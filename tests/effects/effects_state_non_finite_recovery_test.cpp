@@ -117,6 +117,27 @@ Stream run_stream(Processor& processor, int blocks, float poison_value, bool poi
   return out;
 }
 
+/// One block of the same source, optionally poisoned in EVERY channel. That is
+/// the difference from run_stream, and it is what separates a per-block count
+/// from a per-channel one: while only one channel carries the poison the two
+/// produce the same number.
+template <typename Processor>
+void run_one_block(Processor& processor, int block_index, float poison_value, bool poison) {
+  std::vector<float> left(static_cast<size_t>(kBlockSize));
+  std::vector<float> right(static_cast<size_t>(kBlockSize));
+  for (int i = 0; i < kBlockSize; ++i) {
+    const float sample = source_sample(block_index * kBlockSize + i);
+    left[static_cast<size_t>(i)] = sample;
+    right[static_cast<size_t>(i)] = sample;
+  }
+  if (poison) {
+    left[static_cast<size_t>(kPoisonIndex)] = poison_value;
+    right[static_cast<size_t>(kPoisonIndex)] = poison_value;
+  }
+  float* channels[] = {left.data(), right.data()};
+  processor.process(channels, 2, kBlockSize);
+}
+
 /// Largest distance between one output channel and the latency-aligned source
 /// from sample @p from onward, or infinity when any distance is non-finite.
 /// @note The non-finite return is load-bearing. std::max returns its first
@@ -214,6 +235,51 @@ auto prepared(const Config& config) {
     processor->prepare(kSampleRate, kBlockSize);
     return processor;
   };
+}
+
+/// The insert reports that it discarded, with a clean run as the control. Every
+/// case above reads whether the insert came back; none of them can tell a caller
+/// that it ever left, and a recovery nobody can observe is one nobody can act on.
+///
+/// @p contamination_samples is the same window the matching recovery case
+/// allows: an insert whose recursive cells sit behind a long line does not see
+/// the poison in the block that carried it, so a shorter run reads zero from an
+/// insert that counts correctly.
+template <typename Make>
+void check_discard_is_counted(const Make& make, int contamination_samples) {
+  const int kBlocks = recovery_block(contamination_samples) + kTrailingBlocks;
+  for (const float poison_value : poison_values()) {
+    DYNAMIC_SECTION("poison " << poison_value) {
+      auto control = make();
+      run_stream(*control, kBlocks, poison_value, false);
+      // Without this, an insert that counted every block would satisfy the
+      // assertion below while reporting nothing about this sample.
+      CHECK(control->non_finite_discard_count() == 0);
+
+      auto poisoned = make();
+      run_stream(*poisoned, kBlocks, poison_value, true);
+      CHECK(poisoned->non_finite_discard_count() > 0);
+
+      // The unit, not merely its presence. Stepped block by block with every
+      // channel poisoned, the first block that counts must count exactly one: a
+      // processor bumping per channel records two for that block, and the
+      // channel count is a property of the buffer the caller passed rather than
+      // of the work they asked for.
+      auto stepped = make();
+      uint32_t previous = 0;
+      bool counted = false;
+      for (int k = 0; k < kBlocks && !counted; ++k) {
+        run_one_block(*stepped, k, poison_value, k == kPoisonBlock);
+        const uint32_t now = stepped->non_finite_discard_count();
+        if (now != previous) {
+          CHECK(now - previous == 1u);
+          counted = true;
+        }
+      }
+      // Without this the loop above passes by never counting at all.
+      CHECK(counted);
+    }
+  }
 }
 
 }  // namespace
@@ -353,6 +419,88 @@ TEST_CASE("the wah's filters are returned to rest", "[effects][non_finite]") {
   config.dry_wet = 1.0f;
 
   check_recovery(prepared<Wah>(config), kSingleSampleHistory);
+}
+
+TEST_CASE("an insert counts the state it discarded", "[effects][non_finite]") {
+  using namespace sonare::effects;
+
+  SECTION("dc blocker") {
+    check_discard_is_counted(
+        []() {
+          auto processor = std::make_shared<common::DcBlocker>();
+          processor->set_cutoff_hz(400.0f);
+          processor->prepare(kSampleRate, kBlockSize);
+          return processor;
+        },
+        kSingleSampleHistory);
+  }
+  SECTION("fdn reverb") {
+    reverb::FdnReverbConfig config;
+    config.decay = 0.05f;
+    config.dry_wet = 0.5f;
+    const auto make = prepared<reverb::FdnReverb>(config);
+    check_discard_is_counted(make, make()->tail_samples());
+  }
+  SECTION("dattorro reverb") {
+    reverb::DattorroReverbConfig config;
+    config.decay = 0.3f;
+    config.dry_wet = 0.5f;
+    const auto make = prepared<reverb::DattorroReverb>(config);
+    check_discard_is_counted(make, make()->tail_samples());
+  }
+  SECTION("velvet reverb") {
+    reverb::VelvetReverbConfig config;
+    config.reverb_time_s = 0.4f;
+    config.dry_wet = 0.5f;
+    const auto make = prepared<reverb::VelvetReverb>(config);
+    check_discard_is_counted(
+        make, make()->tail_samples() + 2 * reverb::VelvetReverb::kEarlyPartitionSamples);
+  }
+  SECTION("stereo delay") {
+    delay::StereoDelayConfig config;
+    config.delay_time_l_ms = 40.0f;
+    config.delay_time_r_ms = 55.0f;
+    config.feedback = 0.5f;
+    config.ping_pong = 0.5f;
+    config.dry_wet = 0.5f;
+    const auto make = prepared<delay::StereoDelay>(config);
+    check_discard_is_counted(make, make()->tail_samples());
+  }
+  SECTION("flanger") {
+    modulation::FlangerConfig config;
+    config.feedback = 0.8f;
+    config.dry_wet = 0.5f;
+    check_discard_is_counted(prepared<modulation::Flanger>(config),
+                             ms_to_samples(config.center_delay_ms + config.depth_ms));
+  }
+  SECTION("phaser") {
+    modulation::PhaserConfig config;
+    config.dry_wet = 0.5f;
+    check_discard_is_counted(prepared<modulation::Phaser>(config), kSingleSampleHistory);
+  }
+  SECTION("rotary") {
+    modulation::RotaryConfig config;
+    config.dry_wet = 1.0f;
+    check_discard_is_counted(prepared<modulation::Rotary>(config),
+                             ms_to_samples(2.0f * config.depth_ms));
+  }
+  SECTION("ensemble") {
+    modulation::EnsembleConfig config;
+    config.dry_wet = 1.0f;
+    check_discard_is_counted(
+        prepared<modulation::Ensemble>(config),
+        ms_to_samples(config.center_delay_ms + config.depth_slow_ms + config.depth_fast_ms));
+  }
+  SECTION("auto-wah") {
+    modulation::AutoWahConfig config;
+    config.dry_wet = 1.0f;
+    check_discard_is_counted(prepared<modulation::AutoWah>(config), kSingleSampleHistory);
+  }
+  SECTION("wah") {
+    modulation::WahConfig config;
+    config.dry_wet = 1.0f;
+    check_discard_is_counted(prepared<modulation::Wah>(config), kSingleSampleHistory);
+  }
 }
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM

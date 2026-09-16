@@ -25,9 +25,13 @@ namespace sonare::rt {
 
 /// @brief Relaxed-atomic, RT-safe monotonically-increasing drop/overflow count.
 ///
-/// The counter is NOT copyable (it owns an atomic); the owning RT object holds
-/// it by value as a member. All operations are relaxed atomics: the count is
-/// telemetry only and does not order any other memory.
+/// The counter is neither copyable nor movable (it owns an atomic), and that
+/// propagates: a type holding one by value loses both implicitly, so an owner
+/// declaring `= default` for either stops compiling -- with an error that names
+/// the owner and never this header. Such an owner writes them by hand and leaves
+/// the new instance at zero, because the count describes the instance that did
+/// the counting. All operations are relaxed atomics: the count is telemetry only
+/// and does not order any other memory.
 class OverflowCounter {
  public:
   OverflowCounter() = default;

@@ -76,6 +76,7 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
 }
 
 void Phaser::discard_non_finite() noexcept {
+  bool discarded = false;
   for (size_t ch = 0; ch < y1_.size(); ++ch) {
     auto& x = x1_[ch];
     auto& z = y1_[ch];
@@ -85,8 +86,12 @@ void Phaser::discard_non_finite() noexcept {
         discard_run_if_non_finite(x.begin(), x.end(), 0.0f)) {
       std::fill(x.begin(), x.end(), 0.0f);
       std::fill(z.begin(), z.end(), 0.0f);
+      discarded = true;
     }
   }
+  // Accumulated rather than bumped per channel: the channel count is the
+  // caller's buffer, not their unit of work.
+  if (discarded) note_non_finite_discard();
 }
 
 bool Phaser::set_parameter(unsigned int param_id, float value) {

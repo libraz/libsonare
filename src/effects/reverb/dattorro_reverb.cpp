@@ -309,6 +309,7 @@ void DattorroReverb::discard_non_finite() noexcept {
   // The four cells are one cross-coupled tank; a rested damping cell in the
   // half whose tail is poisoned is not half a tank.
   if (!discard_group_if_non_finite(damp_l_, damp_r_, tail_l_, tail_r_)) return;
+  note_non_finite_discard();
   // The lines and allpasses upstream are the loop that feeds these cells --
   // including the input diffusers, which recirculate their own output -- so the
   // poison cycles back instead of flowing out. O(line), recovery only.

@@ -84,6 +84,10 @@ void Flanger::discard_non_finite() noexcept {
   // Each line is fed by the feedback cell that reads it, so the poison
   // recirculates instead of flowing out. O(line), recovery only.
   for (auto& delay : delays_) delay.reset();
+  // Counted on the flag, not on the cell: the cell holds the block's last sample
+  // and is often finite again while the line the reset above wiped still carried
+  // the poison.
+  note_non_finite_discard();
 }
 
 bool Flanger::set_parameter(unsigned int param_id, float value) {

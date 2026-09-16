@@ -87,7 +87,9 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
 void Rotary::discard_non_finite() noexcept {
   // The rotor delay lines are fed by the crossover output alone, so a
   // non-finite sample leaves them within one line length.
-  discard_run_if_non_finite(lp_state_.begin(), lp_state_.end(), 0.0f);
+  if (discard_run_if_non_finite(lp_state_.begin(), lp_state_.end(), 0.0f)) {
+    note_non_finite_discard();
+  }
 }
 
 void Rotary::reset() {

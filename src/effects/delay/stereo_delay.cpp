@@ -89,18 +89,24 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
 }
 
 void StereoDelay::discard_non_finite() noexcept {
+  bool discarded = false;
   if (feedback_non_finite_) {
     feedback_non_finite_ = false;
     discard_run_if_non_finite(feedback_state_.begin(), feedback_state_.end(), 0.0f);
     // Both lines are fed by the feedback cells that read them, so the poison
     // recirculates instead of flowing out. O(line), recovery only.
     for (auto& delay : delays_) delay.reset();
+    // The reset is itself a discard: the cells hold the block's last sample and
+    // are often finite again while the lines still carried the poison.
+    discarded = true;
   }
   // A smoother rests at its target, not at zero: zero would mute the mix and
   // drop the feedback for a smoothing time nobody asked for.
-  discard_if_non_finite(smoothed_feedback_, std::clamp(config_.feedback, 0.0f, 0.95f));
-  discard_if_non_finite(smoothed_dry_wet_, std::clamp(config_.dry_wet, 0.0f, 1.0f));
-  discard_if_non_finite(smoothed_ping_pong_, std::clamp(config_.ping_pong, 0.0f, 1.0f));
+  discarded |= discard_if_non_finite(smoothed_feedback_, std::clamp(config_.feedback, 0.0f, 0.95f));
+  discarded |= discard_if_non_finite(smoothed_dry_wet_, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  discarded |=
+      discard_if_non_finite(smoothed_ping_pong_, std::clamp(config_.ping_pong, 0.0f, 1.0f));
+  if (discarded) note_non_finite_discard();
 }
 
 int StereoDelay::tail_samples() const noexcept {

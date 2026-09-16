@@ -105,7 +105,9 @@ void Ensemble::process(float* const* channels, int num_channels, int num_samples
 void Ensemble::discard_non_finite() noexcept {
   // The tap delays are fed by the input alone, so a non-finite sample leaves
   // them within one line length; the tone filter is where it would stay.
-  discard_run_if_non_finite(tone_state_.begin(), tone_state_.end(), 0.0f);
+  if (discard_run_if_non_finite(tone_state_.begin(), tone_state_.end(), 0.0f)) {
+    note_non_finite_discard();
+  }
 }
 
 bool Ensemble::set_parameter(unsigned int param_id, float value) {

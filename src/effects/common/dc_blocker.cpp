@@ -70,6 +70,7 @@ bool DcBlocker::discard_non_finite() noexcept {
     // poisoned one is not half a filter.
     discarded |= discard_group_if_non_finite(x1_[ch], y1_[ch]);
   }
+  if (discarded) note_non_finite_discard();
   return discarded;
 }
 

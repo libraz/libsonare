@@ -203,8 +203,9 @@ void VelvetReverb::discard_non_finite() noexcept {
   // The tap rings and the late convolver are fed by the input alone, so a
   // non-finite sample leaves them within one tap span; only the post filters
   // hold it for good.
-  discard_group_if_non_finite(shelf_state_l_, shelf_state_r_);
-  dc_blocker_.discard_non_finite();
+  bool discarded = discard_group_if_non_finite(shelf_state_l_, shelf_state_r_);
+  discarded |= dc_blocker_.discard_non_finite();
+  if (discarded) note_non_finite_discard();
 }
 
 int VelvetReverb::tail_samples() const noexcept {

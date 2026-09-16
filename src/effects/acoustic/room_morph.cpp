@@ -114,6 +114,7 @@ void RoomMorphProcessor::process(float* const* channels, int num_channels, int n
   // entirely (true bypass) when suppression is zero.
   const float supp = std::clamp(config_.source_tail_suppression, 0.0f, 1.0f);
   const float max_cut = supp * kMaxAttenuation;
+  bool discarded = false;
   if (max_cut > 0.0f) {
     const int n = std::min(num_channels, static_cast<int>(suppressor_.size()));
     for (int ch = 0; ch < n; ++ch) {
@@ -137,10 +138,11 @@ void RoomMorphProcessor::process(float* const* channels, int num_channels, int n
       }
       // Three floats per channel, once per block. The envelopes rest at silence
       // and the smoothed gain at unity, which is this expander's bypass.
-      discard_group_if_non_finite(st.env, st.peak);
-      discard_if_non_finite(st.gain, 1.0f);
+      discarded |= discard_group_if_non_finite(st.env, st.peak);
+      discarded |= discard_if_non_finite(st.gain, 1.0f);
     }
   }
+  if (discarded) note_non_finite_discard();
 
   // Step 2: add the target room. ConvolutionReverb mixes the (suppressed) dry
   // with the target-room convolution, delay-aligned, allocation-free.

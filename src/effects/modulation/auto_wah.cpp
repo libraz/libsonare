@@ -67,8 +67,9 @@ void AutoWah::process(float* const* channels, int num_channels, int num_samples)
 void AutoWah::discard_non_finite() noexcept {
   // The follower rests at silence: it is a rectified level, and a sweep opened
   // from anything else would be a filter position no input asked for.
-  discard_if_non_finite(envelope_, 0.0f);
-  for (auto& filter : filters_) filter.discard_non_finite();
+  bool discarded = discard_if_non_finite(envelope_, 0.0f);
+  for (auto& filter : filters_) discarded |= filter.discard_non_finite();
+  if (discarded) note_non_finite_discard();
 }
 
 void AutoWah::reset() {

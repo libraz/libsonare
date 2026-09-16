@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "rt/overflow_counter.h"
 #include "util/exception.h"
 
 namespace sonare::rt {
@@ -138,6 +139,20 @@ class ProcessorBase {
   virtual int tail_samples() const noexcept { return 0; }
   virtual float last_gain_reduction_db() const { return 0.0f; }
 
+  /// @brief Blocks in which this processor returned recursive state to its
+  ///        post-reset value because a non-finite sample had reached it.
+  /// @details The discard recovers the processor in silence, so without a count
+  ///   a stream that went through one is indistinguishable from a stream that
+  ///   never needed one -- and the sample that caused it is long gone by the
+  ///   time the output is inspected. The unit is one process() call, never a
+  ///   channel or a cell, so the number does not depend on a dimension the
+  ///   caller did not choose. Cumulative since construction; a copy starts at
+  ///   zero, because the count describes this instance's history. A processor
+  ///   built from others records one of its own when a member discarded during
+  ///   its block -- summing a member's count instead would break the unit, since
+  ///   a member may be driven several times per the owner's block.
+  uint32_t non_finite_discard_count() const noexcept { return non_finite_discards_.load(); }
+
   // Generic host bypass state. Containers such as graph nodes and insert
   // chains consume this flag by leaving the dry buffer untouched and skipping
   // process(); processors may still override for plugin-specific bypass.
@@ -227,9 +242,14 @@ class ProcessorBase {
     return channel >= 0 && channel < num_channels ? channel : -1;
   }
 
+  /// Records one discard. Called from the owner's own discard_non_finite(),
+  /// which is the only place that knows a cell was actually returned.
+  void note_non_finite_discard() noexcept { non_finite_discards_.bump(); }
+
  private:
   std::atomic<bool> bypassed_{false};
   std::atomic<int> detector_excluded_channel_{-1};
+  OverflowCounter non_finite_discards_;
 };
 
 }  // namespace sonare::rt
