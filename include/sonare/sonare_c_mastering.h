@@ -1123,6 +1123,77 @@ SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, i
                                           const SonareDehumConfig* config, float** out,
                                           size_t* out_length);
 
+// Longest harmonic series a dehum pass tracks, and the length of
+// SonareHumDetection::harmonic_dbfs. 16 harmonics reach 800 Hz from a 50 Hz
+// fundamental, past where mains hum carries energy worth notching.
+#define SONARE_DEHUM_MAX_HARMONICS 16
+
+/// @brief Flat POD mirror of @c mastering::repair::HumDetection.
+/// @details Always measured through the estimation path, whatever
+///   @c SonareDehumConfig::adaptive says: the fixed path notches the configured
+///   frequency without ever looking for hum, so a detector following the flag
+///   would hand back its own input.
+typedef struct {
+  float fundamental_hz;                             // tracked fundamental; the configured value
+                                                    // when adaptive tracking is off
+  float fundamental_prominence;                     // winning candidate's projected energy over the
+                                                    // median candidate; 1.0 means no peak was found
+                                                    // at all. Not a lock flag
+  int harmonics;                                    // harmonics above the floor, not necessarily a
+                                                    // contiguous run from the first
+  float harmonic_dbfs[SONARE_DEHUM_MAX_HARMONICS];  // input level at each k*f0,
+                                                    // k ascending. Measured for
+                                                    // every k the sample rate
+                                                    // carries, not only the
+                                                    // notched ones; a k*f0 at or
+                                                    // past Nyquist reads the dB
+                                                    // floor because nothing is
+                                                    // there to measure
+} SonareHumDetection;
+
+/// @brief What one channel's dehum pass found and what it did to it.
+typedef struct {
+  SonareHumDetection detected;   // this channel's own analysis, before filtering
+  int notched_harmonics;         // harmonics the cascade reached; fewer than
+                                 // config.harmonics once k*f0 hits Nyquist
+  float applied_fundamental_hz;  // frequency the last notch refresh used
+  float fundamental_drift_hz;    // largest excursion of the tracked frequency
+                                 // from the configured one. Zero without
+                                 // adaptive tracking, which is the measurement
+                                 // rather than an unset field. Bounded by
+                                 // config.search_range_hz, and a hum inside a
+                                 // narrow range drives it to that bound
+                                 // exactly, so at small ranges the value
+                                 // reports the range rather than the signal
+} SonareDehumReport;
+
+/// @brief A dehummed stereo pair and what each channel's pass did.
+/// @details @c left and @c right are heap-allocated; release each with
+///   @ref sonare_free_floats.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  SonareDehumReport left_report;
+  SonareDehumReport right_report;
+} SonareDehumStereoResult;
+
+/// @brief Dehums a stereo pair, sharing the tracked fundamental when tracking is on.
+/// @details Mains hum is one physical source, so with @c config->adaptive set the
+///   tracker reads the channel mean and both cascades follow the one frequency it
+///   finds: tracking the channels apart would put the notches at two frequencies
+///   differing by whatever each channel's programme material pulled its own search
+///   to, an image shift the hum itself never had. Only the frequency is shared --
+///   each channel keeps its own filter state, so neither channel's transient rings
+///   through the other, and each report's @c detected measures that channel's own
+///   input. With @c adaptive clear, which is the default, nothing is shared and
+///   the two channels are filtered independently at the configured frequency.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float* right,
+                                                 size_t length, int sample_rate,
+                                                 const SonareDehumConfig* config,
+                                                 SonareDehumStereoResult* out);
+
 /// @brief Flat POD mirror of @c mastering::repair::DereverbClassicalConfig.
 typedef struct {
   float threshold;         // late-reverb detection threshold (default 0, no gate)

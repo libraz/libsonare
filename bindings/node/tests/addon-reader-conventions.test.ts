@@ -41,6 +41,7 @@ import {
   masteringRepairDecrackle,
   masteringRepairDecrackleStereo,
   masteringRepairDehum,
+  masteringRepairDehumStereo,
   masteringRepairDenoiseClassical,
   masteringRepairDereverbClassical,
   masteringRepairDereverbConfigForRoom,
@@ -419,6 +420,18 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'masteringRepairDehum',
     invoke: (o) => Array.from(masteringRepairDehum(sine(2048), SR, o)).slice(0, 32),
+  },
+  {
+    jsName: 'masteringRepairDehumStereo',
+    invoke: (o) =>
+      Array.from(
+        masteringRepairDehumStereo({
+          ...o,
+          left: sine(2048),
+          right: sine(2048),
+          sampleRate: SR,
+        }).left,
+      ).slice(0, 32),
   },
   {
     jsName: 'masteringRepairTrimSilence',

@@ -1181,6 +1181,47 @@ class DecrackleStereoResult:
         right_report: DecrackleReport,
     ) -> None: ...
 
+class HumDetection:
+    fundamental_hz: float
+    fundamental_prominence: float
+    harmonics: int
+    harmonic_dbfs: list[float]
+    def __init__(
+        self,
+        fundamental_hz: float,
+        fundamental_prominence: float,
+        harmonics: int,
+        harmonic_dbfs: list[float],
+    ) -> None: ...
+
+class DehumReport:
+    detected: HumDetection
+    notched_harmonics: int
+    applied_fundamental_hz: float
+    fundamental_drift_hz: float
+    def __init__(
+        self,
+        detected: HumDetection,
+        notched_harmonics: int,
+        applied_fundamental_hz: float,
+        fundamental_drift_hz: float,
+    ) -> None: ...
+
+class DehumStereoResult:
+    left: list[float]
+    right: list[float]
+    length: int
+    left_report: DehumReport
+    right_report: DehumReport
+    def __init__(
+        self,
+        left: list[float],
+        right: list[float],
+        length: int,
+        left_report: DehumReport,
+        right_report: DehumReport,
+    ) -> None: ...
+
 class MasteringResult:
     samples: list[float]
     sample_rate: int

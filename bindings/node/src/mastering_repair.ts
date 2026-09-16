@@ -3,6 +3,7 @@ import type {
   DeclickStereoResult,
   DeclipStereoResult,
   DecrackleStereoResult,
+  DehumStereoResult,
   RoomEstimateResult,
 } from './types.js';
 
@@ -312,6 +313,39 @@ export function masteringRepairDehum(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return addon.masteringRepairDehum(request.samples, request.sampleRate ?? 22050, request);
+}
+
+/** Request form of `masteringRepairDehumStereo`. */
+export interface MasteringRepairDehumStereoRequest extends DehumOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
+/**
+ * Offline mains-hum remover for a stereo pair.
+ *
+ * With `adaptive` set, mains hum is one physical source: the tracker reads
+ * the channel mean and both cascades follow the one frequency it finds, so
+ * `leftReport.appliedFundamentalHz` and `rightReport.appliedFundamentalHz`
+ * (and `fundamentalDriftHz`) are identical by construction, even when the two
+ * channels carry different hum. Only the frequency is shared -- each channel
+ * keeps its own filter state, and each report's `detected` still measures
+ * that channel's own input, so `detected.fundamentalHz` can differ between
+ * channels while `appliedFundamentalHz` agrees. Without `adaptive`, which is
+ * the default, nothing is shared and the two channels are filtered
+ * independently at the configured frequency; `fundamentalDriftHz` is then
+ * exactly 0, the measurement rather than an unset field.
+ */
+export function masteringRepairDehumStereo(
+  request: MasteringRepairDehumStereoRequest,
+): DehumStereoResult {
+  return addon.masteringRepairDehumStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /** Offline classical dereverberator (spectral subtraction + optional WPE). */

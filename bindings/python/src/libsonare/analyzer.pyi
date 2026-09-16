@@ -19,6 +19,7 @@ from .types import (
     DeclickStereoResult,
     DeclipStereoResult,
     DecrackleStereoResult,
+    DehumStereoResult,
     DereverbClassicalConfig,
     DynamicRangeReport,
     DynamicsResult,
@@ -1778,6 +1779,20 @@ def mastering_repair_dehum(
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
 ) -> np.ndarray[Any, Any]: ...
+def mastering_repair_dehum_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    fundamental_hz: float = 50.0,
+    harmonics: int = 4,
+    q: float = 20.0,
+    adaptive: bool = False,
+    search_range_hz: float = 2.0,
+    adaptation: float = 0.25,
+    frame_size: int = 2048,
+    pll_bandwidth: float = 0.01,
+) -> DehumStereoResult: ...
 def mastering_repair_dereverb_classical(
     samples: FloatSamples,
     sample_rate: int = 22050,

@@ -4,6 +4,7 @@ import type {
   MasteringRepairDeclickStereoResult,
   MasteringRepairDeclipStereoResult,
   MasteringRepairDecrackleStereoResult,
+  MasteringRepairDehumStereoResult,
 } from './public_types_mastering';
 
 function requireModule() {
@@ -199,6 +200,13 @@ export interface MasteringRepairDehumRequest extends DehumOptions {
   sampleRate: number;
 }
 
+/** Request form of `masteringRepairDehumStereo`. */
+export interface MasteringRepairDehumStereoRequest extends DehumOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
 /** Options for `masteringRepairDereverbClassical`. */
 export interface DereverbClassicalOptions {
   threshold?: number;
@@ -382,6 +390,45 @@ export function masteringRepairDehum(
       ? { samples, sampleRate: sampleRate as number, ...options }
       : samples;
   return requireModule().masteringRepairDehum(request.samples, request.sampleRate, request);
+}
+
+/**
+ * Offline mains-hum remover for a stereo pair.
+ *
+ * With `adaptive` set, mains hum is one physical source, so the tracker reads the channel
+ * mean and both cascades follow the one frequency it finds: `appliedFundamentalHz` and
+ * `fundamentalDriftHz` come back identical in both reports by construction, while each
+ * report's `detected` still measures that channel's own input and each channel keeps its
+ * own filter state, so neither channel's transient rings through the other. With `adaptive`
+ * clear, which is the default, nothing is shared and the two channels are filtered
+ * independently at the configured frequency.
+ */
+export function masteringRepairDehumStereo(
+  request: MasteringRepairDehumStereoRequest,
+): MasteringRepairDehumStereoResult;
+export function masteringRepairDehumStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  config?: DehumOptions,
+): MasteringRepairDehumStereoResult;
+export function masteringRepairDehumStereo(
+  left: Float32Array | MasteringRepairDehumStereoRequest,
+  right?: Float32Array,
+  sampleRate?: number,
+  config: DehumOptions = {},
+): MasteringRepairDehumStereoResult {
+  const request: MasteringRepairDehumStereoRequest =
+    left instanceof Float32Array
+      ? { left, right: right as Float32Array, sampleRate, ...config }
+      : left;
+  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
+  return requireModule().masteringRepairDehumStereo(
+    leftSamples,
+    rightSamples,
+    rate ?? 22050,
+    options,
+  );
 }
 
 /** Offline classical dereverberator (spectral subtraction + optional WPE). */

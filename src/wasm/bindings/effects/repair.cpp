@@ -435,6 +435,70 @@ val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) 
   return vectorToFloat32Array(out);
 }
 
+namespace {
+
+val humDetectionToVal(const mastering::repair::HumDetection& detected) {
+  val out = val::object();
+  out.set("fundamentalHz", detected.fundamental_hz);
+  out.set("fundamentalProminence", detected.fundamental_prominence);
+  out.set("harmonics", detected.harmonics);
+  std::vector<float> harmonic_dbfs(detected.harmonic_dbfs,
+                                   detected.harmonic_dbfs + mastering::repair::kDehumMaxHarmonics);
+  out.set("harmonicDbfs", vectorToFloat32Array(harmonic_dbfs));
+  return out;
+}
+
+val dehumReportToVal(const mastering::repair::DehumReport& report) {
+  val out = val::object();
+  out.set("detected", humDetectionToVal(report.detected));
+  out.set("notchedHarmonics", report.notched_harmonics);
+  out.set("appliedFundamentalHz", report.applied_fundamental_hz);
+  out.set("fundamentalDriftHz", report.fundamental_drift_hz);
+  return out;
+}
+
+}  // namespace
+
+// Dehums a stereo pair. With `adaptive` set the two channels track one shared
+// fundamental -- mains hum is one physical source, and tracking the channels
+// apart would put the notches at two frequencies differing by whatever each
+// channel's programme material pulled its own search to, an image shift the
+// hum itself never had -- so both reports' appliedFundamentalHz and
+// fundamentalDriftHz agree by construction while each detected still measures
+// that channel's own input. With adaptive clear, the default, each channel
+// runs its own fixed-frequency pass and nothing is shared. Calls the core
+// directly rather than the C ABI, matching every other wrapper in this file --
+// sonare_c_mastering_repair.cpp is not part of the WASM binding sources.
+val js_mastering_repair_dehum_stereo(val left_samples, val right_samples,
+                                     const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringRepairDehumStereo input", true);
+  Audio left = loadValidatedAudio(left_samples, sample_rate);
+  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  mastering::repair::DehumConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg.fundamental_hz = repairFloatOption(options, "fundamentalHz", cfg.fundamental_hz);
+    cfg.harmonics = repairIntOption(options, "harmonics", cfg.harmonics);
+    cfg.q = repairFloatOption(options, "q", cfg.q);
+    cfg.adaptive = repairBoolOption(options, "adaptive", cfg.adaptive);
+    cfg.search_range_hz = repairFloatOption(options, "searchRangeHz", cfg.search_range_hz);
+    cfg.adaptation = repairFloatOption(options, "adaptation", cfg.adaptation);
+    cfg.frame_size = repairIntOption(options, "frameSize", cfg.frame_size);
+    cfg.pll_bandwidth = repairFloatOption(options, "pllBandwidth", cfg.pll_bandwidth);
+  }
+  mastering::repair::DehumStereoResult result = mastering::repair::dehum_stereo(left, right, cfg);
+  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
+  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(left_out));
+  out.set("right", vectorToFloat32Array(right_out));
+  out.set("leftReport", dehumReportToVal(result.left_report));
+  out.set("rightReport", dehumReportToVal(result.right_report));
+  return out;
+}
+
 val js_mastering_repair_dereverb_classical(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   mastering::repair::DereverbClassicalConfig cfg;
@@ -536,6 +600,7 @@ void registerRepairBindings() {
   function("masteringRepairDecrackle", &js_mastering_repair_decrackle);
   function("masteringRepairDecrackleStereo", &js_mastering_repair_decrackle_stereo);
   function("masteringRepairDehum", &js_mastering_repair_dehum);
+  function("masteringRepairDehumStereo", &js_mastering_repair_dehum_stereo);
   function("masteringRepairDereverbClassical", &js_mastering_repair_dereverb_classical);
   function("masteringRepairDereverbConfigForRoom", &js_mastering_repair_dereverb_config_for_room);
   function("masteringRepairTrimSilence", &js_mastering_repair_trim_silence);

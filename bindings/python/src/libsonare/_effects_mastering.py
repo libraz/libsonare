@@ -30,6 +30,7 @@ from ._ffi import (
     SonareDecrackleConfig,
     SonareDecrackleStereoResult,
     SonareDehumConfig,
+    SonareDehumStereoResult,
     SonareDenoiseClassicalConfig,
     SonareDereverbClassicalConfig,
     SonareGateConfig,
@@ -71,7 +72,10 @@ from .types import (
     DeclipStereoResult,
     DecrackleReport,
     DecrackleStereoResult,
+    DehumReport,
+    DehumStereoResult,
     DereverbClassicalConfig,
+    HumDetection,
     RoomEstimate,
 )
 
@@ -770,6 +774,111 @@ def mastering_repair_dehum(
         pll_bandwidth=float(pll_bandwidth),
     )
     return _run_repair(_get_lib().sonare_mastering_repair_dehum, samples, sample_rate, config)
+
+
+def _extract_dehum_report(raw: Any) -> DehumReport:
+    detected = raw.detected
+    return DehumReport(
+        detected=HumDetection(
+            fundamental_hz=float(detected.fundamental_hz),
+            fundamental_prominence=float(detected.fundamental_prominence),
+            harmonics=int(detected.harmonics),
+            harmonic_dbfs=[float(v) for v in detected.harmonic_dbfs],
+        ),
+        notched_harmonics=int(raw.notched_harmonics),
+        applied_fundamental_hz=float(raw.applied_fundamental_hz),
+        fundamental_drift_hz=float(raw.fundamental_drift_hz),
+    )
+
+
+@_guard_buffer("left", "right")
+def mastering_repair_dehum_stereo(
+    left: Sequence[float] | list[float] | np.ndarray,
+    right: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    fundamental_hz: float = 50.0,
+    harmonics: int = 4,
+    q: float = 20.0,
+    adaptive: bool = False,
+    search_range_hz: float = 2.0,
+    adaptation: float = 0.25,
+    frame_size: int = 2048,
+    pll_bandwidth: float = 0.01,
+) -> DehumStereoResult:
+    """Dehums a stereo pair, sharing the tracked fundamental when tracking is on.
+
+    Mains hum is one physical source, so with ``adaptive`` set the tracker
+    reads the channel mean and both cascades follow the one frequency it
+    finds: tracking the channels apart would put the notches at two
+    frequencies differing by whatever each channel's programme material
+    pulled its own search to, an image shift the hum itself never had. Only
+    the frequency is shared -- each channel keeps its own filter state, so
+    neither channel's transient rings through the other, and each report's
+    ``detected`` measures that channel's own input. With ``adaptive`` clear,
+    which is the default, nothing is shared and the two channels are
+    filtered independently at the configured frequency.
+
+    Args:
+        left: Left channel input buffer (any sequence convertible to float32).
+        right: Right channel input buffer, same length as ``left``.
+        sample_rate: Sample rate in Hz (default 22050).
+        fundamental_hz: Mains-hum fundamental (default 50 Hz).
+        harmonics: Notch count including fundamental (default 4).
+        q: Notch Q (default 20).
+        adaptive: Enable adaptive tracking, shared between channels (default False).
+        search_range_hz: Tracking search range in Hz (default 2).
+        adaptation: Tracking step size (default 0.25).
+        frame_size: Analysis frame size, must be >= 16 (default 2048).
+        pll_bandwidth: PLL bandwidth (default 0.01).
+
+    Returns:
+        :class:`DehumStereoResult` with the dehummed channels and each
+        channel's own detection/repair report.
+    """
+    lib = _get_lib()
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise SonareValueError("left and right channel lengths must match")
+    config = SonareDehumConfig(  # noqa: F405
+        fundamental_hz=float(fundamental_hz),
+        harmonics=int(harmonics),
+        q=float(q),
+        adaptive=1 if adaptive else 0,
+        search_range_hz=float(search_range_hz),
+        adaptation=float(adaptation),
+        frame_size=int(frame_size),
+        pll_bandwidth=float(pll_bandwidth),
+    )
+    out = SonareDehumStereoResult()  # noqa: F405
+    rc = lib.sonare_mastering_repair_dehum_stereo(
+        left_array,
+        right_array,
+        _to_c_size_t(left_length, "left_length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    try:
+        _check(rc)
+        n = int(out.length)
+        return DehumStereoResult(
+            left=[float(out.left[i]) for i in range(n)],
+            right=[float(out.right[i]) for i in range(n)],
+            length=n,
+            left_report=_extract_dehum_report(out.left_report),
+            right_report=_extract_dehum_report(out.right_report),
+        )
+    finally:
+        # No dedicated free function for this result: `left`/`right` are each
+        # released with sonare_free_floats (see SonareDehumStereoResult in
+        # sonare_c_mastering.h). A refused call leaves `out` at its
+        # zero-initialized default, so both pointers are still NULL here.
+        if out.left:
+            lib.sonare_free_floats(out.left)
+        if out.right:
+            lib.sonare_free_floats(out.right)
 
 
 @_guard_buffer("samples")

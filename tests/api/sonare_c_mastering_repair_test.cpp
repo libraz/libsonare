@@ -697,6 +697,162 @@ TEST_CASE("sonare_mastering_repair_dehum", "[c_api][mastering]") {
   }
 }
 
+TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
+  const int sr = 48000;
+  // Different hum frequencies in the two channels. That is what makes a shared
+  // tracker visible: tracking each channel alone lands on its own frequency,
+  // while the shared tracker reads the channel mean and lands between them.
+  const float kLeftHumHz = 50.0f;
+  const float kRightHumHz = 60.0f;
+  auto left = generate_sine(220.0f, sr, 0.5f);
+  auto right = generate_sine(330.0f, sr, 0.5f);
+  for (size_t i = 0; i < left.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    left[i] = 0.3f * left[i] + 0.2f * std::sin(2.0f * 3.14159265f * kLeftHumHz * t);
+    right[i] = 0.3f * right[i] + 0.2f * std::sin(2.0f * 3.14159265f * kRightHumHz * t);
+  }
+
+  SonareDehumConfig fixed = {};
+  fixed.fundamental_hz = kLeftHumHz;
+  fixed.harmonics = 4;
+  fixed.q = 20.0f;
+  fixed.adaptive = 0;
+  fixed.search_range_hz = 8.0f;
+  fixed.adaptation = 0.25f;
+  fixed.frame_size = 2048;
+  fixed.pll_bandwidth = 0.01f;
+
+  SECTION("without tracking each channel is filtered on its own") {
+    SonareDehumStereoResult out{};
+    REQUIRE(sonare_mastering_repair_dehum_stereo(left.data(), right.data(), left.size(), sr, &fixed,
+                                                 &out) == SONARE_OK);
+    REQUIRE(out.length == left.size());
+
+    // The header calls this the measurement rather than an unset field: with
+    // tracking off the notch never moves, so the drift is exactly zero.
+    REQUIRE(out.left_report.fundamental_drift_hz == 0.0f);
+    REQUIRE(out.right_report.fundamental_drift_hz == 0.0f);
+    REQUIRE(out.left_report.applied_fundamental_hz == Catch::Approx(kLeftHumHz));
+
+    // Nothing is shared here, so each channel owes the mono pass bit equality.
+    // An implementation that grew a cross-channel decision on this path breaks
+    // this without needing a fixture built to catch that decision.
+    float* mono = nullptr;
+    size_t mono_length = 0;
+    REQUIRE(sonare_mastering_repair_dehum(left.data(), left.size(), sr, &fixed, &mono,
+                                          &mono_length) == SONARE_OK);
+    REQUIRE(mono_length == out.length);
+    for (size_t i = 0; i < mono_length; ++i) {
+      REQUIRE(out.left[i] == mono[i]);
+    }
+    sonare_free_floats(mono);
+
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("tracking shares one fundamental while each channel measures its own") {
+    SonareDehumConfig tracked = fixed;
+    tracked.adaptive = 1;
+
+    SonareDehumStereoResult out{};
+    REQUIRE(sonare_mastering_repair_dehum_stereo(left.data(), right.data(), left.size(), sr,
+                                                 &tracked, &out) == SONARE_OK);
+
+    // The discriminating property, and it is an asymmetry rather than a single
+    // equality: one tracker runs for the pair, so the applied frequency is the
+    // same in both reports, while detection reads each channel's own input and
+    // therefore need not agree. Asserting only the first half would pass for an
+    // implementation that ran one channel and copied its whole report.
+    // Pinned before the equality, because two reports agreeing on zero would
+    // satisfy it while measuring nothing.
+    REQUIRE(out.left_report.applied_fundamental_hz > 0.0f);
+    REQUIRE(std::abs(out.left_report.applied_fundamental_hz - tracked.fundamental_hz) <=
+            tracked.search_range_hz);
+    REQUIRE(out.left_report.applied_fundamental_hz == out.right_report.applied_fundamental_hz);
+    REQUIRE(out.left_report.detected.fundamental_hz > 0.0f);
+    REQUIRE(out.right_report.detected.fundamental_hz > 0.0f);
+    REQUIRE(out.left_report.detected.fundamental_hz != out.right_report.detected.fundamental_hz);
+
+    // And the shared tracker must actually be reached: the mono pass tracks the
+    // left channel alone, so it lands somewhere the pair's mean does not.
+    float* mono = nullptr;
+    size_t mono_length = 0;
+    REQUIRE(sonare_mastering_repair_dehum(left.data(), left.size(), sr, &tracked, &mono,
+                                          &mono_length) == SONARE_OK);
+    REQUIRE(mono_length == out.length);
+    bool differs_from_mono = false;
+    for (size_t i = 0; i < mono_length; ++i) {
+      if (out.left[i] != mono[i]) differs_from_mono = true;
+    }
+    REQUIRE(differs_from_mono);
+    sonare_free_floats(mono);
+
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("reports every harmonic slot, not just the first") {
+    SonareDehumStereoResult out{};
+    REQUIRE(sonare_mastering_repair_dehum_stereo(left.data(), right.data(), left.size(), sr, &fixed,
+                                                 &out) == SONARE_OK);
+
+    // A mirror that carried only harmonic_dbfs[0] passes any check written
+    // against the first entry alone, so the whole array has to say something.
+    bool all_finite = true;
+    bool any_differs_from_first = false;
+    for (int k = 0; k < SONARE_DEHUM_MAX_HARMONICS; ++k) {
+      if (!std::isfinite(out.left_report.detected.harmonic_dbfs[k])) all_finite = false;
+      if (out.left_report.detected.harmonic_dbfs[k] != out.left_report.detected.harmonic_dbfs[0]) {
+        any_differs_from_first = true;
+      }
+      REQUIRE(out.left_report.detected.harmonic_dbfs[k] >= -120.0f);
+    }
+    REQUIRE(all_finite);
+    REQUIRE(any_differs_from_first);
+
+    // The notched count stops at Nyquist rather than at the configured count.
+    REQUIRE(out.left_report.notched_harmonics > 0);
+    REQUIRE(out.left_report.notched_harmonics <= fixed.harmonics);
+
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("a harmonic past Nyquist reads the floor rather than an unset value") {
+    const int low_sr = 8000;
+    auto l = generate_sine(220.0f, low_sr, 0.5f);
+    auto r = generate_sine(330.0f, low_sr, 0.5f);
+    SonareDehumConfig high = fixed;
+    high.fundamental_hz = 3000.0f;  // 2*f0 is already past the 4 kHz Nyquist
+
+    SonareDehumStereoResult out{};
+    REQUIRE(sonare_mastering_repair_dehum_stereo(l.data(), r.data(), l.size(), low_sr, &high,
+                                                 &out) == SONARE_OK);
+    REQUIRE(out.left_report.detected.harmonic_dbfs[1] == -120.0f);
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("clears the result before refusing") {
+    SonareDehumStereoResult out{};
+    out.left = non_null_sentinel_float_ptr();
+    out.length = 123;
+    out.left_report.notched_harmonics = 99;
+    REQUIRE(sonare_mastering_repair_dehum_stereo(nullptr, right.data(), left.size(), sr, &fixed,
+                                                 &out) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out.left == nullptr);
+    CHECK(out.right == nullptr);
+    CHECK(out.length == 0);
+    CHECK(out.left_report.notched_harmonics == 0);
+
+    REQUIRE(sonare_mastering_repair_dehum_stereo(left.data(), right.data(), left.size(), 0, &fixed,
+                                                 &out) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_repair_dehum_stereo(left.data(), right.data(), left.size(), sr, &fixed,
+                                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 TEST_CASE("sonare_mastering_repair_dereverb_classical", "[c_api][mastering]") {
   const int sr = 48000;
   auto samples = generate_sine(440.0f, sr, 1.0f);

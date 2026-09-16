@@ -442,6 +442,29 @@ export interface WasmDecrackleStereoResult {
   rightReport: WasmDecrackleReport;
 }
 
+/** What a dehum analysis found in one channel, as `masteringRepairDehumStereo` returns it. */
+export interface WasmHumDetection {
+  fundamentalHz: number;
+  fundamentalProminence: number;
+  harmonics: number;
+  harmonicDbfs: Float32Array;
+}
+
+/** What a dehum pass found in one channel of a stereo dehum and what it did to it. */
+export interface WasmDehumReport {
+  detected: WasmHumDetection;
+  notchedHarmonics: number;
+  appliedFundamentalHz: number;
+  fundamentalDriftHz: number;
+}
+
+export interface WasmDehumStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: WasmDehumReport;
+  rightReport: WasmDehumReport;
+}
+
 export interface WasmRoomMorphOptions extends WasmRoomGeometryOptions {
   wet?: number;
   sourceTailSuppression?: number;
@@ -2217,6 +2240,12 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => Float32Array;
+  masteringRepairDehumStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmDehumStereoResult;
   masteringRepairDereverbClassical: (
     samples: Float32Array,
     sampleRate: number,

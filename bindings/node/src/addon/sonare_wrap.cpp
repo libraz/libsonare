@@ -367,6 +367,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
                                   "masteringRepairDecrackleStereo"));
   exports.Set("masteringRepairDehum",
               Napi::Function::New(env, &SonareWrap::MasteringRepairDehum, "masteringRepairDehum"));
+  exports.Set("masteringRepairDehumStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDehumStereo,
+                                  "masteringRepairDehumStereo"));
   exports.Set("masteringRepairDereverbClassical",
               Napi::Function::New(env, &SonareWrap::MasteringRepairDereverbClassical,
                                   "masteringRepairDereverbClassical"));

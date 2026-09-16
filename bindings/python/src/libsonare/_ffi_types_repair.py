@@ -249,6 +249,45 @@ class SonareDehumConfig(CStruct):
     ]
 
 
+# Length of SonareHumDetection.harmonic_dbfs; matches SONARE_DEHUM_MAX_HARMONICS
+# in sonare_c_mastering.h.
+SONARE_DEHUM_MAX_HARMONICS = 16
+
+
+class SonareHumDetection(CStruct):
+    """Maps to SonareHumDetection in sonare_c.h."""
+
+    _fields_ = [
+        ("fundamental_hz", ctypes.c_float),
+        ("fundamental_prominence", ctypes.c_float),
+        ("harmonics", ctypes.c_int),
+        ("harmonic_dbfs", ctypes.c_float * SONARE_DEHUM_MAX_HARMONICS),
+    ]
+
+
+class SonareDehumReport(CStruct):
+    """Maps to SonareDehumReport in sonare_c.h."""
+
+    _fields_ = [
+        ("detected", SonareHumDetection),
+        ("notched_harmonics", ctypes.c_int),
+        ("applied_fundamental_hz", ctypes.c_float),
+        ("fundamental_drift_hz", ctypes.c_float),
+    ]
+
+
+class SonareDehumStereoResult(CStruct):
+    """Maps to SonareDehumStereoResult in sonare_c.h."""
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("left_report", SonareDehumReport),
+        ("right_report", SonareDehumReport),
+    ]
+
+
 class SonareDereverbClassicalConfig(CStruct):
     """Maps to SonareDereverbClassicalConfig in sonare_c.h."""
 

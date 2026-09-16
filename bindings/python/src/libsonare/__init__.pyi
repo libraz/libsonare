@@ -340,6 +340,9 @@ from .analyzer import (
     mastering_repair_dehum as mastering_repair_dehum,
 )
 from .analyzer import (
+    mastering_repair_dehum_stereo as mastering_repair_dehum_stereo,
+)
+from .analyzer import (
     mastering_repair_denoise_classical as mastering_repair_denoise_classical,
 )
 from .analyzer import (
@@ -732,6 +735,12 @@ from .types import DeclipReport as DeclipReport
 from .types import DeclipStereoResult as DeclipStereoResult
 from .types import DecrackleReport as DecrackleReport
 from .types import DecrackleStereoResult as DecrackleStereoResult
+from .types import (
+    DehumReport as DehumReport,
+)
+from .types import (
+    DehumStereoResult as DehumStereoResult,
+)
 from .types import DereverbClassicalConfig as DereverbClassicalConfig
 from .types import DynamicRangeReport as DynamicRangeReport
 from .types import (
@@ -808,6 +817,9 @@ from .types import (
 )
 from .types import (
     HpssResult as HpssResult,
+)
+from .types import (
+    HumDetection as HumDetection,
 )
 from .types import InverseResult as InverseResult
 from .types import (

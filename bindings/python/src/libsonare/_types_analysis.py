@@ -1492,6 +1492,59 @@ class DecrackleStereoResult:
 
 
 @dataclass(frozen=True, slots=True)
+class HumDetection:
+    """What one channel's hum detector found, independent of repair.
+
+    Always measured from that channel's own input, whatever ``adaptive`` in
+    the config says -- the fixed path notches the configured frequency
+    without ever looking for hum, so a detector following the flag would
+    hand back its own input. ``harmonic_dbfs`` is measured for every
+    harmonic the sample rate carries, not only the notched ones; an entry
+    past Nyquist reads the dB floor because nothing is there to measure.
+    """
+
+    fundamental_hz: float
+    fundamental_prominence: float
+    harmonics: int
+    harmonic_dbfs: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class DehumReport:
+    """What one channel's dehum pass found and did to it.
+
+    ``fundamental_drift_hz`` is exactly zero without adaptive tracking --
+    the measurement rather than an unset field.
+    """
+
+    detected: HumDetection
+    notched_harmonics: int
+    applied_fundamental_hz: float
+    fundamental_drift_hz: float
+
+
+@dataclass(frozen=True, slots=True)
+class DehumStereoResult:
+    """A dehummed stereo pair and what each channel's pass did.
+
+    Mains hum is one physical source, so with ``adaptive`` set the tracker
+    reads the channel mean and both channels' cascades follow the one
+    frequency it finds: ``applied_fundamental_hz`` and
+    ``fundamental_drift_hz`` come out identical in both reports, even when
+    the two channels' own ``detected`` measurements differ. Only the
+    frequency is shared -- each channel keeps its own filter state. With
+    ``adaptive`` clear, which is the default, nothing is shared and the two
+    channels are filtered independently at the configured frequency.
+    """
+
+    left: list[float]
+    right: list[float]
+    length: int
+    left_report: DehumReport
+    right_report: DehumReport
+
+
+@dataclass(frozen=True, slots=True)
 class MasteringResult:
     """Mastering loudness/true-peak processing result."""
 

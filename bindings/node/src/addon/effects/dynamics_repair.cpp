@@ -792,6 +792,114 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+/// @brief Marshal one channel's hum detection into the JS shape shared by the
+///        dehum stereo report.
+Napi::Object EmitHumDetection(Napi::Env env, const SonareHumDetection& detection) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("fundamentalHz", Napi::Number::New(env, detection.fundamental_hz));
+  out.Set("fundamentalProminence", Napi::Number::New(env, detection.fundamental_prominence));
+  out.Set("harmonics", Napi::Number::New(env, detection.harmonics));
+  Napi::Array harmonic_dbfs = Napi::Array::New(env, SONARE_DEHUM_MAX_HARMONICS);
+  for (int i = 0; i < SONARE_DEHUM_MAX_HARMONICS; ++i) {
+    harmonic_dbfs.Set(static_cast<uint32_t>(i), Napi::Number::New(env, detection.harmonic_dbfs[i]));
+  }
+  out.Set("harmonicDbfs", harmonic_dbfs);
+  return out;
+}
+
+Napi::Object EmitDehumReport(Napi::Env env, const SonareDehumReport& report) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("detected", EmitHumDetection(env, report.detected));
+  out.Set("notchedHarmonics", Napi::Number::New(env, report.notched_harmonics));
+  out.Set("appliedFundamentalHz", Napi::Number::New(env, report.applied_fundamental_hz));
+  out.Set("fundamentalDriftHz", Napi::Number::New(env, report.fundamental_drift_hz));
+  return out;
+}
+
+/// @brief Read a SonareDehumConfig options bag, applying the same field names
+///        and defaults as the mono facade's DehumConfig mapping above -- the
+///        two structs share their shape, this is the C-ABI mirror of that
+///        reading.
+SonareDehumConfig read_dehum_config_c(const Napi::Object& options, SonareDehumConfig config) {
+  config.fundamental_hz = FloatProperty(options, "fundamentalHz", config.fundamental_hz);
+  config.harmonics = IntProperty(options, "harmonics", config.harmonics);
+  config.q = FloatProperty(options, "q", config.q);
+  config.adaptive = BoolProperty(options, "adaptive", config.adaptive != 0) ? 1 : 0;
+  config.search_range_hz = FloatProperty(options, "searchRangeHz", config.search_range_hz);
+  config.adaptation = FloatProperty(options, "adaptation", config.adaptation);
+  config.frame_size = IntProperty(options, "frameSize", config.frame_size);
+  config.pll_bandwidth = FloatProperty(options, "pllBandwidth", config.pll_bandwidth);
+  return config;
+}
+
+/// @brief Frees both heap-owned channels of a SonareDehumStereoResult on scope
+///        exit -- mirrors DecrackleStereoResultGuard above.
+class DehumStereoResultGuard {
+ public:
+  explicit DehumStereoResultGuard(SonareDehumStereoResult* result) : result_(result) {}
+  DehumStereoResultGuard(const DehumStereoResultGuard&) = delete;
+  DehumStereoResultGuard& operator=(const DehumStereoResultGuard&) = delete;
+  ~DehumStereoResultGuard() {
+    sonare_free_floats(result_->left);
+    sonare_free_floats(result_->right);
+  }
+
+ private:
+  SonareDehumStereoResult* result_;
+};
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairDehumStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::Error::New(env, "masteringRepairDehumStereo: left and right must have the same length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  // Library defaults (sonare_c_mastering.h SonareDehumConfig), applied before
+  // any options key overrides a field.
+  SonareDehumConfig config{50.0f, 4, 20.0f, 0, 2.0f, 0.25f, 2048, 0.01f};
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    config = read_dehum_config_c(info[3].As<Napi::Object>(), config);
+  }
+  SonareDehumStereoResult result{};
+  SonareError err = sonare_mastering_repair_dehum_stereo(
+      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  DehumStereoResultGuard guard(&result);
+  auto left_out = Napi::Float32Array::New(env, result.length);
+  auto right_out = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0) {
+    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
+    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", left_out);
+  out.Set("right", right_out);
+  out.Set("leftReport", EmitDehumReport(env, result.left_report));
+  out.Set("rightReport", EmitDehumReport(env, result.right_report));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {

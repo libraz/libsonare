@@ -414,6 +414,62 @@ export interface MasteringRepairDecrackleStereoResult {
   rightReport: DecrackleReport;
 }
 
+/**
+ * What a dehum analysis found in one channel of a
+ * {@link MasteringRepairDehumStereoResult}.
+ *
+ * Always measured through the estimation path, whatever `DehumOptions.adaptive` says: the
+ * fixed path notches the configured frequency without ever looking for hum, so a detector
+ * following the flag would hand back its own input.
+ */
+export interface HumDetection {
+  /** Tracked fundamental; the configured value when adaptive tracking is off. */
+  fundamentalHz: number;
+  /** Winning candidate's projected energy over the median candidate; 1.0 means no peak
+   * was found at all. Not a lock flag. */
+  fundamentalProminence: number;
+  /** Harmonics found above the floor, not necessarily a contiguous run from the first. */
+  harmonics: number;
+  /** Input level at each k*f0, k ascending, length 16. Measured for every k the sample
+   * rate carries, not only the notched ones; a k*f0 at or past Nyquist reads the dB floor
+   * because nothing is there to measure. */
+  harmonicDbfs: Float32Array;
+}
+
+/**
+ * What a dehum pass found in one channel of a
+ * {@link MasteringRepairDehumStereoResult} and what it did to it.
+ */
+export interface DehumReport {
+  /** This channel's own analysis, before filtering. */
+  detected: HumDetection;
+  /** Harmonics the cascade reached; fewer than the configured `harmonics` once k*f0
+   * hits Nyquist. */
+  notchedHarmonics: number;
+  /** Frequency the last notch refresh used. */
+  appliedFundamentalHz: number;
+  /** Largest excursion of the tracked frequency from the configured one. Zero without
+   * adaptive tracking, which is the measurement rather than an unset field. */
+  fundamentalDriftHz: number;
+}
+
+/**
+ * A dehummed stereo pair and what each channel's pass found and did.
+ *
+ * Mains hum is one physical source, so with `DehumOptions.adaptive` set the tracker reads
+ * the channel mean and both cascades follow the one frequency it finds: `appliedFundamentalHz`
+ * and `fundamentalDriftHz` are therefore identical in both reports by construction, while each
+ * report's `detected` still measures that channel's own input and each channel keeps its own
+ * filter state. With `adaptive` clear, which is the default, nothing is shared and the two
+ * channels are filtered independently at the configured frequency.
+ */
+export interface MasteringRepairDehumStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: DehumReport;
+  rightReport: DehumReport;
+}
+
 export type MasteringProcessorParams = Record<string, number | boolean>;
 
 /**

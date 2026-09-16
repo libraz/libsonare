@@ -106,6 +106,12 @@ from ._types_analysis import (
     DecrackleStereoResult as DecrackleStereoResult,
 )
 from ._types_analysis import (
+    DehumReport as DehumReport,
+)
+from ._types_analysis import (
+    DehumStereoResult as DehumStereoResult,
+)
+from ._types_analysis import (
     DereverbClassicalConfig as DereverbClassicalConfig,
 )
 from ._types_analysis import (
@@ -125,6 +131,9 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     HpssResult as HpssResult,
+)
+from ._types_analysis import (
+    HumDetection as HumDetection,
 )
 from ._types_analysis import (
     Key as Key,
