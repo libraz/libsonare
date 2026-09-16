@@ -946,7 +946,8 @@ TEST_CASE("RealtimeVoiceChanger counts the input samples it substituted", "[voic
   REQUIRE(changer.non_finite_discard_count() == 2);
 }
 
-TEST_CASE("RealtimeVoiceChanger counts a substituted input per channel", "[voice_changer]") {
+TEST_CASE("RealtimeVoiceChanger counts a block once however many channels carried it",
+          "[voice_changer]") {
   constexpr int sample_rate = 48000;
   constexpr int block = 64;
   RealtimeVoiceChanger changer(realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor));
@@ -966,7 +967,10 @@ TEST_CASE("RealtimeVoiceChanger counts a substituted input per channel", "[voice
   r2[52] = std::numeric_limits<float>::infinity();
   float* both[2] = {l2.data(), r2.data()};
   changer.process_block(both, 2, block);
-  REQUIRE(changer.non_finite_discard_count() == 3);
+  // Both channels carried it and the block still adds one. Moving by two here
+  // would report a stereo stream as twice as degraded as a mono one for the same
+  // defect, over a width the caller passed rather than asked for.
+  REQUIRE(changer.non_finite_discard_count() == 2);
 }
 
 // ===================================================================

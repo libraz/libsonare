@@ -56,8 +56,9 @@ export class RealtimeVoiceChanger {
    * non-zero count is what says the samples in between were not computed from
    * what you supplied.
    *
-   * Monotonic for the lifetime of the instance, and counted per channel and per
-   * block: a stereo block that discards on both channels adds two.
+   * Monotonic for the lifetime of the instance. The unit is one processed
+   * block, never a channel, so a stereo block that discards on both channels
+   * adds one and the number does not depend on a dimension you did not choose.
    *
    * @example
    * ```ts

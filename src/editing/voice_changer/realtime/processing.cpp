@@ -248,6 +248,7 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
   // because set_config() only writes to config_ + publishes a NEW snapshot
   // (the audio thread keeps owning the previously-adopted one).
   const RealtimeVoiceChangerConfig& config = adopt_snapshot_for_block();
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     // Skip null channel pointers (caller's responsibility) rather than aborting
     // the whole block: a null right pointer must not leave the left output
@@ -297,11 +298,13 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     if (config.limiter.enable_isp_limiter) {
       channel.isp_limiter.process_block(channels[ch], num_samples);
     }
-    // One bump per channel per block whichever of the two found something, so the
-    // counter keeps the cadence its accessor documents.
+    // Accumulated across the channels rather than bumped inside the loop: the
+    // channel count is a property of the buffer the caller passed, not of the
+    // work they asked for.
     const bool state_discarded = discard_non_finite_state(channel);
-    if (state_discarded || input_substituted) non_finite_discard_count_.bump();
+    discarded |= state_discarded || input_substituted;
   }
+  if (discarded) non_finite_discard_count_.bump();
 }
 
 bool RealtimeVoiceChanger::discard_non_finite_state(ChannelState& state) noexcept {

@@ -196,11 +196,13 @@ class RealtimeVoiceChanger {
   ///          samples combined and are intentionally omitted. Returns 0 before
   ///          prepare() has been called.
   int latency_samples() const noexcept;
-  /// @brief Channel-blocks in which the chain discarded its own state because a
+  /// @brief Blocks in which the chain discarded its own state because a
   ///        non-finite value had reached it.
   /// @details Any thread; monotonic since @ref prepare, which clears it. The
-  ///          count is per channel and per block, so a stereo block that
-  ///          discards on both channels adds two.
+  ///          unit is one process_block() call, never a channel, so the number
+  ///          does not depend on a dimension the caller did not choose; a stereo
+  ///          block that discards on both channels adds one. This is the unit
+  ///          every processor's count uses.
   ///
   ///          This is the only observable that separates a degraded stream from
   ///          a clean one. Every stage of this chain leaves an in-domain finite

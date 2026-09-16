@@ -140,7 +140,7 @@ class RealtimeVoiceChanger:
         return int(out.value)
 
     def non_finite_discard_count(self) -> int:
-        """Return the channel-blocks in which the chain discarded its own state.
+        """Return the blocks in which the chain discarded its own state.
 
         Advisory telemetry, and the only thing that separates a degraded stream
         from a clean one. Every stage of this chain leaves an in-domain finite
@@ -151,8 +151,10 @@ class RealtimeVoiceChanger:
         input. A non-zero count is what says the samples in between were not
         computed from what was supplied.
 
-        Monotonic for the lifetime of the handle, and counted per channel and
-        per block: a stereo block that discards on both channels adds two.
+        Monotonic for the lifetime of the handle. The unit is one processed
+        block, never a channel, so a stereo block that discards on both channels
+        adds one and the number does not depend on a dimension you did not
+        choose.
         """
         out = ctypes.c_uint32()
         rc = self._lib.sonare_realtime_voice_changer_non_finite_discard_count(
