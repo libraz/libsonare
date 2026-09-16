@@ -187,6 +187,11 @@ function newMixer(): unknown {
   return new native.Mixer(mixingScenePresetJson('commentaryDucking'), 48000, 8);
 }
 
+/** The gated fixture as a handle, for the metering methods that take one. */
+function newGatedAudio(): unknown {
+  return native.Audio.fromBuffer(GATED, SAMPLE_RATE);
+}
+
 interface FloatArgument {
   /** The addon entry point and argument, as the failure should name them. */
   name: string;
@@ -458,6 +463,17 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     site: 'analysis/metering.cpp MeteringSilenceRatio thresholdDb',
     control: [-45, -5],
     call: (v) => native.meteringSilenceRatio(GATED, SAMPLE_RATE, v, 1024, 256),
+  },
+  {
+    // `audio.silenceRatio` reaches its own reader, not the free function's.
+    name: 'audio.silenceRatio thresholdDb',
+    site: 'analysis/metering.cpp SilenceRatioInstance thresholdDb',
+    control: [-45, -5],
+    call: (v) => {
+      /* biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose. */
+      const audio = newGatedAudio() as any;
+      return audio.silenceRatio(v, 1024, 256);
+    },
   },
   {
     name: 'meteringDetectClipping threshold',
