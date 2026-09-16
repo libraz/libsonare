@@ -229,7 +229,15 @@ export interface MixAssistantTrackProfile {
   source: string;
   /** Classifier confidence in `[0, 1]`. */
   sourceConfidence: number;
-  /** False when the track is silent, too short, or has no usable spectral content. */
+  /**
+   * False when the track could not be measured: it has no samples, a
+   * non-positive sample rate, a NaN or Inf sample, is shorter than a gated
+   * loudness needs, is silent, or has no energy in the analysis bands. An
+   * excluded track gets no suggestions at all rather than suggestions of zero,
+   * and the call still succeeds — {@link exclusionReason} names which it was.
+   * A non-finite sample is reported as itself rather than as silence, so the
+   * reason describes the buffer instead of the material.
+   */
   usable: boolean;
   /** Why the track was excluded; empty when {@link usable} is true. */
   exclusionReason: string;

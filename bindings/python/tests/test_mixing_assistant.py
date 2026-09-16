@@ -218,6 +218,35 @@ def test_suggest_with_a_silent_track():
     assert excluded["silence"] is False
 
 
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_a_non_finite_track_is_excluded_as_itself_rather_than_as_silence(bad):
+    from libsonare import MixTrackInput, suggest_mix_scene
+
+    # A non-finite sample reaches the integrated loudness as -inf, where the
+    # silence gate would claim it, and the caller would be told something about
+    # the material instead of about the buffer they handed over.
+    poisoned = _tone(110.0).copy()
+    poisoned[1000] = bad
+    n = int(SAMPLE_RATE * DURATION_SEC)
+    tracks = [
+        MixTrackInput("kick", _percussive(55.0), None, "kick"),
+        MixTrackInput("poisoned", poisoned, None, "bass"),
+        MixTrackInput("silence", np.zeros(n, dtype=np.float32), None, "pad"),
+    ]
+    result = suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE)
+    by_id = {track["stripId"]: track for track in result["tracks"]}
+
+    assert by_id["poisoned"]["usable"] is False
+    assert by_id["poisoned"]["exclusionReason"] == "track has non-finite samples"
+    # The silent track is the control: both are excluded, and the two reasons
+    # stay distinguishable, so the assertion above cannot pass on any refusal.
+    assert by_id["silence"]["usable"] is False
+    assert by_id["silence"]["exclusionReason"] == "track is silent"
+    # A measurable track is carried, so one bad buffer does not fail the call.
+    assert by_id["kick"]["usable"] is True
+    assert by_id["kick"]["exclusionReason"] == ""
+
+
 def test_scene_json_matches_the_scene_in_the_full_result(mono_tracks, mono_suggestion):
     from libsonare import suggest_mix_scene_json
 

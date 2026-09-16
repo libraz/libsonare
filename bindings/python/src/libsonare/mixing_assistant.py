@@ -250,10 +250,13 @@ def suggest_mix_scene(
     Args:
         tracks: Tracks to analyse, each a :class:`MixTrackInput`. Lengths may
             differ between tracks. An empty sequence yields an empty suggestion.
-            A track whose audio is degenerate — empty, silent, too short to
-            measure, or holding a NaN or Inf sample — is excluded and reported
-            as ``"usable": False`` with an ``"exclusionReason"`` rather than
-            failing the call.
+            A track whose audio is degenerate — empty, at a non-positive sample
+            rate, holding a NaN or Inf sample, too short for a gated loudness,
+            silent, or without energy in the analysis bands — is excluded and
+            reported as ``"usable": False`` with an ``"exclusionReason"``
+            naming which, rather than failing the call. A non-finite sample is
+            reported as itself rather than as silence, so the reason describes
+            the buffer instead of the material.
         sample_rate: Shared sample rate of every track, in Hz.
         target_track_lufs: Absolute integrated-loudness target each track is
             staged towards, in LUFS.

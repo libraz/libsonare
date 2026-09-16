@@ -226,8 +226,17 @@ export interface MixAssistantTrackProfile {
   name: string;
   source: MixSourceClass;
   sourceConfidence: number;
-  /** False when the track was excluded from the decisions; see `exclusionReason`. */
+  /**
+   * False when the track could not be measured: it has no samples, a
+   * non-positive sample rate, a NaN or Inf sample, is shorter than a gated
+   * loudness needs, is silent, or has no energy in the analysis bands. An
+   * excluded track gets no suggestions at all rather than suggestions of zero,
+   * and the call still succeeds — `exclusionReason` names which it was. A
+   * non-finite sample is reported as itself rather than as silence, so the
+   * reason describes the buffer instead of the material.
+   */
   usable: boolean;
+  /** Why the track was excluded; empty when `usable` is true. */
   exclusionReason: string;
   channelCount: number;
   durationSec: number;
