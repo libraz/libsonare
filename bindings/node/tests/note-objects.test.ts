@@ -210,7 +210,7 @@ describe('extractNotes', () => {
       f0Hz: tone.f0Hz,
       frameRate: FRAME_RATE,
     };
-    expect(() => extractNotes({ ...request, frameRate: Number.NaN })).toThrow(TypeError);
+    expect(() => extractNotes({ ...request, frameRate: Number.NaN })).toThrow(RangeError);
     expect(() => extractNotes({ ...request, sampleRate: 0 })).toThrow(RangeError);
     expect(() => extractNotes({ ...request, voiced: new Int32Array(3) })).toThrow(RangeError);
     expect(() => extractNotes({ ...request, voicedProb: new Float32Array(3) })).toThrow(RangeError);
@@ -513,7 +513,7 @@ describe('renderNotes pitch curve edits', () => {
         f0Hz,
         frameRate: Number.NaN,
       }),
-    ).toThrow(TypeError);
+    ).toThrow(RangeError);
     // Positive control: a note ending exactly at the track's last frame is
     // inside it, so neither rejection above is refusing every curve edit.
     expect(renderWith({ vibratoDepthChange: -1 })).toHaveLength(SET_LENGTH);
@@ -635,7 +635,7 @@ describe('decomposeNotePitch', () => {
 
   it('rejects malformed arguments', () => {
     expect(() => decomposeNotePitch({ f0Hz, frameRate: Number.NaN, medianHz: CENTRE })).toThrow(
-      TypeError,
+      RangeError,
     );
     expect(() =>
       decomposeNotePitch({ f0Hz: new Float32Array(0), frameRate: CURVE_RATE, medianHz: CENTRE }),

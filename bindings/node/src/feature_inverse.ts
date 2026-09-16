@@ -1,6 +1,7 @@
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { InverseMelResult, InverseStftResult } from './types.js';
+import { assertFiniteScalar } from './validation.js';
 
 export interface CqtToAudioRequest {
   magnitude: Float32Array;
@@ -388,9 +389,7 @@ export function phaseVocoder(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, rate, nFft, hopLength } : samples;
-  if (typeof request.rate !== 'number' || !Number.isFinite(request.rate)) {
-    throw new TypeError('phaseVocoder: rate must be a finite number');
-  }
+  assertFiniteScalar('phaseVocoder', request.rate, 'rate');
   return addon.phaseVocoder(
     request.samples,
     request.sampleRate ?? 22050,

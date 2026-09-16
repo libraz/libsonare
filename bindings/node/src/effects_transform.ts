@@ -16,7 +16,13 @@ import type {
   SpectralRegionOp,
   VoicedFlags,
 } from './types.js';
-import { assertHpssKernels, assertInt32, assertInt64, assertSampleRate } from './validation.js';
+import {
+  assertFiniteScalar,
+  assertHpssKernels,
+  assertInt32,
+  assertInt64,
+  assertSampleRate,
+} from './validation.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
 // ignores any other type, so normalize here rather than at the N-API boundary.
@@ -363,9 +369,7 @@ function assertNoteSetEntries(fnName: string, notes: readonly NoteSetEntry[]): v
 /** Shared entry check for the three entry points that re-measure a whole track. */
 function assertNoteTrackRequest(fnName: string, request: NoteTrackRequest): void {
   assertSampleRate(fnName, request.sampleRate);
-  if (typeof request.frameRate !== 'number' || !Number.isFinite(request.frameRate)) {
-    throw new TypeError(`${fnName}: frameRate must be a finite number`);
-  }
+  assertFiniteScalar(fnName, request.frameRate, 'frameRate');
   if (request.voiced === undefined && request.voicedProb === undefined) {
     throw new TypeError(`${fnName}: one of voiced or voicedProb is required`);
   }
@@ -461,9 +465,7 @@ export function timeStretch(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, rate, nFft, hopLength } : samples;
-  if (typeof request.rate !== 'number' || !Number.isFinite(request.rate)) {
-    throw new TypeError('timeStretch: rate must be a finite number');
-  }
+  assertFiniteScalar('timeStretch', request.rate as number, 'rate');
   const fftOptions = resolveFftOptions('timeStretch', request.nFft, request.hopLength);
   return addon.timeStretch(
     request.samples,
@@ -553,9 +555,7 @@ export function pitchShift(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, semitones, nFft, hopLength } : samples;
-  if (typeof request.semitones !== 'number' || !Number.isFinite(request.semitones)) {
-    throw new TypeError('pitchShift: semitones must be a finite number');
-  }
+  assertFiniteScalar('pitchShift', request.semitones as number, 'semitones');
   const fftOptions = resolveFftOptions('pitchShift', request.nFft, request.hopLength);
   return addon.pitchShift(
     request.samples,
@@ -769,10 +769,10 @@ export function noteMove(
  *   plus the optional segmentation tuning.
  * @returns One {@link NoteObject} per segmented note, in time order. A pitch
  *   track that segments into nothing returns an empty array.
- * @throws {TypeError} `frameRate` is not a finite number, or neither `voiced`
- *   nor `voicedProb` was given.
- * @throws {RangeError} `sampleRate` is out of the supported range, or `voiced` /
- *   `voicedProb` do not have the same length as `f0Hz`.
+ * @throws {TypeError} Neither `voiced` nor `voicedProb` was given.
+ * @throws {RangeError} `frameRate` is not a finite number, `sampleRate` is out
+ *   of the supported range, or `voiced` / `voicedProb` do not have the same
+ *   length as `f0Hz`.
  *
  * @example
  * ```ts
@@ -822,7 +822,8 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  *   edge cross-fade, and the F0 track a curve edit needs.
  * @returns The rendered audio, the same length as `samples`.
  * @throws {TypeError} `notes` is not an array, or `f0Hz` is not a `Float32Array`.
- * @throws {RangeError} `sampleRate` is out of the supported range.
+ * @throws {RangeError} `sampleRate` is out of the supported range, or `f0Hz` was
+ *   given without a finite `frameRate`.
  * @throws {SonareError} A note is missing `onsetSample` or `offsetSample`, or
  *   carries `vibratoDepthChange` or `driftChange` without an `f0Hz` covering its
  *   frame span, or an `amplitudeEnvelope` value is not a finite non-negative
@@ -855,8 +856,9 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
   if (options.f0Hz !== undefined && !(options.f0Hz instanceof Float32Array)) {
     throw new TypeError('renderNotes: f0Hz must be a Float32Array');
   }
-  if (options.f0Hz !== undefined && !Number.isFinite(options.frameRate)) {
-    throw new TypeError('renderNotes: frameRate must be a finite number when f0Hz is given');
+  // Only a track edit reads the frame rate, so it is required exactly when f0Hz is.
+  if (options.f0Hz !== undefined) {
+    assertFiniteScalar('renderNotes', options.frameRate as number, 'frameRate');
   }
   assertEditTimeOffsets('renderNotes', notes, 'notes');
   return addon.renderNotes(samples, sampleRate, notes, options);
@@ -881,7 +883,7 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * @param request - The note's slice of the F0 track, its frame rate, its median
  *   pitch, and the optional cutoff between the two curves.
  * @returns The centre and the two curves, one entry per frame of `f0Hz`.
- * @throws {TypeError} `frameRate` is not a finite number.
+ * @throws {RangeError} `frameRate` is not a finite number.
  * @throws {SonareError} `f0Hz` is empty or carries a negative or non-finite
  *   value, or `medianHz` / `vibratoCutoffHz` is negative or non-finite.
  *
@@ -898,9 +900,7 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  */
 export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDecompositionResult {
   const { f0Hz, frameRate, medianHz, vibratoCutoffHz = 0 } = request;
-  if (typeof frameRate !== 'number' || !Number.isFinite(frameRate)) {
-    throw new TypeError('decomposeNotePitch: frameRate must be a finite number');
-  }
+  assertFiniteScalar('decomposeNotePitch', frameRate, 'frameRate');
   return addon.decomposeNotePitch(f0Hz, frameRate, medianHz, vibratoCutoffHz);
 }
 
@@ -922,11 +922,12 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  * @param request - Audio, its sample rate, the F0 track, the current note set,
  *   the note to split and the frame to cut at.
  * @returns The whole new note set, in time order.
- * @throws {TypeError} `frameRate` is not a finite number, neither `voiced` nor
- *   `voicedProb` was given, `notes` is not an array, or one of its entries is
- *   missing a finite `frameStart` and `frameEnd`.
- * @throws {RangeError} `sampleRate` is out of the supported range, or `voiced` /
- *   `voicedProb` do not have the same length as `f0Hz`.
+ * @throws {TypeError} Neither `voiced` nor `voicedProb` was given, `notes` is
+ *   not an array, or one of its entries is missing a finite `frameStart` and
+ *   `frameEnd`.
+ * @throws {RangeError} `frameRate` is not a finite number, `sampleRate` is out
+ *   of the supported range, or `voiced` / `voicedProb` do not have the same
+ *   length as `f0Hz`.
  * @throws {SonareError} `index` is out of range, or `frame` is not strictly
  *   inside that note's own span.
  *
@@ -975,11 +976,12 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
  *   and the inclusive run to join.
  * @returns The whole new note set, in time order, one note shorter per note
  *   joined away.
- * @throws {TypeError} `frameRate` is not a finite number, neither `voiced` nor
- *   `voicedProb` was given, `notes` is not an array, or one of its entries is
- *   missing a finite `frameStart` and `frameEnd`.
- * @throws {RangeError} `sampleRate` is out of the supported range, or `voiced` /
- *   `voicedProb` do not have the same length as `f0Hz`.
+ * @throws {TypeError} Neither `voiced` nor `voicedProb` was given, `notes` is
+ *   not an array, or one of its entries is missing a finite `frameStart` and
+ *   `frameEnd`.
+ * @throws {RangeError} `frameRate` is not a finite number, `sampleRate` is out
+ *   of the supported range, or `voiced` / `voicedProb` do not have the same
+ *   length as `f0Hz`.
  * @throws {SonareError} `first` is not less than `last`, or `last` is out of
  *   range.
  *
