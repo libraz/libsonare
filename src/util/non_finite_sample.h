@@ -34,8 +34,12 @@ enum class SampleDestination {
   /// A cell the owner carries from one block to the next. One non-finite value
   /// does not degrade a block, it ends the handle (see non_finite_state.h).
   kRecursiveState,
-  /// A file, a device or a host's buffer: the value leaves the library and there
-  /// is no later chance to report it, so something representable must be written.
+  /// A buffer the stage writes in place and can never reach again -- a file, a
+  /// device, a host's callback buffer, a chain's scratch. Something
+  /// representable must be written because the sample is out of reach once the
+  /// call returns. Whether it later leaves the library is the caller's and
+  /// cannot be read at the site, so it does not decide the class: one process()
+  /// is reached from both a host callback and a chain.
   kIrreversibleOutput,
   /// A comparison-based algorithm whose precondition a non-finite violates.
   /// `std::lower_bound` and `std::nth_element` over a NaN are undefined
