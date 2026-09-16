@@ -49,22 +49,23 @@ const tone = new Float32Array(4096).map((_, i) => Math.sin((2 * Math.PI * 440 * 
  * signed 32-bit range and narrows to 0, which several guards downstream read as
  * "use the default", so the refusal has to come from the surface rather than
  * from the core.
+ *
+ * The fraction is derived from each argument's own valid value rather than
+ * fixed, because a fixed one probes the wrong thing. `1.5` looked like a
+ * non-integer probe and was not: it narrows to `1`, which the core rejects for
+ * being odd or non-positive, so every `nFft` read as guarded while `2048.5`
+ * sailed through as `2048`. Only a fraction whose truncation lands on a LEGAL
+ * value can tell a surface that checks from one that does not.
  */
 const WRONG_VALUES = [
-  { kind: 'outOfRange', label: 'out of the signed 32-bit range', value: 2 ** 32 },
-  { kind: 'nonInteger', label: 'not an integer', value: 1.5 },
+  { kind: 'outOfRange', label: 'out of the signed 32-bit range' },
+  { kind: 'nonInteger', label: 'a fraction that truncates onto its valid value' },
 ] as const;
 
 /** An integer-typed argument both forms take at the same position. */
 interface IntArg {
   index: number;
   name: string;
-  /**
-   * The addon truncates a fractional value into the accepted domain here, so
-   * neither form refuses one. Both still have to agree, which is what this file
-   * asserts; the acceptance itself is the addon's, not the facade's.
-   */
-  truncatesNonInteger?: true;
 }
 
 /** An `Audio` method that delegates, and how to drive both of its forms. */
@@ -86,7 +87,7 @@ const DELEGATIONS: Delegation[] = [
   {
     name: 'analyzeImpulseResponse',
     valid: [6],
-    intArgs: [{ index: 0, name: 'nOctaveBands', truncatesNonInteger: true }],
+    intArgs: [{ index: 0, name: 'nOctaveBands' }],
     method: (audio, [a]) => audio.analyzeImpulseResponse(a),
     facade: (samples, rate, [a]) => analyzeImpulseResponse(samples, rate, a),
   },
@@ -99,8 +100,8 @@ const DELEGATIONS: Delegation[] = [
     name: 'chordFunctionalAnalysis',
     valid: [0, 0],
     intArgs: [
-      { index: 0, name: 'keyRoot', truncatesNonInteger: true },
-      { index: 1, name: 'keyMode', truncatesNonInteger: true },
+      { index: 0, name: 'keyRoot' },
+      { index: 1, name: 'keyMode' },
     ],
     method: (audio, [a, b]) => audio.chordFunctionalAnalysis(a, b),
     // The only entry whose two forms disagree on argument order: the facade
@@ -140,7 +141,7 @@ const DELEGATIONS: Delegation[] = [
     valid: [2048, 512],
     intArgs: [
       { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b]) => audio.stft(a, b),
     facade: (samples, rate, [a, b]) => stft(samples, rate, a, b),
@@ -150,7 +151,7 @@ const DELEGATIONS: Delegation[] = [
     valid: [2048, 512],
     intArgs: [
       { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b]) => audio.stftDb(a, b),
     facade: (samples, rate, [a, b]) => stftDb(samples, rate, a, b),
@@ -160,8 +161,8 @@ const DELEGATIONS: Delegation[] = [
     valid: [2048, 512, 128, 0, 0],
     intArgs: [
       { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
-      { index: 2, name: 'nMels', truncatesNonInteger: true },
+      { index: 1, name: 'hopLength' },
+      { index: 2, name: 'nMels' },
     ],
     method: (audio, [a, b, c]) => audio.melSpectrogram(a, b, c),
     facade: (samples, rate, [a, b, c]) => melSpectrogram(samples, rate, a, b, c),
@@ -171,9 +172,9 @@ const DELEGATIONS: Delegation[] = [
     valid: [2048, 512, 128, 20],
     intArgs: [
       { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 1, name: 'hopLength' },
       { index: 2, name: 'nMels' },
-      { index: 3, name: 'nMfcc', truncatesNonInteger: true },
+      { index: 3, name: 'nMfcc' },
     ],
     method: (audio, [a, b, c, d]) => audio.mfcc(a, b, c, d),
     facade: (samples, rate, [a, b, c, d]) => mfcc(samples, rate, a, b, c, d),
@@ -183,7 +184,7 @@ const DELEGATIONS: Delegation[] = [
     valid: [2048, 512],
     intArgs: [
       { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b]) => audio.chroma(a, b),
     facade: (samples, rate, [a, b]) => chroma(samples, rate, a, b),
@@ -193,7 +194,7 @@ const DELEGATIONS: Delegation[] = [
     valid: [2048, 512],
     intArgs: [
       { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b]) => audio.spectralCentroid(a, b),
     facade: (samples, rate, [a, b]) => spectralCentroid(samples, rate, a, b),
@@ -203,7 +204,7 @@ const DELEGATIONS: Delegation[] = [
     valid: [2048, 512],
     intArgs: [
       { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b]) => audio.spectralBandwidth(a, b),
     facade: (samples, rate, [a, b]) => spectralBandwidth(samples, rate, a, b),
@@ -213,7 +214,7 @@ const DELEGATIONS: Delegation[] = [
     valid: [2048, 512, 0.85],
     intArgs: [
       { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b, c]) => audio.spectralRolloff(a, b, c),
     facade: (samples, rate, [a, b, c]) => spectralRolloff(samples, rate, a, b, c),
@@ -223,7 +224,7 @@ const DELEGATIONS: Delegation[] = [
     valid: [2048, 512],
     intArgs: [
       { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b]) => audio.spectralFlatness(a, b),
     facade: (samples, rate, [a, b]) => spectralFlatness(samples, rate, a, b),
@@ -232,8 +233,8 @@ const DELEGATIONS: Delegation[] = [
     name: 'zeroCrossingRate',
     valid: [2048, 512],
     intArgs: [
-      { index: 0, name: 'frameLength', truncatesNonInteger: true },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 0, name: 'frameLength' },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b]) => audio.zeroCrossingRate(a, b),
     facade: (samples, rate, [a, b]) => zeroCrossingRate(samples, rate, a, b),
@@ -242,8 +243,8 @@ const DELEGATIONS: Delegation[] = [
     name: 'rmsEnergy',
     valid: [2048, 512],
     intArgs: [
-      { index: 0, name: 'frameLength', truncatesNonInteger: true },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 0, name: 'frameLength' },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b]) => audio.rmsEnergy(a, b),
     facade: (samples, rate, [a, b]) => rmsEnergy(samples, rate, a, b),
@@ -252,8 +253,8 @@ const DELEGATIONS: Delegation[] = [
     name: 'pitchYin',
     valid: [2048, 512, 65, 2093, 0.1],
     intArgs: [
-      { index: 0, name: 'frameLength', truncatesNonInteger: true },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 0, name: 'frameLength' },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b, c, d, e]) => audio.pitchYin(a, b, c, d, e),
     facade: (samples, rate, [a, b, c, d, e]) => pitchYin(samples, rate, a, b, c, d, e),
@@ -262,8 +263,8 @@ const DELEGATIONS: Delegation[] = [
     name: 'pitchPyin',
     valid: [2048, 512, 65, 2093, 0.1],
     intArgs: [
-      { index: 0, name: 'frameLength', truncatesNonInteger: true },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
+      { index: 0, name: 'frameLength' },
+      { index: 1, name: 'hopLength' },
     ],
     method: (audio, [a, b, c, d, e]) => audio.pitchPyin(a, b, c, d, e),
     facade: (samples, rate, [a, b, c, d, e]) => pitchPyin(samples, rate, a, b, c, d, e),
@@ -271,7 +272,7 @@ const DELEGATIONS: Delegation[] = [
   {
     name: 'resample',
     valid: [16000],
-    intArgs: [{ index: 0, name: 'targetSr', truncatesNonInteger: true }],
+    intArgs: [{ index: 0, name: 'targetSr' }],
     method: (audio, [a]) => audio.resample(a),
     facade: (samples, rate, [a]) => resample(samples, rate, a),
   },
@@ -280,8 +281,8 @@ const DELEGATIONS: Delegation[] = [
     valid: [2048, 512, 128],
     intArgs: [
       { index: 0, name: 'nFft' },
-      { index: 1, name: 'hopLength', truncatesNonInteger: true },
-      { index: 2, name: 'nMels', truncatesNonInteger: true },
+      { index: 1, name: 'hopLength' },
+      { index: 2, name: 'nMels' },
     ],
     method: (audio, [a, b, c]) => audio.onsetEnvelope(a, b, c),
     facade: (samples, rate, [a, b, c]) => onsetEnvelope(samples, rate, a, b, c),
@@ -349,9 +350,12 @@ describe('both forms answer a wrong integer with one class and one message', () 
   for (const entry of DELEGATIONS) {
     for (const arg of entry.intArgs ?? []) {
       for (const wrong of WRONG_VALUES) {
-        const expectRefusal = !(wrong.kind === 'nonInteger' && arg.truncatesNonInteger === true);
         it(`${entry.name}: ${arg.name} ${wrong.label}`, () => {
-          const args = withArg(entry, arg.index, wrong.value);
+          const value =
+            wrong.kind === 'outOfRange'
+              ? 2 ** 32
+              : ((entry.valid as number[])[arg.index] as number) + 0.5;
+          const args = withArg(entry, arg.index, value);
           const audio = Audio.fromBuffer(tone, sampleRate);
           try {
             const viaMethod = outcomeOf(() =>
@@ -363,15 +367,9 @@ describe('both forms answer a wrong integer with one class and one message', () 
             // Compared as one object so a disagreement names the class AND the
             // message at once, rather than failing on whichever ran first.
             expect(viaMethod).toEqual(viaFacade);
-            // Pinned in both directions: a pair that silently stops refusing
-            // would otherwise compare two successes and read as covered, and a
-            // truncation note that goes stale would never be noticed.
-            expect(
-              viaMethod.refused,
-              expectRefusal
-                ? 'neither form refused the value'
-                : 'the value was refused, so the truncation note is stale',
-            ).toBe(expectRefusal);
+            // Without this a pair that silently stopped refusing would compare
+            // two successes and read as covered.
+            expect(viaMethod.refused, 'neither form refused the value').toBe(true);
           } finally {
             audio.destroy();
           }

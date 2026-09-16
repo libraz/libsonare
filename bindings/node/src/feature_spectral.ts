@@ -1,3 +1,4 @@
+import { resolveFftOptions } from './_fft_options.js';
 import type { ValuesRequest } from './feature_units.js';
 import { addon } from './native.js';
 import type {
@@ -8,7 +9,12 @@ import type {
   StftDbResult,
   StftResult,
 } from './types.js';
-import { assertNonNegativeScalar, assertPositiveInteger, assertSamples } from './validation.js';
+import {
+  assertNonNegativeScalar,
+  assertPositiveInteger,
+  assertSampleRate,
+  assertSamples,
+} from './validation.js';
 
 /** Common input for one-shot feature extraction requests. */
 export interface FeatureSamplesRequest {
@@ -75,12 +81,10 @@ export function stft(
 ): StftResult {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength } : samples;
-  return addon.stft(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('stft', resolvedSampleRate);
+  const fft = resolveFftOptions('stft', request.nFft, request.hopLength);
+  return addon.stft(request.samples, resolvedSampleRate, fft.nFft, fft.hopLength);
 }
 
 export function stftDb(request: StftRequest): StftDbResult;
@@ -98,12 +102,10 @@ export function stftDb(
 ): StftDbResult {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength } : samples;
-  return addon.stftDb(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('stftDb', resolvedSampleRate);
+  const fft = resolveFftOptions('stftDb', request.nFft, request.hopLength);
+  return addon.stftDb(request.samples, resolvedSampleRate, fft.nFft, fft.hopLength);
 }
 
 export function melSpectrogram(request: MelSpectrogramRequest): MelSpectrogramResult;
@@ -131,11 +133,15 @@ export function melSpectrogram(
     samples instanceof Float32Array
       ? { samples, sampleRate, nFft, hopLength, nMels, fmin, fmax, htk }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('melSpectrogram', resolvedSampleRate);
+  const fft = resolveFftOptions('melSpectrogram', request.nFft, request.hopLength);
+  assertPositiveInteger('melSpectrogram', request.nMels ?? 128, 'nMels');
   return addon.melSpectrogram(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.nMels ?? 128,
     request.fmin ?? 0,
     request.fmax ?? 0,
@@ -172,11 +178,16 @@ export function mfcc(
     samples instanceof Float32Array
       ? { samples, sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk, lifter }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('mfcc', resolvedSampleRate);
+  const fft = resolveFftOptions('mfcc', request.nFft, request.hopLength);
+  assertPositiveInteger('mfcc', request.nMels ?? 128, 'nMels');
+  assertPositiveInteger('mfcc', request.nMfcc ?? 20, 'nMfcc');
   return addon.mfcc(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.nMels ?? 128,
     request.nMfcc ?? 20,
     request.fmin ?? 0,
@@ -243,11 +254,14 @@ export function reassignedSpectrogram(
   assertSamples('reassignedSpectrogram', request.samples, true);
   const resolvedRefPower = request.refPower ?? 1e-6;
   assertNonNegativeScalar('reassignedSpectrogram', resolvedRefPower, 'refPower');
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('reassignedSpectrogram', resolvedSampleRate);
+  const fft = resolveFftOptions('reassignedSpectrogram', request.nFft, request.hopLength);
   return addon.reassignedSpectrogram(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     resolvedRefPower,
     request.fillNan ?? false,
   );
@@ -268,12 +282,10 @@ export function spectralCentroid(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength } : samples;
-  return addon.spectralCentroid(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('spectralCentroid', resolvedSampleRate);
+  const fft = resolveFftOptions('spectralCentroid', request.nFft, request.hopLength);
+  return addon.spectralCentroid(request.samples, resolvedSampleRate, fft.nFft, fft.hopLength);
 }
 
 /**
@@ -310,11 +322,15 @@ export function spectralContrast(
     samples instanceof Float32Array
       ? { samples, sampleRate, nFft, hopLength, nBands, fmin, quantile }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('spectralContrast', resolvedSampleRate);
+  const fft = resolveFftOptions('spectralContrast', request.nFft, request.hopLength);
+  assertPositiveInteger('spectralContrast', request.nBands ?? 6, 'nBands');
   return addon.spectralContrast(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.nBands ?? 6,
     request.fmin ?? 200,
     request.quantile ?? 0.02,
@@ -339,11 +355,14 @@ export function polyFeatures(
 ): Matrix2D {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength, order } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('polyFeatures', resolvedSampleRate);
+  const fft = resolveFftOptions('polyFeatures', request.nFft, request.hopLength);
   return addon.polyFeatures(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.order ?? 1,
   );
 }
@@ -392,11 +411,14 @@ export function spectralBandwidth(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength, p } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('spectralBandwidth', resolvedSampleRate);
+  const fft = resolveFftOptions('spectralBandwidth', request.nFft, request.hopLength);
   return addon.spectralBandwidth(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.p ?? 2,
   );
 }
@@ -420,11 +442,14 @@ export function spectralRolloff(
     samples instanceof Float32Array
       ? { samples, sampleRate, nFft, hopLength, rollPercent }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('spectralRolloff', resolvedSampleRate);
+  const fft = resolveFftOptions('spectralRolloff', request.nFft, request.hopLength);
   return addon.spectralRolloff(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.rollPercent ?? 0.85,
   );
 }
@@ -444,12 +469,10 @@ export function spectralFlatness(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength } : samples;
-  return addon.spectralFlatness(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('spectralFlatness', resolvedSampleRate);
+  const fft = resolveFftOptions('spectralFlatness', request.nFft, request.hopLength);
+  return addon.spectralFlatness(request.samples, resolvedSampleRate, fft.nFft, fft.hopLength);
 }
 
 export function spectralFlux(request: StftRequest & { lag?: number }): Float32Array;
@@ -469,11 +492,15 @@ export function spectralFlux(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength, lag } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('spectralFlux', resolvedSampleRate);
+  const fft = resolveFftOptions('spectralFlux', request.nFft, request.hopLength);
+  assertPositiveInteger('spectralFlux', request.lag ?? 1, 'lag');
   return addon.spectralFlux(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.lag ?? 1,
   );
 }
@@ -495,9 +522,15 @@ export function zeroCrossingRate(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, frameLength, hopLength } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('zeroCrossingRate', resolvedSampleRate);
+  // A framing window is not a transform size, so the evenness rule the FFT
+  // resolver carries does not apply to it.
+  assertPositiveInteger('zeroCrossingRate', request.frameLength ?? 2048, 'frameLength');
+  assertPositiveInteger('zeroCrossingRate', request.hopLength ?? 512, 'hopLength');
   return addon.zeroCrossingRate(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.frameLength ?? 2048,
     request.hopLength ?? 512,
   );
@@ -520,9 +553,13 @@ export function rmsEnergy(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, frameLength, hopLength } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('rmsEnergy', resolvedSampleRate);
+  assertPositiveInteger('rmsEnergy', request.frameLength ?? 2048, 'frameLength');
+  assertPositiveInteger('rmsEnergy', request.hopLength ?? 512, 'hopLength');
   return addon.rmsEnergy(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.frameLength ?? 2048,
     request.hopLength ?? 512,
   );
@@ -576,5 +613,13 @@ export function pcen(
   // over 100 values is checked as 2 x 50 and answers as a 2-bin result.
   assertPositiveInteger('pcen', requestBins, 'nBins');
   assertPositiveInteger('pcen', requestFrames, 'nFrames');
+  // Only what the caller supplied: an omitted field's default belongs to the
+  // addon's options reader, so resolving one here would check this file's guess.
+  if (requestOptions.sampleRate !== undefined) {
+    assertSampleRate('pcen', requestOptions.sampleRate);
+  }
+  if (requestOptions.hopLength !== undefined) {
+    assertPositiveInteger('pcen', requestOptions.hopLength, 'hopLength');
+  }
   return addon.pcen(requestValues, requestBins, requestFrames, requestOptions);
 }

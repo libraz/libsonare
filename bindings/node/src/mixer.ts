@@ -15,7 +15,7 @@ import type {
   StripRef,
   SurroundPan,
 } from './types.js';
-import { assertFiniteScalar } from './validation.js';
+import { assertFiniteScalar, assertSampleRate } from './validation.js';
 import {
   automationCurveValue,
   meterTapValue,
@@ -110,7 +110,12 @@ export function resample(
   srcSr?: number,
   targetSr?: number,
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, srcSr, targetSr } : samples;
+  const request: ResampleRequest =
+    samples instanceof Float32Array
+      ? { samples, srcSr: srcSr as number, targetSr: targetSr as number }
+      : samples;
+  assertSampleRate('resample', request.srcSr, 'srcSr');
+  assertSampleRate('resample', request.targetSr, 'targetSr');
   return addon.resample(request.samples, request.srcSr, request.targetSr);
 }
 
@@ -593,10 +598,7 @@ export function mixStereo(
   const request = Array.isArray(leftChannels)
     ? { leftChannels, rightChannels: rightChannels as Float32Array[], sampleRate, ...options }
     : leftChannels;
-  return addon.mixStereo(
-    request.leftChannels,
-    request.rightChannels,
-    request.sampleRate ?? 48000,
-    request,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 48000;
+  assertSampleRate('mixStereo', resolvedSampleRate);
+  return addon.mixStereo(request.leftChannels, request.rightChannels, resolvedSampleRate, request);
 }

@@ -1,8 +1,9 @@
 import { resolvePositiveIntegerOption } from './_feature_options.js';
+import { resolveFftOptions } from './_fft_options.js';
 import type { FeatureSamplesRequest, StftRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { ChromaResult, CqtResult, NoteSegment, PiptrackResult, PitchResult } from './types.js';
-import { assertSamples } from './validation.js';
+import { assertPositiveInteger, assertSampleRate, assertSamples } from './validation.js';
 
 /**
  * Options for the constant-Q chroma variants.
@@ -133,12 +134,10 @@ export function chroma(
 ): ChromaResult {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength } : samples;
-  return addon.chroma(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('chroma', resolvedSampleRate);
+  const fft = resolveFftOptions('chroma', request.nFft, request.hopLength);
+  return addon.chroma(request.samples, resolvedSampleRate, fft.nFft, fft.hopLength);
 }
 
 export function chromaCens(request: ChromaRequest): ChromaResult;
@@ -160,9 +159,14 @@ export function chromaCens(
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, nChroma, binsPerOctave }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('chromaCens', resolvedSampleRate);
+  assertPositiveInteger('chromaCens', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('chromaCens', request.nChroma ?? 12, 'nChroma');
+  assertPositiveInteger('chromaCens', request.binsPerOctave ?? 36, 'binsPerOctave');
   return addon.chromaCens(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.nChroma ?? 12,
     request.binsPerOctave ?? 36,
@@ -188,9 +192,14 @@ export function chromaCqt(
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, nChroma, binsPerOctave }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('chromaCqt', resolvedSampleRate);
+  assertPositiveInteger('chromaCqt', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('chromaCqt', request.nChroma ?? 12, 'nChroma');
+  assertPositiveInteger('chromaCqt', request.binsPerOctave ?? 36, 'binsPerOctave');
   return addon.chromaCqt(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.nChroma ?? 12,
     request.binsPerOctave ?? 36,
@@ -212,9 +221,13 @@ export function bassChroma(
 ): ChromaResult {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, hopLength, nChroma } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('bassChroma', resolvedSampleRate);
+  assertPositiveInteger('bassChroma', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('bassChroma', request.nChroma ?? 12, 'nChroma');
   return addon.bassChroma(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.nChroma ?? 12,
   );
@@ -242,9 +255,14 @@ export function cqt(
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('cqt', resolvedSampleRate);
+  assertPositiveInteger('cqt', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('cqt', request.nBins ?? 84, 'nBins');
+  assertPositiveInteger('cqt', request.binsPerOctave ?? 12, 'binsPerOctave');
   return addon.cqt(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.fmin ?? 32.70319566257483,
     request.nBins ?? 84,
@@ -274,9 +292,14 @@ export function pseudoCqt(
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('pseudoCqt', resolvedSampleRate);
+  assertPositiveInteger('pseudoCqt', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('pseudoCqt', request.nBins ?? 84, 'nBins');
+  assertPositiveInteger('pseudoCqt', request.binsPerOctave ?? 12, 'binsPerOctave');
   return addon.pseudoCqt(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.fmin ?? 32.70319566257483,
     request.nBins ?? 84,
@@ -306,9 +329,14 @@ export function hybridCqt(
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('hybridCqt', resolvedSampleRate);
+  assertPositiveInteger('hybridCqt', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('hybridCqt', request.nBins ?? 84, 'nBins');
+  assertPositiveInteger('hybridCqt', request.binsPerOctave ?? 12, 'binsPerOctave');
   return addon.hybridCqt(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.fmin ?? 32.70319566257483,
     request.nBins ?? 84,
@@ -340,9 +368,14 @@ export function vqt(
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('vqt', resolvedSampleRate);
+  assertPositiveInteger('vqt', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('vqt', request.nBins ?? 84, 'nBins');
+  assertPositiveInteger('vqt', request.binsPerOctave ?? 12, 'binsPerOctave');
   return addon.vqt(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.fmin ?? 32.70319566257483,
     request.nBins ?? 84,
@@ -365,6 +398,7 @@ export function pitchTuning(
 ): number {
   const request =
     frequencies instanceof Float32Array ? { frequencies, resolution, binsPerOctave } : frequencies;
+  assertPositiveInteger('pitchTuning', request.binsPerOctave ?? 12, 'binsPerOctave');
   return addon.pitchTuning(
     request.frequencies,
     request.resolution ?? 0.01,
@@ -394,11 +428,15 @@ export function estimateTuning(
     samples instanceof Float32Array
       ? { samples, sampleRate, nFft, hopLength, resolution, binsPerOctave }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('estimateTuning', resolvedSampleRate);
+  const fft = resolveFftOptions('estimateTuning', request.nFft, request.hopLength);
+  assertPositiveInteger('estimateTuning', request.binsPerOctave ?? 12, 'binsPerOctave');
   return addon.estimateTuning(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.resolution ?? 0.01,
     request.binsPerOctave ?? 12,
   );
@@ -429,11 +467,14 @@ export function piptrack(
       ? { samples, sampleRate, nFft, hopLength, fmin, fmax, threshold }
       : samples;
   assertSamples('piptrack', request.samples, true);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('piptrack', resolvedSampleRate);
+  const fft = resolveFftOptions('piptrack', request.nFft, request.hopLength);
   return addon.piptrack(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.fmin ?? 150,
     request.fmax ?? 4000,
     request.threshold ?? 0.1,
@@ -466,9 +507,14 @@ export function pitchYin(
       ? { samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold, fillNa }
       : samples;
   assertSamples('pitchYin', request.samples, true);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('pitchYin', resolvedSampleRate);
+  // frameLength is a framing window, not a transform size, so it carries no evenness rule.
+  assertPositiveInteger('pitchYin', request.frameLength ?? 2048, 'frameLength');
+  assertPositiveInteger('pitchYin', request.hopLength ?? 512, 'hopLength');
   return addon.pitchYin(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.frameLength ?? 2048,
     request.hopLength ?? 512,
     request.fmin ?? 65,
@@ -504,9 +550,13 @@ export function pitchPyin(
       ? { samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold, fillNa }
       : samples;
   assertSamples('pitchPyin', request.samples, true);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('pitchPyin', resolvedSampleRate);
+  assertPositiveInteger('pitchPyin', request.frameLength ?? 2048, 'frameLength');
+  assertPositiveInteger('pitchPyin', request.hopLength ?? 512, 'hopLength');
   return addon.pitchPyin(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.frameLength ?? 2048,
     request.hopLength ?? 512,
     request.fmin ?? 65,
@@ -560,6 +610,8 @@ export function tonnetz(
 ): Float32Array {
   const request =
     chromagram instanceof Float32Array ? { chromagram, nChroma, nFrames } : chromagram;
+  assertPositiveInteger('tonnetz', request.nChroma, 'nChroma');
+  assertPositiveInteger('tonnetz', request.nFrames, 'nFrames');
   return addon.tonnetz(request.chromagram, request.nChroma, request.nFrames);
 }
 
@@ -579,9 +631,13 @@ export function nnlsChroma(
   options: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'> = {},
 ): { nChroma: number; nFrames: number; data: Float32Array } {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('nnlsChroma', resolvedSampleRate);
+  // stftBlendNFft defaults to 4096, not the 2048/512 pair resolveFftOptions assumes.
+  assertPositiveInteger('nnlsChroma', request.stftBlendNFft ?? 4096, 'stftBlendNFft');
   return addon.nnlsChroma(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.enableStftBlend ?? true,
     request.stftBlendWeight ?? 0.55,
     request.stftBlendNFft ?? 4096,

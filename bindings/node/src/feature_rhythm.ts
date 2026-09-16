@@ -1,7 +1,13 @@
+import { resolveFftOptions } from './_fft_options.js';
 import type { MelSpectrogramRequest } from './feature_spectral.js';
 import type { ValuesRequest } from './feature_units.js';
 import { addon } from './native.js';
 import type { TempogramMode } from './types.js';
+import {
+  assertNonNegativeSafeInteger,
+  assertPositiveInteger,
+  assertSampleRate,
+} from './validation.js';
 
 export interface OnsetBacktrackRequest {
   events: Int32Array | number[];
@@ -136,6 +142,12 @@ export function peakPick(
     values instanceof Float32Array
       ? { values, preMax, postMax, preAvg, postAvg, delta, wait }
       : values;
+  // Each is a frame count that may legitimately be zero (see the defaults above).
+  assertNonNegativeSafeInteger('peakPick', request.preMax, 'preMax');
+  assertNonNegativeSafeInteger('peakPick', request.postMax, 'postMax');
+  assertNonNegativeSafeInteger('peakPick', request.preAvg, 'preAvg');
+  assertNonNegativeSafeInteger('peakPick', request.postAvg, 'postAvg');
+  assertNonNegativeSafeInteger('peakPick', request.wait, 'wait');
   return addon.peakPick(
     request.values,
     request.preMax,
@@ -174,9 +186,13 @@ export function tempogram(
     onsetEnvelope instanceof Float32Array
       ? { onsetEnvelope, sampleRate, hopLength, winLength, mode, center, norm }
       : onsetEnvelope;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('tempogram', resolvedSampleRate);
+  assertPositiveInteger('tempogram', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('tempogram', request.winLength ?? 384, 'winLength');
   return addon.tempogram(
     request.onsetEnvelope,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.winLength ?? 384,
     request.mode ?? 'autocorrelation',
@@ -214,9 +230,14 @@ export function cyclicTempogram(
     onsetEnvelope instanceof Float32Array
       ? { onsetEnvelope, sampleRate, hopLength, winLength, center, norm, bpmMin, nBins }
       : onsetEnvelope;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('cyclicTempogram', resolvedSampleRate);
+  assertPositiveInteger('cyclicTempogram', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('cyclicTempogram', request.winLength ?? 384, 'winLength');
+  assertPositiveInteger('cyclicTempogram', request.nBins ?? 60, 'nBins');
   return addon.cyclicTempogram(
     request.onsetEnvelope,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.winLength ?? 384,
     request.bpmMin ?? 60,
@@ -245,9 +266,13 @@ export function plp(
     onsetEnvelope instanceof Float32Array
       ? { onsetEnvelope, sampleRate, hopLength, tempoMin, tempoMax, winLength }
       : onsetEnvelope;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('plp', resolvedSampleRate);
+  assertPositiveInteger('plp', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('plp', request.winLength ?? 384, 'winLength');
   return addon.plp(
     request.onsetEnvelope,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.tempoMin ?? 30,
     request.tempoMax ?? 300,
@@ -272,11 +297,15 @@ export function onsetEnvelope(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength, nMels } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('onsetEnvelope', resolvedSampleRate);
+  const fft = resolveFftOptions('onsetEnvelope', request.nFft, request.hopLength);
+  assertPositiveInteger('onsetEnvelope', request.nMels ?? 128, 'nMels');
   return addon.onsetEnvelope(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.nMels ?? 128,
   );
 }
@@ -306,11 +335,16 @@ export function onsetStrengthMulti(
     samples instanceof Float32Array
       ? { samples, sampleRate, nFft, hopLength, nMels, nBands }
       : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('onsetStrengthMulti', resolvedSampleRate);
+  const fft = resolveFftOptions('onsetStrengthMulti', request.nFft, request.hopLength);
+  assertPositiveInteger('onsetStrengthMulti', request.nMels ?? 128, 'nMels');
+  assertPositiveInteger('onsetStrengthMulti', request.nBands ?? 3, 'nBands');
   return addon.onsetStrengthMulti(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.nMels ?? 128,
     request.nBands ?? 3,
   );
@@ -341,9 +375,13 @@ export function fourierTempogram(
     onsetEnvelope instanceof Float32Array
       ? { onsetEnvelope, sampleRate, hopLength, winLength, center, norm }
       : onsetEnvelope;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('fourierTempogram', resolvedSampleRate);
+  assertPositiveInteger('fourierTempogram', request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger('fourierTempogram', request.winLength ?? 384, 'winLength');
   return addon.fourierTempogram(
     request.onsetEnvelope,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.winLength ?? 384,
     request.center ?? true,
@@ -370,10 +408,14 @@ export function tempogramRatio(
     tempogramData instanceof Float32Array
       ? { tempogramData, winLength, sampleRate, hopLength, factors }
       : tempogramData;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('tempogramRatio', resolvedSampleRate);
+  assertPositiveInteger('tempogramRatio', request.winLength ?? 384, 'winLength');
+  assertPositiveInteger('tempogramRatio', request.hopLength ?? 512, 'hopLength');
   return addon.tempogramRatio(
     request.tempogramData,
     request.winLength ?? 384,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.factors,
   );

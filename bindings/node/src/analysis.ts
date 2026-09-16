@@ -1,3 +1,4 @@
+import { resolveFftOptions } from './_fft_options.js';
 import { addon } from './native.js';
 import type {
   AcousticOptions,
@@ -29,7 +30,14 @@ import type {
   Section,
   TimbreResult,
 } from './types.js';
-import { assertFiniteScalar, assertInt32, assertInt64 } from './validation.js';
+import {
+  assertFiniteScalar,
+  assertInt32,
+  assertInt64,
+  assertNonNegativeSafeInteger,
+  assertPositiveInteger,
+  assertSampleRate,
+} from './validation.js';
 
 /**
  * Check the room-option fields whose zero requests the library default, before
@@ -194,7 +202,9 @@ export function detectBpm(request: SamplesRequest): number;
 export function detectBpm(samples: Float32Array, sampleRate?: number): number;
 export function detectBpm(samples: Float32Array | SamplesRequest, sampleRate = 22050): number {
   const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
-  return addon.detectBpm(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('detectBpm', resolvedSampleRate);
+  return addon.detectBpm(request.samples, resolvedSampleRate);
 }
 
 export function detectKey(request: DetectKeyRequest): Key;
@@ -209,7 +219,9 @@ export function detectKey(
   options?: KeyDetectionOptions,
 ): Key {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.detectKey(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('detectKey', resolvedSampleRate);
+  return addon.detectKey(request.samples, resolvedSampleRate, request);
 }
 
 export function detectKeyCandidates(request: DetectKeyRequest): KeyCandidate[];
@@ -224,7 +236,9 @@ export function detectKeyCandidates(
   options?: KeyDetectionOptions,
 ): KeyCandidate[] {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.detectKeyCandidates(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('detectKeyCandidates', resolvedSampleRate);
+  return addon.detectKeyCandidates(request.samples, resolvedSampleRate, request);
 }
 
 export function detectBeats(request: SamplesRequest): Float32Array;
@@ -234,7 +248,9 @@ export function detectBeats(
   sampleRate = 22050,
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
-  return addon.detectBeats(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('detectBeats', resolvedSampleRate);
+  return addon.detectBeats(request.samples, resolvedSampleRate);
 }
 
 export function detectDownbeats(request: SamplesRequest): Float32Array;
@@ -244,7 +260,9 @@ export function detectDownbeats(
   sampleRate = 22050,
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
-  return addon.detectDownbeats(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('detectDownbeats', resolvedSampleRate);
+  return addon.detectDownbeats(request.samples, resolvedSampleRate);
 }
 
 export function detectOnsets(request: DetectOnsetsRequest): Float32Array;
@@ -259,7 +277,9 @@ export function detectOnsets(
   options: OnsetDetectOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.detectOnsets(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('detectOnsets', resolvedSampleRate);
+  return addon.detectOnsets(request.samples, resolvedSampleRate, request);
 }
 
 export function analyze(request: MusicAnalyzeRequest): AnalysisResult;
@@ -274,7 +294,9 @@ export function analyze(
   options: MusicAnalyzeOptions = {},
 ): AnalysisResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.analyze(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('analyze', resolvedSampleRate);
+  return addon.analyze(request.samples, resolvedSampleRate, request);
 }
 
 const asFloat32Array = (values: ArrayLike<number>): Float32Array =>
@@ -334,7 +356,9 @@ export function estimateRoom(
 ): RoomEstimateResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertRoomOptions('estimateRoom', request);
-  return addon.estimateRoom(request.samples, request.sampleRate ?? 48000, request);
+  const resolvedSampleRate = request.sampleRate ?? 48000;
+  assertSampleRate('estimateRoom', resolvedSampleRate);
+  return addon.estimateRoom(request.samples, resolvedSampleRate, request);
 }
 
 /**
@@ -355,7 +379,9 @@ export function roomMorph(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertRoomOptions('roomMorph', request);
-  return addon.roomMorph(request.samples, request.sampleRate ?? 48000, request);
+  const resolvedSampleRate = request.sampleRate ?? 48000;
+  assertSampleRate('roomMorph', resolvedSampleRate);
+  return addon.roomMorph(request.samples, resolvedSampleRate, request);
 }
 
 /**
@@ -381,7 +407,9 @@ export function analyzeAsync(
     return addon.analyzeAsync(samples as Float32Array, sampleRate);
   }
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.analyzeAsync(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('analyzeAsync', resolvedSampleRate);
+  return addon.analyzeAsync(request.samples, resolvedSampleRate, request);
 }
 
 /**
@@ -403,9 +431,11 @@ export function analyzeWithProgress(
   onProgress?: AnalysisProgressCallback,
 ): AnalysisResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, onProgress } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('analyzeWithProgress', resolvedSampleRate);
   return addon.analyzeWithProgress(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.onProgress ?? (() => {}),
     request.cancel ?? (() => false),
   );
@@ -424,11 +454,14 @@ export function analyzeSections(
   options: AnalyzeSectionsOptions = {},
 ): Section[] {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('analyzeSections', resolvedSampleRate);
+  const fft = resolveFftOptions('analyzeSections', request.nFft, request.hopLength);
   return addon.analyzeSections(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.minSectionSec ?? 4.0,
   );
 }
@@ -455,9 +488,14 @@ export function analyzeMelody(
   options: MelodyOptions = {},
 ): MelodyResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('analyzeMelody', resolvedSampleRate);
+  // frameLength is a framing window, not a transform size, so it carries no evenness rule.
+  assertPositiveInteger('analyzeMelody', request.frameLength ?? 2048, 'frameLength');
+  assertPositiveInteger('analyzeMelody', request.hopLength ?? 256, 'hopLength');
   return addon.analyzeMelody(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.fmin ?? 65.0,
     request.fmax ?? 2093.0,
     request.frameLength ?? 2048,
@@ -480,14 +518,18 @@ export function analyzeBpm(
   options: AnalyzeBpmOptions = {},
 ): BpmAnalysisResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('analyzeBpm', resolvedSampleRate);
+  const fft = resolveFftOptions('analyzeBpm', request.nFft, request.hopLength);
+  assertPositiveInteger('analyzeBpm', request.maxCandidates ?? 5, 'maxCandidates');
   return addon.analyzeBpm(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.bpmMin ?? 30.0,
     request.bpmMax ?? 300.0,
     request.startBpm ?? 120.0,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    fft.nFft,
+    fft.hopLength,
     request.maxCandidates ?? 5,
   );
 }
@@ -504,14 +546,17 @@ export function analyzeRhythm(
   options: AnalyzeRhythmOptions = {},
 ): RhythmResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('analyzeRhythm', resolvedSampleRate);
+  const fft = resolveFftOptions('analyzeRhythm', request.nFft, request.hopLength);
   return addon.analyzeRhythm(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.bpmMin ?? 60.0,
     request.bpmMax ?? 200.0,
     request.startBpm ?? 120.0,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    fft.nFft,
+    fft.hopLength,
   );
 }
 
@@ -527,9 +572,12 @@ export function analyzeDynamics(
   options: AnalyzeDynamicsOptions = {},
 ): DynamicsResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('analyzeDynamics', resolvedSampleRate);
+  assertPositiveInteger('analyzeDynamics', request.hopLength ?? 512, 'hopLength');
   return addon.analyzeDynamics(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.windowSec ?? 0.4,
     request.hopLength ?? 512,
     request.compressionThreshold ?? 6.0,
@@ -559,9 +607,14 @@ export function analyzeImpulseResponse(
   if (resolvedMinDecayDb <= 0) {
     throw new RangeError('analyzeImpulseResponse: minDecayDb must be greater than zero');
   }
+  const resolvedSampleRate = request.sampleRate ?? 48000;
+  assertSampleRate('analyzeImpulseResponse', resolvedSampleRate);
+  // Zero is degenerate but legal: the C ABI refuses only a negative count, so
+  // refusing it here would narrow the domain the other surfaces accept.
+  assertNonNegativeSafeInteger('analyzeImpulseResponse', request.nOctaveBands ?? 6, 'nOctaveBands');
   return addon.analyzeImpulseResponse(
     request.samples,
-    request.sampleRate ?? 48000,
+    resolvedSampleRate,
     request.nOctaveBands ?? 6,
     resolvedMinDecayDb,
   );
@@ -579,9 +632,17 @@ export function detectAcoustic(
   options: AcousticOptions = {},
 ): AcousticResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 48000;
+  assertSampleRate('detectAcoustic', resolvedSampleRate);
+  assertNonNegativeSafeInteger('detectAcoustic', request.nOctaveBands ?? 6, 'nOctaveBands');
+  assertNonNegativeSafeInteger(
+    'detectAcoustic',
+    request.nThirdOctaveSubbands ?? 24,
+    'nThirdOctaveSubbands',
+  );
   return addon.detectAcoustic(
     request.samples,
-    request.sampleRate ?? 48000,
+    resolvedSampleRate,
     request.nOctaveBands ?? 6,
     request.nThirdOctaveSubbands ?? 24,
     request.minDecayDb ?? 30.0,
@@ -601,11 +662,16 @@ export function analyzeTimbre(
   options: AnalyzeTimbreOptions = {},
 ): TimbreResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('analyzeTimbre', resolvedSampleRate);
+  const fft = resolveFftOptions('analyzeTimbre', request.nFft, request.hopLength);
+  assertPositiveInteger('analyzeTimbre', request.nMels ?? 128, 'nMels');
+  assertPositiveInteger('analyzeTimbre', request.nMfcc ?? 13, 'nMfcc');
   return addon.analyzeTimbre(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedSampleRate,
+    fft.nFft,
+    fft.hopLength,
     request.nMels ?? 128,
     request.nMfcc ?? 13,
     request.windowSec ?? 0.5,
@@ -651,6 +717,26 @@ function resolveChordOptions(options: ChordDetectionOptions): ResolvedChordParam
     detectInversions: options.detectInversions ?? false,
     chromaMethod: options.chromaMethod ?? 'stft',
   };
+}
+
+/** Validate the resolved chord params the addon narrows into C ints, before they are sent. */
+/**
+ * The chord parameters both entry points resolve the same way. The key is not
+ * among them: `chordFunctionalAnalysis` takes it as its own argument and sends
+ * that rather than the resolved one, so each caller checks the key it sends.
+ */
+function assertChordParams(
+  fnName: string,
+  p: ResolvedChordParams,
+): { nFft: number; hopLength: number } {
+  const fft = resolveFftOptions(fnName, p.nFft, p.hopLength);
+  assertPositiveInteger(fnName, p.hmmBeamWidth, 'hmmBeamWidth');
+  return fft;
+}
+
+function assertChordKey(fnName: string, keyRoot: number, keyMode: number): void {
+  assertNonNegativeSafeInteger(fnName, keyRoot, 'keyRoot');
+  assertNonNegativeSafeInteger(fnName, keyMode, 'keyMode');
 }
 
 /**
@@ -724,15 +810,20 @@ export function detectChords(
             chromaMethod,
           }
         : resolveChordOptions(samples);
+  const resolvedSampleRate =
+    samples instanceof Float32Array ? sampleRate : (samples.sampleRate ?? 22050);
+  assertSampleRate('detectChords', resolvedSampleRate);
+  const fft = assertChordParams('detectChords', p);
+  assertChordKey('detectChords', p.keyRoot, p.keyMode);
   return addon.detectChords(
     samples instanceof Float32Array ? samples : samples.samples,
-    samples instanceof Float32Array ? sampleRate : (samples.sampleRate ?? 22050),
+    resolvedSampleRate,
     p.minDuration,
     p.smoothingWindow,
     p.threshold,
     p.useTriadsOnly,
-    p.nFft,
-    p.hopLength,
+    fft.nFft,
+    fft.hopLength,
     p.useBeatSync,
     p.useHmm,
     p.hmmBeamWidth,
@@ -817,17 +908,31 @@ export function chordFunctionalAnalysis(
             chromaMethod,
           }
         : resolveChordOptions(samples);
+  const resolvedSampleRate =
+    samples instanceof Float32Array ? sampleRate : (samples.sampleRate ?? 22050);
+  assertSampleRate('chordFunctionalAnalysis', resolvedSampleRate);
+  const fft = assertChordParams('chordFunctionalAnalysis', p);
+  // Ahead of the key, because a first argument that is neither form reads as a
+  // request whose every field is absent, and the key would be blamed for it.
+  if (!(samples instanceof Float32Array) && !(samples.samples instanceof Float32Array)) {
+    throw new TypeError('chordFunctionalAnalysis: samples must be a Float32Array');
+  }
+  // The key travels beside the resolved parameters rather than inside them, so
+  // it is read once here and both checked and sent from the same const.
+  const resolvedKeyRoot = samples instanceof Float32Array ? keyRoot : samples.keyRoot;
+  const resolvedKeyMode = samples instanceof Float32Array ? keyMode : (samples.keyMode ?? 0);
+  assertChordKey('chordFunctionalAnalysis', resolvedKeyRoot, resolvedKeyMode);
   return addon.chordFunctionalAnalysis(
     samples instanceof Float32Array ? samples : samples.samples,
-    samples instanceof Float32Array ? keyRoot : samples.keyRoot,
-    samples instanceof Float32Array ? keyMode : (samples.keyMode ?? 0),
-    samples instanceof Float32Array ? sampleRate : (samples.sampleRate ?? 22050),
+    resolvedKeyRoot,
+    resolvedKeyMode,
+    resolvedSampleRate,
     p.minDuration,
     p.smoothingWindow,
     p.threshold,
     p.useTriadsOnly,
-    p.nFft,
-    p.hopLength,
+    fft.nFft,
+    fft.hopLength,
     p.useBeatSync,
     p.useHmm,
     p.hmmBeamWidth,

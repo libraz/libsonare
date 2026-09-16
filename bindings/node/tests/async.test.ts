@@ -57,7 +57,9 @@ describe('Node async API', () => {
     it('rejects C-ABI failures as SonareError', async () => {
       let caught: unknown;
       try {
-        await analyzeAsync(generateSine(440, 0.1), 0);
+        // Empty rather than a wrong sample rate: the facade refuses that one
+        // itself as a RangeError, so it would never reach the core to be coded.
+        await analyzeAsync(new Float32Array(0), SR);
       } catch (error) {
         caught = error;
       }
