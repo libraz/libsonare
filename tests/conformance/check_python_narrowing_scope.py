@@ -30,6 +30,13 @@ module can convert a caller's number however it likes and nothing notices:
 * **File-local readers.**  A helper that converts a caller's number to a ctypes
   scalar is a reader, and a reader outside the shared family means a change to
   the conversion contract reaches some call sites and not others.
+* **Arguments reaching a narrowing ``argtypes``.**  ctypes applies the declared
+  parameter type to whatever the call hands it, so ``int(track_id)`` into a
+  ``c_uint32`` parameter wraps exactly as ``ctypes.c_uint32(track_id)`` would --
+  with no conversion written anywhere near the call.  The population is keyed on
+  the declaration, so a plain name, an ``int(...)``/``float(...)`` truncation or
+  an arithmetic expression at a narrowing position is a site.  ``restype`` is
+  not part of it: the value it converts comes from C, not from a caller.
 
 The records live in ``python_narrowing_records.json`` and are read as data.  A
 record that matches nothing is itself an error: a stale one keeps asserting a
@@ -61,15 +68,28 @@ find a known-nonzero population: with either route made to match nothing, the
 agreement and the record checks both go green and certify a scanner that has
 stopped working, so a floor is pinned.
 
-KNOWN COMMON MODE
------------------
-Both scans start from the ``ctypes.`` qualification and the type-name list
+KNOWN COMMON MODE, AND THE THIRD ANCHOR THAT IS OUTSIDE IT
+----------------------------------------------------------
+Both scans above start from the ``ctypes.`` qualification and the type-name list
 below.  A conversion reached under a different name -- ``from ctypes import
 c_int``, a type stored in a variable, a ``functools.partial`` -- is invisible to
 both scans AND to their agreement.  The import-shape check below is what closes
 that one: it fails on any binding module that pulls a ctypes integer type into
 its own namespace, so the qualification the scans depend on cannot be bypassed
 without a report.
+
+What that qualification cannot reach at all is the conversion ``argtypes``
+performs inside the foreign call, where the call site spells no type.  Scan C is
+anchored on the **declaration** instead: it reads the ``argtypes`` lists to build
+``symbol -> [parameter type, ...]``, then attributes each call's positional
+arguments against that list.  Whether a site enters the population is decided by
+the declared parameter, so nothing about how the argument is spelled can keep it
+out -- which is the one property the other two scans do not have.  An argument
+that is itself an inline conversion is handed to the inline population instead of
+counted twice, and the hand-off is by AST node identity rather than by spelling,
+so a spelling Scan A stops recognising becomes a Scan C report rather than a
+silence.  What Scan C cannot see is a call through ``getattr(lib, name)``, where
+the symbol is a runtime string.
 """
 
 from __future__ import annotations
@@ -163,6 +183,12 @@ SHARED_LOCAL_READERS = SHARED_READERS + (
     "_float_narrowing_error",
 )
 
+# What counts as checked at an `argtypes` position. The `_to_c_*` family returns
+# a ctypes scalar; the two predicates return a plain number that already had to
+# fit the target range, and ctypes converting a value it cannot change is not a
+# narrowing. Nothing else qualifies, `int()` and `float()` least of all.
+SHARED_ARGUMENT_READERS = SHARED_READERS + ("_narrow_int", "_narrow_float")
+
 
 def _blank(match: re.Match[str]) -> str:
     """Replace a matched span with spaces, keeping its newlines and its length."""
@@ -221,6 +247,30 @@ class Site:
         return (self.path.name, self.argument, self.type)
 
 
+class ArgumentSite:
+    """One argument reaching a narrowing parameter without a checked reader."""
+
+    def __init__(self, path: Path, line: int, symbol: str, index: int, ctype: str, argument: str):
+        self.path = path
+        self.line = line
+        self.symbol = symbol
+        self.index = index
+        self.type = ctype
+        self.argument = " ".join(argument.split())
+
+    @property
+    def display(self) -> str:
+        return f"{_display(self.path)}:{self.line}"
+
+    @property
+    def text(self) -> str:
+        return f"{self.symbol}(... argument {self.index}: {self.type}) <- {self.argument}"
+
+    @property
+    def key(self) -> tuple[str, str, str]:
+        return (self.path.name, self.argument, self.type)
+
+
 class Scan:
     """Both scans over the binding, plus what their disagreement says."""
 
@@ -235,21 +285,36 @@ class Scan:
         self.masked_fields: list[tuple[Path, int, str, int]] = []
         self.local_readers: list[tuple[Path, int, str]] = []
         self.aliased_imports: list[tuple[Path, int, str]] = []
+        self.signatures: dict[str, list[str | None]] = {}
+        self.argument_sites: list[ArgumentSite] = []
+        # Every narrowing position Scan C actually attributed, reported or not:
+        # the population's own size, which a broken declaration reader takes to
+        # zero while every check over it stays green.
+        self.argument_positions = 0
         self._run()
 
     def _files(self) -> list[Path]:
         return sorted(p for p in self.tree.rglob("*.py") if p.is_file())
 
     def _run(self) -> None:
-        for path in self._files():
+        trees = {path: ast.parse(path.read_text(encoding="utf-8")) for path in self._files()}
+        self.signatures = _signature_table(trees.values())
+
+        for path, tree in trees.items():
             source = path.read_text(encoding="utf-8")
-            tree = ast.parse(source)
             exempt = _shared_reader_bodies(tree)
+            # Scan C hands an argument of this shape to the inline population
+            # rather than reporting it twice. Collected from Scan A's own
+            # resolver over this very tree, so the hand-off is node identity.
+            inline: set[int] = set()
 
             # Scan A: over the parsed syntax.
             for node in ast.walk(tree):
                 conversion = _ctypes_narrowing_conversion(node)
-                if conversion is None or not node.args or _within(exempt, node.lineno):
+                if conversion is None:
+                    continue
+                inline.add(id(node))
+                if not node.args or _within(exempt, node.lineno):
                     continue
                 ctype, container = conversion
                 value = _converted_value(node.args[0]) if container else node.args[0]
@@ -262,10 +327,55 @@ class Scan:
             # Scan B: over the token stream.
             self.token_counts[path.name] = _token_scan(source, exempt)
 
+            # Scan C: from the declarations, over the call sites.
+            self._collect_argument_sites(path, tree, inline)
+
             self._collect_structure_bases(path, tree)
             self._collect_masked_fields(path, tree)
             self._collect_local_readers(path, tree)
             self._collect_aliased_imports(path, tree)
+
+    def _collect_argument_sites(self, path: Path, tree: ast.Module, inline: set[int]) -> None:
+        """Scan C: each call's arguments against the parameter types declared for it."""
+
+        def visit(node: ast.AST, checked: frozenset[str]) -> None:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                checked = checked | _reader_bound_names(node)
+            if isinstance(node, ast.Call):
+                self._attribute(path, node, inline, checked)
+            for child in ast.iter_child_nodes(node):
+                visit(child, checked)
+
+        visit(tree, frozenset())
+
+    def _attribute(
+        self, path: Path, call: ast.Call, inline: set[int], checked: frozenset[str]
+    ) -> None:
+        if not isinstance(call.func, ast.Attribute):
+            return
+        declared = self.signatures.get(call.func.attr)
+        if declared is None:
+            return
+        for index, argument in enumerate(call.args):
+            # Positional attribution ends at a splat: nothing past it has a
+            # position this scan can name.
+            if isinstance(argument, ast.Starred):
+                return
+            if index >= len(declared) or declared[index] is None:
+                continue
+            self.argument_positions += 1
+            if id(argument) in inline or _is_checked_argument(argument, checked):
+                continue
+            self.argument_sites.append(
+                ArgumentSite(
+                    path,
+                    call.lineno,
+                    call.func.attr,
+                    index,
+                    declared[index] or "",
+                    ast.unparse(argument),
+                )
+            )
 
     def _collect_structure_bases(self, path: Path, tree: ast.Module) -> None:
         """A struct off the checked base folds every integer and float field it has."""
@@ -326,6 +436,102 @@ class Scan:
             for name, counted in sorted(self.token_counts.items())
             if counted != observed.get(name, 0)
         ]
+
+
+def _signature_table(trees) -> dict[str, list[str | None]]:
+    """``symbol -> [narrowing parameter type or None, ...]`` from every ``argtypes``.
+
+    Scan C's anchor. A symbol declared twice with different parameter types has
+    no one list to attribute against, so it is dropped rather than resolved to
+    whichever declaration was read first.
+    """
+    declared: dict[str, list[list[str | None]]] = {}
+    for tree in trees:
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign):
+                continue
+            if not isinstance(node.value, (ast.List, ast.Tuple)):
+                continue
+            for target in node.targets:
+                if not (isinstance(target, ast.Attribute) and target.attr == "argtypes"):
+                    continue
+                # `lib.<symbol>.argtypes`; a `getattr(lib, name).argtypes` names
+                # no symbol this scan can attribute a call against.
+                if not isinstance(target.value, ast.Attribute):
+                    continue
+                types = [_declared_scalar(element) for element in node.value.elts]
+                declared.setdefault(target.value.attr, []).append(types)
+    return {
+        symbol: lists[0]
+        for symbol, lists in declared.items()
+        if len({tuple(entry) for entry in lists}) == 1
+    }
+
+
+def _declared_scalar(node: ast.expr) -> str | None:
+    """The narrowing scalar a declared parameter type is, or None if it is not one.
+
+    A pointer, a struct and ``c_double`` alike convert nothing a caller chose, so
+    they leave the position out of the population rather than into it.
+    """
+    if isinstance(node, ast.Attribute) and node.attr in NARROWING_TYPES:
+        return node.attr
+    if isinstance(node, ast.Name) and node.id in NARROWING_TYPES:
+        return node.id
+    return None
+
+
+def _reader_bound_names(function: ast.AST) -> frozenset[str]:
+    """Locals bound exactly once, by a shared reader, in this function's own body.
+
+    ``g = _narrow_float(gain, "gain")`` passed as ``g`` is checked, and reading
+    the name alone cannot tell. Assigned more than once the name is not tracked:
+    a second binding is a second contract, and this scan does not order them.
+    """
+    bindings: dict[str, int] = {}
+    reader_bound: set[str] = set()
+    for node in _own_body(function):
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            targets, value = [node.target], node.value
+        else:
+            continue
+        for target in targets:
+            if not isinstance(target, ast.Name):
+                continue
+            bindings[target.id] = bindings.get(target.id, 0) + 1
+            if _is_shared_reader_call(value):
+                reader_bound.add(target.id)
+    return frozenset(name for name in reader_bound if bindings[name] == 1)
+
+
+def _own_body(function: ast.AST):
+    """Every node of ``function`` except those belonging to a nested function.
+
+    A name bound inside a closure is that closure's, and letting it out would
+    bless an outer call site nothing checked.
+    """
+    for child in ast.iter_child_nodes(function):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        yield child
+        yield from _own_body(child)
+
+
+def _is_shared_reader_call(node: ast.AST | None) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in SHARED_ARGUMENT_READERS
+    )
+
+
+def _is_checked_argument(argument: ast.expr, checked: frozenset[str]) -> bool:
+    """Whether the value at this position was range-checked before ctypes saw it."""
+    if _is_shared_reader_call(argument):
+        return True
+    return isinstance(argument, ast.Name) and argument.id in checked
 
 
 def _shared_reader_bodies(tree: ast.Module) -> list[tuple[int, int]]:
@@ -475,6 +681,7 @@ class Records:
         self.structs = data.get("plain_structs", [])
         self.masked = data.get("masked_fields", [])
         self.readers = data.get("readers", [])
+        self.arguments = data.get("argtype_arguments", [])
         self.used: set[str] = set()
         self._shape_patterns = {
             shape["name"]: re.compile(shape["argument_pattern"]) for shape in self.shapes
@@ -490,6 +697,25 @@ class Records:
         for entry in self.narrowings:
             if (entry["file"], entry["argument"], entry["type"]) == site.key:
                 self.used.add(f"narrowing:{entry['file']}:{entry['argument']}")
+                return True
+        return False
+
+    def covers_argument(self, site: ArgumentSite) -> bool:
+        """The shape vocabulary is shared with the inline population.
+
+        It describes the argument expression, which is the same question on both
+        routes; only the per-site entries are kept apart, so one population's
+        entry cannot keep the other's alive.
+        """
+        for shape in self.shapes:
+            if shape.get("unsigned_only") and not site.type.startswith(("c_u", "c_size")):
+                continue
+            if self._shape_patterns[shape["name"]].fullmatch(site.argument):
+                self.used.add(f"shape:{shape['name']}")
+                return True
+        for entry in self.arguments:
+            if (entry["file"], entry["argument"], entry["type"]) == site.key:
+                self.used.add(f"argument:{entry['file']}:{entry['argument']}")
                 return True
         return False
 
@@ -517,6 +743,7 @@ class Records:
         every = (
             [f"shape:{s['name']}" for s in self.shapes]
             + [f"narrowing:{e['file']}:{e['argument']}" for e in self.narrowings]
+            + [f"argument:{e['file']}:{e['argument']}" for e in self.arguments]
             + [f"struct:{s}" for s in self.structs]
             + [f"mask:{e['file']}:{e['target']}" for e in self.masked]
             + [f"reader:{e['file']}:{e['symbol']}" for e in self.readers]
@@ -542,6 +769,12 @@ def _self_check(scan: Scan, floor: dict) -> list[str]:
         "float_narrowings": sum(1 for site in scan.sites if site.type in FLOAT_TYPES),
         "shared_float_reader_calls": _shared_reader_calls(scan.tree, ("_to_c_float",)),
         "shared_reader_calls": _shared_reader_calls(scan.tree),
+        # Scan C's two halves, pinned separately because either one going to
+        # zero empties the population while every check over it stays green: a
+        # declaration reader that resolves nothing, and a call attribution that
+        # lands on nothing.
+        "declared_signatures": len(scan.signatures),
+        "argument_positions": scan.argument_positions,
     }
     return [
         f"{name}: found {measured.get(name, 0)}, floor is {minimum} -- the scan has "
@@ -670,6 +903,17 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
             )
         )
 
+    unchecked = [site for site in scan.argument_sites if not records.covers_argument(site)]
+    if unchecked:
+        failures.append(
+            (
+                "These arguments reach a parameter whose argtypes declares a "
+                "narrowing C type, so ctypes applies the conversion inside the "
+                "call with nothing having checked the range first",
+                [f"  {site.display}  {site.text}" for site in unchecked],
+            )
+        )
+
     stale = records.unused()
     if stale:
         failures.append(
@@ -706,6 +950,11 @@ def main() -> int:
     print(f"inline narrowings outside the shared family: {len(scan.sites)}")
     print(f"sites routed through the shared family: {_shared_reader_calls(args.tree)}")
     print(f"structs on ctypes.Structure directly: {len(scan.plain_structs)}")
+    print(
+        f"arguments at a narrowing argtypes position: {scan.argument_positions}, "
+        f"of them unchecked: {len(scan.argument_sites)} "
+        f"(over {len(scan.signatures)} declared signatures)"
+    )
 
     failures = evaluate(scan, records, data["floor"])
     # Asked of the real tree rather than inside evaluate, which the self-tests

@@ -242,6 +242,129 @@ class FailureClassTest(_SyntheticTree):
         lines = self.only(failures, "no longer finds the population")
         self.assertIn("array_narrowings: found 0", lines[0])
 
+    def test_an_unchecked_argtype_argument_is_the_only_report(self) -> None:
+        """Scan C's anchor: no conversion is spelled anywhere near this call."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_track_gain.argtypes = [ctypes.c_void_p, ctypes.c_uint32]\n\n\n"
+            "def f(lib, handle, track_id):\n"
+            "    lib.sonare_set_track_gain(handle, int(track_id))\n"
+        )
+        lines = self.only(self.evaluate(root), "argtypes declares a narrowing C type")
+        self.assertIn("sonare_set_track_gain(... argument 1: c_uint32) <- int(track_id)", lines[0])
+
+    def test_an_argtype_argument_through_the_shared_reader_reports_nothing(self) -> None:
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_track_gain.argtypes = [ctypes.c_void_p, ctypes.c_uint32]\n\n\n"
+            "def f(lib, handle, track_id):\n"
+            "    lib.sonare_set_track_gain(handle, _to_c_uint32(track_id, 'track_id'))\n"
+        )
+        self.assertEqual(self.evaluate(root), [])
+
+    def test_a_local_bound_by_a_shared_reader_reports_nothing(self) -> None:
+        """The value was range-checked before the name was; reading the name cannot tell."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_track_gain.argtypes = [ctypes.c_void_p, ctypes.c_float]\n\n\n"
+            "def f(lib, handle, gain):\n"
+            "    g = _narrow_float(gain, 'gain')\n"
+            "    lib.sonare_set_track_gain(handle, g)\n"
+        )
+        self.assertEqual(self.evaluate(root), [])
+
+    def test_a_local_bound_twice_is_reported(self) -> None:
+        """A second binding is a second contract, and this scan does not order them."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_track_gain.argtypes = [ctypes.c_void_p, ctypes.c_float]\n\n\n"
+            "def f(lib, handle, gain, raw):\n"
+            "    g = _narrow_float(gain, 'gain')\n"
+            "    g = raw\n"
+            "    lib.sonare_set_track_gain(handle, g)\n"
+        )
+        lines = self.only(self.evaluate(root), "argtypes declares a narrowing C type")
+        self.assertIn("argument 1: c_float) <- g", lines[0])
+
+    def test_a_non_narrowing_parameter_is_not_a_site(self) -> None:
+        """A double converts nothing, and a pointer position carries no caller number."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_sample_rate.argtypes = [\n"
+            "        ctypes.c_void_p,\n"
+            "        ctypes.c_double,\n"
+            "        ctypes.POINTER(ctypes.c_uint32),\n"
+            "    ]\n\n\n"
+            "def f(lib, handle, rate, out):\n"
+            "    lib.sonare_set_sample_rate(handle, float(rate), out)\n"
+        )
+        scan = scope.Scan(root)
+        self.assertEqual(scan.argument_positions, 0)
+        self.assertEqual(self.evaluate(root), [])
+
+    def test_an_inline_conversion_at_an_argtype_position_is_reported_once(self) -> None:
+        """The populations are disjoint: the inline one owns this spelling."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_set_track_gain.argtypes = [ctypes.c_void_p, ctypes.c_uint32]\n\n\n"
+            "def f(lib, handle, track_id):\n"
+            "    lib.sonare_set_track_gain(handle, ctypes.c_uint32(track_id))\n"
+        )
+        lines = self.only(self.evaluate(root), "neither performed by the shared reader")
+        self.assertIn("ctypes.c_uint32(track_id)", lines[0])
+
+    def test_a_symbol_declared_two_ways_is_not_attributed(self) -> None:
+        """Two declarations give no one list to attribute a position against."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib, other):\n"
+            "    lib.sonare_push.argtypes = [ctypes.c_uint32]\n"
+            "    other.sonare_push.argtypes = [ctypes.c_float]\n\n\n"
+            "def f(lib, value):\n"
+            "    lib.sonare_push(int(value))\n"
+        )
+        scan = scope.Scan(root)
+        self.assertEqual(scan.signatures, {})
+        self.assertEqual(self.evaluate(root), [])
+
+    def test_an_argument_past_a_splat_has_no_position(self) -> None:
+        """Positional attribution ends where the positions stop being knowable."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_push.argtypes = [ctypes.c_void_p, ctypes.c_uint32]\n\n\n"
+            "def f(lib, rest, value):\n"
+            "    lib.sonare_push(*rest, int(value))\n"
+        )
+        self.assertEqual(scope.Scan(root).argument_positions, 0)
+        self.assertEqual(self.evaluate(root), [])
+
+    def test_a_shrunken_signature_table_is_the_only_report(self) -> None:
+        """Scan C's anchor, pinned: resolving nothing agrees with everything."""
+        root = self.tree("import ctypes\n")
+        lines = self.only(
+            self.evaluate(root, floor={"declared_signatures": 1}), "no longer finds the population"
+        )
+        self.assertIn("declared_signatures: found 0", lines[0])
+
+    def test_a_shrunken_attribution_is_the_only_report(self) -> None:
+        """The other half: declarations read, no call ever landing on them."""
+        root = self.tree(
+            "import ctypes\n\n\ndef configure(lib):\n"
+            "    lib.sonare_push.argtypes = [ctypes.c_uint32]\n"
+        )
+        lines = self.only(
+            self.evaluate(root, floor={"argument_positions": 1}), "no longer finds the population"
+        )
+        self.assertIn("argument_positions: found 0", lines[0])
+
+    def test_a_stale_argument_record_is_the_only_report(self) -> None:
+        root = self.tree("import ctypes\n")
+        records = {
+            "shapes": [],
+            "narrowings": [],
+            "argtype_arguments": [{"file": "gone.py", "argument": "n", "type": "c_int"}],
+        }
+        self.only(self.evaluate(root, records=records), "matched nothing")
+
     def test_the_two_scans_disagreeing_is_the_only_report(self) -> None:
         """Narrow the tree scan past a call shape the token scan still sees."""
         root = self.tree("import ctypes\n\n\ndef f(n):\n    return ctypes.c_int(len(n))\n")

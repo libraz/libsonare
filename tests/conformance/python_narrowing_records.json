@@ -5,7 +5,9 @@
     "array_narrowings": 5,
     "float_narrowings": 10,
     "shared_float_reader_calls": 120,
-    "shared_reader_calls": 600
+    "shared_reader_calls": 600,
+    "declared_signatures": 600,
+    "argument_positions": 900
   },
   "shapes": [
     {
@@ -91,6 +93,7 @@
       "reason": "NaN here is the C ABI's spelling for no offline peak measured, so the conversion must be able to carry one; the caller's own value goes through _narrow_float where it enters instead."
     }
   ],
+  "argtype_arguments": [],
   "plain_structs": [],
   "masked_fields": [],
   "readers": []
