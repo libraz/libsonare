@@ -69,6 +69,8 @@ node = [
   "assert_positive_integer",      # integer above zero, capped at the C int range
   "assert_even_integer_at_least", # even integer with a floor, for an FFT size
   "assert_exact_integer",         # integer equal to one accepted value
+  "assert_integral_sample_rate",  # the integrality half of assert_sample_rate, for a generator whose core carries no range
+  "assert_interleaved_samples",   # interleaved buffer and channel-count check, the Node sibling of the WASM entry below
   "midi1_event",
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
   "is_sonare_error",        # TS type guard for the SonareError shape; no C symbol
@@ -83,7 +85,16 @@ wasm = [
   "assert_non_negative_integer", # WASM test helper: mirrors TS facade argument validation
   "assert_positive_integer",     # WASM test helper: mirrors TS facade argument validation
   "assert_sample_rate",          # WASM test helper: centralizes sample-rate validation
-  "validate_audio_buffer",       # Internal Audio constructor validator imported by audio.ts; not re-exported from the package entry
+  # The same guard family the Node list above carries, named here because each
+  # surface holds its own copy: the predicates are shared across facade modules
+  # and have no C counterpart by design.
+  "assert_u7",
+  "assert_nibble",
+  "assert_u32",
+  "assert_integer_type",          # integrality alone, reported as a type error
+  "assert_bounded_integer",       # integer inside a caller-named interval, which assert_u7 and assert_nibble fix
+  "assert_even_integer_at_least", # even integer with a floor, for an FFT size
+  "validate_audio_buffer",     # Internal Audio constructor validator imported by audio.ts; not re-exported from the package entry
   "assert_vqt_gamma",            # Internal variable-Q gamma validator imported by feature_music.ts; not re-exported from the package entry
   "stream_analyzer_config_defaults", # WASM facade default snapshot, not a C API symbol
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
