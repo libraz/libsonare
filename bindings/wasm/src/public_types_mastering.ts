@@ -738,6 +738,8 @@ export interface MasteringChainConfig {
       adaptation?: number;
       frameSize?: number;
       pllBandwidth?: number;
+      /** 0 = subtract the tracked harmonics, 1 = cascaded notches. */
+      mode?: number;
     };
     declick?: {
       enabled?: boolean;

@@ -1829,6 +1829,7 @@ def mastering_repair_dehum(
     adaptation: float = 0.25,
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
+    mode: int | str = "subtract",
 ) -> np.ndarray[Any, Any]: ...
 def mastering_repair_dehum_stereo(
     left: FloatSamples,
@@ -1843,6 +1844,7 @@ def mastering_repair_dehum_stereo(
     adaptation: float = 0.25,
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
+    mode: int | str = "subtract",
 ) -> DehumStereoResult: ...
 def mastering_repair_dereverb_classical(
     samples: FloatSamples,
@@ -1971,6 +1973,7 @@ def mastering_repair_detect_hum(
     adaptation: float = 0.25,
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
+    mode: int | str = "subtract",
 ) -> HumDetection: ...
 def mastering_repair_detect_reverb(
     samples: FloatSamples,
