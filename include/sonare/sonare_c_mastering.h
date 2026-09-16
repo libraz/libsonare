@@ -964,6 +964,66 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
                                                       const SonareDenoiseClassicalConfig* config,
                                                       float** out, size_t* out_length);
 
+// Bands a denoise noise floor is reported in, and the length of
+// SonareNoiseDetection::band_floor_dbfs. A geometric grid from 20 Hz to Nyquist,
+// the same axis the mastering report's band_energy_delta_db uses.
+#define SONARE_REPAIR_NOISE_BAND_COUNT 32
+
+/// @brief Flat POD mirror of @c mastering::repair::NoiseDetection.
+/// @details These are absolute levels, which makes them the one part of a stereo
+///   denoise report that depends on how many channels were passed: the estimator
+///   runs on the channel-summed power, so two identical channels read about 3 dB
+///   above the same material through the mono entry point. Compare a stereo floor
+///   against another stereo floor, never against a mono one.
+typedef struct {
+  float floor_dbfs;                                       // broadband estimated noise floor
+  float band_floor_dbfs[SONARE_REPAIR_NOISE_BAND_COUNT];  // per band, low to high
+} SonareNoiseDetection;
+
+/// @brief What a denoise pass found and what it removed.
+typedef struct {
+  SonareNoiseDetection detected;  // analysis of the input, before the mask
+  float mean_reduction_db;        // mean attenuation the gain mask applied. Zero
+                                  // reads the same whether the mask was
+                                  // transparent or no mask ran at all
+  float max_reduction_db;         // deepest attenuation any cell applied; at
+                                  // config.reduction_db the floor set the depth
+  float floor_limited_fraction;   // cells sitting on that floor. Always 0 for
+                                  // SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,
+                                  // which floors on spectral_floor instead, so 0
+                                  // from that mode is the mode and not a
+                                  // measurement
+} SonareDenoiseReport;
+
+/// @brief A denoised stereo pair and the one mask that produced it.
+/// @details @c left and @c right are heap-allocated; release each with
+///   @ref sonare_free_floats.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  SonareDenoiseReport report;
+} SonareDenoiseStereoResult;
+
+/// @brief Denoises a stereo pair with one channel-linked gain mask.
+/// @details The mask is built from the channel-summed power and applied unchanged
+///   to both channels, so the pass cannot move an interchannel level or phase
+///   difference. That is also why there is one report rather than one per
+///   channel: a pair would be two copies of one measurement and would read as
+///   though the two could differ.
+///
+///   Needs at least @c config->n_fft samples and rejects a shorter input, unlike
+///   @ref sonare_mastering_repair_dereverb_classical_stereo, which pads one.
+///
+///   Which config fields are live depends on @c mode: @c over_subtraction and
+///   @c spectral_floor are read only by SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,
+///   and @c speech_presence_gain and @c gain_smoothing only by the other two, so
+///   at the default mode the first pair does nothing.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_denoise_classical_stereo(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareDenoiseClassicalConfig* config, SonareDenoiseStereoResult* out);
+
 /// @brief Flat POD mirror of @c mastering::repair::DeclipConfig.
 typedef struct {
   float clip_threshold;  // amplitude above which a sample is considered clipped (default 0.98)
@@ -1217,6 +1277,64 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
                                                        int sample_rate,
                                                        const SonareDereverbClassicalConfig* config,
                                                        float** out, size_t* out_length);
+
+/// @brief Flat POD mirror of @c mastering::repair::ReverbDetection.
+/// @details NOT an ISO 3382 reverberation time: no Schroeder integration, no
+///   noise-floor truncation, STFT bins rather than octave bands, and music is not
+///   a free decay. Use @ref sonare_detect_acoustic for a graded RT60; this reports
+///   what the module itself measured while deciding how much to subtract.
+typedef struct {
+  float late_decay_ratio_db;  // decay across the module's own late lag. Less
+                              // negative means the material sustains across it,
+                              // which a late tail does and a dry offset does not,
+                              // so a reverberant input reads HIGHER here than the
+                              // same material dry
+  float late_predictability;  // mean WPE predictor norm before the clamp. Zero
+                              // when the WPE stage did not run, which is the case
+                              // whenever config.wpe_enabled is clear -- the
+                              // default
+} SonareReverbDetection;
+
+/// @brief What a dereverb pass found and what it removed.
+typedef struct {
+  SonareReverbDetection detected;  // analysis of the input
+  float mean_reduction_db;         // mean attenuation the subtraction applied
+  float suppressed_fraction;       // cells the config.threshold gate admitted as
+                                   // late reverberation. The only observation of
+                                   // that knob: 0 alongside a nonzero mean says
+                                   // the gate admitted nothing
+  float wpe_predictor_norm;        // mean predictor norm actually applied, after
+                                   // the clamp. Below detected.late_predictability
+                                   // says the clamp acted, an otherwise silent
+                                   // branch. Zero when the WPE stage did not run
+} SonareDereverbReport;
+
+/// @brief A dereverberated stereo pair and the one mask that produced it.
+/// @details @c left and @c right are heap-allocated; release each with
+///   @ref sonare_free_floats.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  SonareDereverbReport report;
+} SonareDereverbStereoResult;
+
+/// @brief Dereverberates a stereo pair with one channel-linked mask.
+/// @details The mask is built from the channel-summed power, and the WPE stage
+///   accumulates over both channels and applies one predictor set to each, so
+///   neither stage can move an interchannel level or phase difference. That is
+///   also why there is one report rather than one per channel.
+///
+///   Every field of that report is a ratio or a fraction, so unlike
+///   @ref SonareNoiseDetection nothing here shifts with the channel count and a
+///   stereo figure is comparable against a mono one.
+///
+///   An input shorter than @c config->n_fft is padded for analysis rather than
+///   rejected, which is the opposite of the denoise pair.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_dereverb_classical_stereo(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareDereverbClassicalConfig* config, SonareDereverbStereoResult* out);
 
 /// @brief Applies a room estimate to a dereverb config IN PLACE: overwrites the
 ///        two fields a measurement determines and leaves the rest alone.

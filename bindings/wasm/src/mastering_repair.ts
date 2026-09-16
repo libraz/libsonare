@@ -5,6 +5,8 @@ import type {
   MasteringRepairDeclipStereoResult,
   MasteringRepairDecrackleStereoResult,
   MasteringRepairDehumStereoResult,
+  MasteringRepairDenoiseClassicalStereoResult,
+  MasteringRepairDereverbClassicalStereoResult,
 } from './public_types_mastering';
 
 function requireModule() {
@@ -100,6 +102,13 @@ export interface MasteringRepairDenoiseClassicalRequest extends DenoiseClassical
   sampleRate: number;
 }
 
+/** Request form of `masteringRepairDenoiseClassicalStereo`. */
+export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseClassicalOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
 /** Offline LPC-based declicker. */
 export function masteringRepairDeclick(request: MasteringRepairDeclickRequest): Float32Array;
 export function masteringRepairDeclick(
@@ -141,6 +150,67 @@ export function masteringRepairDenoiseClassical(
     request.samples,
     request.sampleRate,
     request,
+  );
+}
+
+/**
+ * Offline STFT-domain classical denoiser for a stereo pair, driven by one channel-linked
+ * gain mask.
+ *
+ * The mask is built from the channel-summed power and applied unchanged to both channels, so
+ * the pass cannot move an interchannel level or phase difference. That is also why the result
+ * carries a single `report` rather than one per channel: a pair would be two copies of one
+ * measurement and would read as though the two could differ.
+ *
+ * `report.detected` is therefore a *pair-level* measurement, and the only absolute one in the
+ * result. Its levels are dBFS on the channel-summed power, so two identical channels read
+ * exactly `10*log10(2)` above the same material through
+ * {@link masteringRepairDenoiseClassical}. A stereo floor is comparable only against another
+ * stereo floor, never against a mono one.
+ *
+ * Needs at least `nFft` samples and REJECTS a shorter input, which is the opposite of
+ * {@link masteringRepairDereverbClassicalStereo} — that one pads.
+ *
+ * Which options are live depends on `mode`: `overSubtraction` and `spectralFloor` are read
+ * only by `spectralSubtraction`, and `speechPresenceGain` and `gainSmoothing` only by the
+ * other two, so at the default `logMmse` the first pair does nothing.
+ *
+ * @example
+ * ```ts
+ * const { left, right, report } = masteringRepairDenoiseClassicalStereo({
+ *   left: leftSamples,
+ *   right: rightSamples,
+ *   sampleRate: 48000,
+ *   reductionDb: 18,
+ * });
+ * console.log(report.detected.floorDbfs, report.meanReductionDb);
+ * ```
+ */
+export function masteringRepairDenoiseClassicalStereo(
+  request: MasteringRepairDenoiseClassicalStereoRequest,
+): MasteringRepairDenoiseClassicalStereoResult;
+export function masteringRepairDenoiseClassicalStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  config?: DenoiseClassicalOptions,
+): MasteringRepairDenoiseClassicalStereoResult;
+export function masteringRepairDenoiseClassicalStereo(
+  left: Float32Array | MasteringRepairDenoiseClassicalStereoRequest,
+  right?: Float32Array,
+  sampleRate?: number,
+  config: DenoiseClassicalOptions = {},
+): MasteringRepairDenoiseClassicalStereoResult {
+  const request: MasteringRepairDenoiseClassicalStereoRequest =
+    left instanceof Float32Array
+      ? { left, right: right as Float32Array, sampleRate, ...config }
+      : left;
+  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
+  return requireModule().masteringRepairDenoiseClassicalStereo(
+    leftSamples,
+    rightSamples,
+    rate ?? 22050,
+    options,
   );
 }
 
@@ -225,6 +295,13 @@ export interface DereverbClassicalOptions {
 export interface MasteringRepairDereverbClassicalRequest extends DereverbClassicalOptions {
   samples: Float32Array;
   sampleRate: number;
+}
+
+/** Request form of `masteringRepairDereverbClassicalStereo`. */
+export interface MasteringRepairDereverbClassicalStereoRequest extends DereverbClassicalOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairDereverbConfigForRoom`. */
@@ -453,6 +530,69 @@ export function masteringRepairDereverbClassical(
     request.samples,
     request.sampleRate,
     request,
+  );
+}
+
+/**
+ * Offline classical dereverberator for a stereo pair (spectral subtraction plus an optional
+ * WPE pre-stage), driven by one channel-linked mask.
+ *
+ * The mask is built from the channel-summed power, and the WPE stage accumulates over both
+ * channels and applies one predictor set to each, so neither stage can move an interchannel
+ * level or phase difference. That is also why the result carries a single `report` rather than
+ * one per channel.
+ *
+ * Every field of that report is a ratio or a fraction, so unlike the denoise pair nothing in
+ * it shifts with the channel count: a stereo figure here is comparable against a mono one.
+ *
+ * An input shorter than `nFft` is PADDED for analysis rather than rejected, the opposite of
+ * {@link masteringRepairDenoiseClassicalStereo}.
+ *
+ * Two report fields are gated on the WPE stage, which is off unless `wpeEnabled` is set:
+ * `detected.latePredictability` and `wpePredictorNorm` are then both exactly 0, which is the
+ * measurement rather than an unset field. `detected.lateDecayRatioDb` runs the other way from
+ * what its name suggests — less negative means the material sustains across the module's late
+ * lag, so a reverberant input reads *higher* than the same material dry.
+ *
+ * `threshold` and `attenuation` are both validated to `[0, 1]`, so the strongest gate this
+ * accepts is `threshold: 0.99`, not an arbitrarily large number.
+ *
+ * @example
+ * ```ts
+ * const { left, right, report } = masteringRepairDereverbClassicalStereo({
+ *   left: leftSamples,
+ *   right: rightSamples,
+ *   sampleRate: 48000,
+ *   wpeEnabled: true,
+ * });
+ * console.log(report.detected.lateDecayRatioDb, report.wpePredictorNorm);
+ * ```
+ */
+export function masteringRepairDereverbClassicalStereo(
+  request: MasteringRepairDereverbClassicalStereoRequest,
+): MasteringRepairDereverbClassicalStereoResult;
+export function masteringRepairDereverbClassicalStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  config?: DereverbClassicalOptions,
+): MasteringRepairDereverbClassicalStereoResult;
+export function masteringRepairDereverbClassicalStereo(
+  left: Float32Array | MasteringRepairDereverbClassicalStereoRequest,
+  right?: Float32Array,
+  sampleRate?: number,
+  config: DereverbClassicalOptions = {},
+): MasteringRepairDereverbClassicalStereoResult {
+  const request: MasteringRepairDereverbClassicalStereoRequest =
+    left instanceof Float32Array
+      ? { left, right: right as Float32Array, sampleRate, ...config }
+      : left;
+  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
+  return requireModule().masteringRepairDereverbClassicalStereo(
+    leftSamples,
+    rightSamples,
+    rate ?? 22050,
+    options,
   );
 }
 

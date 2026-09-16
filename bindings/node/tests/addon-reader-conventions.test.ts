@@ -43,7 +43,9 @@ import {
   masteringRepairDehum,
   masteringRepairDehumStereo,
   masteringRepairDenoiseClassical,
+  masteringRepairDenoiseClassicalStereo,
   masteringRepairDereverbClassical,
+  masteringRepairDereverbClassicalStereo,
   masteringRepairDereverbConfigForRoom,
   masteringRepairTrimSilence,
   mergeNotes,
@@ -444,8 +446,32 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) => Array.from(masteringRepairDenoiseClassical(sine(2048), SR, o)).slice(0, 32),
   },
   {
+    jsName: 'masteringRepairDenoiseClassicalStereo',
+    invoke: (o) =>
+      Array.from(
+        masteringRepairDenoiseClassicalStereo({
+          ...o,
+          left: sine(2048),
+          right: sine(2048),
+          sampleRate: SR,
+        }).left,
+      ).slice(0, 32),
+  },
+  {
     jsName: 'masteringRepairDereverbClassical',
     invoke: (o) => Array.from(masteringRepairDereverbClassical(sine(2048), SR, o)).slice(0, 32),
+  },
+  {
+    jsName: 'masteringRepairDereverbClassicalStereo',
+    invoke: (o) =>
+      Array.from(
+        masteringRepairDereverbClassicalStereo({
+          ...o,
+          left: sine(2048),
+          right: sine(2048),
+          sampleRate: SR,
+        }).left,
+      ).slice(0, 32),
   },
   {
     // `volume` is derived from the estimate record rather than the options bag,

@@ -265,6 +265,171 @@ TEST_CASE("sonare_mastering_repair_denoise_classical", "[c_api][mastering]") {
   }
 }
 
+TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering]") {
+  const int sr = 22050;
+  auto signal = generate_sine(440.0f, sr, 1.0f);
+  std::vector<float> noisy(signal.size());
+  std::vector<float> silence(signal.size(), 0.0f);
+  uint32_t state = 1u;
+  for (size_t i = 0; i < signal.size(); ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float u = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+    noisy[i] = 0.5f * signal[i] + (u - 0.5f) * 0.4f;
+  }
+
+  SECTION("one linked mask drives both channels") {
+    SonareDenoiseStereoResult out{};
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(
+                noisy.data(), noisy.data(), noisy.size(), sr, nullptr, &out) == SONARE_OK);
+    REQUIRE(out.length == noisy.size());
+
+    // The mask is one real number per cell scaling both channels, so identical
+    // inputs must come back bit-identical. A per-channel mask -- the shape the
+    // four sibling entries use -- fails this without needing a crafted fixture.
+    for (size_t i = 0; i < out.length; ++i) {
+      REQUIRE(out.left[i] == out.right[i]);
+    }
+    // Pinned so the equality above cannot be satisfied by two silent buffers.
+    REQUIRE(max_abs(out.left, out.length) > 0.01f);
+
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("the reported floor is the pair's, not a channel's") {
+    // The estimator runs on the channel-summed power, so duplicating a channel
+    // doubles it. Measured against a silent partner, whose summed power is the
+    // single channel's, that is exactly 10*log10(2).
+    SonareDenoiseStereoResult doubled{};
+    SonareDenoiseStereoResult single{};
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(
+                noisy.data(), noisy.data(), noisy.size(), sr, nullptr, &doubled) == SONARE_OK);
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(
+                noisy.data(), silence.data(), noisy.size(), sr, nullptr, &single) == SONARE_OK);
+
+    // Pinned before the difference, because two floors agreeing on a sentinel
+    // would satisfy any relation between them while measuring nothing.
+    REQUIRE(std::isfinite(single.report.detected.floor_dbfs));
+    REQUIRE(single.report.detected.floor_dbfs < 0.0f);
+    REQUIRE(single.report.detected.floor_dbfs > sonare::constants::kFloorDb);
+    // Measured 3.010299683 against the 3.010300159 that 10*log10(2) is, so the
+    // margin is two hundred times the observed error and thirty thousand times
+    // tighter than the shift it is there to catch.
+    REQUIRE(doubled.report.detected.floor_dbfs - single.report.detected.floor_dbfs ==
+            Catch::Approx(10.0f * sonare::constants::kLog10Of2).margin(1e-4));
+
+    sonare_free_floats(doubled.left);
+    sonare_free_floats(doubled.right);
+    sonare_free_floats(single.left);
+    sonare_free_floats(single.right);
+  }
+
+  SECTION("every band slot is measured, not just the first") {
+    SonareDenoiseStereoResult out{};
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(
+                noisy.data(), noisy.data(), noisy.size(), sr, nullptr, &out) == SONARE_OK);
+
+    // A mirror carrying only band_floor_dbfs[0] passes any check written against
+    // the first entry alone, so the whole array has to say something.
+    bool all_finite = true;
+    bool any_differs_from_first = false;
+    for (int b = 0; b < SONARE_REPAIR_NOISE_BAND_COUNT; ++b) {
+      const float band = out.report.detected.band_floor_dbfs[b];
+      if (!std::isfinite(band)) all_finite = false;
+      if (band != out.report.detected.band_floor_dbfs[0]) any_differs_from_first = true;
+      REQUIRE(band >= sonare::constants::kFloorDb);
+    }
+    REQUIRE(all_finite);
+    REQUIRE(any_differs_from_first);
+
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("the gain floor is observable in the modes that have one") {
+    SonareDenoiseClassicalConfig config = {};
+    config.mode = SONARE_DENOISE_MODE_LOG_MMSE;
+    config.noise_estimator = SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE;
+    config.n_fft = 1024;
+    config.hop_length = 256;
+    config.dd_alpha = 0.98f;
+    config.reduction_db = 12.0f;
+    config.over_subtraction = 2.0f;
+    config.spectral_floor = 0.05f;
+    config.noise_estimation_quantile = 0.1f;
+    config.speech_presence_gain = 1;
+    config.gain_smoothing = 1;
+
+    SonareDenoiseStereoResult out{};
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(
+                noisy.data(), noisy.data(), noisy.size(), sr, &config, &out) == SONARE_OK);
+    REQUIRE(out.report.mean_reduction_db > 0.0f);
+    REQUIRE(out.report.max_reduction_db >= out.report.mean_reduction_db);
+    REQUIRE(out.report.max_reduction_db <= config.reduction_db + 0.01f);
+    REQUIRE(out.report.floor_limited_fraction > 0.0f);
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+
+    // SpectralSubtraction floors on spectral_floor instead, so its zero here is
+    // the mode answering rather than a measurement. Asserting it alone would
+    // pass against a build that never populated the field at all, which is why
+    // the nonzero above is checked first on the same fixture.
+    config.mode = SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION;
+    SonareDenoiseStereoResult berouti{};
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(
+                noisy.data(), noisy.data(), noisy.size(), sr, &config, &berouti) == SONARE_OK);
+    REQUIRE(berouti.report.floor_limited_fraction == 0.0f);
+    REQUIRE(berouti.report.mean_reduction_db > 0.0f);
+    sonare_free_floats(berouti.left);
+    sonare_free_floats(berouti.right);
+  }
+
+  SECTION("an input shorter than n_fft is refused") {
+    // The opposite of the dereverb pair, which pads one. These two calls differ
+    // only in the core function they reach, so this is what separates them.
+    std::vector<float> tiny(512, 0.25f);
+    SonareDenoiseStereoResult out{};
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(tiny.data(), tiny.data(), tiny.size(),
+                                                             sr, nullptr, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out.left == nullptr);
+    CHECK(out.length == 0);
+  }
+
+  SECTION("clears the result before refusing") {
+    SonareDenoiseStereoResult out{};
+    out.left = non_null_sentinel_float_ptr();
+    out.length = 123;
+    out.report.mean_reduction_db = 99.0f;
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(nullptr, noisy.data(), noisy.size(),
+                                                             sr, nullptr, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out.left == nullptr);
+    CHECK(out.right == nullptr);
+    CHECK(out.length == 0);
+    CHECK(out.report.mean_reduction_db == 0.0f);
+
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(noisy.data(), noisy.data(),
+                                                             noisy.size(), 0, nullptr, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(noisy.data(), noisy.data(),
+                                                             noisy.size(), sr, nullptr, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+
+    SonareDenoiseClassicalConfig bad = {};
+    bad.n_fft = 1000;  // not a power of two
+    bad.hop_length = 256;
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(noisy.data(), noisy.data(),
+                                                             noisy.size(), sr, &bad, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    bad.n_fft = 1024;
+    bad.hop_length = 0;
+    REQUIRE(sonare_mastering_repair_denoise_classical_stereo(noisy.data(), noisy.data(),
+                                                             noisy.size(), sr, &bad, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 TEST_CASE("sonare_mastering_repair_declip_stereo", "[c_api][mastering]") {
   const int sr = 22050;
   // Different tones, so returning one channel twice fails on content alone.
@@ -916,6 +1081,191 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical", "[c_api][mastering]") {
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
     REQUIRE(out_length == 0);
+  }
+}
+
+TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][mastering]") {
+  const int sr = 48000;
+  // A burst through two feedback combs. The tail is what both stages read: the
+  // late-lag statistic needs energy still present one late_delay_ms later, and
+  // the WPE predictor needs that energy to be predictable from the lagged frame.
+  // A plain tone gives the second without the first and would let a build that
+  // never ran the late stage pass.
+  std::vector<float> reverberant(sr, 0.0f);
+  uint32_t state = 7u;
+  for (size_t i = 0; i < static_cast<size_t>(sr) / 10; ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float u = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+    reverberant[i] = (u - 0.5f) * 0.6f;
+  }
+  const size_t taps[2] = {1729, 2400};
+  const float gains[2] = {0.55f, 0.45f};
+  for (size_t i = 0; i < reverberant.size(); ++i) {
+    for (int k = 0; k < 2; ++k) {
+      if (i >= taps[k]) reverberant[i] += gains[k] * reverberant[i - taps[k]];
+    }
+  }
+  std::vector<float> silence(reverberant.size(), 0.0f);
+
+  SonareDereverbClassicalConfig base = {};
+  base.threshold = 0.0f;
+  base.attenuation = 1.0f;
+  base.n_fft = 1024;
+  base.hop_length = 256;
+  base.t60_sec = 0.4f;
+  base.late_delay_ms = 50.0f;
+  base.over_subtraction = 1.0f;
+  base.spectral_floor = 0.08f;
+  base.wpe_enabled = 0;
+  base.wpe_iterations = 2;
+  base.wpe_taps = 3;
+  base.wpe_strength = 0.7f;
+
+  SECTION("one linked mask and one predictor set drive both channels") {
+    SonareDereverbStereoResult out{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                reverberant.data(), reverberant.data(), reverberant.size(), sr, &base, &out) ==
+            SONARE_OK);
+    REQUIRE(out.length == reverberant.size());
+    for (size_t i = 0; i < out.length; ++i) {
+      REQUIRE(out.left[i] == out.right[i]);
+    }
+    // Pinned so the equality above cannot be satisfied by two silent buffers.
+    REQUIRE(max_abs(out.left, out.length) > 0.01f);
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("the WPE fields are zero on the path that does not run WPE") {
+    SonareDereverbStereoResult off{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                reverberant.data(), reverberant.data(), reverberant.size(), sr, &base, &off) ==
+            SONARE_OK);
+    REQUIRE(off.report.detected.late_predictability == 0.0f);
+    REQUIRE(off.report.wpe_predictor_norm == 0.0f);
+    // The rest of the report still has to be alive, or the two zeros above are
+    // satisfied by a call that computed nothing at all.
+    REQUIRE(off.report.mean_reduction_db > 0.0f);
+    sonare_free_floats(off.left);
+    sonare_free_floats(off.right);
+
+    // wpe_enabled is clear by default, so the check above is the whole of what a
+    // default-config test can witness: it passes against a build with no WPE
+    // stage in it. Only this second half distinguishes the two.
+    SonareDereverbClassicalConfig wpe = base;
+    wpe.wpe_enabled = 1;
+    SonareDereverbStereoResult on{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                reverberant.data(), reverberant.data(), reverberant.size(), sr, &wpe, &on) ==
+            SONARE_OK);
+    REQUIRE(on.report.detected.late_predictability > 0.0f);
+    REQUIRE(on.report.wpe_predictor_norm > 0.0f);
+    // The applied norm is the pre-clamp one passed through a 0.98 ceiling, so it
+    // can equal it but never exceed it.
+    REQUIRE(on.report.wpe_predictor_norm <= on.report.detected.late_predictability);
+    sonare_free_floats(on.left);
+    sonare_free_floats(on.right);
+  }
+
+  SECTION("no field carries the pair's level the way a denoise floor does") {
+    // Every field here is a ratio or a fraction, so duplicating a channel leaves
+    // them where they were -- the exact opposite of the denoise pair, whose
+    // absolute floor moves by 10*log10(2) under this same transformation. Both
+    // came back bit-identical here; the margin is left nonzero only because the
+    // late-lag statistic drops cells under an absolute power floor, so on other
+    // material doubling could move a few across it.
+    SonareDereverbStereoResult doubled{};
+    SonareDereverbStereoResult single{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                reverberant.data(), reverberant.data(), reverberant.size(), sr, &base, &doubled) ==
+            SONARE_OK);
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(reverberant.data(), silence.data(),
+                                                              reverberant.size(), sr, &base,
+                                                              &single) == SONARE_OK);
+
+    // Pinned first: an implementation reporting a constant zero satisfies every
+    // equality below.
+    REQUIRE(std::isfinite(single.report.detected.late_decay_ratio_db));
+    REQUIRE(single.report.detected.late_decay_ratio_db != 0.0f);
+    REQUIRE(single.report.mean_reduction_db > 0.0f);
+
+    REQUIRE(doubled.report.detected.late_decay_ratio_db ==
+            Catch::Approx(single.report.detected.late_decay_ratio_db).margin(1e-6));
+    REQUIRE(doubled.report.mean_reduction_db ==
+            Catch::Approx(single.report.mean_reduction_db).margin(1e-6));
+
+    sonare_free_floats(doubled.left);
+    sonare_free_floats(doubled.right);
+    sonare_free_floats(single.left);
+    sonare_free_floats(single.right);
+  }
+
+  SECTION("the threshold gate is observable in suppressed_fraction") {
+    SonareDereverbStereoResult open{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                reverberant.data(), reverberant.data(), reverberant.size(), sr, &base, &open) ==
+            SONARE_OK);
+    REQUIRE(open.report.suppressed_fraction > 0.0f);
+
+    SonareDereverbClassicalConfig gated = base;
+    // The validator bounds threshold to a CLOSED [0, 1], so 1 is the tightest
+    // legal gate; anything above it is refused rather than gating harder.
+    gated.threshold = 1.0f;
+    SonareDereverbStereoResult shut{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                reverberant.data(), reverberant.data(), reverberant.size(), sr, &gated, &shut) ==
+            SONARE_OK);
+    REQUIRE(shut.report.suppressed_fraction < open.report.suppressed_fraction);
+
+    sonare_free_floats(open.left);
+    sonare_free_floats(open.right);
+    sonare_free_floats(shut.left);
+    sonare_free_floats(shut.right);
+  }
+
+  SECTION("an input shorter than n_fft is padded rather than refused") {
+    // The opposite of the denoise pair, which rejects one. These two calls differ
+    // only in the core function they reach, so this is what separates them.
+    std::vector<float> tiny(512, 0.25f);
+    SonareDereverbStereoResult out{};
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(tiny.data(), tiny.data(), tiny.size(),
+                                                              sr, &base, &out) == SONARE_OK);
+    REQUIRE(out.length == tiny.size());
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("clears the result before refusing") {
+    SonareDereverbStereoResult out{};
+    out.left = non_null_sentinel_float_ptr();
+    out.length = 123;
+    out.report.mean_reduction_db = 99.0f;
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                nullptr, reverberant.data(), reverberant.size(), sr, &base, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out.left == nullptr);
+    CHECK(out.right == nullptr);
+    CHECK(out.length == 0);
+    CHECK(out.report.mean_reduction_db == 0.0f);
+
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                reverberant.data(), reverberant.data(), reverberant.size(), 0, &base, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                reverberant.data(), reverberant.data(), reverberant.size(), sr, &base, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+
+    SonareDereverbClassicalConfig bad = base;
+    bad.n_fft = 1500;  // not a power of two
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                reverberant.data(), reverberant.data(), reverberant.size(), sr, &bad, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    // Bounded by n_fft here, where the denoise pair only requires it positive.
+    bad.n_fft = 1024;
+    bad.hop_length = 2048;
+    REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(
+                reverberant.data(), reverberant.data(), reverberant.size(), sr, &bad, &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 

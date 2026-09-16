@@ -213,6 +213,30 @@ SonareDehumReport to_c_dehum_report(const sonare::mastering::repair::DehumReport
   return c;
 }
 
+SonareDenoiseReport to_c_denoise_report(const sonare::mastering::repair::DenoiseReport& cpp) {
+  SonareDenoiseReport c{};
+  c.detected.floor_dbfs = cpp.detected.floor_dbfs;
+  static_assert(static_cast<std::size_t>(SONARE_REPAIR_NOISE_BAND_COUNT) ==
+                    sonare::mastering::repair::kRepairNoiseBandCount,
+                "C band level array must match the core's band count");
+  std::memcpy(c.detected.band_floor_dbfs, cpp.detected.band_floor_dbfs,
+              sizeof(c.detected.band_floor_dbfs));
+  c.mean_reduction_db = cpp.mean_reduction_db;
+  c.max_reduction_db = cpp.max_reduction_db;
+  c.floor_limited_fraction = cpp.floor_limited_fraction;
+  return c;
+}
+
+SonareDereverbReport to_c_dereverb_report(const sonare::mastering::repair::DereverbReport& cpp) {
+  SonareDereverbReport c{};
+  c.detected.late_decay_ratio_db = cpp.detected.late_decay_ratio_db;
+  c.detected.late_predictability = cpp.detected.late_predictability;
+  c.mean_reduction_db = cpp.mean_reduction_db;
+  c.suppressed_fraction = cpp.suppressed_fraction;
+  c.wpe_predictor_norm = cpp.wpe_predictor_norm;
+  return c;
+}
+
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
 void clear_float_output(float** out, size_t* out_length) {
@@ -284,6 +308,42 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
         sonare::mastering::repair::denoise_classical(audio, to_cpp_denoise_config(config));
     return copy_audio_result(result, out, out_length);
   });
+}
+
+SonareError sonare_mastering_repair_denoise_classical_stereo(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareDenoiseClassicalConfig* config, SonareDenoiseStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined before any validation return, so a rejected call hands back an empty
+  // result rather than whatever the caller's stack slot held.
+  *out = SonareDenoiseStereoResult{};
+
+  // Mirrors the mono entry's pre-check so the two agree on which configs they
+  // reject before the core ever sees them.
+  if (config) {
+    if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
+    if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  const auto result = sonare::mastering::repair::denoise_classical_stereo(
+      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
+      to_cpp_denoise_config(config));
+  out->length = result.left.size();
+  out->report = to_c_denoise_report(result.report);
+  std::unique_ptr<float[]> left_out(new float[out->length]);
+  std::unique_ptr<float[]> right_out(new float[out->length]);
+  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
+  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
+  out->left = release_array(left_out);
+  out->right = release_array(right_out);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
@@ -440,6 +500,44 @@ SonareError sonare_mastering_repair_dereverb_classical(const float* samples, siz
         sonare::mastering::repair::dereverb_classical(audio, to_cpp_dereverb_config(config));
     return copy_audio_result(result, out, out_length);
   });
+}
+
+SonareError sonare_mastering_repair_dereverb_classical_stereo(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareDereverbClassicalConfig* config, SonareDereverbStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined before any validation return, so a rejected call hands back an empty
+  // result rather than whatever the caller's stack slot held.
+  *out = SonareDereverbStereoResult{};
+
+  // Mirrors the mono entry's pre-check, which bounds hop_length by n_fft where
+  // the denoise pair only requires it positive.
+  if (config) {
+    if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
+    if (config->hop_length <= 0 || config->hop_length > config->n_fft) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+  }
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  const auto result = sonare::mastering::repair::dereverb_classical_stereo(
+      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
+      to_cpp_dereverb_config(config));
+  out->length = result.left.size();
+  out->report = to_c_dereverb_report(result.report);
+  std::unique_ptr<float[]> left_out(new float[out->length]);
+  std::unique_ptr<float[]> right_out(new float[out->length]);
+  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
+  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
+  out->left = release_array(left_out);
+  out->right = release_array(right_out);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t length,

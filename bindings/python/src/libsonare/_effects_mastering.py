@@ -32,7 +32,9 @@ from ._ffi import (
     SonareDehumConfig,
     SonareDehumStereoResult,
     SonareDenoiseClassicalConfig,
+    SonareDenoiseStereoResult,
     SonareDereverbClassicalConfig,
+    SonareDereverbStereoResult,
     SonareGateConfig,
     SonareRoomEstimate,
     SonareTransientShaperConfig,
@@ -74,8 +76,14 @@ from .types import (
     DecrackleStereoResult,
     DehumReport,
     DehumStereoResult,
+    DenoiseReport,
+    DenoiseStereoResult,
     DereverbClassicalConfig,
+    DereverbReport,
+    DereverbStereoResult,
     HumDetection,
+    NoiseDetection,
+    ReverbDetection,
     RoomEstimate,
 )
 
@@ -457,6 +465,141 @@ def mastering_repair_denoise_classical(
         )
         _check(rc)
         return _from_c_float_array(out, out_length.value)
+
+
+def _extract_denoise_report(raw: Any) -> DenoiseReport:
+    detected = raw.detected
+    return DenoiseReport(
+        detected=NoiseDetection(
+            floor_dbfs=float(detected.floor_dbfs),
+            band_floor_dbfs=[float(v) for v in detected.band_floor_dbfs],
+        ),
+        mean_reduction_db=float(raw.mean_reduction_db),
+        max_reduction_db=float(raw.max_reduction_db),
+        floor_limited_fraction=float(raw.floor_limited_fraction),
+    )
+
+
+@_guard_buffer("left", "right")
+def mastering_repair_denoise_classical_stereo(
+    left: Sequence[float] | list[float] | np.ndarray,
+    right: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    mode: int | str = "logMmse",
+    noise_estimator: int | str = "quantile",
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    dd_alpha: float = 0.98,
+    reduction_db: float = 26.0,
+    over_subtraction: float = 2.0,
+    spectral_floor: float = 0.05,
+    noise_estimation_quantile: float = 0.1,
+    speech_presence_gain: bool = True,
+    gain_smoothing: bool = True,
+) -> DenoiseStereoResult:
+    """Denoises a stereo pair with one channel-linked gain mask.
+
+    The mask is built from the channel-summed power and applied unchanged to
+    both channels, so the pass cannot move an interchannel level or phase
+    difference. That is also why the result carries one ``report`` rather
+    than one per channel: a pair would be two copies of one measurement and
+    would read as though the two could differ.
+
+    ``report.detected`` is the one part that depends on the channel count.
+    Its levels are absolute dBFS measured on the channel-summed power, so two
+    identical channels read about 3 dB above the same material through
+    :func:`mastering_repair_denoise_classical`; compare a stereo floor only
+    against another stereo floor.
+
+    Needs at least ``n_fft`` samples and rejects a shorter input, unlike
+    :func:`mastering_repair_dereverb_classical_stereo`, which pads one.
+
+    Which config fields are live depends on ``mode``: ``over_subtraction``
+    and ``spectral_floor`` are read only by ``"spectralSubtraction"``, and
+    ``speech_presence_gain`` and ``gain_smoothing`` only by the other two, so
+    at the default mode the first pair does nothing.
+
+    Args:
+        left: Left channel input buffer (any sequence convertible to float32).
+        right: Right channel input buffer, same length as ``left``.
+        sample_rate: Sample rate in Hz (default 22050).
+        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
+              an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
+        noise_estimator: ``"quantile"`` (default), ``"mcra"``, or ``"imcra"``.
+        n_fft: STFT size, must be a positive power of two (default 1024).
+        hop_length: Hop size in samples (default 256).
+        dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
+        reduction_db: Deepest attenuation the mask may apply, in dB, >= 0
+            (default 26.0).
+        over_subtraction: Berouti alpha; SpectralSubtraction only (default 2.0).
+        spectral_floor: Berouti beta; SpectralSubtraction only (default 0.05).
+        noise_estimation_quantile: Fraction of frames assumed noise-only (default 0.1).
+        speech_presence_gain: Apply speech-presence probability gating (default True).
+        gain_smoothing: Smooth gains across time (default True).
+
+    Returns:
+        :class:`DenoiseStereoResult` with the denoised channels and the one
+        report the shared mask produced.
+
+    Raises:
+        SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved,
+            if ``n_fft`` is not a power of two, if ``hop_length`` is not
+            positive, or if the two channels differ in length.
+        SonareError: If the C call rejects the request, which includes an input
+            shorter than ``n_fft``.
+    """
+    # The core requires a power of two here (denoise_classical.cpp), narrower
+    # than the shared even-size rule; check it eagerly so the message names it.
+    _require_power_of_two(n_fft, "n_fft")
+    if hop_length <= 0:
+        raise SonareValueError("hop_length must be positive")
+
+    lib = _get_lib()
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise SonareValueError("left and right channel lengths must match")
+    config = SonareDenoiseClassicalConfig(  # noqa: F405
+        mode=_coerce_denoise_mode(mode),
+        noise_estimator=_coerce_denoise_estimator(noise_estimator),
+        n_fft=int(n_fft),
+        hop_length=int(hop_length),
+        dd_alpha=float(dd_alpha),
+        reduction_db=float(reduction_db),
+        over_subtraction=float(over_subtraction),
+        spectral_floor=float(spectral_floor),
+        noise_estimation_quantile=float(noise_estimation_quantile),
+        speech_presence_gain=1 if speech_presence_gain else 0,
+        gain_smoothing=1 if gain_smoothing else 0,
+    )
+    out = SonareDenoiseStereoResult()  # noqa: F405
+    rc = lib.sonare_mastering_repair_denoise_classical_stereo(
+        left_array,
+        right_array,
+        _to_c_size_t(left_length, "left_length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    try:
+        _check(rc)
+        n = int(out.length)
+        return DenoiseStereoResult(
+            left=[float(out.left[i]) for i in range(n)],
+            right=[float(out.right[i]) for i in range(n)],
+            length=n,
+            report=_extract_denoise_report(out.report),
+        )
+    finally:
+        # No dedicated free function for this result: `left`/`right` are each
+        # released with sonare_free_floats (see SonareDenoiseStereoResult in
+        # sonare_c_mastering.h). A refused call leaves `out` at its
+        # zero-initialized default, so both pointers are still NULL here.
+        if out.left:
+            lib.sonare_free_floats(out.left)
+        if out.right:
+            lib.sonare_free_floats(out.right)
 
 
 _DECRACKLE_MODE_NAMES = {
@@ -922,6 +1065,137 @@ def mastering_repair_dereverb_classical(
     return _run_repair(
         _get_lib().sonare_mastering_repair_dereverb_classical, samples, sample_rate, config
     )
+
+
+def _extract_dereverb_report(raw: Any) -> DereverbReport:
+    detected = raw.detected
+    return DereverbReport(
+        detected=ReverbDetection(
+            late_decay_ratio_db=float(detected.late_decay_ratio_db),
+            late_predictability=float(detected.late_predictability),
+        ),
+        mean_reduction_db=float(raw.mean_reduction_db),
+        suppressed_fraction=float(raw.suppressed_fraction),
+        wpe_predictor_norm=float(raw.wpe_predictor_norm),
+    )
+
+
+@_guard_buffer("left", "right")
+def mastering_repair_dereverb_classical_stereo(
+    left: Sequence[float] | list[float] | np.ndarray,
+    right: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.0,
+    attenuation: float = 1.0,
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    t60_sec: float = 0.4,
+    late_delay_ms: float = 50.0,
+    over_subtraction: float = 1.0,
+    spectral_floor: float = 0.08,
+    wpe_enabled: bool = False,
+    wpe_iterations: int = 2,
+    wpe_taps: int = 3,
+    wpe_strength: float = 0.7,
+) -> DereverbStereoResult:
+    """Dereverberates a stereo pair with one channel-linked mask.
+
+    The mask is built from the channel-summed power, and the WPE stage
+    accumulates over both channels and applies one predictor set to each, so
+    neither stage can move an interchannel level or phase difference. That is
+    also why the result carries one ``report`` rather than one per channel.
+
+    Every field of that report is a ratio or a fraction, so unlike
+    :func:`mastering_repair_denoise_classical_stereo` nothing here shifts with
+    the channel count and a stereo figure is comparable against a mono one.
+
+    ``detected.late_predictability`` and ``wpe_predictor_norm`` are both
+    exactly zero unless ``wpe_enabled`` is set, which it is not by default --
+    that is the measurement, not an unset field.
+
+    An input shorter than ``n_fft`` is padded for analysis rather than
+    rejected, which is the opposite of
+    :func:`mastering_repair_denoise_classical_stereo`.
+
+    Args:
+        left: Left channel input buffer (any sequence convertible to float32).
+        right: Right channel input buffer, same length as ``left``.
+        sample_rate: Sample rate in Hz (default 22050).
+        threshold: Late-reverb detection gate; 0 admits everything (default 0).
+        attenuation: Suppression amount, linear (default 1.0, full).
+        n_fft: STFT size, must be a positive power of two (default 1024).
+        hop_length: Hop size in samples, in ``(0, n_fft]`` (default 256).
+        t60_sec: Estimated T60 in seconds (default 0.4).
+        late_delay_ms: Late-reverb onset relative to direct (default 50.0).
+        over_subtraction: Berouti alpha (default 1.0).
+        spectral_floor: Berouti beta (default 0.08).
+        wpe_enabled: Enable the WPE pre-stage (default False).
+        wpe_iterations: WPE EM iterations (default 2).
+        wpe_taps: WPE filter taps (default 3).
+        wpe_strength: WPE blend weight (default 0.7).
+
+    Returns:
+        :class:`DereverbStereoResult` with the dereverberated channels and the
+        one report the shared mask produced.
+
+    Raises:
+        SonareValueError: If ``n_fft`` is not a power of two, if ``hop_length``
+            is outside ``(0, n_fft]``, or if the two channels differ in length.
+        SonareError: If the C call rejects the request.
+    """
+    # The core requires a power of two here (dereverb_classical.cpp), narrower
+    # than the shared even-size rule; check it eagerly so the message names it.
+    _require_power_of_two(n_fft, "n_fft")
+    if hop_length <= 0 or hop_length > n_fft:
+        raise SonareValueError("hop_length must be in (0, n_fft]")
+
+    lib = _get_lib()
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise SonareValueError("left and right channel lengths must match")
+    config = SonareDereverbClassicalConfig(  # noqa: F405
+        threshold=float(threshold),
+        attenuation=float(attenuation),
+        n_fft=int(n_fft),
+        hop_length=int(hop_length),
+        t60_sec=float(t60_sec),
+        late_delay_ms=float(late_delay_ms),
+        over_subtraction=float(over_subtraction),
+        spectral_floor=float(spectral_floor),
+        wpe_enabled=1 if wpe_enabled else 0,
+        wpe_iterations=int(wpe_iterations),
+        wpe_taps=int(wpe_taps),
+        wpe_strength=float(wpe_strength),
+    )
+    out = SonareDereverbStereoResult()  # noqa: F405
+    rc = lib.sonare_mastering_repair_dereverb_classical_stereo(
+        left_array,
+        right_array,
+        _to_c_size_t(left_length, "left_length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    try:
+        _check(rc)
+        n = int(out.length)
+        return DereverbStereoResult(
+            left=[float(out.left[i]) for i in range(n)],
+            right=[float(out.right[i]) for i in range(n)],
+            length=n,
+            report=_extract_dereverb_report(out.report),
+        )
+    finally:
+        # No dedicated free function for this result: `left`/`right` are each
+        # released with sonare_free_floats (see SonareDereverbStereoResult in
+        # sonare_c_mastering.h). A refused call leaves `out` at its
+        # zero-initialized default, so both pointers are still NULL here.
+        if out.left:
+            lib.sonare_free_floats(out.left)
+        if out.right:
+            lib.sonare_free_floats(out.right)
 
 
 def mastering_repair_dereverb_config_for_room(

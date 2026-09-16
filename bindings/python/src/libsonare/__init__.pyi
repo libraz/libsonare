@@ -346,7 +346,13 @@ from .analyzer import (
     mastering_repair_denoise_classical as mastering_repair_denoise_classical,
 )
 from .analyzer import (
+    mastering_repair_denoise_classical_stereo as mastering_repair_denoise_classical_stereo,
+)
+from .analyzer import (
     mastering_repair_dereverb_classical as mastering_repair_dereverb_classical,
+)
+from .analyzer import (
+    mastering_repair_dereverb_classical_stereo as mastering_repair_dereverb_classical_stereo,
 )
 from .analyzer import (
     mastering_repair_dereverb_config_for_room as mastering_repair_dereverb_config_for_room,
@@ -741,7 +747,19 @@ from .types import (
 from .types import (
     DehumStereoResult as DehumStereoResult,
 )
+from .types import (
+    DenoiseReport as DenoiseReport,
+)
+from .types import (
+    DenoiseStereoResult as DenoiseStereoResult,
+)
 from .types import DereverbClassicalConfig as DereverbClassicalConfig
+from .types import (
+    DereverbReport as DereverbReport,
+)
+from .types import (
+    DereverbStereoResult as DereverbStereoResult,
+)
 from .types import DynamicRangeReport as DynamicRangeReport
 from .types import (
     DynamicsResult as DynamicsResult,
@@ -893,6 +911,9 @@ from .types import (
     Mode as Mode,
 )
 from .types import (
+    NoiseDetection as NoiseDetection,
+)
+from .types import (
     NoteSegment as NoteSegment,
 )
 from .types import PanLaw as PanLaw
@@ -922,6 +943,9 @@ from .types import (
 )
 from .types import (
     QuantizeConfig as QuantizeConfig,
+)
+from .types import (
+    ReverbDetection as ReverbDetection,
 )
 from .types import (
     RhythmResult as RhythmResult,

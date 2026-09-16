@@ -465,6 +465,49 @@ export interface WasmDehumStereoResult {
   rightReport: WasmDehumReport;
 }
 
+/** What a denoise analysis found, as `masteringRepairDenoiseClassicalStereo` returns it. */
+export interface WasmNoiseDetection {
+  floorDbfs: number;
+  bandFloorDbfs: Float32Array;
+}
+
+/** What a stereo denoise pass found and what it removed. */
+export interface WasmDenoiseReport {
+  detected: WasmNoiseDetection;
+  meanReductionDb: number;
+  maxReductionDb: number;
+  floorLimitedFraction: number;
+}
+
+/** One `report`, not a per-channel pair: the gain mask is one array applied to both channels. */
+export interface WasmDenoiseStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  report: WasmDenoiseReport;
+}
+
+/** What a dereverb analysis found, as `masteringRepairDereverbClassicalStereo` returns it. */
+export interface WasmReverbDetection {
+  lateDecayRatioDb: number;
+  latePredictability: number;
+}
+
+/** What a stereo dereverb pass found and what it removed. */
+export interface WasmDereverbReport {
+  detected: WasmReverbDetection;
+  meanReductionDb: number;
+  suppressedFraction: number;
+  wpePredictorNorm: number;
+}
+
+/** One `report`, not a per-channel pair: the mask and the WPE predictor set are each one
+ * object applied to both channels. */
+export interface WasmDereverbStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  report: WasmDereverbReport;
+}
+
 export interface WasmRoomMorphOptions extends WasmRoomGeometryOptions {
   wet?: number;
   sourceTailSuppression?: number;
@@ -2213,6 +2256,12 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => Float32Array;
+  masteringRepairDenoiseClassicalStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmDenoiseStereoResult;
   masteringRepairDeclip: (
     samples: Float32Array,
     sampleRate: number,
@@ -2251,6 +2300,12 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => Float32Array;
+  masteringRepairDereverbClassicalStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmDereverbStereoResult;
   masteringRepairDereverbConfigForRoom: (
     estimate: WasmRoomEstimateResult,
     options: object,

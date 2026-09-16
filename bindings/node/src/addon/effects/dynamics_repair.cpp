@@ -465,6 +465,132 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo
 
 namespace {
 
+/// @brief Marshal the pair-level noise analysis into the JS shape the denoise
+///        stereo report carries.
+Napi::Object EmitNoiseDetection(Napi::Env env, const SonareNoiseDetection& detection) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("floorDbfs", Napi::Number::New(env, detection.floor_dbfs));
+  Napi::Array band_floor_dbfs = Napi::Array::New(env, SONARE_REPAIR_NOISE_BAND_COUNT);
+  for (int i = 0; i < SONARE_REPAIR_NOISE_BAND_COUNT; ++i) {
+    band_floor_dbfs.Set(static_cast<uint32_t>(i),
+                        Napi::Number::New(env, detection.band_floor_dbfs[i]));
+  }
+  out.Set("bandFloorDbfs", band_floor_dbfs);
+  return out;
+}
+
+Napi::Object EmitDenoiseReport(Napi::Env env, const SonareDenoiseReport& report) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("detected", EmitNoiseDetection(env, report.detected));
+  out.Set("meanReductionDb", Napi::Number::New(env, report.mean_reduction_db));
+  out.Set("maxReductionDb", Napi::Number::New(env, report.max_reduction_db));
+  out.Set("floorLimitedFraction", Napi::Number::New(env, report.floor_limited_fraction));
+  return out;
+}
+
+/// @brief Read a SonareDenoiseClassicalConfig options bag, reusing the mono
+///        facade's own mode and estimator string readers above so the two paths
+///        cannot recognize different spellings of the same mode.
+SonareDenoiseClassicalConfig read_denoise_config_c(const Napi::Object& options,
+                                                   SonareDenoiseClassicalConfig config) {
+  config.mode = static_cast<int>(parse_denoise_mode(
+      options, static_cast<sonare::mastering::repair::DenoiseMode>(config.mode)));
+  config.noise_estimator = static_cast<int>(parse_denoise_noise_estimator(
+      options,
+      static_cast<sonare::mastering::repair::DenoiseNoiseEstimator>(config.noise_estimator)));
+  config.n_fft = IntProperty(options, "nFft", config.n_fft);
+  config.hop_length = IntProperty(options, "hopLength", config.hop_length);
+  config.dd_alpha = FloatProperty(options, "ddAlpha", config.dd_alpha);
+  config.reduction_db = FloatProperty(options, "reductionDb", config.reduction_db);
+  config.over_subtraction = FloatProperty(options, "overSubtraction", config.over_subtraction);
+  config.spectral_floor = FloatProperty(options, "spectralFloor", config.spectral_floor);
+  config.noise_estimation_quantile =
+      FloatProperty(options, "noiseEstimationQuantile", config.noise_estimation_quantile);
+  config.speech_presence_gain =
+      BoolProperty(options, "speechPresenceGain", config.speech_presence_gain != 0) ? 1 : 0;
+  config.gain_smoothing =
+      BoolProperty(options, "gainSmoothing", config.gain_smoothing != 0) ? 1 : 0;
+  return config;
+}
+
+/// @brief Frees both heap-owned channels of a SonareDenoiseStereoResult on scope
+///        exit -- mirrors DeclickStereoResultGuard above.
+class DenoiseStereoResultGuard {
+ public:
+  explicit DenoiseStereoResultGuard(SonareDenoiseStereoResult* result) : result_(result) {}
+  DenoiseStereoResultGuard(const DenoiseStereoResultGuard&) = delete;
+  DenoiseStereoResultGuard& operator=(const DenoiseStereoResultGuard&) = delete;
+  ~DenoiseStereoResultGuard() {
+    sonare_free_floats(result_->left);
+    sonare_free_floats(result_->right);
+  }
+
+ private:
+  SonareDenoiseStereoResult* result_;
+};
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairDenoiseClassicalStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::Error::New(
+        env, "masteringRepairDenoiseClassicalStereo: left and right must have the same length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  // Library defaults (sonare_c_mastering.h SonareDenoiseClassicalConfig), applied
+  // before any options key overrides a field.
+  SonareDenoiseClassicalConfig config{SONARE_DENOISE_MODE_LOG_MMSE,
+                                      SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
+                                      1024,
+                                      256,
+                                      0.98f,
+                                      26.0f,
+                                      2.0f,
+                                      0.05f,
+                                      0.1f,
+                                      1,
+                                      1};
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    config = read_denoise_config_c(info[3].As<Napi::Object>(), config);
+  }
+  SonareDenoiseStereoResult result{};
+  SonareError err = sonare_mastering_repair_denoise_classical_stereo(
+      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  DenoiseStereoResultGuard guard(&result);
+  auto left_out = Napi::Float32Array::New(env, result.length);
+  auto right_out = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0) {
+    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
+    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", left_out);
+  out.Set("right", right_out);
+  out.Set("report", EmitDenoiseReport(env, result.report));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+namespace {
+
 sonare::mastering::repair::DecrackleMode parse_decrackle_mode(
     const Napi::Object& options, sonare::mastering::repair::DecrackleMode fallback) {
   Napi::Value value = options.Get("mode");
@@ -929,6 +1055,113 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInf
   sonare::Audio result = sonare::mastering::repair::dereverb_classical(audio, config);
   std::vector<float> out(result.data(), result.data() + result.size());
   return VecToFloat32(env, out);
+  SONARE_NODE_CATCH(env)
+}
+
+namespace {
+
+/// @brief Marshal the pair-level reverb analysis into the JS shape the dereverb
+///        stereo report carries.
+Napi::Object EmitReverbDetection(Napi::Env env, const SonareReverbDetection& detection) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("lateDecayRatioDb", Napi::Number::New(env, detection.late_decay_ratio_db));
+  out.Set("latePredictability", Napi::Number::New(env, detection.late_predictability));
+  return out;
+}
+
+Napi::Object EmitDereverbReport(Napi::Env env, const SonareDereverbReport& report) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("detected", EmitReverbDetection(env, report.detected));
+  out.Set("meanReductionDb", Napi::Number::New(env, report.mean_reduction_db));
+  out.Set("suppressedFraction", Napi::Number::New(env, report.suppressed_fraction));
+  out.Set("wpePredictorNorm", Napi::Number::New(env, report.wpe_predictor_norm));
+  return out;
+}
+
+/// @brief Read a SonareDereverbClassicalConfig options bag, applying the same
+///        field names and defaults as read_dereverb_config above -- the two
+///        structs share their shape, this is the C-ABI mirror of that reading.
+SonareDereverbClassicalConfig read_dereverb_config_c(const Napi::Object& options,
+                                                     SonareDereverbClassicalConfig config) {
+  config.threshold = FloatProperty(options, "threshold", config.threshold);
+  config.attenuation = FloatProperty(options, "attenuation", config.attenuation);
+  config.n_fft = IntProperty(options, "nFft", config.n_fft);
+  config.hop_length = IntProperty(options, "hopLength", config.hop_length);
+  config.t60_sec = FloatProperty(options, "t60Sec", config.t60_sec);
+  config.late_delay_ms = FloatProperty(options, "lateDelayMs", config.late_delay_ms);
+  config.over_subtraction = FloatProperty(options, "overSubtraction", config.over_subtraction);
+  config.spectral_floor = FloatProperty(options, "spectralFloor", config.spectral_floor);
+  config.wpe_enabled = BoolProperty(options, "wpeEnabled", config.wpe_enabled != 0) ? 1 : 0;
+  config.wpe_iterations = IntProperty(options, "wpeIterations", config.wpe_iterations);
+  config.wpe_taps = IntProperty(options, "wpeTaps", config.wpe_taps);
+  config.wpe_strength = FloatProperty(options, "wpeStrength", config.wpe_strength);
+  return config;
+}
+
+/// @brief Frees both heap-owned channels of a SonareDereverbStereoResult on
+///        scope exit -- mirrors DenoiseStereoResultGuard above.
+class DereverbStereoResultGuard {
+ public:
+  explicit DereverbStereoResultGuard(SonareDereverbStereoResult* result) : result_(result) {}
+  DereverbStereoResultGuard(const DereverbStereoResultGuard&) = delete;
+  DereverbStereoResultGuard& operator=(const DereverbStereoResultGuard&) = delete;
+  ~DereverbStereoResultGuard() {
+    sonare_free_floats(result_->left);
+    sonare_free_floats(result_->right);
+  }
+
+ private:
+  SonareDereverbStereoResult* result_;
+};
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairDereverbClassicalStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::Error::New(
+        env, "masteringRepairDereverbClassicalStereo: left and right must have the same length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  // Library defaults (sonare_c_mastering.h SonareDereverbClassicalConfig),
+  // applied before any options key overrides a field.
+  SonareDereverbClassicalConfig config{0.0f, 1.0f,  1024, 256, 0.4f, 50.0f,
+                                       1.0f, 0.08f, 0,    2,   3,    0.7f};
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    config = read_dereverb_config_c(info[3].As<Napi::Object>(), config);
+  }
+  SonareDereverbStereoResult result{};
+  SonareError err = sonare_mastering_repair_dereverb_classical_stereo(
+      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  DereverbStereoResultGuard guard(&result);
+  auto left_out = Napi::Float32Array::New(env, result.length);
+  auto right_out = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0) {
+    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
+    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", left_out);
+  out.Set("right", right_out);
+  out.Set("report", EmitDereverbReport(env, result.report));
+  return out;
   SONARE_NODE_CATCH(env)
 }
 

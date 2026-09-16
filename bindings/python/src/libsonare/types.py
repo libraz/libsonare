@@ -112,7 +112,19 @@ from ._types_analysis import (
     DehumStereoResult as DehumStereoResult,
 )
 from ._types_analysis import (
+    DenoiseReport as DenoiseReport,
+)
+from ._types_analysis import (
+    DenoiseStereoResult as DenoiseStereoResult,
+)
+from ._types_analysis import (
     DereverbClassicalConfig as DereverbClassicalConfig,
+)
+from ._types_analysis import (
+    DereverbReport as DereverbReport,
+)
+from ._types_analysis import (
+    DereverbStereoResult as DereverbStereoResult,
 )
 from ._types_analysis import (
     DynamicRangeReport as DynamicRangeReport,
@@ -199,6 +211,9 @@ from ._types_analysis import (
     Mode as Mode,
 )
 from ._types_analysis import (
+    NoiseDetection as NoiseDetection,
+)
+from ._types_analysis import (
     NoteSegment as NoteSegment,
 )
 from ._types_analysis import (
@@ -218,6 +233,9 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     ReassignedSpectrogramResult as ReassignedSpectrogramResult,
+)
+from ._types_analysis import (
+    ReverbDetection as ReverbDetection,
 )
 from ._types_analysis import (
     RhythmResult as RhythmResult,

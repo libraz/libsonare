@@ -1222,6 +1222,76 @@ class DehumStereoResult:
         right_report: DehumReport,
     ) -> None: ...
 
+class NoiseDetection:
+    floor_dbfs: float
+    band_floor_dbfs: list[float]
+    def __init__(
+        self,
+        floor_dbfs: float,
+        band_floor_dbfs: list[float],
+    ) -> None: ...
+
+class DenoiseReport:
+    detected: NoiseDetection
+    mean_reduction_db: float
+    max_reduction_db: float
+    floor_limited_fraction: float
+    def __init__(
+        self,
+        detected: NoiseDetection,
+        mean_reduction_db: float,
+        max_reduction_db: float,
+        floor_limited_fraction: float,
+    ) -> None: ...
+
+class DenoiseStereoResult:
+    left: list[float]
+    right: list[float]
+    length: int
+    report: DenoiseReport
+    def __init__(
+        self,
+        left: list[float],
+        right: list[float],
+        length: int,
+        report: DenoiseReport,
+    ) -> None: ...
+
+class ReverbDetection:
+    late_decay_ratio_db: float
+    late_predictability: float
+    def __init__(
+        self,
+        late_decay_ratio_db: float,
+        late_predictability: float,
+    ) -> None: ...
+
+class DereverbReport:
+    detected: ReverbDetection
+    mean_reduction_db: float
+    suppressed_fraction: float
+    wpe_predictor_norm: float
+    def __init__(
+        self,
+        detected: ReverbDetection,
+        mean_reduction_db: float,
+        suppressed_fraction: float,
+        wpe_predictor_norm: float,
+    ) -> None: ...
+
+class DereverbStereoResult:
+    left: list[float]
+    right: list[float]
+    length: int
+    report: DereverbReport
+    def __init__(
+        self,
+        left: list[float],
+        right: list[float],
+        length: int,
+        report: DereverbReport,
+    ) -> None: ...
+
 class MasteringResult:
     samples: list[float]
     sample_rate: int

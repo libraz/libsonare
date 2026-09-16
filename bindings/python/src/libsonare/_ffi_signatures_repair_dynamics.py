@@ -77,6 +77,28 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
+    if hasattr(lib, "sonare_mastering_repair_denoise_classical_stereo"):
+        lib.sonare_mastering_repair_denoise_classical_stereo.restype = ctypes.c_int32
+        lib.sonare_mastering_repair_denoise_classical_stereo.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareDenoiseClassicalConfig),
+            ctypes.POINTER(SonareDenoiseStereoResult),
+        ]
+
+    if hasattr(lib, "sonare_mastering_repair_dereverb_classical_stereo"):
+        lib.sonare_mastering_repair_dereverb_classical_stereo.restype = ctypes.c_int32
+        lib.sonare_mastering_repair_dereverb_classical_stereo.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareDereverbClassicalConfig),
+            ctypes.POINTER(SonareDereverbStereoResult),
+        ]
+
     for _name, _repair_cfg in (
         ("sonare_mastering_repair_declip", SonareDeclipConfig),
         ("sonare_mastering_repair_decrackle", SonareDecrackleConfig),

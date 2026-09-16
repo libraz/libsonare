@@ -1545,6 +1545,113 @@ class DehumStereoResult:
 
 
 @dataclass(frozen=True, slots=True)
+class NoiseDetection:
+    """The noise floor a denoise pass estimated, before the mask.
+
+    Absolute levels, which makes these the one part of a stereo denoise
+    report that depends on how many channels were passed: the estimator runs
+    on the channel-summed power, so two identical channels read about 3 dB
+    above the same material through :func:`mastering_repair_denoise_classical`.
+    Compare a stereo floor against another stereo floor, never against a
+    mono one. ``band_floor_dbfs`` has 32 entries on a geometric grid from
+    20 Hz to Nyquist, low to high.
+    """
+
+    floor_dbfs: float
+    band_floor_dbfs: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class DenoiseReport:
+    """What a denoise pass found and what it removed.
+
+    ``floor_limited_fraction`` is always 0 in ``"spectralSubtraction"``
+    mode, which floors on ``spectral_floor`` instead -- 0 from that mode is
+    the mode and not a measurement. ``mean_reduction_db`` of 0 reads the
+    same whether the mask was transparent or no mask ran at all.
+    """
+
+    detected: NoiseDetection
+    mean_reduction_db: float
+    max_reduction_db: float
+    floor_limited_fraction: float
+
+
+@dataclass(frozen=True, slots=True)
+class DenoiseStereoResult:
+    """A denoised stereo pair and the one mask that produced it.
+
+    The mask is built from the channel-summed power and applied unchanged to
+    both channels, so the pass cannot move an interchannel level or phase
+    difference. That is also why there is one ``report`` rather than one per
+    channel: a pair would be two copies of one measurement and would read as
+    though the two could differ.
+    """
+
+    left: list[float]
+    right: list[float]
+    length: int
+    report: DenoiseReport
+
+
+@dataclass(frozen=True, slots=True)
+class ReverbDetection:
+    """What a dereverb pass measured while deciding how much to subtract.
+
+    NOT an ISO 3382 reverberation time: no Schroeder integration, no
+    noise-floor truncation, STFT bins rather than octave bands, and music is
+    not a free decay. Use :func:`detect_acoustic` for a graded RT60.
+
+    ``late_decay_ratio_db`` less negative means the material sustains across
+    the module's own late lag, which a late tail does and a dry offset does
+    not, so a reverberant input reads HIGHER here than the same material
+    dry. ``late_predictability`` is exactly zero whenever ``wpe_enabled`` is
+    clear -- the default -- which is the measurement rather than an unset
+    field.
+    """
+
+    late_decay_ratio_db: float
+    late_predictability: float
+
+
+@dataclass(frozen=True, slots=True)
+class DereverbReport:
+    """What a dereverb pass found and what it removed.
+
+    ``suppressed_fraction`` is the only observation of the ``threshold``
+    knob: 0 alongside a nonzero ``mean_reduction_db`` says the gate admitted
+    nothing. ``wpe_predictor_norm`` below ``detected.late_predictability``
+    says the clamp acted, an otherwise silent branch; it is zero when the
+    WPE stage did not run.
+    """
+
+    detected: ReverbDetection
+    mean_reduction_db: float
+    suppressed_fraction: float
+    wpe_predictor_norm: float
+
+
+@dataclass(frozen=True, slots=True)
+class DereverbStereoResult:
+    """A dereverberated stereo pair and the one mask that produced it.
+
+    The mask is built from the channel-summed power, and the WPE stage
+    accumulates over both channels and applies one predictor set to each, so
+    neither stage can move an interchannel level or phase difference. That
+    is also why there is one ``report`` rather than one per channel.
+
+    Every field of that report is a ratio or a fraction, so unlike
+    :class:`NoiseDetection` nothing here shifts with the channel count and a
+    stereo figure is comparable against a mono one.
+    """
+
+    left: list[float]
+    right: list[float]
+    length: int
+    report: DereverbReport
+
+
+@dataclass(frozen=True, slots=True)
 class MasteringResult:
     """Mastering loudness/true-peak processing result."""
 

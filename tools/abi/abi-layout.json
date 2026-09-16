@@ -1421,6 +1421,66 @@
     ],
     "size": 44
   },
+  "SonareDenoiseReport": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "aggregate",
+        "name": "detected",
+        "offset": 0,
+        "size": 132
+      },
+      {
+        "kind": "float",
+        "name": "mean_reduction_db",
+        "offset": 132,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_reduction_db",
+        "offset": 136,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "floor_limited_fraction",
+        "offset": 140,
+        "size": 4
+      }
+    ],
+    "size": 144
+  },
+  "SonareDenoiseStereoResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "left",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "right",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 24,
+        "size": 144
+      }
+    ],
+    "size": 168
+  },
   "SonareDereverbClassicalConfig": {
     "align": 4,
     "fields": [
@@ -1495,6 +1555,66 @@
         "name": "wpe_strength",
         "offset": 44,
         "size": 4
+      }
+    ],
+    "size": 48
+  },
+  "SonareDereverbReport": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "aggregate",
+        "name": "detected",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "mean_reduction_db",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "suppressed_fraction",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "wpe_predictor_norm",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
+  "SonareDereverbStereoResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "left",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "right",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 24,
+        "size": 20
       }
     ],
     "size": 48
@@ -4277,6 +4397,24 @@
     ],
     "size": 140
   },
+  "SonareNoiseDetection": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "floor_dbfs",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "band_floor_dbfs",
+        "offset": 4,
+        "size": 128
+      }
+    ],
+    "size": 132
+  },
   "SonareNoteEdit": {
     "align": 8,
     "fields": [
@@ -6460,6 +6598,24 @@
       }
     ],
     "size": 32
+  },
+  "SonareReverbDetection": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "late_decay_ratio_db",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "late_predictability",
+        "offset": 4,
+        "size": 4
+      }
+    ],
+    "size": 8
   },
   "SonareRhythmResult": {
     "align": 8,

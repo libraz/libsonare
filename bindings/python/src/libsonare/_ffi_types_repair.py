@@ -139,6 +139,46 @@ class SonareDenoiseClassicalConfig(CStruct):
     ]
 
 
+# Length of SonareNoiseDetection.band_floor_dbfs; matches
+# SONARE_REPAIR_NOISE_BAND_COUNT in sonare_c_mastering.h.
+SONARE_REPAIR_NOISE_BAND_COUNT = 32
+
+
+class SonareNoiseDetection(CStruct):
+    """Maps to SonareNoiseDetection in sonare_c.h."""
+
+    _fields_ = [
+        ("floor_dbfs", ctypes.c_float),
+        ("band_floor_dbfs", ctypes.c_float * SONARE_REPAIR_NOISE_BAND_COUNT),
+    ]
+
+
+class SonareDenoiseReport(CStruct):
+    """Maps to SonareDenoiseReport in sonare_c.h."""
+
+    _fields_ = [
+        ("detected", SonareNoiseDetection),
+        ("mean_reduction_db", ctypes.c_float),
+        ("max_reduction_db", ctypes.c_float),
+        ("floor_limited_fraction", ctypes.c_float),
+    ]
+
+
+class SonareDenoiseStereoResult(CStruct):
+    """Maps to SonareDenoiseStereoResult in sonare_c.h.
+
+    One report, not a pair: the mask is built from the channel-summed power
+    and applied unchanged to both channels.
+    """
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("report", SonareDenoiseReport),
+    ]
+
+
 class SonareDeclipConfig(CStruct):
     """Maps to SonareDeclipConfig in sonare_c.h."""
 
@@ -304,6 +344,41 @@ class SonareDereverbClassicalConfig(CStruct):
         ("wpe_iterations", ctypes.c_int),
         ("wpe_taps", ctypes.c_int),
         ("wpe_strength", ctypes.c_float),
+    ]
+
+
+class SonareReverbDetection(CStruct):
+    """Maps to SonareReverbDetection in sonare_c.h."""
+
+    _fields_ = [
+        ("late_decay_ratio_db", ctypes.c_float),
+        ("late_predictability", ctypes.c_float),
+    ]
+
+
+class SonareDereverbReport(CStruct):
+    """Maps to SonareDereverbReport in sonare_c.h."""
+
+    _fields_ = [
+        ("detected", SonareReverbDetection),
+        ("mean_reduction_db", ctypes.c_float),
+        ("suppressed_fraction", ctypes.c_float),
+        ("wpe_predictor_norm", ctypes.c_float),
+    ]
+
+
+class SonareDereverbStereoResult(CStruct):
+    """Maps to SonareDereverbStereoResult in sonare_c.h.
+
+    One report, not a pair: the mask and the WPE predictors are both built
+    across the two channels and applied unchanged to each.
+    """
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("report", SonareDereverbReport),
     ]
 
 

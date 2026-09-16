@@ -20,7 +20,9 @@ from .types import (
     DeclipStereoResult,
     DecrackleStereoResult,
     DehumStereoResult,
+    DenoiseStereoResult,
     DereverbClassicalConfig,
+    DereverbStereoResult,
     DynamicRangeReport,
     DynamicsResult,
     EqSpectrumSnapshot,
@@ -1730,6 +1732,23 @@ def mastering_repair_denoise_classical(
     speech_presence_gain: bool = True,
     gain_smoothing: bool = True,
 ) -> np.ndarray[Any, Any]: ...
+def mastering_repair_denoise_classical_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    mode: int | str = "logMmse",
+    noise_estimator: int | str = "quantile",
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    dd_alpha: float = 0.98,
+    reduction_db: float = 26.0,
+    over_subtraction: float = 2.0,
+    spectral_floor: float = 0.05,
+    noise_estimation_quantile: float = 0.1,
+    speech_presence_gain: bool = True,
+    gain_smoothing: bool = True,
+) -> DenoiseStereoResult: ...
 def mastering_repair_declip(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -1810,6 +1829,24 @@ def mastering_repair_dereverb_classical(
     wpe_taps: int = 3,
     wpe_strength: float = 0.7,
 ) -> np.ndarray[Any, Any]: ...
+def mastering_repair_dereverb_classical_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.0,
+    attenuation: float = 1.0,
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    t60_sec: float = 0.4,
+    late_delay_ms: float = 50.0,
+    over_subtraction: float = 1.0,
+    spectral_floor: float = 0.08,
+    wpe_enabled: bool = False,
+    wpe_iterations: int = 2,
+    wpe_taps: int = 3,
+    wpe_strength: float = 0.7,
+) -> DereverbStereoResult: ...
 def mastering_repair_dereverb_config_for_room(
     estimate: RoomEstimate,
     *,

@@ -196,35 +196,43 @@ mastering::repair::DenoiseNoiseEstimator parseDenoiseNoiseEstimator(const std::s
                                 "unknown denoise noise estimator: " + name);
 }
 
+// Read a denoise options bag over `config`, leaving absent keys alone. The nFft
+// and hopLength checks stay with each entry point, whose name they quote.
+mastering::repair::DenoiseClassicalConfig readDenoiseConfig(
+    const val& options, mastering::repair::DenoiseClassicalConfig config) {
+  if (hasProperty(options, "mode")) {
+    val value = val::undefined();
+    if (repairOptionValue(options, "mode", &value)) {
+      config.mode = parseDenoiseMode(value.as<std::string>());
+    }
+  }
+  if (hasProperty(options, "noiseEstimator")) {
+    val value = val::undefined();
+    if (repairOptionValue(options, "noiseEstimator", &value)) {
+      config.noise_estimator = parseDenoiseNoiseEstimator(value.as<std::string>());
+    }
+  }
+  config.n_fft = repairIntOption(options, "nFft", config.n_fft);
+  config.hop_length = repairIntOption(options, "hopLength", config.hop_length);
+  config.dd_alpha = repairFloatOption(options, "ddAlpha", config.dd_alpha);
+  config.reduction_db = repairFloatOption(options, "reductionDb", config.reduction_db);
+  config.over_subtraction = repairFloatOption(options, "overSubtraction", config.over_subtraction);
+  config.spectral_floor = repairFloatOption(options, "spectralFloor", config.spectral_floor);
+  config.noise_estimation_quantile =
+      repairFloatOption(options, "noiseEstimationQuantile", config.noise_estimation_quantile);
+  config.speech_presence_gain =
+      repairBoolOption(options, "speechPresenceGain", config.speech_presence_gain);
+  config.gain_smoothing = repairBoolOption(options, "gainSmoothing", config.gain_smoothing);
+  return config;
+}
+
 }  // namespace
 
 val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   mastering::repair::DenoiseClassicalConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (hasProperty(options, "mode")) {
-      val value = val::undefined();
-      if (repairOptionValue(options, "mode", &value)) {
-        cfg.mode = parseDenoiseMode(value.as<std::string>());
-      }
-    }
-    if (hasProperty(options, "noiseEstimator")) {
-      val value = val::undefined();
-      if (repairOptionValue(options, "noiseEstimator", &value)) {
-        cfg.noise_estimator = parseDenoiseNoiseEstimator(value.as<std::string>());
-      }
-    }
-    cfg.n_fft = repairIntOption(options, "nFft", cfg.n_fft);
-    cfg.hop_length = repairIntOption(options, "hopLength", cfg.hop_length);
-    cfg.dd_alpha = repairFloatOption(options, "ddAlpha", cfg.dd_alpha);
-    cfg.reduction_db = repairFloatOption(options, "reductionDb", cfg.reduction_db);
-    cfg.over_subtraction = repairFloatOption(options, "overSubtraction", cfg.over_subtraction);
-    cfg.spectral_floor = repairFloatOption(options, "spectralFloor", cfg.spectral_floor);
-    cfg.noise_estimation_quantile =
-        repairFloatOption(options, "noiseEstimationQuantile", cfg.noise_estimation_quantile);
-    cfg.speech_presence_gain =
-        repairBoolOption(options, "speechPresenceGain", cfg.speech_presence_gain);
-    cfg.gain_smoothing = repairBoolOption(options, "gainSmoothing", cfg.gain_smoothing);
+    cfg = readDenoiseConfig(options, cfg);
   }
   if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
     throw sonare::SonareException(
@@ -238,6 +246,70 @@ val js_mastering_repair_denoise_classical(val samples, const val& sample_rate, v
   Audio result = mastering::repair::denoise_classical(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out);
+}
+
+namespace {
+
+val noiseDetectionToVal(const mastering::repair::NoiseDetection& detected) {
+  val out = val::object();
+  out.set("floorDbfs", detected.floor_dbfs);
+  std::vector<float> band_floor_dbfs(
+      detected.band_floor_dbfs,
+      detected.band_floor_dbfs + mastering::repair::kRepairNoiseBandCount);
+  out.set("bandFloorDbfs", vectorToFloat32Array(band_floor_dbfs));
+  return out;
+}
+
+val denoiseReportToVal(const mastering::repair::DenoiseReport& report) {
+  val out = val::object();
+  out.set("detected", noiseDetectionToVal(report.detected));
+  out.set("meanReductionDb", report.mean_reduction_db);
+  out.set("maxReductionDb", report.max_reduction_db);
+  out.set("floorLimitedFraction", report.floor_limited_fraction);
+  return out;
+}
+
+}  // namespace
+
+// Denoises a stereo pair with one channel-linked gain mask. One `report` and
+// not a per-channel pair: the mask is built from the channel-summed power and
+// applied unchanged to both channels, so a pair would be two copies of one
+// measurement. That summed power is also why `detected` is pair-level and
+// absolute -- it reads about 3 dB above the mono entry point on the same
+// material. Calls the core directly rather than the C ABI, matching every other
+// wrapper in this file -- sonare_c_mastering_repair.cpp is not part of the WASM
+// binding sources.
+val js_mastering_repair_denoise_classical_stereo(val left_samples, val right_samples,
+                                                 const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringRepairDenoiseClassicalStereo input", true);
+  Audio left = loadValidatedAudio(left_samples, sample_rate);
+  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  mastering::repair::DenoiseClassicalConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg = readDenoiseConfig(options, cfg);
+  }
+  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDenoiseClassicalStereo: nFft must be a positive power of two");
+  }
+  if (cfg.hop_length <= 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDenoiseClassicalStereo: hopLength must be positive");
+  }
+  mastering::repair::DenoiseStereoResult result =
+      mastering::repair::denoise_classical_stereo(left, right, cfg);
+  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
+  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(left_out));
+  out.set("right", vectorToFloat32Array(right_out));
+  out.set("report", denoiseReportToVal(result.report));
+  return out;
 }
 
 val js_mastering_repair_declip(val samples, const val& sample_rate, val options) {
@@ -520,6 +592,68 @@ val js_mastering_repair_dereverb_classical(val samples, const val& sample_rate, 
   return vectorToFloat32Array(out);
 }
 
+namespace {
+
+val reverbDetectionToVal(const mastering::repair::ReverbDetection& detected) {
+  val out = val::object();
+  out.set("lateDecayRatioDb", detected.late_decay_ratio_db);
+  out.set("latePredictability", detected.late_predictability);
+  return out;
+}
+
+val dereverbReportToVal(const mastering::repair::DereverbReport& report) {
+  val out = val::object();
+  out.set("detected", reverbDetectionToVal(report.detected));
+  out.set("meanReductionDb", report.mean_reduction_db);
+  out.set("suppressedFraction", report.suppressed_fraction);
+  out.set("wpePredictorNorm", report.wpe_predictor_norm);
+  return out;
+}
+
+}  // namespace
+
+// Dereverberates a stereo pair with one channel-linked mask. One `report` and
+// not a per-channel pair: the mask comes from the channel-summed power and the
+// WPE stage accumulates over both channels, so a pair would be two copies of
+// one measurement. Every field of it is a ratio or a fraction, so unlike the
+// denoise pair nothing shifts with the channel count. An input shorter than
+// nFft is padded rather than rejected, the opposite of that pair. Calls the
+// core directly rather than the C ABI, matching every other wrapper in this
+// file -- sonare_c_mastering_repair.cpp is not part of the WASM binding
+// sources.
+val js_mastering_repair_dereverb_classical_stereo(val left_samples, val right_samples,
+                                                  const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringRepairDereverbClassicalStereo input", true);
+  Audio left = loadValidatedAudio(left_samples, sample_rate);
+  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  mastering::repair::DereverbClassicalConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg = readDereverbConfig(options, cfg);
+  }
+  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDereverbClassicalStereo: nFft must be a positive power of two");
+  }
+  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDereverbClassicalStereo: hopLength must be in (0, nFft]");
+  }
+  mastering::repair::DereverbStereoResult result =
+      mastering::repair::dereverb_classical_stereo(left, right, cfg);
+  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
+  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(left_out));
+  out.set("right", vectorToFloat32Array(right_out));
+  out.set("report", dereverbReportToVal(result.report));
+  return out;
+}
+
 val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
   if (estimate.isUndefined() || estimate.isNull()) {
     throw sonare::SonareException(
@@ -595,6 +729,7 @@ void registerRepairBindings() {
   function("masteringRepairDeclick", &js_mastering_repair_declick);
   function("masteringRepairDeclickStereo", &js_mastering_repair_declick_stereo);
   function("masteringRepairDenoiseClassical", &js_mastering_repair_denoise_classical);
+  function("masteringRepairDenoiseClassicalStereo", &js_mastering_repair_denoise_classical_stereo);
   function("masteringRepairDeclip", &js_mastering_repair_declip);
   function("masteringRepairDeclipStereo", &js_mastering_repair_declip_stereo);
   function("masteringRepairDecrackle", &js_mastering_repair_decrackle);
@@ -602,6 +737,8 @@ void registerRepairBindings() {
   function("masteringRepairDehum", &js_mastering_repair_dehum);
   function("masteringRepairDehumStereo", &js_mastering_repair_dehum_stereo);
   function("masteringRepairDereverbClassical", &js_mastering_repair_dereverb_classical);
+  function("masteringRepairDereverbClassicalStereo",
+           &js_mastering_repair_dereverb_classical_stereo);
   function("masteringRepairDereverbConfigForRoom", &js_mastering_repair_dereverb_config_for_room);
   function("masteringRepairTrimSilence", &js_mastering_repair_trim_silence);
 }

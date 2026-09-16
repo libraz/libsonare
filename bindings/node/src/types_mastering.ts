@@ -998,6 +998,68 @@ export interface DecrackleStereoResult {
 }
 
 /**
+ * What a denoise analysis found in the input, from
+ * {@link masteringRepairDenoiseClassicalStereo}.
+ *
+ * These are absolute levels, which makes them the one part of a stereo
+ * denoise report that depends on how many channels were passed: the estimator
+ * runs on the channel-summed power, so two identical channels read about 3 dB
+ * above the same material through the mono entry point. Compare a stereo floor
+ * against another stereo floor, never against a mono one.
+ */
+export interface NoiseDetection {
+  /** Broadband estimated noise floor, in dBFS. */
+  floorDbfs: number;
+  /**
+   * The noise floor's shape, low band to high, length 32. A geometric grid
+   * from 20 Hz to Nyquist -- the same axis the mastering report's
+   * `bandEnergyDeltaDb` uses, so a noise floor and a tonal-balance change can
+   * be read together.
+   */
+  bandFloorDbfs: number[];
+}
+
+/**
+ * What a denoise pass found and what it removed, from
+ * {@link masteringRepairDenoiseClassicalStereo}.
+ */
+export interface DenoiseReport {
+  /** Analysis of the input, before the mask. */
+  detected: NoiseDetection;
+  /**
+   * Mean attenuation the gain mask applied. Zero reads the same whether the
+   * mask was transparent or no mask ran at all.
+   */
+  meanReductionDb: number;
+  /**
+   * Deepest attenuation any cell applied. At `reductionDb` the floor set the
+   * depth rather than the estimate.
+   */
+  maxReductionDb: number;
+  /**
+   * Fraction of cells sitting on that floor. Always 0 in
+   * `spectralSubtraction` mode, which floors on `spectralFloor` instead, so 0
+   * from that mode is the mode and not a measurement.
+   */
+  floorLimitedFraction: number;
+}
+
+/**
+ * A denoised stereo pair and the one mask that produced it, from
+ * {@link masteringRepairDenoiseClassicalStereo}.
+ *
+ * One `report` rather than a per-channel pair: the gain mask is built from the
+ * channel-summed power and applied unchanged to both channels, so a pair would
+ * be two copies of one measurement and would read as though the two could
+ * differ.
+ */
+export interface DenoiseStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  report: DenoiseReport;
+}
+
+/**
  * What a dehum analysis found, from {@link masteringRepairDehumStereo}.
  *
  * Always measured through the estimation path, whatever `adaptive` is
@@ -1058,6 +1120,70 @@ export interface DehumStereoResult {
   right: Float32Array;
   leftReport: DehumReport;
   rightReport: DehumReport;
+}
+
+/**
+ * What a dereverb analysis found in the input, from
+ * {@link masteringRepairDereverbClassicalStereo}.
+ *
+ * NOT an ISO 3382 reverberation time: no Schroeder integration, no
+ * noise-floor truncation, STFT bins rather than octave bands, and music is not
+ * a free decay. Use {@link estimateRoom} for a graded RT60; this reports what
+ * the module itself measured while deciding how much to subtract.
+ */
+export interface ReverbDetection {
+  /**
+   * Decay across the module's own late lag, in dB. Less negative means the
+   * material sustains across that lag, which a late tail does and a dry offset
+   * does not -- so a reverberant input reads *higher* here than the same
+   * material dry, which is the opposite of what the name suggests.
+   */
+  lateDecayRatioDb: number;
+  /**
+   * Mean WPE predictor norm before the clamp. Zero whenever the WPE stage did
+   * not run, which is the case unless `wpeEnabled` is set -- and it is clear
+   * by default, so a default-config pass reports 0 here as its measurement.
+   */
+  latePredictability: number;
+}
+
+/**
+ * What a dereverb pass found and what it removed, from
+ * {@link masteringRepairDereverbClassicalStereo}.
+ */
+export interface DereverbReport {
+  /** Analysis of the input. */
+  detected: ReverbDetection;
+  /** Mean attenuation the subtraction applied. */
+  meanReductionDb: number;
+  /**
+   * Fraction of cells the `threshold` gate admitted as late reverberation. The
+   * only observation of that knob: 0 alongside a nonzero `meanReductionDb`
+   * says the gate admitted nothing.
+   */
+  suppressedFraction: number;
+  /**
+   * Mean predictor norm actually applied, after the clamp. Below
+   * `detected.latePredictability` says the clamp acted, an otherwise silent
+   * branch. Zero when the WPE stage did not run, so 0 by default.
+   */
+  wpePredictorNorm: number;
+}
+
+/**
+ * A dereverberated stereo pair and the one mask that produced it, from
+ * {@link masteringRepairDereverbClassicalStereo}.
+ *
+ * One `report` rather than a per-channel pair: the mask is built from the
+ * channel-summed power and the WPE stage accumulates over both channels, so a
+ * pair would be two copies of one measurement. Every field of that report is a
+ * ratio or a fraction, so unlike {@link NoiseDetection} nothing here shifts
+ * with the channel count and a stereo figure is comparable against a mono one.
+ */
+export interface DereverbStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  report: DereverbReport;
 }
 
 /** What gain-matching one take to another's loudness took, and produced. */
