@@ -180,6 +180,17 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(_detection),
             ]
 
+    # The band grid the noise floor is reported on: analysis geometry alone
+    # decides it, so it takes neither audio nor a config and is registered
+    # outside the detection loop above.
+    if hasattr(lib, "sonare_mastering_repair_noise_band_bins"):
+        lib.sonare_mastering_repair_noise_band_bins.restype = ctypes.c_int32
+        lib.sonare_mastering_repair_noise_band_bins.argtypes = [
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+
     for _name, _repair_cfg in (
         ("sonare_mastering_repair_declip", SonareDeclipConfig),
         ("sonare_mastering_repair_decrackle", SonareDecrackleConfig),

@@ -388,6 +388,9 @@ from .analyzer import (
     mastering_repair_detect_trim_range_stereo as mastering_repair_detect_trim_range_stereo,
 )
 from .analyzer import (
+    mastering_repair_noise_band_bins as mastering_repair_noise_band_bins,
+)
+from .analyzer import (
     mastering_repair_trim_silence as mastering_repair_trim_silence,
 )
 from .analyzer import (

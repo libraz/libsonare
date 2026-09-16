@@ -1934,6 +1934,10 @@ def mastering_repair_detect_noise_floor(
     speech_presence_gain: bool = True,
     gain_smoothing: bool = True,
 ) -> NoiseDetection: ...
+def mastering_repair_noise_band_bins(
+    n_fft: int = 1024,
+    sample_rate: int = 22050,
+) -> list[int]: ...
 def mastering_repair_detect_clipping(
     samples: FloatSamples,
     sample_rate: int = 22050,

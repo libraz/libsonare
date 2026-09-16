@@ -807,6 +807,58 @@ export function masteringRepairDetectNoiseFloor(
   );
 }
 
+/** Request form of `masteringRepairNoiseBandBins`. */
+export interface MasteringRepairNoiseBandBinsRequest {
+  /**
+   * FFT size the bins belong to; a positive power of two, the rule
+   * {@link masteringRepairDetectNoiseFloor} applies to its own `nFft`.
+   *
+   * @defaultValue 1024
+   */
+  nFft?: number;
+  /**
+   * Sample rate the bins belong to; positive.
+   *
+   * @defaultValue 22050
+   */
+  sampleRate?: number;
+}
+
+/**
+ * Bin boundaries of the grid {@link masteringRepairDetectNoiseFloor} reports
+ * `bandFloorDbfs` on.
+ *
+ * Band `k` covers the one-sided STFT bins `[bins[k], bins[k + 1])`, and bin `b`
+ * sits at `b * sampleRate / nFft` Hz. The returned array is one longer than the
+ * band count, so the last entry is the one-past-the-end bin of the top band.
+ *
+ * The geometric band edges are rounded to bins, so a band narrower than the bin
+ * spacing comes out EMPTY -- `bins[k] === bins[k + 1]` -- and its
+ * `bandFloorDbfs[k]` is the floor sentinel because no bin landed in it, not
+ * because that region was quiet. Telling those two apart is what this entry is
+ * for; nothing in the detection result distinguishes them. Empty bands are
+ * confined to the low end, where the geometric edges are closest together, but
+ * they are not a run starting at band 0 -- the lowest edge is clamped to the DC
+ * bin, which usually leaves band 0 holding it. Test each band rather than
+ * scanning until the first non-empty one. How many there are depends on both
+ * `nFft` and `sampleRate`, since the grid's top edge is Nyquist.
+ *
+ * Only the analysis geometry decides the grid, so no denoise options are taken
+ * and no audio is read.
+ *
+ * @example
+ * ```ts
+ * const bins = masteringRepairNoiseBandBins({ nFft: 1024, sampleRate: 48000 });
+ * const detected = masteringRepairDetectNoiseFloor({ samples, sampleRate: 48000 });
+ * const measured = detected.bandFloorDbfs.filter((_, k) => bins[k] < bins[k + 1]);
+ * ```
+ */
+export function masteringRepairNoiseBandBins(
+  request: MasteringRepairNoiseBandBinsRequest,
+): Int32Array {
+  return addon.masteringRepairNoiseBandBins(request);
+}
+
 /** Request form of `masteringRepairDetectClipping`. */
 export interface MasteringRepairDetectClippingRequest
   extends MasteringRepairSamplesRequest,

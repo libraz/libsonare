@@ -5,6 +5,7 @@
 
 #include <algorithm>
 
+#include "mastering/common/noise_profile.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -980,6 +981,26 @@ val js_mastering_repair_detect_noise_floor(val samples, const val& sample_rate, 
       mastering::repair::detect_noise_floor(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
 
+// The bin grid the detector above reports bandFloorDbfs on. The core checks only
+// positivity, so the power-of-two rule is applied here -- it lives in the C ABI
+// layer, which this surface does not go through.
+val js_mastering_repair_noise_band_bins(const val& n_fft_val, const val& sample_rate_val) {
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  if (n_fft <= 0 || (n_fft & (n_fft - 1)) != 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairNoiseBandBins: nFft must be a positive power of two");
+  }
+  if (sample_rate <= 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "masteringRepairNoiseBandBins: sampleRate must be positive");
+  }
+  std::vector<int> bins(mastering::common::kRepairNoiseBandCount + 1);
+  mastering::common::repair_noise_band_bins(n_fft, sample_rate, bins.data());
+  return vectorToInt32Array(bins);
+}
+
 // clipThreshold is the only field that reaches the result; the rest are read so
 // the same config validation runs here as at the repair.
 val js_mastering_repair_detect_clipping(val samples, const val& sample_rate, val options) {
@@ -1110,6 +1131,7 @@ void registerRepairBindings() {
   function("masteringRepairDetectReverb", &js_mastering_repair_detect_reverb);
   function("masteringRepairDetectTrimRange", &js_mastering_repair_detect_trim_range);
   function("masteringRepairDetectTrimRangeStereo", &js_mastering_repair_detect_trim_range_stereo);
+  function("masteringRepairNoiseBandBins", &js_mastering_repair_noise_band_bins);
 }
 
 #endif  // __EMSCRIPTEN__

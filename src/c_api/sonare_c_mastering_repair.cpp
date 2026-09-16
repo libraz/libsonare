@@ -6,6 +6,7 @@
 
 #include "analysis/acoustic_analyzer.h"
 #include "core/audio.h"
+#include "mastering/common/noise_profile.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
 #include "mastering/repair/decrackle.h"
@@ -495,6 +496,25 @@ SonareError sonare_mastering_repair_detect_noise_floor(const float* samples, siz
     return to_c_noise_detection(sonare::mastering::repair::detect_noise_floor(
         samples, length, sample_rate, to_cpp_denoise_config(config)));
   });
+}
+
+SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, int* out_bins) {
+  SONARE_C_API_ENTRY;
+  static_assert(SONARE_REPAIR_NOISE_BAND_EDGE_COUNT ==
+                    static_cast<int>(sonare::mastering::common::kRepairNoiseBandCount) + 1,
+                "C band edge array must match the core's band count");
+  if (!out_bins) return SONARE_ERROR_INVALID_PARAMETER;
+  // Zeroed before any validation return, so a caller that ignores the error code
+  // reads empty bands rather than whatever its stack slot held.
+  std::memset(out_bins, 0, SONARE_REPAIR_NOISE_BAND_EDGE_COUNT * sizeof(int));
+  // The same power-of-two rule the denoise config validator applies, so a grid
+  // this hands back is always one the detector can report on.
+  if (!is_power_of_two(n_fft) || sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SONARE_C_TRY
+  sonare::mastering::common::repair_noise_band_bins(n_fft, sample_rate, out_bins);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,

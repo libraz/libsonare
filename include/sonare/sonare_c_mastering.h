@@ -979,6 +979,10 @@ SonareError sonare_mastering_repair_denoise_classical(const float* samples, size
 // the same axis the mastering report's band_energy_delta_db uses.
 #define SONARE_REPAIR_NOISE_BAND_COUNT 32
 
+// Indices sonare_mastering_repair_noise_band_bins writes: the first bin of every
+// band plus the one-past-the-end bin of the last.
+#define SONARE_REPAIR_NOISE_BAND_EDGE_COUNT (SONARE_REPAIR_NOISE_BAND_COUNT + 1)
+
 /// @brief Flat POD mirror of @c mastering::repair::NoiseDetection.
 /// @details These are absolute levels, which makes them the one part of a stereo
 ///   denoise report that depends on how many channels were passed: the estimator
@@ -1001,6 +1005,27 @@ SonareError sonare_mastering_repair_detect_noise_floor(const float* samples, siz
                                                        int sample_rate,
                                                        const SonareDenoiseClassicalConfig* config,
                                                        SonareNoiseDetection* out);
+
+/// @brief Bin boundaries of the grid @c SonareNoiseDetection::band_floor_dbfs is
+///        reported on.
+/// @details Band @c k covers the one-sided STFT bins @c [out_bins[k], out_bins[k+1]),
+///   and bin @c b sits at @c b * sample_rate / n_fft Hz. The geometric edges are
+///   rounded to bins, so a band narrower than the bin spacing comes out empty --
+///   @c out_bins[k] equals @c out_bins[k+1] -- and its level is the floor sentinel
+///   because no bin landed in it rather than because that region was quiet. That
+///   rounding is why the grid is worth asking for instead of recomputing from the
+///   band count. Nothing but the analysis geometry decides it, so no config is taken.
+///
+///   @c SonareMasteringReport::band_energy_delta_db shares these 32 cells but not
+///   these bins: it samples each cell's centre out of a long-term spectrum rather
+///   than aggregating STFT bins, so it has no bin-narrower-than-a-band case.
+/// @param n_fft FFT size the bins belong to; a positive power of two, the rule
+///   @ref sonare_mastering_repair_detect_noise_floor applies to its config, so every
+///   grid returned here is one that entry can report on.
+/// @param sample_rate Sample rate the bins belong to; positive.
+/// @param out_bins Receives @c SONARE_REPAIR_NOISE_BAND_EDGE_COUNT indices, low to
+///   high. Zeroed before a rejected call returns.
+SonareError sonare_mastering_repair_noise_band_bins(int n_fft, int sample_rate, int* out_bins);
 
 /// @brief What a denoise pass found and what it removed.
 typedef struct {

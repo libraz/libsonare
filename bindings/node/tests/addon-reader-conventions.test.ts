@@ -57,6 +57,7 @@ import {
   masteringRepairDetectReverb,
   masteringRepairDetectTrimRange,
   masteringRepairDetectTrimRangeStereo,
+  masteringRepairNoiseBandBins,
   masteringRepairTrimSilence,
   masteringRepairTrimSilenceStereo,
   mergeNotes,
@@ -557,6 +558,11 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     // Needs at least nFft samples, so this cannot be trimmed below the default.
     jsName: 'masteringRepairDetectNoiseFloor',
     invoke: (o) => masteringRepairDetectNoiseFloor({ ...o, samples: sine(2048), sampleRate: SR }),
+  },
+  {
+    // Reads its whole request off the bag, so nothing here may be overridden.
+    jsName: 'masteringRepairNoiseBandBins',
+    invoke: (o) => Array.from(masteringRepairNoiseBandBins(o)),
   },
   {
     jsName: 'masteringRepairDetectClipping',

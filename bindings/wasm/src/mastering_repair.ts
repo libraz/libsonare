@@ -907,6 +907,12 @@ export interface MasteringRepairDetectNoiseFloorRequest extends DenoiseClassical
   sampleRate: number;
 }
 
+/** Request form of `masteringRepairNoiseBandBins`. */
+export interface MasteringRepairNoiseBandBinsRequest {
+  nFft?: number;
+  sampleRate?: number;
+}
+
 /** Request form of `masteringRepairDetectClipping`. */
 export interface MasteringRepairDetectClippingRequest extends DeclipOptions {
   samples: Float32Array;
@@ -1013,6 +1019,58 @@ export function masteringRepairDetectNoiseFloor(
     request.samples,
     request.sampleRate,
     request,
+  );
+}
+
+/**
+ * Bin boundaries of the grid {@link masteringRepairDetectNoiseFloor} reports `bandFloorDbfs` on.
+ *
+ * Band `k` covers the one-sided STFT bins `[bins[k], bins[k + 1])`, and bin `b` sits at
+ * `b * sampleRate / nFft` Hz.
+ *
+ * The geometric band edges are rounded to bins, so a band narrower than the bin spacing comes
+ * out EMPTY — `bins[k] === bins[k + 1]` — and its `bandFloorDbfs[k]` reads as the floor
+ * sentinel because no bin landed in it, NOT because that region was quiet. Telling those two
+ * apart is what this grid is for, and the rounding cannot be recovered from the band count
+ * alone.
+ *
+ * Nothing but the analysis geometry decides the grid, so no denoise config is taken: one call
+ * describes every floor measured at that `nFft` and `sampleRate`, whatever mode or estimator
+ * produced it.
+ *
+ * @param nFft - STFT size the bins belong to; a positive power of two, the same rule
+ *   {@link masteringRepairDetectNoiseFloor} applies to its config, so every grid returned here
+ *   is one that entry can report on. Defaults to 1024.
+ * @param sampleRate - Sample rate the bins belong to, in Hz; positive. Defaults to 22050.
+ * @returns 33 bin indices, low to high — one more than the 32 bands: the first bin of every
+ *   band plus the one-past-the-end bin of the last, which is `nFft / 2 + 1`. Non-decreasing.
+ * @throws If `nFft` is not a positive power of two, or `sampleRate` is not positive.
+ *
+ * @example
+ * ```ts
+ * const bins = masteringRepairNoiseBandBins({ nFft: 1024, sampleRate: 48000 });
+ * const floor = masteringRepairDetectNoiseFloor({ samples, sampleRate: 48000, nFft: 1024 });
+ * floor.bandFloorDbfs.forEach((level, k) => {
+ *   if (bins[k] === bins[k + 1]) return; // empty band: `level` is the sentinel, not a measurement
+ *   console.log((bins[k] * 48000) / 1024, level);
+ * });
+ * ```
+ */
+export function masteringRepairNoiseBandBins(
+  request?: MasteringRepairNoiseBandBinsRequest,
+): Int32Array;
+export function masteringRepairNoiseBandBins(nFft?: number, sampleRate?: number): Int32Array;
+export function masteringRepairNoiseBandBins(
+  nFft?: number | MasteringRepairNoiseBandBinsRequest,
+  sampleRate?: number,
+): Int32Array {
+  // Both positional arguments are optional, so a default on `nFft` would swallow
+  // an explicit `undefined` and take the request branch with `sampleRate` in hand
+  // but unreachable. Discriminate on the value instead.
+  const request = typeof nFft === 'object' && nFft !== null ? nFft : { nFft, sampleRate };
+  return requireModule().masteringRepairNoiseBandBins(
+    request.nFft ?? 1024,
+    request.sampleRate ?? 22050,
   );
 }
 

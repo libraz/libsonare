@@ -1443,6 +1443,26 @@ Napi::Value SonareWrap::MasteringRepairDetectNoiseFloor(const Napi::CallbackInfo
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::MasteringRepairNoiseBandBins(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  SONARE_NODE_TRY
+  // Every field is optional, so an omitted request reads as an empty one.
+  Napi::Object request = info.Length() >= 1 && info[0].IsObject() ? info[0].As<Napi::Object>()
+                                                                  : Napi::Object::New(env);
+  const int n_fft = IntProperty(request, "nFft", kDenoiseConfigDefaults.n_fft);
+  const int sample_rate = IntProperty(request, "sampleRate", sonare::constants::kDefaultSampleRate);
+  // The C entry writes into the array's own storage; no intermediate buffer.
+  auto bins = Napi::Int32Array::New(env, SONARE_REPAIR_NOISE_BAND_EDGE_COUNT);
+  SonareError err = sonare_mastering_repair_noise_band_bins(n_fft, sample_rate, bins.Data());
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return bins;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringRepairDetectClipping(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!CheckDetectMonoArgs(env, info)) return env.Undefined();

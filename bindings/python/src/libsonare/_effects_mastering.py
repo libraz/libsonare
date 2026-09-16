@@ -20,6 +20,7 @@ from ._ffi import (
     SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA,
     SONARE_DENOISE_NOISE_ESTIMATOR_MCRA,
     SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
+    SONARE_REPAIR_NOISE_BAND_COUNT,
     SONARE_TRIM_SILENCE_MODE_LUFS_GATED,
     SONARE_TRIM_SILENCE_MODE_PEAK,
     SonareClickDetection,
@@ -676,6 +677,66 @@ def mastering_repair_detect_noise_floor(
             SonareNoiseDetection,  # noqa: F405
         )
     )
+
+
+# One more than the band count: the first bin of every band plus the
+# one-past-the-end bin of the last.
+_NOISE_BAND_EDGE_COUNT = SONARE_REPAIR_NOISE_BAND_COUNT + 1
+
+
+def mastering_repair_noise_band_bins(n_fft: int = 1024, sample_rate: int = 22050) -> list[int]:
+    """Bin boundaries of the grid a denoise noise floor is reported on.
+
+    Band ``k`` of :attr:`~libsonare.types.NoiseDetection.band_floor_dbfs` covers
+    the one-sided STFT bins ``[bins[k], bins[k + 1])``, and bin ``b`` sits at
+    ``b * sample_rate / n_fft`` Hz::
+
+        bins = libsonare.mastering_repair_noise_band_bins(n_fft=1024, sample_rate=48000)
+        floor = libsonare.mastering_repair_detect_noise_floor(samples, 48000, n_fft=1024)
+        for k, level in enumerate(floor.band_floor_dbfs):
+            if bins[k] == bins[k + 1]:
+                continue  # empty band: `level` is the sentinel, not a measurement
+            print(bins[k] * 48000 / 1024, level)
+
+    The geometric band edges are rounded to bins, so a band narrower than the
+    bin spacing comes out EMPTY -- ``bins[k] == bins[k + 1]`` -- and its level
+    reads as the floor sentinel because no bin landed in it, not because that
+    region was quiet. Telling those two apart is what this grid is for, and it
+    is why the rounding cannot be recovered from the band count alone.
+
+    Nothing but the analysis geometry decides the grid, so no denoise config is
+    taken: one call describes every floor measured at that ``n_fft`` and
+    ``sample_rate``, whatever mode or estimator produced it.
+
+    Args:
+        n_fft: STFT size the bins belong to; a positive power of two, the same
+            rule :func:`mastering_repair_detect_noise_floor` applies to its
+            config, so every grid returned here is one that entry can report on
+            (default 1024).
+        sample_rate: Sample rate the bins belong to, in Hz; positive
+            (default 22050).
+
+    Returns:
+        33 bin indices, low to high -- one more than the 32 bands: the first bin
+        of every band plus the one-past-the-end bin of the last, which is
+        ``n_fft // 2 + 1``. The sequence is non-decreasing.
+
+    Raises:
+        SonareValueError: If ``n_fft`` is not a positive power of two.
+        SonareError: If the C call rejects the request, which includes a
+            non-positive ``sample_rate``.
+    """
+    # The same power-of-two rule the denoise config validator applies; check it
+    # eagerly so the message names the argument.
+    _require_power_of_two(n_fft, "n_fft")
+    out_bins = (ctypes.c_int * _NOISE_BAND_EDGE_COUNT)()
+    rc = _get_lib().sonare_mastering_repair_noise_band_bins(
+        _to_c_int(n_fft, "n_fft"),
+        _to_c_int(sample_rate, "sample_rate"),
+        out_bins,
+    )
+    _check(rc)
+    return [int(v) for v in out_bins]
 
 
 def _extract_denoise_report(raw: Any) -> DenoiseReport:

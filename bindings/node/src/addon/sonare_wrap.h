@@ -207,6 +207,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringRepairTrimSilenceStereo(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDetectClicks(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDetectNoiseFloor(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringRepairNoiseBandBins(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDetectClipping(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDetectCrackle(const Napi::CallbackInfo& info);
   static Napi::Value MasteringRepairDetectHum(const Napi::CallbackInfo& info);

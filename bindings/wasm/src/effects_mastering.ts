@@ -128,6 +128,7 @@ export type {
   MasteringRepairDetectReverbRequest,
   MasteringRepairDetectTrimRangeRequest,
   MasteringRepairDetectTrimRangeStereoRequest,
+  MasteringRepairNoiseBandBinsRequest,
   MasteringRepairTrimSilenceRequest,
   MasteringRepairTrimSilenceStereoRequest,
   TrimSilenceMode,
@@ -157,6 +158,7 @@ export {
   masteringRepairDetectReverb,
   masteringRepairDetectTrimRange,
   masteringRepairDetectTrimRangeStereo,
+  masteringRepairNoiseBandBins,
   masteringRepairTrimSilence,
   masteringRepairTrimSilenceStereo,
 } from './mastering_repair';

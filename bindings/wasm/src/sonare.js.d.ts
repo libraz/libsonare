@@ -2377,6 +2377,7 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => WasmNoiseDetection;
+  masteringRepairNoiseBandBins: (nFft: number, sampleRate: number) => Int32Array;
   masteringRepairDetectClipping: (
     samples: Float32Array,
     sampleRate: number,

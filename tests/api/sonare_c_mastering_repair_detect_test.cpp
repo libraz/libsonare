@@ -383,6 +383,87 @@ TEST_CASE("sonare_mastering_repair_detect_noise_floor", "[c_api][mastering]") {
   }
 }
 
+TEST_CASE("sonare_mastering_repair_noise_band_bins", "[c_api][mastering]") {
+  const auto loud = white_noise(kLength, 0.1f, 1234);
+  const SonareDenoiseClassicalConfig config = default_denoise_config();
+
+  SECTION("hands back a non-decreasing grid ending at the one-sided bin count") {
+    int bins[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
+    REQUIRE(sonare_mastering_repair_noise_band_bins(config.n_fft, kSr, bins) == SONARE_OK);
+    REQUIRE(bins[0] == 0);
+    REQUIRE(bins[SONARE_REPAIR_NOISE_BAND_COUNT] == config.n_fft / 2 + 1);
+    for (int k = 0; k < SONARE_REPAIR_NOISE_BAND_COUNT; ++k) REQUIRE(bins[k] <= bins[k + 1]);
+  }
+
+  SECTION("an empty band is why a level reads at the sentinel, not a quiet region") {
+    int bins[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
+    REQUIRE(sonare_mastering_repair_noise_band_bins(config.n_fft, kSr, bins) == SONARE_OK);
+    SonareNoiseDetection detection{};
+    REQUIRE(sonare_mastering_repair_detect_noise_floor(loud.data(), loud.size(), kSr, &config,
+                                                       &detection) == SONARE_OK);
+
+    // Both sets have to be occupied or the comparison below decides nothing: at
+    // 48 kHz the 1024-point grid's lowest bands are narrower than the bin spacing
+    // while its upper ones hold many bins.
+    int empty_bands = 0;
+    int occupied_bands = 0;
+    float sentinel = 0.0f;
+    for (int k = 0; k < SONARE_REPAIR_NOISE_BAND_COUNT; ++k) {
+      if (bins[k] == bins[k + 1]) {
+        if (empty_bands == 0) sentinel = detection.band_floor_dbfs[k];
+        REQUIRE(detection.band_floor_dbfs[k] == sentinel);
+        ++empty_bands;
+      } else {
+        ++occupied_bands;
+      }
+    }
+    REQUIRE(empty_bands > 0);
+    REQUIRE(occupied_bands > 0);
+    for (int k = 0; k < SONARE_REPAIR_NOISE_BAND_COUNT; ++k) {
+      if (bins[k] != bins[k + 1]) REQUIRE(detection.band_floor_dbfs[k] > sentinel);
+    }
+  }
+
+  SECTION("follows both halves of the geometry it was given") {
+    int at_1024[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
+    int at_2048[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
+    int at_22050[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
+    REQUIRE(sonare_mastering_repair_noise_band_bins(1024, kSr, at_1024) == SONARE_OK);
+    REQUIRE(sonare_mastering_repair_noise_band_bins(2048, kSr, at_2048) == SONARE_OK);
+    REQUIRE(sonare_mastering_repair_noise_band_bins(1024, 22050, at_22050) == SONARE_OK);
+
+    // Doubling n_fft halves the bin spacing, so the same band edge in Hz lands
+    // at a higher index -- never a lower one, since the rounding is monotone.
+    REQUIRE(at_2048[SONARE_REPAIR_NOISE_BAND_COUNT] == 1025);
+    REQUIRE(at_1024[SONARE_REPAIR_NOISE_BAND_COUNT] == 513);
+    for (int k = 0; k <= SONARE_REPAIR_NOISE_BAND_COUNT; ++k) REQUIRE(at_2048[k] >= at_1024[k]);
+    REQUIRE(at_2048[SONARE_REPAIR_NOISE_BAND_COUNT - 1] >
+            at_1024[SONARE_REPAIR_NOISE_BAND_COUNT - 1]);
+
+    // Same n_fft over a lower Nyquist: the bin count is unchanged and the grid is
+    // stretched across it, so the top band starts further up than it does at 48 kHz.
+    REQUIRE(at_22050[SONARE_REPAIR_NOISE_BAND_COUNT] == at_1024[SONARE_REPAIR_NOISE_BAND_COUNT]);
+    REQUIRE(at_22050[SONARE_REPAIR_NOISE_BAND_COUNT - 1] >
+            at_1024[SONARE_REPAIR_NOISE_BAND_COUNT - 1]);
+  }
+
+  SECTION("refuses a geometry the detector would refuse and zeroes what it was handed") {
+    int bins[SONARE_REPAIR_NOISE_BAND_EDGE_COUNT] = {};
+    REQUIRE(sonare_mastering_repair_noise_band_bins(1024, kSr, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    for (int& bin : bins) bin = -7;
+    REQUIRE(sonare_mastering_repair_noise_band_bins(1000, kSr, bins) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    for (int bin : bins) REQUIRE(bin == 0);
+    for (int& bin : bins) bin = -7;
+    REQUIRE(sonare_mastering_repair_noise_band_bins(0, kSr, bins) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_repair_noise_band_bins(1024, 0, bins) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    for (int bin : bins) REQUIRE(bin == 0);
+  }
+}
+
 TEST_CASE("sonare_mastering_repair_detect_reverb", "[c_api][mastering]") {
   auto samples = generate_sine(440.0f, kSr, 0.5f);
   for (auto& sample : samples) sample *= 0.5f;

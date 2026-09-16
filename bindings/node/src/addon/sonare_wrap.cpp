@@ -400,6 +400,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringRepairDetectNoiseFloor",
               Napi::Function::New(env, &SonareWrap::MasteringRepairDetectNoiseFloor,
                                   "masteringRepairDetectNoiseFloor"));
+  exports.Set("masteringRepairNoiseBandBins",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairNoiseBandBins,
+                                  "masteringRepairNoiseBandBins"));
   exports.Set("masteringRepairDetectClipping",
               Napi::Function::New(env, &SonareWrap::MasteringRepairDetectClipping,
                                   "masteringRepairDetectClipping"));
