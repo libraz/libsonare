@@ -440,6 +440,8 @@ conformance:
 	python3 -m unittest tests/conformance/test_documented_bound_mirrors.py
 	python3 tests/conformance/check_mastering_param_surfaces.py
 	python3 -m unittest tests/conformance/test_mastering_param_surfaces.py
+	python3 tests/conformance/check_analysis_result_surfaces.py
+	python3 -m unittest tests/conformance/test_analysis_result_surfaces.py
 	python3 -m unittest tests/conformance/test_bank_versions.py
 	python3 -m unittest tests/conformance/test_c_api_out_param_init.py
 	python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py
