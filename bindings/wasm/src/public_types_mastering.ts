@@ -696,6 +696,10 @@ export interface MasteringChainConfig {
       | boolean
       | {
           enabled?: boolean;
+          /** 0 = log-MMSE, 1 = MMSE-STSA, 2 = spectral subtraction. */
+          mode?: number;
+          /** 0 = quantile, 1 = MCRA, 2 = IMCRA, 3 = speech-presence probability. */
+          noiseEstimator?: number;
           nFft?: number;
           hopLength?: number;
           ddAlpha?: number;
