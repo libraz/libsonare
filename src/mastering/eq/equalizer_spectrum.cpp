@@ -178,10 +178,13 @@ void EqSpectrumAnalyzer::transform(int elapsed_samples) noexcept {
     // undoes the spreading of a tone across the window's main lobe, so a
     // full-scale sine reports 0 dB in the band that contains it.
     const float band_db = power_to_db_scalar(static_cast<float>(power / window_enbw_));
-    // The fold below answers with its FIRST argument for a non-finite second, so
-    // a non-finite band reads as silence and leaves nothing to show for it. The
-    // order is the clamp this band needs; what it must not do is go unreported.
-    discarded |= !std::isfinite(band_db);
+    // The fold answers with its FIRST argument for a non-finite second, so a
+    // non-finite band reads as silence. That is a substitution on the way in,
+    // not a state discard: the profile below never becomes non-finite, so
+    // nothing is ever returned to a post-reset value here. Counting it on the
+    // discard counter also reports one caller event more than once -- the ring
+    // holds the sample across several transforms, so an overlapping window
+    // meets the same one again in each of them.
     const float level_db = std::max(kFloorDb, band_db);
     if (!has_profile_ || level_db >= profile_db_[band]) {
       profile_db_[band] = level_db;

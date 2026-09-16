@@ -460,3 +460,58 @@ TEST_CASE("the dynamic equalizer bounds a non-finite sample to its own block", "
   // The residual that leaves floors near 1e-5 rather than decaying to zero.
   REQUIRE(residual_from(control, poisoned, kDetectorRecoveryBlocks) < 1.0e-4);
 }
+
+TEST_CASE("the equalizer counts the block a non-finite sample reached, once and once only",
+          "[mastering][eq]") {
+  // The spectrum analyser reads a ring of past samples, so the poisoned one sits
+  // inside several later analysis windows. What it does there is clamp a band to
+  // the floor, which is a substitution on the way in rather than a state cell
+  // returned to its post-reset value -- and folding it into this counter would
+  // report one caller block once per window that met the same sample.
+  const auto configure = [](EqualizerProcessor& eq) {
+    eq.set_band(0, peak_band());
+    eq.set_band(1, low_shelf_band());
+  };
+
+  const std::array<float, 3> poison_values{std::numeric_limits<float>::quiet_NaN(),
+                                           std::numeric_limits<float>::infinity(),
+                                           -std::numeric_limits<float>::infinity()};
+  for (const float poison_value : poison_values) {
+    INFO("poison value " << poison_value);
+    EqualizerProcessor eq({2});
+    eq.prepare(kSampleRate, kBlockSize);
+    configure(eq);
+
+    std::vector<float> clean_left = stream_block(0);
+    std::vector<float> clean_right = clean_left;
+    float* clean_channels[] = {clean_left.data(), clean_right.data()};
+    eq.process(clean_channels, 2, kBlockSize);
+    // Non-vacuity, twice over: a passthrough reports zero for reasons that say
+    // nothing about the counter, and an analyser that never transformed over
+    // these blocks would report the same zero whether or not its fold is here.
+    // The profile leaves the floor only once a transform has run on real signal.
+    REQUIRE(clean_left != stream_block(0));
+    const auto profile = eq.spectrum_snapshot().profile_db;
+    REQUIRE(std::any_of(profile.begin(), profile.end(),
+                        [](float db) { return db > sonare::constants::kFloorDb; }));
+    REQUIRE(eq.non_finite_discard_count() == 0u);
+
+    std::vector<float> left = stream_block(1);
+    std::vector<float> right = left;
+    left[static_cast<size_t>(kPoisonIndex)] = poison_value;
+    right[static_cast<size_t>(kPoisonIndex)] = poison_value;
+    float* poisoned_channels[] = {left.data(), right.data()};
+    eq.process(poisoned_channels, 2, kBlockSize);
+    // Both channels carried it, in one block. The unit is the block.
+    REQUIRE(eq.non_finite_discard_count() == 1u);
+
+    for (int k = 2; k < 10; ++k) {
+      std::vector<float> next_left = stream_block(k);
+      std::vector<float> next_right = next_left;
+      float* next_channels[] = {next_left.data(), next_right.data()};
+      eq.process(next_channels, 2, kBlockSize);
+      INFO("clean block " << k);
+      REQUIRE(eq.non_finite_discard_count() == 1u);
+    }
+  }
+}
