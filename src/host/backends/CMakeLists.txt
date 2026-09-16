@@ -10,6 +10,12 @@
 # scope.
 enable_language(OBJCXX)
 
+# SONARE_WARNING_FLAGS applies to OBJCXX here just as it does to CXX elsewhere,
+# and it is what makes a system-header deprecation from a new SDK fail the build
+# rather than scroll past. These units need it more than the rest of the tree,
+# not less: no CI job enables these backends, so a local build is the only thing
+# that ever compiles them.
+
 # Frameworks shared by the audio backends.
 find_library(COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
 
@@ -23,6 +29,7 @@ if(BUILD_COREAUDIO)
   target_link_libraries(sonare_host_coreaudio PRIVATE
     ${COREAUDIO_FRAMEWORK} ${AUDIOTOOLBOX_FRAMEWORK} ${AUDIOUNIT_FRAMEWORK}
     ${COREFOUNDATION_FRAMEWORK})
+  target_compile_options(sonare_host_coreaudio PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_host_coreaudio PROPERTIES POSITION_INDEPENDENT_CODE ON)
   message(STATUS "libsonare: building CoreAudio host backend (sonare_host_coreaudio)")
 endif()
@@ -34,6 +41,7 @@ if(BUILD_COREMIDI)
   target_link_libraries(sonare_host_coremidi PUBLIC sonare_engine)
   target_link_libraries(sonare_host_coremidi PRIVATE
     ${COREMIDI_FRAMEWORK} ${COREFOUNDATION_FRAMEWORK})
+  target_compile_options(sonare_host_coremidi PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_host_coremidi PROPERTIES POSITION_INDEPENDENT_CODE ON)
   message(STATUS "libsonare: building CoreMIDI host backend (sonare_host_coremidi)")
 endif()
@@ -49,6 +57,7 @@ if(BUILD_AU_HOST)
   target_link_libraries(sonare_host_plughost PRIVATE
     ${AUDIOTOOLBOX_FRAMEWORK} ${AUDIOUNIT_FRAMEWORK} ${AVFOUNDATION_FRAMEWORK}
     ${COREAUDIO_FRAMEWORK} ${COREFOUNDATION_FRAMEWORK})
+  target_compile_options(sonare_host_plughost PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_host_plughost PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_compile_definitions(sonare_host_plughost PRIVATE SONARE_HOST_WITH_AU=1)
   message(STATUS "libsonare: building Audio Unit plugin host (sonare_host_plughost)")
