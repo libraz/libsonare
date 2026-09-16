@@ -45,6 +45,12 @@ struct CentAxis {
   /// the calibrated STFT (44.1 kHz, n_fft 4096, hop 512) the phase-based
   /// instantaneous frequency this axis reads resolves under 1 cent at 55 Hz
   /// above ~20 dB SNR, and well under it by 8 kHz.
+  ///
+  /// Reaching the floor costs accuracy downstream, so it is not the better
+  /// setting for multi-F0 work: at 1.0 cent a major second at C3 resolves to
+  /// harmonic images in every frame, which this default's coarser interpolation
+  /// blurs below @ref MultiF0Config::min_frame_peak_ratio. Measured on one chord
+  /// shape; the span between the two resolutions is unmeasured.
   float cents_per_bin = 100.0f / 3.0f;
   /// Covers [ref_hz, max_hz] inclusive: @c ceil(cents(max_hz) / cents_per_bin)
   /// plus one, so the last bin is at or above @c max_hz rather than under it.
