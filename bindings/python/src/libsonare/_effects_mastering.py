@@ -28,6 +28,7 @@ from ._ffi import (
     SonareDeclipConfig,
     SonareDeclipStereoResult,
     SonareDecrackleConfig,
+    SonareDecrackleStereoResult,
     SonareDehumConfig,
     SonareDenoiseClassicalConfig,
     SonareDereverbClassicalConfig,
@@ -63,10 +64,13 @@ from ._runtime import (
 from .types import (
     ClickDetection,
     ClipDetection,
+    CrackleDetection,
     DeclickReport,
     DeclickStereoResult,
     DeclipReport,
     DeclipStereoResult,
+    DecrackleReport,
+    DecrackleStereoResult,
     DereverbClassicalConfig,
     RoomEstimate,
 )
@@ -649,6 +653,95 @@ def mastering_repair_decrackle(
         levels=int(levels),
     )
     return _run_repair(_get_lib().sonare_mastering_repair_decrackle, samples, sample_rate, config)
+
+
+def _extract_decrackle_report(raw: Any) -> DecrackleReport:
+    detected = raw.detected
+    return DecrackleReport(
+        detected=CrackleDetection(
+            sample_count=int(detected.sample_count),
+            sample_fraction=float(detected.sample_fraction),
+            per_second=float(detected.per_second),
+        ),
+        replaced_samples=int(raw.replaced_samples),
+        detail_coefficients=int(raw.detail_coefficients),
+        shrunk_coefficients=int(raw.shrunk_coefficients),
+        noise_sigma=float(raw.noise_sigma),
+    )
+
+
+@_guard_buffer("left", "right")
+def mastering_repair_decrackle_stereo(
+    left: Sequence[float] | list[float] | np.ndarray,
+    right: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.4,
+    mode: int | str = "median",
+    levels: int = 4,
+) -> DecrackleStereoResult:
+    """Decrackles a stereo pair, each channel on its own.
+
+    Crackle is surface damage landing at different instants in each channel,
+    so unlike :func:`mastering_repair_declick_stereo` and
+    :func:`mastering_repair_declip_stereo` there is no shared run for the two
+    channels to agree about: this is two independent mono passes over a
+    shared, validated config, and each channel's report is its own.
+
+    Args:
+        left: Left channel input buffer (any sequence convertible to float32).
+        right: Right channel input buffer, same length as ``left``.
+        sample_rate: Sample rate in Hz (default 22050).
+        threshold: Median mode: deviation threshold. Wavelet mode: a cap on
+            the BayesShrink threshold, which only binds when the configured
+            value is below what BayesShrink computes from the signal itself
+            (default 0.4).
+        mode: ``"median"`` (default) or ``"waveletShrinkage"``; an integer in
+            ``SONARE_DECRACKLE_MODE_*`` is also accepted.
+        levels: Wavelet mode: number of Haar decomposition levels (default 4).
+
+    Returns:
+        :class:`DecrackleStereoResult` with the decrackled channels and each
+        channel's own detection/repair report.
+    """
+    lib = _get_lib()
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise SonareValueError("left and right channel lengths must match")
+    config = SonareDecrackleConfig(  # noqa: F405
+        threshold=float(threshold),
+        mode=_coerce_decrackle_mode(mode),
+        levels=int(levels),
+    )
+    out = SonareDecrackleStereoResult()  # noqa: F405
+    rc = lib.sonare_mastering_repair_decrackle_stereo(
+        left_array,
+        right_array,
+        _to_c_size_t(left_length, "left_length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    try:
+        _check(rc)
+        n = int(out.length)
+        return DecrackleStereoResult(
+            left=[float(out.left[i]) for i in range(n)],
+            right=[float(out.right[i]) for i in range(n)],
+            length=n,
+            left_report=_extract_decrackle_report(out.left_report),
+            right_report=_extract_decrackle_report(out.right_report),
+        )
+    finally:
+        # No dedicated free function for this result: `left`/`right` are each
+        # released with sonare_free_floats (see SonareDecrackleStereoResult in
+        # sonare_c_mastering.h). A refused call leaves `out` at its
+        # zero-initialized default, so both pointers are still NULL here.
+        if out.left:
+            lib.sonare_free_floats(out.left)
+        if out.right:
+            lib.sonare_free_floats(out.right)
 
 
 @_guard_buffer("samples")

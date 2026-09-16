@@ -200,6 +200,40 @@ class SonareDecrackleConfig(CStruct):
     ]
 
 
+class SonareCrackleDetection(CStruct):
+    """Maps to SonareCrackleDetection in sonare_c.h."""
+
+    _fields_ = [
+        ("sample_count", ctypes.c_size_t),
+        ("sample_fraction", ctypes.c_float),
+        ("per_second", ctypes.c_float),
+    ]
+
+
+class SonareDecrackleReport(CStruct):
+    """Maps to SonareDecrackleReport in sonare_c.h."""
+
+    _fields_ = [
+        ("detected", SonareCrackleDetection),
+        ("replaced_samples", ctypes.c_size_t),
+        ("detail_coefficients", ctypes.c_size_t),
+        ("shrunk_coefficients", ctypes.c_size_t),
+        ("noise_sigma", ctypes.c_float),
+    ]
+
+
+class SonareDecrackleStereoResult(CStruct):
+    """Maps to SonareDecrackleStereoResult in sonare_c.h."""
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("left_report", SonareDecrackleReport),
+        ("right_report", SonareDecrackleReport),
+    ]
+
+
 class SonareDehumConfig(CStruct):
     """Maps to SonareDehumConfig in sonare_c.h."""
 

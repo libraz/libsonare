@@ -845,6 +845,30 @@
     ],
     "size": 32
   },
+  "SonareCrackleDetection": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "sample_count",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "sample_fraction",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "per_second",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
   "SonareDeclickConfig": {
     "align": 8,
     "fields": [
@@ -1132,6 +1156,78 @@
       }
     ],
     "size": 12
+  },
+  "SonareDecrackleReport": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "aggregate",
+        "name": "detected",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "kind": "unsigned",
+        "name": "replaced_samples",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "detail_coefficients",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "shrunk_coefficients",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "noise_sigma",
+        "offset": 40,
+        "size": 4
+      }
+    ],
+    "size": 48
+  },
+  "SonareDecrackleStereoResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "left",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "right",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "length",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "left_report",
+        "offset": 24,
+        "size": 48
+      },
+      {
+        "kind": "aggregate",
+        "name": "right_report",
+        "offset": 72,
+        "size": 48
+      }
+    ],
+    "size": 120
   },
   "SonareDehumConfig": {
     "align": 4,

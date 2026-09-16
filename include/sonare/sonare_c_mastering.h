@@ -1054,6 +1054,56 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
                                               const SonareDecrackleConfig* config, float** out,
                                               size_t* out_length);
 
+/// @brief Flat POD mirror of @c mastering::repair::CrackleDetection.
+/// @details Measured by the median criterion whatever mode is configured:
+///   wavelet shrinkage removes crackle without ever deciding a sample is
+///   crackle, so these counts do not describe what wavelet mode repaired.
+typedef struct {
+  size_t sample_count;    // samples deviating from the local median by more
+                          // than threshold
+  float sample_fraction;  // sample_count divided by the input length
+  float per_second;
+} SonareCrackleDetection;
+
+/// @brief What one channel's decrackle pass found and what it did to it.
+/// @details The two modes report through different fields; the other mode's
+///   fields read zero because that mode did not run, which the caller knows
+///   from the config it passed rather than from the value.
+typedef struct {
+  SonareCrackleDetection detected;  // this channel's own analysis of the input
+  size_t replaced_samples;          // median mode: samples the filter overwrote,
+                                    // equal to detected.sample_count since the
+                                    // detector and the repair share a criterion
+  size_t detail_coefficients;       // wavelet mode: detail coefficients examined
+  size_t shrunk_coefficients;       // wavelet mode: of those, driven to zero
+  float noise_sigma;                // wavelet mode: the MAD noise estimate that
+                                    // set every level's threshold, which the
+                                    // configured threshold only caps
+} SonareDecrackleReport;
+
+/// @brief A decrackled stereo pair and what each channel's pass did.
+/// @details @c left and @c right are heap-allocated; release each with
+///   @ref sonare_free_floats.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  SonareDecrackleReport left_report;
+  SonareDecrackleReport right_report;
+} SonareDecrackleStereoResult;
+
+/// @brief Decrackles a stereo pair, each channel on its own.
+/// @details Crackle is surface damage: the two channels carry different
+///   scratches at different instants, so there is no common event for a shared
+///   decision to agree about, and neither mode carries state across channels.
+///   Unlike the declicker and the declipper, no run is ever widened to match
+///   the other side and no report field counts such a widening.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const float* right,
+                                                     size_t length, int sample_rate,
+                                                     const SonareDecrackleConfig* config,
+                                                     SonareDecrackleStereoResult* out);
+
 /// @brief Flat POD mirror of @c mastering::repair::DehumConfig.
 typedef struct {
   float fundamental_hz;   // mains-hum fundamental (default 50 Hz)

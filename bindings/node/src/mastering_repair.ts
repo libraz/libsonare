@@ -1,5 +1,10 @@
 import { addon } from './native.js';
-import type { DeclickStereoResult, DeclipStereoResult, RoomEstimateResult } from './types.js';
+import type {
+  DeclickStereoResult,
+  DeclipStereoResult,
+  DecrackleStereoResult,
+  RoomEstimateResult,
+} from './types.js';
 
 /** Common input fields for offline repair processors. */
 export interface MasteringRepairSamplesRequest {
@@ -262,6 +267,35 @@ export function masteringRepairDecrackle(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return addon.masteringRepairDecrackle(request.samples, request.sampleRate ?? 22050, request);
+}
+
+/** Request form of `masteringRepairDecrackleStereo`. */
+export interface MasteringRepairDecrackleStereoRequest extends DecrackleOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
+/**
+ * Offline crackle suppressor for a stereo pair (median or wavelet-shrinkage),
+ * each channel decrackled on its own.
+ *
+ * Crackle is surface damage: the two channels carry different scratches at
+ * different instants, so there is no common event for a shared decision to
+ * agree about and neither mode carries state across channels. Unlike
+ * {@link masteringRepairDeclickStereo} and {@link masteringRepairDeclipStereo},
+ * no run is ever widened to match the other channel and no report field
+ * counts such a widening.
+ */
+export function masteringRepairDecrackleStereo(
+  request: MasteringRepairDecrackleStereoRequest,
+): DecrackleStereoResult {
+  return addon.masteringRepairDecrackleStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /** Offline mains-hum remover. */

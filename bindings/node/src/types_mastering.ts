@@ -943,6 +943,60 @@ export interface DeclipStereoResult {
   rightReport: DeclipReport;
 }
 
+/**
+ * One channel's crackle detection, from {@link masteringRepairDecrackleStereo}.
+ *
+ * Measured by the median criterion whatever `mode` is configured: wavelet
+ * shrinkage removes crackle without ever deciding a sample is crackle, so
+ * these counts do not describe what wavelet mode repaired.
+ */
+export interface CrackleDetection {
+  /** Samples deviating from the local median by more than `threshold`. */
+  sampleCount: number;
+  /** `sampleCount` divided by the input length. */
+  sampleFraction: number;
+  perSecond: number;
+}
+
+/**
+ * What one channel's decrackle pass found and what it did to it, from
+ * {@link masteringRepairDecrackleStereo}.
+ *
+ * The two modes report through different fields: median mode fills
+ * `replacedSamples` only, wavelet mode fills `detailCoefficients`,
+ * `shrunkCoefficients` and `noiseSigma` only. The field belonging to the
+ * other mode reads zero because that mode did not run, which the caller
+ * knows from the config it passed rather than from the value.
+ */
+export interface DecrackleReport {
+  /** This channel's own analysis of the input. */
+  detected: CrackleDetection;
+  /** Median mode: samples the filter overwrote, equal to `detected.sampleCount`. */
+  replacedSamples: number;
+  /** Wavelet mode: detail coefficients examined. */
+  detailCoefficients: number;
+  /** Wavelet mode: of those, driven to zero. */
+  shrunkCoefficients: number;
+  /** Wavelet mode: the MAD noise estimate that set every level's threshold, which `threshold` only caps. */
+  noiseSigma: number;
+}
+
+/**
+ * A decrackled stereo pair and what each channel's pass did, from
+ * {@link masteringRepairDecrackleStereo}.
+ *
+ * Crackle is surface damage: the two channels carry different scratches at
+ * different instants, so each channel is decrackled independently. Unlike
+ * declick and declip, no run is ever widened to match the other channel and
+ * no report field counts such a widening.
+ */
+export interface DecrackleStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: DecrackleReport;
+  rightReport: DecrackleReport;
+}
+
 /** What gain-matching one take to another's loudness took, and produced. */
 export interface LoudnessMatchResult {
   /** The source, gain-matched to the reference's integrated loudness. */

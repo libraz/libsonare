@@ -3,6 +3,7 @@ import type { RoomEstimateResult } from './public_types_acoustic';
 import type {
   MasteringRepairDeclickStereoResult,
   MasteringRepairDeclipStereoResult,
+  MasteringRepairDecrackleStereoResult,
 } from './public_types_mastering';
 
 function requireModule() {
@@ -175,6 +176,13 @@ export interface MasteringRepairDecrackleRequest extends DecrackleOptions {
   sampleRate: number;
 }
 
+/** Request form of `masteringRepairDecrackleStereo`. */
+export interface MasteringRepairDecrackleStereoRequest extends DecrackleOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
 /** Options for `masteringRepairDehum`. */
 export interface DehumOptions {
   fundamentalHz?: number;
@@ -318,6 +326,43 @@ export function masteringRepairDecrackle(
       ? { samples, sampleRate: sampleRate as number, ...options }
       : samples;
   return requireModule().masteringRepairDecrackle(request.samples, request.sampleRate, request);
+}
+
+/**
+ * Offline crackle suppressor (median or wavelet-shrinkage) for a stereo pair.
+ *
+ * Crackle is surface damage: the two channels carry different scratches at different instants,
+ * so there is no common event for a shared decision to agree about. Each channel is decrackled
+ * on its own -- there is no linking, unlike {@link masteringRepairDeclickStereo} and
+ * {@link masteringRepairDeclipStereo} -- and this entry point exists to keep the reports and
+ * the channel-length contract in one place.
+ */
+export function masteringRepairDecrackleStereo(
+  request: MasteringRepairDecrackleStereoRequest,
+): MasteringRepairDecrackleStereoResult;
+export function masteringRepairDecrackleStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  config?: DecrackleOptions,
+): MasteringRepairDecrackleStereoResult;
+export function masteringRepairDecrackleStereo(
+  left: Float32Array | MasteringRepairDecrackleStereoRequest,
+  right?: Float32Array,
+  sampleRate?: number,
+  config: DecrackleOptions = {},
+): MasteringRepairDecrackleStereoResult {
+  const request: MasteringRepairDecrackleStereoRequest =
+    left instanceof Float32Array
+      ? { left, right: right as Float32Array, sampleRate, ...config }
+      : left;
+  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
+  return requireModule().masteringRepairDecrackleStereo(
+    leftSamples,
+    rightSamples,
+    rate ?? 22050,
+    options,
+  );
 }
 
 /** Offline mains-hum remover. */

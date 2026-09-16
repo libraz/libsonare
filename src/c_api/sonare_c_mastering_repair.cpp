@@ -186,6 +186,18 @@ SonareDeclipReport to_c_declip_report(const sonare::mastering::repair::DeclipRep
   return c;
 }
 
+SonareDecrackleReport to_c_decrackle_report(const sonare::mastering::repair::DecrackleReport& cpp) {
+  SonareDecrackleReport c{};
+  c.detected.sample_count = cpp.detected.sample_count;
+  c.detected.sample_fraction = cpp.detected.sample_fraction;
+  c.detected.per_second = cpp.detected.per_second;
+  c.replaced_samples = cpp.replaced_samples;
+  c.detail_coefficients = cpp.detail_coefficients;
+  c.shrunk_coefficients = cpp.shrunk_coefficients;
+  c.noise_sigma = cpp.noise_sigma;
+  return c;
+}
+
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
 void clear_float_output(float** out, size_t* out_length) {
@@ -315,6 +327,38 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
     Audio result = sonare::mastering::repair::decrackle(audio, to_cpp_decrackle_config(config));
     return copy_audio_result(result, out, out_length);
   });
+}
+
+SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const float* right,
+                                                     size_t length, int sample_rate,
+                                                     const SonareDecrackleConfig* config,
+                                                     SonareDecrackleStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined before any validation return, so a rejected call hands back an empty
+  // result rather than whatever the caller's stack slot held.
+  *out = SonareDecrackleStereoResult{};
+
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  const auto result = sonare::mastering::repair::decrackle_stereo(
+      Audio::from_buffer(left, length, sample_rate), Audio::from_buffer(right, length, sample_rate),
+      to_cpp_decrackle_config(config));
+  out->length = result.left.size();
+  out->left_report = to_c_decrackle_report(result.left_report);
+  out->right_report = to_c_decrackle_report(result.right_report);
+  std::unique_ptr<float[]> left_out(new float[out->length]);
+  std::unique_ptr<float[]> right_out(new float[out->length]);
+  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
+  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
+  out->left = release_array(left_out);
+  out->right = release_array(right_out);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, int sample_rate,

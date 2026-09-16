@@ -24,6 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  Audio,
   analyze,
   analyzePolyphonic,
   decomposeStems,
@@ -34,8 +35,11 @@ import {
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
   masteringRepairDeclick,
+  masteringRepairDeclickStereo,
   masteringRepairDeclip,
+  masteringRepairDeclipStereo,
   masteringRepairDecrackle,
+  masteringRepairDecrackleStereo,
   masteringRepairDehum,
   masteringRepairDenoiseClassical,
   masteringRepairDereverbClassical,
@@ -173,6 +177,26 @@ const clicks = (bpm: number, seconds: number, sampleRate = SR): Float32Array => 
     }
   }
   return samples;
+};
+
+/**
+ * One decoded handle for the meter entry points, which take an options bag but
+ * read their samples from the handle. The first half stays quiet and the second
+ * is driven into the rails, so there are clipping regions and a spread of levels
+ * to find: on a flat tone the clipping and dynamic-range reports come back empty
+ * whatever the options say, and the equivalence below would hold vacuously.
+ * Long enough to carry more than one dynamic-range window at the default framing.
+ */
+let meterAudioHandle: Audio | undefined;
+const meterAudio = (): Audio => {
+  if (!meterAudioHandle) {
+    const samples = sine(SR * 4);
+    for (let i = samples.length / 2; i < samples.length; i++) {
+      samples[i] = Math.max(-1, Math.min(1, (samples[i] as number) * 6));
+    }
+    meterAudioHandle = Audio.fromBuffer(samples, SR);
+  }
+  return meterAudioHandle;
 };
 
 /**
@@ -349,12 +373,48 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) => Array.from(masteringRepairDeclick(sine(2048), SR, o)).slice(0, 32),
   },
   {
+    jsName: 'masteringRepairDeclickStereo',
+    invoke: (o) =>
+      Array.from(
+        masteringRepairDeclickStereo({
+          ...o,
+          left: sine(2048),
+          right: sine(2048),
+          sampleRate: SR,
+        }).left,
+      ).slice(0, 32),
+  },
+  {
     jsName: 'masteringRepairDeclip',
     invoke: (o) => Array.from(masteringRepairDeclip(sine(2048), SR, o)).slice(0, 32),
   },
   {
+    jsName: 'masteringRepairDeclipStereo',
+    invoke: (o) =>
+      Array.from(
+        masteringRepairDeclipStereo({
+          ...o,
+          left: sine(2048),
+          right: sine(2048),
+          sampleRate: SR,
+        }).left,
+      ).slice(0, 32),
+  },
+  {
     jsName: 'masteringRepairDecrackle',
     invoke: (o) => Array.from(masteringRepairDecrackle(sine(2048), SR, o)).slice(0, 32),
+  },
+  {
+    jsName: 'masteringRepairDecrackleStereo',
+    invoke: (o) =>
+      Array.from(
+        masteringRepairDecrackleStereo({
+          ...o,
+          left: sine(2048),
+          right: sine(2048),
+          sampleRate: SR,
+        }).left,
+      ).slice(0, 32),
   },
   {
     jsName: 'masteringRepairDehum',
@@ -671,6 +731,10 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       }
     },
   },
+  { jsName: 'detectClipping', invoke: (o) => meterAudio().detectClipping(o) },
+  { jsName: 'dynamicRange', invoke: (o) => meterAudio().dynamicRange(o) },
+  { jsName: 'spectrum', invoke: (o) => meterAudio().spectrum(o) },
+  { jsName: 'spectrumFrame', invoke: (o) => meterAudio().spectrumFrame(0, o) },
 ];
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {

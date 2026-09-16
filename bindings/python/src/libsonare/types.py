@@ -85,6 +85,9 @@ from ._types_analysis import (
     ClippingReport as ClippingReport,
 )
 from ._types_analysis import (
+    CrackleDetection as CrackleDetection,
+)
+from ._types_analysis import (
     DeclickReport as DeclickReport,
 )
 from ._types_analysis import (
@@ -95,6 +98,12 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     DeclipStereoResult as DeclipStereoResult,
+)
+from ._types_analysis import (
+    DecrackleReport as DecrackleReport,
+)
+from ._types_analysis import (
+    DecrackleStereoResult as DecrackleStereoResult,
 )
 from ._types_analysis import (
     DereverbClassicalConfig as DereverbClassicalConfig,

@@ -464,6 +464,190 @@ TEST_CASE("sonare_mastering_repair_decrackle", "[c_api][mastering]") {
   }
 }
 
+TEST_CASE("sonare_mastering_repair_decrackle_stereo", "[c_api][mastering]") {
+  const int sr = 48000;
+  // Different tones and different crackle spacings, so a result that restated
+  // one channel twice fails on content, and a pair of crossed reports fails on
+  // the counts rather than needing an equality that happens to hold.
+  auto left = generate_sine(440.0f, sr, 0.5f);
+  auto right = generate_sine(880.0f, sr, 0.5f);
+  for (auto& s : left) s *= 0.4f;
+  for (auto& s : right) s *= 0.4f;
+  for (size_t i = 500; i < left.size(); i += 1700) {
+    left[i] = (i % 2 == 0) ? 0.95f : -0.95f;
+  }
+  for (size_t i = 900; i < right.size(); i += 2300) {
+    right[i] = (i % 2 == 0) ? -0.95f : 0.95f;
+  }
+
+  SECTION("median mode processes each channel independently") {
+    SonareDecrackleStereoResult out{};
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(left.data(), right.data(), left.size(), sr,
+                                                     nullptr, &out) == SONARE_OK);
+    REQUIRE(out.length == left.size());
+
+    // Each channel must witness its own crackle. A channel detecting nothing
+    // satisfies every loose claim below while reporting nothing at all.
+    REQUIRE(out.left_report.detected.sample_count > 0);
+    REQUIRE(out.right_report.detected.sample_count > 0);
+    REQUIRE(out.left_report.detected.sample_count != out.right_report.detected.sample_count);
+
+    // The detector and the median repair share a criterion, so this is an
+    // equality rather than a bound.
+    REQUIRE(out.left_report.replaced_samples == out.left_report.detected.sample_count);
+    REQUIRE(out.right_report.replaced_samples == out.right_report.detected.sample_count);
+
+    // Wavelet's fields belong to the mode that did not run.
+    REQUIRE(out.left_report.detail_coefficients == 0);
+    REQUIRE(out.left_report.shrunk_coefficients == 0);
+    REQUIRE(out.left_report.noise_sigma == 0.0f);
+
+    bool channels_differ = false;
+    for (size_t i = 0; i < out.length; ++i) {
+      if (out.left[i] != out.right[i]) channels_differ = true;
+    }
+    REQUIRE(channels_differ);
+
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("each channel matches the mono pass sample for sample") {
+    SonareDecrackleStereoResult stereo{};
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(left.data(), right.data(), left.size(), sr,
+                                                     nullptr, &stereo) == SONARE_OK);
+
+    // Nothing here widens a repair to match the other side, so unlike the
+    // declicker and the declipper the stereo pass owes the mono pass bit
+    // equality. An implementation that grew any cross-channel decision breaks
+    // this without needing a fixture built to catch that decision.
+    float* mono = nullptr;
+    size_t mono_length = 0;
+    REQUIRE(sonare_mastering_repair_decrackle(left.data(), left.size(), sr, nullptr, &mono,
+                                              &mono_length) == SONARE_OK);
+    REQUIRE(mono_length == stereo.length);
+    for (size_t i = 0; i < mono_length; ++i) {
+      REQUIRE(stereo.left[i] == mono[i]);
+    }
+    sonare_free_floats(mono);
+
+    mono = nullptr;
+    mono_length = 0;
+    REQUIRE(sonare_mastering_repair_decrackle(right.data(), right.size(), sr, nullptr, &mono,
+                                              &mono_length) == SONARE_OK);
+    REQUIRE(mono_length == stereo.length);
+    for (size_t i = 0; i < mono_length; ++i) {
+      REQUIRE(stereo.right[i] == mono[i]);
+    }
+    sonare_free_floats(mono);
+
+    sonare_free_floats(stereo.left);
+    sonare_free_floats(stereo.right);
+  }
+
+  SECTION("swapping the inputs swaps the reports") {
+    SonareDecrackleStereoResult forward{};
+    SonareDecrackleStereoResult reversed{};
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(left.data(), right.data(), left.size(), sr,
+                                                     nullptr, &forward) == SONARE_OK);
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(right.data(), left.data(), left.size(), sr,
+                                                     nullptr, &reversed) == SONARE_OK);
+
+    REQUIRE(reversed.left_report.detected.sample_count ==
+            forward.right_report.detected.sample_count);
+    REQUIRE(reversed.right_report.detected.sample_count ==
+            forward.left_report.detected.sample_count);
+
+    sonare_free_floats(forward.left);
+    sonare_free_floats(forward.right);
+    sonare_free_floats(reversed.left);
+    sonare_free_floats(reversed.right);
+  }
+
+  SECTION("wavelet mode reports through its own fields") {
+    SonareDecrackleConfig config = {};
+    config.threshold = 0.4f;
+    config.mode = SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE;
+    config.levels = 4;
+
+    SonareDecrackleStereoResult out{};
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(left.data(), right.data(), left.size(), sr,
+                                                     &config, &out) == SONARE_OK);
+
+    REQUIRE(out.left_report.detail_coefficients > 0);
+    REQUIRE(out.left_report.shrunk_coefficients > 0);
+    REQUIRE(out.left_report.noise_sigma > 0.0f);
+    REQUIRE(out.right_report.detail_coefficients > 0);
+    REQUIRE(out.right_report.noise_sigma > 0.0f);
+    REQUIRE(out.left_report.replaced_samples == 0);
+    REQUIRE(out.right_report.replaced_samples == 0);
+
+    // Detection is the median criterion whatever mode ran, so it is populated
+    // here while the median repair counter is not.
+    REQUIRE(out.left_report.detected.sample_count > 0);
+
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
+  }
+
+  SECTION("threshold reaches the wavelet shrinkage as a cap") {
+    // The level threshold is min(configured, BayesShrink's own estimate), so
+    // the configured value changes the result only below that estimate. A
+    // value above it is passed through faithfully and changes nothing, which
+    // would let this assertion pass without the value ever arriving.
+    SonareDecrackleConfig loose = {};
+    loose.threshold = 10.0f;
+    loose.mode = SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE;
+    loose.levels = 4;
+    SonareDecrackleConfig capped = loose;
+    capped.threshold = 1e-4f;
+
+    SonareDecrackleStereoResult loose_out{};
+    SonareDecrackleStereoResult capped_out{};
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(left.data(), right.data(), left.size(), sr,
+                                                     &loose, &loose_out) == SONARE_OK);
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(left.data(), right.data(), left.size(), sr,
+                                                     &capped, &capped_out) == SONARE_OK);
+
+    // The same coefficients are examined either way; only how many survive moves.
+    REQUIRE(capped_out.left_report.detail_coefficients ==
+            loose_out.left_report.detail_coefficients);
+    REQUIRE(capped_out.left_report.shrunk_coefficients < loose_out.left_report.shrunk_coefficients);
+
+    sonare_free_floats(loose_out.left);
+    sonare_free_floats(loose_out.right);
+    sonare_free_floats(capped_out.left);
+    sonare_free_floats(capped_out.right);
+  }
+
+  SECTION("rejects a mismatched pair and clears the result") {
+    SonareDecrackleStereoResult out{};
+    out.left = non_null_sentinel_float_ptr();
+    out.length = 123;
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(left.data(), nullptr, left.size(), sr, nullptr,
+                                                     &out) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out.left == nullptr);
+    REQUIRE(out.length == 0);
+
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(left.data(), right.data(), left.size(), 0,
+                                                     nullptr,
+                                                     &out) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(left.data(), right.data(), 0, sr, nullptr,
+                                                     &out) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("rejects unknown mode enum") {
+    SonareDecrackleConfig config = {};
+    config.threshold = 0.4f;
+    config.mode = 999;
+    config.levels = 4;
+    SonareDecrackleStereoResult out{};
+    REQUIRE(sonare_mastering_repair_decrackle_stereo(left.data(), right.data(), left.size(), sr,
+                                                     &config,
+                                                     &out) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 TEST_CASE("sonare_mastering_repair_dehum", "[c_api][mastering]") {
   const int sr = 48000;
   auto signal = generate_sine(440.0f, sr, 1.0f);

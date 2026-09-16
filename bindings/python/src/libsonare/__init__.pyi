@@ -334,6 +334,9 @@ from .analyzer import (
     mastering_repair_decrackle as mastering_repair_decrackle,
 )
 from .analyzer import (
+    mastering_repair_decrackle_stereo as mastering_repair_decrackle_stereo,
+)
+from .analyzer import (
     mastering_repair_dehum as mastering_repair_dehum,
 )
 from .analyzer import (
@@ -722,10 +725,13 @@ from .types import ClippingReport as ClippingReport
 from .types import (
     CqtResult as CqtResult,
 )
+from .types import CrackleDetection as CrackleDetection
 from .types import DeclickReport as DeclickReport
 from .types import DeclickStereoResult as DeclickStereoResult
 from .types import DeclipReport as DeclipReport
 from .types import DeclipStereoResult as DeclipStereoResult
+from .types import DecrackleReport as DecrackleReport
+from .types import DecrackleStereoResult as DecrackleStereoResult
 from .types import DereverbClassicalConfig as DereverbClassicalConfig
 from .types import DynamicRangeReport as DynamicRangeReport
 from .types import (

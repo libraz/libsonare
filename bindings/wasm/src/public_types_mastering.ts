@@ -360,6 +360,60 @@ export interface MasteringRepairDeclipStereoResult {
   rightReport: DeclipReport;
 }
 
+/**
+ * What a decrackle analysis found in one channel of a
+ * {@link MasteringRepairDecrackleStereoResult}.
+ *
+ * Crackle is measured by the median criterion regardless of the configured `DecrackleMode` --
+ * wavelet shrinkage is a removal method, not a detection method, so this is the module's only
+ * definition of the defect.
+ */
+export interface CrackleDetection {
+  /** Samples deviating from the local median by more than `threshold`. */
+  sampleCount: number;
+  /** `sampleCount` divided by the input length. */
+  sampleFraction: number;
+  /** `sampleCount` divided by the input duration. */
+  perSecond: number;
+}
+
+/**
+ * What a decrackle pass found in one channel of a
+ * {@link MasteringRepairDecrackleStereoResult} and what it did to it.
+ *
+ * The two modes remove crackle by different means and report through different fields. A field
+ * belonging to the other mode reads zero because that mode did not run -- the caller knows this
+ * from the config it passed, so it is not an unfilled value.
+ */
+export interface DecrackleReport {
+  /** This channel's own analysis of the input. */
+  detected: CrackleDetection;
+  /** Median mode: samples the filter overwrote. Equal to `detected.sampleCount`. */
+  replacedSamples: number;
+  /** Wavelet mode: detail coefficients examined. */
+  detailCoefficients: number;
+  /** Wavelet mode: of those, driven to zero. */
+  shrunkCoefficients: number;
+  /** Wavelet mode: the MAD noise estimate that set every level's threshold. The configured
+   * `threshold` is only a cap on it. */
+  noiseSigma: number;
+}
+
+/**
+ * A decrackled stereo pair and what each channel's pass found and did.
+ *
+ * Crackle is surface damage: the two channels carry different scratches at different instants,
+ * so there is no common event for a shared decision to agree about. Both modes are memoryless
+ * across channels, so the pair is processed independently and there is no `linkedRuns` field,
+ * unlike {@link MasteringRepairDeclickStereoResult} and {@link MasteringRepairDeclipStereoResult}.
+ */
+export interface MasteringRepairDecrackleStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: DecrackleReport;
+  rightReport: DecrackleReport;
+}
+
 export type MasteringProcessorParams = Record<string, number | boolean>;
 
 /**

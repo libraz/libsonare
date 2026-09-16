@@ -1145,6 +1145,42 @@ class DeclipStereoResult:
         right_report: DeclipReport,
     ) -> None: ...
 
+class CrackleDetection:
+    sample_count: int
+    sample_fraction: float
+    per_second: float
+    def __init__(self, sample_count: int, sample_fraction: float, per_second: float) -> None: ...
+
+class DecrackleReport:
+    detected: CrackleDetection
+    replaced_samples: int
+    detail_coefficients: int
+    shrunk_coefficients: int
+    noise_sigma: float
+    def __init__(
+        self,
+        detected: CrackleDetection,
+        replaced_samples: int,
+        detail_coefficients: int,
+        shrunk_coefficients: int,
+        noise_sigma: float,
+    ) -> None: ...
+
+class DecrackleStereoResult:
+    left: list[float]
+    right: list[float]
+    length: int
+    left_report: DecrackleReport
+    right_report: DecrackleReport
+    def __init__(
+        self,
+        left: list[float],
+        right: list[float],
+        length: int,
+        left_report: DecrackleReport,
+        right_report: DecrackleReport,
+    ) -> None: ...
+
 class MasteringResult:
     samples: list[float]
     sample_rate: int

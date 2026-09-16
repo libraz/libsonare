@@ -657,6 +657,109 @@ Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info)
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+/// @brief Marshal one channel's crackle detection into the JS shape shared by
+///        the decrackle stereo report.
+Napi::Object EmitCrackleDetection(Napi::Env env, const SonareCrackleDetection& detection) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("sampleCount", Napi::Number::New(env, static_cast<double>(detection.sample_count)));
+  out.Set("sampleFraction", Napi::Number::New(env, detection.sample_fraction));
+  out.Set("perSecond", Napi::Number::New(env, detection.per_second));
+  return out;
+}
+
+Napi::Object EmitDecrackleReport(Napi::Env env, const SonareDecrackleReport& report) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("detected", EmitCrackleDetection(env, report.detected));
+  out.Set("replacedSamples", Napi::Number::New(env, static_cast<double>(report.replaced_samples)));
+  out.Set("detailCoefficients",
+          Napi::Number::New(env, static_cast<double>(report.detail_coefficients)));
+  out.Set("shrunkCoefficients",
+          Napi::Number::New(env, static_cast<double>(report.shrunk_coefficients)));
+  out.Set("noiseSigma", Napi::Number::New(env, report.noise_sigma));
+  return out;
+}
+
+/// @brief Read a SonareDecrackleConfig options bag, reusing the mono facade's
+///        own mode-string reader above so the two paths cannot recognize
+///        different spellings of the same mode.
+SonareDecrackleConfig read_decrackle_config_c(const Napi::Object& options,
+                                              SonareDecrackleConfig config) {
+  config.threshold = FloatProperty(options, "threshold", config.threshold);
+  config.mode = static_cast<int>(parse_decrackle_mode(
+      options, static_cast<sonare::mastering::repair::DecrackleMode>(config.mode)));
+  config.levels = IntProperty(options, "levels", config.levels);
+  return config;
+}
+
+/// @brief Frees both heap-owned channels of a SonareDecrackleStereoResult on
+///        scope exit -- mirrors DeclipStereoResultGuard above.
+class DecrackleStereoResultGuard {
+ public:
+  explicit DecrackleStereoResultGuard(SonareDecrackleStereoResult* result) : result_(result) {}
+  DecrackleStereoResultGuard(const DecrackleStereoResultGuard&) = delete;
+  DecrackleStereoResultGuard& operator=(const DecrackleStereoResultGuard&) = delete;
+  ~DecrackleStereoResultGuard() {
+    sonare_free_floats(result_->left);
+    sonare_free_floats(result_->right);
+  }
+
+ private:
+  SonareDecrackleStereoResult* result_;
+};
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairDecrackleStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::Error::New(env,
+                     "masteringRepairDecrackleStereo: left and right must have the same length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  // Library defaults (sonare_c_mastering.h SonareDecrackleConfig), applied before
+  // any options key overrides a field.
+  SonareDecrackleConfig config{0.4f, SONARE_DECRACKLE_MODE_MEDIAN, 4};
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    config = read_decrackle_config_c(info[3].As<Napi::Object>(), config);
+  }
+  SonareDecrackleStereoResult result{};
+  SonareError err = sonare_mastering_repair_decrackle_stereo(
+      left.Data(), right.Data(), left.ElementLength(), sr, &config, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  DecrackleStereoResultGuard guard(&result);
+  auto left_out = Napi::Float32Array::New(env, result.length);
+  auto right_out = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0) {
+    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
+    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", left_out);
+  out.Set("right", right_out);
+  out.Set("leftReport", EmitDecrackleReport(env, result.left_report));
+  out.Set("rightReport", EmitDecrackleReport(env, result.right_report));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {

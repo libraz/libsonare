@@ -419,6 +419,29 @@ export interface WasmDeclipStereoResult {
   rightReport: WasmDeclipReport;
 }
 
+/** What a decrackle analysis found in one channel, as `masteringRepairDecrackleStereo` returns it. */
+export interface WasmCrackleDetection {
+  sampleCount: number;
+  sampleFraction: number;
+  perSecond: number;
+}
+
+/** What a decrackle pass found in one channel of a stereo decrackle and what it did to it. */
+export interface WasmDecrackleReport {
+  detected: WasmCrackleDetection;
+  replacedSamples: number;
+  detailCoefficients: number;
+  shrunkCoefficients: number;
+  noiseSigma: number;
+}
+
+export interface WasmDecrackleStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  leftReport: WasmDecrackleReport;
+  rightReport: WasmDecrackleReport;
+}
+
 export interface WasmRoomMorphOptions extends WasmRoomGeometryOptions {
   wet?: number;
   sourceTailSuppression?: number;
@@ -2183,6 +2206,12 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => Float32Array;
+  masteringRepairDecrackleStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmDecrackleStereoResult;
   masteringRepairDehum: (
     samples: Float32Array,
     sampleRate: number,

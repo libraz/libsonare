@@ -1442,6 +1442,56 @@ class DeclipStereoResult:
 
 
 @dataclass(frozen=True, slots=True)
+class CrackleDetection:
+    """What one channel's crackle detector found, independent of repair.
+
+    Measured by the median criterion regardless of the configured mode --
+    wavelet shrinkage removes crackle without ever deciding a sample is
+    crackle, so this is the only definition of the defect either mode reports
+    against.
+    """
+
+    sample_count: int
+    sample_fraction: float
+    per_second: float
+
+
+@dataclass(frozen=True, slots=True)
+class DecrackleReport:
+    """What one channel's decrackle pass found and did to it.
+
+    The two modes remove crackle by different means and report through
+    different fields: ``replaced_samples`` is median-mode only,
+    ``detail_coefficients`` / ``shrunk_coefficients`` / ``noise_sigma`` are
+    wavelet-mode only. A field belonging to the other mode reads zero because
+    that mode did not run, not because it went unmeasured.
+    """
+
+    detected: CrackleDetection
+    replaced_samples: int
+    detail_coefficients: int
+    shrunk_coefficients: int
+    noise_sigma: float
+
+
+@dataclass(frozen=True, slots=True)
+class DecrackleStereoResult:
+    """A decrackled stereo pair and what each channel's pass did.
+
+    Crackle is surface damage landing at different instants in each channel,
+    so there is no common event for the two channels to agree about: each
+    channel is decrackled independently, unlike the linked-run repairs of
+    declick and declip.
+    """
+
+    left: list[float]
+    right: list[float]
+    length: int
+    left_report: DecrackleReport
+    right_report: DecrackleReport
+
+
+@dataclass(frozen=True, slots=True)
 class MasteringResult:
     """Mastering loudness/true-peak processing result."""
 

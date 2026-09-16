@@ -18,6 +18,7 @@ from .types import (
     CqtResult,
     DeclickStereoResult,
     DeclipStereoResult,
+    DecrackleStereoResult,
     DereverbClassicalConfig,
     DynamicRangeReport,
     DynamicsResult,
@@ -1755,6 +1756,15 @@ def mastering_repair_decrackle(
     mode: int | str = "median",
     levels: int = 4,
 ) -> np.ndarray[Any, Any]: ...
+def mastering_repair_decrackle_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.4,
+    mode: int | str = "median",
+    levels: int = 4,
+) -> DecrackleStereoResult: ...
 def mastering_repair_dehum(
     samples: FloatSamples,
     sample_rate: int = 22050,

@@ -357,6 +357,66 @@ val js_mastering_repair_decrackle(val samples, const val& sample_rate, val optio
   return vectorToFloat32Array(out);
 }
 
+namespace {
+
+val crackleDetectionToVal(const mastering::repair::CrackleDetection& detected) {
+  val out = val::object();
+  out.set("sampleCount", detected.sample_count);
+  out.set("sampleFraction", detected.sample_fraction);
+  out.set("perSecond", detected.per_second);
+  return out;
+}
+
+val decrackleReportToVal(const mastering::repair::DecrackleReport& report) {
+  val out = val::object();
+  out.set("detected", crackleDetectionToVal(report.detected));
+  out.set("replacedSamples", report.replaced_samples);
+  out.set("detailCoefficients", report.detail_coefficients);
+  out.set("shrunkCoefficients", report.shrunk_coefficients);
+  out.set("noiseSigma", report.noise_sigma);
+  return out;
+}
+
+}  // namespace
+
+// Decrackles a stereo pair, each channel on its own. Crackle is surface
+// damage with no common event between the two channels, unlike declick's and
+// declip's shared run selection, so there is nothing to link -- this
+// entrypoint is two independent mono passes sharing one validated config.
+// Calls the core directly rather than the C ABI, matching every other
+// wrapper in this file -- sonare_c_mastering_repair.cpp is not part of the
+// WASM binding sources.
+val js_mastering_repair_decrackle_stereo(val left_samples, val right_samples,
+                                         const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringRepairDecrackleStereo input", true);
+  Audio left = loadValidatedAudio(left_samples, sample_rate);
+  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  mastering::repair::DecrackleConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
+    if (hasProperty(options, "mode")) {
+      val value = val::undefined();
+      if (repairOptionValue(options, "mode", &value)) {
+        cfg.mode = parseDecrackleMode(value.as<std::string>());
+      }
+    }
+    cfg.levels = repairIntOption(options, "levels", cfg.levels);
+  }
+  mastering::repair::DecrackleStereoResult result =
+      mastering::repair::decrackle_stereo(left, right, cfg);
+  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
+  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(left_out));
+  out.set("right", vectorToFloat32Array(right_out));
+  out.set("leftReport", decrackleReportToVal(result.left_report));
+  out.set("rightReport", decrackleReportToVal(result.right_report));
+  return out;
+}
+
 val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   mastering::repair::DehumConfig cfg;
@@ -474,6 +534,7 @@ void registerRepairBindings() {
   function("masteringRepairDeclip", &js_mastering_repair_declip);
   function("masteringRepairDeclipStereo", &js_mastering_repair_declip_stereo);
   function("masteringRepairDecrackle", &js_mastering_repair_decrackle);
+  function("masteringRepairDecrackleStereo", &js_mastering_repair_decrackle_stereo);
   function("masteringRepairDehum", &js_mastering_repair_dehum);
   function("masteringRepairDereverbClassical", &js_mastering_repair_dereverb_classical);
   function("masteringRepairDereverbConfigForRoom", &js_mastering_repair_dereverb_config_for_room);
