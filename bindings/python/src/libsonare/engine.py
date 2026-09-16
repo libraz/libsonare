@@ -75,9 +75,14 @@ from ._ffi_types_mastering_project import (
     SonareProjectTimeSignatureSegment,
 )
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
+    _UINT8_MAX,
     SonareValueError,
     _check,
     _get_lib,
+    _int_refusal,
+    _narrow_int,
     _to_c_float,
     _to_c_int,
     _to_c_int64,
@@ -320,11 +325,14 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         rows = list(segments)
         count = len(rows)
         c_segments = (SonareProjectTimeSignatureSegment * count)() if count else None
+        # The signature fields are carried unconverted so the struct's own
+        # narrowing sees each caller value; int() truncated 4.5 onto the legal 4,
+        # which the core's positive-signature check then accepts as written.
         for i, seg in enumerate(rows):
             if isinstance(seg, Mapping):
                 start_ppq = float(seg["start_ppq"])
-                numerator = int(seg["numerator"])
-                denominator = int(seg["denominator"])
+                numerator = seg["numerator"]
+                denominator = seg["denominator"]
             else:
                 tup = tuple(seg)
                 if len(tup) < 3:
@@ -332,8 +340,8 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                         f"segments[{i}] must contain (start_ppq, numerator, denominator)"
                     )
                 start_ppq = float(tup[0])
-                numerator = int(tup[1])
-                denominator = int(tup[2])
+                numerator = tup[1]
+                denominator = tup[2]
             c_segments[i].start_ppq = start_ppq
             c_segments[i].numerator = numerator
             c_segments[i].denominator = denominator
@@ -363,13 +371,16 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
 
     def add_parameter(self, info: ParameterInfo) -> None:
         raw = SonareParameterInfo()
-        raw.id = int(info.id)
+        # Assigned unconverted so the struct's own narrowing sees the caller's
+        # value; int() would truncate a fraction onto a neighbouring parameter
+        # id. rt_safe is the exception -- it is a documented bool, spelled 0/1.
+        raw.id = info.id
         raw.name = _fixed_bytes(info.name, 64)
         raw.unit = _fixed_bytes(info.unit, 16)
         raw.min_value = float(info.min_value)
         raw.max_value = float(info.max_value)
         raw.default_value = float(info.default_value)
-        raw.rt_safe = int(info.rt_safe)
+        raw.rt_safe = 1 if info.rt_safe else 0
         raw.default_curve = int(AutomationCurve(info.default_curve))
         _check(_get_lib().sonare_engine_add_parameter(self._require_handle(), ctypes.byref(raw)))
 
@@ -627,38 +638,48 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             for event_index, event in enumerate(clip.events):
                 # ctypes narrows to the c_uint8 field silently, so a group of 256
                 # would arrive as 0 and pass the C ABI's range check instead of
-                # being rejected. Reject the wrap here; the C ABI still owns the
-                # finer [0, 15] MIDI range.
-                group = int(event.group)
-                if not 0 <= group <= 255:
-                    raise SonareValueError(
-                        "set_midi_clips: EngineMidiEvent.group must be an integer in [0, 255]"
-                    )
+                # being rejected, and int() folded 5.5 onto the legal group 5.
+                # Narrow both away here; the C ABI still owns the finer [0, 15]
+                # MIDI range.
+                try:
+                    group = _narrow_int(event.group, "EngineMidiEvent.group", 0, _UINT8_MAX)
+                except SonareValueError as exc:
+                    raise _int_refusal(
+                        "set_midi_clips",
+                        event.group,
+                        "EngineMidiEvent.group",
+                        f"must be in [0, {_UINT8_MAX}]",
+                    ) from exc
                 # Same tolerance the C bridge documents: a word_count outside
-                # [1, 4] means "infer the word form", so narrow it by range
-                # rather than letting c_uint8 wrap 257 onto a spurious 1.
-                word_count = int(event.word_count)
+                # [1, 4] means "infer the word form", so this narrows integrality
+                # only -- a range refusal would reject what the bridge defines.
+                # int() truncated 2.5 onto a word form the caller never asked for.
+                word_count = _narrow_int(
+                    event.word_count, "EngineMidiEvent.word_count", _C_INT_MIN, _C_INT_MAX
+                )
+                # The remaining fields go in unconverted so the struct's own
+                # narrowing sees each caller value.
                 raw_events[event_index] = SonareEngineMidiEvent(
-                    int(event.render_frame),
-                    int(event.word0),
-                    int(event.word1),
-                    int(event.word2),
-                    int(event.word3),
+                    event.render_frame,
+                    event.word0,
+                    event.word1,
+                    event.word2,
+                    event.word3,
                     word_count if 1 <= word_count <= 4 else 0,
                     group,
                     0,
-                    int(event.sysex_handle),
+                    event.sysex_handle,
                 )
             event_arrays.append(raw_events)
             raw_clips[index] = SonareEngineMidiClipSchedule(
-                int(clip.id),
-                int(clip.track_id),
-                int(clip.start_sample),
+                clip.id,
+                clip.track_id,
+                clip.start_sample,
                 float(clip.start_ppq),
-                int(clip.length_samples),
+                clip.length_samples,
                 1 if clip.loop else 0,
-                int(clip.loop_length_samples),
-                int(clip.track_id if clip.destination_id is None else clip.destination_id),
+                clip.loop_length_samples,
+                clip.track_id if clip.destination_id is None else clip.destination_id,
                 raw_events,
                 len(clip.events),
             )

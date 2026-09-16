@@ -505,11 +505,14 @@ class _ProjectMidiMixin:
             c_in[i].data0 = _validate_midi_event_word(seq[1], f"events[{i}].data0")
             c_in[i].data1 = _validate_midi_event_word(seq[2], f"events[{i}].data1")
         cfg_map: Mapping[str, int] = config or {}
+        # Passed unconverted so the struct's own narrowing sees each caller
+        # value; int() truncated 5.9 onto the legal channel 5, which the C ABI's
+        # own -1-or-[0,15] check then accepted as the channel that was asked for.
         cfg = SonareMidiRouteConfig(
-            filter_group=int(cfg_map.get("filter_group", -1)),
-            filter_channel=int(cfg_map.get("filter_channel", -1)),
-            remap_channel=int(cfg_map.get("remap_channel", -1)),
-            thru=int(cfg_map.get("thru", 1)),
+            filter_group=cfg_map.get("filter_group", -1),
+            filter_channel=cfg_map.get("filter_channel", -1),
+            remap_channel=cfg_map.get("remap_channel", -1),
+            thru=cfg_map.get("thru", 1),
         )
         out = (SonareMidiEventPod * n)()
         out_count = ctypes.c_size_t()
