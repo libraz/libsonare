@@ -24,7 +24,9 @@
 ///     count. An owner that quietly sanitized its input would pass everything
 ///     else while holding no state under test at all.
 ///  3. Recovery, bounded. "Rejoins eventually" is also true of a handle that
-///     rejoins on its last measured block.
+///     rejoins on its last measured block. An owner whose difference settles on
+///     a rounding floor instead of reaching identity is read as a residual under
+///     a ceiling at that same block.
 ///
 /// The three values are not interchangeable, and the peak envelopes are where
 /// that bites. A cell folded as std::max(new, decayed) does drop a NaN, but it
@@ -48,6 +50,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -93,6 +96,13 @@ constexpr int kPultecRecoveryBlocks = 1700;
 constexpr int kLowEndFocusRecoveryBlocks = 30;
 constexpr int kImagerRecoveryBlocks = 10;
 constexpr int kMultibandImagerRecoveryBlocks = 700;
+// The multiband imager is the exception: its difference falls to a rounding
+// floor and then neither decays nor grows, so whether a run coincides with its
+// control is a property of the target's arithmetic -- arm64 lands on it inside
+// the bound and x86_64 never does. Its bound is where the residual is read
+// instead, and the ceiling is a decade above the largest measured on either
+// target (3.4e-5). That ceiling moves with the fixture.
+constexpr double kMultibandImagerResidual = 1.0e-3;
 constexpr int kMonoMakerRecoveryBlocks = 15;
 constexpr int kTruePeakRecoveryBlocks = 300;
 constexpr int kAdaptiveReleaseBlocks = 160;
@@ -296,9 +306,23 @@ void require_rejoins_control(const Blocks& control, const Blocks& poisoned, int 
   REQUIRE(residual_from(control, poisoned, recovery_blocks) == 0.0);
 }
 
+/// The same claim for an owner that reaches a rounding floor instead of bit
+/// identity: past @p from the streams stay within @p ceiling of each other.
+void require_rejoins_within(const Blocks& control, const Blocks& poisoned, int from,
+                            double ceiling) {
+  const double residual = residual_from(control, poisoned, from);
+  INFO("first identical " << first_identical_block(control, poisoned) << " of " << control.size());
+  INFO("residual " << residual);
+  REQUIRE(residual < ceiling);
+}
+
 /// Drives one owner three times -- clean, clean at another level, and poisoned
 /// -- and asserts the invariant against the first.
-void check_owner(const MakeOwner& make, int recovery_blocks, float poison_value) {
+/// @param residual_ceiling Set for an owner that reaches a rounding floor rather
+///        than bit identity; @p recovery_blocks is then where its residual is
+///        read.
+void check_owner(const MakeOwner& make, int recovery_blocks, float poison_value,
+                 std::optional<double> residual_ceiling = std::nullopt) {
   const int block_count = std::max(recovery_blocks + kHorizonSlack, kMinimumCleanBlocks);
   Owner control_owner = make();
   const Blocks control = run_stream(control_owner.process, block_count, 1.0f, 0.0f, false);
@@ -325,7 +349,11 @@ void check_owner(const MakeOwner& make, int recovery_blocks, float poison_value)
   Owner poisoned_owner = make();
   const Blocks poisoned = run_stream(poisoned_owner.process, block_count, 1.0f, poison_value, true);
   require_non_finite_bounded(poisoned);
-  require_rejoins_control(control, poisoned, recovery_blocks);
+  if (residual_ceiling) {
+    require_rejoins_within(control, poisoned, recovery_blocks, *residual_ceiling);
+  } else {
+    require_rejoins_control(control, poisoned, recovery_blocks);
+  }
   if (control_owner.meter && poisoned_owner.meter) {
     // The meter is folded from the values the detector produced, so it reports a
     // stranded detector even over blocks whose audio has already rejoined.
@@ -341,6 +369,16 @@ void check_owner(const MakeOwner& make, int recovery_blocks, float poison_value)
 void check_owner(const MakeOwner& make, int recovery_blocks) {
   for (const float poison_value : poison_values()) {
     DYNAMIC_SECTION("poison " << poison_value) { check_owner(make, recovery_blocks, poison_value); }
+  }
+}
+
+/// The residual form of the same sweep, for an owner that reaches a rounding
+/// floor rather than bit identity.
+void check_owner_within(const MakeOwner& make, int recovery_blocks, double residual_ceiling) {
+  for (const float poison_value : poison_values()) {
+    DYNAMIC_SECTION("poison " << poison_value) {
+      check_owner(make, recovery_blocks, poison_value, residual_ceiling);
+    }
   }
 }
 
@@ -488,7 +526,7 @@ TEST_CASE("the multiband imager bounds a non-finite sample to its own block",
     return Owner{wrap(processor), {}};
   };
 
-  check_owner(make, kMultibandImagerRecoveryBlocks);
+  check_owner_within(make, kMultibandImagerRecoveryBlocks, kMultibandImagerResidual);
 }
 
 TEST_CASE("the mono maker bounds a non-finite sample to its own block", "[mastering][stereo]") {
