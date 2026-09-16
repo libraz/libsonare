@@ -8,8 +8,10 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <vector>
 
+#include "analysis/acoustic/internal.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/resource_limits.h"
@@ -667,4 +669,68 @@ TEST_CASE("AcousticAnalyzer is invariant to DC offset in blind third-octave fitt
   // The bandpass filter plus explicit DC removal should make the analyzer
   // effectively invariant to a constant offset.
   REQUIRE_THAT(params_offset.rt60, WithinRel(params_zero.rt60, 0.05f));
+}
+
+// The filter's only finiteness clause covered rt60, and rt60 is what came out
+// non-finite. A NaN score survives `<= 0.0f`, then orders the sort below it and
+// accumulates into the histogram and the weighted mean, so it reaches the
+// aggregated rt60 through the fields that were not checked. The confidence stays
+// high while it happens, which is what makes it silent: a confident answer that
+// is not a number. The list is long enough for the ordering to matter.
+TEST_CASE("decay aggregation drops a candidate whose score or confidence is non-finite",
+          "[acoustic_analyzer][edge]") {
+  using sonare::acoustic_detail::aggregate_decay_candidates;
+  using sonare::acoustic_detail::BlindRt60Estimate;
+  using sonare::acoustic_detail::DecayEstimateCandidate;
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  auto make_candidates = []() {
+    std::vector<DecayEstimateCandidate> candidates;
+    for (int i = 0; i < 48; ++i) {
+      const float rt60 = 0.3f + 0.02f * static_cast<float>(i);
+      const float score = 1.0f - 0.01f * static_cast<float>(i);
+      candidates.push_back({BlindRt60Estimate{rt60, 0.8f, 1.0, 0.0f}, score, false});
+    }
+    return candidates;
+  };
+
+  SECTION("a non-finite score or confidence leaves the aggregate finite") {
+    auto candidates = make_candidates();
+    candidates[5].score = nan;
+    candidates[17].score = inf;
+    candidates[33].estimate.confidence = nan;
+
+    const auto result = aggregate_decay_candidates(std::move(candidates));
+    REQUIRE(std::isfinite(result.rt60));
+    REQUIRE(std::isfinite(result.confidence));
+    REQUIRE(std::isfinite(result.energy));
+    REQUIRE(result.rt60 > 0.0f);
+  }
+
+  SECTION("the control: dropping the same three by hand gives the identical answer") {
+    auto poisoned = make_candidates();
+    poisoned[5].score = nan;
+    poisoned[17].score = inf;
+    poisoned[33].estimate.confidence = nan;
+    const auto from_poisoned = aggregate_decay_candidates(std::move(poisoned));
+
+    auto trimmed = make_candidates();
+    trimmed.erase(trimmed.begin() + 33);
+    trimmed.erase(trimmed.begin() + 17);
+    trimmed.erase(trimmed.begin() + 5);
+    const auto from_trimmed = aggregate_decay_candidates(std::move(trimmed));
+
+    // Refusing them is exactly removing them -- the filter is not also moving a
+    // candidate that had nothing wrong with it.
+    REQUIRE(from_poisoned.rt60 == from_trimmed.rt60);
+    REQUIRE(from_poisoned.confidence == from_trimmed.confidence);
+    REQUIRE(from_poisoned.energy == from_trimmed.energy);
+  }
+
+  SECTION("the non-vacuity control: an untouched list still answers") {
+    const auto result = aggregate_decay_candidates(make_candidates());
+    REQUIRE(std::isfinite(result.rt60));
+    REQUIRE(result.rt60 > 0.0f);
+  }
 }

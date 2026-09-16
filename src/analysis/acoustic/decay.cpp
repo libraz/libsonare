@@ -205,7 +205,9 @@ std::optional<BlindRt60Estimate> estimate_exponential_decay_ml(const FrameEnergy
     const double centered = frames.energy[i] - mean_y;
     ss_tot += centered * centered;
   }
-  if (ss_tot <= 1e-20) {
+  // Negated for the same reason: an energy that overflowed to +inf makes every
+  // centered term -inf or NaN, and a NaN total passes a bare `<= 1e-20`.
+  if (!(ss_tot > 1e-20)) {
     return std::nullopt;
   }
 
@@ -257,7 +259,9 @@ std::optional<BlindRt60Estimate> estimate_exponential_decay_ml(const FrameEnergy
   }
 
   const float r2 = static_cast<float>(std::clamp(1.0 - best_sse / ss_tot, 0.0, 1.0));
-  if (r2 < 0.5f) {
+  // Negated, so an unusable fit is rejected rather than accepted: std::clamp does
+  // not launder a NaN, and a bare `< 0.5f` is false for one.
+  if (!(r2 >= 0.5f)) {
     return std::nullopt;
   }
 
@@ -276,9 +280,14 @@ std::optional<BlindRt60Estimate> estimate_exponential_decay_ml(const FrameEnergy
 BlindRt60Estimate aggregate_decay_candidates(std::vector<DecayEstimateCandidate> candidates) {
   candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
                                   [](const DecayEstimateCandidate& candidate) {
+                                    // Every field needs the finiteness clause, not just
+                                    // rt60: the score orders the sort below and feeds the
+                                    // histogram, so a NaN there reaches rt60 anyway.
                                     return !std::isfinite(candidate.estimate.rt60) ||
                                            candidate.estimate.rt60 <= 0.0f ||
+                                           !std::isfinite(candidate.estimate.confidence) ||
                                            candidate.estimate.confidence <= 0.0f ||
+                                           !std::isfinite(candidate.score) ||
                                            candidate.score <= 0.0f;
                                   }),
                    candidates.end());
