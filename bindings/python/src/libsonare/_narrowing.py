@@ -107,3 +107,39 @@ def _narrow_float(value: object, name: str) -> float:
 def _float_narrowing_error(name: str) -> str:
     """Word one refusal for the float half, as :func:`_narrowing_error` does for ints."""
     return f"{name} must be a finite number within [-{_FLOAT32_MAX:g}, {_FLOAT32_MAX:g}]"
+
+
+def _narrow_double(value: object, name: str) -> float:
+    """Return ``value`` as a plain ``float``, or refuse what ``c_double`` would change.
+
+    The double half of the family. A Python float IS an IEEE double, so unlike
+    :func:`_narrow_float` there is no range to check — ``c_double`` cannot
+    saturate a value that already came from one. What it does not refuse is a
+    NaN or an infinity, which passes into the core unchanged and then reads as
+    whatever that field's unspecified case happens to be. That is the single
+    reason this exists, and it is why the error names finiteness rather than a
+    range.
+
+    An ``int`` too large for a double raises ``OverflowError`` inside ``float``
+    and is refused with the same message; ``bool`` is refused rather than read
+    as 0/1, for the reason :func:`_narrow_int` gives.
+
+    Args:
+        value: Caller-supplied number.
+        name: Field or argument name, named in the error message.
+
+    Returns:
+        The value as a plain ``float``.
+
+    Raises:
+        SonareValueError: If ``value`` is not a number, or is not finite.
+    """
+    if not isinstance(value, bool) and isinstance(value, SupportsFloat):
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            pass
+        else:
+            if math.isfinite(number):
+                return number
+    raise SonareValueError(f"{name} must be a finite number")

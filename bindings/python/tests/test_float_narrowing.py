@@ -224,3 +224,42 @@ def mixer_scene():
         yield mixer
     finally:
         mixer.close()
+
+
+def test_a_non_finite_double_argument_is_refused_by_name() -> None:
+    """The two ``c_double`` arguments, which had no narrowing path at all.
+
+    Both sat in a bare ``ctypes.c_double(...)`` while every sibling argument on
+    the same call was narrowed, because the family had no double half to route
+    them through. A Python float is already an IEEE double, so the missing
+    guard was never about range -- it was that a NaN or an infinity reached the
+    core unexamined.
+
+    Measured, and it is why this case does not assert the float32/double
+    distinction: the core's own ``ppq`` domain is far inside the float32 range
+    (1e6 is accepted, 3.5e38 is refused by the core with INVALID_PARAMETER), so
+    no value distinguishes a double narrower from a float32 one here. The
+    observable change at these two sites is the finiteness refusal, and the
+    type match is for the conversion's own correctness rather than for reach.
+    """
+    events = [ls.Project.midi_cc(0.0, 0, 2, 74, 60), ls.Project.midi_cc(0.1, 0, 2, 74, 70)]
+    binding = ls.Project.midi_cc_learn(events, 77)
+    assert binding is not None
+    # Positive control: the argument under test reaches the core and is used.
+    assert ls.Project.midi_param_to_cc([binding], 77, 0.25, 0, 480.0) is not None
+    for value in NON_FINITE:
+        _refuses(
+            "ppq",
+            ("param_id", "unit_value", "group"),
+            ls.Project.midi_param_to_cc,
+            [binding],
+            77,
+            0.25,
+            0,
+            value,
+        )
+
+    with ls.StreamingRetune(semitones=2.0, mix=1.0) as retune:
+        retune.prepare(float(SAMPLE_RATE), 256)  # positive control
+        for value in NON_FINITE:
+            _refuses("sample_rate", ("max_block_size",), retune.prepare, value, 256)

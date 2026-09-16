@@ -23,6 +23,7 @@ from ._errors import SonareValueError as SonareValueError
 from ._ffi import *  # noqa: F403
 from ._narrowing import _FLOAT32_MAX as _FLOAT32_MAX
 from ._narrowing import _float_narrowing_error as _float_narrowing_error
+from ._narrowing import _narrow_double as _narrow_double
 from ._narrowing import _narrow_float as _narrow_float
 from ._narrowing import _narrow_int as _narrow_int
 from ._narrowing import _narrowing_error as _narrowing_error
@@ -586,6 +587,11 @@ def _to_c_size_t(value: object, name: str) -> ctypes.c_size_t:
 def _to_c_float(value: object, name: str) -> ctypes.c_float:
     """Narrow a caller-supplied number onto a C ``float``; see :func:`_narrow_float`."""
     return ctypes.c_float(_narrow_float(value, name))
+
+
+def _to_c_double(value: object, name: str) -> ctypes.c_double:
+    """Narrow a caller-supplied number onto a C ``double``; see :func:`_narrow_double`."""
+    return ctypes.c_double(_narrow_double(value, name))
 
 
 _PAN_MODE_NAMES = {

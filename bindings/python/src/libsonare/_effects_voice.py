@@ -31,6 +31,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _out_float_array,
+    _to_c_double,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -667,7 +668,7 @@ class StreamingRetune:
         _check(
             self._lib.sonare_streaming_retune_prepare(
                 self._handle,
-                ctypes.c_double(sample_rate),
+                _to_c_double(sample_rate, "sample_rate"),
                 _to_c_int(max_block_size, "max_block_size"),
             )
         )

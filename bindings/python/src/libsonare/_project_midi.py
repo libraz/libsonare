@@ -32,6 +32,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
+    _to_c_double,
     _to_c_float,
     _to_c_int,
     _to_c_size_t,
@@ -633,7 +634,7 @@ class _ProjectMidiMixin:
             _to_c_uint32(param_id, "param_id"),
             _to_c_float(unit_value, "unit_value"),
             _to_c_uint8(group, "group"),
-            ctypes.c_double(float(ppq)),
+            _to_c_double(ppq, "ppq"),
             ctypes.byref(out_event),
         )
         if rc == SONARE_ERROR_INVALID_STATE:
