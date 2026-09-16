@@ -337,3 +337,80 @@ TEST_CASE("clamp does not launder a non-finite value", "[math_utils]") {
   REQUIRE(clamp(0.25f, 0.0f, 1.0f) == 0.25f);
   REQUIRE(clamp(3, 0, 10) == 3);
 }
+
+// Both functions copy into a buffer and std::sort it, and a non-finite breaks the
+// strict weak ordering that sort requires -- undefined behaviour rather than a
+// wrong answer. The sibling median in the harmonic/percussive separator already
+// substituted for this reason; these two did not.
+TEST_CASE("median and percentile sort a substituted buffer", "[math_utils][edge]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  SECTION("a non-finite entry becomes silence and the order is well defined") {
+    // The buffer has to be long enough for a broken ordering to move ranks: on
+    // three elements std::sort takes its small-input path and lands on the same
+    // answer with and without the substitution, so such a case asserts nothing.
+    std::vector<float> values;
+    for (int i = 0; i < 32; ++i) values.push_back(static_cast<float>(32 - i));
+    values[7] = nan;
+    REQUIRE_THAT(median(values.data(), values.size()), WithinAbs(15.5f, 1e-6f));
+
+    values[2] = -inf;
+    REQUIRE_THAT(median(values.data(), values.size()), WithinAbs(14.5f, 1e-6f));
+  }
+
+  SECTION("the control: writing the substitution out by hand gives the same answer") {
+    std::vector<float> values;
+    for (int i = 0; i < 32; ++i) values.push_back(static_cast<float>(32 - i));
+    values[7] = 0.0f;
+    REQUIRE_THAT(median(values.data(), values.size()), WithinAbs(15.5f, 1e-6f));
+
+    values[2] = 0.0f;
+    REQUIRE_THAT(median(values.data(), values.size()), WithinAbs(14.5f, 1e-6f));
+  }
+
+  SECTION("percentile resolves its buffer the same way") {
+    // {1, 2, 3, 4, +inf} resolves to {1, 2, 3, 4, 0}; the sorted ranks are
+    // {0, 1, 2, 3, 4}, so the median rank is 2 and the top rank is 4.
+    std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f, inf};
+    REQUIRE_THAT(percentile(data.data(), data.size(), 50.0f), WithinAbs(2.0f, 1e-6f));
+    REQUIRE_THAT(percentile(data.data(), data.size(), 100.0f), WithinAbs(4.0f, 1e-6f));
+  }
+
+  SECTION("the caller's buffer is not modified") {
+    std::vector<float> data = {3.0f, 1.0f, nan};
+    (void)median(data.data(), data.size());
+    REQUIRE(data[0] == 3.0f);
+    REQUIRE(std::isnan(data[2]));
+  }
+}
+
+// std::clamp returns its own argument for a NaN -- the case the neighbouring
+// out-of-range test does not reach, because -5 and 150 are the two values the
+// clamp can actually act on. The resulting rank is NaN and its cast to size_t
+// is an out-of-bounds index, so the refusal has to come before the arithmetic.
+// An infinity is not in that set: it orders normally, so the clamp bounds it and
+// it stays the documented out-of-range case rather than a refusal.
+TEST_CASE("a NaN percentile is refused while an infinity still clamps", "[math_utils][edge]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+  const std::vector<float> sorted = data;
+
+  REQUIRE_THROWS_AS(percentile(data.data(), data.size(), nan), SonareException);
+  REQUIRE_THROWS_AS(percentile_sorted(sorted, std::nan("")), SonareException);
+
+  // +/-inf clamp to the ends exactly as 150 and -5 do in the case above.
+  REQUIRE_THAT(percentile(data.data(), data.size(), inf), WithinAbs(5.0f, 1e-6f));
+  REQUIRE_THAT(percentile(data.data(), data.size(), -inf), WithinAbs(1.0f, 1e-6f));
+
+  // The control: a finite p on the same buffers still answers, so the refusal is
+  // the NaN one and not a blanket rejection.
+  REQUIRE_THAT(percentile(data.data(), data.size(), 50.0f), WithinAbs(3.0f, 1e-6f));
+  REQUIRE_THAT(static_cast<float>(percentile_sorted(sorted, 0.5)), WithinAbs(3.0f, 1e-6f));
+
+  // An empty distribution is answered before the percentile is read at all, so
+  // the existing "0 if empty" contract is not routed through the new refusal.
+  const std::vector<float> empty;
+  REQUIRE(percentile_sorted(empty, std::nan("")) == 0.0);
+}

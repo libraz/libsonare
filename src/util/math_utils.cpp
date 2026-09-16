@@ -12,6 +12,7 @@
 #include "core/db_convert.h"
 #include "core/fft.h"
 #include "util/exception.h"
+#include "util/non_finite_sample.h"
 
 namespace sonare {
 
@@ -62,6 +63,8 @@ float median(const float* data, size_t size) {
   if (size == 0) return 0.0f;
 
   std::vector<float> sorted(data, data + size);
+  // std::sort needs a strict weak ordering, which a non-finite breaks.
+  (void)resolve_non_finite_run(SampleDestination::kOrderedContainer, sorted.data(), sorted.size());
   std::sort(sorted.begin(), sorted.end());
 
   if (size % 2 == 0) {
@@ -123,6 +126,13 @@ std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, si
 
 double percentile_sorted(const std::vector<float>& sorted, double percentile) {
   if (sorted.empty()) return 0.0;
+  // std::clamp returns its own argument for a NaN, so the rank below would be NaN
+  // and its cast to size_t an out-of-bounds index. An infinity is ordered, so the
+  // clamp bounds it as the documented out-of-range case; only a NaN is refused.
+  if (std::isnan(percentile)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "percentile_sorted: percentile must not be NaN");
+  }
   const double position = std::clamp(percentile, 0.0, 1.0) * static_cast<double>(sorted.size() - 1);
   const size_t low = static_cast<size_t>(std::floor(position));
   const size_t high = static_cast<size_t>(std::ceil(position));
@@ -135,6 +145,8 @@ float percentile(const float* data, size_t size, float p) {
   if (size == 0) return 0.0f;
 
   std::vector<float> sorted(data, data + size);
+  // std::sort needs a strict weak ordering, which a non-finite breaks.
+  (void)resolve_non_finite_run(SampleDestination::kOrderedContainer, sorted.data(), sorted.size());
   std::sort(sorted.begin(), sorted.end());
 
   // Clamp the requested percentile to [0, 100]. Out-of-range p would scale to a
