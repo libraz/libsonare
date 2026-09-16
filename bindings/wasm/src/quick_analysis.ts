@@ -575,9 +575,11 @@ export function analyzeImpulseResponse(
 ): AcousticResult {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nOctaveBands, minDecayDb } : samples;
-  if (request.minDecayDb === null) {
-    throw new TypeError('analyzeImpulseResponse: minDecayDb must be a finite number');
-  }
+  // Only `undefined` takes the default. `null` falls through to
+  // assertFiniteScalar, which refuses it with the same wording as any other
+  // non-finite value -- Number.isFinite(null) is false, so the case needs no
+  // branch of its own, and the one that was here answered it with a different
+  // error class than the check three lines down.
   const resolvedMinDecayDb = request.minDecayDb === undefined ? 30.0 : request.minDecayDb;
   assertFiniteScalar('analyzeImpulseResponse', resolvedMinDecayDb, 'minDecayDb');
   if (resolvedMinDecayDb <= 0) {
