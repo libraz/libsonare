@@ -287,6 +287,7 @@ class StreamAnalyzerWrapper {
     out.set("droppedOutputFrames", s.dropped_output_frames);
     out.set("droppedChordProgressionEntries", s.dropped_chord_progression_entries);
     out.set("droppedBarProgressionEntries", s.dropped_bar_progression_entries);
+    out.set("nonFiniteDiscardBlocks", s.non_finite_discard_blocks);
 
     val estimate = val::object();
     estimate.set("bpm", s.estimate.bpm);

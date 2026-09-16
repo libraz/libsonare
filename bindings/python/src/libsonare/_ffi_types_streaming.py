@@ -368,6 +368,7 @@ class SonareStreamStats(CStruct):
         ("updated", ctypes.c_int32),
         ("dropped_chord_progression_entries", ctypes.c_size_t),
         ("dropped_bar_progression_entries", ctypes.c_size_t),
+        ("non_finite_discard_blocks", ctypes.c_size_t),
     ]
 
 

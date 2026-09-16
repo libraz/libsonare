@@ -204,6 +204,7 @@ export class StreamAnalyzer {
       droppedOutputFrames: s.droppedOutputFrames,
       droppedChordProgressionEntries: s.droppedChordProgressionEntries,
       droppedBarProgressionEntries: s.droppedBarProgressionEntries,
+      nonFiniteDiscardBlocks: s.nonFiniteDiscardBlocks,
       estimate: {
         bpm: s.estimate.bpm,
         bpmConfidence: s.estimate.bpmConfidence,

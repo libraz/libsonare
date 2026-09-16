@@ -2392,6 +2392,7 @@ class StreamStats:
     dropped_output_frames: int
     dropped_chord_progression_entries: int
     dropped_bar_progression_entries: int
+    non_finite_discard_blocks: int
     bpm: float
     bpm_confidence: float
     bpm_candidate_count: int
@@ -2423,6 +2424,7 @@ class StreamStats:
         dropped_output_frames: int,
         dropped_chord_progression_entries: int,
         dropped_bar_progression_entries: int,
+        non_finite_discard_blocks: int,
         bpm: float,
         bpm_confidence: float,
         bpm_candidate_count: int,

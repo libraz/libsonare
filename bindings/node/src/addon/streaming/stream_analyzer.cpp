@@ -445,6 +445,8 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
           Napi::Number::New(env, static_cast<double>(s.dropped_chord_progression_entries)));
   out.Set("droppedBarProgressionEntries",
           Napi::Number::New(env, static_cast<double>(s.dropped_bar_progression_entries)));
+  out.Set("nonFiniteDiscardBlocks",
+          Napi::Number::New(env, static_cast<double>(s.non_finite_discard_blocks)));
 
   const sonare::ProgressiveEstimate& est = s.estimate;
   Napi::Object estimate = Napi::Object::New(env);

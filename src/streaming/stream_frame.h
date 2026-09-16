@@ -128,7 +128,12 @@ struct AnalyzerStats {
   size_t dropped_output_frames = 0;  ///< New output frames dropped at the pending-frame limit
   size_t dropped_chord_progression_entries = 0;  ///< Chord changes dropped at the history cap
   size_t dropped_bar_progression_entries = 0;    ///< Bar chords dropped at the history cap
-  ProgressiveEstimate estimate;                  ///< Current progressive estimate
+  /// Blocks in which a non-finite input sample was replaced before it could
+  /// reach the analyzer's recursive state. One per process() call, never per
+  /// sample. Unlike the drops above, nothing is lost from the output: the
+  /// estimates simply stop describing the input, and this is the only report.
+  size_t non_finite_discard_blocks = 0;
+  ProgressiveEstimate estimate;  ///< Current progressive estimate
 };
 
 /// @brief Frame buffer in Structure of Arrays format.

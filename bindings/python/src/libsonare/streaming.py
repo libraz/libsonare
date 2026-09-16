@@ -482,6 +482,7 @@ def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
         dropped_output_frames=int(raw.dropped_output_frames),
         dropped_chord_progression_entries=int(raw.dropped_chord_progression_entries),
         dropped_bar_progression_entries=int(raw.dropped_bar_progression_entries),
+        non_finite_discard_blocks=int(raw.non_finite_discard_blocks),
         bpm=float(raw.bpm),
         bpm_confidence=float(raw.bpm_confidence),
         bpm_candidate_count=int(raw.bpm_candidate_count),

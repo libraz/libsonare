@@ -568,3 +568,42 @@ def test_color_saturation_stages_engage_only_when_meaningful() -> None:
 
 def _all_finite(values: list[float]) -> bool:
     return all(math.isfinite(v) for v in values)
+
+
+def test_stream_analyzer_counts_a_call_whose_input_it_scrubbed() -> None:
+    """One process() call adds one, however many samples in it were bad.
+
+    The analyzer replaces a non-finite input sample before it reaches the STFT
+    and the onset/chroma histories, so nothing is missing from the output and
+    every estimate is produced as usual -- this count is the only report that
+    they stopped describing the input.
+    """
+    from libsonare import StreamAnalyzer, StreamConfig
+
+    config = StreamConfig(sample_rate=8000, n_fft=32, hop_length=32, n_mels=8)
+    with StreamAnalyzer(config) as analyzer:
+        clean = [0.5 * math.sin(2 * math.pi * 220 * i / 8000) for i in range(256)]
+        analyzer.process(clean)
+        # The stream really was analyzed, so the zero below is a measurement
+        # rather than the absence of one.
+        assert analyzer.stats().total_frames > 0
+        assert analyzer.stats().non_finite_discard_blocks == 0
+
+        # Half the block is non-finite, with both infinities and NaN present. A
+        # count that followed the samples rather than the call would land far
+        # from one; that is what this asserts.
+        poisoned = list(clean)
+        for i in range(0, len(poisoned), 2):
+            poisoned[i] = float("nan") if i % 4 == 0 else float("inf")
+        poisoned[1] = float("-inf")
+        analyzer.process(poisoned)
+        assert analyzer.stats().non_finite_discard_blocks == 1
+
+        # A clean call adds nothing; a second bad one does, so it is not stuck.
+        analyzer.process(clean)
+        assert analyzer.stats().non_finite_discard_blocks == 1
+        analyzer.process(poisoned)
+        assert analyzer.stats().non_finite_discard_blocks == 2
+
+        analyzer.reset()
+        assert analyzer.stats().non_finite_discard_blocks == 0

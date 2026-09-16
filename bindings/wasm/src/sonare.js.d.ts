@@ -3488,6 +3488,7 @@ export interface WasmAnalyzerStats {
   droppedOutputFrames: number;
   droppedChordProgressionEntries: number;
   droppedBarProgressionEntries: number;
+  nonFiniteDiscardBlocks: number;
   estimate: WasmProgressiveEstimate;
 }
 

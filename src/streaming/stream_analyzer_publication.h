@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "rt/overflow_counter.h"
 #include "streaming/stream_frame.h"
 
 namespace sonare {
@@ -30,6 +31,13 @@ struct StreamAnalyzerPublication {
   std::atomic<uint64_t> output_write_sequence{0};
   uint64_t producer_write_sequence = 0;
   size_t producer_dropped_frames = 0;
+
+  // Blocks in which a non-finite input sample was replaced before it could reach
+  // the analyzer's recursive state. Held here rather than on StreamAnalyzer so
+  // its defaulted move stays defaulted: the counter owns an atomic and is
+  // neither copyable nor movable, and that propagates to any owner holding it by
+  // value.
+  rt::OverflowCounter non_finite_discards;
 
   // Slot ownership is acquired by CAS, so producer and consumer can never
   // touch the same non-atomic snapshot storage. With three slots there is

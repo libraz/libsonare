@@ -361,6 +361,7 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
   out->updated = s.estimate.updated ? 1 : 0;
   out->dropped_chord_progression_entries = s.dropped_chord_progression_entries;
   out->dropped_bar_progression_entries = s.dropped_bar_progression_entries;
+  out->non_finite_discard_blocks = s.non_finite_discard_blocks;
   return SONARE_OK;
   SONARE_C_CATCH
 }

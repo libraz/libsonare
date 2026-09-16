@@ -1709,3 +1709,61 @@ TEST_CASE("StreamAnalyzer keeps a finite bar duration when the tempo drops out",
   REQUIRE(stats.estimate.bar_duration >= shortest_bar - 1.0e-3f);
   REQUIRE(stats.estimate.bar_duration <= longest_bar + 1.0e-3f);
 }
+
+TEST_CASE("StreamAnalyzer counts a call whose input it had to scrub", "[streaming][non_finite]") {
+  StreamConfig config;
+  config.sample_rate = 8000;
+  config.n_fft = 32;
+  config.hop_length = 32;
+  config.n_mels = 8;
+  StreamAnalyzer analyzer(config);
+
+  constexpr size_t kBlock = 256;
+  std::vector<float> clean(kBlock, 0.0f);
+  for (size_t i = 0; i < kBlock; ++i) {
+    clean[i] = 0.5f * std::sin(2.0f * 3.14159265f * 220.0f * static_cast<float>(i) / 8000.0f);
+  }
+
+  SECTION("a clean call leaves it at zero") {
+    analyzer.process(clean.data(), clean.size());
+    // The stream really was analyzed, so the zero below is a measurement rather
+    // than the absence of one.
+    REQUIRE(analyzer.stats().total_frames > 0);
+    REQUIRE(analyzer.stats().non_finite_discard_blocks == 0u);
+  }
+
+  SECTION("one scrubbed call adds exactly one however many samples were bad") {
+    analyzer.process(clean.data(), clean.size());
+    REQUIRE(analyzer.stats().non_finite_discard_blocks == 0u);
+
+    // Half the block is non-finite and the two infinities differ in sign, so a
+    // count that followed the samples rather than the call would land far from
+    // one. That is the assertion: the published unit is one process() call.
+    std::vector<float> poisoned = clean;
+    for (size_t i = 0; i < kBlock; i += 2) {
+      poisoned[i] = (i % 4 == 0) ? std::numeric_limits<float>::quiet_NaN()
+                                 : std::numeric_limits<float>::infinity();
+    }
+    poisoned[1] = -std::numeric_limits<float>::infinity();
+    analyzer.process(poisoned.data(), poisoned.size());
+    REQUIRE(analyzer.stats().non_finite_discard_blocks == 1u);
+
+    // A second clean call adds nothing: the scrub is not sticky.
+    analyzer.process(clean.data(), clean.size());
+    REQUIRE(analyzer.stats().non_finite_discard_blocks == 1u);
+
+    // A second bad call does add one, so the counter is not saturating at one.
+    analyzer.process(poisoned.data(), poisoned.size());
+    REQUIRE(analyzer.stats().non_finite_discard_blocks == 2u);
+  }
+
+  SECTION("reset clears it with the rest of the segment") {
+    std::vector<float> poisoned = clean;
+    poisoned[0] = std::numeric_limits<float>::quiet_NaN();
+    analyzer.process(poisoned.data(), poisoned.size());
+    REQUIRE(analyzer.stats().non_finite_discard_blocks == 1u);
+
+    analyzer.reset();
+    REQUIRE(analyzer.stats().non_finite_discard_blocks == 0u);
+  }
+}

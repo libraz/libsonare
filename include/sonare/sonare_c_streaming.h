@@ -207,6 +207,19 @@ typedef struct {
                                                exactly one snapshot */
   size_t dropped_chord_progression_entries; /* Oldest chord changes dropped at cap */
   size_t dropped_bar_progression_entries;   /* Oldest bar chords dropped at cap */
+  size_t non_finite_discard_blocks;         /* Blocks in which a non-finite input sample was
+                                               replaced before it could reach the analyzer's
+                                               recursive state. Unlike the drops above nothing
+                                               is missing from the output: every estimate is
+                                               produced as usual and simply stops describing
+                                               the input, so this is the only report that the
+                                               stream was degraded. The unit is one process()
+                                               call, never a sample, so a block carrying a
+                                               thousand NaNs adds one. Cleared by
+                                               sonare_stream_analyzer_reset alongside the drop
+                                               counts, because that call rebuilds the timeline
+                                               and the count describes a segment rather than
+                                               the analyzer. */
 } SonareStreamStats;
 
 /// @brief Fills @p config with real-time defaults (44100 Hz, n_fft 2048, etc.).

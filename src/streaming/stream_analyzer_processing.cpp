@@ -7,6 +7,7 @@
 
 #include "analysis/chord_analyzer.h"
 #include "streaming/stream_analyzer.h"
+#include "streaming/stream_analyzer_publication.h"
 #include "streaming/stream_analyzer_utils.h"
 #include "util/exception.h"
 #include "util/non_finite_sample.h"
@@ -79,7 +80,11 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
   /// (mel, chroma, onset, spectral features) for the rest of the stream. Done
   /// before resampling so corrupted values never enter the resampler's filter
   /// history either. The sanitized copy reuses a persistent scratch buffer.
-  const float* clean_samples = sanitize_into(samples, n_samples, sanitize_buffer_);
+  bool discarded = false;
+  const float* clean_samples = sanitize_into(samples, n_samples, sanitize_buffer_, discarded);
+  /// One bump per call, never per sample: a block carrying a thousand NaNs lost
+  /// its state once, and the number must not depend on how many.
+  if (discarded) publication_->non_finite_discards.bump();
 
   const float* process_samples = clean_samples;
   size_t process_n_samples = n_samples;
@@ -289,12 +294,15 @@ std::array<float, 12> StreamAnalyzer::median_full_chroma(size_t start, size_t co
 }
 
 const float* StreamAnalyzer::sanitize_into(const float* src, size_t n_samples,
-                                           std::vector<float>& dst) {
+                                           std::vector<float>& dst, bool& out_discarded) {
   dst.assign(src, src + n_samples);
   /// The copy feeds the STFT and, through it, the onset and chroma histories the
-  /// analyzer carries between frames. The count is discarded because the
-  /// analyzer exposes no counter to add it to.
-  (void)resolve_non_finite_run(SampleDestination::kRecursiveState, dst.data(), n_samples);
+  /// analyzer carries between frames, so a replacement here is the only thing
+  /// separating a degraded stream from one that merely went quiet.
+  /// The run returns how many SAMPLES it replaced; the caller counts the call,
+  /// so the tally is narrowed to a flag here rather than at the call site.
+  out_discarded =
+      resolve_non_finite_run(SampleDestination::kRecursiveState, dst.data(), n_samples) != 0u;
   return dst.data();
 }
 

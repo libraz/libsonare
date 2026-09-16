@@ -144,6 +144,9 @@ void StreamAnalyzer::reset_publication() noexcept {
   publication_->output_write_sequence.store(0, std::memory_order_relaxed);
   publication_->producer_write_sequence = 0;
   publication_->producer_dropped_frames = 0;
+  /// Cleared with the drop counts rather than carried across: reset() rebuilds
+  /// the timeline itself, so the count describes a segment and not the object.
+  publication_->non_finite_discards.reset();
   publication_->published_total_frames.store(0, std::memory_order_relaxed);
   publication_->published_duration_seconds.store(0.0f, std::memory_order_relaxed);
   publication_->published_stats_slot.store(0, std::memory_order_relaxed);
@@ -159,6 +162,7 @@ void StreamAnalyzer::reset_publication() noexcept {
     slot.all_pattern_scores_size = 0;
     slot.storage.dropped_chord_progression_entries = 0;
     slot.storage.dropped_bar_progression_entries = 0;
+    slot.storage.non_finite_discard_blocks = 0;
   }
 }
 
@@ -187,6 +191,7 @@ void StreamAnalyzer::publish_stats_snapshot() noexcept {
   snapshot.duration_seconds = static_cast<float>(cumulative_samples_) / config_.sample_rate;
   snapshot.pending_frames = available_frames();
   snapshot.dropped_output_frames = publication_->producer_dropped_frames;
+  snapshot.non_finite_discard_blocks = publication_->non_finite_discards.load();
   /// Mirror of the two scalars frame_count() and current_time() answer with, so
   /// neither has to pin and copy this whole snapshot for one number.
   publication_->published_total_frames.store(snapshot.total_frames, std::memory_order_relaxed);
@@ -524,6 +529,7 @@ AnalyzerStats StreamAnalyzer::stats() const {
   result.dropped_output_frames = snapshot.dropped_output_frames;
   result.dropped_chord_progression_entries = snapshot.dropped_chord_progression_entries;
   result.dropped_bar_progression_entries = snapshot.dropped_bar_progression_entries;
+  result.non_finite_discard_blocks = snapshot.non_finite_discard_blocks;
   copy_progressive_scalars(snapshot.estimate, result.estimate);
   result.estimate.chord_progression.assign(
       snapshot.estimate.chord_progression.begin(),

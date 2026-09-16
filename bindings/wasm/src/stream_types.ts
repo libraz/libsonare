@@ -90,6 +90,19 @@ export interface AnalyzerStats {
   droppedOutputFrames: number;
   droppedChordProgressionEntries: number;
   droppedBarProgressionEntries: number;
+  /**
+   * Blocks in which a non-finite input sample was replaced before it could
+   * reach the analyzer's recursive state.
+   *
+   * Unlike the drop counts above, nothing is missing from the output: every
+   * estimate is produced as usual and simply stops describing the input, so
+   * this is the only report that the stream was degraded. The unit is one
+   * {@link StreamAnalyzer.process} call, never a sample, so a block carrying a
+   * thousand NaNs adds one. Cleared by {@link StreamAnalyzer.reset} alongside
+   * the drop counts, because that call rebuilds the timeline and the count
+   * describes a segment rather than the analyzer.
+   */
+  nonFiniteDiscardBlocks: number;
   estimate: ProgressiveEstimate;
 }
 

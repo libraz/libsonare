@@ -98,6 +98,48 @@ describe('StreamAnalyzer', () => {
       expect(stats.droppedBarProgressionEntries).toBe(0);
       analyzer.delete();
     });
+
+    it('counts a process call whose input it had to scrub, once per call', () => {
+      const analyzer = new StreamAnalyzer({
+        sampleRate: 8000,
+        nFft: 32,
+        hopLength: 32,
+        nMels: 8,
+      });
+      try {
+        const clean = new Float32Array(256);
+        for (let i = 0; i < clean.length; i += 1) {
+          clean[i] = 0.5 * Math.sin((2 * Math.PI * 220 * i) / 8000);
+        }
+        analyzer.process(clean);
+        // The stream really was analyzed, so the zero below is a measurement
+        // rather than the absence of one.
+        expect(analyzer.stats().totalFrames).toBeGreaterThan(0);
+        expect(analyzer.stats().nonFiniteDiscardBlocks).toBe(0);
+
+        // Half the block is non-finite, with both infinities and NaN present: a
+        // count that followed the samples rather than the call would land far
+        // from one, which is what this pins.
+        const poisoned = clean.slice();
+        for (let i = 0; i < poisoned.length; i += 2) {
+          poisoned[i] = i % 4 === 0 ? Number.NaN : Number.POSITIVE_INFINITY;
+        }
+        poisoned[1] = Number.NEGATIVE_INFINITY;
+        analyzer.process(poisoned);
+        expect(analyzer.stats().nonFiniteDiscardBlocks).toBe(1);
+
+        // A clean call adds nothing; a second bad one does, so it is not stuck.
+        analyzer.process(clean);
+        expect(analyzer.stats().nonFiniteDiscardBlocks).toBe(1);
+        analyzer.process(poisoned);
+        expect(analyzer.stats().nonFiniteDiscardBlocks).toBe(2);
+
+        analyzer.reset();
+        expect(analyzer.stats().nonFiniteDiscardBlocks).toBe(0);
+      } finally {
+        analyzer.delete();
+      }
+    });
   });
 
   describe('chord progression', () => {

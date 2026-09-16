@@ -495,7 +495,11 @@ class StreamAnalyzer {
   /// @brief Copies @p n_samples from @p src into @p dst, replacing any NaN/Inf
   ///        with 0. Returns dst.data(). Used to keep one bad input sample from
   ///        poisoning every downstream estimate (FFT, mel, chroma, onset).
-  static const float* sanitize_into(const float* src, size_t n_samples, std::vector<float>& dst);
+  /// @param out_discarded Set when at least one sample was replaced. The caller
+  ///   counts the call rather than the samples, so this is a flag and not a
+  ///   tally: the published unit is one processed block.
+  static const float* sanitize_into(const float* src, size_t n_samples, std::vector<float>& dst,
+                                    bool& out_discarded);
   void process_single_frame(const float* frame_start, size_t sample_offset, StreamFrame& frame);
   void compute_stft(const float* frame_start);
   void compute_mel();

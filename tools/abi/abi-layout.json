@@ -8317,9 +8317,15 @@
         "name": "dropped_bar_progression_entries",
         "offset": 256,
         "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "non_finite_discard_blocks",
+        "offset": 264,
+        "size": 8
       }
     ],
-    "size": 264
+    "size": 272
   },
   "SonareStreamingPlatform": {
     "align": 8,
