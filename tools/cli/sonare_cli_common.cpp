@@ -66,6 +66,9 @@ Audio load_reference_audio(const CliArgs& args, int expected_sample_rate, size_t
   if (samples.size() != expected_size) {
     throw std::invalid_argument("reference length must match input length");
   }
+  // The offline-input policy Audio::from_file applies to the main input. This
+  // pairing skips it otherwise, from_vector checking only the sample rate.
+  validate_offline_audio_input(samples.data(), samples.size(), sample_rate);
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 
@@ -78,6 +81,8 @@ Audio load_reference_audio_any_length(const CliArgs& args, int expected_sample_r
   if (sample_rate != expected_sample_rate) {
     throw std::invalid_argument("reference sample rate must match input sample rate");
   }
+  // Same policy as the length-matched loader above.
+  validate_offline_audio_input(samples.data(), samples.size(), sample_rate);
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 
