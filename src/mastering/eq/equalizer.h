@@ -164,7 +164,9 @@ class EqualizerProcessor : public rt::ProcessorBase {
   // Applies the recursive-cell rule to the detector and gain state that survives
   // a block. O(bands x channels) and independent of block size, so the
   // per-sample input scan the realtime contract avoids is not reintroduced.
-  void discard_non_finite_dynamic_state() noexcept;
+  /// @return true when any detector or gain cell was returned to its post-reset
+  ///         value.
+  bool discard_non_finite_dynamic_state() noexcept;
   void update_iir_bands_preserving_state(int num_samples = 0);
   void rebuild_iir(int num_samples = 0);
   static EqBand backend_band(EqBand band, PhaseMode global_phase, float gain_scale);

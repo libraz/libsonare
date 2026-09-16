@@ -134,14 +134,15 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
   // only ever sees finite input. A configuration route is open (range_db is not
   // checked for finiteness) but that is a validation question and nothing here
   // covers it. A measured absence on the signals tried, not a proof of one.
-  discard_if_non_finite(gain_, 1.0f);
+  bool discarded = discard_if_non_finite(gain_, 1.0f);
   // The two taps of a one-pole section are meaningful only together. This pair
   // does strand: a non-finite tap makes the detector read silence from then on,
   // so the gate stays shut for the rest of the handle with every output sample
   // finite -- which is why the test reads a value rather than finiteness.
   for (size_t ch = 0; ch < hpf_x1_.size(); ++ch) {
-    discard_group_if_non_finite(hpf_x1_[ch], hpf_y1_[ch]);
+    discarded |= discard_group_if_non_finite(hpf_x1_[ch], hpf_y1_[ch]);
   }
+  if (discarded) note_non_finite_discard();
 }
 
 void Gate::reset() {

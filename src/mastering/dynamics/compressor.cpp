@@ -219,13 +219,14 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
   // not surface as a non-finite output: the fold that derives the reduction
   // answers false for a non-finite level and returns no reduction at all, so the
   // owner silently stops compressing for the rest of the handle.
-  discard_if_non_finite(rms_state_, 0.0f);
-  discard_if_non_finite(pdr_state_db_, 0.0f);
+  bool discarded = discard_if_non_finite(rms_state_, 0.0f);
+  discarded |= discard_if_non_finite(pdr_state_db_, 0.0f);
   // The two taps of a one-pole section are meaningful only together.
   for (size_t ch = 0; ch < hpf_x1_.size(); ++ch) {
-    discard_group_if_non_finite(hpf_x1_[ch], hpf_y1_[ch]);
+    discarded |= discard_group_if_non_finite(hpf_x1_[ch], hpf_y1_[ch]);
   }
-  reduction_smoother_.discard_if_non_finite();
+  discarded |= reduction_smoother_.discard_if_non_finite();
+  if (discarded) note_non_finite_discard();
 
   last_gain_reduction_db_ = max_reduction;
 }

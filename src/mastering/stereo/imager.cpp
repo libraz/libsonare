@@ -92,9 +92,11 @@ void Imager::process(float* const* channels, int num_channels, int num_samples) 
   // Two taps per allpass stage, once per block. The decorrelator runs whether or
   // not its output is mixed in, so a stranded stage waits silently until the
   // width and amount that reveal it are set.
+  bool discarded = false;
   for (auto& stage : allpass_) {
-    discard_group_if_non_finite(stage.x1, stage.y1);
+    discarded |= discard_group_if_non_finite(stage.x1, stage.y1);
   }
+  if (discarded) note_non_finite_discard();
 }
 
 void Imager::reset() {

@@ -68,6 +68,7 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
   const DeEsserConfig& cfg = *adopt_snapshot_for_block();
 
   float max_reduction = 0.0f;
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     auto& filter = bandpass_[static_cast<size_t>(ch)];
     auto& filter2 = bandpass2_[static_cast<size_t>(ch)];
@@ -91,9 +92,10 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
     }
     // Five floats per channel, once per block. The two bandpass sections feed
     // the follower, so one non-finite section makes the whole detector unusable.
-    discard_group_if_non_finite(filter.z1, filter.z2, filter2.z1, filter2.z2);
-    follower.discard_if_non_finite();
+    discarded |= discard_group_if_non_finite(filter.z1, filter.z2, filter2.z1, filter2.z2);
+    discarded |= follower.discard_if_non_finite();
   }
+  if (discarded) note_non_finite_discard();
 
   last_gain_reduction_db_ = max_reduction;
 }

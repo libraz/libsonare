@@ -85,6 +85,7 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
                           "num_channels exceeds prepared ParametricEq state");
   }
 
+  bool discarded = false;
   for (size_t band_index = 0; band_index < kMaxBands; ++band_index) {
     if (!bands_[band_index].enabled) {
       continue;
@@ -103,9 +104,10 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
         samples[i] = y;
       }
       // Two floats per section per channel, once per block.
-      discard_group_if_non_finite(state.z1, state.z2);
+      discarded |= discard_group_if_non_finite(state.z1, state.z2);
     }
   }
+  if (discarded) note_non_finite_discard();
 }
 
 void ParametricEq::reset() {

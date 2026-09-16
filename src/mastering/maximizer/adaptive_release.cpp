@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
@@ -72,6 +73,10 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
   }
 
   last_gain_reduction_db_ = 0.0f;
+  bool discarded = false;
+  // Read outside the control-interval loop: the limiter runs once per chunk, and
+  // the unit is one process() call.
+  const uint32_t limiter_discards = limiter_.non_finite_discard_count();
   int offset = 0;
   while (offset < num_samples) {
     if (control_phase_ == 0) {
@@ -85,7 +90,7 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
     const int count = std::min(num_samples - offset, kControlIntervalSamples - control_phase_);
     // The envelopes read the input, so they must run before the limiter
     // overwrites the buffer in place.
-    advance_envelopes(channels, num_channels, offset, count);
+    discarded |= advance_envelopes(channels, num_channels, offset, count);
     for (int ch = 0; ch < num_channels; ++ch) {
       chunk_channels_[static_cast<std::size_t>(ch)] = channels[ch] + offset;
     }
@@ -94,6 +99,8 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
     control_phase_ = (control_phase_ + count) % kControlIntervalSamples;
     offset += count;
   }
+  discarded |= limiter_.non_finite_discard_count() != limiter_discards;
+  if (discarded) note_non_finite_discard();
 }
 
 void AdaptiveRelease::reset() {
@@ -178,7 +185,7 @@ void AdaptiveRelease::update_envelope_coefficients() noexcept {
       time_to_attack_release_rate_f(sample_rate_, config_.release_smoothing_ms);
 }
 
-void AdaptiveRelease::advance_envelopes(float* const* channels, int num_channels, int offset,
+bool AdaptiveRelease::advance_envelopes(float* const* channels, int num_channels, int offset,
                                         int count) noexcept {
   const float inv_channels = 1.0f / static_cast<float>(num_channels);
   // Map crest factor onto [0, 1] then onto [max_release, min_release]:
@@ -215,8 +222,9 @@ void AdaptiveRelease::advance_envelopes(float* const* channels, int num_channels
   // std::max fold drops a NaN but keeps an infinity, which is the value an
   // envelope over |x| actually acquires; the two halves of the crest detector
   // rest together at silence, the release where prepare() seeds it.
-  discard_group_if_non_finite(peak_envelope_, rms_square_envelope_);
-  discard_if_non_finite(current_release_ms_, config_.min_release_ms);
+  bool discarded = discard_group_if_non_finite(peak_envelope_, rms_square_envelope_);
+  discarded |= discard_if_non_finite(current_release_ms_, config_.min_release_ms);
+  return discarded;
 }
 
 }  // namespace sonare::mastering::maximizer

@@ -74,6 +74,7 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
   }
 
   if (config_.oversample_factor <= 1) {
+    bool discarded = false;
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& state = states_[static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
@@ -83,8 +84,9 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
         gap += gap_loss_coeff_ * (y - gap);
         channels[ch][i] = y * (1.0f - config_.gap_loss) + gap * config_.gap_loss;
       }
-      discard_non_finite_state(static_cast<size_t>(ch));
+      discarded |= discard_non_finite_state(static_cast<size_t>(ch));
     }
+    if (discarded) note_non_finite_discard();
     return;
   }
 
@@ -98,6 +100,7 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_samples exceeds prepared Tape oversampling scratch");
   }
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     auto& state = states_[static_cast<size_t>(ch)];
     auto& oversampler_state = oversampler_states_[static_cast<size_t>(ch)];
@@ -115,18 +118,20 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
       gap += gap_loss_coeff_ * (y - gap);
       channels[ch][i] = y * (1.0f - config_.gap_loss) + gap * config_.gap_loss;
     }
-    discard_non_finite_state(static_cast<size_t>(ch));
+    discarded |= discard_non_finite_state(static_cast<size_t>(ch));
   }
+  if (discarded) note_non_finite_discard();
 }
 
-void Tape::discard_non_finite_state(size_t channel) noexcept {
+bool Tape::discard_non_finite_state(size_t channel) noexcept {
   // Five floats per channel, once per block. The oversampler's FIR history is a
   // delay line rather than a recursive cell, so it flushes on its own.
   auto& magnetics = states_[channel];
-  discard_group_if_non_finite(magnetics.magnetization, magnetics.previous_field);
+  bool discarded = discard_group_if_non_finite(magnetics.magnetization, magnetics.previous_field);
   auto& filter = head_bump_[channel];
-  discard_group_if_non_finite(filter.z1, filter.z2);
-  sonare::discard_if_non_finite(gap_state_[channel], 0.0f);
+  discarded |= discard_group_if_non_finite(filter.z1, filter.z2);
+  discarded |= sonare::discard_if_non_finite(gap_state_[channel], 0.0f);
+  return discarded;
 }
 
 void Tape::reset() {

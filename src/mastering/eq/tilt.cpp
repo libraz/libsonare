@@ -1,6 +1,7 @@
 #include "mastering/eq/tilt.h"
 
 #include <algorithm>
+#include <cstdint>
 
 #include "util/constants.h"
 #include "util/exception.h"
@@ -24,7 +25,9 @@ void TiltEq::prepare(double sample_rate, int max_block_size) {
 
 void TiltEq::process(float* const* channels, int num_channels, int num_samples) {
   ensure_prepared(prepared_, "TiltEq");
+  const uint32_t eq_discards = eq_.non_finite_discard_count();
   eq_.process(channels, num_channels, num_samples);
+  if (eq_.non_finite_discard_count() != eq_discards) note_non_finite_discard();
 }
 
 void TiltEq::reset() { eq_.reset(); }

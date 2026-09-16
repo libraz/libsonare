@@ -84,14 +84,16 @@ void LowEndFocus::process(float* const* channels, int num_channels, int num_samp
   // Every cell carried between blocks, once per block. The low-pass feeds both
   // the subharmonic divider and the transient detector, so one non-finite cell
   // strands the channel; all three rest at silence.
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     const auto index = static_cast<size_t>(ch);
     // The polarity detector reads the previous low-pass value against the
     // current one, so the pair is meaningful only together.
-    discard_group_if_non_finite(low_state_[index], previous_low_[index]);
-    discard_if_non_finite(sub_state_[index], 0.0f);
-    discard_if_non_finite(transient_state_[index], 0.0f);
+    discarded |= discard_group_if_non_finite(low_state_[index], previous_low_[index]);
+    discarded |= discard_if_non_finite(sub_state_[index], 0.0f);
+    discarded |= discard_if_non_finite(transient_state_[index], 0.0f);
   }
+  if (discarded) note_non_finite_discard();
 }
 
 void LowEndFocus::reset() {

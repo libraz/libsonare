@@ -1,6 +1,7 @@
 #include "mastering/saturation/multiband_exciter.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <utility>
 
 #include "mastering/dynamics/channel_limits.h"
@@ -54,6 +55,16 @@ void MultibandExciter::process(float* const* channels, int num_channels, int num
   validate_channel_buffers(channels, num_channels);
 
   crossover_.ensure_scratch(scratch_, num_channels, num_samples);
+  // Summed over the crossover and every band, read once on either side of the
+  // whole block: the sum detects that some member moved without standing in for
+  // this processor's own count, which is one per process() call.
+  const auto member_discards = [this]() noexcept -> uint64_t {
+    uint64_t total = crossover_.non_finite_discard_count();
+    for (const auto& exciter : exciters_) total += exciter.non_finite_discard_count();
+    return total;
+  };
+  const uint64_t member_discards_before = member_discards();
+
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
@@ -68,6 +79,8 @@ void MultibandExciter::process(float* const* channels, int num_channels, int num
       for (int i = 0; i < num_samples; ++i) channels[ch][i] += samples[static_cast<size_t>(i)];
     }
   }
+
+  if (member_discards() != member_discards_before) note_non_finite_discard();
 }
 
 void MultibandExciter::reset() {

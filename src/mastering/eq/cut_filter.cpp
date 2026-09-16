@@ -113,10 +113,13 @@ void CutFilter::process(float* const* channels, int num_channels, int num_sample
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_channels exceeds prepared CutFilter state");
   }
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
-    process_stage(high_pass_sections_, high_pass_states_, channels[ch], ch, num_samples);
-    process_stage(low_pass_sections_, low_pass_states_, channels[ch], ch, num_samples);
+    discarded |=
+        process_stage(high_pass_sections_, high_pass_states_, channels[ch], ch, num_samples);
+    discarded |= process_stage(low_pass_sections_, low_pass_states_, channels[ch], ch, num_samples);
   }
+  if (discarded) note_non_finite_discard();
   if (high_pass_is_brickwall() || low_pass_is_brickwall()) {
     brickwall_.process(channels, num_channels, num_samples);
   }
@@ -261,9 +264,10 @@ bool CutFilter::low_pass_is_brickwall() const noexcept {
   return low_pass_slope_ == CutFilterSlope::Brickwall && low_pass_.enabled;
 }
 
-void CutFilter::process_stage(const std::array<Section, kMaxSections>& sections,
+bool CutFilter::process_stage(const std::array<Section, kMaxSections>& sections,
                               std::array<std::vector<State>, kMaxSections>& states, float* samples,
                               int channel, int num_samples) const {
+  bool discarded = false;
   for (size_t section_index = 0; section_index < kMaxSections; ++section_index) {
     if (!sections[section_index].enabled) {
       continue;
@@ -278,8 +282,9 @@ void CutFilter::process_stage(const std::array<Section, kMaxSections>& sections,
       samples[i] = y;
     }
     // Two floats per section per channel, once per block.
-    discard_group_if_non_finite(state.z1, state.z2);
+    discarded |= discard_group_if_non_finite(state.z1, state.z2);
   }
+  return discarded;
 }
 
 }  // namespace sonare::mastering::eq

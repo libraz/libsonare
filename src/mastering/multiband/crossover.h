@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "rt/biquad_design.h"
+#include "rt/overflow_counter.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::multiband {
@@ -66,6 +67,14 @@ struct CrossoverScratch {
 class Crossover {
  public:
   explicit Crossover(CrossoverConfig config = {});
+
+  /// @brief Blocks in which a filter section was returned to rest because a
+  ///        non-finite sample had reached it. Cumulative since construction.
+  /// @details This class has no processor base to inherit the counter from, so
+  ///   it carries its own. A multiband processor that owns one folds this into
+  ///   its own count, because the sections it splits with are not reachable
+  ///   from outside it.
+  uint32_t non_finite_discard_count() const noexcept { return non_finite_discards_.load(); }
 
   void prepare(double sample_rate, int max_block_size);
   /// Prepare with an explicit upper bound on the number of input channels.
@@ -141,7 +150,8 @@ class Crossover {
   float allpass(float sample, int band_index, int split_index, int channel);
   /// @brief Returns the channel's split and compensation sections to rest when a
   ///        non-finite value has reached them (see util/non_finite_state.h).
-  void discard_non_finite_state(int channel, int splits) noexcept;
+  /// @return true when a section was returned to rest.
+  bool discard_non_finite_state(int channel, int splits) noexcept;
 
   struct SplitChannelState {
     std::vector<Biquad> lowpass;
@@ -174,6 +184,7 @@ class Crossover {
   std::vector<std::vector<size_t>> fir_history_index_;
   std::vector<std::vector<float>> fir_delay_history_;
   std::vector<size_t> fir_delay_index_;
+  rt::OverflowCounter non_finite_discards_;
 };
 
 }  // namespace sonare::mastering::multiband

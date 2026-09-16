@@ -95,6 +95,10 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
   validate_channel_buffers(channels, num_channels);
 
   crossover_.ensure_scratch(scratch_, num_channels, num_samples);
+  // Read as a delta rather than summed: the crossover is driven once per block
+  // here, but a member driven in sub-blocks would contribute several of its own
+  // counts to one of this processor's, and the unit is one process() call.
+  const uint32_t crossover_discards = crossover_.non_finite_discard_count();
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
   if (num_channels >= 2) {
@@ -153,11 +157,14 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
   // Two taps per allpass stage, once per block. The enclosed Crossover returns
   // its own sections; these stages sit after the split, and the bands are summed
   // above, so one stranded stage is enough to ruin the whole output.
+  bool discarded = false;
   for (auto& band_stages : allpass_) {
     for (auto& stage : band_stages) {
-      discard_group_if_non_finite(stage.x1, stage.y1);
+      discarded |= discard_group_if_non_finite(stage.x1, stage.y1);
     }
   }
+  discarded |= crossover_.non_finite_discard_count() != crossover_discards;
+  if (discarded) note_non_finite_discard();
 }
 
 void MultibandImager::reset() {

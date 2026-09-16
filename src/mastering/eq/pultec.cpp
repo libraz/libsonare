@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
@@ -50,11 +51,15 @@ void PultecEq::prepare(double sample_rate, int max_block_size) {
 
 void PultecEq::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
+  const uint32_t eq_discards = eq_.non_finite_discard_count();
   eq_.process(channels, num_channels, num_samples);
+  bool discarded = eq_.non_finite_discard_count() != eq_discards;
   if (component_model_ == PultecComponentModel::CurveOnly && output_drive_ <= 0.0f) {
+    if (discarded) note_non_finite_discard();
     return;
   }
   if (num_channels <= 0 || num_samples <= 0 || channels == nullptr) {
+    if (discarded) note_non_finite_discard();
     return;
   }
   prepare_component_state(num_channels);
@@ -66,9 +71,10 @@ void PultecEq::process(float* const* channels, int num_channels, int num_samples
     // Two charges per channel, once per block. The enclosed ParametricEq returns
     // its own sections; these sit after it and rest discharged.
     auto& state = component_state_[static_cast<size_t>(ch)];
-    discard_if_non_finite(state.low_charge, 0.0f);
-    discard_if_non_finite(state.high_charge, 0.0f);
+    discarded |= discard_if_non_finite(state.low_charge, 0.0f);
+    discarded |= discard_if_non_finite(state.high_charge, 0.0f);
   }
+  if (discarded) note_non_finite_discard();
 }
 
 void PultecEq::reset() {

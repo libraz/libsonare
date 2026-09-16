@@ -55,9 +55,11 @@ void MonoMaker::process(float* const* channels, int num_channels, int num_sample
 
   // Two taps per one-pole section, once per block. The sections are cascaded, so
   // a stranded one strands every section below it as well.
+  bool discarded = false;
   for (size_t stage = 0; stage < highpass_input_.size(); ++stage) {
-    discard_group_if_non_finite(highpass_input_[stage], highpass_output_[stage]);
+    discarded |= discard_group_if_non_finite(highpass_input_[stage], highpass_output_[stage]);
   }
+  if (discarded) note_non_finite_discard();
 }
 
 void MonoMaker::reset() {

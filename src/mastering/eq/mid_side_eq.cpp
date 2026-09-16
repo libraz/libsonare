@@ -1,6 +1,7 @@
 #include "mastering/eq/mid_side_eq.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <string>
 
 #include "rt/scoped_no_denormals.h"
@@ -43,6 +44,10 @@ void MidSideEq::process(float* const* channels, int num_channels, int num_sample
   float* const mid = mid_buffer_.data();
   float* const side = side_buffer_.data();
 
+  // Read outside the chunk loop: each backend runs once per chunk, and the unit
+  // is one process() call.
+  const uint32_t mid_discards = mid_eq_.non_finite_discard_count();
+  const uint32_t side_discards = side_eq_.non_finite_discard_count();
   for (int start = 0; start < num_samples; start += chunk) {
     const int n = std::min(chunk, num_samples - start);
     for (int i = 0; i < n; ++i) {
@@ -61,6 +66,11 @@ void MidSideEq::process(float* const* channels, int num_channels, int num_sample
       channels[0][start + i] = mid[i] + side[i];
       channels[1][start + i] = mid[i] - side[i];
     }
+  }
+
+  if (mid_eq_.non_finite_discard_count() != mid_discards ||
+      side_eq_.non_finite_discard_count() != side_discards) {
+    note_non_finite_discard();
   }
 }
 

@@ -78,7 +78,8 @@ class AdaptiveRelease : public rt::ProcessorBase {
   /// @brief Advances the crest/RMS/release envelopes over @p count input samples
   ///        starting at @p offset. Must run before the limiter overwrites the
   ///        buffer in place.
-  void advance_envelopes(float* const* channels, int num_channels, int offset, int count) noexcept;
+  /// @return true when any envelope was returned to its post-reset value.
+  bool advance_envelopes(float* const* channels, int num_channels, int offset, int count) noexcept;
 
   /// @brief Interval, in input samples, between release updates handed to the
   ///        inner limiter.

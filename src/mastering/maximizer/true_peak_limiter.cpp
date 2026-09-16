@@ -385,9 +385,10 @@ void TruePeakLimiter::discard_non_finite_state() noexcept {
   // acquires, and an infinite crest holds the release at its shortest for good.
   // The gain smoothers rest at unity, the crest detector's two halves together at
   // silence.
-  discard_if_non_finite(fast_gain_, 1.0f);
-  discard_if_non_finite(slow_gain_, 1.0f);
-  discard_group_if_non_finite(crest_peak_, crest_rms_);
+  bool discarded = discard_if_non_finite(fast_gain_, 1.0f);
+  discarded |= discard_if_non_finite(slow_gain_, 1.0f);
+  discarded |= discard_group_if_non_finite(crest_peak_, crest_rms_);
+  if (discarded) note_non_finite_discard();
 }
 
 void TruePeakLimiter::reset() {

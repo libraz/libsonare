@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 
 namespace sonare::mastering::eq {
 namespace {
@@ -30,7 +31,9 @@ void ApiStyleEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void ApiStyleEq::process(float* const* channels, int num_channels, int num_samples) {
+  const uint32_t eq_discards = eq_.non_finite_discard_count();
   eq_.process(channels, num_channels, num_samples);
+  if (eq_.non_finite_discard_count() != eq_discards) note_non_finite_discard();
 }
 
 void ApiStyleEq::reset() { eq_.reset(); }

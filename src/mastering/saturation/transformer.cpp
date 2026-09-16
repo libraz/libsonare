@@ -41,6 +41,7 @@ void Transformer::process(float* const* channels, int num_channels, int num_samp
     throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   ensure_state(num_channels);
 
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
@@ -52,8 +53,9 @@ void Transformer::process(float* const* channels, int num_channels, int num_samp
     // step from previous_field and advances magnetization from its own value, so
     // one non-finite sample leaves the core stranded for every later block. Rest
     // is the demagnetised state JilesAtherton::reset writes.
-    discard_group_if_non_finite(state.magnetization, state.previous_field);
+    discarded |= discard_group_if_non_finite(state.magnetization, state.previous_field);
   }
+  if (discarded) note_non_finite_discard();
 }
 
 void Transformer::reset() {

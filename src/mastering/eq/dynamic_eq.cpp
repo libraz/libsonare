@@ -119,7 +119,7 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
 }
 
 void DynamicEq::discard_non_finite_detector_state() noexcept {
-  discard_if_non_finite(last_detector_db_, kFloorDb);
+  bool any_discarded = discard_if_non_finite(last_detector_db_, kFloorDb);
   for (size_t i = 0; i < kMaxBands; ++i) {
     bool discarded = false;
     for (auto& channel : detectors_[i].channels) {
@@ -137,14 +137,16 @@ void DynamicEq::discard_non_finite_detector_state() noexcept {
     if (discarded) {
       last_band_detector_db_[i] = kFloorDb;
     }
-    discard_if_non_finite(last_band_detector_db_[i], kFloorDb);
-    discard_if_non_finite(smoothed_gain_db_[i], 0.0f);
-    discard_if_non_finite(target_gain_db_[i], 0.0f);
-    discard_if_non_finite(last_applied_gain_db_[i], 0.0f);
+    any_discarded |= discarded;
+    any_discarded |= discard_if_non_finite(last_band_detector_db_[i], kFloorDb);
+    any_discarded |= discard_if_non_finite(smoothed_gain_db_[i], 0.0f);
+    any_discarded |= discard_if_non_finite(target_gain_db_[i], 0.0f);
+    any_discarded |= discard_if_non_finite(last_applied_gain_db_[i], 0.0f);
     // last_applied_coeff_gain_db_ is deliberately NaN until a band is first
     // programmed, and the skip test it feeds reads that NaN as "reprogram".
     // Discarding it here would turn the first apply into a skip.
   }
+  if (any_discarded) note_non_finite_discard();
 }
 
 void DynamicEq::apply_band_gain(size_t index, float gain_db) {

@@ -130,6 +130,7 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
   const double shelf_frequency =
       std::clamp(config_.shelf_frequency_hz, 20.0f, static_cast<float>(sample_rate_ * 0.49));
   const auto shelf_design = rt::rbj_high_shelf_design_d(shelf_frequency, sample_rate_, kInvSqrt2D);
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
@@ -204,21 +205,24 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
     band_rms_sq_[static_cast<size_t>(ch)] = band_rms_sq;
     harmonic_rms_sq_[static_cast<size_t>(ch)] = harmonic_rms_sq;
     harmonic_gain_[static_cast<size_t>(ch)] = harmonic_gain;
-    discard_non_finite_state(static_cast<size_t>(ch));
+    discarded |= discard_non_finite_state(static_cast<size_t>(ch));
   }
+  if (discarded) note_non_finite_discard();
 }
 
-void AirBand::discard_non_finite_state(size_t channel) noexcept {
+bool AirBand::discard_non_finite_state(size_t channel) noexcept {
   // Ten floats per channel, once per block. The detector feeds the envelope
   // that programmes the shelf, so the three sections and the four followers
   // they drive come back together.
-  discard_group_if_non_finite(shelf_[channel].z1, shelf_[channel].z2);
-  discard_group_if_non_finite(detector_[channel].z1, detector_[channel].z2);
-  discard_group_if_non_finite(harmonic_filter_[channel].z1, harmonic_filter_[channel].z2);
-  discard_if_non_finite(envelope_[channel], 0.0f);
-  discard_if_non_finite(shelf_gain_db_[channel], 0.0f);
-  discard_group_if_non_finite(band_rms_sq_[channel], harmonic_rms_sq_[channel],
-                              harmonic_gain_[channel]);
+  bool discarded = discard_group_if_non_finite(shelf_[channel].z1, shelf_[channel].z2);
+  discarded |= discard_group_if_non_finite(detector_[channel].z1, detector_[channel].z2);
+  discarded |=
+      discard_group_if_non_finite(harmonic_filter_[channel].z1, harmonic_filter_[channel].z2);
+  discarded |= discard_if_non_finite(envelope_[channel], 0.0f);
+  discarded |= discard_if_non_finite(shelf_gain_db_[channel], 0.0f);
+  discarded |= discard_group_if_non_finite(band_rms_sq_[channel], harmonic_rms_sq_[channel],
+                                           harmonic_gain_[channel]);
+  return discarded;
 }
 
 void AirBand::reset() {

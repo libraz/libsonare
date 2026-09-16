@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "mastering/eq/spectrum_registry.h"
 #include "util/constants.h"
@@ -105,11 +106,20 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
                  pre_snapshot.pre, pre_snapshot.pre_count);
   const float input_db =
       rms_db(const_cast<const float* const*>(channels), num_channels, num_samples);
+  bool discarded = false;
+  // Summed across the IIR planes and read once on either side of the whole
+  // block: a plane may run more than once, and the unit is one process() call.
+  const auto iir_discards = [this]() noexcept -> uint64_t {
+    return static_cast<uint64_t>(stereo_iir_.non_finite_discard_count()) +
+           left_iir_.non_finite_discard_count() + right_iir_.non_finite_discard_count() +
+           mid_iir_.non_finite_discard_count() + side_iir_.non_finite_discard_count();
+  };
+  const uint64_t iir_discards_before = iir_discards();
   if (has_dynamic_bands_) {
     update_dynamic_state(const_cast<const float* const*>(channels), num_channels, num_samples);
     // Before the detector's reading reaches coefficient design, so a poisoned
     // detector cannot hand a non-finite gain to a band.
-    discard_non_finite_dynamic_state();
+    discarded = discard_non_finite_dynamic_state();
     update_iir_bands_preserving_state(num_samples);
   }
   if (has_lr_linear_bands_) {
@@ -173,10 +183,14 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
   // The auto-gain smoother is driven by the block RMS of both the input and the
   // output, so a non-finite sample reaches it whether or not it survived the
   // filters.
-  if (discard_if_non_finite(smoothed_auto_gain_db_, 0.0f)) {
+  const bool smoothed_discarded = discard_if_non_finite(smoothed_auto_gain_db_, 0.0f);
+  if (smoothed_discarded) {
     last_auto_gain_db_ = 0.0f;
   }
-  discard_if_non_finite(last_auto_gain_db_, 0.0f);
+  discarded |= smoothed_discarded;
+  discarded |= discard_if_non_finite(last_auto_gain_db_, 0.0f);
+  discarded |= iir_discards() != iir_discards_before;
+  if (discarded) note_non_finite_discard();
   apply_output_gain_and_pan(channels, num_channels, num_samples);
   publish_spectrum_snapshot(pre_snapshot, const_cast<const float* const*>(channels), num_channels,
                             num_samples);
@@ -215,8 +229,8 @@ void EqualizerProcessor::reset() {
   clear_sidechain();
 }
 
-void EqualizerProcessor::discard_non_finite_dynamic_state() noexcept {
-  discard_if_non_finite(last_detector_db_, kFloorDb);
+bool EqualizerProcessor::discard_non_finite_dynamic_state() noexcept {
+  bool any_discarded = discard_if_non_finite(last_detector_db_, kFloorDb);
   for (size_t i = 0; i < kMaxBands; ++i) {
     bool discarded = false;
     for (auto& state : detector_states_[i]) {
@@ -234,13 +248,15 @@ void EqualizerProcessor::discard_non_finite_dynamic_state() noexcept {
     if (discarded) {
       last_band_detector_db_[i] = kFloorDb;
     }
-    discard_if_non_finite(last_band_detector_db_[i], kFloorDb);
+    any_discarded |= discarded;
+    any_discarded |= discard_if_non_finite(last_band_detector_db_[i], kFloorDb);
     // Reinitialised by a floor-sentinel comparison in update_dynamic_state,
     // which a non-finite value answers false to forever.
-    discard_if_non_finite(auto_threshold_db_[i], kFloorDb);
-    discard_if_non_finite(smoothed_gain_db_[i], 0.0f);
-    discard_if_non_finite(last_applied_gain_db_[i], 0.0f);
+    any_discarded |= discard_if_non_finite(auto_threshold_db_[i], kFloorDb);
+    any_discarded |= discard_if_non_finite(smoothed_gain_db_[i], 0.0f);
+    any_discarded |= discard_if_non_finite(last_applied_gain_db_[i], 0.0f);
   }
+  return any_discarded;
 }
 
 bool EqualizerProcessor::set_parameter(unsigned int param_id, float value) {

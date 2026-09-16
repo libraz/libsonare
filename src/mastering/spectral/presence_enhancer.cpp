@@ -70,6 +70,7 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
   ensure_state(num_channels);
 
   if (config_.aliasing != sonare::rt::AliasingControl::Oversample4x) {
+    bool discarded = false;
     for (int ch = 0; ch < num_channels; ++ch) {
       if (channels[ch] == nullptr)
         throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
@@ -80,8 +81,9 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
         channels[ch][i] += harmonic * config_.amount;
       }
       // Two floats per channel, once per block.
-      discard_group_if_non_finite(bandpass.z1, bandpass.z2);
+      discarded |= discard_group_if_non_finite(bandpass.z1, bandpass.z2);
     }
+    if (discarded) note_non_finite_discard();
     return;
   }
 
@@ -98,6 +100,7 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_samples exceeds prepared PresenceEnhancer oversampling scratch");
   }
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
@@ -122,8 +125,9 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
       channels[ch][i] = dry + harmonic_scratch_[static_cast<size_t>(i)] * config_.amount;
     }
     auto& bandpass = bandpass_[static_cast<size_t>(ch)];
-    discard_group_if_non_finite(bandpass.z1, bandpass.z2);
+    discarded |= discard_group_if_non_finite(bandpass.z1, bandpass.z2);
   }
+  if (discarded) note_non_finite_discard();
 }
 
 void PresenceEnhancer::set_config(const PresenceEnhancerConfig& config) {

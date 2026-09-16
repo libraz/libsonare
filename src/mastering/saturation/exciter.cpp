@@ -85,6 +85,7 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
   }
 
   if (config_.aliasing != sonare::rt::AliasingControl::Oversample4x) {
+    bool discarded = false;
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& bandpass = bandpass_[static_cast<size_t>(ch)];
       auto& allpass = allpass_[static_cast<size_t>(ch)];
@@ -103,9 +104,10 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
       even_dc_[static_cast<size_t>(ch)] = even_dc;
       // Five floats per channel, once per block. The allpass and the DC tracker
       // both read the bandpass output, so the three come back together.
-      discard_group_if_non_finite(bandpass.z1, bandpass.z2, allpass.z1, allpass.z2,
-                                  even_dc_[static_cast<size_t>(ch)]);
+      discarded |= discard_group_if_non_finite(bandpass.z1, bandpass.z2, allpass.z1, allpass.z2,
+                                               even_dc_[static_cast<size_t>(ch)]);
     }
+    if (discarded) note_non_finite_discard();
     return;
   }
 
@@ -122,6 +124,7 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_samples exceeds prepared Exciter oversampling scratch");
   }
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     auto& bandpass = bandpass_[static_cast<size_t>(ch)];
     auto& allpass = allpass_[static_cast<size_t>(ch)];
@@ -157,9 +160,10 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
       channels[ch][i] = dry + aligned * 0.05f * config_.amount +
                         harmonic_scratch_[static_cast<size_t>(i)] * config_.amount;
     }
-    discard_group_if_non_finite(bandpass.z1, bandpass.z2, allpass.z1, allpass.z2,
-                                even_dc_[static_cast<size_t>(ch)]);
+    discarded |= discard_group_if_non_finite(bandpass.z1, bandpass.z2, allpass.z1, allpass.z2,
+                                             even_dc_[static_cast<size_t>(ch)]);
   }
+  if (discarded) note_non_finite_discard();
 }
 
 void Exciter::reset() {

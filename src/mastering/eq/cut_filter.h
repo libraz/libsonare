@@ -86,7 +86,8 @@ class CutFilter : public rt::ProcessorBase {
   void rebuild_brickwall();
   bool high_pass_is_brickwall() const noexcept;
   bool low_pass_is_brickwall() const noexcept;
-  void process_stage(const std::array<Section, kMaxSections>& sections,
+  /// @return true when any section's state was returned to its post-reset value.
+  bool process_stage(const std::array<Section, kMaxSections>& sections,
                      std::array<std::vector<State>, kMaxSections>& states, float* samples,
                      int channel, int num_samples) const;
 

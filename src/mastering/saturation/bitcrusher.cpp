@@ -47,6 +47,7 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
   if (channels == nullptr)
     throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   ensure_state(num_channels);
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
@@ -59,19 +60,21 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
       channels[ch][i] =
           channels[ch][i] * (1.0f - config_.mix) + held_[static_cast<size_t>(ch)] * config_.mix;
     }
-    discard_non_finite_state(static_cast<size_t>(ch));
+    discarded |= discard_non_finite_state(static_cast<size_t>(ch));
   }
+  if (discarded) note_non_finite_discard();
 }
 
-void BitCrusher::discard_non_finite_state(size_t channel) noexcept {
+bool BitCrusher::discard_non_finite_state(size_t channel) noexcept {
   // Ten floats per channel, once per block. The nine shaping taps are the error
   // the quantizer feeds back into its own input, so one non-finite tap re-poisons
   // every later block; they are one history and any of them returns all of them
   // to rest. The held sample only survives to the end of its downsample period,
   // and is scrubbed so that period does not start from it.
   auto& history = error_history_[channel];
-  discard_run_if_non_finite(history.begin(), history.end(), 0.0f);
-  discard_if_non_finite(held_[channel], 0.0f);
+  bool discarded = discard_run_if_non_finite(history.begin(), history.end(), 0.0f);
+  discarded |= discard_if_non_finite(held_[channel], 0.0f);
+  return discarded;
 }
 
 void BitCrusher::reset() {

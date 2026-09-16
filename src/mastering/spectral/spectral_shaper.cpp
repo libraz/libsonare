@@ -63,6 +63,7 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
   const float attack_coeff = time_to_attack_release_rate_f(sample_rate_, config_.attack_ms);
   const float release_coeff = time_to_attack_release_rate_f(sample_rate_, config_.release_ms);
   float min_gain = 1.0f;
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     float low = low_state_[static_cast<size_t>(ch)];
     float band_low = band_low_state_[static_cast<size_t>(ch)];
@@ -91,13 +92,14 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
     // Four cells per channel, once per block. The two low-pass states feed the
     // envelope and the envelope feeds the gain, so one non-finite cell strands
     // the channel for every later block. The gain rests at unity, not at zero.
-    discard_group_if_non_finite(low, band_low);
-    envelope.discard_if_non_finite();
-    discard_if_non_finite(gain_state, 1.0f);
+    discarded |= discard_group_if_non_finite(low, band_low);
+    discarded |= envelope.discard_if_non_finite();
+    discarded |= discard_if_non_finite(gain_state, 1.0f);
     low_state_[static_cast<size_t>(ch)] = low;
     band_low_state_[static_cast<size_t>(ch)] = band_low;
     gain_state_[static_cast<size_t>(ch)] = gain_state;
   }
+  if (discarded) note_non_finite_discard();
   last_reduction_db_ = linear_to_db(min_gain);
 }
 

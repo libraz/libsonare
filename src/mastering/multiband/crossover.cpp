@@ -217,6 +217,7 @@ void Crossover::process_block_iir(float* const* channels, int num_channels, int 
   rebuild_state(num_channels);
   const int splits = static_cast<int>(config_.cutoffs_hz.size());
 
+  bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     for (int i = 0; i < num_samples; ++i) {
       float remainder = channels[ch][i];
@@ -237,17 +238,19 @@ void Crossover::process_block_iir(float* const* channels, int num_channels, int 
       }
       out_bands.back()[static_cast<size_t>(ch)][static_cast<size_t>(i)] = remainder;
     }
-    discard_non_finite_state(ch, splits);
+    discarded |= discard_non_finite_state(ch, splits);
   }
+  if (discarded) non_finite_discards_.bump();
 }
 
-void Crossover::discard_non_finite_state(int channel, int splits) noexcept {
+bool Crossover::discard_non_finite_state(int channel, int splits) noexcept {
   // Two floats per second-order section, once per block. The bands are summed
   // downstream, so one non-finite section is enough to ruin the whole split and
   // the sections come back together.
-  const auto discard_stages = [](std::vector<Biquad>& stages) noexcept {
+  bool discarded = false;
+  const auto discard_stages = [&discarded](std::vector<Biquad>& stages) noexcept {
     for (Biquad& stage : stages) {
-      discard_group_if_non_finite(stage.z1, stage.z2);
+      discarded |= discard_group_if_non_finite(stage.z1, stage.z2);
     }
   };
   for (int split_index = 0; split_index < splits; ++split_index) {
@@ -261,6 +264,7 @@ void Crossover::discard_non_finite_state(int channel, int splits) noexcept {
       discard_stages(split_states);
     }
   }
+  return discarded;
 }
 
 void Crossover::reset() {

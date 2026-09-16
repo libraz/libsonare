@@ -83,7 +83,8 @@ class Tape : public rt::ProcessorBase {
   void update_filters(double sample_rate);
   /// @brief Returns the channel's recursive cells to rest when a non-finite
   ///        value has reached them (see util/non_finite_state.h).
-  void discard_non_finite_state(size_t channel) noexcept;
+  /// @return true when any cell was discarded.
+  bool discard_non_finite_state(size_t channel) noexcept;
 
   using Biquad = rt::BiquadState;
 

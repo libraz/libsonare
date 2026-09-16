@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <string>
 
 #include "util/exception.h"
@@ -31,8 +32,14 @@ void GraphicEq::prepare(double sample_rate, int max_block_size) {
 }
 
 void GraphicEq::process(float* const* channels, int num_channels, int num_samples) {
+  const uint32_t low_discards = low_eq_.non_finite_discard_count();
+  const uint32_t high_discards = high_eq_.non_finite_discard_count();
   low_eq_.process(channels, num_channels, num_samples);
   high_eq_.process(channels, num_channels, num_samples);
+  if (low_eq_.non_finite_discard_count() != low_discards ||
+      high_eq_.non_finite_discard_count() != high_discards) {
+    note_non_finite_discard();
+  }
 }
 
 void GraphicEq::reset() {
