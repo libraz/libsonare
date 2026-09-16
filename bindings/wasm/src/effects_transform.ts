@@ -18,6 +18,7 @@ import type {
 } from './public_types';
 import type { ValidateOptions } from './validation';
 import {
+  assertFiniteScalar,
   assertHpssKernels,
   assertPercussiveSeparation,
   assertSampleRate,
@@ -546,6 +547,11 @@ export function timeStretch(
         }
       : samples;
   assertSamples('timeStretch', request.samples, request.validate !== false);
+  // Matches the addon, which refuses a non-finite rate here rather than letting
+  // the core answer it. Does NOT cover a finite value too wide for a float:
+  // Number.isFinite(1e39) is true and the demotion to the f32 parameter makes it
+  // an infinity, which only the binding-side narrowing can see.
+  assertFiniteScalar('timeStretch', request.rate as number, 'rate');
   const fftOptions = resolveFftOptions('timeStretch', request.nFft, request.hopLength);
   return requireModule().timeStretchEx(
     request.samples,
@@ -616,6 +622,8 @@ export function pitchShift(
         }
       : samples;
   assertSamples('pitchShift', request.samples, request.validate !== false);
+  // See timeStretch above for what this does and does not cover.
+  assertFiniteScalar('pitchShift', request.semitones as number, 'semitones');
   const fftOptions = resolveFftOptions('pitchShift', request.nFft, request.hopLength);
   return requireModule().pitchShiftEx(
     request.samples,

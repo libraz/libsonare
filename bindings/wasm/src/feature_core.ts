@@ -228,6 +228,12 @@ export interface PlpRequest {
 /**
  * Convert frequency in Hz to Mel scale.
  *
+ * A total function, matching the C ABI and librosa: a non-finite `hz`
+ * propagates rather than throwing, and a magnitude past the 32-bit float range
+ * saturates to an infinity the same way the C conversion does. Out-of-audio
+ * frequencies are not refused either — the mapping is defined over the whole
+ * real line.
+ *
  * @param hz - Frequency in Hz
  * @returns Mel frequency
  */
@@ -236,7 +242,8 @@ export function hzToMel(hz: number): number {
 }
 
 /**
- * Convert Mel scale to frequency in Hz.
+ * Convert Mel scale to frequency in Hz. Total over the same domain as
+ * {@link hzToMel}.
  *
  * @param mel - Mel frequency
  * @returns Frequency in Hz
@@ -248,6 +255,11 @@ export function melToHz(mel: number): number {
 /**
  * Convert frequency in Hz to MIDI note number.
  *
+ * Total, like {@link hzToMel}. A non-positive `hz` returns `-Infinity`, the log2
+ * limit, and {@link midiToHz} maps that back to 0. A NaN propagates, which is
+ * what makes a default `pitchPyin` track — whose unvoiced frames are NaN — safe
+ * to map through.
+ *
  * @param hz - Frequency in Hz
  * @returns MIDI note number (A4 = 440 Hz = 69)
  */
@@ -256,7 +268,8 @@ export function hzToMidi(hz: number): number {
 }
 
 /**
- * Convert MIDI note number to frequency in Hz.
+ * Convert MIDI note number to frequency in Hz. Total, like {@link hzToMel};
+ * `-Infinity` bottoms out at 0 rather than propagating its sign.
  *
  * @param midi - MIDI note number
  * @returns Frequency in Hz
@@ -267,6 +280,11 @@ export function midiToHz(midi: number): number {
 
 /**
  * Convert frequency in Hz to note name.
+ *
+ * Every frequency with no note answers `"?"` rather than throwing: zero,
+ * negative, past the representable MIDI range, and non-finite alike. A default
+ * `pitchPyin` track fills unvoiced frames with NaN, so mapping one through this
+ * yields `"?"` at those frames.
  *
  * @param hz - Frequency in Hz
  * @returns Note name (e.g., "A4", "C#5")

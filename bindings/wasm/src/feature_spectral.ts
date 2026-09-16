@@ -10,6 +10,7 @@ import type {
 } from './sonare.js';
 import type { ValidateOptions } from './validation';
 import {
+  assertFiniteScalar,
   assertHpssKernels,
   assertInterleavedSamples,
   assertNonNegativeInteger,
@@ -668,6 +669,10 @@ export function phaseVocoder(
     const r = samples;
     return phaseVocoder(r.samples, r.sampleRate ?? 22050, r.rate, r.nFft, r.hopLength);
   }
+  // Matches the addon. A finite value too wide for a float is not covered here
+  // and cannot be — it is still finite to Number.isFinite; the core's own guard
+  // refuses the infinity it becomes.
+  assertFiniteScalar('phaseVocoder', rate, 'rate');
   return requireModule().phaseVocoder(samples, sampleRate, rate, nFft, hopLength);
 }
 

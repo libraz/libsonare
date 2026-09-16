@@ -45,12 +45,22 @@ describe('phaseVocoder rate guard matches the C ABI (no upper cap)', () => {
     expect(out.length).toBeLessThan(8192);
   });
   it('still rejects a non-positive rate', () => {
+    // Finite, so the facade passes it on and the core's own guard answers it.
     expect(() => phaseVocoder(sine(), SR, 0)).toThrow(/finite positive/);
     expect(() => phaseVocoder(sine(), SR, -1)).toThrow(/finite positive/);
   });
   it('still rejects a non-finite rate before allocating an enormous buffer', () => {
-    expect(() => phaseVocoder(sine(), SR, Number.NaN)).toThrow(/finite positive/);
-    expect(() => phaseVocoder(sine(), SR, Number.POSITIVE_INFINITY)).toThrow(/finite positive/);
+    // Answered by the facade rather than the core, which is what the addon does
+    // with the same value: the wording is the shared assertFiniteScalar's, not
+    // the core's "finite positive". Pinning the core's wording here asserted a
+    // message no other surface produces, which is the divergence this file
+    // exists to prevent.
+    expect(() => phaseVocoder(sine(), SR, Number.NaN)).toThrow(
+      /phaseVocoder: rate must be a finite number/,
+    );
+    expect(() => phaseVocoder(sine(), SR, Number.POSITIVE_INFINITY)).toThrow(
+      /phaseVocoder: rate must be a finite number/,
+    );
   });
 });
 
