@@ -1,12 +1,20 @@
 #include "midi/synth/sample_bank.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace sonare::midi::synth {
 
 bool SampleBank::add_sample(const float* data, size_t n_frames, const SampleDesc& desc,
                             uint32_t* out_index) {
   if (data == nullptr || n_frames == 0) return false;
+  // Refused before the pool grows, because what a stored one costs is paid at
+  // render: the reader's interpolation smears one non-finite frame over the
+  // whole sustain, and a non-finite tuning offset silences the voice outright.
+  if (!std::isfinite(desc.fine_tune_cents) || !std::isfinite(desc.source_rate)) return false;
+  for (size_t frame = 0; frame < n_frames; ++frame) {
+    if (!std::isfinite(data[frame])) return false;
+  }
 
   const uint32_t start = static_cast<uint32_t>(pool_.size());
   pool_.insert(pool_.end(), data, data + n_frames);

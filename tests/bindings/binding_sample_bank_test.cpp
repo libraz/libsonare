@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -90,6 +91,64 @@ TEST_CASE("a sample bank rejects what it cannot hold", "[project][sample_bank]")
 
   sonare_sample_bank_destroy(bank);
   sonare_sample_bank_destroy(nullptr);  // documented no-op
+}
+
+TEST_CASE("a sample bank refuses a value it could not attribute later", "[project][sample_bank]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  SonareSampleBank* bank = sonare_sample_bank_create();
+  REQUIRE(bank != nullptr);
+
+  std::vector<float> pcm = tone(261.6256, 0.2);
+  REQUIRE(pcm.size() > 1000);
+
+  SECTION("a non-finite frame, whichever kind") {
+    for (const float bad : {nan, inf, -inf}) {
+      std::vector<float> poisoned = pcm;
+      poisoned[500] = bad;
+      SonareSampleDesc desc{};
+      desc.source_rate = kSourceRate;
+      CHECK(sonare_sample_bank_add_sample(bank, poisoned.data(), poisoned.size(), &desc, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    }
+  }
+
+  SECTION("a non-finite tuning field, which silences the voice rather than poisoning it") {
+    SonareSampleDesc desc{};
+    desc.fine_tune_cents = nan;
+    CHECK(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &desc, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+    desc = SonareSampleDesc{};
+    desc.source_rate = nan;
+    CHECK(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &desc, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    // Rejected rather than read as the zero that means "the render's own rate":
+    // a comparison against zero is false for a NaN, so the sentinel would have
+    // absorbed a caller's mistake into a value nothing downstream can question.
+    desc.source_rate = inf;
+    CHECK(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &desc, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  // A refusal leaves the bank alone. Checking the count rather than the return
+  // code is what separates refusing from appending and then reporting failure.
+  size_t count = 99;
+  REQUIRE(sonare_sample_bank_sample_count(bank, &count) == SONARE_OK);
+  CHECK(count == 0);
+
+  // The same bank still takes the clean sample, so the refusals above are the
+  // values being read and not the bank having been left unusable.
+  SonareSampleDesc good{};
+  good.source_rate = kSourceRate;
+  uint32_t index = 99;
+  REQUIRE(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &good, &index) == SONARE_OK);
+  CHECK(index == 0);
+  REQUIRE(sonare_sample_bank_sample_count(bank, &count) == SONARE_OK);
+  CHECK(count == 1);
+
+  sonare_sample_bank_destroy(bank);
 }
 
 TEST_CASE("an all-zero zone covers the whole keyboard", "[project][sample_bank]") {

@@ -62,6 +62,11 @@ export class SampleBank {
    * survives the clamp empty is dropped, so a malformed loop plays as an
    * unlooped sample rather than as a wrap over nothing. An empty array, and a
    * bank that would exceed 67,108,864 sample points, throw.
+   *
+   * A NaN or Inf frame, `fineTuneCents` or `sourceRate` throws too, and the
+   * bank is left unchanged. Such a value is unattributable once stored: the
+   * reader's interpolation spreads one bad frame across the whole sustain, and
+   * a bad tuning offset renders the voice silent with no error raised.
    */
   addSample(data: Float32Array, desc: SampleDesc = {}): number {
     return this.native.addSample(data, desc);

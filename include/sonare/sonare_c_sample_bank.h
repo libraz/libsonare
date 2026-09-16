@@ -75,10 +75,16 @@ void sonare_sample_bank_destroy(SonareSampleBank* bank);
 ///          survives the clamp empty is dropped, so a malformed loop plays as an
 ///          unlooped sample rather than as a wrap over nothing.
 ///          SONARE_ERROR_INVALID_PARAMETER for a NULL bank/@p data, a zero
-///          @p n_frames or a NULL @p desc; SONARE_ERROR_OUT_OF_MEMORY when the
-///          bank would exceed 67,108,864 sample points, the same ceiling the
+///          @p n_frames, a NULL @p desc, or a non-finite frame, @c
+///          fine_tune_cents or @c source_rate; SONARE_ERROR_OUT_OF_MEMORY when
+///          the bank would exceed 67,108,864 sample points, the same ceiling the
 ///          SoundFont loader applies so neither door is the cheaper way to
 ///          exhaust memory.
+/// @details A non-finite input is refused here rather than stored, because it is
+///          unattributable by the time it is audible: the reader's interpolation
+///          spreads one such frame across the whole sustain, and a non-finite
+///          tuning offset renders the voice silent with no error raised. The
+///          bank is left unchanged by a refusal.
 SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* data,
                                           size_t n_frames, const SonareSampleDesc* desc,
                                           uint32_t* out_index);

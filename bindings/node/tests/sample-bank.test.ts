@@ -153,6 +153,36 @@ describe('SampleBank', () => {
     });
   });
 
+  it('rejects a value it could not attribute later, adding nothing', () => {
+    withBank((bank) => {
+      for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        const poisoned = sampleSine(1024);
+        poisoned[500] = bad;
+        expect(() => bank.addSample(poisoned, { rootKey: 69, sourceRate: SR })).toThrow();
+        expect(() => bank.addSample(sampleSine(1024), { sourceRate: bad })).toThrow();
+        expect(() => bank.addSample(sampleSine(1024), { fineTuneCents: bad })).toThrow();
+      }
+      // Checking the count rather than the throw is what separates refusing
+      // from appending and then reporting failure.
+      expect(bank.sampleCount()).toBe(0);
+
+      // The bank still takes the clean sample, so the refusals are the values
+      // being read and not the bank having been left unusable.
+      expect(bank.addSample(sampleSine(1024), { rootKey: 69, sourceRate: SR })).toBe(0);
+      expect(bank.sampleCount()).toBe(1);
+    });
+  });
+
+  it('a sample that survives the bank renders without a non-finite frame', () => {
+    withBank((bank) => {
+      bank.addSample(sampleSine(), { rootKey: 69, sourceRate: SR });
+      bank.addZone({ sampleIndex: 0 });
+      const audio = renderNote(bank, 69);
+      expect(peak(audio)).toBeGreaterThan(0);
+      expect(audio.every((v) => Number.isFinite(v))).toBe(true);
+    });
+  });
+
   it('rejects a zone the bank cannot honour, adding nothing', () => {
     withBank((bank) => {
       // No sample yet, so index 0 does not exist.
