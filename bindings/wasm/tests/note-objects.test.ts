@@ -927,10 +927,13 @@ describe('decomposeNotePitch', () => {
   it('rejects malformed arguments', () => {
     const base = { f0Hz: curve, frameRate: fixtureFrameRate, medianHz: centreHz };
     expectInvalidParameter(() => decomposeNotePitch({ ...base, f0Hz: new Float32Array(0) }));
-    for (const badF0 of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
-      const poisoned = Float32Array.from(curve);
-      poisoned[7] = badF0;
-      expectInvalidParameter(() => decomposeNotePitch({ ...base, f0Hz: poisoned }));
+    // A frame carrying no pitch is spelled zero, negative or non-finite, and
+    // all three are read rather than refused. The frame rate and the centre
+    // below are still rejected, so this is not a blanket acceptance.
+    for (const noPitch of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
+      const track = Float32Array.from(curve);
+      track[7] = noPitch;
+      expect(decomposeNotePitch({ ...base, f0Hz: track }).centreHz).toBeGreaterThan(0);
     }
     for (const badRate of [0, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
       expectInvalidParameter(() => decomposeNotePitch({ ...base, frameRate: badRate }));
@@ -1239,27 +1242,29 @@ describe('the documented pitchPyin to extractNotes pipeline', () => {
     return out;
   })();
 
-  it('rejects the default track, whose unvoiced frames are NaN', () => {
+  it('segments the default track, whose unvoiced frames are NaN', () => {
     const pitch = pitchPyin({ samples: gappedTone, sampleRate });
 
     // Both halves of the track are real: the silence is NaN and the tone is
-    // not, so neither the rejection below nor the success in the next case is
-    // an artefact of a degenerate fixture.
+    // not, so the success below is the NaN frames being read as carrying no
+    // pitch rather than an artefact of a degenerate fixture.
     const nanFrames = [...pitch.f0].filter((hz) => Number.isNaN(hz)).length;
     expect(nanFrames).toBeGreaterThan(0);
     expect(nanFrames).toBeLessThan(pitch.f0.length);
     expect(pitch.voicedFlag.filter(Boolean).length).toBeGreaterThan(0);
 
-    expectInvalidParameter(() =>
-      extractNotes({
-        samples: gappedTone,
-        sampleRate,
-        f0Hz: pitch.f0,
-        voiced: pitch.voicedFlag,
-        frameRate,
-        minNoteMs: 40,
-      }),
-    );
+    const notes = extractNotes({
+      samples: gappedTone,
+      sampleRate,
+      f0Hz: pitch.f0,
+      voiced: pitch.voicedFlag,
+      frameRate,
+      minNoteMs: 40,
+    });
+    expect(notes.length).toBeGreaterThan(0);
+    for (const note of notes) {
+      expect(note.medianHz).toBeCloseTo(220, 0);
+    }
   });
 
   it('segments the track fillNa produces', () => {

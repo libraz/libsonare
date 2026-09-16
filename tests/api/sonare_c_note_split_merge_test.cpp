@@ -354,13 +354,17 @@ TEST_CASE("sonare_decompose_note_pitch rejects malformed arguments and clears it
     return sonare_decompose_note_pitch(f0.data(), 0, kFrameRate, kCentre, 3.0f, out);
   });
 
-  for (const float bad_f0 : {kNaN, kInf, -kInf, -1.0f}) {
-    std::vector<float> poisoned = f0;
-    poisoned[7] = bad_f0;
-    rejects([&](SonarePitchDecompositionResult* out) {
-      return sonare_decompose_note_pitch(poisoned.data(), poisoned.size(), kFrameRate, kCentre,
-                                         3.0f, out);
-    });
+  // A frame carrying no pitch is spelled zero, negative or non-finite, and all
+  // four spellings are read the same way rather than refused. The frame rate and
+  // the centre below are still refused, so this is not a blanket acceptance.
+  for (const float no_pitch : {kNaN, kInf, -kInf, -1.0f}) {
+    CAPTURE(no_pitch);
+    std::vector<float> track = f0;
+    track[7] = no_pitch;
+    SonarePitchDecompositionResult out{};
+    REQUIRE(sonare_decompose_note_pitch(track.data(), track.size(), kFrameRate, kCentre, 3.0f,
+                                        &out) == SONARE_OK);
+    sonare_free_pitch_decomposition(&out);
   }
 
   for (const float bad_rate : {0.0f, -100.0f, kNaN, kInf}) {

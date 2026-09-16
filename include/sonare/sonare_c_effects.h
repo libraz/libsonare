@@ -316,8 +316,10 @@ typedef struct {
 ///          quality figures, and its slice of the amplitude curve. Every
 ///          returned note has the identity edit.
 /// @param samples Source audio; @p length must be non-zero.
-/// @param f0_hz Per-frame F0 in Hz, @p n_frames entries. Every value must be
-///        finite and non-negative; zero denotes an unvoiced frame.
+/// @param f0_hz Per-frame F0 in Hz, @p n_frames entries. A frame carrying no
+///        pitch is spelled as zero, a negative value or a non-finite one --
+///        sonare_pitch_pyin emits NaN there unless asked to fill it -- and all
+///        three read the same: that frame contributes no measurement.
 /// @param voiced_prob Per-frame voicing in [0, 1], or NULL. Read only when
 ///        @p voiced is NULL, and then required.
 /// @param voiced Per-frame voiced flags (non-zero = voiced), or NULL.
@@ -407,9 +409,11 @@ typedef struct {
 ///          @ref sonare_extract_notes, so pass the caller's own @c f0_hz sliced
 ///          by the note's @c [frame_start, frame_end) together with its
 ///          @c median_hz.
-/// @param f0_hz The note's slice of the F0 track, @p n_frames entries. Every
-///        value must be finite and non-negative; zero denotes an unvoiced
-///        frame.
+/// @param f0_hz The note's slice of the F0 track, @p n_frames entries. A frame carrying no pitch is
+/// spelled as zero, a
+///        negative value or a non-finite one -- sonare_pitch_pyin emits NaN
+///        there unless asked to fill it -- and all three read the same: that
+///        frame contributes no measurement.
 /// @param frame_rate F0 frames per second; must be finite and > 0.
 /// @param median_hz The note's @c median_hz; must be finite and non-negative.
 ///        A note with no pitch is spelled 0, so a negative or non-finite value

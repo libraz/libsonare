@@ -117,15 +117,16 @@ SonareError resolve_extractor_config(const SonareNoteExtractorConfig* config,
   return SONARE_OK;
 }
 
-/// Validates the F0 frame array every note entry point takes.
+/// Validates the F0 frame array every note entry point takes. The frame values
+/// are deliberately not checked: a frame carrying no pitch is spelled as a
+/// non-finite or non-positive value -- which is what this library's own
+/// sonare_pitch_pyin emits for an unvoiced frame -- and every consumer reads
+/// each frame through the same usable-pitch predicate rather than assuming one.
 SonareError validate_f0_frames(const float* f0_hz, size_t n_frames, float frame_rate) {
   if (f0_hz == nullptr || n_frames == 0 ||
       n_frames > static_cast<size_t>(std::numeric_limits<int>::max()) ||
       !std::isfinite(frame_rate) || !(frame_rate > 0.0f)) {
     return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  for (size_t i = 0; i < n_frames; ++i) {
-    if (!std::isfinite(f0_hz[i]) || f0_hz[i] < 0.0f) return SONARE_ERROR_INVALID_PARAMETER;
   }
   return SONARE_OK;
 }

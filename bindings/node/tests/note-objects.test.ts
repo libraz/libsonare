@@ -649,11 +649,16 @@ describe('decomposeNotePitch', () => {
     for (const badCutoff of [-1, Number.NaN]) {
       expect(() => decomposeAt(badCutoff)).toThrow();
     }
-    const poisoned = Float32Array.from(f0Hz);
-    poisoned[7] = -1;
-    expect(() =>
-      decomposeNotePitch({ f0Hz: poisoned, frameRate: CURVE_RATE, medianHz: CENTRE }),
-    ).toThrow();
+    // A frame carrying no pitch is spelled zero, negative or non-finite, and
+    // all three are read rather than refused. The rejections above are what
+    // keeps that from reading as a dropped check.
+    for (const noPitch of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const track = Float32Array.from(f0Hz);
+      track[7] = noPitch;
+      expect(
+        decomposeNotePitch({ f0Hz: track, frameRate: CURVE_RATE, medianHz: CENTRE }).centreHz,
+      ).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -957,33 +962,28 @@ describe('the documented pitchPyin to extractNotes pipeline', () => {
     return samples;
   })();
 
-  it('rejects the default track, whose unvoiced frames are NaN', () => {
+  it('segments the default track, whose unvoiced frames are NaN', () => {
     const pitch = pitchPyin({ samples: gappedTone, sampleRate: SR });
 
     // Both halves of the track are real: the silence is NaN and the tone is
-    // not, so neither the rejection below nor the success in the next case is
-    // an artefact of a degenerate fixture.
+    // not, so the success below is the NaN frames being read as carrying no
+    // pitch rather than an artefact of a degenerate fixture.
     const nanFrames = [...pitch.f0].filter((hz) => Number.isNaN(hz)).length;
     expect(nanFrames).toBeGreaterThan(0);
     expect(nanFrames).toBeLessThan(pitch.f0.length);
     expect(pitch.voicedFlag.filter(Boolean).length).toBeGreaterThan(0);
 
-    let caught: unknown;
-    try {
-      extractNotes({
-        samples: gappedTone,
-        sampleRate: SR,
-        f0Hz: pitch.f0,
-        voiced: pitch.voicedFlag,
-        frameRate: FRAME_RATE,
-        minNoteMs: 40,
-      });
-    } catch (error) {
-      caught = error;
-    }
-    expect(isSonareError(caught)).toBe(true);
-    if (isSonareError(caught)) {
-      expect(caught.code).toBe(ErrorCode.InvalidParameter);
+    const notes = extractNotes({
+      samples: gappedTone,
+      sampleRate: SR,
+      f0Hz: pitch.f0,
+      voiced: pitch.voicedFlag,
+      frameRate: FRAME_RATE,
+      minNoteMs: 40,
+    });
+    expect(notes.length).toBeGreaterThan(0);
+    for (const note of notes) {
+      expect(note.medianHz).toBeCloseTo(220, 0);
     }
   });
 

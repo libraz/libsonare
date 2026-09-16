@@ -562,8 +562,11 @@ SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const floa
   for (size_t i = 0; i < f0_count; ++i) {
     const float f0 = f0_hz[i];
     const float probability = voiced_prob[i];
-    if (!std::isfinite(f0) || f0 < 0.0f || !std::isfinite(probability) || probability < 0.0f ||
-        probability > 1.0f) {
+    // The F0 value is not checked: a frame carrying no pitch is spelled zero,
+    // negative or non-finite, and the segmenter reads all three the same way.
+    // The probability is, because it is compared against a threshold below and
+    // a non-finite one would lose that comparison and read as unvoiced.
+    if (!std::isfinite(probability) || probability < 0.0f || probability > 1.0f) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     track.f0_hz.push_back(f0);

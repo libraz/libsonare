@@ -171,9 +171,11 @@ export interface ExtractNotesRequest extends NoteExtractorOptions, ValidateOptio
    */
   sampleRate: number;
   /**
-   * Per-frame F0 in Hz; finite and non-negative, zero meaning unvoiced. A
-   * {@link pitchPyin} track only satisfies that with `fillNa: true` — its
-   * default leaves unvoiced frames NaN, which this rejects.
+   * Per-frame F0 in Hz. A frame carrying no pitch is spelled as zero, a
+   * negative value or a non-finite one, and all three read the same: that
+   * frame contributes no measurement. A {@link pitchPyin} track can be passed
+   * straight through — its `fillNa` is a choice about the contour you want,
+   * not a requirement of this call.
    */
   f0Hz: Float32Array;
   /** F0 frames per second. */
@@ -248,9 +250,11 @@ export interface NoteSetRequest extends NoteExtractorOptions, ValidateOptions {
   samples: Float32Array;
   sampleRate: number;
   /**
-   * Per-frame F0 in Hz; finite and non-negative, zero meaning unvoiced. A
-   * {@link pitchPyin} track only satisfies that with `fillNa: true` — its
-   * default leaves unvoiced frames NaN, which this rejects.
+   * Per-frame F0 in Hz. A frame carrying no pitch is spelled as zero, a
+   * negative value or a non-finite one, and all three read the same: that
+   * frame contributes no measurement. A {@link pitchPyin} track can be passed
+   * straight through — its `fillNa` is a choice about the contour you want,
+   * not a requirement of this call.
    */
   f0Hz: Float32Array;
   /** F0 frames per second. */
@@ -895,8 +899,9 @@ export function noteMove(
  *
  * @example
  * ```ts
- * // fillNa is required: the default leaves unvoiced frames NaN.
- * const pitch = pitchPyin({ samples, sampleRate, fillNa: true });
+ * // pitchPyin's default leaves unvoiced frames NaN, which reads here as a
+ * // frame carrying no pitch, so fillNa is a choice rather than a requirement.
+ * const pitch = pitchPyin({ samples, sampleRate });
  * const notes = extractNotes({
  *   samples,
  *   sampleRate,

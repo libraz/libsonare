@@ -58,8 +58,19 @@ TEST_CASE("sonare_note_segments validates and returns frame-accurate regions",
   REQUIRE(out.segments == nullptr);
   REQUIRE(out.count == 0);
 
+  // A frame carrying no pitch is spelled zero, negative or non-finite, and the
+  // segmenter reads all three as unvoiced rather than refusing the track.
   const float non_finite = std::numeric_limits<float>::quiet_NaN();
   REQUIRE(sonare_note_segments(&non_finite, 1, voiced.data(), 1, 100.0f, &config, &out) ==
+          SONARE_OK);
+  sonare_free_note_segments(&out);
+
+  // The voicing probability is still checked, because it is compared against a
+  // threshold and a non-finite one would lose that comparison silently. This is
+  // what keeps the acceptance above from reading as a dropped check.
+  const float bad_prob = std::numeric_limits<float>::quiet_NaN();
+  const float good_f0 = 220.0f;
+  REQUIRE(sonare_note_segments(&good_f0, 1, &bad_prob, 1, 100.0f, &config, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
 }
 

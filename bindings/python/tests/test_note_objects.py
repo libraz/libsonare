@@ -626,16 +626,25 @@ def test_decompose_note_pitch_rejects_invalid_arguments() -> None:
 
     with pytest.raises(SonareValueError, match="decompose_note_pitch"):
         libsonare.decompose_note_pitch(np.zeros(0, dtype=np.float32), FRAME_RATE, centre_hz)
-    with pytest.raises(SonareValueError, match="decompose_note_pitch"):
-        libsonare.decompose_note_pitch(
-            np.full(n_frames, np.nan, dtype=np.float32), FRAME_RATE, centre_hz
-        )
 
+    # An all-NaN contour is a note with no usable pitch, which the header says
+    # comes back as a zero centre and two empty curves rather than as an error.
+    unmeasured = libsonare.decompose_note_pitch(
+        np.full(n_frames, np.nan, dtype=np.float32), FRAME_RATE, centre_hz
+    )
+    assert unmeasured.centre_hz == 0.0
+    assert len(unmeasured.drift_cents) == 0
+    assert len(unmeasured.vibrato_cents) == 0
+
+    # A negative frame is the same statement as a NaN one -- this frame carries
+    # no pitch -- so it is read rather than refused, and the note still resolves
+    # around the frames that do carry one.
     negative = f0_hz.copy()
     negative[7] = -1.0
-    with pytest.raises(SonareError):
-        libsonare.decompose_note_pitch(negative, FRAME_RATE, centre_hz)
+    assert libsonare.decompose_note_pitch(negative, FRAME_RATE, centre_hz).centre_hz > 0.0
 
+    # The frame rate and the centre below are still refused, so the acceptances
+    # above are the contour's values being read and not a dropped check.
     for frame_rate in (0.0, -100.0, np.nan, np.inf):
         with pytest.raises(SonareError):
             libsonare.decompose_note_pitch(f0_hz, frame_rate, centre_hz)
@@ -912,14 +921,13 @@ def test_merge_notes_rejects_a_run_that_does_not_ascend_or_runs_past_the_set() -
 
 
 def test_the_documented_pitch_pyin_to_extract_notes_pipeline_runs() -> None:
-    """The shipped example is executable, and its fill_na=True is load-bearing.
+    """The shipped example is executable with either pitch_pyin spelling.
 
-    pitch_pyin leaves an unvoiced frame as NaN by default, and extract_notes is
-    guarded against non-finite f0_hz, so the example as originally written
-    raised on any recording with a silent passage. The two halves are asserted
-    separately: that the default really does produce NaN (otherwise the
-    fill_na=True below would be decoration), and that the documented call then
-    succeeds.
+    pitch_pyin leaves an unvoiced frame as NaN by default and extract_notes
+    reads that as a frame carrying no pitch, so fill_na is a choice about the
+    contour rather than a requirement of the call. Both are asserted, against
+    an input whose default track really does carry NaN -- otherwise the pair
+    would agree for want of anything to disagree about.
     """
     import math
 
@@ -937,14 +945,14 @@ def test_the_documented_pitch_pyin_to_extract_notes_pipeline_runs() -> None:
     # too clean to tell.
     default_track = libsonare.pitch_pyin(samples, sample_rate=sr, hop_length=512)
     assert np.isnan(np.asarray(default_track.f0, dtype=np.float64)).any()
-    with pytest.raises(libsonare.SonareValueError, match="NaN or Inf"):
-        libsonare.extract_notes(
-            samples,
-            sr,
-            default_track.f0,
-            sr / 512,
-            voiced=[int(v) for v in default_track.voiced_flag],
-        )
+    unfilled = libsonare.extract_notes(
+        samples,
+        sr,
+        default_track.f0,
+        sr / 512,
+        voiced=[int(v) for v in default_track.voiced_flag],
+    )
+    assert unfilled, "the NaN-bearing track produced no notes"
 
     # The example as shipped.
     pitch = libsonare.pitch_pyin(samples, sample_rate=sr, hop_length=512, fill_na=True)

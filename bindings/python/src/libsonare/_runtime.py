@@ -150,8 +150,16 @@ def _validate_samples(
 _GuardedFn = TypeVar("_GuardedFn", bound=Callable[..., Any])
 
 
-def _guard_buffer(*arg_names: str) -> Callable[[_GuardedFn], _GuardedFn]:
+def _guard_buffer(
+    *arg_names: str, shape_only: tuple[str, ...] = ()
+) -> Callable[[_GuardedFn], _GuardedFn]:
     """Preflight the named sample-buffer arguments of a facade function.
+
+    Names given in ``shape_only`` are coerced and checked for emptiness like the
+    rest, but their values are not scanned. That is for an argument whose own
+    encoding uses a non-finite value to mean something -- an F0 contour spells a
+    frame with no pitch that way -- where refusing it would refuse a measurement
+    rather than a mistake.
 
     Runs :func:`_validate_samples` on each named argument before the wrapped
     call, so an empty or non-finite buffer raises :class:`SonareValueError`
@@ -188,7 +196,7 @@ def _guard_buffer(*arg_names: str) -> Callable[[_GuardedFn], _GuardedFn]:
             if validate_param is not None:
                 validate = bool(bound.arguments.get("validate", validate_param.default))
             coerced = False
-            for arg_name in arg_names:
+            for arg_name in (*arg_names, *shape_only):
                 if arg_name in bound.arguments:
                     # Hand the body the buffer that was just validated, not the
                     # caller's original. Discarding it made every non-contiguous
@@ -200,7 +208,7 @@ def _guard_buffer(*arg_names: str) -> Callable[[_GuardedFn], _GuardedFn]:
                     bound.arguments[arg_name] = _validate_samples(
                         fn.__name__,
                         bound.arguments[arg_name],
-                        validate=validate,
+                        validate=validate and arg_name not in shape_only,
                         arg_name=arg_name,
                     )
                     coerced = True

@@ -1097,14 +1097,18 @@ TEST_CASE("sonare_extract_notes rejects malformed arguments and clears its outpu
     });
   }
 
-  for (const float bad_f0 : {kNaN, kInf, -kInf, -1.0f}) {
-    std::vector<float> poisoned = f0;
-    poisoned[7] = bad_f0;
-    rejects([&](SonareNoteObjectsResult* out) {
-      return sonare_extract_notes(samples.data(), samples.size(), kSampleRate, poisoned.data(),
-                                  nullptr, voiced.data(), poisoned.size(), kFrameRate, nullptr,
-                                  out);
-    });
+  // A frame carrying no pitch is spelled zero, negative or non-finite, and all
+  // four spellings are read the same way rather than refused -- sonare_pitch_pyin
+  // emits NaN there, so refusing it would refuse this library's own F0 track.
+  for (const float no_pitch : {kNaN, kInf, -kInf, -1.0f}) {
+    CAPTURE(no_pitch);
+    std::vector<float> track = f0;
+    track[7] = no_pitch;
+    SonareNoteObjectsResult out{};
+    REQUIRE(sonare_extract_notes(samples.data(), samples.size(), kSampleRate, track.data(), nullptr,
+                                 voiced.data(), track.size(), kFrameRate, nullptr,
+                                 &out) == SONARE_OK);
+    sonare_free_note_objects(&out);
   }
 
   for (const float bad_prob : {kNaN, kInf, -0.1f, 1.1f}) {

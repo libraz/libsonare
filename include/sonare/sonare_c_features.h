@@ -767,8 +767,10 @@ typedef struct {
 } SonareNoteSegmentsResult;
 
 /// @brief Segment a monophonic F0 track into stable note regions.
-/// @param f0_hz F0 values in Hz. Every value must be finite and non-negative;
-///        zero denotes an unvoiced frame.
+/// @param f0_hz F0 values in Hz. A frame carrying no pitch is spelled as zero, a
+///        negative value or a non-finite one -- sonare_pitch_pyin emits NaN
+///        there unless asked to fill it -- and all three read the same: that
+///        frame contributes no measurement.
 /// @param f0_count Number of F0 frames; must be non-zero.
 /// @param voiced_prob Per-frame voicing values in [0, 1]. A value below the
 ///        config's @c voiced_threshold (default 0.5) is treated as unvoiced;

@@ -401,10 +401,9 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
                           prefix + "voiced and voicedProb must match f0Hz length");
   }
   for (size_t i = 0; i < n_frames; ++i) {
-    if (!std::isfinite(f0[i]) || f0[i] < 0.0f) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            prefix + "f0Hz values must be finite and non-negative");
-    }
+    // f0Hz values are not checked: a frame carrying no pitch is spelled zero,
+    // negative or non-finite -- pitchPyin leaves NaN there unless asked to fill
+    // it -- and every consumer reads all three as contributing no measurement.
     // voicedProb is read only when voiced is absent, so it is validated only then.
     if (!has_voiced && (!std::isfinite(prob_vec[i]) || prob_vec[i] < 0.0f || prob_vec[i] > 1.0f)) {
       throw SonareException(ErrorCode::InvalidParameter,
@@ -589,12 +588,8 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
     if (f0.empty()) {
       throw SonareException(ErrorCode::InvalidParameter, "renderNotes: f0Hz must not be empty");
     }
-    for (const float hz : f0) {
-      if (!std::isfinite(hz) || hz < 0.0f) {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "renderNotes: f0Hz values must be finite and non-negative");
-      }
-    }
+    // f0Hz values are not checked: a frame carrying no pitch is spelled zero,
+    // negative or non-finite, and every consumer reads all three the same.
   }
 
   const std::size_t count = wasmArrayLikeLength(notes, "renderNotes notes");
@@ -633,12 +628,8 @@ val js_decompose_note_pitch(val f0_hz, float frame_rate, float median_hz, float 
     throw SonareException(ErrorCode::InvalidParameter,
                           "decomposeNotePitch: f0Hz must not be empty");
   }
-  for (const float hz : f0) {
-    if (!std::isfinite(hz) || hz < 0.0f) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "decomposeNotePitch: f0Hz values must be finite and non-negative");
-    }
-  }
+  // f0Hz values are not checked: a frame carrying no pitch is spelled zero,
+  // negative or non-finite, and every consumer reads all three the same.
 
   editing::note_model::NoteObject note;
   note.median_hz = median_hz;

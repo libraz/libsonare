@@ -275,7 +275,14 @@ _ENTRY_POINTS = _buffer_entry_points()
 _METHOD_ENTRY_POINTS = {
     name: entry for name, entry in _ENTRY_POINTS.items() if entry.owner is not None
 }
-_GUARDED = sorted(set(_ENTRY_POINTS) - _EMPTY_INPUT_IS_DEFINED)
+# Entry points whose leading buffer is an F0 contour. A frame carrying no pitch
+# is spelled zero, negative or non-finite there -- pitch_pyin leaves NaN unless
+# asked to fill it -- so a value scan would refuse a measurement rather than a
+# mistake. Their emptiness check is unchanged, and the rest of their arguments
+# are still guarded; only the contour's values are read rather than judged.
+_NO_PITCH_IS_A_VALUE = frozenset({"decompose_note_pitch", "note_segments"})
+
+_GUARDED = sorted(set(_ENTRY_POINTS) - _EMPTY_INPUT_IS_DEFINED - _NO_PITCH_IS_A_VALUE)
 _EXEMPT = sorted(_EMPTY_INPUT_IS_DEFINED & set(_ENTRY_POINTS))
 
 # Block-processing methods on the audio-thread path. What they fail is this
@@ -429,6 +436,42 @@ def test_every_exemption_is_live() -> None:
     """A renamed exemption must not silently hide a real coverage gap."""
     stale = sorted(_EMPTY_INPUT_IS_DEFINED - set(_ENTRY_POINTS))
     assert stale == [], f"exempted functions no longer exist as buffer entry points: {stale}"
+
+
+def test_every_no_pitch_entry_is_live() -> None:
+    """A renamed F0 entry must not carry its exemption to a dead name."""
+    stale = sorted(_NO_PITCH_IS_A_VALUE - set(_ENTRY_POINTS))
+    assert stale == [], f"F0 entry points no longer exist as buffer entry points: {stale}"
+
+
+def _no_pitch_call(name: str, contour: np.ndarray) -> Any:
+    """Invoke an F0 entry with @p contour and otherwise valid arguments.
+
+    Spelled out rather than built by `_call_arguments`, which fills every buffer
+    parameter from the same array and would hand `note_segments` a voicing
+    probability of 220 -- refused for its own reason, not the contour's.
+    """
+    if name == "note_segments":
+        probability = np.full(len(contour), 0.9, dtype=np.float32)
+        return libsonare.note_segments(contour, probability, 100.0)
+    return libsonare.decompose_note_pitch(contour, 100.0, 220.0)
+
+
+@pytest.mark.parametrize("name", sorted(_NO_PITCH_IS_A_VALUE))
+def test_no_pitch_contour_is_read_rather_than_refused(name: str) -> None:
+    """The exemption is a contract, so it is asserted rather than only excused.
+
+    A non-finite contour is accepted and an empty one is still refused by name,
+    which is what separates "these values mean something" from "this argument
+    lost its guard".
+    """
+    contour = np.full(64, 220.0, dtype=np.float32)
+    contour[7] = np.nan
+    _no_pitch_call(name, contour)
+
+    with pytest.raises(SonareValueError) as excinfo:
+        _no_pitch_call(name, np.zeros(0, dtype=np.float32))
+    assert "must not be empty" in str(excinfo.value)
 
 
 def test_every_block_path_entry_is_live() -> None:

@@ -727,7 +727,7 @@ class NoteObject:
     edit: NoteEdit = dataclasses.field(default_factory=NoteEdit)
 
 
-@_guard_buffer("samples", "f0_hz")
+@_guard_buffer("samples", shape_only=("f0_hz",))
 def extract_notes(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
@@ -780,15 +780,15 @@ def extract_notes(
     Raises:
         SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
             either has a different length than ``f0_hz``, or if a buffer is
-            empty or non-finite.
+            empty. A non-finite ``f0_hz`` frame is read as carrying no pitch,
+            not refused.
 
     Example:
-        ``fill_na=True`` is required, not optional: pYIN's default leaves an
-        unvoiced frame as NaN, which this function rejects.
+        pYIN's default leaves an unvoiced frame as ``NaN`` and this function
+        reads it as what it is -- a frame carrying no pitch -- so ``fill_na``
+        is a choice about the contour you want rather than a requirement.
 
-        >>> pitch = libsonare.pitch_pyin(
-        ...     samples, sample_rate=sr, hop_length=512, fill_na=True
-        ... )
+        >>> pitch = libsonare.pitch_pyin(samples, sample_rate=sr, hop_length=512)
         >>> notes = libsonare.extract_notes(
         ...     samples,
         ...     sr,
@@ -1100,7 +1100,7 @@ class PitchDecomposition:
     )
 
 
-@_guard_buffer("f0_hz")
+@_guard_buffer(shape_only=("f0_hz",))
 def decompose_note_pitch(
     f0_hz: Sequence[float] | list[float] | np.ndarray,
     frame_rate: float,
@@ -1135,7 +1135,8 @@ def decompose_note_pitch(
         a zero ``centre_hz`` and two empty curves rather than as an error.
 
     Raises:
-        SonareValueError: If ``f0_hz`` is empty or non-finite.
+        SonareValueError: If ``f0_hz`` is empty. A non-finite frame is read
+            as carrying no pitch, not refused.
         SonareError: If the C call rejects the request.
 
     Example:
@@ -1236,7 +1237,7 @@ def _note_set_edit(
         lib.sonare_free_note_objects(ctypes.byref(out))
 
 
-@_guard_buffer("samples", "f0_hz")
+@_guard_buffer("samples", shape_only=("f0_hz",))
 def split_note(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
@@ -1327,7 +1328,7 @@ def split_note(
     )
 
 
-@_guard_buffer("samples", "f0_hz")
+@_guard_buffer("samples", shape_only=("f0_hz",))
 def merge_notes(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int,
@@ -1387,7 +1388,8 @@ def merge_notes(
         SonareValueError: If neither ``voiced`` nor ``voiced_prob`` is given, if
             either has a different length than ``f0_hz``, if ``first`` or
             ``last`` is not a non-negative integer a ``size_t`` holds, or if a
-            buffer is empty or non-finite.
+            buffer is empty. A non-finite ``f0_hz`` frame is read as carrying no
+            pitch, not refused.
         SonareError: If the C call rejects the request (e.g. a run that does not
             ascend, or one that runs past the end of the set).
 

@@ -216,6 +216,16 @@ def _guarded_names(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
                 for argument in decorator.args
                 if isinstance(argument, ast.Constant) and isinstance(argument.value, str)
             )
+            # `shape_only` names are coerced and named by the same call, only
+            # without the value scan, so they carry a name just as structurally.
+            for keyword in decorator.keywords:
+                if keyword.arg != "shape_only" or not isinstance(keyword.value, ast.Tuple):
+                    continue
+                names.update(
+                    element.value
+                    for element in keyword.value.elts
+                    if isinstance(element, ast.Constant) and isinstance(element.value, str)
+                )
     return names
 
 

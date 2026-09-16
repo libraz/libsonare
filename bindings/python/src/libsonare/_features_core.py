@@ -1377,7 +1377,7 @@ def pitch_pyin(
         lib.sonare_free_pitch_result(ctypes.byref(out))
 
 
-@_guard_buffer("f0_hz")
+@_guard_buffer(shape_only=("f0_hz",))
 def note_segments(
     f0_hz: Sequence[float] | list[float],
     voiced_prob: Sequence[float] | list[float],
