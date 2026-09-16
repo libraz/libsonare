@@ -599,7 +599,11 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
                                                       size_t param_count, char** json_out);
 
 /// @brief Analyze audio and return mastering assistant profile JSON.
-/// @details @p params accepts nFft, hopLength, and truePeakOversample.
+/// @details @p params accepts nFft, hopLength, truePeakOversample, and
+/// detectDefects. The last runs the six repair detectors and fills the
+/// @c defects block; it is off by default because they are six further
+/// analysis passes. The block is present either way, and its @c measured
+/// field is what says whether anything looked.
 /// The returned string must be released with sonare_free_string().
 SonareError sonare_mastering_audio_profile(const float* samples, size_t length, int sample_rate,
                                            const SonareMasteringParam* params, size_t param_count,

@@ -73,6 +73,8 @@ inline AudioProfileConfig audio_profile_config_from_params(const api::Param* par
       config.hop_length = static_cast<int>(value);
     } else if (key == "truePeakOversample" || key == "true_peak_oversample") {
       config.true_peak_oversample = static_cast<int>(value);
+    } else if (key == "detectDefects" || key == "detect_defects") {
+      config.detect_defects = value != 0.0;
     }
   }
   return config;

@@ -642,6 +642,38 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_free_string(json);
   }
 
+  SECTION("defect detection is reachable through the C API and stays off by default") {
+    // The defects block is emitted either way, so the reachability question is
+    // whether a param can make `measured` true -- not whether the key is there.
+    auto samples = generate_sine(330.0f, 48000, 2.0f);
+    for (auto& sample : samples) sample *= 0.2f;
+    for (size_t index = 4096; index + 1 < samples.size(); index += 4096) {
+      samples[index] = 0.9f;
+    }
+
+    auto profile_defects = [&samples](const SonareMasteringParam* params, size_t count) {
+      char* json = nullptr;
+      REQUIRE(sonare_mastering_audio_profile(samples.data(), samples.size(), 48000, params, count,
+                                             &json) == SONARE_OK);
+      const auto root = sonare::util::json::parse(json);
+      sonare_free_string(json);
+      const auto* defects = root.find("defects");
+      REQUIRE(defects != nullptr);
+      return *defects;
+    };
+
+    const auto unasked = profile_defects(nullptr, 0);
+    REQUIRE(unasked.find("measured")->as_bool() == false);
+    REQUIRE(unasked.find("clickCount")->as_number() == 0.0);
+
+    const SonareMasteringParam params[] = {{"detectDefects", 1.0}};
+    const auto asked = profile_defects(params, 1);
+    REQUIRE(asked.find("measured")->as_bool() == true);
+    // The same signal reads zero until the param asks, which is what separates
+    // "nothing looked" from "nothing there".
+    REQUIRE(asked.find("clickCount")->as_number() > 0.0);
+  }
+
   SECTION("stereo analysis entry points measure the pair, not a downmix") {
     auto left = generate_sine(1000.0f, 48000, 4.0f);
     auto right = generate_sine(1731.0f, 48000, 4.0f);
