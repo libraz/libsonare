@@ -1,3 +1,4 @@
+import { resolvePositiveIntegerOption } from './_feature_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { InverseMelResult, InverseStftResult } from './types.js';
@@ -119,15 +120,24 @@ export function cqtToAudio(
       : magnitude;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('cqtToAudio', resolvedSampleRate);
+  // Positivity only: the core takes any positive hop and any positive iteration
+  // count, and names the Griffin-Lim ceiling itself when one exceeds it.
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'cqtToAudio',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
+  const resolvedNIter = resolvePositiveIntegerOption('cqtToAudio', 'nIter', request.nIter, 32);
   return addon.cqtToAudio(
     request.magnitude,
     request.nBins,
     request.nFrames,
     resolvedSampleRate,
-    request.hopLength ?? 512,
+    resolvedHopLength,
     request.fmin ?? 32.70319566257483,
     request.binsPerOctave ?? 12,
-    request.nIter ?? 32,
+    resolvedNIter,
   );
 }
 
@@ -172,6 +182,10 @@ export function vqtToAudio(
     );
   }
   assertSampleRate('vqtToAudio', sampleRate);
+  // Checked on the positional parameters the call below sends, which is where
+  // the request form's values arrive after the delegation above.
+  assertPositiveInteger('vqtToAudio', hopLength, 'hopLength');
+  assertPositiveInteger('vqtToAudio', nIter, 'nIter');
   return addon.vqtToAudio(
     magnitude,
     nBins,
@@ -213,12 +227,15 @@ export function melToStft(
   // No range bound here: the core only requires sample_rate > 0 for this
   // reconstruction, unlike the [8000, 384000] audio-analysis bound.
   assertPositiveInteger('melToStft', resolvedSampleRate, 'sampleRate');
+  // Positivity only: the filterbank inverse takes any positive size, so the
+  // even-size rule the STFT entries carry would refuse sizes this one answers.
+  const resolvedNFft = resolvePositiveIntegerOption('melToStft', 'nFft', request.nFft, 2048);
   return addon.melToStft(
     request.mel,
     request.nMels,
     request.nFrames,
     resolvedSampleRate,
-    request.nFft ?? 2048,
+    resolvedNFft,
     request.fmin ?? 0,
     request.fmax ?? 0,
     request.htk ?? false,
@@ -259,16 +276,26 @@ export function melToAudio(
   // No range bound here: the core only requires sample_rate > 0 for this
   // reconstruction, unlike the [8000, 384000] audio-analysis bound.
   assertPositiveInteger('melToAudio', resolvedSampleRate, 'sampleRate');
+  // Positivity only, as melToStft: the geometry rule this reconstruction carries
+  // is that all three are positive.
+  const resolvedNFft = resolvePositiveIntegerOption('melToAudio', 'nFft', request.nFft, 2048);
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'melToAudio',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
+  const resolvedNIter = resolvePositiveIntegerOption('melToAudio', 'nIter', request.nIter, 32);
   return addon.melToAudio(
     request.mel,
     request.nMels,
     request.nFrames,
     resolvedSampleRate,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedNFft,
+    resolvedHopLength,
     request.fmin ?? 0,
     request.fmax ?? 0,
-    request.nIter ?? 32,
+    resolvedNIter,
     request.htk ?? false,
   );
 }
@@ -301,14 +328,24 @@ export function griffinLim(
       : magnitude;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('griffinLim', resolvedSampleRate);
+  // Positivity only: the core pairs the size with `nBins` (`nBins === nFft / 2 + 1`)
+  // rather than bounding it, and names that relation when it does not hold.
+  const resolvedNFft = resolvePositiveIntegerOption('griffinLim', 'nFft', request.nFft, 2048);
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'griffinLim',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
+  const resolvedNIter = resolvePositiveIntegerOption('griffinLim', 'nIter', request.nIter, 32);
   return addon.griffinLim(
     request.magnitude,
     request.nBins,
     request.nFrames,
     resolvedSampleRate,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
-    request.nIter ?? 32,
+    resolvedNFft,
+    resolvedHopLength,
+    resolvedNIter,
     request.momentum ?? 0.99,
   );
 }
@@ -377,17 +414,27 @@ export function mfccToAudio(
   // No range bound here: the core only requires sample_rate > 0 for this
   // reconstruction, unlike the [8000, 384000] audio-analysis bound.
   assertPositiveInteger('mfccToAudio', resolvedSampleRate, 'sampleRate');
+  // Positivity only, as melToAudio: the same reconstruction behind one more
+  // inverse transform, under the same geometry rule.
+  const resolvedNFft = resolvePositiveIntegerOption('mfccToAudio', 'nFft', request.nFft, 2048);
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'mfccToAudio',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
+  const resolvedNIter = resolvePositiveIntegerOption('mfccToAudio', 'nIter', request.nIter, 32);
   return addon.mfccToAudio(
     request.mfcc,
     request.nMfcc,
     request.nFrames,
     request.nMels ?? 128,
     resolvedSampleRate,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedNFft,
+    resolvedHopLength,
     request.fmin ?? 0,
     request.fmax ?? 0,
-    request.nIter ?? 32,
+    resolvedNIter,
     request.htk ?? false,
     request.lifter ?? 0,
   );
@@ -414,12 +461,21 @@ export function phaseVocoder(
   assertFiniteScalar('phaseVocoder', request.rate, 'rate');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('phaseVocoder', resolvedSampleRate);
+  // Positivity only: the analysis geometry is an StftConfig, which requires a
+  // positive size and hop and reports its own size ceiling by name.
+  const resolvedNFft = resolvePositiveIntegerOption('phaseVocoder', 'nFft', request.nFft, 2048);
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'phaseVocoder',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
   return addon.phaseVocoder(
     request.samples,
     resolvedSampleRate,
     request.rate,
-    request.nFft ?? 2048,
-    request.hopLength ?? 512,
+    resolvedNFft,
+    resolvedHopLength,
   );
 }
 

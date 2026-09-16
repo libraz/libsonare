@@ -5,7 +5,7 @@ import type {
   MixAssistantTrack,
   SuggestMixSceneRequest,
 } from './types.js';
-import { assertSampleRate } from './validation.js';
+import { assertPositiveInteger, assertSampleRate } from './validation.js';
 
 /**
  * Assistant tunables, in the order the native config declares them. Only keys
@@ -85,12 +85,28 @@ function normalizeTracks(fnName: string, tracks: MixAssistantTrack[]): NativeTra
   return { left, right: anyRight ? right : null, ids, names: anyName ? names : null };
 }
 
-function normalizeOptions(options: MixAssistantOptions = {}): Record<string, number | boolean> {
+/** The two analysis-geometry keys, which reach the core as a truncating cast. */
+const INTEGER_OPTION_KEYS = ['nFft', 'hopLength'] as const;
+
+function normalizeOptions(
+  fnName: string,
+  options: MixAssistantOptions = {},
+): Record<string, number | boolean> {
   const params: Record<string, number | boolean> = {};
   for (const key of OPTION_KEYS) {
     const value = options[key];
     if (value !== undefined) {
       params[key] = value;
+    }
+  }
+  // Only what the caller supplied: an omitted key never reaches the param list,
+  // so resolving a default here would check this file's guess at the core's.
+  // Positivity is the STFT geometry's own rule; the size ceiling stays the
+  // core's, which names it.
+  for (const key of INTEGER_OPTION_KEYS) {
+    const value = options[key];
+    if (value !== undefined) {
+      assertPositiveInteger(fnName, value, key);
     }
   }
   return params;
@@ -102,7 +118,7 @@ function suggest(fnName: string, request: SuggestMixSceneRequest, sceneOnly: boo
   }
   assertSampleRate(fnName, request.sampleRate);
   const tracks = normalizeTracks(fnName, request.tracks);
-  const params = normalizeOptions(request.options);
+  const params = normalizeOptions(fnName, request.options);
   const entry = sceneOnly ? addon.mixingAssistantSuggestSceneJson : addon.mixingAssistantSuggest;
   return entry(tracks.left, tracks.right, tracks.ids, tracks.names, request.sampleRate, params);
 }

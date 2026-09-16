@@ -18,7 +18,30 @@ import type {
   TrimRange,
   TrimSilenceStereoResult,
 } from './types.js';
-import { assertPositiveInteger, assertSampleRate } from './validation.js';
+import { assertIntegerValue, assertPositiveInteger, assertSampleRate } from './validation.js';
+
+/**
+ * Check the STFT geometry the denoise and dereverb entries share, before the
+ * addon's options reader narrows it onto a size the core accepts.
+ *
+ * Only what the caller supplied, because the whole request travels to that
+ * reader. The two halves take different guards because the core states
+ * different rules: `nFft` must be a POWER OF TWO, which positivity does not
+ * imply, so only the truncation is closed here and the size rule stays with the
+ * reader that names it; `hopLength` is checked `> 0` outright, so positivity is
+ * this field's own domain and the `hopLength <= nFft` pairing stays the core's.
+ */
+function assertRepairGeometry(
+  fnName: string,
+  options: { nFft?: number; hopLength?: number },
+): void {
+  if (options.nFft !== undefined) {
+    assertIntegerValue(fnName, options.nFft, 'nFft');
+  }
+  if (options.hopLength !== undefined) {
+    assertPositiveInteger(fnName, options.hopLength, 'hopLength');
+  }
+}
 
 /** Common input fields for offline repair processors. */
 export interface MasteringRepairSamplesRequest {
@@ -131,6 +154,7 @@ export function masteringRepairDenoiseClassical(
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringRepairDenoiseClassical', resolvedSampleRate);
+  assertRepairGeometry('masteringRepairDenoiseClassical', request);
   return addon.masteringRepairDenoiseClassical(request.samples, resolvedSampleRate, request);
 }
 
@@ -181,6 +205,7 @@ export function masteringRepairDenoiseClassicalStereo(
 ): DenoiseStereoResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringRepairDenoiseClassicalStereo', resolvedSampleRate);
+  assertRepairGeometry('masteringRepairDenoiseClassicalStereo', request);
   return addon.masteringRepairDenoiseClassicalStereo(
     request.left,
     request.right,
@@ -242,6 +267,7 @@ export function masteringRepairDenoiseClassicalLinked(
 ): DenoiseLinkedResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringRepairDenoiseClassicalLinked', resolvedSampleRate);
+  assertRepairGeometry('masteringRepairDenoiseClassicalLinked', request);
   return addon.masteringRepairDenoiseClassicalLinked(request.channels, resolvedSampleRate, request);
 }
 
@@ -510,6 +536,7 @@ export function masteringRepairDereverbClassical(
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringRepairDereverbClassical', resolvedSampleRate);
+  assertRepairGeometry('masteringRepairDereverbClassical', request);
   return addon.masteringRepairDereverbClassical(request.samples, resolvedSampleRate, request);
 }
 
@@ -560,6 +587,7 @@ export function masteringRepairDereverbClassicalStereo(
 ): DereverbStereoResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringRepairDereverbClassicalStereo', resolvedSampleRate);
+  assertRepairGeometry('masteringRepairDereverbClassicalStereo', request);
   return addon.masteringRepairDereverbClassicalStereo(
     request.left,
     request.right,
@@ -622,6 +650,7 @@ export function masteringRepairDereverbClassicalLinked(
 ): DereverbLinkedResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringRepairDereverbClassicalLinked', resolvedSampleRate);
+  assertRepairGeometry('masteringRepairDereverbClassicalLinked', request);
   return addon.masteringRepairDereverbClassicalLinked(
     request.channels,
     resolvedSampleRate,
@@ -686,6 +715,7 @@ export function masteringRepairDereverbConfigForRoom(
   config: DereverbClassicalOptions = {},
 ): Required<DereverbClassicalOptions> {
   const request = 'estimate' in estimate ? estimate : { estimate, ...config };
+  assertRepairGeometry('masteringRepairDereverbConfigForRoom', request);
   return addon.masteringRepairDereverbConfigForRoom(request.estimate, request);
 }
 
@@ -832,6 +862,7 @@ export function masteringRepairDetectNoiseFloor(
 ): NoiseDetection {
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringRepairDetectNoiseFloor', resolvedSampleRate);
+  assertRepairGeometry('masteringRepairDetectNoiseFloor', request);
   return addon.masteringRepairDetectNoiseFloor(request.samples, resolvedSampleRate, request);
 }
 
@@ -892,6 +923,7 @@ export function masteringRepairNoiseBandBins(
   if (request.sampleRate !== undefined) {
     assertPositiveInteger('masteringRepairNoiseBandBins', request.sampleRate, 'sampleRate');
   }
+  assertRepairGeometry('masteringRepairNoiseBandBins', request);
   return addon.masteringRepairNoiseBandBins(request);
 }
 
@@ -1006,6 +1038,7 @@ export function masteringRepairDetectReverb(
 ): ReverbDetection {
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringRepairDetectReverb', resolvedSampleRate);
+  assertRepairGeometry('masteringRepairDetectReverb', request);
   return addon.masteringRepairDetectReverb(request.samples, resolvedSampleRate, request);
 }
 

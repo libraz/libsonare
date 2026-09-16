@@ -1,3 +1,4 @@
+import { resolvePositiveIntegerOption } from './_feature_options.js';
 import { resolveFftOptions } from './_fft_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
@@ -258,12 +259,15 @@ export function decompose(
 ): { w: Matrix2D; h: Matrix2D } {
   const request =
     s instanceof Float32Array ? { s, nFeatures, nFrames, nComponents, nIter, beta, init } : s;
+  // Positivity only: 0 iterations returns the raw init matrices, which the C ABI
+  // refuses for that reason and bounds no further.
+  const resolvedNIter = resolvePositiveIntegerOption('decompose', 'nIter', request.nIter, 50);
   return addon.decompose(
     request.s,
     request.nFeatures,
     request.nFrames,
     request.nComponents,
-    request.nIter ?? 50,
+    resolvedNIter,
     request.beta ?? 2,
     request.init ?? 'random',
   );

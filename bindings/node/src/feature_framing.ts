@@ -2,6 +2,7 @@ import { resolvePositiveIntegerOption } from './_feature_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import type { ValuesRequest } from './feature_units.js';
 import { addon } from './native.js';
+import { assertPositiveInteger } from './validation.js';
 
 export interface TrimSilenceRequest {
   samples: Float32Array;
@@ -119,11 +120,24 @@ export function trimSilence(
 ): { audio: Float32Array; startSample: number; endSample: number } {
   const request =
     samples instanceof Float32Array ? { samples, topDb, frameLength, hopLength } : samples;
+  // The framing rule `trim` itself enforces: both positive, no other domain.
+  const resolvedFrameLength = resolvePositiveIntegerOption(
+    'trimSilence',
+    'frameLength',
+    request.frameLength,
+    2048,
+  );
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'trimSilence',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
   return addon.trimSilence(
     request.samples,
     request.topDb ?? 60,
-    request.frameLength ?? 2048,
-    request.hopLength ?? 512,
+    resolvedFrameLength,
+    resolvedHopLength,
   );
 }
 
@@ -142,11 +156,24 @@ export function splitSilence(
 ): Int32Array {
   const request =
     samples instanceof Float32Array ? { samples, topDb, frameLength, hopLength } : samples;
+  // Both positive, as trimSilence: `split` applies the same framing rule.
+  const resolvedFrameLength = resolvePositiveIntegerOption(
+    'splitSilence',
+    'frameLength',
+    request.frameLength,
+    2048,
+  );
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'splitSilence',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
   return addon.splitSilence(
     request.samples,
     request.topDb ?? 60,
-    request.frameLength ?? 2048,
-    request.hopLength ?? 512,
+    resolvedFrameLength,
+    resolvedHopLength,
   );
 }
 
@@ -162,6 +189,10 @@ export function frameSignal(
   hopLength = 0,
 ): { nFrames: number; frames: Float32Array } {
   const request = samples instanceof Float32Array ? { samples, frameLength, hopLength } : samples;
+  // Both positive, as the sibling framing entries. The positional form's 0 is
+  // not a default the core has -- it refuses one -- so it is refused by name here.
+  assertPositiveInteger('frameSignal', request.frameLength, 'frameLength');
+  assertPositiveInteger('frameSignal', request.hopLength, 'hopLength');
   return addon.frameSignal(request.samples, request.frameLength, request.hopLength);
 }
 

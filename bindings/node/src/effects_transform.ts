@@ -1,3 +1,4 @@
+import { resolvePositiveIntegerOption } from './_feature_options.js';
 import { resolveFftOptions } from './_fft_options.js';
 import { addon } from './native.js';
 import type {
@@ -647,12 +648,20 @@ export function pitchCorrectToMidiTimevarying(
         }
       : samples;
   assertPitchTrackLengths(request.f0Hz, request.voiced, request.voicedProb);
+  // Positivity only: the corrector requires a positive hop to place the contour
+  // and carries no further domain.
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'pitchCorrectToMidiTimevarying',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
   return addon.pitchCorrectToMidiTimevarying(
     request.samples,
     request.sampleRate ?? 22050,
     request.f0Hz,
     request.targetMidi,
-    request.hopLength ?? 512,
+    resolvedHopLength,
     request.voiced ? toVoicedInt32(request.voiced) : undefined,
     request.voicedProb,
   );
@@ -696,11 +705,18 @@ export function pitchCorrectTimevarying(
     ...requestOptions
   } = request;
   assertPitchTrackLengths(requestF0Hz, requestOptions.voiced, requestOptions.voicedProb);
+  // Positivity only, as pitchCorrectToMidiTimevarying: the same corrector.
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'pitchCorrectTimevarying',
+    'hopLength',
+    requestHopLength,
+    512,
+  );
   return addon.pitchCorrectTimevarying(
     input,
     requestSampleRate ?? 22050,
     requestF0Hz,
-    requestHopLength ?? 512,
+    resolvedHopLength,
     {
       ...requestOptions,
       voiced: requestOptions.voiced ? toVoicedInt32(requestOptions.voiced) : undefined,

@@ -92,6 +92,7 @@ import type {
   TimbreResult,
 } from './types.js';
 import type { ValidateOptions } from './validation.js';
+import { assertPositiveInteger } from './validation.js';
 
 export class Audio {
   private native: InstanceType<typeof addon.Audio>;
@@ -254,6 +255,10 @@ export class Audio {
 
   silenceRatio(thresholdDb = -45, frameLength = 1024, hopLength = 256): number {
     this.requireAlive();
+    // Positivity only, as the free meteringSilenceRatio: the same C entry, which
+    // requires both positive and bounds neither.
+    assertPositiveInteger('silenceRatio', frameLength, 'frameLength');
+    assertPositiveInteger('silenceRatio', hopLength, 'hopLength');
     return this.native.silenceRatio(thresholdDb, frameLength, hopLength);
   }
 

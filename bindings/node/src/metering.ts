@@ -1,3 +1,4 @@
+import { resolvePositiveIntegerOption } from './_feature_options.js';
 import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
 import {
@@ -157,12 +158,25 @@ export function meteringSilenceRatio(
   assertSamples('meteringSilenceRatio', request.samples, request.validate !== false);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('meteringSilenceRatio', resolvedSampleRate);
+  // Positivity only: the C entry requires both positive and bounds neither.
+  const resolvedFrameLength = resolvePositiveIntegerOption(
+    'meteringSilenceRatio',
+    'frameLength',
+    request.frameLength,
+    1024,
+  );
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'meteringSilenceRatio',
+    'hopLength',
+    request.hopLength,
+    256,
+  );
   return addon.meteringSilenceRatio(
     request.samples,
     resolvedSampleRate,
     request.thresholdDb ?? -45,
-    request.frameLength ?? 1024,
-    request.hopLength ?? 256,
+    resolvedFrameLength,
+    resolvedHopLength,
   );
 }
 
