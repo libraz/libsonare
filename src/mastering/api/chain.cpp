@@ -177,12 +177,14 @@ int reported_true_peak_oversample(const MasteringChainConfig& config) {
 
 int count_enabled_mono_stages(const MasteringChainConfig& cfg) {
   int n = 0;
-  if (cfg.repair.declick.enabled) ++n;
+  // Listed in the order the stages run, which a total does not depend on but a
+  // reader checking the order against process() does.
   if (cfg.repair.declip.enabled) ++n;
+  if (cfg.repair.declick.enabled) ++n;
   if (cfg.repair.decrackle.enabled) ++n;
   if (cfg.repair.dehum.enabled) ++n;
-  if (cfg.repair.dereverb.enabled) ++n;
   if (cfg.repair.denoise.enabled) ++n;
+  if (cfg.repair.dereverb.enabled) ++n;
   if (cfg.eq.tilt.enabled) ++n;
   if (cfg.dynamics.deesser.enabled) ++n;
   if (cfg.dynamics.transient_shaper.enabled) ++n;
@@ -227,11 +229,11 @@ void validate_mastering_chain_config(const MasteringChainConfig& config) {
   });
   // Repair's own validators are only reached from inside the repair call, which
   // is already mid-track, so an invalid stage has to be refused here.
-  if (config.repair.declick.enabled) {
-    check_stage("repair.declick", [&] { repair::validate_config(config.repair.declick.config); });
-  }
   if (config.repair.declip.enabled) {
     check_stage("repair.declip", [&] { repair::validate_config(config.repair.declip.config); });
+  }
+  if (config.repair.declick.enabled) {
+    check_stage("repair.declick", [&] { repair::validate_config(config.repair.declick.config); });
   }
   if (config.repair.decrackle.enabled) {
     check_stage("repair.decrackle",
@@ -240,11 +242,11 @@ void validate_mastering_chain_config(const MasteringChainConfig& config) {
   if (config.repair.dehum.enabled) {
     check_stage("repair.dehum", [&] { repair::validate_config(config.repair.dehum.config); });
   }
-  if (config.repair.dereverb.enabled) {
-    check_stage("repair.dereverb", [&] { repair::validate_config(config.repair.dereverb.config); });
-  }
   if (config.repair.denoise.enabled) {
     check_stage("repair.denoise", [&] { repair::validate_config(config.repair.denoise.config); });
+  }
+  if (config.repair.dereverb.enabled) {
+    check_stage("repair.dereverb", [&] { repair::validate_config(config.repair.dereverb.config); });
   }
   // Every enabled stage's own static validator, run here rather than where the
   // stage is constructed: construction happens after the repair stages have
@@ -404,20 +406,26 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     return true;
   };
 
-  // 1. repair.declick
-  if (config_.repair.declick.enabled) {
-    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
-      return mastering::repair::declick(in, config_.repair.declick.config);
-    });
-    if (!report("repair.declick")) return std::nullopt;
-  }
+  // The repair stages run widest-damage-first, so each one sees material the
+  // previous has already made well-formed. declip precedes declick because a
+  // flat-topped region has no transient for a click detector to measure, and
+  // dereverb runs last because a broadband floor reads as a stationary late
+  // tail and biases the reverb estimate towards it.
 
-  // 2. repair.declip
+  // 1. repair.declip
   if (config_.repair.declip.enabled) {
     detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
       return mastering::repair::declip(in, config_.repair.declip.config);
     });
     if (!report("repair.declip")) return std::nullopt;
+  }
+
+  // 2. repair.declick
+  if (config_.repair.declick.enabled) {
+    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
+      return mastering::repair::declick(in, config_.repair.declick.config);
+    });
+    if (!report("repair.declick")) return std::nullopt;
   }
 
   // 3. repair.decrackle
@@ -436,20 +444,20 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     if (!report("repair.dehum")) return std::nullopt;
   }
 
-  // 5. repair.dereverb
-  if (config_.repair.dereverb.enabled) {
-    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
-      return mastering::repair::dereverb_classical(in, config_.repair.dereverb.config);
-    });
-    if (!report("repair.dereverb")) return std::nullopt;
-  }
-
-  // 6. repair.denoise
+  // 5. repair.denoise
   if (config_.repair.denoise.enabled) {
     detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
       return mastering::repair::denoise_classical(in, config_.repair.denoise.config);
     });
     if (!report("repair.denoise")) return std::nullopt;
+  }
+
+  // 6. repair.dereverb
+  if (config_.repair.dereverb.enabled) {
+    detail::apply_repair_in_place(data, sample_rate, [this](const Audio& in) {
+      return mastering::repair::dereverb_classical(in, config_.repair.dereverb.config);
+    });
+    if (!report("repair.dereverb")) return std::nullopt;
   }
 
   // 7. eq.tilt
@@ -656,20 +664,22 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   // the summed power. Repairing the channels independently moved the image on
   // exactly the transients a repair touches.
 
-  // 1. repair.declick
-  if (config_.repair.declick.enabled) {
-    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
-      return mastering::repair::declick_stereo(l, r, config_.repair.declick.config);
-    });
-    if (!report("repair.declick")) return std::nullopt;
-  }
+  // Ordered as the mono path orders them, and for the same reasons.
 
-  // 2. repair.declip
+  // 1. repair.declip
   if (config_.repair.declip.enabled) {
     detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
       return mastering::repair::declip_stereo(l, r, config_.repair.declip.config);
     });
     if (!report("repair.declip")) return std::nullopt;
+  }
+
+  // 2. repair.declick
+  if (config_.repair.declick.enabled) {
+    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
+      return mastering::repair::declick_stereo(l, r, config_.repair.declick.config);
+    });
+    if (!report("repair.declick")) return std::nullopt;
   }
 
   // 3. repair.decrackle
@@ -688,20 +698,20 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     if (!report("repair.dehum")) return std::nullopt;
   }
 
-  // 5. repair.dereverb
-  if (config_.repair.dereverb.enabled) {
-    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
-      return mastering::repair::dereverb_classical_stereo(l, r, config_.repair.dereverb.config);
-    });
-    if (!report("repair.dereverb")) return std::nullopt;
-  }
-
-  // 6. repair.denoise
+  // 5. repair.denoise
   if (config_.repair.denoise.enabled) {
     detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
       return mastering::repair::denoise_classical_stereo(l, r, config_.repair.denoise.config);
     });
     if (!report("repair.denoise")) return std::nullopt;
+  }
+
+  // 6. repair.dereverb
+  if (config_.repair.dereverb.enabled) {
+    detail::apply_stereo_repair(left, right, sample_rate, [this](const Audio& l, const Audio& r) {
+      return mastering::repair::dereverb_classical_stereo(l, r, config_.repair.dereverb.config);
+    });
+    if (!report("repair.dereverb")) return std::nullopt;
   }
 
   // 7. eq.tilt

@@ -124,6 +124,50 @@ TEST_CASE("MasteringChain reports enabled stage names in result", "[mastering][c
   REQUIRE(result.stages.front() == "eq.tilt");
 }
 
+TEST_CASE("MasteringChain runs the repair stages in one order on both paths",
+          "[mastering][chain][repair]") {
+  // The mono and stereo paths spell their order independently, and the preset
+  // goldens only ever call the mono entry point, so a stereo path left in a
+  // different order changes nothing any other test reads: the same config would
+  // quietly produce two different renders depending on the channel count.
+  MasteringChainConfig config;
+  config.repair.declip.enabled = true;
+  config.repair.declick.enabled = true;
+  config.repair.decrackle.enabled = true;
+  config.repair.dehum.enabled = true;
+  config.repair.denoise.enabled = true;
+  config.repair.dereverb.enabled = true;
+
+  // Widest damage first, so each stage sees material the one before it has
+  // already made well-formed.
+  const std::vector<std::string> kRepairOrder = {"repair.declip",    "repair.declick",
+                                                 "repair.decrackle", "repair.dehum",
+                                                 "repair.denoise",   "repair.dereverb"};
+
+  constexpr int kSampleRate = 44100;
+  std::vector<float> samples(kSampleRate / 4, 0.0f);
+  const double step = 2.0 * constants::kPiD * 440.0 / kSampleRate;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = 0.2f * static_cast<float>(std::sin(step * static_cast<double>(i)));
+  }
+
+  MasteringChain mono_chain(config);
+  const auto mono = mono_chain.process_mono(samples.data(), samples.size(), kSampleRate);
+  MasteringChain stereo_chain(config);
+  const auto stereo =
+      stereo_chain.process_stereo(samples.data(), samples.data(), samples.size(), kSampleRate);
+
+  REQUIRE(mono.stages.size() >= kRepairOrder.size());
+  REQUIRE(stereo.stages.size() >= kRepairOrder.size());
+  const auto mono_repair = std::vector<std::string>(
+      mono.stages.begin(), mono.stages.begin() + static_cast<std::ptrdiff_t>(kRepairOrder.size()));
+  const auto stereo_repair = std::vector<std::string>(
+      stereo.stages.begin(),
+      stereo.stages.begin() + static_cast<std::ptrdiff_t>(kRepairOrder.size()));
+  CHECK(mono_repair == kRepairOrder);
+  CHECK(stereo_repair == kRepairOrder);
+}
+
 TEST_CASE("MasteringChain regular processing skips the cancellation callback",
           "[mastering][chain]") {
   std::vector<float> samples(44100, 0.1f);
