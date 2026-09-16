@@ -36,6 +36,7 @@ import {
   reassignedSpectrogram,
   resample,
   rmsEnergy,
+  SonareError,
   segmentAgglomerative,
   segmentCrossSimilarity,
   segmentLagToRecurrence,
@@ -701,9 +702,21 @@ describe('Feature API precision (reference compatibility)', () => {
 
     it('timeStretch rejects non-finite and oversized projected rates, then recovers', () => {
       const tone = generateSine(440, SR, 0.1);
-      expect(() => timeStretch(tone, SR, Number.NaN)).toThrow();
-      expect(() => timeStretch(tone, SR, Number.POSITIVE_INFINITY)).toThrow();
-      expect(() => timeStretch(tone, SR, 1.1754943508222875e-38)).toThrow();
+      // Pinned to the class, not to "something was thrown". WASM answers a
+      // non-finite rate with the shared facade assertion and agrees with the
+      // addon on the wording, but it agrees only because it was made to: an
+      // assertion that accepts any throw cannot hold that agreement, and this
+      // one went on passing when the class moved underneath it.
+      expect(() => timeStretch(tone, SR, Number.NaN)).toThrow(
+        new RangeError('timeStretch: rate must be a finite number'),
+      );
+      expect(() => timeStretch(tone, SR, Number.POSITIVE_INFINITY)).toThrow(
+        new RangeError('timeStretch: rate must be a finite number'),
+      );
+      // Finite, so the facade passes it on and the core refuses the projected
+      // length instead. The two rejections are different layers, and keeping
+      // them distinguishable here is the point.
+      expect(() => timeStretch(tone, SR, 1.1754943508222875e-38)).toThrow(SonareError);
       expect(Array.from(timeStretch(tone, SR, 1)).every(Number.isFinite)).toBe(true);
     });
 
