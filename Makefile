@@ -23,6 +23,11 @@ CMAKE ?= cmake
 # An explicit --parallel outranks CMAKE_BUILD_PARALLEL_LEVEL, so honour that
 # variable here or the documented way to cap a shared machine silently loses.
 HARDENING_JOBS ?= $(if $(CMAKE_BUILD_PARALLEL_LEVEL),$(CMAKE_BUILD_PARALLEL_LEVEL),2)
+# Compile workers for the ordinary build targets. A bare `-j` outranks
+# CMAKE_BUILD_PARALLEL_LEVEL the same way an explicit --parallel does, and it
+# means "unbounded" to the underlying make, so pass the level through when one
+# is set and fall back to the native default when it is not.
+BUILD_PARALLEL := $(if $(CMAKE_BUILD_PARALLEL_LEVEL),--parallel $(CMAKE_BUILD_PARALLEL_LEVEL),-j)
 UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 PYTHON_PKG_DIR := bindings/python/src/libsonare
 UNAME_S := $(shell uname -s)
@@ -40,11 +45,11 @@ all: build
 
 build:
 	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug
-	$(CMAKE) --build $(BUILD_DIR) -j
+	$(CMAKE) --build $(BUILD_DIR) $(BUILD_PARALLEL)
 
 release:
 	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
-	$(CMAKE) --build $(BUILD_DIR) -j
+	$(CMAKE) --build $(BUILD_DIR) $(BUILD_PARALLEL)
 
 # Install the C++ library, its headers, the CMake package files and the native
 # CLI under CMAKE_INSTALL_PREFIX (/usr/local by default; override with
@@ -65,11 +70,11 @@ test-install:
 	rm -rf $(INSTALL_PREFIX_DIR) build-install-consumer
 	$(CMAKE) -B build-install -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
 	  -DBUILD_SHARED=ON -DCMAKE_INSTALL_PREFIX=$(INSTALL_PREFIX_DIR)
-	$(CMAKE) --build build-install -j
+	$(CMAKE) --build build-install $(BUILD_PARALLEL)
 	$(CMAKE) --install build-install
 	$(CMAKE) -S tests/cmake/consumer -B build-install-consumer \
 	  -DCMAKE_PREFIX_PATH=$(INSTALL_PREFIX_DIR)
-	$(CMAKE) --build build-install-consumer -j
+	$(CMAKE) --build build-install-consumer $(BUILD_PARALLEL)
 	ctest --test-dir build-install-consumer --output-on-failure --no-tests=error
 
 # Delegates instead of configuring a tree of its own, because the feature
@@ -115,7 +120,7 @@ test-golden: build fixtures
 
 test-optional-fixtures:
 	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
-	$(CMAKE) --build $(OPTIONAL_FIXTURE_BUILD_DIR) -j
+	$(CMAKE) --build $(OPTIONAL_FIXTURE_BUILD_DIR) $(BUILD_PARALLEL)
 	ctest --test-dir $(OPTIONAL_FIXTURE_BUILD_DIR) --output-on-failure -R "optional|fixture|EBU R128" --parallel
 
 # Measures musical accuracy against whatever corpus the music_eval manifests
@@ -125,7 +130,7 @@ test-optional-fixtures:
 # dimension with no rows. See tools/eval/README.md.
 accuracy-report:
 	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
-	$(CMAKE) --build $(OPTIONAL_FIXTURE_BUILD_DIR) -j
+	$(CMAKE) --build $(OPTIONAL_FIXTURE_BUILD_DIR) $(BUILD_PARALLEL)
 	python3 tests/fixtures/run_optional_fixture_report.py --suite music \
 	        --sonare-tests $(OPTIONAL_FIXTURE_BUILD_DIR)/bin/sonare_tests \
 	        --output $(ACCURACY_REPORT_JSON)
@@ -197,7 +202,7 @@ format-check:
 # Binding targets
 build-shared:
 	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON
-	$(CMAKE) --build $(BUILD_DIR) --target sonare_shared -j
+	$(CMAKE) --build $(BUILD_DIR) --target sonare_shared $(BUILD_PARALLEL)
 	cp -L $(SHARED_LIB) $(PYTHON_SHARED_LIB)
 ifeq ($(UNAME_S),Darwin)
 	-install_name_tool -id @loader_path/libsonare.dylib $(PYTHON_SHARED_LIB)
@@ -228,7 +233,7 @@ FIELD_COVERAGE := $(CURDIR)/tools/voicematch/field-coverage.json
 
 build-bank-shared:
 	$(CMAKE) -S . -B $(BANK_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TUNING=ON
-	$(CMAKE) --build $(BANK_BUILD_DIR) --target sonare_shared -j
+	$(CMAKE) --build $(BANK_BUILD_DIR) --target sonare_shared $(BUILD_PARALLEL)
 
 # NOTE is what the bump is recorded as; a run without one records "unrecorded",
 # which the version can never recover.
@@ -663,7 +668,7 @@ VOICE_SHARED_LIB := $(CURDIR)/$(VOICE_BUILD_DIR)/lib/libsonare.so
 endif
 voice-gate:
 	$(CMAKE) -S . -B $(VOICE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON
-	$(CMAKE) --build $(VOICE_BUILD_DIR) --target sonare_shared -j
+	$(CMAKE) --build $(VOICE_BUILD_DIR) --target sonare_shared $(BUILD_PARALLEL)
 	@found=0; failed=""; \
 	for gate in tools/voicematch/reference/*_gate.json; do \
 		test -e "$$gate" || continue; \
@@ -699,7 +704,7 @@ ci-local:
 # Coverage targets
 coverage-build:
 	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON
-	$(CMAKE) --build $(BUILD_DIR) -j
+	$(CMAKE) --build $(BUILD_DIR) $(BUILD_PARALLEL)
 
 coverage: coverage-build
 	@mkdir -p $(BUILD_DIR)/coverage
