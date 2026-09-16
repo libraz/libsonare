@@ -11,6 +11,7 @@ import type {
   StreamFramesU8,
   StreamQuantizeConfig,
 } from './types.js';
+import { assertExactInteger } from './validation.js';
 
 /**
  * Configuration accepted by the {@link StreamingMasteringChain} constructor.
@@ -246,14 +247,8 @@ export class StreamAnalyzer {
   private disposed = false;
 
   constructor(config: StreamAnalyzerConfig = {}) {
-    if (
-      config.outputFormat !== undefined &&
-      (typeof config.outputFormat !== 'number' ||
-        !Number.isFinite(config.outputFormat) ||
-        !Number.isInteger(config.outputFormat) ||
-        config.outputFormat !== 0)
-    ) {
-      throw new TypeError('outputFormat must be the integer 0 (Float32)');
+    if (config.outputFormat !== undefined) {
+      assertExactInteger('StreamAnalyzer', config.outputFormat, 'outputFormat', 0, 'Float32');
     }
     this.native = new addon.StreamAnalyzer(config);
   }

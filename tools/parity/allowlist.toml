@@ -59,6 +59,16 @@ node = [
   "assert_int64",           # safe-integer-range sibling of assert_int32, same family
   "assert_non_negative_safe_integer", # non-negative sibling of assert_int64, same family; assert_u32 caps lower and assert_int64 ignores sign
   "assert_project_midi_events",
+  # Same family, added so the range and integrality predicates the facade modules
+  # used to spell inline live in one place. Each is a shape the list above does
+  # not already cover, which is why they are separate rather than folded.
+  "assert_non_negative_scalar",   # finite scalar with a floor of zero
+  "assert_integer_type",          # integrality alone, reported as a type error
+  "assert_integer_value",         # integrality, splitting the non-number case from the fractional one
+  "assert_bounded_integer",       # integer inside a caller-named interval, which assert_u7 and assert_nibble fix
+  "assert_positive_integer",      # integer above zero, capped at the C int range
+  "assert_even_integer_at_least", # even integer with a floor, for an FFT size
+  "assert_exact_integer",         # integer equal to one accepted value
   "midi1_event",
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
   "is_sonare_error",        # TS type guard for the SonareError shape; no C symbol

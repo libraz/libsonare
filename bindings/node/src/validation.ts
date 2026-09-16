@@ -88,6 +88,14 @@ export function assertFiniteScalar(fnName: string, value: number, argName: strin
   }
 }
 
+/** {@link assertFiniteScalar} plus a floor of zero, for a quantity that is a magnitude. */
+export function assertNonNegativeScalar(fnName: string, value: number, argName: string): void {
+  assertFiniteScalar(fnName, value, argName);
+  if (value < 0) {
+    throw new RangeError(`${fnName}: ${argName} must be non-negative`);
+  }
+}
+
 /**
  * Offline-analysis sample-rate bounds, mirroring the C++ core limits
  * (`sonare::kMinAudioSampleRate` / `kMaxAudioSampleRate` in `core/audio.h`) and
@@ -121,6 +129,89 @@ export function assertNibble(fnName: string, value: number, argName: string): nu
     throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 15]`);
   }
   return value;
+}
+
+/**
+ * Reject anything `Number.isInteger` refuses, wrong type included.
+ *
+ * `Number.isInteger` already returns `false` for a value that is not a
+ * `number` at all, so a separate `typeof` guard ahead of it would be dead
+ * code: the two collapse to one class (`TypeError`) and one message here.
+ */
+export function assertIntegerType(
+  fnName: string,
+  value: unknown,
+  argName: string,
+): asserts value is number {
+  if (!Number.isInteger(value)) {
+    throw new TypeError(`${fnName}: ${argName} must be an integer`);
+  }
+}
+
+/**
+ * Split "not an integer" the way some option resolvers report it: `TypeError`
+ * when the value is not a `number` at all, `RangeError` when it is a number
+ * but not integral -- the right-type, wrong-domain half of the same message.
+ * Unlike {@link assertIntegerType}, the two halves are distinguishable, so
+ * both checks are needed.
+ */
+export function assertIntegerValue(
+  fnName: string,
+  value: unknown,
+  argName: string,
+): asserts value is number {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be an integer`);
+  }
+  if (!Number.isInteger(value)) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer`);
+  }
+}
+
+/** General integer-in-`[min, max]` check, for a bound {@link assertU7}/{@link assertNibble} don't cover. */
+export function assertBoundedInteger(
+  fnName: string,
+  value: number,
+  argName: string,
+  min: number,
+  max: number,
+): void {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [${min}, ${max}]`);
+  }
+}
+
+/** Integer strictly greater than zero, up to the native `int` ceiling. */
+export function assertPositiveInteger(fnName: string, value: number, argName: string): void {
+  if (!Number.isInteger(value) || value <= 0 || value > C_INT_MAX) {
+    throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
+  }
+}
+
+/** Even integer in `[min, max]`, for an FFT-style size where only parity matters. */
+export function assertEvenIntegerAtLeast(
+  fnName: string,
+  value: number,
+  argName: string,
+  min: number,
+  max: number,
+): void {
+  if (!Number.isInteger(value) || value < min || value > max || value % 2 !== 0) {
+    throw new RangeError(`${fnName}: ${argName} must be an even integer >= ${min}`);
+  }
+}
+
+/** Reject anything but one specific accepted integer, for a field that presently has a single legal value. */
+export function assertExactInteger(
+  fnName: string,
+  value: number,
+  argName: string,
+  expected: number,
+  note: string,
+): void {
+  if (!Number.isInteger(value) || value !== expected) {
+    throw new TypeError(`${fnName}: ${argName} must be the integer ${expected} (${note})`);
+  }
 }
 
 export function midi1Event(

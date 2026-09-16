@@ -44,6 +44,7 @@ import type {
   WarpMode,
 } from './types.js';
 import {
+  assertBoundedInteger,
   assertInt32,
   assertInt64,
   assertProjectMidiEvents,
@@ -360,9 +361,7 @@ export class Project {
     channel: number,
     bend: number,
   ): ProjectMidiEvent {
-    if (!Number.isInteger(bend) || bend < 0 || bend > 0x3fff) {
-      throw new RangeError('Project.midiPitchBend: bend must be an integer in [0, 16383]');
-    }
+    assertBoundedInteger('Project.midiPitchBend', bend, 'bend', 0, 0x3fff);
     return midi1Event('Project.midiPitchBend', ppq, group, 0xe, channel, bend & 0x7f, bend >> 7);
   }
 

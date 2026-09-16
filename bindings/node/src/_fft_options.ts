@@ -1,3 +1,9 @@
+import {
+  assertEvenIntegerAtLeast,
+  assertIntegerType,
+  assertPositiveInteger,
+} from './validation.js';
+
 /**
  * The facade's single FFT-size/hop domain.
  *
@@ -25,17 +31,9 @@ export function resolveFftOptions(
 ): { nFft: number; hopLength: number } {
   const resolvedNFft = nFft === undefined ? 2048 : nFft;
   const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
-  if (typeof resolvedNFft !== 'number' || !Number.isInteger(resolvedNFft)) {
-    throw new TypeError(`${fnName}: nFft must be an integer`);
-  }
-  if (resolvedNFft < 2 || resolvedNFft > 2 ** 30 || resolvedNFft % 2 !== 0) {
-    throw new RangeError(`${fnName}: nFft must be an even integer >= 2`);
-  }
-  if (typeof resolvedHopLength !== 'number' || !Number.isInteger(resolvedHopLength)) {
-    throw new TypeError(`${fnName}: hopLength must be an integer`);
-  }
-  if (resolvedHopLength <= 0 || resolvedHopLength > 2 ** 31 - 1) {
-    throw new RangeError(`${fnName}: hopLength must be a positive integer`);
-  }
+  assertIntegerType(fnName, resolvedNFft, 'nFft');
+  assertEvenIntegerAtLeast(fnName, resolvedNFft, 'nFft', 2, 2 ** 30);
+  assertIntegerType(fnName, resolvedHopLength, 'hopLength');
+  assertPositiveInteger(fnName, resolvedHopLength, 'hopLength');
   return { nFft: resolvedNFft, hopLength: resolvedHopLength };
 }

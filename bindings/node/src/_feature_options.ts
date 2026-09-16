@@ -1,3 +1,5 @@
+import { assertIntegerValue, assertPositiveInteger } from './validation.js';
+
 /**
  * Option resolvers shared by more than one feature module.
  *
@@ -13,16 +15,7 @@ export function resolvePositiveIntegerOption(
   fallback: number,
 ): number {
   const resolved = value === undefined ? fallback : value;
-  if (typeof resolved !== 'number') {
-    throw new TypeError(`${fnName}: ${name} must be an integer`);
-  }
-  // A fractional or non-finite number is the right type out of domain, which is
-  // the RangeError side of the split the branch below is already on.
-  if (!Number.isInteger(resolved)) {
-    throw new RangeError(`${fnName}: ${name} must be an integer`);
-  }
-  if (resolved <= 0 || resolved > 2 ** 31 - 1) {
-    throw new RangeError(`${fnName}: ${name} must be a positive integer`);
-  }
+  assertIntegerValue(fnName, resolved, name);
+  assertPositiveInteger(fnName, resolved, name);
   return resolved;
 }
