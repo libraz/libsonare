@@ -72,8 +72,9 @@ the browser to see what libsonare can power.
   (subtractive, FM, additive, Karplus-Strong, and modal resonators, plus physically-modeled piano, harpsichord, bowed strings, reeds,
   brass, flute, pipe organ, plucked strings, voice, free reed, and percussion), a
   mod matrix, and named presets,
-  backed by a data-free GM fallback covering all 128 programs + drums, so MIDI
-  never renders silent. Add a host-supplied SoundFont and the GS-compatible
+  backed by a data-free GM/GS fallback covering all 128 programs, the GS rhythm
+  sets and the variation tones it voices apart, so MIDI never renders silent.
+  Add a host-supplied SoundFont and the GS-compatible
   16-part SF2 player takes over, falling back per program. The physical-model
   voices are usable today and being refined over time as tuning continues.
 - **Headless DAW runtime** — author projects with audio & MIDI tracks/clips

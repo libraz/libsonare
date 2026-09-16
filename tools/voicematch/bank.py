@@ -3,9 +3,9 @@
 The harness grew the other way round. A page was addressed by capture — the
 reference plugin's definition named the instrument, the GM program and the
 phrase set — which meant a voice could be auditioned only where somebody owned
-a plugin and had captured it. Four captures exist, so four of the bank's voices
-had a page and the rest had none, including every voice nobody has a reference
-for and every voice whose reference is not worth buying.
+a plugin and had captured it, and every voice nobody has a reference for had no
+page at all. That is the wrong way round however many captures exist: a voice
+without a reference is the one most worth listening to.
 
 So the index is the bank: every GM program, every variation bank the library
 voices apart, and each drum kit. A capture is an attachment to an

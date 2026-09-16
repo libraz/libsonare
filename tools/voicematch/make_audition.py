@@ -13,10 +13,11 @@ outside the repository's tracked tree, plus the `manifest.json` that
 THE INDEX IS THE BANK, NOT THE CAPTURE LIST. What is auditioned is named as a
 GM program, a variation bank or a kit, and `bank.py` resolves it: the phrase
 set from the voice's tone class, the reference from whichever capture covers it
-if any does. Four captures exist and the bank has 128 programs, so most voices
-have no reference at all — those render the model alone and the page plays
-rather than compares, which `serve.py` already handles as an ordinary set. A
-reference is an attachment to an entry, never the reason the entry exists.
+if any does. A voice no capture covers renders the model alone and the page
+plays rather than compares, which `serve.py` already handles as an ordinary
+set — today that is mostly the GS variations, whose slots only the machine
+defines. A reference is an attachment to an entry, never the reason the entry
+exists.
 
 `--config` still names a capture directly, for the case where the capture is
 the subject: it fixes the program, the phrase set and the timbres in one, which

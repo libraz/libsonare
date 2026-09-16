@@ -63,7 +63,7 @@ Outputs land in `out/p<NNN>_<pattern>/`: `model.wav`, `oracle.wav`, `notes.mid`,
 
 The order matters, and each step exists because the one before it cannot answer the question the next one asks.
 
-Steps 1–3 are the only ones that need the reference plugin, and they are already done for a captured instrument: `reference/<id>.json` is committed, so **a voice can be measured, fitted and diagnosed against the grand, the harpsichord, the kit or the organ from a plain clone**, on any platform, with nothing installed. Skip to step 4.
+Steps 1–3 are the only ones that need the reference plugin, and they are already done for a captured instrument: `reference/<id>.json` is committed, so **any voice a capture covers can be measured, fitted and diagnosed from a plain clone**, on any platform, with nothing installed. `make voice-status` says which those are. Skip to step 4.
 
 ```sh
 # 1. What the plugin needs from its host. Measured, not guessed: a sampler that

@@ -10,7 +10,7 @@ python tools/audition/serve.py
 
 ## The index is the bank
 
-What is auditioned is named as a **GM program, a variation bank or a kit**, and `bank.py` resolves everything else about it. A capture is an attachment to an entry, never the reason the entry exists: where one covers the voice its phrase set and its reference timbres are used, and where none does the page holds the model alone and plays rather than compares. Four captures exist and the bank has 128 programs, so most voices are in the second case — which is an ordinary set to `serve.py`, not a broken one.
+What is auditioned is named as a **GM program, a variation bank or a kit**, and `bank.py` resolves everything else about it. A capture is an attachment to an entry, never the reason the entry exists: where one covers the voice its phrase set and its reference timbres are used, and where none does the page holds the model alone and plays rather than compares. A voice in the second case is an ordinary set to `serve.py` and not a broken one — today that is mostly the GS variations, whose slots only the machine defines.
 
 That is the way round it has to be. Addressed by capture, a voice could be auditioned only where somebody owned a plugin and had captured it, which left the whole bank but four voices with no page at all — including every voice nobody has a reference for and every voice whose reference is not worth buying.
 
