@@ -307,4 +307,28 @@ std::string processor_catalog_json() {
   return out;
 }
 
+const std::vector<std::string>& processor_catalog_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "[].id",
+      "[].kind",
+      "[].realtimeInsertable",
+      "[].stereoOnly",
+      "[].latencySamples",
+      "[].tailSamples",
+      "[].realtimeCost",
+      "[].channelPolicy",
+      "[].category",
+      "[].params",
+      "[].params[].name",
+      "[].params[].id",
+      "[].params[].rtSafe",
+      "[].params[].type",
+      "[].params[].min",
+      "[].params[].max",
+      "[].params[].default",
+      "[].params[].unit",
+  };
+  return paths;
+}
+
 }  // namespace sonare::mastering::api

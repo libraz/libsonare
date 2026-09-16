@@ -1388,4 +1388,11 @@ std::string insert_param_info_json(const std::string& name) {
   return memo.emplace(name, build_insert_param_info_json(name)).first->second;
 }
 
+const std::vector<std::string>& insert_param_info_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "[].name", "[].id", "[].rtSafe", "[].type", "[].min", "[].max", "[].default", "[].unit",
+  };
+  return paths;
+}
+
 }  // namespace sonare::mastering::api

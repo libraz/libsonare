@@ -110,6 +110,13 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 // processor_names() are still reported. Ids are emitted sorted.
 std::string processor_catalog_json();
 
+/// @brief Canonical field paths for one entry of the processor catalog array.
+/// @details The array is the root, so each path begins with the `[]` element
+/// segment. The `params` interior repeats insert_param_info_schema_paths() under
+/// a prefix; a test holds the two to each other, because the list is written out
+/// literally so that a reader outside this language can parse it.
+const std::vector<std::string>& processor_catalog_schema_paths();
+
 // Apply a two-input "match.*" processor. The source and reference buffers may
 // have different lengths; the underlying match primitives consume each buffer at
 // its own length. The single-length overload delegates with

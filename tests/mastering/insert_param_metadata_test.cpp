@@ -14,9 +14,11 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "mastering/api/named_processor.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/stereo/imager.h"
+#include "support/schema_paths.h"
 #include "util/json.h"
 
 namespace {
@@ -204,4 +206,41 @@ TEST_CASE("declaring a band's parameters does not make its keys count as read",
   REQUIRE(make_insert("eq.minimumPhase", R"({"band0.frequencyHz":800,"band0.q":2.0})", &ignored) !=
           nullptr);
   REQUIRE(ignored.empty());
+}
+
+TEST_CASE("the parameter info schema list matches what the writer emits", "[mastering][catalog]") {
+  // Every insert, not one: the writer emits the same eight keys per descriptor
+  // regardless of the processor, so a list derived from a single sample would
+  // pass while describing nothing about the rest.
+  std::set<std::string> actual;
+  for (const auto& name : insert_factory_names()) {
+    const auto paths = sonare::test::schema_paths_of(insert_param_info_json(name));
+    actual.insert(paths.begin(), paths.end());
+  }
+  const auto& expected_paths = sonare::mastering::api::insert_param_info_schema_paths();
+  const std::set<std::string> expected(expected_paths.begin(), expected_paths.end());
+  REQUIRE_FALSE(actual.empty());
+  REQUIRE(actual == expected);
+}
+
+TEST_CASE("the processor catalog schema list matches what the writer emits",
+          "[mastering][catalog]") {
+  const auto actual =
+      sonare::test::schema_paths_of(sonare::mastering::api::processor_catalog_json());
+  const auto& expected_paths = sonare::mastering::api::processor_catalog_schema_paths();
+  const std::set<std::string> expected(expected_paths.begin(), expected_paths.end());
+  REQUIRE(actual == expected);
+
+  // The params interior is the parameter info schema under a prefix. Both lists
+  // are written out literally so a reader outside this language can parse them,
+  // which is exactly what lets the two copies drift; this is what stops them.
+  std::set<std::string> prefixed;
+  for (const auto& path : sonare::mastering::api::insert_param_info_schema_paths()) {
+    prefixed.insert("[].params" + path);
+  }
+  std::set<std::string> interior;
+  for (const auto& path : expected) {
+    if (path.rfind("[].params[]", 0) == 0) interior.insert(path);
+  }
+  REQUIRE(interior == prefixed);
 }

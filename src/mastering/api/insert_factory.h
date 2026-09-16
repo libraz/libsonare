@@ -90,14 +90,22 @@ std::vector<std::string> insert_param_names(const std::string& name);
 
 /// @brief Realtime-automatable parameter descriptors for an insert processor.
 /// @param name Processor name (see make_insert()).
-/// @return A JSON array string `[{"name","id","rtSafe"}, ...]` mapping each
-///         realtime-automatable parameter's JSON key to the integer param_id
-///         accepted by the engine's realtime insert-parameter setter, with
-///         `rtSafe` reporting whether the param can be changed from the audio
-///         thread. Returns `[]` for an unknown @p name or a processor that
-///         exposes no automatable parameters. Unlike insert_param_names (which
-///         lists every construction key), this lists only the keys reachable via
-///         set_parameter, i.e. the realtime-controllable subset.
+/// @return A JSON array string mapping each realtime-automatable parameter's
+///         JSON key to the integer param_id accepted by the engine's realtime
+///         insert-parameter setter, alongside its declared type, measured
+///         bounds, default and unit. See insert_param_info_schema_paths() for
+///         the exact field set; every entry carries every field, with `null`
+///         where a value could not be measured. Returns `[]` for an unknown
+///         @p name or a processor that exposes no automatable parameters.
+///         Unlike insert_param_names (which lists every construction key), this
+///         lists only the keys reachable via set_parameter, i.e. the
+///         realtime-controllable subset.
 std::string insert_param_info_json(const std::string& name);
+
+/// @brief Canonical field paths for one entry of the parameter info array.
+/// @details The array is the root, so each path begins with the `[]` element
+/// segment. Keep the JSON writer and both TypeScript result types in parity by
+/// testing them against this list.
+const std::vector<std::string>& insert_param_info_schema_paths();
 
 }  // namespace sonare::mastering::api
