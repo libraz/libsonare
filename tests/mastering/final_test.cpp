@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
@@ -155,19 +156,73 @@ TEST_CASE("OutputChain applies dither then quantization", "[mastering][final]") 
   REQUIRE_THAT(result[1] * 2048.0f, WithinAbs(-205.0f, 0.001f));
 }
 
-TEST_CASE("Final dither and bit depth sanitize non-finite samples", "[mastering][final]") {
-  const auto input =
-      make_audio({std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
-                  -std::numeric_limits<float>::infinity(), 0.25f});
+namespace {
 
-  const auto quantized = bit_depth(input, {16, true});
-  for (size_t i = 0; i < quantized.size(); ++i) REQUIRE(std::isfinite(quantized[i]));
+// Every assertion below is on a value or on a count. Finiteness is satisfied by
+// full scale as readily as by silence, so it cannot tell a substitution from a
+// sample the caller delivered at the ceiling.
+constexpr int kEncodeBits = 16;
+constexpr float kEncodeLsb = 1.0f / 32768.0f;
 
-  for (const DitherType type :
-       {DitherType::None, DitherType::Rpdf, DitherType::Tpdf, DitherType::NoiseShaped}) {
-    const auto dithered = dither(input, {type, 16, 1234});
-    for (size_t i = 0; i < dithered.size(); ++i) REQUIRE(std::isfinite(dithered[i]));
+}  // namespace
+
+TEST_CASE("A non-finite sample reaching bit_depth leaves silence", "[mastering][final]") {
+  // The three arrivals take different branches, so each one is its own run.
+  const float arrival =
+      GENERATE(std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+               -std::numeric_limits<float>::infinity());
+  size_t count = 99;
+  const auto result = bit_depth(make_audio({arrival}), {kEncodeBits, true}, &count);
+  REQUIRE(result[0] == 0.0f);
+  REQUIRE(count == 1);
+}
+
+TEST_CASE("A non-finite sample reaching any dither mode leaves silence", "[mastering][final]") {
+  const float arrival =
+      GENERATE(std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+               -std::numeric_limits<float>::infinity());
+  // One mode per run, and one sample per run so the shaper's error history is
+  // still zero when the substituted sample is quantized.
+  const DitherType type =
+      GENERATE(DitherType::None, DitherType::Rpdf, DitherType::Tpdf, DitherType::NoiseShaped);
+
+  size_t count = 99;
+  const auto result = dither(make_audio({arrival}), {type, kEncodeBits, 1234}, &count);
+  REQUIRE(count == 1);
+  if (type == DitherType::None) {
+    // None does not quantize, so the replacement arrives bit-identical.
+    REQUIRE(result[0] == 0.0f);
+  } else {
+    // The added noise is at LSB scale, so silence survives quantization as at
+    // most one code either way.
+    REQUIRE(std::abs(result[0]) <= kEncodeLsb);
   }
+}
+
+TEST_CASE("A finite sample at the ceiling reaches a final encode stage untouched",
+          "[mastering][final]") {
+  // The negative control for the case above: the substitution must fire on the
+  // non-finite value and on nothing else, including the values it used to
+  // produce. A fix that replaced everything would pass that case and fail here.
+  constexpr int kBits = 16;
+
+  size_t count = 99;
+  const auto quantized = bit_depth(make_audio({1.0f, -1.0f, 0.999f}), {kBits, true}, &count);
+  REQUIRE(count == 0);
+  // 1.0f lands on the top code because the grid has no code for it, which is the
+  // stage's own transfer function rather than a replacement.
+  REQUIRE_THAT(quantized[0], WithinAbs(32767.0f / 32768.0f, 1e-6f));
+  REQUIRE_THAT(quantized[1], WithinAbs(-1.0f, 1e-6f));
+  REQUIRE_THAT(quantized[2], WithinAbs(32735.0f / 32768.0f, 1e-6f));
+
+  // None does not quantize, so full scale must arrive bit-identical.
+  count = 99;
+  const auto passed =
+      dither(make_audio({1.0f, -1.0f, 0.999f}), {DitherType::None, kBits, 1234}, &count);
+  REQUIRE(count == 0);
+  REQUIRE(passed[0] == 1.0f);
+  REQUIRE(passed[1] == -1.0f);
+  REQUIRE(passed[2] == 0.999f);
 }
 
 TEST_CASE("Final helpers validate inputs", "[mastering][final]") {

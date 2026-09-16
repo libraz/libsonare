@@ -20,9 +20,9 @@ struct BitDepthConfig {
 
 /// @brief Quantizes @p audio to @c config.target_bits without adding dither.
 /// @param[out] non_finite_samples Optional count of input samples that were not
-///        finite. A NaN leaves as silence and an infinity as full scale, both in
-///        range and free of any error, so this count is the only thing that
-///        distinguishes such a sample from one the caller meant to deliver. The
+///        finite. Each leaves as silence, which is in range and free of any
+///        error, so this count is the only thing that distinguishes such a
+///        sample from one the caller meant to deliver. The
 ///        clamp cannot stand in for the check: a comparison against a non-finite
 ///        value is false, so @c std::clamp returns it unchanged.
 Audio bit_depth(const Audio& audio, const BitDepthConfig& config = {},

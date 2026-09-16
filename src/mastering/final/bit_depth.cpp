@@ -4,35 +4,13 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <utility>
 #include <vector>
 
 #include "util/exception.h"
+#include "util/non_finite_sample.h"
 
 namespace sonare::mastering::final {
-namespace {
-
-/// Replaces a non-finite sample with a finite in-domain one and counts it in
-/// @p non_finite, which is the only thing that separates the replacement from a
-/// sample the caller delivered.
-float sanitize_sample(float sample, size_t& non_finite) noexcept {
-  if (std::isnan(sample)) {
-    ++non_finite;
-    return 0.0f;
-  }
-  if (sample == std::numeric_limits<float>::infinity()) {
-    ++non_finite;
-    return 1.0f;
-  }
-  if (sample == -std::numeric_limits<float>::infinity()) {
-    ++non_finite;
-    return -1.0f;
-  }
-  return sample;
-}
-
-}  // namespace
 
 Audio bit_depth(const Audio& audio, const BitDepthConfig& config, size_t* non_finite_samples) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
@@ -45,7 +23,9 @@ Audio bit_depth(const Audio& audio, const BitDepthConfig& config, size_t* non_fi
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   size_t non_finite = 0;
   for (auto& sample : samples) {
-    sample = sanitize_sample(sample, non_finite);
+    // Last stage before the samples leave for a file or a device, so a
+    // non-finite one is replaced here rather than propagated.
+    if (resolve_non_finite(SampleDestination::kIrreversibleOutput, sample)) ++non_finite;
     if (config.clamp) sample = std::clamp(sample, -1.0f, 1.0f);
     sample = std::clamp(std::round(sample * scale), min_code, max_code) / scale;
     if (config.clamp) sample = std::clamp(sample, -1.0f, 1.0f);
