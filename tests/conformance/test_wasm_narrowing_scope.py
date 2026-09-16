@@ -772,16 +772,30 @@ class RealTreeTest(unittest.TestCase):
 
     def test_both_integer_and_size_narrowings_are_in_the_population(self) -> None:
         # A type list that lost an entry would shrink the population without
-        # emptying it, which the floor alone could survive.
+        # emptying it, which the floor alone could survive. Signed, unsigned and
+        # size are each named so no one kind can drop out unnoticed; the spelling
+        # a kind arrives under is the other test's subject, not this one's.
         types = {site.type for site in self.scan.sites}
-        for name in ("int", "size_t", "uint32_t", "unsigned"):
+        for name in ("int", "size_t", "unsigned"):
             self.assertIn(name, types)
 
     def test_the_type_list_still_names_the_widths_the_tree_has_no_instance_of(self) -> None:
         # The tree currently narrows to none of these, so the population check
         # above cannot see them dropped from the list -- and the day one lands,
-        # a list missing its spelling reports nothing at all.
-        for name in ("int8_t", "uint8_t", "int16_t", "uint16_t", "int64_t", "uint64_t"):
+        # a list missing its spelling reports nothing at all. uint32_t is here
+        # rather than above because the tree's last one was routed through the
+        # shared guard: a spelling that left because the work removed it needs
+        # the list guarded exactly as much as one that was never there.
+        for name in (
+            "int8_t",
+            "uint8_t",
+            "int16_t",
+            "uint16_t",
+            "int32_t",
+            "int64_t",
+            "uint64_t",
+            "uint32_t",
+        ):
             self.assertIn(name, CHECKER.INTEGER_TYPES)
 
     def test_val_taking_lambdas_are_in_the_container_population(self) -> None:
