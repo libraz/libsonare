@@ -1556,6 +1556,33 @@ TEST_CASE("Welch spectrum normalizes a zero-padded tail frame by its own window 
   REQUIRE_THAT(tail_result.magnitude[0], WithinAbs(full_result.magnitude[0], 1e-4f));
 }
 
+// The per-window fold wrote floor_db as std::max's FIRST argument, which is what
+// kept a non-finite window level out of the std::sort that computes the
+// percentiles -- an invariant held by an argument order and stated nowhere. The
+// refusal moves it to the input, where a later readability swap cannot undo it.
+TEST_CASE("dynamic range refuses audio it cannot order", "[meter][numeric]") {
+  const float nan_sample = std::numeric_limits<float>::quiet_NaN();
+  metering::DynamicRangeConfig config;
+
+  std::vector<float> samples(48000);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = 0.4f * std::sin(0.05f * static_cast<float>(i));
+  }
+  const Audio clean = Audio::from_buffer(samples.data(), samples.size(), 48000);
+
+  std::vector<float> poisoned = samples;
+  poisoned[30000] = nan_sample;
+  const Audio bad = Audio::from_buffer(poisoned.data(), poisoned.size(), 48000);
+
+  REQUIRE_THROWS_AS(metering::dynamic_range(bad, config), SonareException);
+
+  // The control: the same signal without it still measures, so the refusal is
+  // the non-finite one.
+  const auto result = metering::dynamic_range(clean, config);
+  REQUIRE(!result.window_rms_db.empty());
+  REQUIRE(std::isfinite(result.dynamic_range_db));
+}
+
 // peak_db absorbed a non-finite sample through peak_abs and published the silence
 // floor for audio that was never silent, while rms_db three functions away
 // answered nan for the same buffer -- two numbers a caller cannot reconcile. The

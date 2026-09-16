@@ -60,6 +60,12 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
   DynamicRangeResult result;
   if (audio.empty()) return result;
 
+  // The per-window fold writes floor_db first, which is the only thing keeping a
+  // non-finite level out of the std::sort below. Refuse here, so that ordering is
+  // a property of the input rather than of an argument order nothing states.
+  SONARE_CHECK_MSG(numeric::all_finite(audio.data(), audio.size()), ErrorCode::InvalidParameter,
+                   "dynamic_range: audio contains a non-finite sample");
+
   size_t window = 0;
   size_t hop = 0;
   SONARE_CHECK(numeric::checked_round_cast(
