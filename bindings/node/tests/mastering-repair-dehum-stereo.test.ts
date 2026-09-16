@@ -6,13 +6,17 @@ const SR = 22050;
 function sine(freq: number, seconds: number, amp: number): Float32Array {
   const n = Math.floor(SR * seconds);
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i += 1) out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
+  for (let i = 0; i < n; i += 1) {
+    out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
+  }
   return out;
 }
 
 function add(a: Float32Array, b: Float32Array): Float32Array {
   const out = new Float32Array(a.length);
-  for (let i = 0; i < a.length; i += 1) out[i] = a[i] + b[i];
+  for (let i = 0; i < a.length; i += 1) {
+    out[i] = a[i] + b[i];
+  }
   return out;
 }
 

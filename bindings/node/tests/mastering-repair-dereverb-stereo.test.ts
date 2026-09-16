@@ -27,7 +27,9 @@ function bursts(seed: number, length = LENGTH): Float32Array {
   const burst = Math.floor(SR * 0.02);
   const period = Math.floor(SR * 0.1);
   for (let i = 0; i < length; i += 1) {
-    if (i % period < burst) out[i] = source[i];
+    if (i % period < burst) {
+      out[i] = source[i];
+    }
   }
   return out;
 }
@@ -44,13 +46,17 @@ function reverberant(dry: Float32Array): Float32Array {
 
 function scaled(a: Float32Array, factor: number): Float32Array {
   const out = new Float32Array(a.length);
-  for (let i = 0; i < a.length; i += 1) out[i] = a[i] * factor;
+  for (let i = 0; i < a.length; i += 1) {
+    out[i] = a[i] * factor;
+  }
   return out;
 }
 
 function peak(a: Float32Array): number {
   let max = 0;
-  for (const value of a) max = Math.max(max, Math.abs(value));
+  for (const value of a) {
+    max = Math.max(max, Math.abs(value));
+  }
   return max;
 }
 

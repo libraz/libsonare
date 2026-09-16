@@ -8,7 +8,9 @@ const RIGHT_ONLY_CLICK = 2000;
 function sine(freq: number, seconds: number, amp: number): Float32Array {
   const n = Math.floor(SR * seconds);
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i += 1) out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
+  for (let i = 0; i < n; i += 1) {
+    out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
+  }
   return out;
 }
 
@@ -23,7 +25,9 @@ function sine(freq: number, seconds: number, amp: number): Float32Array {
 function fixture(): { left: Float32Array; right: Float32Array } {
   const left = sine(440, 0.3, 0.2);
   const right = sine(880, 0.3, 0.2);
-  for (const pos of LEFT_CLICKS) left[pos] = 1.0;
+  for (const pos of LEFT_CLICKS) {
+    left[pos] = 1.0;
+  }
   right[RIGHT_ONLY_CLICK] = 1.0;
   return { left, right };
 }

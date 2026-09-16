@@ -22,25 +22,33 @@ function noise(seed: number, amp: number, length = LENGTH): Float32Array {
 
 function tone(freq: number, amp: number, length = LENGTH): Float32Array {
   const out = new Float32Array(length);
-  for (let i = 0; i < length; i += 1) out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
+  for (let i = 0; i < length; i += 1) {
+    out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
+  }
   return out;
 }
 
 function add(a: Float32Array, b: Float32Array): Float32Array {
   const out = new Float32Array(a.length);
-  for (let i = 0; i < a.length; i += 1) out[i] = a[i] + b[i];
+  for (let i = 0; i < a.length; i += 1) {
+    out[i] = a[i] + b[i];
+  }
   return out;
 }
 
 function scaled(a: Float32Array, factor: number): Float32Array {
   const out = new Float32Array(a.length);
-  for (let i = 0; i < a.length; i += 1) out[i] = a[i] * factor;
+  for (let i = 0; i < a.length; i += 1) {
+    out[i] = a[i] * factor;
+  }
   return out;
 }
 
 function peak(a: Float32Array): number {
   let max = 0;
-  for (const value of a) max = Math.max(max, Math.abs(value));
+  for (const value of a) {
+    max = Math.max(max, Math.abs(value));
+  }
   return max;
 }
 
@@ -122,7 +130,10 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
 
     // Twice the summed power is 3.01 dB, so carrying the same material in both
     // channels reads that much above carrying it in one.
-    expect(both.report.detected.floorDbfs - oneSided.report.detected.floorDbfs).toBeCloseTo(3.01, 1);
+    expect(both.report.detected.floorDbfs - oneSided.report.detected.floorDbfs).toBeCloseTo(
+      3.01,
+      1,
+    );
     // Half the amplitude is a quarter of the power: an absolute level follows
     // it, a ratio would not move at all.
     expect(both.report.detected.floorDbfs - halved.report.detected.floorDbfs).toBeCloseTo(6.02, 1);

@@ -12,7 +12,9 @@ const RIGHT_SPIKE_POSITIONS = [4000, 8000];
 function sine(freq: number, seconds: number, amp: number): Float32Array {
   const n = Math.floor(SR * seconds);
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i += 1) out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
+  for (let i = 0; i < n; i += 1) {
+    out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
+  }
   return out;
 }
 
@@ -23,8 +25,12 @@ function sine(freq: number, seconds: number, amp: number): Float32Array {
 function fixture(): { left: Float32Array; right: Float32Array } {
   const left = sine(440, 0.6, 0.1);
   const right = sine(660, 0.6, 0.1);
-  for (const i of LEFT_SPIKE_POSITIONS) left[i] = 0.95;
-  for (const i of RIGHT_SPIKE_POSITIONS) right[i] = -0.95;
+  for (const i of LEFT_SPIKE_POSITIONS) {
+    left[i] = 0.95;
+  }
+  for (const i of RIGHT_SPIKE_POSITIONS) {
+    right[i] = -0.95;
+  }
   return { left, right };
 }
 

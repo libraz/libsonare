@@ -40,7 +40,9 @@ const MID_THRESHOLD = 0.05;
 const SHORT_WINDOW_MS = 20;
 
 function fillBlock(out: Float32Array, begin: number, end: number, amp: number): void {
-  for (let i = begin; i < end; i++) out[i] = i % 2 === 0 ? amp : -amp;
+  for (let i = begin; i < end; i++) {
+    out[i] = i % 2 === 0 ? amp : -amp;
+  }
 }
 
 /** A quiet block, then a loud one, with silence around and between them. */
@@ -133,7 +135,9 @@ describe('masteringRepairTrimSilenceStereo (WASM)', () => {
     expect('leftReport' in result).toBe(false);
     expect('rightReport' in result).toBe(false);
 
-    expect(result.report.range.first).toBe(Math.min(result.leftRange.first, result.rightRange.first));
+    expect(result.report.range.first).toBe(
+      Math.min(result.leftRange.first, result.rightRange.first),
+    );
     expect(result.report.range.lastExclusive).toBe(
       Math.max(result.leftRange.lastExclusive, result.rightRange.lastExclusive),
     );

@@ -53,7 +53,9 @@ function reverberate(samples: Float32Array): Float32Array {
   for (let i = 0; i < out.length; i++) {
     for (let t = 0; t < TAIL_DELAYS_SAMPLES.length; t++) {
       const delay = TAIL_DELAYS_SAMPLES[t] ?? 0;
-      if (i >= delay) out[i] = (out[i] ?? 0) + (TAIL_GAINS[t] ?? 0) * (out[i - delay] ?? 0);
+      if (i >= delay) {
+        out[i] = (out[i] ?? 0) + (TAIL_GAINS[t] ?? 0) * (out[i - delay] ?? 0);
+      }
     }
   }
   return out;

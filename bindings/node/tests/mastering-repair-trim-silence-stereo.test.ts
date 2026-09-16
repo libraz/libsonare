@@ -19,7 +19,9 @@ const LENGTH = 4410;
  */
 function run(begin: number, end: number, amp: number, into?: Float32Array): Float32Array {
   const out = into ?? new Float32Array(LENGTH);
-  for (let i = begin; i < end; i += 1) out[i] = i % 2 === 0 ? amp : -amp;
+  for (let i = begin; i < end; i += 1) {
+    out[i] = i % 2 === 0 ? amp : -amp;
+  }
   return out;
 }
 
@@ -106,7 +108,9 @@ describe('masteringRepairTrimSilenceStereo', () => {
     expect(() => {
       result = trim(pair);
     }).not.toThrow();
-    if (result === undefined) throw new Error('unreachable');
+    if (result === undefined) {
+      throw new Error('unreachable');
+    }
 
     expect(result.left).toBeInstanceOf(Float32Array);
     expect(result.right).toBeInstanceOf(Float32Array);
@@ -221,9 +225,9 @@ describe('masteringRepairTrimSilenceStereo', () => {
     // Not a rounding artefact of the refusal: 0 is accepted and is the default.
     expect(trim(pair, { paddingSamples: 0 }).report.range).toEqual(trim(pair).report.range);
     // A non-number is refused by name too, rather than silently defaulting.
-    expect(() =>
-      trim(pair, { paddingSamples: '256' as unknown as number }),
-    ).toThrow(/paddingSamples/);
+    expect(() => trim(pair, { paddingSamples: '256' as unknown as number })).toThrow(
+      /paddingSamples/,
+    );
   });
 
   it('agrees with the mono trimmer on a pair whose channels are identical', () => {
@@ -265,9 +269,7 @@ describe('masteringRepairTrimSilenceStereo', () => {
       }),
     ).toThrow();
     expect(() => trim(pair, { mode: 'sometimes' as unknown as 'peak' })).toThrow();
-    expect(() =>
-      masteringRepairTrimSilenceStereo({ ...pair, sampleRate: Number.NaN }),
-    ).toThrow();
+    expect(() => masteringRepairTrimSilenceStereo({ ...pair, sampleRate: Number.NaN })).toThrow();
     expect(() => masteringRepairTrimSilenceStereo({ ...pair, sampleRate: 0 })).toThrow();
   });
 });

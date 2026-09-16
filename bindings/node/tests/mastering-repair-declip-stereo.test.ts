@@ -30,12 +30,16 @@ const LEFT_WIDE_LENGTH = 20;
 function sine(freq: number, seconds: number, amp: number): Float32Array {
   const n = Math.floor(SR * seconds);
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i += 1) out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
+  for (let i = 0; i < n; i += 1) {
+    out[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR);
+  }
   return out;
 }
 
 function clip(buffer: Float32Array, start: number, length: number): void {
-  for (let i = 0; i < length; i += 1) buffer[start + i] = 1.0;
+  for (let i = 0; i < length; i += 1) {
+    buffer[start + i] = 1.0;
+  }
 }
 
 // Different tones in the two channels so "declip one channel and return it
