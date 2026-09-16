@@ -181,11 +181,12 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
 // pitchRangeOctaves, pitchStability, meanFrequency, vibratoRate }.
 // Embind passes every argument, so the narrowed sizes carry no C++ default, and
 // neither can the float parameters that precede them.
-val js_analyze_melody(val samples, const val& sample_rate, float fmin, const val& fmax_val,
+val js_analyze_melody(val samples, const val& sample_rate, const val& fmin_val, const val& fmax_val,
                       const val& frame_length_val, const val& hop_length_val,
                       const val& threshold_val, bool use_pyin, bool center) {
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -193,7 +194,6 @@ val js_analyze_melody(val samples, const val& sample_rate, float fmin, const val
   // inverted/zero frequency range, non-positive sizing and a non-positive
   // threshold instead of silently substituting struct defaults. use_pyin/center
   // are plain bools selecting the pYIN tracker and frame centering.
-  // fmin is a plain embind float, so nothing narrowed it on the way in.
   if (!numeric::finite_positive(fmin) || !numeric::finite_ordered_range(fmin, fmax) ||
       frame_length <= 0 || hop_length <= 0 || !numeric::finite_positive(threshold)) {
     throw SonareException(ErrorCode::InvalidParameter,
@@ -249,10 +249,10 @@ val cqtResultToVal(const CqtResult& result) {
   return out;
 }
 
-val js_cqt(val samples, const val& sample_rate, const val& hop_length, float fmin,
+val js_cqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
            const val& n_bins, const val& bins_per_octave) {
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  // fmin is a plain embind float, so nothing narrowed it on the way in.
   if (!numeric::finite_positive(fmin)) {
     throw SonareException(ErrorCode::InvalidParameter, "cqt: require fmin > 0");
   }
@@ -294,8 +294,9 @@ val js_hybrid_cqt(val samples, const val& sample_rate, const val& hop_length, co
   return cqtResultToVal(hybrid_cqt(audio, config));
 }
 
-val js_vqt(val samples, const val& sample_rate, const val& hop_length, float fmin,
+val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val& fmin_val,
            const val& n_bins, const val& bins_per_octave, float gamma) {
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror sonare_vqt: a NaN gamma selects automatic bandwidth, an infinity does not.
   if (!numeric::finite_positive(fmin) || std::isinf(gamma)) {

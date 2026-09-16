@@ -16,11 +16,12 @@
 // is in absolute samples from the start of processing. curve: 0 = Linear,
 // 1 = Exponential, 2 = Hold, 3 = SCurve.
 void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& insert_index_val,
-                                         const val& param_id_val, double sample_pos, float value,
-                                         const val& curve_val) {
+                                         const val& param_id_val, double sample_pos,
+                                         const val& value_val, const val& curve_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const unsigned int insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const unsigned int param_id = checkedUintFromVal(param_id_val, "paramId");
+  const float value = checkedFloatFromVal(value_val, "value");
   const int curve = checkedIntFromVal(curve_val, "curve");
   SonareStrip* strip = sonare_mixer_strip_at(mixer_, static_cast<size_t>(strip_index));
   if (strip == nullptr) {
@@ -69,26 +70,29 @@ val MixerWasm::busMeter(std::string bus_id) {
 // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential, 2 = Hold,
 // 3 = SCurve.
 void MixerWasm::scheduleFaderAutomation(const val& strip_index_val, double sample_pos,
-                                        float fader_db, const val& curve_val) {
+                                        const val& fader_db_val, const val& curve_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const float fader_db = checkedFloatFromVal(fader_db_val, "faderDb");
   const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripError(sonare_strip_schedule_fader_automation(
                       stripAt(strip_index), static_cast<int64_t>(sample_pos), fader_db, curve),
                   "failed to schedule fader automation");
 }
 
-void MixerWasm::schedulePanAutomation(const val& strip_index_val, double sample_pos, float pan,
-                                      const val& curve_val) {
+void MixerWasm::schedulePanAutomation(const val& strip_index_val, double sample_pos,
+                                      const val& pan_val, const val& curve_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const float pan = checkedFloatFromVal(pan_val, "pan");
   const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripError(sonare_strip_schedule_pan_automation(
                       stripAt(strip_index), static_cast<int64_t>(sample_pos), pan, curve),
                   "failed to schedule pan automation");
 }
 
-void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, double sample_pos, float width,
-                                        const val& curve_val) {
+void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, double sample_pos,
+                                        const val& width_val, const val& curve_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  const float width = checkedFloatFromVal(width_val, "width");
   const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripError(sonare_strip_schedule_width_automation(
                       stripAt(strip_index), static_cast<int64_t>(sample_pos), width, curve),
@@ -97,10 +101,11 @@ void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, double sampl
 
 // Schedules sample-accurate send-level automation on a strip's send.
 void MixerWasm::scheduleSendAutomation(const val& strip_index_val, const val& send_index_val,
-                                       double sample_pos, float db, const val& curve_val) {
+                                       double sample_pos, const val& db_val, const val& curve_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const std::size_t send_index =
       static_cast<std::size_t>(checkedUintFromVal(send_index_val, "sendIndex"));
+  const float db = checkedFloatFromVal(db_val, "db");
   const int curve = checkedIntFromVal(curve_val, "curve");
   checkStripError(
       sonare_strip_schedule_send_automation(stripAt(strip_index), send_index,

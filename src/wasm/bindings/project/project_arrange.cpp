@@ -264,8 +264,9 @@ void ProjectWasm::setTrackMidiDestination(const val& track_id_val, const val& de
   }
 }
 
-void ProjectWasm::setTrackGain(const val& track_id_val, float gain) {
+void ProjectWasm::setTrackGain(const val& track_id_val, const val& gain_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const float gain = checkedFloatFromVal(gain_val, "gain");
   const SonareError err = sonare_project_set_track_gain(project_.get(), track_id, gain);
   if (err != SONARE_OK) {
     throwCError(err, "failed to set track gain");
@@ -288,8 +289,9 @@ void ProjectWasm::setTrackSolo(const val& track_id_val, bool solo) {
   }
 }
 
-void ProjectWasm::setTrackPan(const val& track_id_val, float pan) {
+void ProjectWasm::setTrackPan(const val& track_id_val, const val& pan_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const float pan = checkedFloatFromVal(pan_val, "pan");
   const SonareError err = sonare_project_set_track_pan(project_.get(), track_id, pan);
   if (err != SONARE_OK) {
     throwCError(err, "failed to set track pan");

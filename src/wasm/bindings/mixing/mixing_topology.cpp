@@ -40,7 +40,8 @@ size_t MixerWasm::busCount() const {
 
 // Adds a VCA group with the given gain offset. members is an array of strip-id
 // strings (may be empty).
-void MixerWasm::addVcaGroup(std::string id, float gain_db, val members) {
+void MixerWasm::addVcaGroup(std::string id, const val& gain_db_val, val members) {
+  const float gain_db = checkedFloatFromVal(gain_db_val, "gainDb");
   std::vector<std::string> member_storage;
   std::vector<const char*> member_ptrs;
   if (!members.isUndefined() && !members.isNull()) {
@@ -73,7 +74,8 @@ void MixerWasm::removeVcaGroup(std::string id) {
   }
 }
 
-void MixerWasm::setVcaGroupGainDb(std::string id, float gain_db) {
+void MixerWasm::setVcaGroupGainDb(std::string id, const val& gain_db_val) {
+  const float gain_db = checkedFloatFromVal(gain_db_val, "gainDb");
   SonareError err = sonare_mixer_set_vca_group_gain_db(mixer_, id.c_str(), gain_db);
   if (err != SONARE_OK) {
     throw sonare::SonareException(

@@ -323,16 +323,19 @@ size_t RealtimeEngineWasm::midiInstrumentCount() const {
 }
 
 void RealtimeEngineWasm::bindMidiCc(const val& channel_val, const val& controller_val,
-                                    const val& param_id_val, float min_value, float max_value) {
+                                    const val& param_id_val, const val& min_value_val,
+                                    const val& max_value_val) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int controller = checkedIntFromVal(controller_val, "controller");
   const uint32_t param_id = checkedUintFromVal(param_id_val, "paramId");
+  const float min_value = checkedFloatFromVal(min_value_val, "minValue");
+  const float max_value = checkedFloatFromVal(max_value_val, "maxValue");
   if (channel < 0 || channel > 15 || controller < 0 || controller > 127 || param_id == 0 ||
-      !std::isfinite(min_value) || !std::isfinite(max_value) || max_value < min_value) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "bindMidiCc: channel in [0,15], controller in [0,127], paramId non-zero, range finite");
+      max_value < min_value) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "bindMidiCc: channel in [0,15], controller in [0,127], paramId "
+                                  "non-zero, maxValue >= minValue");
   }
   if (!engine_.bind_midi_cc(static_cast<uint8_t>(controller), static_cast<uint8_t>(channel),
                             param_id, min_value, max_value)) {
@@ -342,8 +345,8 @@ void RealtimeEngineWasm::bindMidiCc(const val& channel_val, const val& controlle
   (void)channel_val;
   (void)controller_val;
   (void)param_id_val;
-  (void)min_value;
-  (void)max_value;
+  (void)min_value_val;
+  (void)max_value_val;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif

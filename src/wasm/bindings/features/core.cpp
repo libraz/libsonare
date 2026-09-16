@@ -76,25 +76,33 @@ int js_samples_to_frames(const val& samples, const val& hop_length, const val& n
                            checkedIntFromVal(n_fft, "nFft"));
 }
 
-val js_power_to_db(val values, float ref, float amin, float top_db) {
+val js_power_to_db(val values, const val& ref_val, const val& amin_val, const val& top_db_val) {
+  const float ref = checkedFloatFromVal(ref_val, "ref");
+  const float amin = checkedFloatFromVal(amin_val, "amin");
+  const float top_db = checkedFloatFromVal(top_db_val, "topDb");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "powerToDb");
   return vectorToFloat32Array(power_to_db(data, ref, amin, top_db));
 }
 
-val js_amplitude_to_db(val values, float ref, float amin, float top_db) {
+val js_amplitude_to_db(val values, const val& ref_val, const val& amin_val, const val& top_db_val) {
+  const float ref = checkedFloatFromVal(ref_val, "ref");
+  const float amin = checkedFloatFromVal(amin_val, "amin");
+  const float top_db = checkedFloatFromVal(top_db_val, "topDb");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "amplitudeToDb");
   return vectorToFloat32Array(amplitude_to_db(data, ref, amin, top_db));
 }
 
-val js_db_to_power(val values, float ref) {
+val js_db_to_power(val values, const val& ref_val) {
+  const float ref = checkedFloatFromVal(ref_val, "ref");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "dbToPower");
   return vectorToFloat32Array(db_to_power(data, ref));
 }
 
-val js_db_to_amplitude(val values, float ref) {
+val js_db_to_amplitude(val values, const val& ref_val) {
+  const float ref = checkedFloatFromVal(ref_val, "ref");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "dbToAmplitude");
   return vectorToFloat32Array(db_to_amplitude(data, ref));
@@ -163,9 +171,10 @@ val js_frame_signal(val samples, const val& frame_length_val, const val& hop_len
   return out;
 }
 
-val js_tone(const val& frequency_val, const val& sample_rate, float duration, const val& phase_val,
-            const val& amplitude_val) {
+val js_tone(const val& frequency_val, const val& sample_rate, const val& duration_val,
+            const val& phase_val, const val& amplitude_val) {
   const float frequency = checkedFloatFromVal(frequency_val, "frequency");
+  const float duration = checkedFloatFromVal(duration_val, "duration");
   const float phase = checkedFloatFromVal(phase_val, "phase");
   const float amplitude = checkedFloatFromVal(amplitude_val, "amplitude");
   const Audio audio =
@@ -173,19 +182,22 @@ val js_tone(const val& frequency_val, const val& sample_rate, float duration, co
   return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
 }
 
-val js_chirp(const val& fmin_val, const val& fmax_val, const val& sample_rate, float duration,
-             bool linear) {
+val js_chirp(const val& fmin_val, const val& fmax_val, const val& sample_rate,
+             const val& duration_val, bool linear) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float duration = checkedFloatFromVal(duration_val, "duration");
   const Audio audio =
       chirp(fmin, fmax, checkedIntFromVal(sample_rate, "sampleRate"), duration, linear);
   return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
 }
 
-val js_clicks(val times, const val& sample_rate_val, const val& length_val, float frequency,
-              float click_duration) {
+val js_clicks(val times, const val& sample_rate_val, const val& length_val,
+              const val& frequency_val, const val& click_duration_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int length = checkedIntFromVal(length_val, "length");
+  const float frequency = checkedFloatFromVal(frequency_val, "frequency");
+  const float click_duration = checkedFloatFromVal(click_duration_val, "clickDuration");
   std::vector<float> values = float32ArrayToVector(times);
   validateFiniteVector(values, "clicks");
   const Audio audio = clicks(values, sample_rate, length, frequency, click_duration);
@@ -334,10 +346,11 @@ val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_
 }
 
 val js_cyclic_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
-                        const val& win_length_val, float bpm_min, const val& n_bins_val) {
+                        const val& win_length_val, const val& bpm_min_val, const val& n_bins_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int win_length = checkedIntFromVal(win_length_val, "winLength");
+  const float bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
   const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "cyclicTempogram");
@@ -356,9 +369,11 @@ val js_cyclic_tempogram(val onset_envelope, const val& sample_rate_val, const va
 }
 
 val js_plp(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,
-           float tempo_min, float tempo_max, const val& win_length_val) {
+           const val& tempo_min_val, const val& tempo_max_val, const val& win_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float tempo_min = checkedFloatFromVal(tempo_min_val, "tempoMin");
+  const float tempo_max = checkedFloatFromVal(tempo_max_val, "tempoMax");
   const int win_length = checkedIntFromVal(win_length_val, "winLength");
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "plp");

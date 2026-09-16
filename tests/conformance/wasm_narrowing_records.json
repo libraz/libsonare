@@ -112,33 +112,23 @@
   },
   "float": {
     "floor": {
-      "parameters": 110,
-      "functions": 85,
-      "files": 18
+      "parameters": 7,
+      "functions": 7,
+      "files": 3
     },
     "distribution": [
-      { "file": "bindings/analysis/quick.cpp", "count": 11 },
-      { "file": "bindings/analysis/stream_analyzer.cpp", "count": 3 },
-      { "file": "bindings/effects/audio.cpp", "count": 21 },
-      { "file": "bindings/effects/offline_dynamics_editing.cpp", "count": 2 },
-      { "file": "bindings/features/core.cpp", "count": 20 },
-      { "file": "bindings/features/music.cpp", "count": 4 },
-      { "file": "bindings/features/pitch.cpp", "count": 8 },
-      { "file": "bindings/features/spectral.cpp", "count": 5 },
-      { "file": "bindings/features/spectrogram.cpp", "count": 11 },
-      { "file": "bindings/mastering/chain.cpp", "count": 3 },
-      { "file": "bindings/mastering/streaming_equalizer.cpp", "count": 3 },
-      { "file": "bindings/metering/metering.cpp", "count": 6 },
-      { "file": "bindings/mixing/mixing_automation.cpp", "count": 5 },
-      { "file": "bindings/mixing/mixing_strip.cpp", "count": 9 },
-      { "file": "bindings/mixing/mixing_topology.cpp", "count": 2 },
-      { "file": "bindings/project/project_arrange.cpp", "count": 2 },
-      { "file": "bindings/project/project_edit.cpp", "count": 1 },
-      { "file": "bindings/project/project_meta.cpp", "count": 3 },
-      { "file": "bindings/realtime/capture.cpp", "count": 1 },
-      { "file": "bindings/realtime/midi.cpp", "count": 2 },
-      { "file": "bindings/realtime/mixer.cpp", "count": 6 },
-      { "file": "bindings/realtime/params.cpp", "count": 3 }
+      {
+        "file": "bindings/features/core.cpp",
+        "count": 5
+      },
+      {
+        "file": "bindings/features/music.cpp",
+        "count": 1
+      },
+      {
+        "file": "bindings/features/spectrogram.cpp",
+        "count": 1
+      }
     ],
     "passthroughs": [
       {
@@ -205,6 +195,40 @@
           }
         ],
         "reason": "Answers \"?\" for every frequency with no note, non-finite included, so a saturated value produces the same answer as any other unnameable one. The refusal a checked reader would add is a different contract, not a stricter one."
+      },
+      {
+        "js": "vqt",
+        "symbol": "js_vqt",
+        "index": 6,
+        "name": "gamma",
+        "mechanism": [
+          {
+            "file": "include/sonare/sonare_c_features.h",
+            "contains": "Negative or NaN selects the"
+          },
+          {
+            "file": "src/feature/vqt.cpp",
+            "contains": "config.gamma < 0.0f || std::isnan(config.gamma)"
+          }
+        ],
+        "reason": "A NaN gamma is one of the two spellings of the automatic ERB-derived bandwidth, alongside a negative value, and the core resolves both. A checked read would refuse the sentinel rather than an overflow. The wrapper still refuses an infinity, which selects nothing."
+      },
+      {
+        "js": "vqtToAudio",
+        "symbol": "js_vqt_to_audio",
+        "index": 7,
+        "name": "gamma",
+        "mechanism": [
+          {
+            "file": "include/sonare/sonare_c_features.h",
+            "contains": "Negative or NaN selects the"
+          },
+          {
+            "file": "src/feature/vqt.cpp",
+            "contains": "config.gamma < 0.0f || std::isnan(config.gamma)"
+          }
+        ],
+        "reason": "The inverse of vqt under the same gamma contract: the pair has to accept the same sentinel or a round trip through the automatic bandwidth cannot be spelled on this surface. An infinity is still refused."
       }
     ]
   }

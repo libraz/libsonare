@@ -8,12 +8,15 @@
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/mastering/chain_result.h"
 
-val js_mastering(val samples, const val& sample_rate_val, float target_lufs, float ceiling_db,
-                 const val& true_peak_oversample_val, float release_ms,
-                 bool apply_gain_at_input_rate) {
+val js_mastering(val samples, const val& sample_rate_val, const val& target_lufs_val,
+                 const val& ceiling_db_val, const val& true_peak_oversample_val,
+                 const val& release_ms_val, bool apply_gain_at_input_rate) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int true_peak_oversample =
       checkedIntFromVal(true_peak_oversample_val, "truePeakOversample");
+  const float target_lufs = checkedFloatFromVal(target_lufs_val, "targetLufs");
+  const float ceiling_db = checkedFloatFromVal(ceiling_db_val, "ceilingDb");
+  const float release_ms = checkedFloatFromVal(release_ms_val, "releaseMs");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   mastering::maximizer::LoudnessOptimizeConfig config;

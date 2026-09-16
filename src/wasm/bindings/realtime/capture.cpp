@@ -66,11 +66,8 @@ void RealtimeEngineWasm::setCaptureSource(val source) {
 void RealtimeEngineWasm::setRecordOffsetSamples(int64_t offset_samples) {
   engine_.set_record_offset_samples(offset_samples);
 }
-void RealtimeEngineWasm::setInputMonitor(bool enabled, float gain) {
-  if (!std::isfinite(gain)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "input monitor gain must be finite");
-  }
+void RealtimeEngineWasm::setInputMonitor(bool enabled, const val& gain_val) {
+  const float gain = checkedFloatFromVal(gain_val, "gain");
   engine_.set_input_monitor(enabled, gain);
 }
 void RealtimeEngineWasm::resetCapture() { engine_.reset_capture(); }

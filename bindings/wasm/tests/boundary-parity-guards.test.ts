@@ -45,9 +45,11 @@ describe('phaseVocoder rate guard matches the C ABI (no upper cap)', () => {
     expect(out.length).toBeLessThan(8192);
   });
   it('still rejects a non-positive rate', () => {
-    // Finite, so the facade passes it on and the core's own guard answers it.
-    expect(() => phaseVocoder(sine(), SR, 0)).toThrow(/finite positive/);
-    expect(() => phaseVocoder(sine(), SR, -1)).toThrow(/finite positive/);
+    // Finite, so it gets past the boundary reader and the domain guard answers
+    // it. The wording is that guard's own and says only what it checked: the
+    // finiteness of the rate is a separate question, answered below.
+    expect(() => phaseVocoder(sine(), SR, 0)).toThrow(/rate must be a positive number/);
+    expect(() => phaseVocoder(sine(), SR, -1)).toThrow(/rate must be a positive number/);
   });
   it('still rejects a non-finite rate before allocating an enormous buffer', () => {
     // Answered by the facade rather than the core, which is what the addon does

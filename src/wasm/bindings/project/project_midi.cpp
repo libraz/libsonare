@@ -384,9 +384,11 @@ std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings) {
   return out;
 }
 
-val js_midi_cc_learn(val events, const val& param_id_val, float min_value, float max_value,
-                     const val& min_movement_val) {
+val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_val,
+                     const val& max_value_val, const val& min_movement_val) {
   const uint32_t param_id = checkedUintFromVal(param_id_val, "paramId");
+  const float min_value = checkedFloatFromVal(min_value_val, "minValue");
+  const float max_value = checkedFloatFromVal(max_value_val, "maxValue");
   const int min_movement = checkedIntFromVal(min_movement_val, "minMovement");
   const size_t count =
       events.isUndefined() || events.isNull() ? 0 : wasmArrayLikeLength(events, "events");
@@ -427,9 +429,10 @@ val js_midi_cc_to_breakpoint(val bindings, val event) {
 // selected the binding whose id is 5, and 5.5 selected it too. The object-field
 // spelling of the same field reads through checkedUintFromVal, so both paths
 // refuse what neither can represent.
-val js_midi_param_to_cc(val bindings, val param_id, float unit_value, const val& group_val,
+val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value_val, const val& group_val,
                         double ppq) {
   const uint32_t requested_param_id = checkedUintFromVal(param_id, "paramId");
+  const float unit_value = checkedFloatFromVal(unit_value_val, "unitValue");
   const int group = checkedIntFromVal(group_val, "group");
   std::vector<SonareMidiCcBinding> cc_bindings = js_cc_bindings_from_val(bindings);
   SonareMidiEventPod event{};

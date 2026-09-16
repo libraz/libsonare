@@ -63,10 +63,11 @@ val js_spectral_centroid(val samples, const val& sample_rate_val, const val& n_f
 }
 
 val js_spectral_bandwidth(val samples, const val& sample_rate_val, const val& n_fft_val,
-                          const val& hop_length_val, float p) {
+                          const val& hop_length_val, const val& p_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float p = checkedFloatFromVal(p_val, "p");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
@@ -80,10 +81,11 @@ val js_spectral_bandwidth(val samples, const val& sample_rate_val, const val& n_
 }
 
 val js_spectral_rolloff(val samples, const val& sample_rate_val, const val& n_fft_val,
-                        const val& hop_length_val, float roll_percent) {
+                        const val& hop_length_val, const val& roll_percent_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float roll_percent = checkedFloatFromVal(roll_percent_val, "rollPercent");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
@@ -151,12 +153,14 @@ val js_rms_energy(val samples, const val& sample_rate_val, const val& frame_leng
 // row-major matrix [(n_bands + 1) x n_frames] as { data, rows, cols }, with the
 // extra row holding the residual band.
 val js_spectral_contrast(val samples, const val& sample_rate_val, const val& n_fft_val,
-                         const val& hop_length_val, const val& n_bands_val, float fmin,
-                         float quantile) {
+                         const val& hop_length_val, const val& n_bands_val, const val& fmin_val,
+                         const val& quantile_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_bands = checkedIntFromVal(n_bands_val, "nBands");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float quantile = checkedFloatFromVal(quantile_val, "quantile");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   StftConfig config;
@@ -207,7 +211,9 @@ val js_poly_features(val samples, const val& sample_rate_val, const val& n_fft_v
 
 // Raw zero-crossing sample indices. Mirrors the C ABI sonare_zero_crossings /
 // librosa.zero_crossings (returns indices i where sign(y[i]) != sign(y[i-1])).
-val js_zero_crossings(val samples, float threshold, bool ref_magnitude, bool pad, bool zero_pos) {
+val js_zero_crossings(val samples, const val& threshold_val, bool ref_magnitude, bool pad,
+                      bool zero_pos) {
+  const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   std::vector<float> data = float32ArrayToVector(samples);
   std::vector<int> indices =
       zero_crossings(data.data(), data.size(), threshold, ref_magnitude, pad, zero_pos);

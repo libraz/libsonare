@@ -10,12 +10,14 @@
 // ============================================================================
 
 val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_length_val,
-                 const val& hop_length_val, float fmin, const val& fmax_val, float threshold,
-                 bool fill_na) {
+                 const val& hop_length_val, const val& fmin_val, const val& fmax_val,
+                 const val& threshold_val, bool fill_na) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   PitchConfig config;
@@ -51,12 +53,14 @@ val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_lengt
 }
 
 val js_pitch_pyin(val samples, const val& sample_rate_val, const val& frame_length_val,
-                  const val& hop_length_val, float fmin, const val& fmax_val, float threshold,
-                  bool fill_na) {
+                  const val& hop_length_val, const val& fmin_val, const val& fmax_val,
+                  const val& threshold_val, bool fill_na) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   PitchConfig config;
@@ -86,7 +90,8 @@ val js_pitch_pyin(val samples, const val& sample_rate_val, const val& frame_leng
   return out;
 }
 
-val js_note_segments(val f0_hz, val voiced_prob, float frame_rate, val options) {
+val js_note_segments(val f0_hz, val voiced_prob, const val& frame_rate_val, val options) {
+  const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
   std::vector<float> probabilities = float32ArrayToVector(voiced_prob);
   SonareNoteSegmenterConfig config{};
@@ -120,8 +125,9 @@ val js_note_segments(val f0_hz, val voiced_prob, float frame_rate, val options) 
 
 // Per-octave tuning offset from a list of detected pitches. Mirrors the C ABI
 // sonare_pitch_tuning / librosa.pitch_tuning.
-float js_pitch_tuning(val frequencies, float resolution, const val& bins_per_octave_val) {
+float js_pitch_tuning(val frequencies, const val& resolution_val, const val& bins_per_octave_val) {
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
+  const float resolution = checkedFloatFromVal(resolution_val, "resolution");
   std::vector<float> data = float32ArrayToVector(frequencies);
   return pitch_tuning(data, resolution, bins_per_octave);
 }
@@ -129,22 +135,24 @@ float js_pitch_tuning(val frequencies, float resolution, const val& bins_per_oct
 // Global tuning offset of an audio signal. Mirrors the C ABI
 // sonare_estimate_tuning / librosa.estimate_tuning.
 float js_estimate_tuning(val samples, const val& sample_rate_val, const val& n_fft_val,
-                         const val& hop_length_val, float resolution,
+                         const val& hop_length_val, const val& resolution_val,
                          const val& bins_per_octave_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
+  const float resolution = checkedFloatFromVal(resolution_val, "resolution");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
 }
 
 val js_piptrack(val samples, const val& sample_rate_val, const val& n_fft_val,
-                const val& hop_length_val, float fmin, const val& fmax_val,
+                const val& hop_length_val, const val& fmin_val, const val& fmax_val,
                 const val& threshold_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   const Audio audio = loadValidatedAudio(samples, sample_rate);

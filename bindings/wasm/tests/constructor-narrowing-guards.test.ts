@@ -396,21 +396,24 @@ describe('each entry point reads back which value it was constructed with', () =
 });
 
 describe('the untouched neighbours of the narrowed positions are unchanged', () => {
-  // fmin is a float and maxPendingFrames a double; neither was converted, and
-  // neither may start reporting the checked reader's refusals. This is what
-  // shows the refusals above come from the converted positions rather than from
-  // something upstream that had begun rejecting every constructor argument.
+  // maxPendingFrames is a double with a guard of its own and may never start
+  // reporting the checked reader's refusals. fmin is a float, read through the
+  // checked FLOAT reader, which asks a narrower question than the integer one:
+  // it refuses only what no float can carry. Between them they show the refusals
+  // above come from the converted integer positions rather than from something
+  // upstream that had begun rejecting every constructor argument.
   const NEIGHBOUR_VALUES: ReadonlyArray<{ label: string; value: number }> = [
     ...READER_REFUSED.map(({ label, value }) => ({ label, value })),
     { label: '-1', value: -1 },
   ];
 
   /**
-   * What each shape does at `fmin`, which is a plain `float` parameter. The
-   * magnitudes every narrowed position refuses are ACCEPTED into the float and
-   * fail later, unnamed, in the mel filterbank; a fractional value is simply a
-   * legal frequency. Pinned rather than corrected: the point of this block is
-   * that the positions nobody converted still behave as they did.
+   * What each shape does at `fmin`, a `float` position. The magnitudes every
+   * narrowed integer position refuses are ACCEPTED into the float and fail
+   * later, unnamed, in the mel filterbank; a fractional value is simply a legal
+   * frequency. A float carries neither a NaN nor an infinity into a frequency,
+   * so those two the reader answers by name; everything else a float can hold
+   * it passes on, and the domain guard behind it decides.
    */
   const FMIN_OUTCOME: ReadonlyArray<readonly [string, string]> = [
     // A float holds these, so the refusal comes from deep in the build and
@@ -418,8 +421,8 @@ describe('the untouched neighbours of the narrowed positions are unchanged', () 
     ['2**32 + 5', 'Invalid parameter'],
     ['2**32', 'Invalid parameter'],
     ['2**53 + 1', 'Invalid parameter'],
-    ['NaN', 'StreamConfig: fmin/fmax must be finite and non-negative'],
-    ['Infinity', 'StreamConfig: fmin/fmax must be finite and non-negative'],
+    ['NaN', 'fmin must be a finite number'],
+    ['Infinity', 'fmin must be a finite number'],
     ['1.5', 'constructs'],
     ['-1', 'StreamConfig: fmin/fmax must be finite and non-negative'],
   ];

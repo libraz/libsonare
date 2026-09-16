@@ -79,8 +79,9 @@ val js_percussive(val samples, const val& sample_rate) {
 }
 
 // Time stretch
-val js_time_stretch_ex(val samples, const val& sample_rate, float rate, const val& n_fft,
+val js_time_stretch_ex(val samples, const val& sample_rate, const val& rate_val, const val& n_fft,
                        const val& hop_length) {
+  const float rate = checkedFloatFromVal(rate_val, "rate");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   TimeStretchConfig config;
   config.n_fft = checkedIntFromVal(n_fft, "nFft");
@@ -91,15 +92,16 @@ val js_time_stretch_ex(val samples, const val& sample_rate, float rate, const va
   return vectorToFloat32Array(out_vec);
 }
 
-val js_time_stretch(val samples, const val& sample_rate, float rate) {
+val js_time_stretch(val samples, const val& sample_rate, const val& rate) {
   return js_time_stretch_ex(samples, sample_rate, rate, val(constants::kDefaultNFft),
                             val(constants::kDefaultHopLength));
 }
 
 // Pitch shift
-val js_pitch_shift_ex(val samples, const val& sample_rate_val, float semitones, const val& n_fft,
-                      const val& hop_length) {
+val js_pitch_shift_ex(val samples, const val& sample_rate_val, const val& semitones_val,
+                      const val& n_fft, const val& hop_length) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const float semitones = checkedFloatFromVal(semitones_val, "semitones");
   PitchShiftPlan plan;
   if (!make_pitch_shift_plan(samples["length"].as<size_t>(), sample_rate, semitones, &plan)) {
     throw SonareException(ErrorCode::InvalidParameter, "unsupported pitch-shift expansion");
@@ -114,7 +116,7 @@ val js_pitch_shift_ex(val samples, const val& sample_rate_val, float semitones, 
   return vectorToFloat32Array(out_vec);
 }
 
-val js_pitch_shift(val samples, const val& sample_rate, float semitones) {
+val js_pitch_shift(val samples, const val& sample_rate, const val& semitones) {
   return js_pitch_shift_ex(samples, sample_rate, semitones, val(constants::kDefaultNFft),
                            val(constants::kDefaultHopLength));
 }
@@ -129,8 +131,10 @@ val js_pitch_shift(val samples, const val& sample_rate, float semitones) {
 // C editing API), so the feature is always linked and the `#else` stub branch is
 // unreachable on this surface — adding the guard here would compile the stub and
 // break the binding rather than mirror the C ABI.
-val js_pitch_correct_to_midi(val samples, const val& sample_rate, float current_midi,
-                             float target_midi) {
+val js_pitch_correct_to_midi(val samples, const val& sample_rate, const val& current_midi_val,
+                             const val& target_midi_val) {
+  const float current_midi = checkedFloatFromVal(current_midi_val, "currentMidi");
+  const float target_midi = checkedFloatFromVal(target_midi_val, "targetMidi");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   editing::pitch_editor::PitchCorrector corrector;
   Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
@@ -143,9 +147,10 @@ val js_pitch_correct_to_midi(val samples, const val& sample_rate, float current_
 // optional (undefined/null -> every frame voiced). Companion arrays are passed
 // as Float32Array (voiced uses 0.0/1.0) so a single conversion path suffices.
 val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val, val f0_hz,
-                                         float target_midi, const val& hop_length_val, val voiced,
-                                         val voiced_prob) {
+                                         const val& target_midi_val, const val& hop_length_val,
+                                         val voiced, val voiced_prob) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const float target_midi = checkedFloatFromVal(target_midi_val, "targetMidi");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
   const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
@@ -291,7 +296,8 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
 }
 
 val js_note_stretch(val samples, const val& sample_rate, const val& onset_sample,
-                    const val& offset_sample, float stretch_ratio) {
+                    const val& offset_sample, const val& stretch_ratio_val) {
+  const float stretch_ratio = checkedFloatFromVal(stretch_ratio_val, "stretchRatio");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   editing::pitch_editor::NoteRegion region;
   region.onset_sample = checkedIntFromVal(onset_sample, "onsetSample");
@@ -540,8 +546,9 @@ std::vector<editing::note_model::NoteObject> deriveNoteSet(
 // split of one note's pitch curve into the parts an edit acts on, and the two
 // calls that reshape the set itself.
 val js_extract_notes(val samples, const val& sample_rate_val, val f0_hz, val voiced_prob,
-                     val voiced, float frame_rate, val options) {
+                     val voiced, const val& frame_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
   const editing::note_model::NoteExtractorConfig config =
       noteExtractorConfigFromVal(options, "extractNotes");
   std::size_t cumulative_count = 0;
@@ -606,20 +613,24 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
   return vectorToFloat32Array(out_vec);
 }
 
-val js_decompose_note_pitch(val f0_hz, float frame_rate, float median_hz, float vibrato_cutoff_hz) {
+val js_decompose_note_pitch(val f0_hz, const val& frame_rate_val, const val& median_hz_val,
+                            const val& vibrato_cutoff_hz_val) {
+  const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
+  const float median_hz = checkedFloatFromVal(median_hz_val, "medianHz");
+  const float vibrato_cutoff_hz = checkedFloatFromVal(vibrato_cutoff_hz_val, "vibratoCutoffHz");
   // A note with no pitch is spelled 0, so only a value that cannot be a centre
   // or a cutoff at all is rejected.
-  if (!std::isfinite(median_hz) || median_hz < 0.0f) {
+  if (median_hz < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "decomposeNotePitch: medianHz must be finite and non-negative");
+                          "decomposeNotePitch: medianHz must be non-negative");
   }
-  if (!std::isfinite(vibrato_cutoff_hz) || vibrato_cutoff_hz < 0.0f) {
+  if (vibrato_cutoff_hz < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "decomposeNotePitch: vibratoCutoffHz must be finite and non-negative");
+                          "decomposeNotePitch: vibratoCutoffHz must be non-negative");
   }
-  if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
+  if (frame_rate <= 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "decomposeNotePitch: frameRate must be a finite positive number");
+                          "decomposeNotePitch: frameRate must be a positive number");
   }
   std::size_t cumulative_count = 0;
   accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", "decomposeNotePitch input", &cumulative_count);
@@ -650,8 +661,9 @@ val js_decompose_note_pitch(val f0_hz, float frame_rate, float median_hz, float 
 }
 
 val js_split_note(val samples, const val& sample_rate_val, val f0_hz, val voiced_prob, val voiced,
-                  float frame_rate, val notes, double index, double frame, val options) {
+                  const val& frame_rate_val, val notes, double index, double frame, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
   const std::size_t note_index = wasmIndexArg(index, "splitNote index");
   const int cut_frame = noteFrameArg(frame, "splitNote frame");
   const editing::note_model::NoteExtractorConfig config =
@@ -673,8 +685,9 @@ val js_split_note(val samples, const val& sample_rate_val, val f0_hz, val voiced
 }
 
 val js_merge_notes(val samples, const val& sample_rate_val, val f0_hz, val voiced_prob, val voiced,
-                   float frame_rate, val notes, double first, double last, val options) {
+                   const val& frame_rate_val, val notes, double first, double last, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
   const std::size_t first_index = wasmIndexArg(first, "mergeNotes first");
   const std::size_t last_index = wasmIndexArg(last, "mergeNotes last");
   const editing::note_model::NoteExtractorConfig config =
@@ -831,8 +844,10 @@ val js_render_percussive_events(val samples, const val& sample_rate, val events,
   return vectorToFloat32Array(out_vec);
 }
 
-val js_voice_change(val samples, const val& sample_rate, float pitch_semitones,
-                    float formant_factor) {
+val js_voice_change(val samples, const val& sample_rate, const val& pitch_semitones_val,
+                    const val& formant_factor_val) {
+  const float pitch_semitones = checkedFloatFromVal(pitch_semitones_val, "pitchSemitones");
+  const float formant_factor = checkedFloatFromVal(formant_factor_val, "formantFactor");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = pitch_semitones;
@@ -873,11 +888,12 @@ val js_voice_change_realtime(val samples, const val& sample_rate, std::string pr
 // matrices as { w, h }: w is [n_features x n_components] row-major and h is
 // [n_components x n_frames] row-major (both flat Float32Array buffers).
 val js_decompose(val s, const val& n_features_val, const val& n_frames_val,
-                 const val& n_components_val, const val& n_iter_val, float beta) {
+                 const val& n_components_val, const val& n_iter_val, const val& beta_val) {
   const int n_features = checkedIntFromVal(n_features_val, "nFeatures");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int n_components = checkedIntFromVal(n_components_val, "nComponents");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
   if (n_components <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "n_components must be positive");
@@ -905,12 +921,13 @@ val js_decompose(val s, const val& n_features_val, const val& n_frames_val,
 // js_decompose but exposes the initialisation strategy: "random" (default,
 // deterministic seed) or "nndsvd" (SVD-based warm start). Returns { w, h }.
 val js_decompose_with_init(val s, const val& n_features_val, const val& n_frames_val,
-                           const val& n_components_val, const val& n_iter_val, float beta,
+                           const val& n_components_val, const val& n_iter_val, const val& beta_val,
                            std::string init) {
   const int n_features = checkedIntFromVal(n_features_val, "nFeatures");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int n_components = checkedIntFromVal(n_components_val, "nComponents");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
   if (n_components <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "n_components must be positive");
@@ -1110,19 +1127,18 @@ val js_hpss_with_residual(val samples, const val& sample_rate, const val& kernel
 
 // Phase-vocoder time-scale modification (STFT -> phase_vocoder -> iSTFT).
 // Mirrors the C ABI sonare_phase_vocoder. rate < 1.0 = slower, > 1.0 = faster.
-val js_phase_vocoder(val samples, const val& sample_rate_val, float rate, const val& n_fft_val,
-                     const val& hop_length_val) {
+val js_phase_vocoder(val samples, const val& sample_rate_val, const val& rate_val,
+                     const val& n_fft_val, const val& hop_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const float rate = checkedFloatFromVal(rate_val, "rate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  // Guard the time-scale rate before deriving the output length: a non-finite
-  // rate would request an enormous (Inf) or garbage (NaN) output buffer, and a
-  // non-positive rate is rejected. Mirrors the C ABI rate > 0 check
-  // (sonare_phase_vocoder); the finite guard is a WASM-heap safeguard that never
-  // rejects a valid finite rate, so no upper cap is imposed on fast rates.
-  if (!std::isfinite(rate) || rate <= 0.0f) {
+  // Guard the time-scale rate before deriving the output length. Mirrors the C
+  // ABI rate > 0 check (sonare_phase_vocoder); no upper cap is imposed on fast
+  // rates.
+  if (rate <= 0.0f) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "phaseVocoder: rate must be a finite positive number");
+                                  "phaseVocoder: rate must be a positive number");
   }
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
@@ -1142,10 +1158,12 @@ val js_phase_vocoder(val samples, const val& sample_rate_val, float rate, const 
 }
 
 // Normalize
-val js_normalize_ex(val samples, const val& sample_rate, float target_db, const std::string& mode) {
+val js_normalize_ex(val samples, const val& sample_rate, const val& target_db_val,
+                    const std::string& mode) {
   if (mode != "peak" && mode != "rms") {
     throw SonareException(ErrorCode::InvalidParameter, "normalize: mode must be 'peak' or 'rms'");
   }
+  const float target_db = checkedFloatFromVal(target_db_val, "targetDb");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   Audio result =
       mode == "rms" ? normalize_rms(audio, target_db, true) : normalize(audio, target_db);
@@ -1153,7 +1171,7 @@ val js_normalize_ex(val samples, const val& sample_rate, float target_db, const 
   return vectorToFloat32Array(out_vec);
 }
 
-val js_normalize(val samples, const val& sample_rate, float target_db) {
+val js_normalize(val samples, const val& sample_rate, const val& target_db) {
   return js_normalize_ex(samples, sample_rate, target_db, "peak");
 }
 

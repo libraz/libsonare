@@ -205,16 +205,17 @@ val js_mel_delta(val features, const val& n_features_val, const val& n_frames_va
 }
 
 val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val& n_fft_val,
-                              const val& hop_length_val, float ref_power, bool fill_nan) {
+                              const val& hop_length_val, const val& ref_power_val, bool fill_nan) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const float ref_power = checkedFloatFromVal(ref_power_val, "refPower");
   const Audio audio = loadValidatedAudio(samples, sample_rate);
   validate_positive("reassignedSpectrogram", n_fft, "n_fft");
   validate_positive("reassignedSpectrogram", hop_length, "hop_length");
-  if (!std::isfinite(ref_power) || ref_power < 0.0f) {
+  if (ref_power < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "reassignedSpectrogram: ref_power must be finite and non-negative");
+                          "reassignedSpectrogram: ref_power must be non-negative");
   }
   StftConfig config;
   config.n_fft = n_fft;
@@ -235,12 +236,14 @@ val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val
 //
 // hop_length is intentionally absent: feature::mel_to_stft does not consume it.
 val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val,
-                   const val& sample_rate_val, const val& n_fft_val, float fmin, float fmax,
-                   bool htk) {
+                   const val& sample_rate_val, const val& n_fft_val, const val& fmin_val,
+                   const val& fmax_val, bool htk) {
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   validate_sample_rate("melToStft", sample_rate);
   std::vector<float> data =
       load_validated_matrix("melToStft", mel_power, n_mels, n_frames, "melPower", "n_mels");
@@ -267,13 +270,15 @@ val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val
 // feature::mel_to_audio.
 val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_val,
                     const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
-                    float fmin, float fmax, const val& n_iter_val, bool htk) {
+                    const val& fmin_val, const val& fmax_val, const val& n_iter_val, bool htk) {
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   validate_sample_rate("melToAudio", sample_rate);
   std::vector<float> data =
       load_validated_matrix("melToAudio", mel_power, n_mels, n_frames, "melPower", "n_mels");
@@ -297,13 +302,14 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
 
 val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val,
                    const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
-                   const val& n_iter_val, float momentum) {
+                   const val& n_iter_val, const val& momentum_val) {
   const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const float momentum = checkedFloatFromVal(momentum_val, "momentum");
   validate_sample_rate("griffinLim", sample_rate);
   std::vector<float> data =
       load_validated_matrix("griffinLim", magnitude, n_bins, n_frames, "magnitude", "n_bins");
@@ -311,7 +317,7 @@ val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val
   validate_positive("griffinLim", hop_length, "hop_length");
   validate_positive("griffinLim", n_iter, "n_iter");
   if (n_bins != n_fft / 2 + 1 || n_iter > sonare::resource::kMaxGriffinLimIterations ||
-      !std::isfinite(momentum) || momentum < 0.0f || momentum >= 1.0f) {
+      momentum < 0.0f || momentum >= 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "griffinLim: invalid shape or options");
   }
   GriffinLimConfig config;
@@ -346,8 +352,8 @@ val js_mfcc_to_mel(val mfcc, const val& n_mfcc_val, const val& n_frames_val, con
 // Inverse: MFCC matrix -> audio via Griffin-Lim. Mirrors feature::mfcc_to_audio.
 val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
                      const val& n_mels_val, const val& sample_rate_val, const val& n_fft_val,
-                     const val& hop_length_val, float fmin, float fmax, const val& n_iter_val,
-                     bool htk, const val& lifter_val) {
+                     const val& hop_length_val, const val& fmin_val, const val& fmax_val,
+                     const val& n_iter_val, bool htk, const val& lifter_val) {
   const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
@@ -355,6 +361,8 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   validate_sample_rate("mfccToAudio", sample_rate);
   std::vector<float> data =
@@ -379,7 +387,7 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
 }
 
 val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_val,
-                    const val& sample_rate_val, const val& hop_length_val, float fmin,
+                    const val& sample_rate_val, const val& hop_length_val, const val& fmin_val,
                     const val& bins_per_octave_val, const val& n_iter_val) {
   const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
@@ -387,13 +395,14 @@ val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   validate_sample_rate("cqtToAudio", sample_rate);
   std::vector<float> data =
       load_validated_matrix("cqtToAudio", magnitude, n_bins, n_frames, "magnitude", "n_bins");
   validate_positive("cqtToAudio", hop_length, "hop_length");
   validate_positive("cqtToAudio", bins_per_octave, "bins_per_octave");
   validate_positive("cqtToAudio", n_iter, "n_iter");
-  if (!std::isfinite(fmin) || fmin <= 0.0f || n_iter > sonare::resource::kMaxGriffinLimIterations) {
+  if (fmin <= 0.0f || n_iter > sonare::resource::kMaxGriffinLimIterations) {
     throw SonareException(ErrorCode::InvalidParameter, "cqtToAudio: invalid fmin or n_iter");
   }
   CqtConfig config;
@@ -406,7 +415,7 @@ val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
 }
 
 val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_val,
-                    const val& sample_rate_val, const val& hop_length_val, float fmin,
+                    const val& sample_rate_val, const val& hop_length_val, const val& fmin_val,
                     const val& bins_per_octave_val, float gamma, const val& n_iter_val) {
   const int n_bins = checkedIntFromVal(n_bins_val, "nBins");
   const int n_frames = checkedIntFromVal(n_frames_val, "nFrames");
@@ -414,14 +423,14 @@ val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   const int n_iter = checkedIntFromVal(n_iter_val, "nIter");
+  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   validate_sample_rate("vqtToAudio", sample_rate);
   std::vector<float> data =
       load_validated_matrix("vqtToAudio", magnitude, n_bins, n_frames, "magnitude", "n_bins");
   validate_positive("vqtToAudio", hop_length, "hop_length");
   validate_positive("vqtToAudio", bins_per_octave, "bins_per_octave");
   validate_positive("vqtToAudio", n_iter, "n_iter");
-  if (!std::isfinite(fmin) || fmin <= 0.0f || std::isinf(gamma) ||
-      n_iter > sonare::resource::kMaxGriffinLimIterations) {
+  if (fmin <= 0.0f || std::isinf(gamma) || n_iter > sonare::resource::kMaxGriffinLimIterations) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "vqtToAudio: invalid fmin, gamma, or n_iter");
   }

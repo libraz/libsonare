@@ -115,10 +115,10 @@ struct ProjectWasm {
   void setWarpMap(val desc);
   void removeWarpMap(const val& warp_ref_id);
   void setTrackMidiDestination(const val& track_id, const val& destination_id);
-  void setTrackGain(const val& track_id, float gain);
+  void setTrackGain(const val& track_id, const val& gain_val);
   void setTrackMute(const val& track_id, bool mute);
   void setTrackSolo(const val& track_id, bool solo);
-  void setTrackPan(const val& track_id, float pan);
+  void setTrackPan(const val& track_id, const val& pan_val);
   void undo();
   void redo();
   void clearHistory();
@@ -242,7 +242,7 @@ struct ProjectWasm {
   // --------------------------------------------------------------------------
 
   void removeClip(const val& clip_id);
-  void setClipGain(const val& clip_id, float gain);
+  void setClipGain(const val& clip_id, const val& gain_val);
 
   // Reads a { lengthPpq?, curve? } fade descriptor; curve accepts the ordinal or
   // a string ("linear"/"equal-power"/"equalPower"/"equal_power"/...).
@@ -355,10 +355,11 @@ val js_midi_event_to_val(const SonareMidiEventPod& event);
 SonareMidiCcBinding js_cc_binding_from_val(val object);
 val js_cc_binding_to_val(const SonareMidiCcBinding& binding);
 std::vector<SonareMidiCcBinding> js_cc_bindings_from_val(val bindings);
-val js_midi_cc_learn(val events, const val& param_id, float min_value, float max_value,
+val js_midi_cc_learn(val events, const val& param_id, const val& min_value, const val& max_value,
                      const val& min_movement);
 val js_midi_cc_to_breakpoint(val bindings, val event);
-val js_midi_param_to_cc(val bindings, val param_id, float unit_value, const val& group, double ppq);
+val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value, const val& group,
+                        double ppq);
 val js_midi_route_events(val events, val config);
 
 // NativeSynth preset / enum free functions (bodies in project_bounce.cpp).

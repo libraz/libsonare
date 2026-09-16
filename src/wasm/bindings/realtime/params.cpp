@@ -136,12 +136,8 @@ int RealtimeEngineWasm::automationLaneCount() const {
   return static_cast<int>(engine_.automation().lane_count());
 }
 
-void RealtimeEngineWasm::setParameter(double param_id, float value, int64_t render_frame) {
-  // Match the C ABI: reject a non-finite value (WASM bypasses the C-ABI guard).
-  if (!std::isfinite(value)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "parameter value must be finite");
-  }
+void RealtimeEngineWasm::setParameter(double param_id, const val& value_val, int64_t render_frame) {
+  const float value = checkedFloatFromVal(value_val, "value");
   if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "parameter is not realtime safe");
@@ -157,12 +153,9 @@ void RealtimeEngineWasm::setParameter(double param_id, float value, int64_t rend
   }
 }
 
-void RealtimeEngineWasm::setParameterSmoothed(double param_id, float value, int64_t render_frame) {
-  // Match the C ABI: reject a non-finite value (WASM bypasses the C-ABI guard).
-  if (!std::isfinite(value)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "parameter value must be finite");
-  }
+void RealtimeEngineWasm::setParameterSmoothed(double param_id, const val& value_val,
+                                              int64_t render_frame) {
+  const float value = checkedFloatFromVal(value_val, "value");
   if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "parameter is not realtime safe");
@@ -178,10 +171,11 @@ void RealtimeEngineWasm::setParameterSmoothed(double param_id, float value, int6
   }
 }
 
-void RealtimeEngineWasm::setParamSmoothingMs(float smoothing_ms) {
-  if (!std::isfinite(smoothing_ms) || smoothing_ms < 0.0f) {
+void RealtimeEngineWasm::setParamSmoothingMs(const val& smoothing_ms_val) {
+  const float smoothing_ms = checkedFloatFromVal(smoothing_ms_val, "smoothingMs");
+  if (smoothing_ms < 0.0f) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "smoothing_ms must be finite and non-negative");
+                                  "smoothing_ms must be non-negative");
   }
   engine_.set_param_smoothing_ms(smoothing_ms);
 }

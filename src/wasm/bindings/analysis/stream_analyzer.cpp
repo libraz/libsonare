@@ -99,13 +99,14 @@ val js_stream_analyzer_config_default() {
 class StreamAnalyzerWrapper {
  public:
   StreamAnalyzerWrapper(const val& sample_rate_val, const val& n_fft_val, const val& hop_length_val,
-                        const val& n_mels_val, float fmin, float fmax, float tuning_ref_hz,
-                        bool compute_magnitude, bool compute_mel, bool compute_chroma,
-                        bool compute_onset, bool compute_spectral,
+                        const val& n_mels_val, const val& fmin_val, const val& fmax_val,
+                        const val& tuning_ref_hz_val, bool compute_magnitude, bool compute_mel,
+                        bool compute_chroma, bool compute_onset, bool compute_spectral,
                         const val& emit_every_n_frames_val, const val& magnitude_downsample_val,
                         double max_pending_frames, double max_progression_entries,
-                        float key_update_interval_sec, float bpm_update_interval_sec,
-                        const val& window_val, const val& output_format_val) {
+                        const val& key_update_interval_sec_val,
+                        const val& bpm_update_interval_sec_val, const val& window_val,
+                        const val& output_format_val) {
     // The narrow integers arrive as val because embind's integer glue wraps, so
     // a request past 2^32 would reach the config as a small legal one.
     const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
@@ -117,6 +118,13 @@ class StreamAnalyzerWrapper {
         checkedIntFromVal(magnitude_downsample_val, "magnitudeDownsample");
     const int window = checkedIntFromVal(window_val, "window");
     const int output_format = checkedIntFromVal(output_format_val, "outputFormat");
+    const float fmin = checkedFloatFromVal(fmin_val, "fmin");
+    const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+    const float tuning_ref_hz = checkedFloatFromVal(tuning_ref_hz_val, "tuningRefHz");
+    const float key_update_interval_sec =
+        checkedFloatFromVal(key_update_interval_sec_val, "keyUpdateIntervalSec");
+    const float bpm_update_interval_sec =
+        checkedFloatFromVal(bpm_update_interval_sec_val, "bpmUpdateIntervalSec");
     // The shared facade check rather than a message of this file's own, so the
     // four surfaces answer an unsupported config identically.
     StreamConfig requested;
@@ -359,17 +367,24 @@ class StreamAnalyzerWrapper {
   float currentTime() const { return analyzer_->current_time(); }
 
   /// @brief Sets the expected total duration for pattern lock timing.
-  void setExpectedDuration(float duration_seconds) {
+  void setExpectedDuration(const val& duration_seconds_val) {
+    const float duration_seconds = checkedFloatFromVal(duration_seconds_val, "durationSeconds");
     analyzer_->set_expected_duration(duration_seconds);
   }
 
   /// @brief Sets normalization gain for loud audio.
-  void setNormalizationGain(float gain) { analyzer_->set_normalization_gain(gain); }
+  void setNormalizationGain(const val& gain_val) {
+    const float gain = checkedFloatFromVal(gain_val, "gain");
+    analyzer_->set_normalization_gain(gain);
+  }
 
   /// @brief Sets tuning reference frequency (A4).
-  /// @param ref_hz Reference frequency for A4 (default 440 Hz)
+  /// @param ref_hz_val Reference frequency for A4 (default 440 Hz)
   /// @details Use 466.16 if audio is 1 semitone sharp, 415.30 if 1 semitone flat.
-  void setTuningRefHz(float ref_hz) { analyzer_->set_tuning_ref_hz(ref_hz); }
+  void setTuningRefHz(const val& ref_hz_val) {
+    const float ref_hz = checkedFloatFromVal(ref_hz_val, "refHz");
+    analyzer_->set_tuning_ref_hz(ref_hz);
+  }
 
  private:
   StreamConfig config_;
@@ -380,9 +395,9 @@ void registerStreamAnalyzerBindings() {
   // Streaming - StreamAnalyzer
   function("streamAnalyzerConfigDefault", &js_stream_analyzer_config_default);
   class_<StreamAnalyzerWrapper>("StreamAnalyzer")
-      .constructor<const val&, const val&, const val&, const val&, float, float, float, bool, bool,
-                   bool, bool, bool, const val&, const val&, double, double, float, float,
-                   const val&, const val&>()
+      .constructor<const val&, const val&, const val&, const val&, const val&, const val&,
+                   const val&, bool, bool, bool, bool, bool, const val&, const val&, double, double,
+                   const val&, const val&, const val&, const val&>()
       .function("process", &StreamAnalyzerWrapper::process)
       .function("processWithOffset", &StreamAnalyzerWrapper::processWithOffset)
       .function("finalize", &StreamAnalyzerWrapper::finalize)

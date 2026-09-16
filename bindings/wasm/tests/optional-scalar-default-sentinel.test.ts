@@ -38,8 +38,17 @@ function maxAbsDiff(a: Float32Array, b: Float32Array): number {
   return worst;
 }
 
-const NON_SENTINEL_REFUSED: [string, number][] = [
-  ['a negative value', -5],
+/**
+ * Two layers refuse, and each is pinned against the one that answers it. A
+ * finite value outside the domain reaches the core; a non-finite one never gets
+ * that far, because the boundary reader that narrows the argument to a float
+ * refuses it first and names the parameter in the spelling the caller used.
+ * One regex covering both would have to be loose enough to pass on a refusal
+ * from the wrong layer.
+ */
+const OUT_OF_DOMAIN_REFUSED: [string, number][] = [['a negative value', -5]];
+
+const NON_FINITE_REFUSED: [string, number][] = [
   ['NaN', Number.NaN],
   ['positive infinity', Number.POSITIVE_INFINITY],
   ['negative infinity', Number.NEGATIVE_INFINITY],
@@ -58,8 +67,12 @@ describe('mastering releaseMs', () => {
         : { samples, sampleRate: SR, targetLufs: -6, releaseMs },
     ).samples;
 
-  it.each(NON_SENTINEL_REFUSED)('refuses %s instead of using the default', (_label, value) => {
+  it.each(OUT_OF_DOMAIN_REFUSED)('refuses %s instead of using the default', (_label, value) => {
     expect(() => master(value)).toThrow(/release_ms must be 0 .* or a finite positive value/);
+  });
+
+  it.each(NON_FINITE_REFUSED)('refuses %s instead of using the default', (_label, value) => {
+    expect(() => master(value)).toThrow(/releaseMs must be a finite number/);
   });
 
   it('treats 0 as the library default rather than a release of zero', () => {

@@ -107,9 +107,11 @@ float js_metering_rms_db(val samples, const val& sample_rate_val) {
   return metering::rms_db(audio);
 }
 
-float js_metering_silence_ratio(val samples, const val& sample_rate_val, float threshold_db,
-                                const val& frame_length_val, const val& hop_length_val) {
+float js_metering_silence_ratio(val samples, const val& sample_rate_val,
+                                const val& threshold_db_val, const val& frame_length_val,
+                                const val& hop_length_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const float threshold_db = checkedFloatFromVal(threshold_db_val, "thresholdDb");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   Audio audio = loadValidatedAudio(samples, sample_rate);
@@ -158,9 +160,10 @@ float js_metering_true_peak_db(val samples, const val& sample_rate_val,
   return metering::true_peak_db(audio, factor);
 }
 
-val js_metering_detect_clipping(val samples, const val& sample_rate_val, float threshold,
+val js_metering_detect_clipping(val samples, const val& sample_rate_val, const val& threshold_val,
                                 const val& min_region_samples_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   const int min_region_samples = checkedIntFromVal(min_region_samples_val, "minRegionSamples");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   if (min_region_samples < 0) {
@@ -189,9 +192,14 @@ val js_metering_detect_clipping(val samples, const val& sample_rate_val, float t
   return out;
 }
 
-val js_metering_dynamic_range(val samples, const val& sample_rate_val, float window_sec,
-                              float hop_sec, float low_percentile, float high_percentile) {
+val js_metering_dynamic_range(val samples, const val& sample_rate_val, const val& window_sec_val,
+                              const val& hop_sec_val, const val& low_percentile_val,
+                              const val& high_percentile_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const float window_sec = checkedFloatFromVal(window_sec_val, "windowSec");
+  const float hop_sec = checkedFloatFromVal(hop_sec_val, "hopSec");
+  const float low_percentile = checkedFloatFromVal(low_percentile_val, "lowPercentile");
+  const float high_percentile = checkedFloatFromVal(high_percentile_val, "highPercentile");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   const metering::DynamicRangeConfig cfg = metering::dynamic_range_config_from_public(
       window_sec, hop_sec, low_percentile, high_percentile);

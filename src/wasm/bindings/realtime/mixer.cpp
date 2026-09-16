@@ -279,9 +279,10 @@ void RealtimeEngineWasm::setBusStripInsertBypassed(const val& bus_id_val,
 void RealtimeEngineWasm::setTrackStripInsertParamByName(const val& track_id_val,
                                                         const val& insert_index_val,
                                                         const std::string& param_name,
-                                                        float value) {
+                                                        const val& value_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
   const auto result =
       engine_.set_track_insert_param_detailed(track_id, insert_index, param_name, value);
@@ -305,8 +306,9 @@ void RealtimeEngineWasm::setTrackStripInsertParamByName(const val& track_id_val,
 
 void RealtimeEngineWasm::setMasterStripInsertParamByName(const val& insert_index_val,
                                                          const std::string& param_name,
-                                                         float value) {
+                                                         const val& value_val) {
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
   const auto result = engine_.set_master_insert_param_detailed(insert_index, param_name, value);
   if (result == sonare::engine::InsertParamSetResult::kInvalidTarget) {
@@ -328,9 +330,11 @@ void RealtimeEngineWasm::setMasterStripInsertParamByName(const val& insert_index
 
 void RealtimeEngineWasm::setBusStripInsertParamByName(const val& bus_id_val,
                                                       const val& insert_index_val,
-                                                      const std::string& param_name, float value) {
+                                                      const std::string& param_name,
+                                                      const val& value_val) {
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
+  const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
   const auto result =
       engine_.set_bus_insert_param_detailed(bus_id, insert_index, param_name, value);
@@ -401,8 +405,9 @@ double RealtimeEngineWasm::resolveBusInsertAutomationId(const val& bus_id_val,
 #endif
 }
 
-void RealtimeEngineWasm::setTrackStripPan(const val& track_id_val, float pan) {
+void RealtimeEngineWasm::setTrackStripPan(const val& track_id_val, const val& pan_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const float pan = checkedFloatFromVal(pan_val, "pan");
 #if defined(SONARE_WITH_MIXING)
   if (!engine_.set_track_pan(track_id, pan)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -454,9 +459,11 @@ void RealtimeEngineWasm::setTrackStripPanMode(const val& track_id_val, const val
 #endif
 }
 
-void RealtimeEngineWasm::setTrackStripDualPan(const val& track_id_val, float left_pan,
-                                              float right_pan) {
+void RealtimeEngineWasm::setTrackStripDualPan(const val& track_id_val, const val& left_pan_val,
+                                              const val& right_pan_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const float left_pan = checkedFloatFromVal(left_pan_val, "leftPan");
+  const float right_pan = checkedFloatFromVal(right_pan_val, "rightPan");
 #if defined(SONARE_WITH_MIXING)
   if (!engine_.set_track_dual_pan(track_id, left_pan, right_pan)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

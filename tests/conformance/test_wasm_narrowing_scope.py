@@ -1035,17 +1035,21 @@ class RealTreeFloatTest(unittest.TestCase):
         # still reads 5 is exactly the change to catch.
         self.assertEqual(
             sorted(entry["js"] for entry in self.records.passthroughs),
-            ["hzToMel", "hzToMidi", "hzToNote", "melToHz", "midiToHz"],
+            ["hzToMel", "hzToMidi", "hzToNote", "melToHz", "midiToHz", "vqt", "vqtToAudio"],
         )
 
-    def test_the_float_section_does_not_claim_the_remainder_is_refused(self) -> None:
+    def test_the_float_section_states_a_citation_and_not_a_verdict(self) -> None:
         # The limit, asserted rather than left to the docstring: the records
-        # carry no status, so nothing in this file can be read as a verdict on
-        # the remainder. Those are refused by core validators and by the C ABI's
-        # finite(), neither of which a text scan over src/wasm can see.
+        # carry no status, so an entry says only that a conversion is total --
+        # never that a parameter is safe. Whether a value is refused past the
+        # conversion is decided by core validators and by the C ABI's finite(),
+        # neither of which a text scan over src/wasm can see.
         for entry in self.records.passthroughs:
             self.assertNotIn("status", entry)
-        self.assertGreater(len(self.scan.float_parameters), len(self.records.passthroughs))
+        # Every float position now carries one, so the two counts moving apart
+        # means a position arrived with no record rather than a record going
+        # stale -- the direction this file cannot otherwise report.
+        self.assertEqual(len(self.scan.float_parameters), len(self.records.passthroughs))
 
 
 if __name__ == "__main__":

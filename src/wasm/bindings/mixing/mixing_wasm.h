@@ -63,7 +63,7 @@ class MixerWasm {
   // is in absolute samples from the start of processing. curve: 0 = Linear,
   // 1 = Exponential.
   void scheduleInsertAutomation(const val& strip_index, const val& insert_index,
-                                const val& param_id, double sample_pos, float value,
+                                const val& param_id, double sample_pos, const val& value,
                                 const val& curve);
 
   // Borrowed strip handle by index in [0, stripCount()). Throws if out of range.
@@ -71,18 +71,18 @@ class MixerWasm {
   SonareStrip* stripAt(unsigned int strip_index);
 
   // Sets the strip's input trim in dB.
-  void setInputTrimDb(const val& strip_index_val, float db);
+  void setInputTrimDb(const val& strip_index_val, const val& db_val);
 
   // Sets the strip's fader level in dB.
-  void setFaderDb(const val& strip_index_val, float db);
+  void setFaderDb(const val& strip_index_val, const val& db_val);
 
   // Sets the strip's pan position. pan_mode is the SONARE_PAN_MODE_* ordinal;
   // pass SONARE_PAN_MODE_KEEP (-1) to keep the strip's current pan mode (e.g. a
   // scene-defined mode) on a plain pan nudge.
-  void setPan(const val& strip_index_val, float pan, const val& pan_mode_val);
+  void setPan(const val& strip_index_val, const val& pan_val, const val& pan_mode_val);
 
   // Sets the strip's stereo width.
-  void setWidth(const val& strip_index_val, float width);
+  void setWidth(const val& strip_index_val, const val& width_val);
 
   // Sets the strip's mute state.
   void setMuted(const val& strip_index_val, bool muted);
@@ -107,10 +107,10 @@ class MixerWasm {
   void setChannelDelaySamples(const val& strip_index_val, const val& delay_samples_val);
 
   // Sets the strip's live VCA gain offset in dB (not persisted to the scene).
-  void setVcaOffsetDb(const val& strip_index_val, float offset_db);
+  void setVcaOffsetDb(const val& strip_index_val, const val& offset_db_val);
 
   // Sets independent left/right pan positions (dual-pan mode).
-  void setDualPan(const val& strip_index_val, float left_pan, float right_pan);
+  void setDualPan(const val& strip_index_val, const val& left_pan_val, const val& right_pan_val);
 
   // Sets the strip's surround pan from a JS object {azimuth, elevation,
   // divergence, lfe, distance}; absent/non-numeric fields fall back to the
@@ -120,10 +120,10 @@ class MixerWasm {
   // Adds a post-construction send to the strip. timing mirrors SonareSendTiming:
   // 0 = post-fader, 1 = pre-fader. Returns the new send's index.
   size_t addSend(const val& strip_index_val, std::string id, std::string destination_bus_id,
-                 float send_db, const val& timing_val);
+                 const val& send_db_val, const val& timing_val);
 
   // Sets the send level (in dB) for an existing send by index.
-  void setSendDb(const val& strip_index_val, const val& send_index_val, float send_db);
+  void setSendDb(const val& strip_index_val, const val& send_index_val, const val& send_db_val);
 
   // Removes the send at send_index (in add order) from the strip. Higher send
   // indices shift down by one after removal; recompile before processing.
@@ -141,18 +141,18 @@ class MixerWasm {
 
   // Schedules sample-accurate fader automation on a strip. sample_pos uses the
   // absolute-sample timeline; curve: 0 = Linear, 1 = Exponential.
-  void scheduleFaderAutomation(const val& strip_index_val, double sample_pos, float fader_db,
-                               const val& curve_val);
+  void scheduleFaderAutomation(const val& strip_index_val, double sample_pos,
+                               const val& fader_db_val, const val& curve_val);
 
-  void schedulePanAutomation(const val& strip_index_val, double sample_pos, float pan,
+  void schedulePanAutomation(const val& strip_index_val, double sample_pos, const val& pan_val,
                              const val& curve_val);
 
-  void scheduleWidthAutomation(const val& strip_index_val, double sample_pos, float width,
+  void scheduleWidthAutomation(const val& strip_index_val, double sample_pos, const val& width_val,
                                const val& curve_val);
 
   // Schedules sample-accurate send-level automation on a strip's send.
   void scheduleSendAutomation(const val& strip_index_val, const val& send_index_val,
-                              double sample_pos, float db, const val& curve_val);
+                              double sample_pos, const val& db_val, const val& curve_val);
 
   // Reads up to max_points of the strip's most recent goniometer samples.
   // Returns an array of { left, right } points (oldest to newest).
@@ -177,11 +177,11 @@ class MixerWasm {
 
   // Adds a VCA group with the given gain offset. members is an array of strip-id
   // strings (may be empty).
-  void addVcaGroup(std::string id, float gain_db, val members);
+  void addVcaGroup(std::string id, const val& gain_db_val, val members);
 
   void removeVcaGroup(std::string id);
 
-  void setVcaGroupGainDb(std::string id, float gain_db);
+  void setVcaGroupGainDb(std::string id, const val& gain_db_val);
 
   void setVcaGroupMembers(std::string id, val members);
 

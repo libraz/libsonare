@@ -19,8 +19,9 @@ void ProjectWasm::removeClip(const val& clip_id_val) {
   }
 }
 
-void ProjectWasm::setClipGain(const val& clip_id_val, float gain) {
+void ProjectWasm::setClipGain(const val& clip_id_val, const val& gain_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
+  const float gain = checkedFloatFromVal(gain_val, "gain");
   const SonareError err = sonare_project_set_clip_gain(project_.get(), clip_id, gain);
   if (err != SONARE_OK) {
     throwCError(err, "failed to set clip gain");

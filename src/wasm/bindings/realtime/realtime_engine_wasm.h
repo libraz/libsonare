@@ -89,9 +89,10 @@ class RealtimeEngineWasm {
   emscripten::val parameterInfo(double id) const;
   void setAutomationLane(double param_id, emscripten::val points);
   int automationLaneCount() const;
-  void setParameter(double param_id, float value, int64_t render_frame);
-  void setParameterSmoothed(double param_id, float value, int64_t render_frame);
-  void setParamSmoothingMs(float smoothing_ms);
+  void setParameter(double param_id, const emscripten::val& value_val, int64_t render_frame);
+  void setParameterSmoothed(double param_id, const emscripten::val& value_val,
+                            int64_t render_frame);
+  void setParamSmoothingMs(const emscripten::val& smoothing_ms_val);
   void setSoloMute(const emscripten::val& lane_index_val, bool solo, bool mute,
                    int64_t render_frame);
   void setTrackMonitorMode(const emscripten::val& lane_index_val, const emscripten::val& mode_val,
@@ -113,7 +114,8 @@ class RealtimeEngineWasm {
   void clearMidiInstrument(const emscripten::val& destination_id_val);
   size_t midiInstrumentCount() const;
   void bindMidiCc(const emscripten::val& channel_val, const emscripten::val& controller_val,
-                  const emscripten::val& param_id_val, float min_value, float max_value);
+                  const emscripten::val& param_id_val, const emscripten::val& min_value_val,
+                  const emscripten::val& max_value_val);
   void bindMidiCcBinding(emscripten::val binding);
   void clearMidiCcBindings();
   size_t midiCcBindingCount() const;
@@ -179,12 +181,15 @@ class RealtimeEngineWasm {
                                     bool reset_on_bypass);
   void setTrackStripInsertParamByName(const emscripten::val& track_id_val,
                                       const emscripten::val& insert_index_val,
-                                      const std::string& param_name, float value);
+                                      const std::string& param_name,
+                                      const emscripten::val& value_val);
   void setMasterStripInsertParamByName(const emscripten::val& insert_index_val,
-                                       const std::string& param_name, float value);
+                                       const std::string& param_name,
+                                       const emscripten::val& value_val);
   void setBusStripInsertParamByName(const emscripten::val& bus_id_val,
                                     const emscripten::val& insert_index_val,
-                                    const std::string& param_name, float value);
+                                    const std::string& param_name,
+                                    const emscripten::val& value_val);
   void setBusStripInsertBypassed(const emscripten::val& bus_id_val,
                                  const emscripten::val& insert_index_val, bool bypassed,
                                  bool reset_on_bypass);
@@ -196,11 +201,13 @@ class RealtimeEngineWasm {
   double resolveBusInsertAutomationId(const emscripten::val& bus_id_val,
                                       const emscripten::val& insert_index_val,
                                       const std::string& param_name);
-  void setTrackStripPan(const emscripten::val& track_id_val, float pan);
+  void setTrackStripPan(const emscripten::val& track_id_val, const emscripten::val& pan_val);
   void setTrackStripPanLaw(const emscripten::val& track_id_val, const emscripten::val& pan_law_val);
   void setTrackStripPanMode(const emscripten::val& track_id_val,
                             const emscripten::val& pan_mode_val);
-  void setTrackStripDualPan(const emscripten::val& track_id_val, float left_pan, float right_pan);
+  void setTrackStripDualPan(const emscripten::val& track_id_val,
+                            const emscripten::val& left_pan_val,
+                            const emscripten::val& right_pan_val);
   void setTrackStripChannelDelaySamples(const emscripten::val& track_id_val,
                                         const emscripten::val& delay_samples_val);
 
@@ -233,7 +240,7 @@ class RealtimeEngineWasm {
   void setCapturePunch(int64_t start_sample, int64_t end_sample, bool enabled);
   void setCaptureSource(emscripten::val source);
   void setRecordOffsetSamples(int64_t offset_samples);
-  void setInputMonitor(bool enabled, float gain);
+  void setInputMonitor(bool enabled, const emscripten::val& gain_val);
   void resetCapture();
   emscripten::val captureStatus() const;
   emscripten::val capturedAudio() const;

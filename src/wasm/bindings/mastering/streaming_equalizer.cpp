@@ -130,11 +130,20 @@ class EqualizerWrapper {
 
   void setAutoGain(bool enabled) { processor_.set_auto_gain_enabled(enabled); }
 
-  void setGainScale(float scale) { processor_.set_gain_scale(scale); }
+  void setGainScale(const val& scale_val) {
+    const float scale = checkedFloatFromVal(scale_val, "scale");
+    processor_.set_gain_scale(scale);
+  }
 
-  void setOutputGainDb(float gain_db) { processor_.set_output_gain_db(gain_db); }
+  void setOutputGainDb(const val& gain_db_val) {
+    const float gain_db = checkedFloatFromVal(gain_db_val, "gainDb");
+    processor_.set_output_gain_db(gain_db);
+  }
 
-  void setOutputPan(float pan) { processor_.set_output_pan(pan); }
+  void setOutputPan(const val& pan_val) {
+    const float pan = checkedFloatFromVal(pan_val, "pan");
+    processor_.set_output_pan(pan);
+  }
 
   // Borrows a mono external sidechain key for dynamic bands that opt into
   // DynamicParams::external_sidechain. The samples are copied into an owned
