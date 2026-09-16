@@ -58,8 +58,11 @@ float js_frames_to_time(const val& frames, const val& sr, const val& hop_length)
   return frames_to_time(checkedIntFromVal(frames, "frames"), checkedIntFromVal(sr, "sr"),
                         checkedIntFromVal(hop_length, "hopLength"));
 }
-int js_time_to_frames(float time, const val& sr, const val& hop_length) {
-  return time_to_frames(time, checkedIntFromVal(sr, "sr"),
+int js_time_to_frames(const val& time_val, const val& sr, const val& hop_length) {
+  // time_to_frames saturates a non-finite result to INT_MAX, so a value the f32
+  // parameter turned into an infinity returns a frame index nothing downstream
+  // can tell from a real one.
+  return time_to_frames(checkedFloatFromVal(time_val, "time"), checkedIntFromVal(sr, "sr"),
                         checkedIntFromVal(hop_length, "hopLength"));
 }
 int js_frames_to_samples(const val& frames, const val& hop_length, const val& n_fft) {
