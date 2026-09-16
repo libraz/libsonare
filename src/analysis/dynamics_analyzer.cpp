@@ -8,6 +8,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -30,6 +31,13 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   const float* data = audio.data();
   size_t n_samples = audio.size();
   int sr = audio.sample_rate();
+
+  // The peak fold below absorbs a non-finite sample while the sum of squares beside
+  // it propagates one, so the two levels disagree; and the prefix sum turns a +inf
+  // into inf - inf for every later window, which then orders a sort. WASM calls this
+  // directly, so the check belongs here rather than in the C-ABI wrapper.
+  SONARE_CHECK_MSG(numeric::all_finite(data, n_samples), ErrorCode::InvalidParameter,
+                   "DynamicsAnalyzer: audio contains a non-finite sample");
 
   // Compute peak and overall sum of squares in single pass
   float peak = 0.0f;

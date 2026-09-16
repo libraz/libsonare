@@ -7,9 +7,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/math_utils.h"
 
 using namespace sonare;
@@ -302,4 +304,48 @@ TEST_CASE("DynamicsAnalyzer dynamic range comes from the shared percentile kerne
       static_cast<float>(percentile_sorted(sorted, 0.95) - percentile_sorted(sorted, 0.10));
   CAPTURE(sorted.size(), analyzer.dynamic_range_db(), expected);
   REQUIRE_THAT(analyzer.dynamic_range_db(), WithinAbs(expected, 1e-4f));
+}
+
+// The peak fold absorbs a non-finite sample while the sum of squares beside it
+// propagates one, so peak_db and rms_db disagreed about the same buffer -- the
+// same split the level meters had. The prefix sum is the sharper half: it turns a
+// single +inf into inf - inf for every later window, and those NaN levels then
+// order the std::sort that computes the percentiles.
+TEST_CASE("the dynamics analyzer refuses audio it cannot measure", "[dynamics_analyzer]") {
+  const float nan_sample = std::numeric_limits<float>::quiet_NaN();
+  const float inf_sample = std::numeric_limits<float>::infinity();
+
+  auto tone = [](float amp, size_t n) {
+    std::vector<float> samples(n);
+    for (size_t i = 0; i < n; ++i)
+      samples[i] =
+          amp * std::sin(2.0f * constants::kPi * 440.0f * static_cast<float>(i) / 48000.0f);
+    return samples;
+  };
+
+  SECTION("a NaN and an infinity are both refused") {
+    std::vector<float> with_nan = tone(0.5f, 48000);
+    with_nan[20000] = nan_sample;
+    REQUIRE_THROWS_AS(DynamicsAnalyzer(Audio::from_buffer(with_nan.data(), with_nan.size(), 48000)),
+                      SonareException);
+
+    // The infinity is not the milder case here: every window after it reads
+    // inf - inf out of the prefix sum, so the poisoning spreads forward.
+    std::vector<float> with_inf = tone(0.5f, 48000);
+    with_inf[20000] = inf_sample;
+    REQUIRE_THROWS_AS(DynamicsAnalyzer(Audio::from_buffer(with_inf.data(), with_inf.size(), 48000)),
+                      SonareException);
+  }
+
+  SECTION("the control: the same signal without it still analyses") {
+    // Without this the refusals above are satisfied by an analyzer that throws
+    // for every input.
+    const std::vector<float> clean = tone(0.5f, 48000);
+    const DynamicsAnalyzer analyzer(Audio::from_buffer(clean.data(), clean.size(), 48000));
+    const auto& d = analyzer.dynamics();
+    REQUIRE(std::isfinite(d.peak_db));
+    REQUIRE(std::isfinite(d.rms_db));
+    REQUIRE(std::isfinite(d.crest_factor));
+    REQUIRE(d.peak_db > d.rms_db);
+  }
 }

@@ -734,3 +734,54 @@ TEST_CASE("decay aggregation drops a candidate whose score or confidence is non-
     REQUIRE(result.rt60 > 0.0f);
   }
 }
+
+// The spectral noise suppressor builds per-bin magnitude rows and takes a
+// percentile of each with nth_element. One non-finite sample makes every
+// magnitude in the frames it touches non-finite, so the ordering the algorithm
+// requires is gone. The buffer comes back unsuppressed, which is the answer the
+// too-short and wrong-rate cases already give and which the caller handles.
+TEST_CASE("the spectral noise suppressor hands back audio it cannot analyse",
+          "[acoustic_analyzer][edge]") {
+  using sonare::acoustic_detail::suppress_stationary_noise_spectral;
+  const float nan_sample = std::numeric_limits<float>::quiet_NaN();
+
+  std::vector<float> noisy(48000);
+  for (size_t i = 0; i < noisy.size(); ++i) {
+    noisy[i] = 0.3f * std::sin(0.05f * static_cast<float>(i)) +
+               0.02f * std::sin(1.7f * static_cast<float>(i));
+  }
+
+  SECTION("a non-finite sample returns the input unchanged") {
+    std::vector<float> poisoned = noisy;
+    poisoned[12345] = nan_sample;
+    const auto out = suppress_stationary_noise_spectral(poisoned.data(), poisoned.size(), 48000);
+
+    REQUIRE(out.size() == poisoned.size());
+    REQUIRE(std::isnan(out[12345]));
+    // Unchanged, not merely finite: nothing was substituted on the way through.
+    for (size_t i = 0; i < out.size(); ++i) {
+      if (i != 12345) REQUIRE(out[i] == poisoned[i]);
+    }
+  }
+
+  SECTION("the non-vacuity control: a clean buffer is actually suppressed") {
+    // Without this the section above is satisfied by a function that returns its
+    // input for everything, which would make the guard untestable.
+    const auto out = suppress_stationary_noise_spectral(noisy.data(), noisy.size(), 48000);
+    REQUIRE(out.size() == noisy.size());
+    size_t changed = 0;
+    for (size_t i = 0; i < out.size(); ++i) {
+      if (out[i] != noisy[i]) ++changed;
+    }
+    REQUIRE(changed > noisy.size() / 2);
+  }
+
+  SECTION("a NaN percentile is refused rather than used as a pivot") {
+    std::vector<float> data{1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+    REQUIRE(std::isnan(sonare::acoustic_detail::percentile_nth_element(
+        data.data(), data.size(), std::numeric_limits<float>::quiet_NaN())));
+    // An infinity orders, so the clamp still bounds it to the top rank.
+    REQUIRE(sonare::acoustic_detail::percentile_nth_element(
+                data.data(), data.size(), std::numeric_limits<float>::infinity()) == 5.0f);
+  }
+}

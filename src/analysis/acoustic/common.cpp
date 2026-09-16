@@ -9,6 +9,7 @@
 #include "core/window.h"
 #include "util/db.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::acoustic_detail {
 
@@ -115,6 +116,12 @@ float percentile_nth_element(float* data, size_t count, float q) {
   if (data == nullptr || count == 0) {
     return nan_value();
   }
+  // std::clamp returns its own argument for a NaN, so the rank below would be NaN
+  // and its cast to size_t an out-of-bounds nth_element pivot. An infinity orders,
+  // so the clamp bounds it; only a NaN is unmeasurable.
+  if (std::isnan(q)) {
+    return nan_value();
+  }
   q = std::clamp(q, 0.0f, 1.0f);
   const float position = q * static_cast<float>(count - 1);
   const auto lower = static_cast<size_t>(std::floor(position));
@@ -135,6 +142,13 @@ std::vector<float> suppress_stationary_noise_spectral(const float* samples, size
                                                       int sample_rate) {
   if (samples == nullptr || sample_rate <= 0 || size < 1024) {
     return samples == nullptr ? std::vector<float>{} : std::vector<float>(samples, samples + size);
+  }
+
+  // A non-finite sample makes every magnitude in the frames it touches non-finite,
+  // and the per-bin noise floor below runs nth_element over those rows. Hand the
+  // input back unsuppressed, the way a too-short buffer already does.
+  if (!numeric::all_finite(samples, size)) {
+    return std::vector<float>(samples, samples + size);
   }
 
   const int n_fft = sample_rate <= 16000 ? 512 : 1024;
