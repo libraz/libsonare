@@ -438,17 +438,6 @@ EMSCRIPTEN_BINDINGS(unit) {
             self.assertIn("carry no verdict", heading)
             self.assertEqual(lines, ["  slot_index: status 'pending'"])
 
-    def test_a_float_named_like_a_count_is_reported(self) -> None:
-        """The float boundary's trip-wire, which nothing in the tree trips today."""
-        counted = self.SOURCE.replace("float gain_db", "float n_frames")
-        with tempfile.TemporaryDirectory() as tmp:
-            _, failures = self._run(Path(tmp), self._records(), counted)
-            self.assertEqual(len(failures), 1, failures)
-            heading, lines = failures[0]
-            self.assertIn("named like a count or an index", heading)
-            self.assertEqual(len(lines), 1)
-            self.assertIn("setStripGain(n_frames: float)", lines[0])
-
     def test_an_unresolvable_registration_is_reported(self) -> None:
         orphaned = self.SOURCE.replace("&analyze)", "&analyzeElsewhere)")
         with tempfile.TemporaryDirectory() as tmp:
@@ -474,6 +463,177 @@ EMSCRIPTEN_BINDINGS(unit) {
             self.assertEqual(scan.reconcile(), [])
             failures = CHECKER._positional_self_check(scan, self.FLOOR)
             self.assertEqual(len(failures), 5)
+
+
+class FloatFailureClassTest(unittest.TestCase):
+    """Each float class, reverted one at a time on a scratch tree.
+
+    The float section's own failure mode is the one every census has: it reports
+    a number nobody reads and nothing fails.  So each class below is broken
+    alone and required to fire alone, and the distribution is broken in BOTH
+    directions -- a parameter landing and a parameter leaving are different
+    mistakes and a check that only catches one of them is half a check.
+    """
+
+    SOURCE = """
+#include <emscripten/val.h>
+using emscripten::val;
+
+float hzToMel(float hz) { return hz; }
+val setStripGain(const val& strip_index, float gain_db) { return strip_index; }
+
+EMSCRIPTEN_BINDINGS(unit) {
+  function("hzToMel", &hzToMel);
+  function("setStripGain", &setStripGain);
+}
+"""
+
+    # One below the fixture's population, so an ablation that removes a
+    # parameter reddens the class under test and not the floor as well.
+    FLOOR = {"parameters": 1, "functions": 1, "files": 1}
+
+    def _records(self, root: Path, **overrides) -> dict:
+        _write(root / "cited.ts", "the conversion is total over the whole real line\n")
+        section = {
+            "floor": self.FLOOR,
+            "distribution": [{"file": "bindings/domain/unit.cpp", "count": 2}],
+            "passthroughs": [
+                {
+                    "js": "hzToMel",
+                    "symbol": "hzToMel",
+                    "index": 0,
+                    "name": "hz",
+                    "mechanism": [
+                        {"file": "cited.ts", "contains": "total over the whole real line"}
+                    ],
+                    "reason": "test fixture",
+                }
+            ],
+        }
+        section.update(overrides)
+        return {"float": section}
+
+    def _run(self, root: Path, records: dict, source: str | None = None):
+        tree = root / "src" / "wasm"
+        _write(tree / "bindings" / "domain" / "unit.cpp", source or self.SOURCE)
+        with mock.patch.multiple(CHECKER, ROOT=root, WASM_TREE=tree):
+            scan = CHECKER.PositionalScan(tree)
+            return scan, CHECKER.evaluate_floats(scan, CHECKER.FloatRecords(records, tree, root))
+
+    def test_the_fixture_is_clean(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scan, failures = self._run(root, self._records(root))
+            self.assertEqual(len(scan.float_parameters), 2)
+            self.assertEqual(failures, [])
+
+    def test_a_new_float_parameter_is_reported_by_name(self) -> None:
+        """Direction one, and the parameter itself has to be in the output.
+
+        A count that moved is not a finding until the reader knows which one
+        moved; naming the file alone leaves them to re-derive the triage.
+        """
+        grown = self.SOURCE.replace("float gain_db", "float gain_db, float pan")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, failures = self._run(root, self._records(root), grown)
+            self.assertEqual(len(failures), 1, failures)
+            heading, lines = failures[0]
+            self.assertIn("no longer hold the float parameters", heading)
+            self.assertIn("recorded 2, found 3", lines[0])
+            self.assertIn("setStripGain(pan)", "\n".join(lines))
+
+    def test_a_float_parameter_routed_away_is_reported(self) -> None:
+        """Direction two. Routing one is not silent either -- the record owes an update."""
+        routed = self.SOURCE.replace(
+            "val setStripGain(const val& strip_index, float gain_db) { return strip_index; }",
+            "val setStripGain(const val& strip_index, const val& gain_db) { return strip_index; }",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, failures = self._run(root, self._records(root), routed)
+            self.assertEqual(len(failures), 1, failures)
+            heading, lines = failures[0]
+            self.assertIn("no longer hold the float parameters", heading)
+            self.assertIn("recorded 2, found 1", lines[0])
+
+    def test_a_passthrough_matching_nothing_is_reported(self) -> None:
+        routed = self.SOURCE.replace(
+            "float hzToMel(float hz) { return hz; }",
+            "float hzToMel(const val& hz) { return hz.as<float>(); }",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            records = self._records(root, distribution=[{"file": "bindings/domain/unit.cpp", "count": 1}])
+            _, failures = self._run(root, records, routed)
+            headings = [heading for heading, _ in failures]
+            self.assertEqual(len(failures), 1, failures)
+            self.assertIn("matched no parameter", headings[0])
+            self.assertEqual(failures[0][1], ["  hzToMel(hz)"])
+
+    def test_a_passthrough_without_a_reason_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            records = self._records(root)
+            records["float"]["passthroughs"][0]["reason"] = "   "
+            _, failures = self._run(root, records)
+            self.assertEqual(len(failures), 1, failures)
+            self.assertIn("carry no reason", failures[0][0])
+
+    def test_a_passthrough_without_a_mechanism_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            records = self._records(root)
+            del records["float"]["passthroughs"][0]["mechanism"]
+            _, failures = self._run(root, records)
+            self.assertEqual(len(failures), 1, failures)
+            self.assertIn("cannot be read where", failures[0][0])
+            self.assertEqual(failures[0][1], ["  hzToMel(hz): no mechanism citation"])
+
+    def test_a_mechanism_quote_that_is_not_there_is_reported(self) -> None:
+        """The citation has to be readable, not merely written.
+
+        A passthrough is the verdict that lets a saturated value through, so the
+        text it points at is the whole of its evidence -- and a quote drifts
+        without anyone editing this file, which is how two of the shipping
+        citations were caught wrong.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            records = self._records(root)
+            records["float"]["passthroughs"][0]["mechanism"][0]["contains"] = "refuses a non-finite"
+            _, failures = self._run(root, records)
+            self.assertEqual(len(failures), 1, failures)
+            self.assertIn("cannot be read where", failures[0][0])
+            self.assertIn("does not contain", failures[0][1][0])
+
+    def test_a_float_named_like_a_count_is_reported(self) -> None:
+        """The wrapping trip-wire, which nothing in the tree trips today."""
+        counted = self.SOURCE.replace("float gain_db", "float n_frames")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, failures = self._run(root, self._records(root), counted)
+            self.assertEqual(len(failures), 1, failures)
+            heading, lines = failures[0]
+            self.assertIn("named like a count or an index", heading)
+            self.assertEqual(len(lines), 1)
+            self.assertIn("setStripGain(n_frames: float)", lines[0])
+
+    def test_an_empty_population_fails_the_floor(self) -> None:
+        """The mandatory one. An empty roster agrees with an empty scan.
+
+        Emptying the distribution alongside the population takes every other
+        class in this section green, so the floor is the only thing left to
+        refuse the pair.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            records = self._records(root, distribution=[], passthroughs=[])
+            _, failures = self._run(root, records, "// nothing here\n")
+            headings = [heading for heading, _ in failures]
+            self.assertEqual(len(failures), 1, failures)
+            self.assertIn("no longer finds the population it is sized for", headings[0])
+            self.assertEqual(len(failures[0][1]), 3)
 
 
 class PositionalVerdictCostTest(unittest.TestCase):
@@ -839,11 +999,53 @@ class RealTreePositionalTest(unittest.TestCase):
             self.assertIn(name, CHECKER.POSITIONAL_TYPES)
 
     def test_no_float_parameter_is_named_like_a_count(self) -> None:
-        # The float exclusion rests on this, and only this half of it can stop
-        # being true without anyone touching the checker.
+        # The float exclusion from the positional population rests on this, and
+        # only this half of it can stop being true without anyone touching the
+        # checker.
         named = [p.name for p in self.scan.float_parameters if CHECKER._COUNT_SHAPED.search(p.name)]
         self.assertEqual(named, [])
         self.assertTrue(self.scan.float_parameters, "the float population is not empty")
+
+
+class RealTreeFloatTest(unittest.TestCase):
+    """The float population, against the tree the checker actually guards."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.scan = CHECKER.PositionalScan()
+        cls.records = CHECKER.FloatRecords(CHECKER.load_records())
+
+    def test_the_population_is_the_size_it_is_pinned_for(self) -> None:
+        self.assertEqual(CHECKER._float_self_check(self.scan, self.records.floor), [])
+
+    def test_the_distribution_matches_the_tree(self) -> None:
+        self.assertEqual(self.records.miscounted(self.scan.float_parameters), [])
+
+    def test_every_passthrough_is_evidenced_and_live(self) -> None:
+        for parameter in self.scan.float_parameters:
+            self.records.covers(parameter)
+        self.assertEqual(self.records.missing_reasons(), [])
+        self.assertEqual(self.records.unsupported(), [])
+        self.assertEqual(self.records.unused(), [])
+
+    def test_the_passthroughs_are_the_conversions_documented_as_total(self) -> None:
+        # Pinned by name rather than only by count. A passthrough lets a
+        # saturated value reach the core, so which parameters hold that verdict
+        # is the fact worth asserting -- a sixth appearing under a count that
+        # still reads 5 is exactly the change to catch.
+        self.assertEqual(
+            sorted(entry["js"] for entry in self.records.passthroughs),
+            ["hzToMel", "hzToMidi", "hzToNote", "melToHz", "midiToHz"],
+        )
+
+    def test_the_float_section_does_not_claim_the_remainder_is_refused(self) -> None:
+        # The limit, asserted rather than left to the docstring: the records
+        # carry no status, so nothing in this file can be read as a verdict on
+        # the remainder. Those are refused by core validators and by the C ABI's
+        # finite(), neither of which a text scan over src/wasm can see.
+        for entry in self.records.passthroughs:
+            self.assertNotIn("status", entry)
+        self.assertGreater(len(self.scan.float_parameters), len(self.records.passthroughs))
 
 
 if __name__ == "__main__":

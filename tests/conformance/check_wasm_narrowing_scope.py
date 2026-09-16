@@ -37,11 +37,36 @@ different contract:
   conversion silently changes.
 * ``float`` -- ``toWireType: value => value``, and the f32 demotion turns an
   overflow into Infinity rather than into a plausible in-domain number.  That is
-  the saturating defect, not the wrapping one, and it needs its own per-site
-  triage; none of this tree's float positional parameters is a count or an index,
-  which is the only float shape the wrapping question reaches.  A float
-  parameter whose NAME is count- or index-shaped is reported, so the day one
-  lands it is not absorbed by this boundary.
+  the saturating defect, not the wrapping one, so the float parameters are their
+  own population with their own section below, not a silent exclusion.
+
+WHAT THE FLOAT SECTION DOES AND DOES NOT ASSERT
+-----------------------------------------------
+Read this before reading the float section's count as coverage.  A float
+positional parameter cannot be routed through a checked reader while it is still
+DECLARED ``float``: embind's glue converts it before any code in this tree runs,
+so routing means changing the parameter to a ``val`` -- which removes it from
+this population entirely.  What remains here is therefore the ungoverned set by
+construction, and whether a member of it is safe is decided almost everywhere
+OUTSIDE ``src/wasm``: by a core validator or by the C ABI's ``finite()``, several
+call hops away and through a config struct.  A text scan over this tree sees
+``config.fmin = fmin;`` and can conclude nothing from it.
+
+So the float section asserts two things and no third:
+
+* the collection still matches -- a pinned floor, plus an exact per-file
+  ``distribution``.  A floor can only see the population DRAINING; it cannot see
+  a parameter land.  The distribution can, in either direction, and it fails
+  naming the file, so a float parameter cannot arrive without someone triaging
+  it in the same change.  Most ledgers in this tree carry only the floor.
+* every parameter that is knowingly NOT refused carries a ``passthrough`` record
+  with a reason and a mechanism citation this file reads back.
+
+It does NOT assert that the unrecorded remainder is refused.  Nothing here can:
+that verdict comes from driving each entry point with the value the f32 parameter
+actually holds, which is ``tests/conformance/wasm_float_saturation_test.cpp``
+natively and the WASM test suite for the guards that live in this tree.  A green
+float section is silent about all of it.
 
 The records live in ``wasm_narrowing_records.json`` and are read as data.  A
 record that matches nothing is itself an error: a stale one keeps asserting a
@@ -205,7 +230,7 @@ _BIGINT_TYPES = frozenset(
     }
 )
 
-# A float parameter shaped like a count or an index is the one float the wrapping
+# A float parameter shaped like a count or an index is the one float the WRAPPING
 # question reaches, and there is none today -- so the pattern is a trip-wire
 # rather than a classifier.
 _COUNT_SHAPED = re.compile(r"^(?:n|num|count)_|_(?:count|index|frames|samples)$|^n$|_n$")
@@ -1159,6 +1184,102 @@ class PositionalRecords:
         return sorted(name for name in every if name not in self.used)
 
 
+class FloatRecords:
+    """The float population's pinned distribution and its passthrough roster.
+
+    ``distribution`` is an exact per-file count, not a floor.  A floor alone
+    would catch a scanner that had stopped matching and nothing else; this
+    population is not one the work removes, so what is worth catching is a float
+    parameter LANDING.  A count that moves either way fails naming the file,
+    which puts the triage in the same change as the parameter.
+
+    ``passthroughs`` name the parameters a saturated value is knowingly allowed
+    to reach.  The verdict is the expensive one for the same reason ``benign``
+    is next door: it costs a ``mechanism`` citation -- a path and text that must
+    be readable at it -- so a claim that a conversion is total points at where
+    that can be seen.  A record matching no live parameter is an error, because
+    a stale one keeps a contract attached to a spelling the next parameter would
+    inherit.
+
+    There is deliberately no status meaning "refused elsewhere".  Every
+    unrecorded parameter is in that state, and a record asserting it per site
+    would turn a fact nothing here can check into a file full of unchecked
+    claims -- read, downstream, exactly like the ones that are checked.
+    """
+
+    def __init__(self, data: dict, tree: Path | None = None, root: Path | None = None) -> None:
+        section = data.get("float", {})
+        self.tree = tree if tree is not None else WASM_TREE
+        self.root = root if root is not None else ROOT
+        self.floor = section.get("floor", {})
+        self.distribution = section.get("distribution", [])
+        self.passthroughs = section.get("passthroughs", [])
+        self.used: set[str] = set()
+
+    @staticmethod
+    def label(entry: dict) -> str:
+        return f"{entry.get('js')}({entry.get('name') or '#' + str(entry.get('index'))})"
+
+    def covers(self, parameter: Positional) -> dict | None:
+        for entry in self.passthroughs:
+            if (entry["js"], entry["symbol"], entry["index"]) == parameter.key:
+                self.used.add(self.label(entry))
+                return entry
+        return None
+
+    def missing_reasons(self) -> list[str]:
+        return sorted(
+            self.label(entry)
+            for entry in self.passthroughs
+            if not str(entry.get("reason", "")).strip()
+        )
+
+    def unsupported(self) -> list[str]:
+        """Passthroughs whose mechanism is missing, unreadable, or not there."""
+        failures = []
+        for entry in self.passthroughs:
+            citations = entry.get("mechanism") or []
+            if not citations:
+                failures.append(f"{self.label(entry)}: no mechanism citation")
+                continue
+            for citation in citations:
+                problem = read_citation(self.root, citation)
+                if problem:
+                    failures.append(f"{self.label(entry)}: {problem}")
+        return sorted(failures)
+
+    def unused(self) -> list[str]:
+        return sorted(
+            self.label(entry)
+            for entry in self.passthroughs
+            if self.label(entry) not in self.used
+        )
+
+    def miscounted(self, parameters: list[Positional]) -> list[str]:
+        """Files whose float count is not the one the distribution records.
+
+        Each disagreement is followed by the file's parameters, because a count
+        alone leaves the reader to re-derive which one moved -- and finding that
+        is the whole of the triage the count exists to force.
+        """
+        measured: dict[str, list[Positional]] = {}
+        for parameter in parameters:
+            key = _relative(parameter.registration.path, self.tree)
+            measured.setdefault(key, []).append(parameter)
+        recorded = {entry["file"]: entry["count"] for entry in self.distribution}
+        problems = []
+        for name in sorted(set(measured) | set(recorded)):
+            found = measured.get(name, [])
+            if len(found) == recorded.get(name, 0):
+                continue
+            problems.append(f"{name}: recorded {recorded.get(name, 0)}, found {len(found)}")
+            problems.extend(
+                f"    {p.registration.js_name}({p.name or '#' + str(p.index)})"
+                for p in sorted(found, key=lambda p: (p.registration.js_name, p.index))
+            )
+        return problems
+
+
 def _self_check(scan: Scan, floor: dict) -> list[str]:
     """The mandatory one. Two empty sets agree perfectly.
 
@@ -1180,6 +1301,107 @@ def _self_check(scan: Scan, floor: dict) -> list[str]:
                 "the scan has stopped matching, and an empty population agrees "
                 "with everything"
             )
+    return failures
+
+
+def _float_self_check(scan: PositionalScan, floor: dict) -> list[str]:
+    """The float population's own floor, for the same reason as the other two.
+
+    Redundant with the distribution on the day both are right, and not redundant
+    on the day the distribution is emptied: an empty roster agrees with an empty
+    scan, and the floor is what refuses that pair.
+    """
+    failures = []
+    measured = {
+        "parameters": len(scan.float_parameters),
+        "functions": len({p.registration.js_name for p in scan.float_parameters}),
+        "files": len({p.registration.path for p in scan.float_parameters}),
+    }
+    for name, minimum in floor.items():
+        if measured.get(name, 0) < minimum:
+            failures.append(
+                f"{name}: found {measured.get(name, 0)}, floor is {minimum} -- "
+                "the scan has stopped matching, and an empty population agrees "
+                "with everything"
+            )
+    return failures
+
+
+def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[str, list[str]]]:
+    """Every failure class of the float population, as (heading, lines)."""
+    failures: list[tuple[str, list[str]]] = []
+
+    self_check = _float_self_check(scan, records.floor)
+    if self_check:
+        failures.append(
+            ("The float scan no longer finds the population it is sized for", self_check)
+        )
+
+    # Walked before the roster is read for staleness, since this is what marks a
+    # passthrough used.
+    for parameter in scan.float_parameters:
+        records.covers(parameter)
+
+    missing_reasons = records.missing_reasons()
+    if missing_reasons:
+        failures.append(
+            (
+                "These passthroughs carry no reason, so they allow a saturated "
+                "value through without saying on what grounds",
+                [f"  {name}" for name in missing_reasons],
+            )
+        )
+
+    unsupported = records.unsupported()
+    if unsupported:
+        failures.append(
+            (
+                "These passthroughs claim a contract that cannot be read where "
+                "they say it is. Letting a value through unrefused is the "
+                "expensive verdict on purpose: it points at the text, and the "
+                "text has to be there",
+                [f"  {line}" for line in unsupported],
+            )
+        )
+
+    counts = records.miscounted(scan.float_parameters)
+    if counts:
+        failures.append(
+            (
+                "These files no longer hold the float parameters the "
+                "distribution records. The count moving either way is the "
+                "report: a parameter landing needs its triage in this change, "
+                "and one leaving needs its record deleted in the same one",
+                [f"  {line}" for line in counts],
+            )
+        )
+
+    # The wrapping question's trip-wire. A float SATURATES rather than wrapping,
+    # so the positional population excludes it by mechanism -- and by role, since
+    # no float parameter here is a count or an index. Only the second half can
+    # stop being true without anyone noticing.
+    counted_floats = [p for p in scan.float_parameters if _COUNT_SHAPED.search(p.name)]
+    if counted_floats:
+        failures.append(
+            (
+                "These float parameters are named like a count or an index, "
+                "which is the one float shape the wrapping question reaches; the "
+                "float exclusion from the positional population was written on "
+                "there being none",
+                [f"  {p.display}" for p in sorted(counted_floats, key=lambda p: p.display)],
+            )
+        )
+
+    stale = records.unused()
+    if stale:
+        failures.append(
+            (
+                "These passthroughs matched no parameter. A record that allows "
+                "nothing still asserts a contract about a spelling, so the next "
+                "parameter to take it inherits permission unexamined",
+                [f"  {name}" for name in stale],
+            )
+        )
     return failures
 
 
@@ -1308,21 +1530,6 @@ def evaluate_positional(
                 "is a pattern AND a count, because a pattern alone absorbs the "
                 "next parameter to take a covered name",
                 [f"  {line}" for line in counts],
-            )
-        )
-
-    # The float boundary's trip-wire. The population is excluded by mechanism --
-    # a float saturates to Infinity rather than wrapping -- and by role, since
-    # none of this tree's float parameters is a count or an index. Only the
-    # second half can stop being true without anyone noticing.
-    counted_floats = [p for p in scan.float_parameters if _COUNT_SHAPED.search(p.name)]
-    if counted_floats:
-        failures.append(
-            (
-                "These float parameters are named like a count or an index, which "
-                "is the one float shape the wrapping question reaches; the float "
-                "exclusion was written on there being none",
-                [f"  {p.display}" for p in sorted(counted_floats, key=lambda p: p.display)],
             )
         )
 
@@ -1499,6 +1706,7 @@ def main() -> int:
 
     positional_records = PositionalRecords(data)
     positional = PositionalScan(args.tree, short_name_only=args.short_name_only)
+    float_records = FloatRecords(data, args.tree)
 
     print(f"val-taking bodies: {len(scan.containers)}")
     print(f"integer narrowings: {len(scan.sites)}")
@@ -1509,9 +1717,17 @@ def main() -> int:
         f"over {len({p.registration.js_name for p in positional.route_r})} functions, "
         f"{positional_records.open_total()} of them open"
     )
+    print(
+        f"float positional parameters: {len(positional.float_parameters)} "
+        f"over {len({p.registration.js_name for p in positional.float_parameters})} functions "
+        f"in {len({p.registration.path for p in positional.float_parameters})} files, "
+        f"{len(float_records.passthroughs)} of them recorded as passthroughs "
+        "(the rest are refused outside this tree, which this scan does not check)"
+    )
 
     failures = evaluate(scan, records, data["floor"])
     failures += evaluate_positional(positional, positional_records)
+    failures += evaluate_floats(positional, float_records)
 
     for heading, lines in failures:
         print(f"\n{heading}:", *lines, sep="\n", file=sys.stderr)

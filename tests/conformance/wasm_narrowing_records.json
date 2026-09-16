@@ -109,5 +109,103 @@
     ],
     "constructors": [],
     "parameters": []
+  },
+  "float": {
+    "floor": {
+      "parameters": 110,
+      "functions": 85,
+      "files": 18
+    },
+    "distribution": [
+      { "file": "bindings/analysis/quick.cpp", "count": 11 },
+      { "file": "bindings/analysis/stream_analyzer.cpp", "count": 3 },
+      { "file": "bindings/effects/audio.cpp", "count": 21 },
+      { "file": "bindings/effects/offline_dynamics_editing.cpp", "count": 2 },
+      { "file": "bindings/features/core.cpp", "count": 20 },
+      { "file": "bindings/features/music.cpp", "count": 4 },
+      { "file": "bindings/features/pitch.cpp", "count": 8 },
+      { "file": "bindings/features/spectral.cpp", "count": 5 },
+      { "file": "bindings/features/spectrogram.cpp", "count": 11 },
+      { "file": "bindings/mastering/chain.cpp", "count": 3 },
+      { "file": "bindings/mastering/streaming_equalizer.cpp", "count": 3 },
+      { "file": "bindings/metering/metering.cpp", "count": 6 },
+      { "file": "bindings/mixing/mixing_automation.cpp", "count": 5 },
+      { "file": "bindings/mixing/mixing_strip.cpp", "count": 9 },
+      { "file": "bindings/mixing/mixing_topology.cpp", "count": 2 },
+      { "file": "bindings/project/project_arrange.cpp", "count": 2 },
+      { "file": "bindings/project/project_edit.cpp", "count": 1 },
+      { "file": "bindings/project/project_meta.cpp", "count": 3 },
+      { "file": "bindings/realtime/capture.cpp", "count": 1 },
+      { "file": "bindings/realtime/midi.cpp", "count": 2 },
+      { "file": "bindings/realtime/mixer.cpp", "count": 6 },
+      { "file": "bindings/realtime/params.cpp", "count": 3 }
+    ],
+    "passthroughs": [
+      {
+        "js": "hzToMel",
+        "symbol": "js_hz_to_mel",
+        "index": 0,
+        "name": "hz",
+        "mechanism": [
+          {
+            "file": "bindings/node/src/feature_units.ts",
+            "contains": "saturates to an infinity the same way the C conversion does"
+          }
+        ],
+        "reason": "A total function over the whole real line, and documented as one on the surface a consumer reads. Refusing a saturated value here would make the mel mapping disagree with the C ABI, with Node and with the reference implementation it mirrors, for a conversion that has no rejecting branch to reach."
+      },
+      {
+        "js": "melToHz",
+        "symbol": "js_mel_to_hz",
+        "index": 0,
+        "name": "mel",
+        "mechanism": [
+          {
+            "file": "bindings/node/src/feature_units.ts",
+            "contains": "Slaney mel scale to frequency in Hz. Total over the same domain as"
+          }
+        ],
+        "reason": "The inverse of hzToMel under the same contract: the pair has to accept the same domain or a round trip stops being one."
+      },
+      {
+        "js": "hzToMidi",
+        "symbol": "js_hz_to_midi",
+        "index": 0,
+        "name": "hz",
+        "mechanism": [
+          {
+            "file": "bindings/node/src/feature_units.ts",
+            "contains": "whose unvoiced frames are NaN"
+          }
+        ],
+        "reason": "Non-finite is meaningful input here rather than a caller error: an unvoiced frame of a pitch track is NaN, and mapping a whole track through this is the documented use. A checked reader refuses NaN, so routing it would reject the convention's own spelling."
+      },
+      {
+        "js": "midiToHz",
+        "symbol": "js_midi_to_hz",
+        "index": 0,
+        "name": "midi",
+        "mechanism": [
+          {
+            "file": "bindings/node/src/feature_units.ts",
+            "contains": "`-Infinity` bottoms out at 0 rather than propagating its sign"
+          }
+        ],
+        "reason": "The inverse of hzToMidi, and its documented behaviour is specifically about what it does with an infinity -- a value it must therefore be able to receive."
+      },
+      {
+        "js": "hzToNote",
+        "symbol": "js_hz_to_note",
+        "index": 0,
+        "name": "hz",
+        "mechanism": [
+          {
+            "file": "bindings/node/src/feature_units.ts",
+            "contains": "past the representable MIDI range, and non-finite alike"
+          }
+        ],
+        "reason": "Answers \"?\" for every frequency with no note, non-finite included, so a saturated value produces the same answer as any other unnameable one. The refusal a checked reader would add is a different contract, not a stricter one."
+      }
+    ]
   }
 }
