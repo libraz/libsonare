@@ -126,18 +126,21 @@ void MeterProcessor::reset_integrated() noexcept {
 
 void MeterProcessor::discard_non_finite_loudness_state(int lufs_channels) noexcept {
   // Four doubles per channel plus the two running sums, once per block.
+  bool discarded = false;
   for (int ch = 0; ch < lufs_channels; ++ch) {
     const size_t c = static_cast<size_t>(ch);
-    discard_group_if_non_finite(k_state_pre_[c].z1, k_state_pre_[c].z2);
-    discard_group_if_non_finite(k_state_rlb_[c].z1, k_state_rlb_[c].z2);
+    discarded |= discard_group_if_non_finite(k_state_pre_[c].z1, k_state_pre_[c].z2);
+    discarded |= discard_group_if_non_finite(k_state_rlb_[c].z1, k_state_rlb_[c].z2);
   }
   // A sliding sum cannot drop one term: the value it subtracts when the sample
   // leaves the window is the same non-finite value it added. The window goes
   // instead, and the meter reports nothing until it has refilled, as it does at
   // the start of a stream. The ring walk runs only when the sums have tripped.
   if (std::isfinite(momentary_sum_) && std::isfinite(short_term_sum_)) {
+    if (discarded) note_non_finite_discard();
     return;
   }
+  note_non_finite_discard();
   std::fill(energy_ring_.begin(), energy_ring_.end(), 0.0f);
   ring_pos_ = 0;
   filled_ = 0;

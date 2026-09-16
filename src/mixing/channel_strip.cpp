@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <new>
 #include <utility>
 
@@ -227,6 +228,17 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     return;
   }
+  // The EQ and the inserts each run once per segment below, so the deltas are
+  // read here and checked at whichever exit the block takes; either way the
+  // block bumps at most once.
+  const uint32_t eq_discards_before = eq_.non_finite_discard_count();
+  const uint64_t insert_discards_before = insert_discard_sum();
+  const auto note_member_discards = [this, eq_discards_before, insert_discards_before]() noexcept {
+    if (eq_.non_finite_discard_count() != eq_discards_before ||
+        insert_discard_sum() != insert_discards_before) {
+      note_non_finite_discard();
+    }
+  };
   // AUDIO-THREAD ONLY. discard_before() and consume_block() on an
   // AutomationLane are both consumer-side and mutate the lane's
   // active_event_/has_active_event_ state, so they must be serialized.
@@ -277,11 +289,13 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     for (size_t i = 0; i < width_count; ++i) apply_automation_event(width_events[i].event);
     for (size_t i = 0; i < insert_count; ++i) apply_automation_event(insert_events[i].event);
     process_unsegmented(channels, num_channels, num_samples);
+    note_member_discards();
     return;
   }
 
   if (fader_count == 0 && pan_count == 0 && width_count == 0 && insert_count == 0) {
     process_unsegmented(channels, num_channels, num_samples);
+    note_member_discards();
     return;
   }
 
@@ -295,6 +309,7 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
     for (size_t i = 0; i < width_count; ++i) apply_automation_event(width_events[i].event);
     for (size_t i = 0; i < insert_count; ++i) apply_automation_event(insert_events[i].event);
     process_unsegmented(channels, num_channels, num_samples);
+    note_member_discards();
     return;
   }
 
@@ -376,6 +391,7 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   // meters integrate different lengths, so their RMS/LUFS readings would
   // disagree for the same block. Clamp the post meter to match.
   if (post_meter_) post_meter_->process(channels, num_channels, clamped_samples);
+  note_member_discards();
 }
 
 void ChannelStrip::process_unsegmented(float* const* channels, int num_channels, int num_samples) {

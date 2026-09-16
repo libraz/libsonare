@@ -376,6 +376,22 @@ class ChannelStrip : public rt::ProcessorBase {
                             const std::vector<uint8_t>& stereo_pair_only, float* const* channels,
                             int num_channels, int num_samples, size_t first_insert_index,
                             int sidechain_offset);
+  /// @brief Every insert's discard count added together, for the block delta in
+  ///        process_at(). RT-safe: relaxed atomic loads only.
+  /// @details An insert is owned here and reachable only as a count, so a
+  ///   discard inside one is observable nowhere unless the strip records it. The
+  ///   sum answers "did any of them move", which is the question the strip's own
+  ///   per-block count asks; it is never published as a count of its own.
+  uint64_t insert_discard_sum() const noexcept {
+    uint64_t total = 0;
+    for (const auto& insert : pre_inserts_) {
+      if (insert) total += insert->non_finite_discard_count();
+    }
+    for (const auto& insert : post_inserts_) {
+      if (insert) total += insert->non_finite_discard_count();
+    }
+    return total;
+  }
   // Re-derives both per-insert alignment banks from the current insert list.
   // Control-thread only, and re-derived in full rather than per new slot because
   // adding a pre-insert shifts every post-insert's combined index.
