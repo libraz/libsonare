@@ -97,6 +97,14 @@ FAMILIES = {
             "wasm": WASM / "public_types_mixing.ts",
         },
     },
+    "audio_profile_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/assistant/audio_profile.cpp",
+        "root": "MasteringAudioProfile",
+        "surfaces": {
+            "node": NODE / "mastering_chain.ts",
+            "wasm": WASM / "mastering_core.ts",
+        },
+    },
     "capability_catalog_schema_paths": {
         "source": REPO_ROOT / "src/c_api/sonare_c_mastering_apply.cpp",
         "root": "CapabilityCatalog",

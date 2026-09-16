@@ -151,6 +151,78 @@ export interface MasteringAssistantSuggestRequest {
   params?: MasteringAssistantParams;
 }
 
+/** One entry of {@link MasteringAudioProfile.genreCandidates}. */
+export interface MasteringGenreCandidate {
+  name: string;
+  score: number;
+}
+
+/**
+ * The shape {@link masteringAudioProfile}'s JSON parses to.
+ *
+ * The profile crosses as a string, so nothing type-checks it on arrival; this
+ * declaration is what a conformance check compares against the paths the C++
+ * writer publishes, so a field added on one side and not the other fails there
+ * rather than reaching a caller as `undefined`.
+ */
+export interface MasteringAudioProfile {
+  durationSec: number;
+  bpm: number;
+  bpmConfidence: number;
+  loudness: {
+    integratedLufs: number;
+    lraLu: number;
+    truePeakDb: number;
+    crestFactorDb: number;
+  };
+  spectral: {
+    subRmsDb: number;
+    lowRmsDb: number;
+    lowMidRmsDb: number;
+    midRmsDb: number;
+    highMidRmsDb: number;
+    highRmsDb: number;
+    airRmsDb: number;
+    centroidHz: number;
+    flatness: number;
+    rolloffHz: number;
+  };
+  dynamics: {
+    shortTermLufsStd: number;
+    attackDensity: number;
+    sustainRatio: number;
+  };
+  /**
+   * What the repair detectors measured. `measured` is false when nothing ran —
+   * either `detectDefects` was not asked for or the input was too short — and
+   * every other field is then at its default rather than a reading.
+   */
+  defects: {
+    measured: boolean;
+    clickCount: number;
+    clickRejected: number;
+    clickLongestRunSamples: number;
+    clickPerSecond: number;
+    crackleSampleCount: number;
+    crackleSampleFraction: number;
+    cracklePerSecond: number;
+    clipSampleCount: number;
+    clipRunCount: number;
+    clipLongestRunSamples: number;
+    clipSampleFraction: number;
+    noiseFloorDbfs: number;
+    noiseBandPeakDbfs: number;
+    noiseBandPeakIndex: number;
+    humFundamentalHz: number;
+    humFundamentalProminence: number;
+    humHarmonics: number;
+    humFundamentalDbfs: number;
+    humPeakHarmonicDbfs: number;
+    lateDecayRatioDb: number;
+  };
+  genreCandidates: MasteringGenreCandidate[];
+}
+
 /** The profile entry points take numeric params only; they have no target platform. */
 export interface MasteringAudioProfileRequest {
   samples: Float32Array;

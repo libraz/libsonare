@@ -599,4 +599,58 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
   return json::dump(json::Value(std::move(root)));
 }
 
+const std::vector<std::string>& audio_profile_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "bpm",
+      "bpmConfidence",
+      "defects",
+      "defects.clickCount",
+      "defects.clickLongestRunSamples",
+      "defects.clickPerSecond",
+      "defects.clickRejected",
+      "defects.clipLongestRunSamples",
+      "defects.clipRunCount",
+      "defects.clipSampleCount",
+      "defects.clipSampleFraction",
+      "defects.cracklePerSecond",
+      "defects.crackleSampleCount",
+      "defects.crackleSampleFraction",
+      "defects.humFundamentalDbfs",
+      "defects.humFundamentalHz",
+      "defects.humFundamentalProminence",
+      "defects.humHarmonics",
+      "defects.humPeakHarmonicDbfs",
+      "defects.lateDecayRatioDb",
+      "defects.measured",
+      "defects.noiseBandPeakDbfs",
+      "defects.noiseBandPeakIndex",
+      "defects.noiseFloorDbfs",
+      "durationSec",
+      "dynamics",
+      "dynamics.attackDensity",
+      "dynamics.shortTermLufsStd",
+      "dynamics.sustainRatio",
+      "genreCandidates",
+      "genreCandidates[].name",
+      "genreCandidates[].score",
+      "loudness",
+      "loudness.crestFactorDb",
+      "loudness.integratedLufs",
+      "loudness.lraLu",
+      "loudness.truePeakDb",
+      "spectral",
+      "spectral.airRmsDb",
+      "spectral.centroidHz",
+      "spectral.flatness",
+      "spectral.highMidRmsDb",
+      "spectral.highRmsDb",
+      "spectral.lowMidRmsDb",
+      "spectral.lowRmsDb",
+      "spectral.midRmsDb",
+      "spectral.rolloffHz",
+      "spectral.subRmsDb",
+  };
+  return paths;
+}
+
 }  // namespace sonare::mastering::assistant

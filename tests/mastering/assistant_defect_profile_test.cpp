@@ -3,9 +3,11 @@
 #include <cmath>
 #include <cstddef>
 #include <random>
+#include <set>
 #include <vector>
 
 #include "mastering/assistant/audio_profile.h"
+#include "support/schema_paths.h"
 #include "util/constants.h"
 #include "util/json.h"
 
@@ -277,4 +279,25 @@ TEST_CASE("Defect profile JSON carries the block whether or not it was measured"
   REQUIRE(measured["defects"]["measured"].as_bool());
   REQUIRE(measured["defects"]["clickCount"].as_int() >= 8);
   REQUIRE(measured["defects"]["noiseBandPeakIndex"].as_int() >= 0);
+}
+
+TEST_CASE("the audio profile schema list matches what the writer emits",
+          "[mastering][assistant][defects]") {
+  // An array contributes nothing of its own, so the fixture has to populate
+  // genreCandidates or two of the listed paths could never be reached and the
+  // set equality would fail for a reason that is not drift. A tone long enough
+  // to be profiled always yields candidates; the REQUIRE below says so rather
+  // than leaving it to luck.
+  auto signal = with_spikes(tone(220.0f, 0.2f), 2048, 0.9f);
+  add_tone(signal, 50.0f, 0.05f);
+  const auto profile =
+      assistant::analyze_audio_profile(signal.data(), signal.size(), kSr, detecting_config());
+  REQUIRE_FALSE(profile.genre_candidates.empty());
+  REQUIRE(profile.defects.measured);
+
+  const auto actual = sonare::test::schema_paths_of(assistant::audio_profile_to_json(profile));
+  const auto& listed = assistant::audio_profile_schema_paths();
+  const std::set<std::string> expected(listed.begin(), listed.end());
+  REQUIRE_FALSE(actual.empty());
+  REQUIRE(actual == expected);
 }

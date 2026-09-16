@@ -182,4 +182,13 @@ AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t
                                                Spectrogram* spec_out);
 std::string audio_profile_to_json(const AudioProfile& profile);
 
+/// @brief Every dotted field path @ref audio_profile_to_json emits.
+/// @details The JSON crosses to user code as a string each facade parses and
+///          casts, so nothing type-checks it on arrival. This list is what the
+///          per-surface declarations are compared against, and a set equality
+///          against a serialized fixture is what keeps it from drifting either
+///          way. An array contributes its element's paths under a `[]` segment
+///          and nothing of its own.
+const std::vector<std::string>& audio_profile_schema_paths();
+
 }  // namespace sonare::mastering::assistant
