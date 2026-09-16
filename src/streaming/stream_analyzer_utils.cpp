@@ -9,6 +9,7 @@
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/math_utils.h"
+#include "util/non_finite_sample.h"
 
 namespace sonare::streaming_detail {
 
@@ -192,15 +193,29 @@ TempoEstimate find_best_tempo(const std::vector<float>& autocorr, int sr, int ho
   return {best_bpm, confidence, candidate_count};
 }
 
-uint8_t quantize_to_u8(float value, float min_val, float max_val) {
+namespace {
+
+/// Maps @p value onto [0, 1] for a quantizer. A degenerate range and a
+/// non-finite value both land on the floor: the bounds are caller-supplied and
+/// unvalidated, so an equal pair divides by zero, and a min/max pair yields its
+/// constant argument against a NaN -- which would encode the maximum code for a
+/// value the analyzer never computed.
+float normalize_for_quantizer(float value, float min_val, float max_val) {
+  if (!(max_val > min_val)) return 0.0f;
   float normalized = (value - min_val) / (max_val - min_val);
-  normalized = std::max(0.0f, std::min(1.0f, normalized));
+  (void)resolve_non_finite(SampleDestination::kIrreversibleOutput, normalized);
+  return std::clamp(normalized, 0.0f, 1.0f);
+}
+
+}  // namespace
+
+uint8_t quantize_to_u8(float value, float min_val, float max_val) {
+  const float normalized = normalize_for_quantizer(value, min_val, max_val);
   return static_cast<uint8_t>(normalized * 255.0f + 0.5f);
 }
 
 int16_t quantize_to_i16(float value, float min_val, float max_val) {
-  float normalized = (value - min_val) / (max_val - min_val);
-  normalized = std::max(0.0f, std::min(1.0f, normalized));
+  const float normalized = normalize_for_quantizer(value, min_val, max_val);
   // Round-to-nearest and clamp so the endpoints map symmetrically:
   // normalized 0 -> -32768, normalized 1 -> 32767. The previous
   // truncating cast turned -32767.5 into -32767, so 0 never reached -32768.

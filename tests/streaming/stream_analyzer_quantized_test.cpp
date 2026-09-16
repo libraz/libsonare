@@ -1,6 +1,8 @@
 /// @file stream_analyzer_quantized_test.cpp
 /// @brief StreamAnalyzer progressive and quantized output tests.
 
+#include <limits>
+
 #include "stream_analyzer_test_helpers.h"
 #include "util/exception.h"
 
@@ -289,6 +291,44 @@ TEST_CASE("quantize/dequantize map endpoints symmetrically", "[streaming]") {
                  Catch::Matchers::WithinAbs(value, 8.0f / 255.0f));
     REQUIRE_THAT(dequantize_from_i16(quantize_to_i16(value, -2.0f, 6.0f), -2.0f, 6.0f),
                  Catch::Matchers::WithinAbs(value, 8.0f / 65535.0f));
+  }
+}
+
+TEST_CASE("A quantizer encodes the floor for a value it could not normalize", "[streaming]") {
+  using sonare::streaming_detail::quantize_to_i16;
+  using sonare::streaming_detail::quantize_to_u8;
+
+  constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+  constexpr float kInf = std::numeric_limits<float>::infinity();
+
+  // Asserted on the CODE, not on whether the call returned: every code in the
+  // range is one the analyzer produces on its own, so the only thing separating
+  // a substitution from a measurement is which one was written.
+  SECTION("a non-finite value") {
+    for (const float value : {kNaN, kInf, -kInf}) {
+      REQUIRE(quantize_to_u8(value, 0.0f, 1.0f) == 0);
+      REQUIRE(quantize_to_i16(value, 0.0f, 1.0f) == -32768);
+    }
+  }
+
+  // The bounds reach here from a caller's config with no validation in between,
+  // so an equal pair divides by zero out of entirely finite inputs.
+  SECTION("a degenerate range built from finite bounds") {
+    REQUIRE(quantize_to_u8(0.0f, 0.0f, 0.0f) == 0);
+    REQUIRE(quantize_to_u8(3.0f, 0.0f, 0.0f) == 0);
+    REQUIRE(quantize_to_u8(0.5f, 1.0f, 0.0f) == 0);
+    REQUIRE(quantize_to_i16(3.0f, 0.0f, 0.0f) == -32768);
+    REQUIRE(quantize_to_u8(0.5f, kNaN, 1.0f) == 0);
+  }
+
+  // The negative control: a usable range still spans its codes, so the two
+  // sections above are about the inputs rather than about a quantizer that
+  // now returns the floor for everything.
+  SECTION("a usable range is untouched") {
+    REQUIRE(quantize_to_u8(0.0f, 0.0f, 1.0f) == 0);
+    REQUIRE(quantize_to_u8(0.5f, 0.0f, 1.0f) == 128);
+    REQUIRE(quantize_to_u8(1.0f, 0.0f, 1.0f) == 255);
+    REQUIRE(quantize_to_i16(1.0f, 0.0f, 1.0f) == 32767);
   }
 }
 
