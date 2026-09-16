@@ -1362,6 +1362,230 @@ Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInf
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+// Library defaults (sonare_c_mastering.h), the base an options bag is read
+// over. A call with no options bag passes NULL instead, which is how the C ABI
+// itself asks for these.
+constexpr SonareDeclickConfig kDeclickConfigDefaults{0.8f, 4.0f, 8, 20, 8.0f};
+constexpr SonareDenoiseClassicalConfig kDenoiseConfigDefaults{
+    SONARE_DENOISE_MODE_LOG_MMSE,
+    SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
+    1024,
+    256,
+    0.98f,
+    26.0f,
+    2.0f,
+    0.05f,
+    0.1f,
+    1,
+    1};
+constexpr SonareDeclipConfig kDeclipConfigDefaults{0.98f, 36, 2, 0.65f};
+constexpr SonareDecrackleConfig kDecrackleConfigDefaults{0.4f, SONARE_DECRACKLE_MODE_MEDIAN, 4};
+constexpr SonareDehumConfig kDehumConfigDefaults{50.0f, 4, 20.0f, 0, 2.0f, 0.25f, 2048, 0.01f};
+constexpr SonareDereverbClassicalConfig kDereverbConfigDefaults{0.0f, 1.0f,  1024, 256, 0.4f, 50.0f,
+                                                                1.0f, 0.08f, 0,    2,   3,    0.7f};
+constexpr SonareTrimSilenceConfig kTrimSilenceConfigDefaults{
+    0.001f, 0, SONARE_TRIM_SILENCE_MODE_PEAK, -60.0f, 400.0f};
+
+/// @brief Argument check shared by the mono detect entries, which all take
+///        (Float32Array, sampleRate, options?).
+bool CheckDetectMonoArgs(Napi::Env env, const Napi::CallbackInfo& info) {
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  return true;
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairDetectClicks(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  SonareDeclickConfig config = kDeclickConfigDefaults;
+  const bool has_options = info.Length() >= 3 && info[2].IsObject();
+  if (has_options) config = read_declick_config_c(env, info[2].As<Napi::Object>(), config);
+  SonareClickDetection detection{};
+  SonareError err = sonare_mastering_repair_detect_clicks(
+      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return EmitClickDetection(env, detection);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDetectNoiseFloor(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  SonareDenoiseClassicalConfig config = kDenoiseConfigDefaults;
+  const bool has_options = info.Length() >= 3 && info[2].IsObject();
+  if (has_options) config = read_denoise_config(info[2].As<Napi::Object>(), config);
+  SonareNoiseDetection detection{};
+  SonareError err = sonare_mastering_repair_detect_noise_floor(
+      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return EmitNoiseDetection(env, detection);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDetectClipping(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  SonareDeclipConfig config = kDeclipConfigDefaults;
+  const bool has_options = info.Length() >= 3 && info[2].IsObject();
+  if (has_options) config = read_declip_config_c(info[2].As<Napi::Object>(), config);
+  SonareClipDetection detection{};
+  SonareError err = sonare_mastering_repair_detect_clipping(
+      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return EmitClipDetection(env, detection);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDetectCrackle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  SonareDecrackleConfig config = kDecrackleConfigDefaults;
+  const bool has_options = info.Length() >= 3 && info[2].IsObject();
+  if (has_options) config = read_decrackle_config_c(info[2].As<Napi::Object>(), config);
+  SonareCrackleDetection detection{};
+  SonareError err = sonare_mastering_repair_detect_crackle(
+      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return EmitCrackleDetection(env, detection);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDetectHum(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  SonareDehumConfig config = kDehumConfigDefaults;
+  const bool has_options = info.Length() >= 3 && info[2].IsObject();
+  if (has_options) config = read_dehum_config_c(info[2].As<Napi::Object>(), config);
+  SonareHumDetection detection{};
+  SonareError err = sonare_mastering_repair_detect_hum(typed.Data(), typed.ElementLength(), sr,
+                                                       has_options ? &config : nullptr, &detection);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return EmitHumDetection(env, detection);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDetectReverb(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  SonareDereverbClassicalConfig config = kDereverbConfigDefaults;
+  const bool has_options = info.Length() >= 3 && info[2].IsObject();
+  if (has_options) config = read_dereverb_config_c(info[2].As<Napi::Object>(), config);
+  SonareReverbDetection detection{};
+  SonareError err = sonare_mastering_repair_detect_reverb(
+      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &detection);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return EmitReverbDetection(env, detection);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDetectTrimRange(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  SonareTrimSilenceConfig config = kTrimSilenceConfigDefaults;
+  const bool has_options = info.Length() >= 3 && info[2].IsObject();
+  if (has_options && !ReadTrimSilenceConfig(env, info[2].As<Napi::Object>(), &config)) {
+    return env.Undefined();
+  }
+  SonareTrimRange range{};
+  SonareError err = sonare_mastering_repair_detect_trim_range(
+      typed.Data(), typed.ElementLength(), sr, has_options ? &config : nullptr, &range);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return EmitTrimRange(env, range);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDetectTrimRangeStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array left, Float32Array right, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::Error::New(
+        env, "masteringRepairDetectTrimRangeStereo: left and right must have the same length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[2], "sampleRate");
+  SonareTrimSilenceConfig config = kTrimSilenceConfigDefaults;
+  const bool has_options = info.Length() >= 4 && info[3].IsObject();
+  if (has_options && !ReadTrimSilenceConfig(env, info[3].As<Napi::Object>(), &config)) {
+    return env.Undefined();
+  }
+  SonareTrimRange range{};
+  SonareError err = sonare_mastering_repair_detect_trim_range_stereo(
+      left.Data(), right.Data(), left.ElementLength(), sr, has_options ? &config : nullptr, &range);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return EmitTrimRange(env, range);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 

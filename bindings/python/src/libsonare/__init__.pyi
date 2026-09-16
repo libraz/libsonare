@@ -358,6 +358,30 @@ from .analyzer import (
     mastering_repair_dereverb_config_for_room as mastering_repair_dereverb_config_for_room,
 )
 from .analyzer import (
+    mastering_repair_detect_clicks as mastering_repair_detect_clicks,
+)
+from .analyzer import (
+    mastering_repair_detect_clipping as mastering_repair_detect_clipping,
+)
+from .analyzer import (
+    mastering_repair_detect_crackle as mastering_repair_detect_crackle,
+)
+from .analyzer import (
+    mastering_repair_detect_hum as mastering_repair_detect_hum,
+)
+from .analyzer import (
+    mastering_repair_detect_noise_floor as mastering_repair_detect_noise_floor,
+)
+from .analyzer import (
+    mastering_repair_detect_reverb as mastering_repair_detect_reverb,
+)
+from .analyzer import (
+    mastering_repair_detect_trim_range as mastering_repair_detect_trim_range,
+)
+from .analyzer import (
+    mastering_repair_detect_trim_range_stereo as mastering_repair_detect_trim_range_stereo,
+)
+from .analyzer import (
     mastering_repair_trim_silence as mastering_repair_trim_silence,
 )
 from .analyzer import (

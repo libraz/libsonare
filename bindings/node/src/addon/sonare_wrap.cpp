@@ -388,6 +388,30 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringRepairTrimSilenceStereo",
               Napi::Function::New(env, &SonareWrap::MasteringRepairTrimSilenceStereo,
                                   "masteringRepairTrimSilenceStereo"));
+  exports.Set("masteringRepairDetectClicks",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDetectClicks,
+                                  "masteringRepairDetectClicks"));
+  exports.Set("masteringRepairDetectNoiseFloor",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDetectNoiseFloor,
+                                  "masteringRepairDetectNoiseFloor"));
+  exports.Set("masteringRepairDetectClipping",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDetectClipping,
+                                  "masteringRepairDetectClipping"));
+  exports.Set("masteringRepairDetectCrackle",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDetectCrackle,
+                                  "masteringRepairDetectCrackle"));
+  exports.Set(
+      "masteringRepairDetectHum",
+      Napi::Function::New(env, &SonareWrap::MasteringRepairDetectHum, "masteringRepairDetectHum"));
+  exports.Set("masteringRepairDetectReverb",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDetectReverb,
+                                  "masteringRepairDetectReverb"));
+  exports.Set("masteringRepairDetectTrimRange",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDetectTrimRange,
+                                  "masteringRepairDetectTrimRange"));
+  exports.Set("masteringRepairDetectTrimRangeStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDetectTrimRangeStereo,
+                                  "masteringRepairDetectTrimRangeStereo"));
   exports.Set("trim", Napi::Function::New(env, &SonareWrap::Trim, "trim"));
   exports.Set("spectralEdit", Napi::Function::New(env, &SonareWrap::SpectralEdit, "spectralEdit"));
 

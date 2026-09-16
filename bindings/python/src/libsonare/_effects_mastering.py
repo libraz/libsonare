@@ -22,7 +22,10 @@ from ._ffi import (
     SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
     SONARE_TRIM_SILENCE_MODE_LUFS_GATED,
     SONARE_TRIM_SILENCE_MODE_PEAK,
+    SonareClickDetection,
+    SonareClipDetection,
     SonareCompressorConfig,
+    SonareCrackleDetection,
     SonareDeclickConfig,
     SonareDeclickStereoResult,
     SonareDeclipConfig,
@@ -36,8 +39,12 @@ from ._ffi import (
     SonareDereverbClassicalConfig,
     SonareDereverbStereoResult,
     SonareGateConfig,
+    SonareHumDetection,
+    SonareNoiseDetection,
+    SonareReverbDetection,
     SonareRoomEstimate,
     SonareTransientShaperConfig,
+    SonareTrimRange,
     SonareTrimSilenceConfig,
     SonareTrimSilenceStereoResult,
 )
@@ -244,6 +251,35 @@ def _coerce_denoise_estimator(value: int | str) -> int:
     )
 
 
+def _run_detection(
+    lib_fn: Any,
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int,
+    config: Any,
+    detection_type: Any,
+) -> Any:
+    """Call one measure-only repair entry and hand back the filled C struct.
+
+    These allocate nothing -- the result is a small POD struct the caller
+    supplies -- so unlike :func:`_run_repair` there is nothing to release and no
+    pointer to read. A refused call zeroes the struct before it returns, which
+    the ``_check`` below turns into an exception anyway.
+    """
+    in_buf = _as_float32_buffer(samples)
+    length = int(in_buf.shape[0])
+    c_array = in_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+    out = detection_type()
+    rc = lib_fn(
+        c_array,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return out
+
+
 @_guard_buffer("samples")
 def mastering_repair_declick(
     samples: Sequence[float] | list[float] | np.ndarray,
@@ -295,15 +331,83 @@ def mastering_repair_declick(
         return _from_c_float_array(out, out_length.value)
 
 
+def _extract_click_detection(raw: Any) -> ClickDetection:
+    return ClickDetection(
+        count=int(raw.count),
+        rejected=int(raw.rejected),
+        longest_run_samples=int(raw.longest_run_samples),
+        per_second=float(raw.per_second),
+    )
+
+
+@_guard_buffer("samples")
+def mastering_repair_detect_clicks(
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.8,
+    neighbor_ratio: float = 4.0,
+    max_click_samples: int = 8,
+    lpc_order: int = 20,
+    residual_ratio: float = 8.0,
+) -> ClickDetection:
+    """Measure clicks without repairing them.
+
+    Runs the same LPC analysis :func:`mastering_repair_declick` runs, so a run
+    counted here is one the repair would act on; a cheaper threshold-only scan
+    would report runs it leaves alone. The arguments are the declicker's own, so
+    a measurement describes the repair that would follow it only when the two
+    calls are configured alike::
+
+        detected = libsonare.mastering_repair_detect_clicks(samples, 44100)
+        if detected.per_second > 1.0:
+            samples = libsonare.mastering_repair_declick(samples, 44100)
+
+    ``count`` counts RUNS meeting the repair criteria, not samples, and
+    ``rejected`` counts runs the criteria excluded as outliers -- a large
+    ``rejected`` says the configured run length or neighbour ratio is too tight
+    for this material, not that the material is clean.
+
+    Args:
+        samples: Mono input buffer (any sequence convertible to float32).
+        sample_rate: Sample rate in Hz (default 22050).
+        threshold: Amplitude threshold vs LPC prediction (default 0.8).
+        neighbor_ratio: Ratio vs neighbour amplitude (default 4.0).
+        max_click_samples: Maximum click run length in samples (default 8).
+        lpc_order: LPC order used for prediction (default 20).
+        residual_ratio: Residual / signal threshold (default 8.0).
+
+    Returns:
+        :class:`~libsonare.types.ClickDetection`.
+
+    Raises:
+        SonareValueError: If ``max_click_samples`` is not positive, or if the
+            buffer is empty or carries a non-finite sample.
+        SonareError: If the C call rejects the request.
+    """
+    if max_click_samples <= 0:
+        raise SonareValueError("max_click_samples must be positive")
+    config = SonareDeclickConfig(  # noqa: F405
+        threshold=float(threshold),
+        neighbor_ratio=float(neighbor_ratio),
+        max_click_samples=int(max_click_samples),
+        lpc_order=int(lpc_order),
+        residual_ratio=float(residual_ratio),
+    )
+    return _extract_click_detection(
+        _run_detection(
+            _get_lib().sonare_mastering_repair_detect_clicks,
+            samples,
+            sample_rate,
+            config,
+            SonareClickDetection,  # noqa: F405
+        )
+    )
+
+
 def _extract_declick_report(raw: Any) -> DeclickReport:
-    detected = raw.detected
     return DeclickReport(
-        detected=ClickDetection(
-            count=int(detected.count),
-            rejected=int(detected.rejected),
-            longest_run_samples=int(detected.longest_run_samples),
-            per_second=float(detected.per_second),
-        ),
+        detected=_extract_click_detection(raw.detected),
         repaired_runs=int(raw.repaired_runs),
         repaired_samples=int(raw.repaired_samples),
         linked_runs=int(raw.linked_runs),
@@ -471,13 +575,106 @@ def mastering_repair_denoise_classical(
         return _from_c_float_array(out, out_length.value)
 
 
+def _extract_noise_detection(raw: Any) -> NoiseDetection:
+    return NoiseDetection(
+        floor_dbfs=float(raw.floor_dbfs),
+        band_floor_dbfs=[float(v) for v in raw.band_floor_dbfs],
+    )
+
+
+@_guard_buffer("samples")
+def mastering_repair_detect_noise_floor(
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    mode: int | str = "logMmse",
+    noise_estimator: int | str = "quantile",
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    dd_alpha: float = 0.98,
+    reduction_db: float = 26.0,
+    over_subtraction: float = 2.0,
+    spectral_floor: float = 0.05,
+    noise_estimation_quantile: float = 0.1,
+    speech_presence_gain: bool = True,
+    gain_smoothing: bool = True,
+) -> NoiseDetection:
+    """Measure the noise floor without denoising.
+
+    Runs the STFT and the configured noise estimator -- the two stages
+    :func:`mastering_repair_denoise_classical` runs -- and stops before the gain
+    mask, which is why the attenuation figures live on the denoise report rather
+    than here::
+
+        floor = libsonare.mastering_repair_detect_noise_floor(samples, 44100)
+        print(floor.floor_dbfs, floor.band_floor_dbfs[0])
+
+    Needs at least ``n_fft`` samples and REFUSES a shorter buffer, unlike
+    :func:`mastering_repair_detect_reverb`, which pads one.
+
+    ``band_floor_dbfs`` has 32 entries on a geometric grid from 20 Hz to Nyquist,
+    low to high -- the same axis the mastering report's band energy deltas use.
+    Every level is absolute, so compare a figure only against one measured over
+    the same channel count.
+
+    Args:
+        samples: Mono input buffer (any sequence convertible to float32).
+        sample_rate: Sample rate in Hz (default 22050).
+        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
+              an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
+        noise_estimator: ``"quantile"`` (default), ``"mcra"``, or ``"imcra"``.
+        n_fft: STFT size, must be a positive power of two (default 1024).
+        hop_length: Hop size in samples (default 256).
+        dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
+        reduction_db: Deepest attenuation the mask may apply, in dB (default 26.0).
+        over_subtraction: Berouti alpha; SpectralSubtraction only (default 2.0).
+        spectral_floor: Berouti beta; SpectralSubtraction only (default 0.05).
+        noise_estimation_quantile: Fraction of frames assumed noise-only (default 0.1).
+        speech_presence_gain: Apply speech-presence probability gating (default True).
+        gain_smoothing: Smooth gains across time (default True).
+
+    Returns:
+        :class:`~libsonare.types.NoiseDetection`.
+
+    Raises:
+        SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved,
+            if ``n_fft`` is not a power of two, if ``hop_length`` is not
+            positive, or if the buffer is empty or carries a non-finite sample.
+        SonareError: If the C call rejects the request, which includes a buffer
+            shorter than ``n_fft``.
+    """
+    # The core requires a power of two here (denoise_classical.cpp), narrower
+    # than the shared even-size rule; check it eagerly so the message names it.
+    _require_power_of_two(n_fft, "n_fft")
+    if hop_length <= 0:
+        raise SonareValueError("hop_length must be positive")
+    config = SonareDenoiseClassicalConfig(  # noqa: F405
+        mode=_coerce_denoise_mode(mode),
+        noise_estimator=_coerce_denoise_estimator(noise_estimator),
+        n_fft=int(n_fft),
+        hop_length=int(hop_length),
+        dd_alpha=float(dd_alpha),
+        reduction_db=float(reduction_db),
+        over_subtraction=float(over_subtraction),
+        spectral_floor=float(spectral_floor),
+        noise_estimation_quantile=float(noise_estimation_quantile),
+        speech_presence_gain=1 if speech_presence_gain else 0,
+        gain_smoothing=1 if gain_smoothing else 0,
+    )
+    return _extract_noise_detection(
+        _run_detection(
+            _get_lib().sonare_mastering_repair_detect_noise_floor,
+            samples,
+            sample_rate,
+            config,
+            SonareNoiseDetection,  # noqa: F405
+        )
+    )
+
+
 def _extract_denoise_report(raw: Any) -> DenoiseReport:
-    detected = raw.detected
     return DenoiseReport(
-        detected=NoiseDetection(
-            floor_dbfs=float(detected.floor_dbfs),
-            band_floor_dbfs=[float(v) for v in detected.band_floor_dbfs],
-        ),
+        detected=_extract_noise_detection(raw.detected),
         mean_reduction_db=float(raw.mean_reduction_db),
         max_reduction_db=float(raw.max_reduction_db),
         floor_limited_fraction=float(raw.floor_limited_fraction),
@@ -696,15 +893,79 @@ def mastering_repair_declip(
     return _run_repair(_get_lib().sonare_mastering_repair_declip, samples, sample_rate, config)
 
 
+def _extract_clip_detection(raw: Any) -> ClipDetection:
+    return ClipDetection(
+        sample_count=int(raw.sample_count),
+        sample_fraction=float(raw.sample_fraction),
+        run_count=int(raw.run_count),
+        longest_run_samples=int(raw.longest_run_samples),
+    )
+
+
+@_guard_buffer("samples")
+def mastering_repair_detect_clipping(
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    clip_threshold: float = 0.98,
+    lpc_order: int = 36,
+    iterations: int = 2,
+    lpc_blend: float = 0.65,
+) -> ClipDetection:
+    """Measure clipping without repairing it.
+
+    Counts samples at or past ``clip_threshold``; NO other argument reaches the
+    result. ``lpc_order``, ``iterations`` and ``lpc_blend`` are accepted so one
+    set of arguments configures both this call and
+    :func:`mastering_repair_declip`, and ``sample_rate`` is validated without
+    being read, since no field here is a rate::
+
+        detected = libsonare.mastering_repair_detect_clipping(samples, 44100)
+        if detected.sample_fraction > 0.0:
+            samples = libsonare.mastering_repair_declip(samples, 44100)
+
+    ``longest_run_samples`` past 512 is the one field that predicts the repair's
+    method rather than its extent: a longer run takes the interpolation fallback
+    instead of the LPC solver, for which the three solver arguments do nothing.
+
+    Args:
+        samples: Mono input buffer (any sequence convertible to float32).
+        sample_rate: Sample rate in Hz (default 22050).
+        clip_threshold: Amplitude at or above which a sample counts as clipped
+            (default 0.98).
+        lpc_order: LPC order the repair would use (default 36); not read here.
+        iterations: Reconstruction iterations the repair would use (default 2);
+            not read here.
+        lpc_blend: LPC vs interpolation blend the repair would use (default
+            0.65); not read here.
+
+    Returns:
+        :class:`~libsonare.types.ClipDetection`.
+
+    Raises:
+        SonareValueError: If the buffer is empty or carries a non-finite sample.
+        SonareError: If the C call rejects the request.
+    """
+    config = SonareDeclipConfig(  # noqa: F405
+        clip_threshold=float(clip_threshold),
+        lpc_order=int(lpc_order),
+        iterations=int(iterations),
+        lpc_blend=float(lpc_blend),
+    )
+    return _extract_clip_detection(
+        _run_detection(
+            _get_lib().sonare_mastering_repair_detect_clipping,
+            samples,
+            sample_rate,
+            config,
+            SonareClipDetection,  # noqa: F405
+        )
+    )
+
+
 def _extract_declip_report(raw: Any) -> DeclipReport:
-    detected = raw.detected
     return DeclipReport(
-        detected=ClipDetection(
-            sample_count=int(detected.sample_count),
-            sample_fraction=float(detected.sample_fraction),
-            run_count=int(detected.run_count),
-            longest_run_samples=int(detected.longest_run_samples),
-        ),
+        detected=_extract_clip_detection(raw.detected),
         lpc_reconstructed_runs=int(raw.lpc_reconstructed_runs),
         interpolated_runs=int(raw.interpolated_runs),
         repaired_samples=int(raw.repaired_samples),
@@ -806,14 +1067,73 @@ def mastering_repair_decrackle(
     return _run_repair(_get_lib().sonare_mastering_repair_decrackle, samples, sample_rate, config)
 
 
+def _extract_crackle_detection(raw: Any) -> CrackleDetection:
+    return CrackleDetection(
+        sample_count=int(raw.sample_count),
+        sample_fraction=float(raw.sample_fraction),
+        per_second=float(raw.per_second),
+    )
+
+
+@_guard_buffer("samples")
+def mastering_repair_detect_crackle(
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.4,
+    mode: int | str = "median",
+    levels: int = 4,
+) -> CrackleDetection:
+    """Measure crackle without repairing it.
+
+    Measured by the MEDIAN criterion whatever ``mode`` says: wavelet shrinkage
+    removes crackle without ever deciding a sample is crackle, so these counts
+    describe what median mode would replace and not what wavelet mode would do::
+
+        detected = libsonare.mastering_repair_detect_crackle(samples, 44100)
+        if detected.per_second > 5.0:
+            samples = libsonare.mastering_repair_decrackle(samples, 44100)
+
+    ``mode`` and ``levels`` are accepted so one set of arguments configures both
+    this call and :func:`mastering_repair_decrackle`; neither reaches the result.
+
+    Args:
+        samples: Mono input buffer (any sequence convertible to float32).
+        sample_rate: Sample rate in Hz (default 22050).
+        threshold: Deviation from the local median above which a sample counts
+            as crackle (default 0.4).
+        mode: ``"median"`` (default) or ``"waveletShrinkage"``; accepted for
+            symmetry with the repair and not read here.
+        levels: Wavelet decomposition levels the repair would use (default 4);
+            not read here.
+
+    Returns:
+        :class:`~libsonare.types.CrackleDetection`.
+
+    Raises:
+        SonareValueError: If ``mode`` cannot be resolved, or if the buffer is
+            empty or carries a non-finite sample.
+        SonareError: If the C call rejects the request.
+    """
+    config = SonareDecrackleConfig(  # noqa: F405
+        threshold=float(threshold),
+        mode=_coerce_decrackle_mode(mode),
+        levels=int(levels),
+    )
+    return _extract_crackle_detection(
+        _run_detection(
+            _get_lib().sonare_mastering_repair_detect_crackle,
+            samples,
+            sample_rate,
+            config,
+            SonareCrackleDetection,  # noqa: F405
+        )
+    )
+
+
 def _extract_decrackle_report(raw: Any) -> DecrackleReport:
-    detected = raw.detected
     return DecrackleReport(
-        detected=CrackleDetection(
-            sample_count=int(detected.sample_count),
-            sample_fraction=float(detected.sample_fraction),
-            per_second=float(detected.per_second),
-        ),
+        detected=_extract_crackle_detection(raw.detected),
         replaced_samples=int(raw.replaced_samples),
         detail_coefficients=int(raw.detail_coefficients),
         shrunk_coefficients=int(raw.shrunk_coefficients),
@@ -923,15 +1243,92 @@ def mastering_repair_dehum(
     return _run_repair(_get_lib().sonare_mastering_repair_dehum, samples, sample_rate, config)
 
 
+def _extract_hum_detection(raw: Any) -> HumDetection:
+    return HumDetection(
+        fundamental_hz=float(raw.fundamental_hz),
+        fundamental_prominence=float(raw.fundamental_prominence),
+        harmonics=int(raw.harmonics),
+        harmonic_dbfs=[float(v) for v in raw.harmonic_dbfs],
+    )
+
+
+@_guard_buffer("samples")
+def mastering_repair_detect_hum(
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    fundamental_hz: float = 50.0,
+    harmonics: int = 4,
+    q: float = 20.0,
+    adaptive: bool = False,
+    search_range_hz: float = 2.0,
+    adaptation: float = 0.25,
+    frame_size: int = 2048,
+    pll_bandwidth: float = 0.01,
+) -> HumDetection:
+    """Measure mains hum without filtering it.
+
+    ALWAYS measured through the estimation path, whatever ``adaptive`` says: the
+    fixed path notches the configured frequency without ever looking for hum, so
+    a detector following the flag would hand back its own input. That makes this
+    the way to find out whether a recording has hum at all, and at which
+    frequency, before deciding to filter it::
+
+        detected = libsonare.mastering_repair_detect_hum(samples, 44100)
+        if detected.fundamental_prominence > 2.0:
+            samples = libsonare.mastering_repair_dehum(
+                samples, 44100, fundamental_hz=detected.fundamental_hz
+            )
+
+    ``fundamental_prominence`` is the winning candidate's projected energy over
+    the median candidate; 1.0 means no peak was found at all. It is not a lock
+    flag. ``harmonic_dbfs`` has 16 entries measured at every ``k * f0`` the
+    sample rate carries, not only the notched ones, so an entry at or past
+    Nyquist reads the dB floor because nothing is there to measure.
+
+    Args:
+        samples: Mono input buffer (any sequence convertible to float32).
+        sample_rate: Sample rate in Hz (default 22050).
+        fundamental_hz: Frequency the search is centred on (default 50.0).
+        harmonics: Notch count the repair would use (default 4).
+        q: Notch Q the repair would use (default 20.0).
+        adaptive: Ignored here -- the estimation path always runs (default False).
+        search_range_hz: Tracking search range in Hz (default 2.0).
+        adaptation: Tracking step size (default 0.25).
+        frame_size: Analysis frame size, must be >= 16 (default 2048).
+        pll_bandwidth: PLL bandwidth (default 0.01).
+
+    Returns:
+        :class:`~libsonare.types.HumDetection`.
+
+    Raises:
+        SonareValueError: If the buffer is empty or carries a non-finite sample.
+        SonareError: If the C call rejects the request.
+    """
+    config = SonareDehumConfig(  # noqa: F405
+        fundamental_hz=float(fundamental_hz),
+        harmonics=int(harmonics),
+        q=float(q),
+        adaptive=1 if adaptive else 0,
+        search_range_hz=float(search_range_hz),
+        adaptation=float(adaptation),
+        frame_size=int(frame_size),
+        pll_bandwidth=float(pll_bandwidth),
+    )
+    return _extract_hum_detection(
+        _run_detection(
+            _get_lib().sonare_mastering_repair_detect_hum,
+            samples,
+            sample_rate,
+            config,
+            SonareHumDetection,  # noqa: F405
+        )
+    )
+
+
 def _extract_dehum_report(raw: Any) -> DehumReport:
-    detected = raw.detected
     return DehumReport(
-        detected=HumDetection(
-            fundamental_hz=float(detected.fundamental_hz),
-            fundamental_prominence=float(detected.fundamental_prominence),
-            harmonics=int(detected.harmonics),
-            harmonic_dbfs=[float(v) for v in detected.harmonic_dbfs],
-        ),
+        detected=_extract_hum_detection(raw.detected),
         notched_harmonics=int(raw.notched_harmonics),
         applied_fundamental_hz=float(raw.applied_fundamental_hz),
         fundamental_drift_hz=float(raw.fundamental_drift_hz),
@@ -1071,13 +1468,115 @@ def mastering_repair_dereverb_classical(
     )
 
 
+def _extract_reverb_detection(raw: Any) -> ReverbDetection:
+    return ReverbDetection(
+        late_decay_ratio_db=float(raw.late_decay_ratio_db),
+        late_predictability=float(raw.late_predictability),
+    )
+
+
+@_guard_buffer("samples")
+def mastering_repair_detect_reverb(
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.0,
+    attenuation: float = 1.0,
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    t60_sec: float = 0.4,
+    late_delay_ms: float = 50.0,
+    over_subtraction: float = 1.0,
+    spectral_floor: float = 0.08,
+    wpe_enabled: bool = False,
+    wpe_iterations: int = 2,
+    wpe_taps: int = 3,
+    wpe_strength: float = 0.7,
+) -> ReverbDetection:
+    """Measure reverberation without dereverberating.
+
+    NOT an ISO 3382 reverberation time: no Schroeder integration, no noise-floor
+    truncation, STFT bins rather than octave bands, and music is not a free
+    decay. Use :func:`libsonare.detect_acoustic` for a graded RT60; this reports
+    what the dereverb module itself measures while deciding how much to
+    subtract::
+
+        detected = libsonare.mastering_repair_detect_reverb(samples, 44100)
+        print(detected.late_decay_ratio_db)
+
+    A buffer shorter than ``n_fft`` is PADDED for analysis and accepted, unlike
+    :func:`mastering_repair_detect_noise_floor`, which refuses one.
+
+    ``late_decay_ratio_db`` less negative means the material sustains across the
+    module's own late lag, which a late tail does and a dry offset does not, so a
+    reverberant input reads HIGHER here than the same material dry.
+    ``late_predictability`` is exactly zero unless ``wpe_enabled`` is set -- the
+    measurement rather than an unset field -- and under it only the WPE
+    covariance and solve run, never the subtraction.
+
+    Args:
+        samples: Mono input buffer (any sequence convertible to float32).
+        sample_rate: Sample rate in Hz (default 22050).
+        threshold: Late-reverb gate the repair would use (default 0.0); not read
+            here.
+        attenuation: Suppression amount the repair would use (default 1.0); not
+            read here.
+        n_fft: STFT size, must be a positive power of two (default 1024).
+        hop_length: Hop size in samples, in ``(0, n_fft]`` (default 256).
+        t60_sec: Estimated T60 in seconds (default 0.4).
+        late_delay_ms: Late-reverb onset relative to direct (default 50.0).
+        over_subtraction: Berouti alpha the repair would use (default 1.0); not
+            read here.
+        spectral_floor: Berouti beta the repair would use (default 0.08); not
+            read here.
+        wpe_enabled: Run the WPE analysis, which is what fills
+            ``late_predictability`` (default False).
+        wpe_iterations: WPE EM iterations (default 2).
+        wpe_taps: WPE filter taps (default 3).
+        wpe_strength: WPE blend weight (default 0.7).
+
+    Returns:
+        :class:`~libsonare.types.ReverbDetection`.
+
+    Raises:
+        SonareValueError: If ``n_fft`` is not a power of two, if ``hop_length``
+            is outside ``(0, n_fft]``, or if the buffer is empty or carries a
+            non-finite sample.
+        SonareError: If the C call rejects the request.
+    """
+    # The core requires a power of two here (dereverb_classical.cpp), narrower
+    # than the shared even-size rule; check it eagerly so the message names it.
+    _require_power_of_two(n_fft, "n_fft")
+    if hop_length <= 0 or hop_length > n_fft:
+        raise SonareValueError("hop_length must be in (0, n_fft]")
+    config = SonareDereverbClassicalConfig(  # noqa: F405
+        threshold=float(threshold),
+        attenuation=float(attenuation),
+        n_fft=int(n_fft),
+        hop_length=int(hop_length),
+        t60_sec=float(t60_sec),
+        late_delay_ms=float(late_delay_ms),
+        over_subtraction=float(over_subtraction),
+        spectral_floor=float(spectral_floor),
+        wpe_enabled=1 if wpe_enabled else 0,
+        wpe_iterations=int(wpe_iterations),
+        wpe_taps=int(wpe_taps),
+        wpe_strength=float(wpe_strength),
+    )
+    return _extract_reverb_detection(
+        _run_detection(
+            _get_lib().sonare_mastering_repair_detect_reverb,
+            samples,
+            sample_rate,
+            config,
+            SonareReverbDetection,  # noqa: F405
+        )
+    )
+
+
 def _extract_dereverb_report(raw: Any) -> DereverbReport:
-    detected = raw.detected
     return DereverbReport(
-        detected=ReverbDetection(
-            late_decay_ratio_db=float(detected.late_decay_ratio_db),
-            late_predictability=float(detected.late_predictability),
-        ),
+        detected=_extract_reverb_detection(raw.detected),
         mean_reduction_db=float(raw.mean_reduction_db),
         suppressed_fraction=float(raw.suppressed_fraction),
         wpe_predictor_norm=float(raw.wpe_predictor_norm),
@@ -1354,6 +1853,161 @@ def _extract_trim_report(raw: Any) -> TrimReport:
         removed_head_samples=int(raw.removed_head_samples),
         removed_tail_samples=int(raw.removed_tail_samples),
     )
+
+
+@_guard_buffer("samples")
+def mastering_repair_detect_trim_range(
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.001,
+    padding_samples: int = 0,
+    mode: int | str = "peak",
+    gate_lufs: float = -60.0,
+    window_ms: float = 400.0,
+) -> TrimRange:
+    """Measure the range a trim pass would keep, without trimming.
+
+    The padding ``padding_samples`` asks for is ALREADY INSIDE the returned
+    range, so this is the range :func:`mastering_repair_trim_silence` would cut
+    to rather than the detected extent of the signal::
+
+        kept = libsonare.mastering_repair_detect_trim_range(samples, 44100)
+        head, tail = kept.first, len(samples) - kept.last_exclusive
+
+    A buffer with nothing above the threshold reports ``(length, length)`` --
+    an empty range at the end of the buffer, not at its start.
+
+    Which arguments are live depends on ``mode``: ``threshold`` is read only in
+    ``"peak"`` mode, and ``gate_lufs`` and ``window_ms`` only in
+    ``"lufs_gated"``. That gated mode compares an UNWEIGHTED RMS over a window
+    centred on each sample, so the figure it gates on is dBFS rather than a
+    BS.1770 loudness, and ``window_ms`` sizes that window and does nothing else.
+
+    Args:
+        samples: Mono input buffer (any sequence convertible to float32).
+        sample_rate: Sample rate in Hz (default 22050).
+        threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
+        padding_samples: Samples to retain either side of the kept range,
+            clamped to the buffer (default 0). A pass that kept nothing is not
+            padded.
+        mode: ``"peak"`` or ``"lufs_gated"`` (default ``"peak"``).
+        gate_lufs: Gate in dBFS, ``"lufs_gated"`` mode only (default -60.0).
+        window_ms: Analysis window, ``"lufs_gated"`` mode only (default 400.0).
+
+    Returns:
+        :class:`~libsonare.types.TrimRange`, half-open and in input-buffer
+        coordinates.
+
+    Raises:
+        SonareValueError: If ``padding_samples`` is negative, if ``mode`` cannot
+            be resolved, or if the buffer is empty or carries a non-finite
+            sample.
+        SonareError: If the C call rejects the request.
+    """
+    # Refused here rather than at the C validator: `padding_samples` is a
+    # size_t, so a negative count arrives as a value near SIZE_MAX and the core
+    # rejects it as out of range -- a true statement about the wrapped value
+    # that says nothing about what the caller passed. Matches the trim entries.
+    if padding_samples < 0:
+        raise SonareValueError("padding_samples must be non-negative")
+    config = SonareTrimSilenceConfig(  # noqa: F405
+        threshold=float(threshold),
+        padding_samples=int(padding_samples),
+        mode=_coerce_trim_silence_mode(mode),
+        gate_lufs=float(gate_lufs),
+        window_ms=float(window_ms),
+    )
+    return _extract_trim_range(
+        _run_detection(
+            _get_lib().sonare_mastering_repair_detect_trim_range,
+            samples,
+            sample_rate,
+            config,
+            SonareTrimRange,  # noqa: F405
+        )
+    )
+
+
+@_guard_buffer("left", "right")
+def mastering_repair_detect_trim_range_stereo(
+    left: Sequence[float] | list[float] | np.ndarray,
+    right: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.001,
+    padding_samples: int = 0,
+    mode: int | str = "peak",
+    gate_lufs: float = -60.0,
+    window_ms: float = 400.0,
+) -> TrimRange:
+    """Measure the one range a stereo trim pass would cut both channels to.
+
+    Each channel is scanned on its own and the two ranges are UNIONED, so the
+    pair keeps whatever either channel calls signal -- the range
+    :func:`mastering_repair_trim_silence_stereo` would apply, without the
+    trimmed audio::
+
+        kept = libsonare.mastering_repair_detect_trim_range_stereo(left, right, 44100)
+
+    A channel with nothing above the threshold contributes NO EDGE at all rather
+    than an edge at the buffer's end, so one silent channel does not widen the
+    range: the union of a silent channel and an active one is the active
+    channel's range exactly. No downmix is read, because summing to mono halves
+    material carried by one channel alone and cancels an antiphase pair outright,
+    either of which would read full-level audio as silence.
+
+    Unlike :func:`mastering_repair_trim_silence_stereo` this hands back the
+    union alone; the per-channel scans it was formed from come back only from
+    the trimming call.
+
+    Args:
+        left: Left channel input buffer (any sequence convertible to float32).
+        right: Right channel input buffer, same length as ``left``.
+        sample_rate: Sample rate in Hz (default 22050).
+        threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
+        padding_samples: Samples to retain either side of the kept range,
+            clamped to the buffer (default 0).
+        mode: ``"peak"`` or ``"lufs_gated"`` (default ``"peak"``).
+        gate_lufs: Gate in dBFS, ``"lufs_gated"`` mode only (default -60.0).
+        window_ms: Analysis window, ``"lufs_gated"`` mode only (default 400.0).
+
+    Returns:
+        :class:`~libsonare.types.TrimRange`, the union of the two channels'
+        scans.
+
+    Raises:
+        SonareValueError: If ``padding_samples`` is negative, if ``mode`` cannot
+            be resolved, if the two channels differ in length, or if either
+            buffer is empty or carries a non-finite sample.
+        SonareError: If the C call rejects the request.
+    """
+    if padding_samples < 0:
+        raise SonareValueError("padding_samples must be non-negative")
+
+    lib = _get_lib()
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise SonareValueError("left and right channel lengths must match")
+    config = SonareTrimSilenceConfig(  # noqa: F405
+        threshold=float(threshold),
+        padding_samples=int(padding_samples),
+        mode=_coerce_trim_silence_mode(mode),
+        gate_lufs=float(gate_lufs),
+        window_ms=float(window_ms),
+    )
+    out = SonareTrimRange()  # noqa: F405
+    rc = lib.sonare_mastering_repair_detect_trim_range_stereo(
+        left_array,
+        right_array,
+        _to_c_size_t(left_length, "left_length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return _extract_trim_range(out)
 
 
 @_guard_buffer("left", "right")

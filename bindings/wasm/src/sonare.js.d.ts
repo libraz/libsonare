@@ -2345,6 +2345,47 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => WasmTrimSilenceStereoResult;
+  masteringRepairDetectClicks: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmClickDetection;
+  masteringRepairDetectNoiseFloor: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmNoiseDetection;
+  masteringRepairDetectClipping: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmClipDetection;
+  masteringRepairDetectCrackle: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmCrackleDetection;
+  masteringRepairDetectHum: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmHumDetection;
+  masteringRepairDetectReverb: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmReverbDetection;
+  masteringRepairDetectTrimRange: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmTrimRange;
+  masteringRepairDetectTrimRangeStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    options: object,
+  ) => WasmTrimRange;
   masteringDynamicsCompressor: (
     samples: Float32Array,
     sampleRate: number,

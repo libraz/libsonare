@@ -1,6 +1,10 @@
 import { getSonareModule } from './module_state';
 import type { RoomEstimateResult } from './public_types_acoustic';
 import type {
+  ClickDetection,
+  ClipDetection,
+  CrackleDetection,
+  HumDetection,
   MasteringRepairDeclickStereoResult,
   MasteringRepairDeclipStereoResult,
   MasteringRepairDecrackleStereoResult,
@@ -8,6 +12,9 @@ import type {
   MasteringRepairDenoiseClassicalStereoResult,
   MasteringRepairDereverbClassicalStereoResult,
   MasteringRepairTrimSilenceStereoResult,
+  NoiseDetection,
+  ReverbDetection,
+  TrimRange,
 } from './public_types_mastering';
 
 function requireModule() {
@@ -753,6 +760,340 @@ export function masteringRepairTrimSilenceStereo(
       : left;
   const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairTrimSilenceStereo(
+    leftSamples,
+    rightSamples,
+    rate ?? 22050,
+    options,
+  );
+}
+
+// ============================================================================
+// Repair detection — measure without repairing
+// ============================================================================
+
+/** Request form of `masteringRepairDetectClicks`. */
+export interface MasteringRepairDetectClicksRequest extends DeclickOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+/** Request form of `masteringRepairDetectNoiseFloor`. */
+export interface MasteringRepairDetectNoiseFloorRequest extends DenoiseClassicalOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+/** Request form of `masteringRepairDetectClipping`. */
+export interface MasteringRepairDetectClippingRequest extends DeclipOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+/** Request form of `masteringRepairDetectCrackle`. */
+export interface MasteringRepairDetectCrackleRequest extends DecrackleOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+/** Request form of `masteringRepairDetectHum`. */
+export interface MasteringRepairDetectHumRequest extends DehumOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+/** Request form of `masteringRepairDetectReverb`. */
+export interface MasteringRepairDetectReverbRequest extends DereverbClassicalOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+/** Request form of `masteringRepairDetectTrimRange`. */
+export interface MasteringRepairDetectTrimRangeRequest extends TrimSilenceOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+/** Request form of `masteringRepairDetectTrimRangeStereo`. */
+export interface MasteringRepairDetectTrimRangeStereoRequest extends TrimSilenceOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
+/**
+ * Measures clicks without repairing.
+ *
+ * Runs the same LPC analysis {@link masteringRepairDeclick} runs, so a run counted here is one
+ * the repair would act on — a cheaper threshold-only scan would report runs it leaves alone.
+ * That also means the options that shape the repair shape the count: a large `rejected` says
+ * `maxClickSamples` or `neighborRatio` is too tight for this material, not that the material is
+ * clean.
+ *
+ * @example
+ * ```ts
+ * const detected = masteringRepairDetectClicks({ samples, sampleRate: 48000 });
+ * if (detected.perSecond > 1) samples = masteringRepairDeclick({ samples, sampleRate: 48000 });
+ * ```
+ */
+export function masteringRepairDetectClicks(
+  request: MasteringRepairDetectClicksRequest,
+): ClickDetection;
+export function masteringRepairDetectClicks(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: DeclickOptions,
+): ClickDetection;
+export function masteringRepairDetectClicks(
+  samples: Float32Array | MasteringRepairDetectClicksRequest,
+  sampleRate?: number,
+  options: DeclickOptions = {},
+): ClickDetection {
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  return requireModule().masteringRepairDetectClicks(request.samples, request.sampleRate, request);
+}
+
+/**
+ * Measures the noise floor without denoising.
+ *
+ * Runs the STFT and the configured noise estimator — the two stages
+ * {@link masteringRepairDenoiseClassical} runs — and stops before the gain mask, which is why
+ * no attenuation figure appears here.
+ *
+ * Needs at least `nFft` samples and THROWS for a shorter buffer, the opposite of
+ * {@link masteringRepairDetectReverb}, which pads one.
+ *
+ * `floorDbfs` is an absolute level, so it is comparable only against another figure measured
+ * over the same channel count.
+ */
+export function masteringRepairDetectNoiseFloor(
+  request: MasteringRepairDetectNoiseFloorRequest,
+): NoiseDetection;
+export function masteringRepairDetectNoiseFloor(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: DenoiseClassicalOptions,
+): NoiseDetection;
+export function masteringRepairDetectNoiseFloor(
+  samples: Float32Array | MasteringRepairDetectNoiseFloorRequest,
+  sampleRate?: number,
+  options: DenoiseClassicalOptions = {},
+): NoiseDetection {
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  return requireModule().masteringRepairDetectNoiseFloor(
+    request.samples,
+    request.sampleRate,
+    request,
+  );
+}
+
+/**
+ * Measures clipping without repairing.
+ *
+ * Counts samples at or past `clipThreshold`. No other option reaches the result — `lpcOrder`,
+ * `iterations` and `lpcBlend` are validated and then unread, since nothing here is
+ * reconstructed. `sampleRate` is validated without being read for the same reason: no field of
+ * the result is a rate.
+ *
+ * Compare `longestRunSamples` against the 512-sample LPC cap to tell in advance which runs
+ * {@link masteringRepairDeclip} would fill by interpolation rather than with the solver.
+ */
+export function masteringRepairDetectClipping(
+  request: MasteringRepairDetectClippingRequest,
+): ClipDetection;
+export function masteringRepairDetectClipping(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: DeclipOptions,
+): ClipDetection;
+export function masteringRepairDetectClipping(
+  samples: Float32Array | MasteringRepairDetectClippingRequest,
+  sampleRate?: number,
+  options: DeclipOptions = {},
+): ClipDetection {
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  return requireModule().masteringRepairDetectClipping(
+    request.samples,
+    request.sampleRate,
+    request,
+  );
+}
+
+/**
+ * Measures crackle without repairing.
+ *
+ * Measured by the median criterion whatever `mode` is set to: wavelet shrinkage removes crackle
+ * without ever deciding that a sample is crackle, so these counts do not describe what a
+ * wavelet-mode repair would remove. A caller therefore gets the same answer before choosing a
+ * mode.
+ */
+export function masteringRepairDetectCrackle(
+  request: MasteringRepairDetectCrackleRequest,
+): CrackleDetection;
+export function masteringRepairDetectCrackle(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: DecrackleOptions,
+): CrackleDetection;
+export function masteringRepairDetectCrackle(
+  samples: Float32Array | MasteringRepairDetectCrackleRequest,
+  sampleRate?: number,
+  options: DecrackleOptions = {},
+): CrackleDetection {
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  return requireModule().masteringRepairDetectCrackle(request.samples, request.sampleRate, request);
+}
+
+/**
+ * Measures hum without filtering.
+ *
+ * Always runs the estimation path, whatever `adaptive` says: the fixed path notches the
+ * configured frequency without ever looking for hum, so a detector following the flag would
+ * hand back its own input. `fundamentalProminence` is the winning candidate's projected energy
+ * over the median candidate, so `1.0` means no peak was found at all — it is not a lock flag.
+ *
+ * `harmonicDbfs` is measured at every `k*f0` the sample rate carries, not only the ones a
+ * cascade would notch; a `k*f0` at or past Nyquist reads the dB floor because nothing is there
+ * to measure.
+ */
+export function masteringRepairDetectHum(request: MasteringRepairDetectHumRequest): HumDetection;
+export function masteringRepairDetectHum(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: DehumOptions,
+): HumDetection;
+export function masteringRepairDetectHum(
+  samples: Float32Array | MasteringRepairDetectHumRequest,
+  sampleRate?: number,
+  options: DehumOptions = {},
+): HumDetection {
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  return requireModule().masteringRepairDetectHum(request.samples, request.sampleRate, request);
+}
+
+/**
+ * Measures reverberation without dereverberating.
+ *
+ * NOT an ISO 3382 reverberation time — use `estimateRoom` for a graded RT60. This reports what
+ * {@link masteringRepairDereverbClassical} itself measures while deciding how much to subtract.
+ *
+ * A buffer shorter than `nFft` is PADDED for analysis, as the repair pads it, which is the
+ * opposite of {@link masteringRepairDetectNoiseFloor}.
+ *
+ * `latePredictability` comes from the WPE stage, which runs only under `wpeEnabled` — clear by
+ * default — and then only its covariance and solve; the prediction is never subtracted. A
+ * default-config call therefore reports exactly 0 there as its measurement.
+ */
+export function masteringRepairDetectReverb(
+  request: MasteringRepairDetectReverbRequest,
+): ReverbDetection;
+export function masteringRepairDetectReverb(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: DereverbClassicalOptions,
+): ReverbDetection;
+export function masteringRepairDetectReverb(
+  samples: Float32Array | MasteringRepairDetectReverbRequest,
+  sampleRate?: number,
+  options: DereverbClassicalOptions = {},
+): ReverbDetection {
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  return requireModule().masteringRepairDetectReverb(request.samples, request.sampleRate, request);
+}
+
+/**
+ * Measures the range {@link masteringRepairTrimSilence} would keep, without trimming.
+ *
+ * The padding `paddingSamples` asks for is already INSIDE the returned range, so this is the
+ * range the repair would cut to rather than the detected extent of the signal. A buffer with
+ * nothing above the threshold reports `(length, length)`.
+ *
+ * @example
+ * ```ts
+ * const range = masteringRepairDetectTrimRange({ samples, sampleRate: 48000, threshold: 0.01 });
+ * const keptSeconds = (range.lastExclusive - range.first) / 48000;
+ * ```
+ */
+export function masteringRepairDetectTrimRange(
+  request: MasteringRepairDetectTrimRangeRequest,
+): TrimRange;
+export function masteringRepairDetectTrimRange(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: TrimSilenceOptions,
+): TrimRange;
+export function masteringRepairDetectTrimRange(
+  samples: Float32Array | MasteringRepairDetectTrimRangeRequest,
+  sampleRate?: number,
+  options: TrimSilenceOptions = {},
+): TrimRange {
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate: sampleRate as number, ...options }
+      : samples;
+  return requireModule().masteringRepairDetectTrimRange(
+    request.samples,
+    request.sampleRate,
+    request,
+  );
+}
+
+/**
+ * Measures the one range a stereo trim pass would cut both channels to.
+ *
+ * Each channel is scanned on its own and the two ranges are UNIONED, so the pair keeps whatever
+ * either channel calls signal. A channel with nothing above the threshold contributes NO EDGE
+ * rather than an edge at the buffer's end: the union of a silent channel and an active one is
+ * the active channel's range exactly, where a naive `min`/`max` would push `lastExclusive` out
+ * to the buffer end and keep the whole tail.
+ *
+ * A downmix is not read: summing to mono halves material carried by one channel alone and
+ * cancels an antiphase pair outright, either of which would read full-level audio as silence.
+ *
+ * @example
+ * ```ts
+ * const range = masteringRepairDetectTrimRangeStereo({ left, right, sampleRate: 48000 });
+ * console.log(range.first, range.lastExclusive);
+ * ```
+ */
+export function masteringRepairDetectTrimRangeStereo(
+  request: MasteringRepairDetectTrimRangeStereoRequest,
+): TrimRange;
+export function masteringRepairDetectTrimRangeStereo(
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  config?: TrimSilenceOptions,
+): TrimRange;
+export function masteringRepairDetectTrimRangeStereo(
+  left: Float32Array | MasteringRepairDetectTrimRangeStereoRequest,
+  right?: Float32Array,
+  sampleRate?: number,
+  config: TrimSilenceOptions = {},
+): TrimRange {
+  const request: MasteringRepairDetectTrimRangeStereoRequest =
+    left instanceof Float32Array
+      ? { left, right: right as Float32Array, sampleRate, ...config }
+      : left;
+  const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
+  return requireModule().masteringRepairDetectTrimRangeStereo(
     leftSamples,
     rightSamples,
     rate ?? 22050,

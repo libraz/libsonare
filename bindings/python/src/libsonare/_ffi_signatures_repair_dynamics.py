@@ -110,6 +110,47 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareTrimSilenceStereoResult),
         ]
 
+    if hasattr(lib, "sonare_mastering_repair_detect_trim_range_stereo"):
+        lib.sonare_mastering_repair_detect_trim_range_stereo.restype = ctypes.c_int32
+        lib.sonare_mastering_repair_detect_trim_range_stereo.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareTrimSilenceConfig),
+            ctypes.POINTER(SonareTrimRange),
+        ]
+
+    # The measure-only entry points: one config type and one POD result each,
+    # and nothing allocated, so they share a shape the repairs do not.
+    for _name, _detect_cfg, _detection in (
+        ("sonare_mastering_repair_detect_clicks", SonareDeclickConfig, SonareClickDetection),
+        (
+            "sonare_mastering_repair_detect_noise_floor",
+            SonareDenoiseClassicalConfig,
+            SonareNoiseDetection,
+        ),
+        ("sonare_mastering_repair_detect_clipping", SonareDeclipConfig, SonareClipDetection),
+        ("sonare_mastering_repair_detect_crackle", SonareDecrackleConfig, SonareCrackleDetection),
+        ("sonare_mastering_repair_detect_hum", SonareDehumConfig, SonareHumDetection),
+        (
+            "sonare_mastering_repair_detect_reverb",
+            SonareDereverbClassicalConfig,
+            SonareReverbDetection,
+        ),
+        ("sonare_mastering_repair_detect_trim_range", SonareTrimSilenceConfig, SonareTrimRange),
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int32
+            _fn.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(_detect_cfg),
+                ctypes.POINTER(_detection),
+            ]
+
     for _name, _repair_cfg in (
         ("sonare_mastering_repair_declip", SonareDeclipConfig),
         ("sonare_mastering_repair_decrackle", SonareDecrackleConfig),

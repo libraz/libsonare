@@ -916,6 +916,16 @@ typedef struct {
   float per_second;            // count divided by the input duration
 } SonareClickDetection;
 
+/// @brief Measures clicks without repairing.
+/// @details Runs the same LPC analysis the repair runs, so a run counted here is
+///   one the repair would act on; a cheaper threshold-only scan would report runs
+///   it leaves alone.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t length,
+                                                  int sample_rate,
+                                                  const SonareDeclickConfig* config,
+                                                  SonareClickDetection* out);
+
 /// @brief What one channel's declick pass found and what it did to it.
 /// @details A large @c detected.rejected says the configured run length or
 ///   neighbour ratio is too tight for this material, not that the material is
@@ -979,6 +989,18 @@ typedef struct {
   float floor_dbfs;                                       // broadband estimated noise floor
   float band_floor_dbfs[SONARE_REPAIR_NOISE_BAND_COUNT];  // per band, low to high
 } SonareNoiseDetection;
+
+/// @brief Measures the noise floor without denoising.
+/// @details Runs the STFT and the configured noise estimator -- the two stages the
+///   repair runs -- and stops before the gain mask, which is why the attenuation
+///   figures live on @ref SonareDenoiseReport rather than here. Needs at least
+///   @c config.n_fft samples and refuses a shorter buffer, unlike
+///   @ref sonare_mastering_repair_detect_reverb, which pads one.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_detect_noise_floor(const float* samples, size_t length,
+                                                       int sample_rate,
+                                                       const SonareDenoiseClassicalConfig* config,
+                                                       SonareNoiseDetection* out);
 
 /// @brief What a denoise pass found and what it removed.
 typedef struct {
@@ -1057,6 +1079,16 @@ typedef struct {
                                // interpolation fallback instead of the solver
 } SonareClipDetection;
 
+/// @brief Measures clipping without repairing.
+/// @details Counts samples at or past @c config.clip_threshold; no other config
+///   field reaches the result, and @p sample_rate is validated without being read,
+///   since no field here is a rate.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t length,
+                                                    int sample_rate,
+                                                    const SonareDeclipConfig* config,
+                                                    SonareClipDetection* out);
+
 /// @brief What one channel's declip pass found and what it did to it.
 typedef struct {
   SonareClipDetection detected;   // this channel's own analysis of the input
@@ -1124,6 +1156,13 @@ typedef struct {
   float sample_fraction;  // sample_count divided by the input length
   float per_second;
 } SonareCrackleDetection;
+
+/// @brief Measures crackle without repairing.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t length,
+                                                   int sample_rate,
+                                                   const SonareDecrackleConfig* config,
+                                                   SonareCrackleDetection* out);
 
 /// @brief What one channel's decrackle pass found and what it did to it.
 /// @details The two modes report through different fields; the other mode's
@@ -1211,6 +1250,12 @@ typedef struct {
                                                     // there to measure
 } SonareHumDetection;
 
+/// @brief Measures hum without filtering.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_detect_hum(const float* samples, size_t length, int sample_rate,
+                                               const SonareDehumConfig* config,
+                                               SonareHumDetection* out);
+
 /// @brief What one channel's dehum pass found and what it did to it.
 typedef struct {
   SonareHumDetection detected;   // this channel's own analysis, before filtering
@@ -1294,6 +1339,17 @@ typedef struct {
                               // whenever config.wpe_enabled is clear -- the
                               // default
 } SonareReverbDetection;
+
+/// @brief Measures reverberation without dereverberating.
+/// @details Runs the STFT and the module's own late-lag decay statistic. A buffer
+///   shorter than @c config.n_fft is padded for analysis, as the repair pads it.
+///   The WPE analysis runs only under @c config.wpe_enabled, and then only its
+///   covariance and solve -- the prediction is never subtracted.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_detect_reverb(const float* samples, size_t length,
+                                                  int sample_rate,
+                                                  const SonareDereverbClassicalConfig* config,
+                                                  SonareReverbDetection* out);
 
 /// @brief What a dereverb pass found and what it removed.
 typedef struct {
@@ -1401,6 +1457,31 @@ typedef struct {
   size_t first;           // first kept sample
   size_t last_exclusive;  // one past the last kept sample
 } SonareTrimRange;
+
+/// @brief Measures the range a trim pass would keep, without trimming.
+/// @details The padding @c config.padding_samples asks for is already inside the
+///   returned range, so this is the range the repair would cut to rather than the
+///   detected extent of the signal. A buffer with nothing above the threshold
+///   reports (length, length).
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_detect_trim_range(const float* samples, size_t length,
+                                                      int sample_rate,
+                                                      const SonareTrimSilenceConfig* config,
+                                                      SonareTrimRange* out);
+
+/// @brief Measures the one range a stereo trim pass would cut both channels to.
+/// @details Each channel is scanned on its own and the two ranges are unioned, so
+///   the pair keeps whatever either channel calls signal. A channel with nothing
+///   above the threshold contributes no edge at all rather than an edge at the
+///   buffer's end, so one silent channel does not widen the range. A downmix is
+///   not read: summing to mono halves material carried by one channel alone and
+///   cancels an antiphase pair outright, either of which would read full-level
+///   audio as silence.
+/// @param config Pass NULL to use library defaults.
+SonareError sonare_mastering_repair_detect_trim_range_stereo(const float* left, const float* right,
+                                                             size_t length, int sample_rate,
+                                                             const SonareTrimSilenceConfig* config,
+                                                             SonareTrimRange* out);
 
 /// @brief What a trim pass kept and what it dropped.
 /// @details A pass that kept nothing reports the range (length, length), which

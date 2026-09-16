@@ -47,6 +47,14 @@ import {
   masteringRepairDereverbClassical,
   masteringRepairDereverbClassicalStereo,
   masteringRepairDereverbConfigForRoom,
+  masteringRepairDetectClicks,
+  masteringRepairDetectClipping,
+  masteringRepairDetectCrackle,
+  masteringRepairDetectHum,
+  masteringRepairDetectNoiseFloor,
+  masteringRepairDetectReverb,
+  masteringRepairDetectTrimRange,
+  masteringRepairDetectTrimRangeStereo,
   masteringRepairTrimSilence,
   masteringRepairTrimSilenceStereo,
   mergeNotes,
@@ -513,6 +521,47 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           absorptionBands: new Float32Array(0),
           rt60Bands: new Float32Array([9, 9, 1, 2, 9, 9]),
         },
+      }),
+  },
+  // The detectors measure without repairing, so the whole result is compared:
+  // it is a handful of scalars, and there is no buffer to slice.
+  {
+    jsName: 'masteringRepairDetectClicks',
+    invoke: (o) => masteringRepairDetectClicks({ ...o, samples: sine(2048), sampleRate: SR }),
+  },
+  {
+    // Needs at least nFft samples, so this cannot be trimmed below the default.
+    jsName: 'masteringRepairDetectNoiseFloor',
+    invoke: (o) => masteringRepairDetectNoiseFloor({ ...o, samples: sine(2048), sampleRate: SR }),
+  },
+  {
+    jsName: 'masteringRepairDetectClipping',
+    invoke: (o) => masteringRepairDetectClipping({ ...o, samples: sine(2048), sampleRate: SR }),
+  },
+  {
+    jsName: 'masteringRepairDetectCrackle',
+    invoke: (o) => masteringRepairDetectCrackle({ ...o, samples: sine(2048), sampleRate: SR }),
+  },
+  {
+    jsName: 'masteringRepairDetectHum',
+    invoke: (o) => masteringRepairDetectHum({ ...o, samples: sine(2048), sampleRate: SR }),
+  },
+  {
+    jsName: 'masteringRepairDetectReverb',
+    invoke: (o) => masteringRepairDetectReverb({ ...o, samples: sine(2048), sampleRate: SR }),
+  },
+  {
+    jsName: 'masteringRepairDetectTrimRange',
+    invoke: (o) => masteringRepairDetectTrimRange({ ...o, samples: sine(2048), sampleRate: SR }),
+  },
+  {
+    jsName: 'masteringRepairDetectTrimRangeStereo',
+    invoke: (o) =>
+      masteringRepairDetectTrimRangeStereo({
+        ...o,
+        left: sine(2048),
+        right: sine(2048),
+        sampleRate: SR,
       }),
   },
   {

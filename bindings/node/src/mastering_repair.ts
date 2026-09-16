@@ -1,12 +1,19 @@
 import { addon } from './native.js';
 import type {
+  ClickDetection,
+  ClipDetection,
+  CrackleDetection,
   DeclickStereoResult,
   DeclipStereoResult,
   DecrackleStereoResult,
   DehumStereoResult,
   DenoiseStereoResult,
   DereverbStereoResult,
+  HumDetection,
+  NoiseDetection,
+  ReverbDetection,
   RoomEstimateResult,
+  TrimRange,
   TrimSilenceStereoResult,
 } from './types.js';
 
@@ -613,6 +620,239 @@ export function masteringRepairTrimSilenceStereo(
   request: MasteringRepairTrimSilenceStereoRequest,
 ): TrimSilenceStereoResult {
   return addon.masteringRepairTrimSilenceStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request,
+  );
+}
+
+/** Request form of `masteringRepairDetectClicks`. */
+export interface MasteringRepairDetectClicksRequest
+  extends MasteringRepairSamplesRequest,
+    DeclickOptions {}
+
+/**
+ * Measure clicks without repairing.
+ *
+ * Runs the same LPC analysis {@link masteringRepairDeclick} runs, so a run
+ * counted here is one the repair would act on -- a cheaper threshold-only scan
+ * would report runs it leaves alone. The options are the declicker's own, and
+ * they select what is counted: a large `rejected` says the configured run
+ * length or neighbour ratio is too tight for this material, not that the
+ * material is clean.
+ *
+ * @example
+ * ```ts
+ * const detected = masteringRepairDetectClicks({ samples, sampleRate: 48000 });
+ * console.log(detected.count, detected.perSecond);
+ * ```
+ */
+export function masteringRepairDetectClicks(
+  request: MasteringRepairDetectClicksRequest,
+): ClickDetection {
+  return addon.masteringRepairDetectClicks(request.samples, request.sampleRate ?? 22050, request);
+}
+
+/** Request form of `masteringRepairDetectNoiseFloor`. */
+export interface MasteringRepairDetectNoiseFloorRequest
+  extends MasteringRepairSamplesRequest,
+    DenoiseClassicalOptions {}
+
+/**
+ * Measure the noise floor without denoising.
+ *
+ * Runs the STFT and the configured noise estimator -- the two stages
+ * {@link masteringRepairDenoiseClassical} runs -- and stops before the gain
+ * mask, which is why the attenuation figures are not here: nothing was
+ * attenuated.
+ *
+ * Needs at least `nFft` samples and REJECTS a shorter buffer, unlike
+ * {@link masteringRepairDetectReverb}, which pads one. The levels are absolute
+ * dBFS, so they are comparable only against another measurement of the same
+ * channel count.
+ *
+ * @example
+ * ```ts
+ * const detected = masteringRepairDetectNoiseFloor({ samples, sampleRate: 48000 });
+ * console.log(detected.floorDbfs, detected.bandFloorDbfs.length);
+ * ```
+ */
+export function masteringRepairDetectNoiseFloor(
+  request: MasteringRepairDetectNoiseFloorRequest,
+): NoiseDetection {
+  return addon.masteringRepairDetectNoiseFloor(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
+}
+
+/** Request form of `masteringRepairDetectClipping`. */
+export interface MasteringRepairDetectClippingRequest
+  extends MasteringRepairSamplesRequest,
+    DeclipOptions {}
+
+/**
+ * Measure clipping without repairing.
+ *
+ * Counts samples at or past `clipThreshold`; no other option reaches the
+ * result, so `lpcOrder`, `iterations` and `lpcBlend` are accepted and change
+ * nothing -- they describe a reconstruction that does not run here.
+ * `sampleRate` is validated without being read, since no field of the result
+ * is a rate.
+ *
+ * `longestRunSamples` past 512 is the run {@link masteringRepairDeclip} would
+ * fill by interpolation rather than with the LPC solver.
+ *
+ * @example
+ * ```ts
+ * const detected = masteringRepairDetectClipping({ samples, sampleRate: 48000 });
+ * console.log(detected.sampleCount, detected.runCount);
+ * ```
+ */
+export function masteringRepairDetectClipping(
+  request: MasteringRepairDetectClippingRequest,
+): ClipDetection {
+  return addon.masteringRepairDetectClipping(request.samples, request.sampleRate ?? 22050, request);
+}
+
+/** Request form of `masteringRepairDetectCrackle`. */
+export interface MasteringRepairDetectCrackleRequest
+  extends MasteringRepairSamplesRequest,
+    DecrackleOptions {}
+
+/**
+ * Measure crackle without repairing.
+ *
+ * Measured by the median criterion whatever `mode` is set to: wavelet
+ * shrinkage removes crackle without ever deciding a sample is crackle, so
+ * these counts do not describe what `'waveletShrinkage'` would repair.
+ *
+ * @example
+ * ```ts
+ * const detected = masteringRepairDetectCrackle({ samples, sampleRate: 48000 });
+ * console.log(detected.sampleCount, detected.perSecond);
+ * ```
+ */
+export function masteringRepairDetectCrackle(
+  request: MasteringRepairDetectCrackleRequest,
+): CrackleDetection {
+  return addon.masteringRepairDetectCrackle(request.samples, request.sampleRate ?? 22050, request);
+}
+
+/** Request form of `masteringRepairDetectHum`. */
+export interface MasteringRepairDetectHumRequest
+  extends MasteringRepairSamplesRequest,
+    DehumOptions {}
+
+/**
+ * Measure mains hum without filtering.
+ *
+ * Always measured through the estimation path, whatever `adaptive` is set to:
+ * the fixed path notches the configured frequency without ever looking for
+ * hum, so a detector following the flag would hand back its own input.
+ * `fundamentalProminence` is the winning candidate's energy over the median
+ * candidate -- 1.0 means no peak was found at all, and it is not a lock flag.
+ *
+ * @example
+ * ```ts
+ * const detected = masteringRepairDetectHum({ samples, sampleRate: 48000, fundamentalHz: 60 });
+ * console.log(detected.fundamentalHz, detected.fundamentalProminence);
+ * ```
+ */
+export function masteringRepairDetectHum(request: MasteringRepairDetectHumRequest): HumDetection {
+  return addon.masteringRepairDetectHum(request.samples, request.sampleRate ?? 22050, request);
+}
+
+/** Request form of `masteringRepairDetectReverb`. */
+export interface MasteringRepairDetectReverbRequest
+  extends MasteringRepairSamplesRequest,
+    DereverbClassicalOptions {}
+
+/**
+ * Measure reverberation without dereverberating.
+ *
+ * Runs the STFT and the module's own late-lag decay statistic. A buffer shorter
+ * than `nFft` is PADDED for analysis, as the repair pads it -- the opposite of
+ * {@link masteringRepairDetectNoiseFloor}, which refuses one.
+ *
+ * NOT an ISO 3382 reverberation time; use {@link estimateRoom} for a graded
+ * RT60. `latePredictability` comes from the WPE stage, which runs only under
+ * `wpeEnabled` and then only its covariance and solve, so it is exactly 0 by
+ * default -- the measurement rather than an unset field.
+ *
+ * @example
+ * ```ts
+ * const detected = masteringRepairDetectReverb({ samples, sampleRate: 48000 });
+ * console.log(detected.lateDecayRatioDb, detected.latePredictability);
+ * ```
+ */
+export function masteringRepairDetectReverb(
+  request: MasteringRepairDetectReverbRequest,
+): ReverbDetection {
+  return addon.masteringRepairDetectReverb(request.samples, request.sampleRate ?? 22050, request);
+}
+
+/** Request form of `masteringRepairDetectTrimRange`. */
+export interface MasteringRepairDetectTrimRangeRequest
+  extends MasteringRepairSamplesRequest,
+    TrimSilenceOptions {}
+
+/**
+ * Measure the range a trim pass would keep, without trimming.
+ *
+ * The `paddingSamples` asked for is already INSIDE the returned range, so this
+ * is the range {@link masteringRepairTrimSilence} would cut to rather than the
+ * detected extent of the signal. A buffer with nothing above the threshold
+ * reports `(length, length)` -- an empty range at the far end, not `(0, 0)`.
+ *
+ * @example
+ * ```ts
+ * const range = masteringRepairDetectTrimRange({ samples, sampleRate: 48000 });
+ * console.log(range.first, range.lastExclusive);
+ * ```
+ */
+export function masteringRepairDetectTrimRange(
+  request: MasteringRepairDetectTrimRangeRequest,
+): TrimRange {
+  return addon.masteringRepairDetectTrimRange(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
+}
+
+/** Request form of `masteringRepairDetectTrimRangeStereo`. */
+export interface MasteringRepairDetectTrimRangeStereoRequest extends TrimSilenceOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+}
+
+/**
+ * Measure the one range a stereo trim pass would cut both channels to.
+ *
+ * Each channel is scanned on its own and the two ranges are unioned, so the
+ * pair keeps whatever *either* channel calls signal. A channel with nothing
+ * above the threshold contributes NO EDGE at all rather than an edge at the
+ * buffer's end: the union of a silent channel and an active one is the active
+ * channel's range exactly, so one silent channel does not widen the result.
+ *
+ * A downmix is not read -- summing to mono halves material carried by one
+ * channel alone and cancels an antiphase pair outright, either of which would
+ * read full-level audio as silence.
+ *
+ * @example
+ * ```ts
+ * const range = masteringRepairDetectTrimRangeStereo({ left, right, sampleRate: 48000 });
+ * console.log(range.first, range.lastExclusive);
+ * ```
+ */
+export function masteringRepairDetectTrimRangeStereo(
+  request: MasteringRepairDetectTrimRangeStereoRequest,
+): TrimRange {
+  return addon.masteringRepairDetectTrimRangeStereo(
     request.left,
     request.right,
     request.sampleRate ?? 22050,

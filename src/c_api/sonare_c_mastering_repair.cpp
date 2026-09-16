@@ -160,12 +160,18 @@ sonare::mastering::repair::TrimSilenceConfig to_cpp_trim_silence_config(
   return cpp;
 }
 
+SonareClickDetection to_c_click_detection(const sonare::mastering::repair::ClickDetection& cpp) {
+  SonareClickDetection c{};
+  c.count = cpp.count;
+  c.rejected = cpp.rejected;
+  c.longest_run_samples = cpp.longest_run_samples;
+  c.per_second = cpp.per_second;
+  return c;
+}
+
 SonareDeclickReport to_c_declick_report(const sonare::mastering::repair::DeclickReport& cpp) {
   SonareDeclickReport c{};
-  c.detected.count = cpp.detected.count;
-  c.detected.rejected = cpp.detected.rejected;
-  c.detected.longest_run_samples = cpp.detected.longest_run_samples;
-  c.detected.per_second = cpp.detected.per_second;
+  c.detected = to_c_click_detection(cpp.detected);
   c.repaired_runs = cpp.repaired_runs;
   c.repaired_samples = cpp.repaired_samples;
   c.linked_runs = cpp.linked_runs;
@@ -173,12 +179,18 @@ SonareDeclickReport to_c_declick_report(const sonare::mastering::repair::Declick
   return c;
 }
 
+SonareClipDetection to_c_clip_detection(const sonare::mastering::repair::ClipDetection& cpp) {
+  SonareClipDetection c{};
+  c.sample_count = cpp.sample_count;
+  c.sample_fraction = cpp.sample_fraction;
+  c.run_count = cpp.run_count;
+  c.longest_run_samples = cpp.longest_run_samples;
+  return c;
+}
+
 SonareDeclipReport to_c_declip_report(const sonare::mastering::repair::DeclipReport& cpp) {
   SonareDeclipReport c{};
-  c.detected.sample_count = cpp.detected.sample_count;
-  c.detected.sample_fraction = cpp.detected.sample_fraction;
-  c.detected.run_count = cpp.detected.run_count;
-  c.detected.longest_run_samples = cpp.detected.longest_run_samples;
+  c.detected = to_c_clip_detection(cpp.detected);
   c.lpc_reconstructed_runs = cpp.lpc_reconstructed_runs;
   c.interpolated_runs = cpp.interpolated_runs;
   c.repaired_samples = cpp.repaired_samples;
@@ -186,11 +198,18 @@ SonareDeclipReport to_c_declip_report(const sonare::mastering::repair::DeclipRep
   return c;
 }
 
+SonareCrackleDetection to_c_crackle_detection(
+    const sonare::mastering::repair::CrackleDetection& cpp) {
+  SonareCrackleDetection c{};
+  c.sample_count = cpp.sample_count;
+  c.sample_fraction = cpp.sample_fraction;
+  c.per_second = cpp.per_second;
+  return c;
+}
+
 SonareDecrackleReport to_c_decrackle_report(const sonare::mastering::repair::DecrackleReport& cpp) {
   SonareDecrackleReport c{};
-  c.detected.sample_count = cpp.detected.sample_count;
-  c.detected.sample_fraction = cpp.detected.sample_fraction;
-  c.detected.per_second = cpp.detected.per_second;
+  c.detected = to_c_crackle_detection(cpp.detected);
   c.replaced_samples = cpp.replaced_samples;
   c.detail_coefficients = cpp.detail_coefficients;
   c.shrunk_coefficients = cpp.shrunk_coefficients;
@@ -198,39 +217,55 @@ SonareDecrackleReport to_c_decrackle_report(const sonare::mastering::repair::Dec
   return c;
 }
 
-SonareDehumReport to_c_dehum_report(const sonare::mastering::repair::DehumReport& cpp) {
-  SonareDehumReport c{};
-  c.detected.fundamental_hz = cpp.detected.fundamental_hz;
-  c.detected.fundamental_prominence = cpp.detected.fundamental_prominence;
-  c.detected.harmonics = cpp.detected.harmonics;
+SonareHumDetection to_c_hum_detection(const sonare::mastering::repair::HumDetection& cpp) {
+  SonareHumDetection c{};
+  c.fundamental_hz = cpp.fundamental_hz;
+  c.fundamental_prominence = cpp.fundamental_prominence;
+  c.harmonics = cpp.harmonics;
   static_assert(SONARE_DEHUM_MAX_HARMONICS == sonare::mastering::repair::kDehumMaxHarmonics,
                 "C harmonic level array must match the core's harmonic bound");
-  std::memcpy(c.detected.harmonic_dbfs, cpp.detected.harmonic_dbfs,
-              sizeof(c.detected.harmonic_dbfs));
+  std::memcpy(c.harmonic_dbfs, cpp.harmonic_dbfs, sizeof(c.harmonic_dbfs));
+  return c;
+}
+
+SonareDehumReport to_c_dehum_report(const sonare::mastering::repair::DehumReport& cpp) {
+  SonareDehumReport c{};
+  c.detected = to_c_hum_detection(cpp.detected);
   c.notched_harmonics = cpp.notched_harmonics;
   c.applied_fundamental_hz = cpp.applied_fundamental_hz;
   c.fundamental_drift_hz = cpp.fundamental_drift_hz;
   return c;
 }
 
-SonareDenoiseReport to_c_denoise_report(const sonare::mastering::repair::DenoiseReport& cpp) {
-  SonareDenoiseReport c{};
-  c.detected.floor_dbfs = cpp.detected.floor_dbfs;
+SonareNoiseDetection to_c_noise_detection(const sonare::mastering::repair::NoiseDetection& cpp) {
+  SonareNoiseDetection c{};
+  c.floor_dbfs = cpp.floor_dbfs;
   static_assert(static_cast<std::size_t>(SONARE_REPAIR_NOISE_BAND_COUNT) ==
                     sonare::mastering::repair::kRepairNoiseBandCount,
                 "C band level array must match the core's band count");
-  std::memcpy(c.detected.band_floor_dbfs, cpp.detected.band_floor_dbfs,
-              sizeof(c.detected.band_floor_dbfs));
+  std::memcpy(c.band_floor_dbfs, cpp.band_floor_dbfs, sizeof(c.band_floor_dbfs));
+  return c;
+}
+
+SonareDenoiseReport to_c_denoise_report(const sonare::mastering::repair::DenoiseReport& cpp) {
+  SonareDenoiseReport c{};
+  c.detected = to_c_noise_detection(cpp.detected);
   c.mean_reduction_db = cpp.mean_reduction_db;
   c.max_reduction_db = cpp.max_reduction_db;
   c.floor_limited_fraction = cpp.floor_limited_fraction;
   return c;
 }
 
+SonareReverbDetection to_c_reverb_detection(const sonare::mastering::repair::ReverbDetection& cpp) {
+  SonareReverbDetection c{};
+  c.late_decay_ratio_db = cpp.late_decay_ratio_db;
+  c.late_predictability = cpp.late_predictability;
+  return c;
+}
+
 SonareDereverbReport to_c_dereverb_report(const sonare::mastering::repair::DereverbReport& cpp) {
   SonareDereverbReport c{};
-  c.detected.late_decay_ratio_db = cpp.detected.late_decay_ratio_db;
-  c.detected.late_predictability = cpp.detected.late_predictability;
+  c.detected = to_c_reverb_detection(cpp.detected);
   c.mean_reduction_db = cpp.mean_reduction_db;
   c.suppressed_fraction = cpp.suppressed_fraction;
   c.wpe_predictor_norm = cpp.wpe_predictor_norm;
@@ -250,6 +285,25 @@ SonareTrimReport to_c_trim_report(const sonare::mastering::repair::TrimReport& c
   c.removed_head_samples = cpp.removed_head_samples;
   c.removed_tail_samples = cpp.removed_tail_samples;
   return c;
+}
+
+/// Shared body of the detection entry points, which differ only in their config
+/// type and the core call they wrap.
+template <typename CDetection, typename Fn>
+SonareError run_detection(const float* samples, size_t length, int sample_rate, CDetection* out,
+                          Fn detect) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Cleared before any validation return, so a rejected call hands back a zero
+  // detection rather than whatever the caller's stack slot held.
+  *out = CDetection{};
+
+  const SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  *out = detect();
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
@@ -304,6 +358,17 @@ SonareError sonare_mastering_repair_declick_stereo(const float* left, const floa
   out->right = release_array(right_out);
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t length,
+                                                  int sample_rate,
+                                                  const SonareDeclickConfig* config,
+                                                  SonareClickDetection* out) {
+  SONARE_C_API_ENTRY;
+  return run_detection(samples, length, sample_rate, out, [&] {
+    return to_c_click_detection(sonare::mastering::repair::detect_clicks(
+        samples, length, sample_rate, to_cpp_declick_config(config)));
+  });
 }
 
 SonareError sonare_mastering_repair_denoise_classical(const float* samples, size_t length,
@@ -361,6 +426,17 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
   SONARE_C_CATCH
 }
 
+SonareError sonare_mastering_repair_detect_noise_floor(const float* samples, size_t length,
+                                                       int sample_rate,
+                                                       const SonareDenoiseClassicalConfig* config,
+                                                       SonareNoiseDetection* out) {
+  SONARE_C_API_ENTRY;
+  return run_detection(samples, length, sample_rate, out, [&] {
+    return to_c_noise_detection(sonare::mastering::repair::detect_noise_floor(
+        samples, length, sample_rate, to_cpp_denoise_config(config)));
+  });
+}
+
 SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
                                            const SonareDeclipConfig* config, float** out,
                                            size_t* out_length) {
@@ -404,6 +480,17 @@ SonareError sonare_mastering_repair_declip_stereo(const float* left, const float
   out->right = release_array(right_out);
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t length,
+                                                    int sample_rate,
+                                                    const SonareDeclipConfig* config,
+                                                    SonareClipDetection* out) {
+  SONARE_C_API_ENTRY;
+  return run_detection(samples, length, sample_rate, out, [&] {
+    return to_c_clip_detection(sonare::mastering::repair::detect_clipping(
+        samples, length, sample_rate, to_cpp_declip_config(config)));
+  });
 }
 
 SonareError sonare_mastering_repair_decrackle(const float* samples, size_t length, int sample_rate,
@@ -451,6 +538,17 @@ SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const fl
   SONARE_C_CATCH
 }
 
+SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t length,
+                                                   int sample_rate,
+                                                   const SonareDecrackleConfig* config,
+                                                   SonareCrackleDetection* out) {
+  SONARE_C_API_ENTRY;
+  return run_detection(samples, length, sample_rate, out, [&] {
+    return to_c_crackle_detection(sonare::mastering::repair::detect_crackle(
+        samples, length, sample_rate, to_cpp_decrackle_config(config)));
+  });
+}
+
 SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, int sample_rate,
                                           const SonareDehumConfig* config, float** out,
                                           size_t* out_length) {
@@ -494,6 +592,16 @@ SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float*
   out->right = release_array(right_out);
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_repair_detect_hum(const float* samples, size_t length, int sample_rate,
+                                               const SonareDehumConfig* config,
+                                               SonareHumDetection* out) {
+  SONARE_C_API_ENTRY;
+  return run_detection(samples, length, sample_rate, out, [&] {
+    return to_c_hum_detection(sonare::mastering::repair::detect_hum(samples, length, sample_rate,
+                                                                    to_cpp_dehum_config(config)));
+  });
 }
 
 SonareError sonare_mastering_repair_dereverb_classical(const float* samples, size_t length,
@@ -555,6 +663,17 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
   SONARE_C_CATCH
 }
 
+SonareError sonare_mastering_repair_detect_reverb(const float* samples, size_t length,
+                                                  int sample_rate,
+                                                  const SonareDereverbClassicalConfig* config,
+                                                  SonareReverbDetection* out) {
+  SONARE_C_API_ENTRY;
+  return run_detection(samples, length, sample_rate, out, [&] {
+    return to_c_reverb_detection(sonare::mastering::repair::detect_reverb(
+        samples, length, sample_rate, to_cpp_dereverb_config(config)));
+  });
+}
+
 SonareError sonare_mastering_repair_trim_silence(const float* samples, size_t length,
                                                  int sample_rate,
                                                  const SonareTrimSilenceConfig* config, float** out,
@@ -603,6 +722,39 @@ SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const
   std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
   out->left = release_array(left_out);
   out->right = release_array(right_out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_repair_detect_trim_range(const float* samples, size_t length,
+                                                      int sample_rate,
+                                                      const SonareTrimSilenceConfig* config,
+                                                      SonareTrimRange* out) {
+  SONARE_C_API_ENTRY;
+  return run_detection(samples, length, sample_rate, out, [&] {
+    return to_c_trim_range(sonare::mastering::repair::detect_trim_range(
+        samples, length, sample_rate, to_cpp_trim_silence_config(config)));
+  });
+}
+
+SonareError sonare_mastering_repair_detect_trim_range_stereo(const float* left, const float* right,
+                                                             size_t length, int sample_rate,
+                                                             const SonareTrimSilenceConfig* config,
+                                                             SonareTrimRange* out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Cleared before any validation return, so a rejected call hands back a zero
+  // range rather than whatever the caller's stack slot held.
+  *out = SonareTrimRange{};
+
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  *out = to_c_trim_range(sonare::mastering::repair::detect_trim_range_stereo(
+      left, right, length, sample_rate, to_cpp_trim_silence_config(config)));
   return SONARE_OK;
   SONARE_C_CATCH
 }

@@ -785,6 +785,161 @@ val js_mastering_repair_trim_silence_stereo(val left_samples, val right_samples,
   return out;
 }
 
+// ============================================================================
+// Mastering — repair detection entry points
+//
+// These measure without repairing and allocate nothing. Like every wrapper
+// above they call the core directly rather than the C ABI, so each validates on
+// its own -- sonare_c_mastering_repair.cpp is not a WASM binding source.
+// loadValidatedAudio refuses an empty buffer at every entry here, which flattens
+// the core's split rule: detect_noise_floor and detect_reverb throw for an empty
+// buffer while the other six hand back a zeroed detection or range.
+// ============================================================================
+
+val js_mastering_repair_detect_clicks(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  mastering::repair::DeclickConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
+    cfg.neighbor_ratio = repairFloatOption(options, "neighborRatio", cfg.neighbor_ratio);
+    if (hasProperty(options, "maxClickSamples")) {
+      const int v =
+          repairIntOption(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
+      if (v <= 0) {
+        throw sonare::SonareException(
+            sonare::ErrorCode::InvalidParameter,
+            "masteringRepairDetectClicks: maxClickSamples must be positive");
+      }
+      cfg.max_click_samples = static_cast<size_t>(v);
+    }
+    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
+    cfg.residual_ratio = repairFloatOption(options, "residualRatio", cfg.residual_ratio);
+  }
+  return declickDetectionToVal(
+      mastering::repair::detect_clicks(audio.data(), audio.size(), audio.sample_rate(), cfg));
+}
+
+// Refuses a buffer shorter than nFft, as the repair does; the dereverb detector
+// below pads one instead.
+val js_mastering_repair_detect_noise_floor(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  mastering::repair::DenoiseClassicalConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg = readDenoiseConfig(options, cfg);
+  }
+  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDetectNoiseFloor: nFft must be a positive power of two");
+  }
+  if (cfg.hop_length <= 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "masteringRepairDetectNoiseFloor: hopLength must be positive");
+  }
+  return noiseDetectionToVal(
+      mastering::repair::detect_noise_floor(audio.data(), audio.size(), audio.sample_rate(), cfg));
+}
+
+// clipThreshold is the only field that reaches the result; the rest are read so
+// the same config validation runs here as at the repair.
+val js_mastering_repair_detect_clipping(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  mastering::repair::DeclipConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg.clip_threshold = repairFloatOption(options, "clipThreshold", cfg.clip_threshold);
+    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
+    cfg.iterations = repairIntOption(options, "iterations", cfg.iterations);
+    cfg.lpc_blend = repairFloatOption(options, "lpcBlend", cfg.lpc_blend);
+  }
+  return declipDetectionToVal(
+      mastering::repair::detect_clipping(audio.data(), audio.size(), audio.sample_rate(), cfg));
+}
+
+// Measured by the median criterion whatever `mode` says: wavelet shrinkage
+// removes crackle without ever deciding a sample is crackle.
+val js_mastering_repair_detect_crackle(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  mastering::repair::DecrackleConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
+    if (hasProperty(options, "mode")) {
+      val value = val::undefined();
+      if (repairOptionValue(options, "mode", &value)) {
+        cfg.mode = parseDecrackleMode(value.as<std::string>());
+      }
+    }
+    cfg.levels = repairIntOption(options, "levels", cfg.levels);
+  }
+  return crackleDetectionToVal(
+      mastering::repair::detect_crackle(audio.data(), audio.size(), audio.sample_rate(), cfg));
+}
+
+// Always runs the estimation path, whatever `adaptive` says: the fixed path
+// notches the configured frequency without ever looking for hum.
+val js_mastering_repair_detect_hum(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  mastering::repair::DehumConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg.fundamental_hz = repairFloatOption(options, "fundamentalHz", cfg.fundamental_hz);
+    cfg.harmonics = repairIntOption(options, "harmonics", cfg.harmonics);
+    cfg.q = repairFloatOption(options, "q", cfg.q);
+    cfg.adaptive = repairBoolOption(options, "adaptive", cfg.adaptive);
+    cfg.search_range_hz = repairFloatOption(options, "searchRangeHz", cfg.search_range_hz);
+    cfg.adaptation = repairFloatOption(options, "adaptation", cfg.adaptation);
+    cfg.frame_size = repairIntOption(options, "frameSize", cfg.frame_size);
+    cfg.pll_bandwidth = repairFloatOption(options, "pllBandwidth", cfg.pll_bandwidth);
+  }
+  return humDetectionToVal(
+      mastering::repair::detect_hum(audio.data(), audio.size(), audio.sample_rate(), cfg));
+}
+
+// Pads a buffer shorter than nFft, as the repair does -- the opposite of the
+// noise-floor detector above.
+val js_mastering_repair_detect_reverb(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  mastering::repair::DereverbClassicalConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg = readDereverbConfig(options, cfg);
+  }
+  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDetectReverb: nFft must be a positive power of two");
+  }
+  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "masteringRepairDetectReverb: hopLength must be in (0, nFft]");
+  }
+  return reverbDetectionToVal(
+      mastering::repair::detect_reverb(audio.data(), audio.size(), audio.sample_rate(), cfg));
+}
+
+// The range the repair would cut to, paddingSamples already inside it; a buffer
+// with nothing above the threshold reports (length, length).
+val js_mastering_repair_detect_trim_range(val samples, const val& sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
+  const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
+      options, mastering::repair::TrimSilenceConfig{}, "masteringRepairDetectTrimRange");
+  return trimRangeToVal(
+      mastering::repair::detect_trim_range(audio.data(), audio.size(), audio.sample_rate(), cfg));
+}
+
+// The union of the two channels' ranges. A channel with nothing above the
+// threshold contributes no edge, so a silent side leaves the other's range as
+// it is rather than widening it to the buffer end.
+val js_mastering_repair_detect_trim_range_stereo(val left_samples, val right_samples,
+                                                 const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "masteringRepairDetectTrimRangeStereo input", true);
+  Audio left = loadValidatedAudio(left_samples, sample_rate);
+  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const mastering::repair::TrimSilenceConfig cfg = readTrimSilenceConfig(
+      options, mastering::repair::TrimSilenceConfig{}, "masteringRepairDetectTrimRangeStereo");
+  return trimRangeToVal(mastering::repair::detect_trim_range_stereo(
+      left.data(), right.data(), left.size(), left.sample_rate(), cfg));
+}
+
 void registerRepairBindings() {
   // Mastering — offline repair processors
   function("masteringRepairDeclick", &js_mastering_repair_declick);
@@ -803,6 +958,15 @@ void registerRepairBindings() {
   function("masteringRepairDereverbConfigForRoom", &js_mastering_repair_dereverb_config_for_room);
   function("masteringRepairTrimSilence", &js_mastering_repair_trim_silence);
   function("masteringRepairTrimSilenceStereo", &js_mastering_repair_trim_silence_stereo);
+  // Mastering — repair detection, measuring without repairing
+  function("masteringRepairDetectClicks", &js_mastering_repair_detect_clicks);
+  function("masteringRepairDetectNoiseFloor", &js_mastering_repair_detect_noise_floor);
+  function("masteringRepairDetectClipping", &js_mastering_repair_detect_clipping);
+  function("masteringRepairDetectCrackle", &js_mastering_repair_detect_crackle);
+  function("masteringRepairDetectHum", &js_mastering_repair_detect_hum);
+  function("masteringRepairDetectReverb", &js_mastering_repair_detect_reverb);
+  function("masteringRepairDetectTrimRange", &js_mastering_repair_detect_trim_range);
+  function("masteringRepairDetectTrimRangeStereo", &js_mastering_repair_detect_trim_range_stereo);
 }
 
 #endif  // __EMSCRIPTEN__
