@@ -417,18 +417,38 @@ TEST_CASE("Declip mono output survives the detector extraction unchanged",
 // The declip pair predates the detector extraction and has survived it; the
 // declick pair is re-recorded whenever the fill's arithmetic changes, which a
 // bit-identity claim about declick can then be read against.
-TEST_CASE("Declick and declip mono digests stay stable", "[.][repair][stereo][impulse][golden]") {
-  const std::vector<float> click_left = click_fixture(0.0);
-  const std::vector<float> click_right = click_fixture(0.35);
-  CHECK(digest(declick(view(click_left), kCorpusDeclick)) == 0x6861830cu);
-  CHECK(digest(declick(view(click_right), kCorpusDeclick)) == 0x4a9a870fu);
-
+//
+// The two halves are separate cases because they hold under different conditions,
+// which one case cannot express: a skip covers everything in it.
+TEST_CASE("Declip mono digests stay stable", "[.][repair][stereo][impulse][golden]") {
   const std::vector<float> clip_left = clip_fixture(0.0);
   const std::vector<float> clip_right = clip_fixture(0.35);
   DeclipConfig config;
   config.clip_threshold = threshold_in_file(clip_left, clip_right);
   CHECK(digest(declip(view(clip_left), config)) == 0x6fd0ee17u);
   CHECK(digest(declip(view(clip_right), config)) == 0xd76bca10u);
+}
+
+// These two are recorded twice because the fill's last bits move with the
+// optimization level, and the sensitivity belongs to `src/util/lpc.cpp` rather
+// than to declick: compiling that one unit at -O0 moves both digests while
+// declick's own level changes nothing, and the declip pair above holds at every
+// level while solving the same way 440 times. The difference is 1 ULP on 11 of
+// 48000 samples, no sample moves by more than 1e-6, and detected / rejected /
+// repaired_runs / repaired_samples are identical -- so the digest is a finer
+// instrument than the behaviour it guards. Both values are recorded rather than
+// one guarded and the other skipped, because `make test-golden` configures Debug
+// and a skip there would leave the sanctioned path checking nothing.
+TEST_CASE("Declick mono digests stay stable", "[.][repair][stereo][impulse][golden]") {
+  const std::vector<float> click_left = click_fixture(0.0);
+  const std::vector<float> click_right = click_fixture(0.35);
+#ifdef NDEBUG
+  CHECK(digest(declick(view(click_left), kCorpusDeclick)) == 0x6861830cu);
+  CHECK(digest(declick(view(click_right), kCorpusDeclick)) == 0x4a9a870fu);
+#else
+  CHECK(digest(declick(view(click_left), kCorpusDeclick)) == 0x508faa52u);
+  CHECK(digest(declick(view(click_right), kCorpusDeclick)) == 0x65fb694eu);
+#endif
 }
 
 TEST_CASE("Declip reports the runs that fall past the LPC gap cap", "[repair][stereo][impulse]") {
