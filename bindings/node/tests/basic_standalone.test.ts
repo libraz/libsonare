@@ -527,23 +527,38 @@ describe('standalone functions', () => {
 
   it('exposes mastering assistant suggestions', () => {
     const sampleRate = 22050;
-    const samples = generateSine(220, sampleRate, 3);
-    const json = masteringAssistantSuggest(samples, sampleRate, {
-      targetLufs: -13,
-      ceilingDb: -0.8,
-      enableRepair: true,
-    });
-    const result = JSON.parse(json);
+    const suggest = (samples: Float32Array) =>
+      JSON.parse(
+        masteringAssistantSuggest(samples, sampleRate, {
+          targetLufs: -13,
+          ceilingDb: -0.8,
+          enableRepair: true,
+        }),
+      );
 
+    const clean = new Float32Array(sampleRate * 3);
+    for (let i = 0; i < clean.length; i++) {
+      clean[i] = 0.2 * Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+    }
+    const clicked = Float32Array.from(clean);
+    const step = Math.floor(clicked.length / 5);
+    for (let k = 1; k <= 4; k++) {
+      clicked[k * step] = 0.9;
+    }
+
+    const result = suggest(clean);
     expect(result).toHaveProperty('chainConfig');
     expect(result).toHaveProperty('profile');
     expect(Array.isArray(result.explanation)).toBe(true);
     expect(Array.isArray(result.genreCandidates)).toBe(true);
     expect(result.chainConfig.params['loudness.targetLufs']).toBe(-13);
     expect(result.chainConfig.params['loudness.ceilingDb']).toBeCloseTo(-0.8, 6);
-    // After chain_json.cpp moved to util::json::dump, booleans serialize as
-    // JSON `true`/`false` (RFC 8259) instead of `1`/`0`. Same semantics.
-    expect(result.chainConfig.params['repair.declick.enabled']).toBe(true);
+
+    // enableRepair asks for repair; the measured defect profile picks which stages
+    // run. Only the clean side would still pass with enableRepair ignored outright,
+    // so both are driven. Booleans serialize as JSON true/false (RFC 8259).
+    expect(result.chainConfig.params['repair.declick.enabled']).toBe(false);
+    expect(suggest(clicked).chainConfig.params['repair.declick.enabled']).toBe(true);
   });
 
   it('exposes mastering audio profiles', () => {
