@@ -539,8 +539,8 @@ def vqt(
         fmin: Lowest center frequency in Hz (default C1).
         n_bins: Total number of frequency bins (default 84).
         bins_per_octave: Bins per octave (default 12).
-        gamma: Bandwidth offset. Negative selects the automatic ERB-derived
-            value; zero is equivalent to CQT (default -1.0).
+        gamma: Bandwidth offset. A negative value or NaN selects the automatic
+            ERB-derived value; zero is equivalent to CQT (default -1.0).
 
     Returns:
         A :class:`CqtResult` with the magnitude matrix and bin frequencies.

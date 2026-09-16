@@ -103,6 +103,16 @@ export function assertFiniteScalar(fnName: string, value: number, argName: strin
   }
 }
 
+/**
+ * A NaN gamma is the automatic-bandwidth sentinel the variable-Q transform
+ * documents, alongside a negative value, so only an infinity is out of domain.
+ */
+export function assertVqtGamma(fnName: string, gamma: number): void {
+  if (gamma === Number.POSITIVE_INFINITY || gamma === Number.NEGATIVE_INFINITY) {
+    throw new RangeError(`${fnName}: gamma must not be infinite`);
+  }
+}
+
 export function assertSampleRate(fnName: string, sampleRate: number): void {
   if (
     !Number.isInteger(sampleRate) ||

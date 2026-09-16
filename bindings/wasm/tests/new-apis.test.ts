@@ -1382,7 +1382,16 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => nnlsChroma(new Float32Array([Number.NaN]), SR)).toThrow(/NaN|Inf/);
       expect(() => cqt(signal, 7999)).toThrow(/sampleRate/);
       expect(() => cqt(signal, SR, 0)).toThrow(/hopLength/);
-      expect(() => vqt(signal, SR, 512, 32.7, 24, 12, Number.NaN)).toThrow(/gamma/);
+      // A NaN gamma is one of the two spellings of the automatic ERB-derived
+      // bandwidth, so the facade passes it through and it agrees exactly with
+      // the negative spelling. An infinity selects nothing and is still refused.
+      expect(() => vqt(signal, SR, 512, 32.7, 24, 12, Number.POSITIVE_INFINITY)).toThrow(/gamma/);
+      expect(Array.from(vqt(signal, SR, 512, 32.7, 24, 12, Number.NaN).magnitude)).toEqual(
+        Array.from(vqt(signal, SR, 512, 32.7, 24, 12, -1).magnitude),
+      );
+      expect(Array.from(vqt(signal, SR, 512, 32.7, 24, 12, Number.NaN).magnitude)).not.toEqual(
+        Array.from(vqt(signal, SR, 512, 32.7, 24, 12, 0).magnitude),
+      );
       expect(() => analyzeSections(signal, SR, { minSectionSec: -1 })).toThrow(/minSectionSec/);
       expect(() => analyzeSections(signal, SR, { minSectionSec: 0 })).not.toThrow();
       expect(() => analyzeSections(signal, SR, { nFft: 0 })).toThrow(/nFft/);

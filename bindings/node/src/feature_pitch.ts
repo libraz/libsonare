@@ -316,7 +316,7 @@ export function hybridCqt(
   );
 }
 
-/** Compute VQT magnitude (`gamma < 0` selects the automatic ERB-derived value). */
+/** Compute VQT magnitude (a negative or NaN `gamma` selects the automatic ERB-derived value). */
 export function vqt(request: VqtRequest): CqtResult;
 export function vqt(
   samples: Float32Array,

@@ -3,8 +3,8 @@
 /// @file vqt.h
 /// @brief Variable-Q Transform (VQT) for music signal analysis.
 /// @details VQT extends CQT with variable Q factor controlled by gamma parameter.
-/// When gamma=0, VQT is equivalent to CQT. A negative gamma selects librosa's
-/// ERB-derived automatic gamma.
+/// When gamma=0, VQT is equivalent to CQT. A negative or NaN gamma selects
+/// librosa's ERB-derived automatic gamma.
 
 #include <functional>
 #include <memory>

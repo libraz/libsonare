@@ -16,6 +16,7 @@ import {
   assertPositiveInteger,
   assertSampleRate,
   assertSamples,
+  assertVqtGamma,
 } from './validation';
 
 function requireModule() {
@@ -325,8 +326,8 @@ export function hybridCqt(
  * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
  * @param nBins - Number of frequency bins (default: 84)
  * @param binsPerOctave - Bins per octave (default: 12)
- * @param gamma - Bandwidth offset; negative selects the automatic ERB-derived
- *   value, while 0 is equivalent to CQT (default: -1)
+ * @param gamma - Bandwidth offset; a negative value or NaN selects the automatic
+ *   ERB-derived value, while 0 is equivalent to CQT (default: -1)
  * @returns VQT magnitude result (same shape as CQT)
  */
 export function vqt(request: VqtRequest): CqtResult;
@@ -366,7 +367,7 @@ export function vqt(
   validateMusicSamples('vqt', samples, sampleRate, options);
   validatePositiveIntegers('vqt', { hopLength, nBins, binsPerOctave });
   validateFrequencyBounds('vqt', fmin);
-  assertFiniteScalar('vqt', gamma, 'gamma');
+  assertVqtGamma('vqt', gamma);
   return requireModule().vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
 }
 
@@ -512,7 +513,7 @@ export function vqtToAudio(
     nIter,
     options,
   );
-  assertFiniteScalar('vqtToAudio', gamma, 'gamma');
+  assertVqtGamma('vqtToAudio', gamma);
   return requireModule().vqtToAudio(
     magnitude,
     nBins,
