@@ -10,12 +10,14 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 #include "midi/midi_event.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "rt/processor_base.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -23,6 +25,7 @@ namespace {
 using Catch::Approx;
 using sonare::midi::MidiEvent;
 using sonare::midi::synth::Sf2File;
+using sonare::midi::synth::Sf2InsertType;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
 using sonare::test::Sf2Builder;
@@ -162,6 +165,24 @@ void crossing_period_range(const std::vector<float>& buf, size_t from, double* m
     }
   }
 }
+
+/// A ProcessorBase double for a part insert: reports a controlled number of
+/// discards per process() call through the inherited counter, without
+/// depending on any real non-finite value. Used to pin Sf2Player's own-member
+/// fold (its per-part insert chains) to a real, publicly-reachable seam
+/// (Sf2PlayerConfig::insert_factory) rather than to a mock of Sf2Player itself.
+class DiscardingInsert final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {
+    ++process_calls;
+    for (int i = 0; i < discards_per_call; ++i) note_non_finite_discard();
+  }
+  void reset() override {}
+
+  int discards_per_call = 0;
+  int process_calls = 0;
+};
 
 }  // namespace
 
@@ -335,4 +356,86 @@ TEST_CASE("Sf2 fidelity path renders bit-identically", "[midi][sf2][fidelity]") 
     return render_mono(player, 24000);
   };
   REQUIRE(run() == run());
+}
+
+// --- non-finite discard count (rt::ProcessorBase::non_finite_discard_count) ---
+//
+// Sf2Player is a composite: process_impl() renders in kChunkFrames chunks, and
+// its own per-part insert chains and master EQ each carry their own counter.
+// The cases below pin the fold across chunk boundaries via
+// Sf2PlayerConfig::insert_factory, a real (not mocked) seam a host already
+// uses to wire a guitar rig. No public API reaches a real non-finite sample
+// from a voice into these tests: NativeSynthVoice's filter models (svf.h,
+// filter_models.h) clamp cutoff and Q to a finite, self-oscillation-safe range
+// before use, and the fallback pool's patches come from the fixed
+// gm_fallback_map tables rather than a caller-suppliable one, so the one
+// unclamped field found in this engine family (bowed_string.stribeck, see
+// native_synth_test.cpp) cannot be reached through Sf2Player's own config.
+
+TEST_CASE("A clean Sf2Player fallback render leaves the discard count at zero",
+          "[midi][sf2][non-finite]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  Sf2Player player(cfg);
+  player.prepare(kOutRate, 256);
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+  const std::vector<float> out = render_mono(player, 8192);
+  float peak = 0.0f;
+  for (float v : out) peak = std::max(peak, std::fabs(v));
+  REQUIRE(peak > 0.0f);  // non-vacuity: a count of 0 has to mean something
+  REQUIRE(player.non_finite_discard_count() == 0u);
+}
+
+TEST_CASE(
+    "A part insert discarding on every chunk of a multi-chunk call still moves the count by "
+    "exactly one",
+    "[midi][sf2][non-finite]") {
+  // render_chunk() is called once per kChunkFrames (256) samples; process_impl()
+  // loops it for as many chunks as the caller's block needs. A render spanning
+  // several thousand samples exercises several chunk calls in this one
+  // process() call, which is the span the fence around this task warned a
+  // naive bump could get wrong (scoped to render_chunk() instead of
+  // process_impl()).
+  DiscardingInsert* insert = nullptr;
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
+  cfg.part_inserts[0].stages.push_back({"probe.discard", "{}"});
+  cfg.insert_factory = [&insert](std::string_view,
+                                 std::string_view) -> std::unique_ptr<sonare::rt::ProcessorBase> {
+    auto proc = std::make_unique<DiscardingInsert>();
+    insert = proc.get();
+    return proc;
+  };
+  Sf2Player player(cfg);
+  player.prepare(kOutRate, 256);
+  REQUIRE(insert != nullptr);
+
+  // The GS master EQ stays at its power-on default (flat) for this whole test,
+  // so render_chunk()'s own `if (eq_.active())` gate never runs it -- the fold
+  // below is attributable to the insert chain and nothing else by construction,
+  // not merely by a count this test has no public accessor to read.
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+
+  insert->discards_per_call = 3;
+  const int num_samples = 8192;  // 32 chunks at kChunkFrames == 256
+  const std::vector<float> out = render_mono(player, num_samples);
+  REQUIRE(insert->process_calls == num_samples / 256);
+  // The insert's own counter moved 3 times per chunk; the player's own count
+  // is the delta of the fold, not the sum, and must land at exactly one.
+  REQUIRE(player.non_finite_discard_count() == 1u);
+  float peak = 0.0f;
+  for (float v : out) peak = std::max(peak, std::fabs(v));
+  REQUIRE(peak > 0.0f);  // real fallback voice audio still reaches the mix
+
+  // A clean call -- the insert reporting nothing -- does not raise it further.
+  insert->discards_per_call = 0;
+  render_mono(player, 2048);
+  REQUIRE(player.non_finite_discard_count() == 1u);
+
+  // A later call that discards again moves it again: this is not a one-shot
+  // latch, it is the delta of each call that actually discarded.
+  insert->discards_per_call = 1;
+  render_mono(player, 2048);
+  REQUIRE(player.non_finite_discard_count() == 2u);
 }

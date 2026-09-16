@@ -570,10 +570,24 @@ class Sf2Player final : public MidiInstrument {
   /// internal mix scratch. In source-track mode, attributable dry voice audio
   /// is added directly to its target while destination-scoped part/effect
   /// residuals are added to target zero.
-  void render_chunk(int n, const MidiInstrumentSourceOutput* source_outputs,
+  /// @return Whether any voice discarded a non-finite recursive-state sample
+  ///         this chunk. process_impl() accumulates this across every chunk of
+  ///         one call rather than bumping here, since one call renders several.
+  bool render_chunk(int n, const MidiInstrumentSourceOutput* source_outputs,
                     size_t source_output_count, int output_offset, int num_channels) noexcept;
   void process_impl(float* const* channels, const MidiInstrumentSourceOutput* source_outputs,
                     size_t source_output_count, int num_channels, int num_samples) noexcept;
+  /// @brief Every owned processor's discard count added together -- the master
+  ///        EQ and the realised EFX chains (per-part inserts and per-unit
+  ///        chains) -- for the process_impl() call delta. RT-safe: relaxed
+  ///        atomic loads only.
+  /// @details Reachable from outside only as a count, so a discard inside one
+  ///   is observable nowhere unless the player records it. The sum answers "did
+  ///   any of them move", which is the question process_impl()'s own per-call
+  ///   count asks; it is never published as a count of its own, and summing is
+  ///   safe only because of that -- a chain may run once per render_chunk() and
+  ///   one process_impl() call spans several. Mirrors ChannelStrip / BusProcessor.
+  uint64_t member_discard_sum() const noexcept;
 
   /// Internal bus-graph chunk size (matches the effect bus block).
   static constexpr int kChunkFrames = 256;

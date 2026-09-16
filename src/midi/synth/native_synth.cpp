@@ -773,6 +773,10 @@ void NativeSynth::process_impl(float* const* channels,
     }
   }
 
+  // Set when any sample in this call's per-sample loop below actually
+  // discarded; bumped once after the loop rather than per sample, since the
+  // unit is one process() call, not one sample.
+  bool discarded = false;
   for (int i = 0; i < num_samples; ++i) {
     float mix_l = 0.0f;
     float mix_r = 0.0f;
@@ -859,10 +863,9 @@ void NativeSynth::process_impl(float* const* channels,
     // input, which is not the same as safe for it -- the blocker is a feedback
     // cell whose worst-case gain is well over unity, so a large enough finite
     // sample still leaves float range. Mirrors the host-side scrub in
-    // au_instrument_provider. The count is discarded because the synth exposes
-    // no counter to add it to.
-    (void)resolve_non_finite(SampleDestination::kRecursiveState, mix_l);
-    (void)resolve_non_finite(SampleDestination::kRecursiveState, mix_r);
+    // au_instrument_provider.
+    discarded |= resolve_non_finite(SampleDestination::kRecursiveState, mix_l);
+    discarded |= resolve_non_finite(SampleDestination::kRecursiveState, mix_r);
     if (config_.dc_block) {
       const float l = mix_l - dc_x1_[0] + dc_r_ * dc_y1_[0];
       dc_x1_[0] = mix_l;
@@ -890,6 +893,7 @@ void NativeSynth::process_impl(float* const* channels,
       }
     }
   }
+  if (discarded) note_non_finite_discard();
 }
 
 }  // namespace sonare::midi::synth

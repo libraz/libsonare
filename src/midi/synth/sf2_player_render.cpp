@@ -22,9 +22,13 @@ using sonare::constants::kInvSqrt2;
 
 }  // namespace
 
-void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_outputs,
+bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_outputs,
                              size_t source_output_count, int output_offset,
                              int num_channels) noexcept {
+  // Set by either voice loop below when a recursive-state scrub actually
+  // discarded a sample; process_impl() folds this chunk's result into its own
+  // call-scoped flag rather than bumping the counter here.
+  bool discarded = false;
   std::memset(mix_l_.data(), 0, sizeof(float) * static_cast<size_t>(n));
   std::memset(mix_r_.data(), 0, sizeof(float) * static_cast<size_t>(n));
   const bool source_render = source_outputs != nullptr;
@@ -176,9 +180,8 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       const Sf2ChannelMod& mod = mods[part];
       // Same non-finite scrub as the fallback loop below: this leg feeds the
       // insert bus and the system effect sends, which are persistent IIR state.
-      // The count is discarded because the player exposes no counter for it.
       float s = v.render(mod);
-      (void)resolve_non_finite(SampleDestination::kRecursiveState, s);
+      discarded |= resolve_non_finite(SampleDestination::kRecursiveState, s);
       const float l = s * v.gain_left;
       const float r = s * v.gain_right;
       if (part_bussed[part]) {
@@ -239,10 +242,9 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       // for the whole render. Bit-identical for finite input, which is not the
       // same as safe for it -- those states are feedback cells, so a large
       // enough finite sample still leaves float range. The same guard the
-      // NativeSynth host applies to its own physical-model mix bus. The count is
-      // discarded because the player exposes no counter for it.
+      // NativeSynth host applies to its own physical-model mix bus.
       float s = v.render(mod, wind.pitch_ratio, wind.gain);
-      (void)resolve_non_finite(SampleDestination::kRecursiveState, s);
+      discarded |= resolve_non_finite(SampleDestination::kRecursiveState, s);
       float l = s * v.gain_left;
       float r = s * v.gain_right;
       if (body_active[part]) body_dry[part] += 0.5f * (l + r);
@@ -527,6 +529,7 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
                  (mix_r_[static_cast<size_t>(i)] - attributed_r[i]) * out_gain_r);
     }
   }
+  return discarded;
 }
 
 void Sf2Player::process(float* const* channels, int num_channels, int num_samples) {
@@ -583,9 +586,15 @@ void Sf2Player::process_impl(float* const* channels,
   float out_gain_l = 1.0f;
   float out_gain_r = 1.0f;
   int offset = 0;
+  // The master EQ and the realised EFX chains each run once per render_chunk()
+  // below, so their combined delta is read once here and once after every chunk
+  // has rendered; the call bumps at most once however many chunks or voices
+  // discarded.
+  const uint64_t member_discards_before = member_discard_sum();
+  bool discarded = false;
   while (offset < num_samples) {
     const int n = std::min(kChunkFrames, num_samples - offset);
-    render_chunk(n, source_outputs, source_output_count, offset, num_channels);
+    discarded |= render_chunk(n, source_outputs, source_output_count, offset, num_channels);
     // Re-read per block rather than once: a SysEx dispatched between blocks
     // moves them, and the chunk that follows it has to hear that.
     output_gains(&out_gain_l, &out_gain_r);
@@ -606,6 +615,26 @@ void Sf2Player::process_impl(float* const* channels,
     }
     offset += n;
   }
+  discarded |= member_discard_sum() != member_discards_before;
+  if (discarded) note_non_finite_discard();
+}
+
+uint64_t Sf2Player::member_discard_sum() const noexcept {
+  uint64_t total = eq_.non_finite_discard_count();
+  const Sf2RealizedEfx* efx = efx_pub_->current();
+  if (efx != nullptr) {
+    for (const auto& chain : efx->chains) {
+      for (const auto& proc : chain) {
+        if (proc) total += proc->non_finite_discard_count();
+      }
+    }
+    for (const auto& chain : efx->unit_chains) {
+      for (const auto& proc : chain) {
+        if (proc) total += proc->non_finite_discard_count();
+      }
+    }
+  }
+  return total;
 }
 
 }  // namespace sonare::midi::synth

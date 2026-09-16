@@ -34,7 +34,9 @@ MidiEvent event(const sonare::midi::Ump& ump) {
 }
 
 /// Records what reached it and emits a constant so the mix is measurable.
-class ProbeInstrument final : public MidiInstrument {
+/// Not final: DiscardingProbe below extends it to reach the protected
+/// note_non_finite_discard() from a subclass.
+class ProbeInstrument : public MidiInstrument {
  public:
   struct Note {
     uint8_t note;
@@ -93,6 +95,19 @@ class ProbeInstrument final : public MidiInstrument {
   int latency_ = 0;
   int tail_ = 0;
   bool prepared_ = false;
+};
+
+/// A probe that discards on demand: process() bumps its own counter
+/// discards_per_call times, letting a test steer a deterministic number of
+/// child discards into a single parent block without hostile audio.
+class DiscardingProbe final : public ProbeInstrument {
+ public:
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    ProbeInstrument::process(channels, num_channels, num_samples);
+    for (int i = 0; i < discards_per_call; ++i) note_non_finite_discard();
+  }
+
+  int discards_per_call = 0;
 };
 
 /// Renders one block and returns the summed leg peaks.
@@ -313,6 +328,64 @@ TEST_CASE("A parameter key addresses one layer", "[midi][layered]") {
   CHECK(b_p->applied_id == 7);
   CHECK(b_p->applied_value == Catch::Approx(0.75f));
   CHECK(a_p->applied_id == -1);
+}
+
+TEST_CASE("A clean layered render leaves the discard count at zero", "[midi][layered]") {
+  LayeredInstrument inst;
+  REQUIRE(inst.add_layer(std::make_unique<ProbeInstrument>(0.3f), InstrumentLayerSpec{}));
+  REQUIRE(inst.add_layer(std::make_unique<ProbeInstrument>(0.2f), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+
+  const Legs legs = render(inst);
+  CHECK(legs.left != 0.0f);  // output has energy, so a count of 0 is not vacuous
+  CHECK(inst.non_finite_discard_count() == 0);
+}
+
+TEST_CASE("A layer's discard raises the parent's count", "[midi][layered]") {
+  LayeredInstrument inst;
+  REQUIRE(inst.add_layer(std::make_unique<DiscardingProbe>(), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+  REQUIRE(inst.non_finite_discard_count() == 0);
+
+  static_cast<DiscardingProbe*>(inst.layer_at(0))->discards_per_call = 1;
+  render(inst);
+  CHECK(inst.non_finite_discard_count() == 1);
+}
+
+TEST_CASE("Several layers discarding several times each still move the parent by exactly one",
+          "[midi][layered]") {
+  // The children's summed counters move by 3 + 2 + 4 = 9 in this one block;
+  // the parent's own count is the delta of the sum, not the sum, and must
+  // land at exactly 1.
+  LayeredInstrument inst;
+  REQUIRE(inst.add_layer(std::make_unique<DiscardingProbe>(), InstrumentLayerSpec{}));
+  REQUIRE(inst.add_layer(std::make_unique<DiscardingProbe>(), InstrumentLayerSpec{}));
+  REQUIRE(inst.add_layer(std::make_unique<DiscardingProbe>(), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+  REQUIRE(inst.non_finite_discard_count() == 0);
+
+  static_cast<DiscardingProbe*>(inst.layer_at(0))->discards_per_call = 3;
+  static_cast<DiscardingProbe*>(inst.layer_at(1))->discards_per_call = 2;
+  static_cast<DiscardingProbe*>(inst.layer_at(2))->discards_per_call = 4;
+  render(inst);
+
+  CHECK(inst.non_finite_discard_count() == 1);
+}
+
+TEST_CASE("A clean call after a discard does not raise the parent's count further",
+          "[midi][layered]") {
+  LayeredInstrument inst;
+  REQUIRE(inst.add_layer(std::make_unique<DiscardingProbe>(), InstrumentLayerSpec{}));
+  inst.prepare(kRate, 128);
+  auto* probe = static_cast<DiscardingProbe*>(inst.layer_at(0));
+
+  probe->discards_per_call = 1;
+  render(inst);
+  REQUIRE(inst.non_finite_discard_count() == 1);
+
+  probe->discards_per_call = 0;
+  render(inst);
+  CHECK(inst.non_finite_discard_count() == 1);
 }
 
 TEST_CASE("The layered audio path is allocation-free", "[midi][layered]") {

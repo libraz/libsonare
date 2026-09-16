@@ -439,6 +439,71 @@ TEST_CASE("Sf2Player without a SoundFont plays every GM program via the fallback
   }
 }
 
+TEST_CASE("A clean bowed-string render leaves the discard count at zero",
+          "[midi][synth][non-finite]") {
+  // Same engine and elasto-plastic path as the poisoned case below, differing
+  // only in the stribeck value, so the two cases isolate that one field.
+  NativeSynthConfig cfg;
+  cfg.patch.mode = SynthEngineMode::kBowedString;
+  cfg.patch.bowed_string.elasto_plastic = true;
+  cfg.patch.bowed_string.stribeck = 0.7f;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 57, 110)));
+  const StereoRender out = render(synth, 8192);
+  REQUIRE(peak(out.left) > 0.0f);  // non-vacuity: a count of 0 has to mean something
+  REQUIRE(synth.non_finite_discard_count() == 0u);
+}
+
+TEST_CASE(
+    "A stribeck value outside the elasto-plastic model's own range raises the discard count "
+    "exactly once per call",
+    "[midi][synth][non-finite]") {
+  // bowed_string.stribeck is gated behind elasto_plastic and reaches the render
+  // loop without ever passing through clamp_synth_patch (native_synth.h never
+  // mentions it, unlike every other bowed_string field): the constructor's
+  // clamp cannot protect a field it does not know about. Fed a non-finite
+  // value, BowedStringVoiceCore::start() computes ep_stribeck_v_ from it
+  // unclamped, and elasto_plastic_injection() divides by it on the very first
+  // sample, so the corruption is immediate rather than a divergence that needs
+  // many samples to arrive.
+  //
+  // Tried and rejected before this one: pushing SF2 initialFilterQ / NativeSynth
+  // resonance_q to their generator/patch extremes. Both TptSvf::set() (svf.h)
+  // and the ladder/Sallen-Key models (filter_models.h) clamp cutoff and Q to a
+  // finite, self-oscillation-safe range before using them, and a Q or cutoff
+  // fed as +-infinity compares normally against those bounds and lands on the
+  // clamp's finite edge rather than surviving. The elasto-plastic bristle's own
+  // z_ss floor (kEpZssFloor, bowed_string_voice.cpp) is similarly bounded away
+  // from zero for any FINITE input, so an extreme-but-finite bow velocity never
+  // reaches the division either. stribeck is the one field in this whole engine
+  // family with no clamp at all between the caller and a divisor.
+  auto make_synth = []() {
+    NativeSynthConfig cfg;
+    cfg.patch.mode = SynthEngineMode::kBowedString;
+    cfg.patch.bowed_string.elasto_plastic = true;
+    cfg.patch.bowed_string.stribeck = std::numeric_limits<float>::quiet_NaN();
+    auto synth = std::make_unique<NativeSynth>(cfg);
+    synth->prepare(kOutRate, 256);
+    return synth;
+  };
+
+  auto synth = make_synth();
+  synth->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 57, 110)));
+  // One process() call, long enough that the corrupted voice discards on
+  // hundreds of samples inside it; the unit is the call, not the sample.
+  const StereoRender out = render(*synth, 8192);
+  for (float v : out.left) REQUIRE(std::isfinite(v));
+  for (float v : out.right) REQUIRE(std::isfinite(v));
+  REQUIRE(synth->non_finite_discard_count() == 1u);
+
+  // The bristle state stays corrupted (nothing in this engine recovers it), so
+  // a second call discards again -- the count is not a one-shot latch, it moves
+  // once per call that actually discarded.
+  render(*synth, 512);
+  REQUIRE(synth->non_finite_discard_count() == 2u);
+}
+
 TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi][synth]") {
   using sonare::midi::synth::gm_fallback_patch;
   // Harpsichord (GM 6) voices its own jack-and-plectrum engine; the clavinet (7)

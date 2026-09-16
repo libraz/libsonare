@@ -92,6 +92,20 @@ class LayeredInstrument final : public MidiInstrument {
   void send_note(size_t layer_index, const MidiEvent& event, uint8_t note,
                  uint32_t destination_id) noexcept;
 
+  /// @brief Every layer's discard count added together, for the block delta in
+  ///        process(). RT-safe: relaxed atomic loads only.
+  /// @details Each layer is a full MidiInstrument with its own live counter,
+  ///   reachable from outside only through this instrument, so a discard inside
+  ///   one is observable nowhere unless process() records it. The sum answers
+  ///   "did any layer move", never published as a count of its own -- a layer
+  ///   can be driven several times per this instrument's block. Mirrors
+  ///   ChannelStrip / BusProcessor.
+  uint64_t layer_discard_sum() const noexcept {
+    uint64_t total = 0;
+    for (const Layer& layer : layers_) total += layer.instrument->non_finite_discard_count();
+    return total;
+  }
+
   std::vector<Layer> layers_;
   std::vector<uint32_t> note_owners_;
   /// Per-child render scratch: max_block_size frames for each of two legs.

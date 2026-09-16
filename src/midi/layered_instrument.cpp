@@ -132,6 +132,9 @@ void LayeredInstrument::process(float* const* channels, int num_channels, int nu
   float* scratch_right = scratch_.data() + max_block_size_;
   float* scratch_chans[2] = {scratch_left, scratch_right};
 
+  // Read before the layer loop and compared after, so this block bumps at
+  // most once however many layers discarded during it.
+  const uint64_t layer_discards_before = layer_discard_sum();
   for (Layer& layer : layers_) {
     std::fill_n(scratch_left, num_samples, 0.0f);
     std::fill_n(scratch_right, num_samples, 0.0f);
@@ -145,6 +148,7 @@ void LayeredInstrument::process(float* const* channels, int num_channels, int nu
       }
     }
   }
+  if (layer_discard_sum() != layer_discards_before) note_non_finite_discard();
 }
 
 void LayeredInstrument::set_transport(const transport::TransportState& state) noexcept {
