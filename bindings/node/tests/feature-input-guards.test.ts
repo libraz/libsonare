@@ -140,7 +140,7 @@ describe('a framing entry point refuses a fractional window', () => {
     });
 
     it(`${name} refuses a fractional frame length`, () => {
-      expect(() => call({ frameLength: 2048.5 })).toThrow(/frameLength must be a positive integer/);
+      expect(() => call({ frameLength: 2048.5 })).toThrow(/frameLength must be an integer/);
     });
 
     it(`${name} refuses a fractional sample rate`, () => {

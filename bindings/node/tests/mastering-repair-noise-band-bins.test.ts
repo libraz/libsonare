@@ -137,14 +137,16 @@ describe('masteringRepairNoiseBandBins', () => {
     // 22050.7 is the shape a fixed probe misses: it narrows onto 22050, which
     // the core accepts, so without this check the call answers for a rate the
     // caller never asked for.
+    // Named as a fraction rather than as non-positive, which is what the case
+    // above reports: 22050.7 is already positive.
     expect(() => masteringRepairNoiseBandBins({ sampleRate: 22050.7 })).toThrow(
-      /sampleRate must be a positive integer/,
+      /sampleRate must be an integer/,
     );
   });
 
   it('refuses a sampleRate that is not a number rather than substituting its default', () => {
     expect(() =>
       masteringRepairNoiseBandBins({ sampleRate: 'not-a-number' as unknown as number }),
-    ).toThrow(/sampleRate must be a positive integer/);
+    ).toThrow(/sampleRate must be an integer/);
   });
 });

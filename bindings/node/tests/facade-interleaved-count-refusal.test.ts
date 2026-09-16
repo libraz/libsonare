@@ -51,13 +51,21 @@ describe('waveformPeaks', () => {
     // 100 % 2.5 === 0, so the length rule alone lets this through.
     expect(LENGTH % 2.5).toBe(0);
     expect(() => waveformPeaks(fixture(), 2.5, { samplesPerBucket: 10 })).toThrow(
-      /channels must be a positive integer/,
+      /channels must be an integer/,
     );
   });
 
-  it('refuses a channel count at and below zero', () => {
-    expect(() => waveformPeaks(fixture(), 0, { samplesPerBucket: 10 })).toThrow(RangeError);
-    expect(() => waveformPeaks(fixture(), -1, { samplesPerBucket: 10 })).toThrow(RangeError);
+  it('refuses a channel count at and below zero, naming the sign rather than the type', () => {
+    // The other half of the split the fractional case above asserts: 2.5 is
+    // positive and is told it must be an integer, while these are integers and
+    // are told they must be positive. One message for both would name a
+    // property one of the two values already has.
+    expect(() => waveformPeaks(fixture(), 0, { samplesPerBucket: 10 })).toThrow(
+      /channels must be a positive integer/,
+    );
+    expect(() => waveformPeaks(fixture(), -1, { samplesPerBucket: 10 })).toThrow(
+      /channels must be a positive integer/,
+    );
   });
 
   it('answers differently for two legitimate bucket widths', () => {
@@ -69,7 +77,7 @@ describe('waveformPeaks', () => {
 
   it('refuses a fractional bucket width', () => {
     expect(() => waveformPeaks(fixture(), 2, { samplesPerBucket: 10.5 })).toThrow(
-      /samplesPerBucket must be a positive integer/,
+      /samplesPerBucket must be an integer/,
     );
   });
 });
@@ -85,13 +93,13 @@ describe('waveformPeakPyramid', () => {
 
   it('refuses a fractional channel count that divides the buffer', () => {
     expect(() => waveformPeakPyramid(fixture(), 2.5, { samplesPerBucketLevels: [10] })).toThrow(
-      /channels must be a positive integer/,
+      /channels must be an integer/,
     );
   });
 
   it('names the level it refused rather than the list', () => {
     expect(() => waveformPeakPyramid(fixture(), 2, { samplesPerBucketLevels: [10, 7.5] })).toThrow(
-      /samplesPerBucketLevels\[1\] must be a positive integer/,
+      /samplesPerBucketLevels\[1\] must be an integer/,
     );
   });
 
@@ -158,6 +166,6 @@ describe('pcen', () => {
   it('refuses a fractional bin count that divides the buffer once truncated', () => {
     // The addon checks `nBins * nFrames === length` AFTER narrowing, so 2.5 x 50
     // over 100 values passes that rule as 2 x 50.
-    expect(() => pcen(new Float32Array(100), 2.5, 50)).toThrow(/nBins must be a positive integer/);
+    expect(() => pcen(new Float32Array(100), 2.5, 50)).toThrow(/nBins must be an integer/);
   });
 });

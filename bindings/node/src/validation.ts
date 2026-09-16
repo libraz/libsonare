@@ -225,7 +225,13 @@ export function assertBoundedInteger(
 
 /** Integer strictly greater than zero, up to the native `int` ceiling. */
 export function assertPositiveInteger(fnName: string, value: number, argName: string): void {
-  if (!Number.isInteger(value) || value <= 0 || value > C_INT_MAX) {
+  // Two refusals, not one: 512.7 is positive, so reporting it as non-positive
+  // names a property it has. The ceiling travels with the sign rather than with
+  // integrality, because both describe a value the native `int` can carry.
+  if (!Number.isInteger(value)) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer`);
+  }
+  if (value <= 0 || value > C_INT_MAX) {
     throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
   }
 }
