@@ -300,11 +300,15 @@ test-hardening-tsan:
 	$(CMAKE) --build build-hardening-tsan --target sonare_tests --parallel $(HARDENING_JOBS)
 	TSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-hardening-tsan --output-on-failure --no-tests=error --output-log build-hardening-tsan/test-hardening.log -R "concurrent|producer consumer stress|control/audio threads|captured samples before captured_frames|polls safely during processing|reclaims retired pages|cannot lap an audio-held snapshot|race with process_block"
 
+# This is the only configuration that compiles the AU adapters at all, so the
+# filter below decides whether any of their tests ever run. It matches the whole
+# `AU ` family rather than naming cases: an enumerated list silently stops
+# covering the next probe added beside them.
 test-hardening-host:
 ifeq ($(UNAME_S),Darwin)
 	$(CMAKE) -B build-hardening-host -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF -DBUILD_COREAUDIO=ON -DBUILD_COREMIDI=ON -DBUILD_AU_HOST=ON
 	$(CMAKE) --build build-hardening-host --target sonare_tests --parallel $(HARDENING_JOBS)
-	ctest --test-dir build-hardening-host --output-on-failure --no-tests=error --output-log build-hardening-host/test-hardening.log -R "CoreAudio oversize callback|CoreMIDI (input|output|scripted)|AU (effect factory|process paths)"
+	ctest --test-dir build-hardening-host --output-on-failure --no-tests=error --output-log build-hardening-host/test-hardening.log -R "CoreAudio oversize callback|CoreMIDI (input|output|scripted)|AU "
 else
 	@echo "test-hardening-host: skipped (Darwin only)"
 endif
