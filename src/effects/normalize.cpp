@@ -116,6 +116,11 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
   // hop_length spins the scan forever and a zero frame_length divides by zero.
   SONARE_CHECK_MSG(frame_length > 0, ErrorCode::InvalidParameter, "frame_length must be > 0");
   SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
+  // Agrees with metering::silence_ratio, which measures the same quantity: a
+  // non-finite threshold makes every comparison below false, so both scans
+  // return the whole buffer for a request they could not evaluate.
+  SONARE_CHECK_MSG(std::isfinite(threshold_db), ErrorCode::InvalidParameter,
+                   "threshold_db must be finite, got " + util::to_text(threshold_db));
   if (audio.empty()) return {0, 0};
 
   float threshold_linear = db_to_linear(threshold_db);
