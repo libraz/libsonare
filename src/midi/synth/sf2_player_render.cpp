@@ -480,10 +480,12 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   // the same as safe for it -- the blocker is a feedback cell whose worst-case
   // gain is well over unity, so a large enough finite sample still leaves float
   // range. The same guard the NativeSynth host applies ahead of its blocker.
-  for (int i = 0; i < n; ++i) {
-    if (!std::isfinite(mix_l_[static_cast<size_t>(i)])) mix_l_[static_cast<size_t>(i)] = 0.0f;
-    if (!std::isfinite(mix_r_[static_cast<size_t>(i)])) mix_r_[static_cast<size_t>(i)] = 0.0f;
-  }
+  // The run returns a SAMPLE tally; it is narrowed here so the fold keeps the
+  // published unit, which is one process() call rather than one sample.
+  discarded |= resolve_non_finite_run(SampleDestination::kRecursiveState, mix_l_.data(),
+                                      static_cast<size_t>(n)) != 0u;
+  discarded |= resolve_non_finite_run(SampleDestination::kRecursiveState, mix_r_.data(),
+                                      static_cast<size_t>(n)) != 0u;
   // Master EQ, ahead of the DC blocker so a low-shelf boost cannot leave the bus
   // with an offset the blocker was there to remove.
   if (eq_.active()) {
