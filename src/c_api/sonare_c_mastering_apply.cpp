@@ -270,6 +270,44 @@ const char* sonare_capability_catalog_json(void) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
+namespace sonare_c_mastering_detail {
+
+const std::vector<std::string>& capability_catalog_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "version",
+      "abi",
+      "abi.project",
+      "abi.engine",
+      "presets",
+      "presets.mastering",
+      "presets.synth",
+      "presets.mixingScene",
+      "presets.voiceChanger",
+      "processors",
+      "processors[].id",
+      "processors[].kind",
+      "processors[].realtimeInsertable",
+      "processors[].stereoOnly",
+      "processors[].latencySamples",
+      "processors[].tailSamples",
+      "processors[].realtimeCost",
+      "processors[].channelPolicy",
+      "processors[].category",
+      "processors[].params",
+      "processors[].params[].name",
+      "processors[].params[].id",
+      "processors[].params[].rtSafe",
+      "processors[].params[].type",
+      "processors[].params[].min",
+      "processors[].params[].max",
+      "processors[].params[].default",
+      "processors[].params[].unit",
+  };
+  return paths;
+}
+
+}  // namespace sonare_c_mastering_detail
+
 const char* sonare_mastering_insert_param_names(const char* name) {
   SONARE_C_TRY
   // Unlike the no-arg *_names getters this depends on the argument, so it cannot

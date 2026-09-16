@@ -18,6 +18,13 @@
 
 namespace sonare_c_mastering_detail {
 
+/// @brief Canonical field paths the capability catalog emits.
+/// @details Rooted at the catalog object. The `processors` interior repeats
+/// sonare::mastering::api::processor_catalog_schema_paths() under a prefix; a
+/// test holds the two to each other, because the list is written out literally
+/// so that a reader outside this language can parse it.
+const std::vector<std::string>& capability_catalog_schema_paths();
+
 inline sonare::mastering::maximizer::LoudnessOptimizeConfig to_cpp_config(
     const SonareMasteringConfig* config) {
   sonare::mastering::maximizer::LoudnessOptimizeConfig cpp;

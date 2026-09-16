@@ -2,12 +2,15 @@
 /// @brief Mastering C API tests.
 
 #include "c_api/eq_band_json.h"
+#include "c_api/sonare_c_mastering_helpers.h"
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
+#include "mastering/api/named_processor.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "sonare_c_test_helpers.h"
+#include "support/schema_paths.h"
 #include "util/db.h"
 #include "util/json.h"
 
@@ -891,6 +894,29 @@ TEST_CASE("sonare_capability_catalog_json aggregates processors and presets",
   REQUIRE(param.contains("max"));
   REQUIRE(param.contains("default"));
   REQUIRE(param.contains("unit"));
+}
+
+TEST_CASE("the capability catalog schema list matches what the writer emits",
+          "[c_api][mastering]") {
+  const char* json = sonare_capability_catalog_json();
+  REQUIRE(json != nullptr);
+  const auto actual = sonare::test::schema_paths_of(json);
+  const auto& expected_paths = sonare_c_mastering_detail::capability_catalog_schema_paths();
+  const std::set<std::string> expected(expected_paths.begin(), expected_paths.end());
+  REQUIRE(actual == expected);
+
+  // The processors interior is the processor catalog schema under a prefix.
+  // Both lists are written out literally so a reader outside this language can
+  // parse them, which is exactly what lets the two copies drift.
+  std::set<std::string> prefixed;
+  for (const auto& path : sonare::mastering::api::processor_catalog_schema_paths()) {
+    prefixed.insert("processors" + path);
+  }
+  std::set<std::string> interior;
+  for (const auto& path : expected) {
+    if (path.rfind("processors[]", 0) == 0) interior.insert(path);
+  }
+  REQUIRE(interior == prefixed);
 }
 
 TEST_CASE("sonare_mastering named-processor rejects out-of-range repair modes",
