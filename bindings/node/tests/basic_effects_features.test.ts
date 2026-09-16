@@ -130,6 +130,47 @@ describe('effects', () => {
     );
   });
 
+  it('refuses a feature matrix the segment primitives cannot order', () => {
+    // These entries take a feature matrix rather than audio, so nothing upstream
+    // has checked it, and one non-finite cell poisons every distance drawn from
+    // its column. The addon checks dimensions only, so the refusal is the core's.
+    const rows = 4;
+    const cols = 64;
+    const clean = new Float32Array(rows * cols);
+    for (let i = 0; i < clean.length; i++) {
+      clean[i] = Math.sin(i * 0.37) * 0.5 + 0.5;
+    }
+    const poisoned = Float32Array.from(clean);
+    poisoned[30] = Number.NaN;
+
+    expect(() => segmentRecurrenceMatrix({ data: poisoned, rows, cols })).toThrow(/non-finite/);
+    expect(() =>
+      segmentCrossSimilarity({
+        x: poisoned,
+        xRows: rows,
+        xCols: cols,
+        y: clean,
+        yRows: rows,
+        yCols: cols,
+      }),
+    ).toThrow(/non-finite/);
+    expect(() =>
+      segmentSubsegment({ data: poisoned, rows, cols, boundaries: new Int32Array([0, 32]) }),
+    ).toThrow(/non-finite/);
+    expect(() => segmentAgglomerative({ data: poisoned, rows, cols, k: 2 })).toThrow(/non-finite/);
+
+    // The same matrix without the one cell is accepted and every output is a
+    // number, so the refusals above are not a dimension check firing.
+    const accepted = segmentRecurrenceMatrix({ data: clean, rows, cols });
+    expect(accepted.values).toHaveLength(cols * cols);
+    expect(accepted.values.every((v) => Number.isFinite(v))).toBe(true);
+
+    // The reshaping entries carry the caller's own value instead of refusing it:
+    // they derive no distance from the matrix and so have no ordering to protect.
+    const lag = segmentRecurrenceToLag({ recurrence: poisoned, n: 16, pad: false });
+    expect(lag.values.some((v) => Number.isNaN(v))).toBe(true);
+  });
+
   it('hpss returns harmonic and percussive', () => {
     const result = hpss(tone, SR);
     expect(result.harmonic).toBeInstanceOf(Float32Array);
