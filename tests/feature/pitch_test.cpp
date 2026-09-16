@@ -8,6 +8,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <random>
 #include <utility>
 #include <vector>
@@ -278,6 +279,43 @@ TEST_CASE("yin_with_confidence", "[pitch]") {
   REQUIRE(freq > 0.0f);
   REQUIRE(confidence > 0.5f);  // Should have good confidence for clean sine
   REQUIRE(confidence <= 1.0f);
+}
+
+TEST_CASE("A frame carrying a non-finite sample does not report certainty", "[pitch]") {
+  // Walked stage by stage rather than end to end: a zero confidence arrives by
+  // several routes, and only the stage counts say which one ran.
+  Audio audio = generate_sine(440.0f, 0.2f, 22050);
+  std::vector<float> frame(audio.data(), audio.data() + 2048);
+  frame[1000] = std::numeric_limits<float>::quiet_NaN();
+
+  const std::vector<float> diff = yin_difference(frame.data(), 2048, 512);
+  const std::vector<float> cmndf = yin_cmndf(diff);
+  const auto non_finite = [](const std::vector<float>& v) {
+    return std::count_if(v.begin(), v.end(), [](float x) { return !std::isfinite(x); });
+  };
+  CAPTURE(non_finite(diff));
+  CAPTURE(non_finite(cmndf));
+
+  // The difference function carries the arrival through; the normalization is
+  // where it stops, on the sentinel its threshold test reaches when the running
+  // sum is not finite. Asserting both ends pins WHERE the boundary is, so moving
+  // it shows up here rather than downstream as a fabricated pitch.
+  REQUIRE(non_finite(diff) > 0);
+  REQUIRE(non_finite(cmndf) == 0);
+
+  bool below = false;
+  const float period = yin_find_pitch(cmndf, 0.2f, 22, 221, &below);
+  CAPTURE(period);
+  // No lag is under threshold, so the search falls back to the least dissimilar
+  // one and reports it as unvoiced rather than as a detection.
+  REQUIRE(!below);
+
+  float confidence = -1.0f;
+  const float freq =
+      yin_with_confidence(frame.data(), 2048, 22050, 100.0f, 1000.0f, 0.2f, &confidence);
+  CAPTURE(freq);
+  REQUIRE(freq == 0.0f);
+  REQUIRE(confidence == 0.0f);
 }
 
 TEST_CASE("yin_find_pitch honors the configured voicing threshold", "[pitch]") {

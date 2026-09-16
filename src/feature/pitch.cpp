@@ -12,6 +12,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/non_finite_sample.h"
 #include "util/padding.h"
 #include "util/reflect_padding.h"
 
@@ -167,10 +168,13 @@ void yin_cmndf_into(const std::vector<float>& diff, std::vector<float>& cmndf) {
   float running_sum = 0.0f;
   for (size_t tau = 1; tau < diff.size(); ++tau) {
     running_sum += diff[tau];
-    if (running_sum > constants::kEpsilon) {
-      cmndf[tau] = diff[tau] * tau / running_sum;
-    } else {
+    // Spelled as a negated test because a non-finite sum lands here too, every
+    // comparison against it being false: 1 is maximum dissimilarity, so an
+    // unanalysable lag reports no periodicity rather than a fabricated match.
+    if (!(running_sum > constants::kEpsilon)) {
       cmndf[tau] = 1.0f;
+    } else {
+      cmndf[tau] = diff[tau] * tau / running_sum;
     }
   }
 }
@@ -265,7 +269,10 @@ float yin_with_confidence_ctx(YinDiffContext& ctx, std::vector<float>& diff,
   int tau = static_cast<int>(std::round(period));
   tau = std::max(0, std::min(tau, static_cast<int>(cmndf.size()) - 1));
   *out_confidence = 1.0f - cmndf[static_cast<size_t>(tau)];
-  *out_confidence = std::max(0.0f, std::min(1.0f, *out_confidence));
+  // A NaN takes the ceiling rather than the floor under a min/max pair, every
+  // comparison against it being false, so it would leave maximum confidence.
+  (void)resolve_non_finite(SampleDestination::kBoundedResult, *out_confidence);
+  *out_confidence = std::clamp(*out_confidence, 0.0f, 1.0f);
 
   // Convert period to frequency
   float freq = static_cast<float>(sr) / period;
