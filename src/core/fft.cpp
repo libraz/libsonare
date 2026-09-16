@@ -145,10 +145,12 @@ struct FFT::Impl {
   /// Builds the state one direction of the real transform needs, on first use.
   /// Idempotent, and called only from forward() and inverse(), which the class's
   /// thread-safety contract already requires a caller to serialize per instance.
-  /// The latch covers the whole decision, not just the PFFFT half: for a length
-  /// PFFFT declines, the KissFFT fallback must be chosen once rather than
-  /// re-attempting the failing setup on every transform. An allocation failure
-  /// leaves it clear so a retry is still possible.
+  /// The latch is what gives prepare() its meaning: re-entering this path frees
+  /// and re-allocates the scratch buffers, so without it a prepared instance
+  /// would still allocate on every transform. A length PFFFT declines is not
+  /// retried either, but that gate is a modulus on n checked before the setup
+  /// call rather than a setup that failed. An allocation failure leaves the
+  /// latch clear so a retry is still possible.
   void ensure_real(int n, bool inverse) {
     bool& ready = inverse ? real_inverse_ready : real_forward_ready;
     if (ready) return;
@@ -181,11 +183,11 @@ struct FFT::Impl {
 
   /// Builds the complex-transform state on first use. Idempotent, and called
   /// only from forward_complex(), which the class's thread-safety contract
-  /// already requires a caller to serialize per instance. complex_ready latches
-  /// the whole decision, not just the PFFFT half: for a length PFFFT declines,
-  /// the KissFFT fallback must be chosen once rather than re-attempting the
-  /// failing setup on every transform. An allocation failure leaves it clear so
-  /// a retry is still possible.
+  /// already requires a caller to serialize per instance. complex_ready carries
+  /// the same weight as the real latches: re-entering this path frees and
+  /// re-allocates the scratch buffers, so without it a prepared instance would
+  /// still allocate on every transform. An allocation failure leaves the latch
+  /// clear so a retry is still possible.
   void ensure_complex(int n) {
     if (complex_ready) return;
 #if SONARE_HAVE_PFFFT
