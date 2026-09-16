@@ -747,6 +747,9 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
   for (int k = 0; k < n_bins; ++k) {
     const float* row = row_of(k);
     for (int t = 0; t < n_frames; ++t) {
+      // The accumulator goes first on purpose: std::max returns its first argument
+      // for a non-finite second one, so the gate below stays finite. Swapping these
+      // for symmetry makes `b < gate[t]` stop rejecting anything.
       frame_max[static_cast<size_t>(t)] = std::max(frame_max[static_cast<size_t>(t)], row[t]);
     }
   }
