@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <iterator>
 #include <limits>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,7 @@
 #include "mixing/api/scene.h"
 #include "mixing/assistant/source_classifier.h"
 #include "mixing/assistant/track_profile.h"
+#include "support/schema_paths.h"
 #include "util/exception.h"
 #include "util/json.h"
 
@@ -26,6 +28,7 @@ namespace {
 using sonare::mixing::assistant::MixAssistantConfig;
 using sonare::mixing::assistant::MixAssistantResult;
 using sonare::mixing::assistant::TrackInput;
+using sonare::mixing::assistant::TrackProfile;
 using sonare::mixing::assistant::test::make_demo_tracks;
 
 MixAssistantConfig all_domains_off() {
@@ -422,4 +425,190 @@ TEST_CASE("a disabled domain's cross-track measurement is not taken", "[mixing][
     CHECK(sonare::mixing::assistant::analyze_mix_profile(tracks, profiles, neither)
               .dominance.empty());
   }
+}
+
+namespace {
+
+// Every field set, including the conditionally-omitted ones scene_json.cpp
+// only writes for a non-default strip/bus, so the schema-path equality below
+// actually exercises the whole writer rather than its unconditional subset.
+sonare::mixing::api::Scene make_fully_populated_scene() {
+  using sonare::mixing::api::Bus;
+  using sonare::mixing::api::Insert;
+  using sonare::mixing::api::InsertSlot;
+  using sonare::mixing::api::Scene;
+  using sonare::mixing::api::Send;
+  using sonare::mixing::api::SendTiming;
+  using sonare::mixing::api::Strip;
+  using sonare::mixing::api::VcaGroup;
+
+  Scene scene;
+
+  Strip lead;
+  lead.id = "lead";
+  lead.input_trim_db = 1.5f;
+  lead.fader_db = -2.0f;
+  lead.vca_offset_db = 0.5f;
+  lead.pan = 0.25f;
+  lead.width = 1.2f;
+  lead.muted = true;
+  lead.soloed = false;
+  lead.solo_safe = true;
+  lead.pan_mode = 1;
+  lead.dual_pan_left = -0.8f;
+  lead.dual_pan_right = 0.8f;
+  lead.polarity_invert_left = true;
+  lead.polarity_invert_right = false;
+  lead.pan_law = 1;
+  lead.channel_delay_samples = 12;
+  lead.source_layout = sonare::ChannelLayout::FivePointOne;
+  lead.surround_pan.azimuth = 0.3f;
+  lead.surround_pan.elevation = 0.1f;
+  lead.surround_pan.divergence = 0.2f;
+  lead.surround_pan.lfe = 0.05f;
+  lead.surround_pan.distance = 1.5f;
+  lead.metering.enabled = false;
+  lead.metering.lufs = true;
+  lead.metering.true_peak = true;
+  lead.metering.true_peak_oversample = 8;
+  lead.inserts.push_back(Insert(InsertSlot::PreFader, "eq.parametric", "{}", "lead-sidechain"));
+  lead.sends.push_back(Send{"send1", "reverb", -6.0f, SendTiming::PreFader});
+  scene.strips.push_back(lead);
+
+  Strip backing;
+  backing.id = "backing";
+  scene.strips.push_back(backing);
+
+  Bus master;
+  master.id = "master";
+  master.role = "master";
+  master.layout = sonare::ChannelLayout::FivePointOne;
+  master.input_trim_db = -1.0f;
+  master.width = 0.8f;
+  master.polarity_invert_left = true;
+  master.polarity_invert_right = true;
+  master.inserts.push_back(
+      Insert(InsertSlot::PostFader, "dynamics.limiter", "{}", "bus-sidechain"));
+  scene.buses.push_back(master);
+
+  VcaGroup group;
+  group.id = "vca1";
+  group.gain_db = 2.0f;
+  group.members = {"lead", "backing"};
+  scene.vca_groups.push_back(group);
+
+  scene.connections.push_back({"lead", "master"});
+  scene.connections.push_back({"backing", "master"});
+
+  return scene;
+}
+
+std::vector<TrackProfile> make_fully_populated_track_profiles() {
+  TrackProfile lead;
+  lead.strip_id = "lead";
+  lead.name = "Lead Vocal";
+  lead.base.loudness.integrated_lufs = -14.0f;
+  lead.base.loudness.true_peak_db = -1.0f;
+  lead.base.loudness.crest_factor_db = 10.0f;
+  lead.base.spectral.centroid_hz = 2200.0f;
+  lead.base.spectral.flatness = 0.3f;
+  lead.base.dynamics.attack_density = 1.5f;
+  lead.base.dynamics.sustain_ratio = 0.6f;
+  lead.source = sonare::mixing::assistant::SourceClass::Vocal;
+  lead.source_confidence = 0.85f;
+  lead.channel_count = 2;
+  lead.duration_sec = 12.5f;
+  lead.usable = true;
+
+  // Distinct source/usable state so tracks[].usable and tracks[].exclusionReason
+  // are exercised at both values, not just the unconditional keys.
+  TrackProfile backing = lead;
+  backing.strip_id = "backing";
+  backing.name = "Backing Vocal";
+  backing.usable = false;
+  backing.exclusion_reason = "track has non-finite samples";
+
+  return {lead, backing};
+}
+
+// Populated by hand rather than measured: mix.bandDominance[], mix.alignment[],
+// mix.crowdedBands[] and mix.monoRisks[] are each conditional on a specific
+// entry (see suggester.cpp), so a measured MixProfile is not guaranteed to
+// trigger all four.
+sonare::mixing::assistant::MixProfile make_fully_populated_mix_profile() {
+  using sonare::mixing::assistant::BandDominance;
+  using sonare::mixing::assistant::kBandCount;
+  using sonare::mixing::assistant::MixProfile;
+  using sonare::mixing::assistant::MonoRisk;
+  using sonare::mixing::assistant::PairAlignment;
+
+  MixProfile mix;
+  mix.track_count = 2;
+
+  mix.dominance.assign(static_cast<std::size_t>(mix.track_count * mix.track_count * kBandCount),
+                       BandDominance{});
+  BandDominance masking;
+  masking.ratio = 0.7f;
+  masking.valid_frames = 5;
+  mix.dominance[static_cast<std::size_t>((0 * mix.track_count + 1) * kBandCount)] = masking;
+
+  PairAlignment aligned;
+  aligned.reference_index = 0;
+  aligned.target_index = 1;
+  aligned.lag_samples = 3;
+  aligned.correlation = 0.6f;
+  aligned.polarity_opposed = true;
+  aligned.related = true;
+  mix.alignment.push_back(aligned);
+
+  mix.image.crowded.assign(static_cast<std::size_t>(kBandCount), false);
+  mix.image.crowding.assign(static_cast<std::size_t>(kBandCount), 0.0f);
+  mix.image.crowded[2] = true;
+  mix.image.crowding[2] = 0.8f;
+
+  MonoRisk risk;
+  risk.track_index = 0;
+  risk.strip_id = "lead";
+  risk.correlation = 0.2f;
+  risk.width = 1.5f;
+  risk.wide_low_end = true;
+  mix.mono_risks.push_back(risk);
+
+  return mix;
+}
+
+MixAssistantResult make_fully_populated_assistant_result() {
+  MixAssistantResult result;
+  result.scene = make_fully_populated_scene();
+  result.tracks = make_fully_populated_track_profiles();
+  result.mix = make_fully_populated_mix_profile();
+  result.explanation = {"pulled the lead down to make room for the backing vocal"};
+  return result;
+}
+
+}  // namespace
+
+TEST_CASE("the assistant result schema list matches what the writer emits", "[mixing][assistant]") {
+  const auto result = make_fully_populated_assistant_result();
+  const auto actual = sonare::test::schema_paths_of(
+      sonare::mixing::assistant::mix_assistant_result_to_json(result));
+  const auto& expected_paths = sonare::mixing::assistant::mix_assistant_result_schema_paths();
+  const std::set<std::string> expected(expected_paths.begin(), expected_paths.end());
+  REQUIRE(actual == expected);
+}
+
+TEST_CASE("the assistant result's scene interior matches the scene document schema",
+          "[mixing][assistant]") {
+  // Both lists are written out literally so a reader outside this language can
+  // parse them, which is exactly what lets the two copies drift; this is what
+  // stops them.
+  std::set<std::string> prefixed;
+  for (const auto& path : sonare::mixing::api::scene_schema_paths()) {
+    prefixed.insert("scene." + path);
+  }
+  std::set<std::string> interior;
+  for (const auto& path : sonare::mixing::assistant::mix_assistant_result_schema_paths()) {
+    if (path.rfind("scene.", 0) == 0) interior.insert(path);
+  }
+  REQUIRE(interior == prefixed);
 }

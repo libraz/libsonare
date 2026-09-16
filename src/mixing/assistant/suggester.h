@@ -219,4 +219,12 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
 ///          string.
 std::string mix_assistant_result_to_json(const MixAssistantResult& result);
 
+/// @brief Canonical field paths for the serialised @ref MixAssistantResult.
+/// @details Array item fields use `[]`, e.g. `tracks[].stripId`. Kept literal,
+///          not composed, so a checker outside this language can parse it. The
+///          `scene.*` entries are @ref api::scene_schema_paths() each prefixed
+///          with `scene.`, duplicated here rather than assembled at runtime for
+///          the same reason; a test holds the two copies to each other.
+const std::vector<std::string>& mix_assistant_result_schema_paths();
+
 }  // namespace sonare::mixing::assistant

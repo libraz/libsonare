@@ -161,6 +161,13 @@ struct Scene {
 std::string scene_to_json(const Scene& scene);
 Scene scene_from_json(const std::string& json);
 
+/// Canonical field paths for one Scene document, rooted at the document object
+/// (no leading `scene.`). Array item fields use `[]`, e.g. `strips[].id`. Kept
+/// literal, not composed, so a checker outside this language can parse it; see
+/// @ref sonare::mixing::assistant::mix_assistant_result_schema_paths for the
+/// copy this is duplicated into under a `scene.` prefix.
+const std::vector<std::string>& scene_schema_paths();
+
 /// Walks an ALREADY-PARSED scene document. `scene_from_json` is this plus a
 /// parse. A caller that has parsed a larger document containing a scene should
 /// use this rather than dumping the sub-tree back to text and re-parsing it:
