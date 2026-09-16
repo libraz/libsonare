@@ -15,6 +15,7 @@
 #include "mastering/eq/tilt.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_compressor.h"
+#include "mastering/repair/denoise_streaming.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/spectral/air_band.h"
@@ -52,9 +53,17 @@ void reject_non_streaming_repair(const MasteringChainConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "StreamingMasteringChain does not support repair.dereverb");
   }
-  if (config.repair.denoise.enabled) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingMasteringChain does not support repair.denoise");
+  // denoise is the one repair stage that does run block by block, but only for
+  // the estimators that are recursive in time. The default ranks every frame of
+  // the whole signal by energy, which a stream has no way to do, so it is refused
+  // by name rather than swapped for a streaming one behind the caller's back.
+  if (config.repair.denoise.enabled &&
+      config.repair.denoise.config.noise_estimator == repair::DenoiseNoiseEstimator::Quantile) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "StreamingMasteringChain does not support repair.denoise with the quantile noise "
+        "estimator, which ranks the whole signal's frames; set repair.denoise.noiseEstimator to "
+        "mcra, imcra or spp");
   }
 }
 
@@ -193,7 +202,15 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
     stage_names.emplace_back(name);
   };
 
-  // 1. eq.tilt
+  // 1. repair.denoise
+  // Ahead of every mastering stage, matching the offline chain: a broadband floor
+  // left under the programme reads as material to every stage after it.
+  if (config_.repair.denoise.enabled) {
+    add_stage(std::make_unique<mastering::repair::StreamingDenoise>(config_.repair.denoise.config),
+              "repair.denoise");
+  }
+
+  // 2. eq.tilt
   if (config_.eq.tilt.enabled) {
     auto tilt = std::make_unique<mastering::eq::TiltEq>();
     tilt->set_tilt_db(config_.eq.tilt.tilt_db);
@@ -201,63 +218,63 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
     add_stage(std::move(tilt), "eq.tilt");
   }
 
-  // 2. dynamics.deesser
+  // 3. dynamics.deesser
   if (config_.dynamics.deesser.enabled) {
     add_stage(std::make_unique<mastering::dynamics::DeEsser>(config_.dynamics.deesser.config),
               "dynamics.deesser");
   }
 
-  // 3. dynamics.transientShaper
+  // 4. dynamics.transientShaper
   if (config_.dynamics.transient_shaper.enabled) {
     add_stage(std::make_unique<mastering::dynamics::TransientShaper>(
                   config_.dynamics.transient_shaper.config),
               "dynamics.transientShaper");
   }
 
-  // 4. dynamics.compressor
+  // 5. dynamics.compressor
   if (config_.dynamics.compressor.enabled) {
     add_stage(std::make_unique<mastering::dynamics::Compressor>(config_.dynamics.compressor.config),
               "dynamics.compressor");
   }
 
-  // 5. dynamics.multibandComp
+  // 6. dynamics.multibandComp
   if (config_.dynamics.multiband_comp.enabled) {
     add_stage(std::make_unique<mastering::multiband::MultibandCompressor>(
                   config_.dynamics.multiband_comp.config),
               "dynamics.multibandComp");
   }
 
-  // 6. saturation.tape
+  // 7. saturation.tape
   if (config_.saturation.tape.enabled) {
     add_stage(std::make_unique<mastering::saturation::Tape>(config_.saturation.tape.config),
               "saturation.tape");
   }
 
-  // 7. saturation.exciter
+  // 8. saturation.exciter
   if (config_.saturation.exciter.enabled) {
     add_stage(std::make_unique<mastering::saturation::Exciter>(config_.saturation.exciter.config),
               "saturation.exciter");
   }
 
-  // 8. spectral.airBand
+  // 9. spectral.airBand
   if (config_.spectral.air_band.enabled) {
     add_stage(std::make_unique<mastering::spectral::AirBand>(config_.spectral.air_band.config),
               "spectral.airBand");
   }
 
-  // 9. stereo.imager (stereo only)
+  // 10. stereo.imager (stereo only)
   if (num_channels == 2 && config_.stereo.imager.enabled) {
     add_stage(std::make_unique<mastering::stereo::Imager>(config_.stereo.imager.config),
               "stereo.imager");
   }
 
-  // 10. stereo.monoMaker (stereo only)
+  // 11. stereo.monoMaker (stereo only)
   if (num_channels == 2 && config_.stereo.mono_maker.enabled) {
     add_stage(std::make_unique<mastering::stereo::MonoMaker>(config_.stereo.mono_maker.config),
               "stereo.monoMaker");
   }
 
-  // 11. maximizer.truePeakLimiter
+  // 12. maximizer.truePeakLimiter
   if (config_.maximizer.true_peak_limiter.enabled) {
     auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(
         config_.maximizer.true_peak_limiter.config);
@@ -265,7 +282,7 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
     add_stage(std::move(limiter), "maximizer.truePeakLimiter");
   }
 
-  // 12. loudness (precomputed static gain + dedicated true-peak limiter).
+  // 13. loudness (precomputed static gain + dedicated true-peak limiter).
   // Built only when loudness is enabled (which requires a finite static gain,
   // enforced in the options constructor). The static gain itself is applied in
   // process_block(); here we prepare the matching final limiter that mirrors the

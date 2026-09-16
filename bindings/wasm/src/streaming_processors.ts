@@ -55,9 +55,20 @@ const EQ_PHASE_MODES: Record<string, number> = {
  * `dynamics.multibandComp`, `saturation.tape`, `saturation.exciter`,
  * `spectral.airBand`, `stereo.imager` (stereo only), `stereo.monoMaker`
  * (stereo only), `maximizer.truePeakLimiter`. Configurations that enable ANY of
- * the six whole-signal repair stages (`repair.declick`, `repair.declip`,
- * `repair.decrackle`, `repair.dehum`, `repair.dereverb`, `repair.denoise`)
- * throw at construction. An enabled `loudness` stage also throws unless
+ * the five whole-signal repair stages (`repair.declick`, `repair.declip`,
+ * `repair.decrackle`, `repair.dehum`, `repair.dereverb`) throw at construction.
+ *
+ * `repair.denoise` runs here, but only with a noise estimator that is recursive
+ * in time. Its default ranks every frame of the whole signal by energy, which a
+ * stream never reaches the end of, so it is refused by name rather than
+ * substituted; set `repair.denoise.noiseEstimator` to `1` (MCRA), `2` (IMCRA)
+ * or `3` (speech-presence probability). The two minimum-tracking estimators
+ * (`1` and `2`) seed their noise floor from the first frame they see and hold it
+ * for the half second their minimum window spans, so a stream opened in the
+ * middle of the programme is over-suppressed until it turns over; `3` tracks no
+ * minimum and is unaffected.
+ *
+ * An enabled `loudness` stage also throws unless
  * {@link StreamingMasteringChainConfig.loudnessStaticGainDb} supplies a
  * precomputed normalization gain.
  *

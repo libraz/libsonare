@@ -1060,8 +1060,10 @@ TEST_CASE("StreamingMasteringChain supported and rejected stages match the imple
     }
   }
 
-  // Every whole-signal repair stage is rejected - all six of them, not just
-  // repair.denoise - and so is loudness without a precomputed static gain.
+  // Five repair stages need the whole signal, and so does loudness without a
+  // precomputed static gain. repair.denoise is in this list only because the
+  // sweep enables each stage at its defaults, and the default noise estimator is
+  // the whole-signal one; the case below drives the other side of that.
   const std::vector<std::string> kRejected = {
       "loudness",     "repair.declick", "repair.declip",  "repair.decrackle",
       "repair.dehum", "repair.denoise", "repair.dereverb"};
@@ -1087,6 +1089,43 @@ TEST_CASE("StreamingMasteringChain supported and rejected stages match the imple
       parse_chain_config_params(stereo_params.data(), stereo_params.size()));
   mono_chain.prepare(48000.0, 512, 1);
   CHECK(mono_chain.stage_names() == std::vector<std::string>{"eq.tilt"});
+}
+
+TEST_CASE("StreamingMasteringChain takes repair.denoise only with a causal noise estimator",
+          "[mastering][chain][streaming]") {
+  // Both sides are driven. Asserting only the refusal would still pass if the
+  // stage could never be built at all, and asserting only the acceptance would
+  // still pass if the whole-signal estimator were being swapped out silently --
+  // which is the outcome the refusal exists to prevent.
+  const auto chain_with = [](double estimator) {
+    const std::vector<Param> params{{"repair.denoise.enabled", 1.0},
+                                    {"repair.denoise.noiseEstimator", estimator}};
+    return parse_chain_config_params(params.data(), params.size());
+  };
+
+  // 0 is the quantile estimator, which ranks every frame of the whole signal.
+  // Caught by hand rather than with REQUIRE_THROWS_AS because what the refusal
+  // has to carry is the message, not only the type.
+  try {
+    StreamingMasteringChain rejected(chain_with(0.0));
+    FAIL("the quantile estimator was accepted");
+  } catch (const sonare::SonareException& error) {
+    // The message has to name the field and the values that work, or a caller
+    // learns only that the stage is unavailable.
+    const std::string what = error.what();
+    CAPTURE(what);
+    CHECK(what.find("noiseEstimator") != std::string::npos);
+    CHECK(what.find("spp") != std::string::npos);
+  }
+
+  // 1 mcra, 2 imcra, 3 spp: all three are recursive in time.
+  for (const double estimator : {1.0, 2.0, 3.0}) {
+    CAPTURE(estimator);
+    StreamingMasteringChain chain(chain_with(estimator));
+    chain.prepare(48000.0, 512, 2);
+    CHECK(chain.stage_names() == std::vector<std::string>{"repair.denoise"});
+    CHECK(chain.latency_samples() > 0);
+  }
 }
 
 TEST_CASE("StreamingMasteringChain throws if loudness enabled", "[mastering][chain][streaming]") {

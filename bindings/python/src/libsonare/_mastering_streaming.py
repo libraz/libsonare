@@ -40,10 +40,20 @@ class StreamingMasteringChain:
     dynamics.deesser, dynamics.transientShaper, dynamics.compressor,
     dynamics.multibandComp, saturation.tape, saturation.exciter,
     spectral.airBand, stereo.imager (stereo only), stereo.monoMaker (stereo
-    only), maximizer.truePeakLimiter. Configurations that enable any of the six
+    only), maximizer.truePeakLimiter. Configurations that enable any of the five
     whole-signal repair stages (``repair.declick``, ``repair.declip``,
-    ``repair.decrackle``, ``repair.dehum``, ``repair.dereverb``,
-    ``repair.denoise``) or ``loudness`` raise :class:`RuntimeError`.
+    ``repair.decrackle``, ``repair.dehum``, ``repair.dereverb``) or
+    ``loudness`` raise :class:`RuntimeError`.
+
+    ``repair.denoise`` runs here, but only with a noise estimator that is
+    recursive in time. Its default ranks every frame of the whole signal by
+    energy, which a stream never reaches the end of, so it is refused by name
+    rather than substituted; set ``repair.denoise.noiseEstimator`` to ``1``
+    (mcra), ``2`` (imcra) or ``3`` (spp). The two minimum-tracking estimators
+    (``1`` and ``2``) seed their noise floor from the first frame they see and
+    hold it for the half second their minimum window spans, so a stream opened
+    in the middle of the programme is over-suppressed until it turns over;
+    ``3`` tracks no minimum and is unaffected.
 
     Example::
 

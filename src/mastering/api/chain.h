@@ -300,14 +300,20 @@ class MasteringChain {
 // StreamingMasteringChain
 // Block-by-block streaming variant of MasteringChain. Maintains processor
 // state across process_block() calls. Supports only ProcessorBase-based
-// stages: eq.tilt, dynamics.deesser, dynamics.transientShaper,
+// stages: repair.denoise, eq.tilt, dynamics.deesser, dynamics.transientShaper,
 // dynamics.compressor, dynamics.multibandComp, saturation.tape,
 // saturation.exciter, spectral.airBand, stereo.imager (stereo only),
 // stereo.monoMaker (stereo only), maximizer.truePeakLimiter.
-// The constructor throws InvalidParameter if the config enables ANY of the six
+// The constructor throws InvalidParameter if the config enables any of the five
 // whole-signal repair stages (repair.declick, repair.declip, repair.decrackle,
-// repair.dehum, repair.dereverb, repair.denoise), and for loudness unless a
-// precomputed static gain is supplied (see StreamingMasteringChainOptions).
+// repair.dehum, repair.dereverb), and for loudness unless a precomputed static
+// gain is supplied (see StreamingMasteringChainOptions).
+// repair.denoise runs here, but only with a noise estimator that is recursive in
+// time. Its default ranks every frame of the whole signal by energy and is
+// refused by name; mcra, imcra and spp are accepted. The two minimum-tracking
+// estimators seed their floor from the first frame they see and hold it for the
+// half second their minimum window spans, so a stream opened mid-programme is
+// over-suppressed until it turns over; spp tracks no minimum and is unaffected.
 // This list is pinned against prepare() and the constructor by
 // "StreamingMasteringChain supported and rejected stages match the
 // implementation" in tests/mastering/chain_test.cpp, which derives both sets by

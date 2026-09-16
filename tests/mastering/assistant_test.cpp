@@ -313,9 +313,15 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   assistant::AssistantConfig streaming_safe;
   streaming_safe.enable_repair = true;
   streaming_safe.prefer_streaming_safe = true;
+  // Both preferences select denoise; what the preference decides is the noise
+  // estimator, because the default one ranks every frame of the whole signal and
+  // a stream has no whole signal. Asserting only that the stage is on would pass
+  // whichever estimator came out, which is the part that has to differ.
   auto safe_result = assistant::suggest_chain(damaged, streaming_safe);
   REQUIRE(safe_result.config.repair.declick.enabled);
-  REQUIRE_FALSE(safe_result.config.repair.denoise.enabled);
+  REQUIRE(safe_result.config.repair.denoise.enabled);
+  REQUIRE(safe_result.config.repair.denoise.config.noise_estimator ==
+          sonare::mastering::repair::DenoiseNoiseEstimator::Spp);
 
   assistant::AssistantConfig offline_repair;
   offline_repair.enable_repair = true;
@@ -323,6 +329,8 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   auto repair_result = assistant::suggest_chain(damaged, offline_repair);
   REQUIRE(repair_result.config.repair.declick.enabled);
   REQUIRE(repair_result.config.repair.denoise.enabled);
+  REQUIRE(repair_result.config.repair.denoise.config.noise_estimator ==
+          sonare::mastering::repair::DenoiseNoiseEstimator::Quantile);
 
   // An unmeasured profile selects nothing, whatever enable_repair says: "nobody
   // looked" must not read as "nothing is wrong".

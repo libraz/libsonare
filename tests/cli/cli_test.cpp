@@ -3281,11 +3281,12 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   }
 
   SECTION("--no-streaming-safe reaches the suggester") {
-    // prefer_streaming_safe defaults to true, so the reachable control is the
-    // one that turns it off, and the repair explanation is where the suggester
-    // reports which of the two it applied. The material has to carry the defect
-    // the flag governs: repair is selected from measurement, so on a clean tone
-    // neither branch says anything and the flag looks unreachable.
+    // prefer_streaming_safe defaults to true, so the reachable control is the one
+    // that turns it off. Both settings now select denoise; what the flag decides
+    // is the noise estimator, because the default one ranks every frame of the
+    // whole signal and a stream has no whole signal. The material has to carry the
+    // defect the flag governs: repair is selected from measurement, so on a clean
+    // tone neither branch says anything and the flag looks unreachable.
     const std::string noisy = unique_temp_path("_noisy.wav");
     create_noisy_wav(noisy);
 
@@ -3293,6 +3294,9 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
         CLI + " mastering " + noisy + " --assistant --enable-repair --explain --json -q");
     REQUIRE(safe_code == 0);
     REQUIRE_THAT(safe_output, ContainsSubstring("streaming-safe was asked for"));
+    // The stage list is where this output reports what ran. Which estimator it
+    // ran with is not in this JSON at all; assistant_test covers that.
+    REQUIRE_THAT(safe_output, ContainsSubstring("\"repair.denoise\""));
 
     auto [open_code, open_output] =
         exec_command(CLI + " mastering " + noisy +
@@ -3300,6 +3304,7 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE(open_code == 0);
     REQUIRE_THAT(open_output, !ContainsSubstring("streaming-safe was asked for"));
     REQUIRE_THAT(open_output, ContainsSubstring("the noise floor is loud under the programme"));
+    REQUIRE_THAT(open_output, ContainsSubstring("\"repair.denoise\""));
     std::remove(noisy.c_str());
   }
 

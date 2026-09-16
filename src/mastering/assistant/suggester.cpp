@@ -133,12 +133,17 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
   // with an inaudible floor is not treated like a loud one with the same floor.
   const float floor_over_programme = defects.noise_floor_dbfs - profile.loudness.integrated_lufs;
   if (floor_over_programme > kNoiseFloorOverProgrammeDb) {
+    out.repair.denoise.enabled = true;
     if (config.prefer_streaming_safe) {
+      // The default estimator ranks every frame of the whole signal by energy, so
+      // it is the one thing in this stage a stream cannot have. The tracker
+      // estimators are recursive in time; speech-presence probability is the one
+      // that carries neither a minimum window nor its bias compensation.
+      out.repair.denoise.config.noise_estimator = repair::DenoiseNoiseEstimator::Spp;
       explain(explanation,
-              "denoise: the noise floor is loud under the programme, but the stage "
-              "needs the whole signal and streaming-safe was asked for");
+              "denoise: the noise floor is loud under the programme, tracking it "
+              "frame by frame because streaming-safe was asked for");
     } else {
-      out.repair.denoise.enabled = true;
       explain(explanation, "denoise: the noise floor is loud under the programme");
     }
   }
