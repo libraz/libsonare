@@ -101,10 +101,14 @@ def test_nnls_chroma_rejects_custom_hop_without_ex2(monkeypatch: pytest.MonkeyPa
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
+        # One row per property, because one message for all of them would name a
+        # property the offending value has: 1.5 is positive and 2 ** 31 is even.
         ({"hop_length": 0}, "hop_length must be a positive integer"),
-        ({"hop_length": 1.5}, "hop_length must be a positive integer"),
+        ({"hop_length": 1.5}, r"hop_length must be an integer within \["),
         ({"stft_blend_weight": float("nan")}, "stft_blend_weight must be finite"),
         ({"stft_blend_n_fft": 3}, "stft_blend_n_fft must be an even integer"),
+        ({"stft_blend_n_fft": 0}, "stft_blend_n_fft must be at least 2"),
+        ({"stft_blend_n_fft": 2**31}, r"stft_blend_n_fft must be an integer within \["),
     ],
 )
 def test_nnls_chroma_validates_ex2_parameters(kwargs: dict[str, Any], message: str) -> None:

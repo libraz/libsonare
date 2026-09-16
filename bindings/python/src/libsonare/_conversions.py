@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import ctypes
 import math
-import operator
 from collections.abc import Sequence
 
 from ._runtime import (
     _C_INT_MAX,
+    _C_INT_MIN,
     ErrorCode,
     SonareError,
     SonareValueError,
@@ -18,6 +18,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _int_array_result,
+    _narrow_int,
     _out_float_array,
     _out_int_array,
     _to_c_float,
@@ -660,28 +661,19 @@ def nnls_chroma(
     controls the CQT hop used by the NNLS analysis and defaults to the legacy
     512-sample hop.
     """
-    if isinstance(hop_length, bool):
+    # One refusal per property, through the shared narrowing rather than a local
+    # copy of it: 512.7 is positive and 2 ** 31 is even, so a single message for
+    # each argument names a property the offending value already has.
+    hop_length_value = _narrow_int(hop_length, "nnls_chroma: hop_length", _C_INT_MIN, _C_INT_MAX)
+    if hop_length_value <= 0:
         raise SonareValueError("nnls_chroma: hop_length must be a positive integer")
-    try:
-        hop_length_value = operator.index(hop_length)
-    except TypeError as exc:
-        raise SonareValueError("nnls_chroma: hop_length must be a positive integer") from exc
-    if hop_length_value <= 0 or hop_length_value > _C_INT_MAX:
-        raise SonareValueError("nnls_chroma: hop_length must be a positive integer")
-    if isinstance(stft_blend_n_fft, bool):
-        raise SonareValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2")
-    try:
-        stft_blend_n_fft_value = operator.index(stft_blend_n_fft)
-    except TypeError as exc:
-        raise SonareValueError(
-            "nnls_chroma: stft_blend_n_fft must be an even integer >= 2"
-        ) from exc
-    if (
-        stft_blend_n_fft_value < 2
-        or stft_blend_n_fft_value > _C_INT_MAX
-        or (stft_blend_n_fft_value & 1) != 0
-    ):
-        raise SonareValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2")
+    stft_blend_n_fft_value = _narrow_int(
+        stft_blend_n_fft, "nnls_chroma: stft_blend_n_fft", _C_INT_MIN, _C_INT_MAX
+    )
+    if stft_blend_n_fft_value < 2:
+        raise SonareValueError("nnls_chroma: stft_blend_n_fft must be at least 2")
+    if (stft_blend_n_fft_value & 1) != 0:
+        raise SonareValueError("nnls_chroma: stft_blend_n_fft must be an even integer")
     try:
         blend_weight = float(stft_blend_weight)
         blend_weight_c = ctypes.c_float(blend_weight).value

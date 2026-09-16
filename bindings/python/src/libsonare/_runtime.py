@@ -740,10 +740,17 @@ def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
     return kernel
 
 
-def _require_power_of_two(value: int, name: str) -> None:
-    """Validate a positive power-of-two integer with a consistent error."""
-    if value <= 0 or (value & (value - 1)) != 0:
+def _require_power_of_two(value: object, name: str) -> int:
+    """Validate a positive power-of-two integer with a consistent error.
+
+    Narrowed before the bit test, which raises a bare :class:`TypeError` on a
+    float rather than this family's refusal, and which a caller would otherwise
+    reach only after ``int()`` had already truncated the value.
+    """
+    narrowed = _narrow_int(value, name, _C_INT_MIN, _C_INT_MAX)
+    if narrowed <= 0 or (narrowed & (narrowed - 1)) != 0:
         raise SonareValueError(f"{name} must be a positive power of two")
+    return narrowed
 
 
 def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
