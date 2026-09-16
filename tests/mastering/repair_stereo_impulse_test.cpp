@@ -414,12 +414,14 @@ TEST_CASE("Declip mono output survives the detector extraction unchanged",
 // the reproducibility of an LPC solve across architectures and libm
 // implementations, so a value recorded on one host cannot match another. It
 // stays a same-environment refactor tripwire, run through `make test-golden`.
-// Digests taken from the build that preceded the detector extraction.
+// The declip pair predates the detector extraction and has survived it; the
+// declick pair is re-recorded whenever the fill's arithmetic changes, which a
+// bit-identity claim about declick can then be read against.
 TEST_CASE("Declick and declip mono digests stay stable", "[.][repair][stereo][impulse][golden]") {
   const std::vector<float> click_left = click_fixture(0.0);
   const std::vector<float> click_right = click_fixture(0.35);
-  CHECK(digest(declick(view(click_left), kCorpusDeclick)) == 0x89151232u);
-  CHECK(digest(declick(view(click_right), kCorpusDeclick)) == 0x540284deu);
+  CHECK(digest(declick(view(click_left), kCorpusDeclick)) == 0x6861830cu);
+  CHECK(digest(declick(view(click_right), kCorpusDeclick)) == 0x4a9a870fu);
 
   const std::vector<float> clip_left = clip_fixture(0.0);
   const std::vector<float> clip_right = clip_fixture(0.35);
@@ -532,17 +534,24 @@ TEST_CASE("Linked declick detection beats the shared mono transfer on a common-m
   // The transfer path decides a per-sample gain across two discontinuous
   // branches -- a 1e-6 zero guard and a +/-4 clamp -- so one sample crossing
   // either moves its RMSE in the fourth significant figure from one build to the
-  // next. The separations asserted here are two orders clear of that: measured,
-  // the linked image error is 219x below the transfer's and 1204x below the
+  // next. The separations asserted here are orders clear of that: measured, the
+  // linked image error is ~7e5x below the transfer's and ~4e6x below the
   // independent one.
   const double transfer_image =
       image_error(transfer.first, transfer.second, clean_left, clean_right);
   const double split_image = image_error(split.first, split.second, clean_left, clean_right);
   const double linked_image = image_error(linked_left, linked_right, clean_left, clean_right);
   CAPTURE(transfer_image, split_image, linked_image);
-  // Not zero: a link that copied one channel onto the other would read exactly 0
-  // here, and so would a pass that did nothing to either.
-  REQUIRE(linked_image > grid_image_bound);
+  // The two degenerate passes this separation could otherwise be read off, stated
+  // as themselves: a link that copied one channel onto the other, and a pass that
+  // left both alone. A magnitude floor cannot carry that any more -- the two-sided
+  // fill puts the linked image error below the 24-bit grid bound a no-op also sits
+  // under, so the bound would now reject the good result and the degenerate one
+  // together.
+  REQUIRE(linked_image > 0.0);
+  REQUIRE(linked_left != linked_right);
+  REQUIRE(linked_left != dirty_left);
+  REQUIRE(linked_right != dirty_right);
   REQUIRE(linked_image * 100.0 < transfer_image);
   REQUIRE(linked_image * 100.0 < split_image);
   // Repairing only one side is worse for the image than not repairing at all,

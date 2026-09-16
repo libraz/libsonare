@@ -149,7 +149,18 @@ TEST_CASE("raw LPC helpers accept valid empty null inputs", "[audio_ops][util][e
   model.ar = {1.0f};
 
   REQUIRE(lpc_residual(nullptr, 0, model).empty());
-  REQUIRE(ar_interpolate(nullptr, nullptr, 0, model).empty());
   REQUIRE_THROWS_AS(lpc_residual(nullptr, 1, model), SonareException);
-  REQUIRE_THROWS_AS(ar_interpolate(nullptr, nullptr, 1, model), SonareException);
+
+  // The gap fillers take the buffer directly, so an empty buffer is the only
+  // null they accept and a gap outside the buffer is a parameter error.
+  const ArInterpolateParams params;
+  REQUIRE_NOTHROW(interpolate_gap(nullptr, 0, 0, 0));
+  REQUIRE_NOTHROW(ar_interpolate_region(nullptr, 0, 0, 0, params));
+  REQUIRE_THROWS_AS(interpolate_gap(nullptr, 1, 0, 1), SonareException);
+  REQUIRE_THROWS_AS(ar_interpolate_region(nullptr, 1, 0, 1, params), SonareException);
+
+  std::vector<float> samples(8, 0.25f);
+  REQUIRE_THROWS_AS(interpolate_gap(samples.data(), samples.size(), 2, 9), SonareException);
+  REQUIRE_THROWS_AS(ar_interpolate_region(samples.data(), samples.size(), 5, 2, params),
+                    SonareException);
 }

@@ -47,6 +47,11 @@ struct DeclickReport {
   bool lpc_model_used = false;  ///< False when the input was too short for
                                 ///  lpc_order: detection then reduces to the
                                 ///  threshold mask and every fill is linear.
+                                ///  True says the AR path was viable, not that
+                                ///  every fill took it -- the two-sided solver
+                                ///  re-estimates its own model over a bounded
+                                ///  window per run and declines a run whose gap
+                                ///  or context it cannot work with.
 };
 
 Audio declick(const Audio& audio, const DeclickConfig& config = {});

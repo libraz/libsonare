@@ -102,47 +102,58 @@ ChannelAnalysis analyze_channel(const std::vector<float>& samples, const Declick
   return analysis;
 }
 
+/// @brief Outer estimate-and-solve rounds the click fill runs.
+/// @details The same count declip reconstructs a clipped run with. A click gap is
+/// far shorter than the AR order, so the estimate has converged by the second
+/// round; a third measures the same samples again.
+constexpr int kDeclickArIterations = 2;
+
+/// @brief Longest click run the AR solver reconstructs.
+/// @details A run selected in one channel is capped by @c max_click_samples, but
+/// the stereo union merges overlapping runs and the merged extent has no such
+/// cap. The solver's dense matrices are sized from the gap, so anything past this
+/// takes the linear fill and per-run compute stays bounded by the cap rather than
+/// by the input.
+constexpr size_t kDeclickMaxArGapSamples = 512;
+
+/// @brief Longest one-sided context window handed to the AR solver.
+/// @details Bounds the context even when @c DeclickConfig::lpc_order is large.
+constexpr size_t kDeclickMaxArContextRadius = 8 * kDeclickMaxArGapSamples;
+
 void interpolate_region(std::vector<float>& output, const std::vector<float>& samples, size_t start,
-                        size_t end, const LpcResult* lpc_model) {
+                        size_t end, const DeclickConfig& config, bool use_ar) {
   const size_t length = end - start;
   const float left = output[start - 1];
   const float right = samples[end];
   // Linear interpolation anchored to BOTH boundaries; this is the fallback fill
-  // and also the boundary-respecting baseline the AR estimate is blended toward.
+  // for a gap past the AR cap, and what stands when no AR model is available.
   for (size_t j = start; j < end; ++j) {
     const float t = static_cast<float>(j - start + 1) / static_cast<float>(length + 1);
     output[j] = left + (right - left) * t;
   }
 
-  if (!lpc_model) return;
+  if (!use_ar) return;
 
-  // Forward AR extrapolation from the left context restores the click's spectral
-  // detail but, on its own, drifts away from the right boundary. Crossfade the
-  // AR prediction (weight 1 at the left edge) toward the linear interpolation
-  // (weight 1 at the right edge) so both boundaries are respected. Predict into
-  // a scratch buffer first so each step uses the already-blended history rather
-  // than raw AR output.
-  std::vector<float> ar_fill(length, 0.0f);
-  for (size_t j = start; j < end; ++j) {
-    double predicted = 0.0;
-    const size_t max_k = std::min(lpc_model->ar.size() - 1, j);
-    for (size_t k = 1; k <= max_k; ++k) {
-      predicted -= static_cast<double>(lpc_model->ar[k]) * output[j - k];
-    }
-    const float linear = output[j];
-    // w: 1 at the first filled sample, decreasing to ~0 near the right anchor.
-    const float w = 1.0f - static_cast<float>(j - start + 1) / static_cast<float>(length + 1);
-    ar_fill[j - start] = w * static_cast<float>(predicted) + (1.0f - w) * linear;
-    output[j] = ar_fill[j - start];
-  }
+  // Two-sided AR interpolation: the gap is solved against both known edges at
+  // once, so it carries the click's spectral detail and lands on the right
+  // boundary by construction. The forward extrapolation this replaced had no
+  // term anchoring it there and needed a crossfade to the linear fill, which
+  // spent the far half of every gap on the fallback.
+  ArInterpolateParams params;
+  params.order = config.lpc_order;
+  params.iterations = kDeclickArIterations;
+  params.blend = 1.0f;
+  params.max_gap = kDeclickMaxArGapSamples;
+  params.max_context_radius = kDeclickMaxArContextRadius;
+  ar_interpolate_region(output.data(), output.size(), start, end, params);
 }
 
 /// Fills @p runs in ascending order, which is the order the fill was written
 /// for: each region's left anchor is the already-repaired sample before it.
 void apply_runs(std::vector<float>& output, const std::vector<float>& samples,
-                const std::vector<ClickRun>& runs, const LpcResult* lpc_model) {
+                const std::vector<ClickRun>& runs, const DeclickConfig& config, bool use_ar) {
   for (const ClickRun& run : runs) {
-    interpolate_region(output, samples, run.start, run.end, lpc_model);
+    interpolate_region(output, samples, run.start, run.end, config, use_ar);
   }
 }
 
@@ -262,7 +273,7 @@ Audio declick(const Audio& audio, const DeclickConfig& config, DeclickReport* re
   const std::optional<LpcResult> lpc_model = fit_lpc(samples, validated.get());
   const LpcResult* model = lpc_model ? &*lpc_model : nullptr;
   const ChannelAnalysis analysis = analyze_channel(samples, validated.get(), model);
-  apply_runs(output, samples, analysis.selected, model);
+  apply_runs(output, samples, analysis.selected, validated.get(), lpc_model.has_value());
   if (report != nullptr) {
     *report = to_report(analysis, analysis.selected, samples.size(), audio.sample_rate(),
                         lpc_model.has_value());
@@ -288,8 +299,8 @@ DeclickStereoResult declick_stereo(const Audio& left, const Audio& right,
 
   std::vector<float> left_output = left_samples;
   std::vector<float> right_output = right_samples;
-  apply_runs(left_output, left_samples, applied, left_model ? &*left_model : nullptr);
-  apply_runs(right_output, right_samples, applied, right_model ? &*right_model : nullptr);
+  apply_runs(left_output, left_samples, applied, validated.get(), left_model.has_value());
+  apply_runs(right_output, right_samples, applied, validated.get(), right_model.has_value());
 
   DeclickStereoResult result;
   result.left_report =
