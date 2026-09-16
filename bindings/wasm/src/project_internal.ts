@@ -49,6 +49,7 @@ import type {
 // leaves the other working, so the property is pinned by
 // tests/sample-bank-module-cycle.test.ts rather than left to review.
 import { SampleBank } from './sample_bank';
+import { assertNibble, assertU7, assertU32 } from './validation';
 
 /**
  * A synth binding as the embind layer takes it: the public `sampleBank` handle
@@ -325,20 +326,6 @@ export function projectModule(): ProjectModule {
   return candidate as ProjectModule;
 }
 
-export function assertProjectU7(fnName: string, value: number, argName: string): number {
-  if (!Number.isInteger(value) || value < 0 || value > 127) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 127]`);
-  }
-  return value;
-}
-
-export function assertProjectNibble(fnName: string, value: number, argName: string): number {
-  if (!Number.isInteger(value) || value < 0 || value > 15) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 15]`);
-  }
-  return value;
-}
-
 export function projectMidi1Event(
   fnName: string,
   ppq: number,
@@ -351,22 +338,16 @@ export function projectMidi1Event(
   if (!Number.isFinite(ppq) || ppq < 0) {
     throw new RangeError(`${fnName}: ppq must be a non-negative finite number`);
   }
-  const g = assertProjectNibble(fnName, group, 'group');
-  const ch = assertProjectNibble(fnName, channel, 'channel');
-  const d1 = assertProjectU7(fnName, data1, 'data1');
-  const d2 = assertProjectU7(fnName, data2, 'data2');
+  const g = assertNibble(fnName, group, 'group');
+  const ch = assertNibble(fnName, channel, 'channel');
+  const d1 = assertU7(fnName, data1, 'data1');
+  const d2 = assertU7(fnName, data2, 'data2');
   // UMP MIDI-1.0 channel-voice word (message type 0x2). Canonical layout is
   // sonare::midi::make_midi1_* (C-ABI sonare_midi_*, which Python delegates to);
   // this hand-written copy is locked against those words by the golden vectors
   // in project.test.ts (mirrored in the Node suite) so it cannot silently drift.
   const word = ((0x2 << 28) | (g << 24) | (status << 20) | (ch << 16) | (d1 << 8) | d2) >>> 0;
   return { ppq, data0: word, data1: 0 };
-}
-
-export function assertProjectU32(fnName: string, value: number, argName: string): void {
-  if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 4294967295]`);
-  }
 }
 
 export function assertProjectMidiEvents(
@@ -385,8 +366,8 @@ export function assertProjectMidiEvents(
       if (!Number.isFinite(event[0]) || event[0] < 0) {
         throw new RangeError(`${fnName}: ${prefix}.ppq must be a non-negative finite number`);
       }
-      assertProjectU32(fnName, event[1], `${prefix}.data0`);
-      assertProjectU32(fnName, event[2], `${prefix}.data1`);
+      assertU32(fnName, event[1], `${prefix}.data0`);
+      assertU32(fnName, event[2], `${prefix}.data1`);
       return;
     }
     if (event === null || typeof event !== 'object') {
@@ -395,9 +376,9 @@ export function assertProjectMidiEvents(
     if (!Number.isFinite(event.ppq) || event.ppq < 0) {
       throw new RangeError(`${fnName}: ${prefix}.ppq must be a non-negative finite number`);
     }
-    assertProjectU32(fnName, event.data0, `${prefix}.data0`);
+    assertU32(fnName, event.data0, `${prefix}.data0`);
     if (event.data1 !== undefined) {
-      assertProjectU32(fnName, event.data1, `${prefix}.data1`);
+      assertU32(fnName, event.data1, `${prefix}.data1`);
     }
   });
 }

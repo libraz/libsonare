@@ -244,6 +244,39 @@ export function assertPositiveInteger(fnName: string, value: number, argName: st
   }
 }
 
+/** General integer-in-`[min, max]` check, for a bound {@link assertU7}/{@link assertNibble} don't cover. */
+export function assertBoundedInteger(
+  fnName: string,
+  value: number,
+  argName: string,
+  min: number,
+  max: number,
+): void {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [${min}, ${max}]`);
+  }
+}
+
+export function assertU7(fnName: string, value: number, argName: string): number {
+  if (!Number.isInteger(value) || value < 0 || value > 127) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 127]`);
+  }
+  return value;
+}
+
+export function assertNibble(fnName: string, value: number, argName: string): number {
+  if (!Number.isInteger(value) || value < 0 || value > 15) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 15]`);
+  }
+  return value;
+}
+
+export function assertU32(fnName: string, value: number, argName: string): void {
+  if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 4294967295]`);
+  }
+}
+
 export function assertInterleavedSamples(
   fnName: string,
   samples: ArrayLike<number>,

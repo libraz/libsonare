@@ -57,6 +57,7 @@ import type {
   Sf2ProgramStatus,
   SynthPatch,
 } from './project_types';
+import { assertBoundedInteger } from './validation';
 
 /**
  * Folds the positional and request call forms of `bakeMidiFx` into one shape,
@@ -338,9 +339,7 @@ export class Project {
     channel: number,
     bend: number,
   ): ProjectMidiEvent {
-    if (!Number.isInteger(bend) || bend < 0 || bend > 0x3fff) {
-      throw new RangeError('Project.midiPitchBend: bend must be an integer in [0, 16383]');
-    }
+    assertBoundedInteger('Project.midiPitchBend', bend, 'bend', 0, 0x3fff);
     return projectMidi1Event(
       'Project.midiPitchBend',
       ppq,

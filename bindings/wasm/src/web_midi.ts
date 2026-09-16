@@ -1,4 +1,5 @@
 import type { MidiCcBindOptions } from './realtime_engine';
+import { assertNibble } from './validation';
 
 export interface WebMidiEngine {
   bindMidiCc(
@@ -392,12 +393,6 @@ function readU7(data: ArrayLike<number>, index: number): number {
     return -1;
   }
   return value;
-}
-
-function assertNibble(fnName: string, value: number, field: string): void {
-  if (!Number.isInteger(value) || value < 0 || value > 15) {
-    throw new RangeError(`${fnName}: ${field} must be an integer in [0, 15]`);
-  }
 }
 
 function iterInputs(access: MidiAccessLike): Iterable<[string, MidiInputLike]> {
