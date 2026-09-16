@@ -241,6 +241,17 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     mark_field(flags.dehum);
     return true;
   }
+  if (key == "repair.dehum.mode") {
+    const int mode = vi();
+    // The upper bound names the last enumerator, so it moves whenever one is added.
+    if (mode < static_cast<int>(repair::DehumMode::Subtract) ||
+        mode > static_cast<int>(repair::DehumMode::Notch)) {
+      throw SonareException(ErrorCode::InvalidParameter, "unknown dehum mode");
+    }
+    cfg.repair.dehum.config.mode = static_cast<repair::DehumMode>(mode);
+    mark_field(flags.dehum);
+    return true;
+  }
 
   // ---- repair.dereverb ----
   if (key == "repair.dereverb.enabled") {
@@ -325,8 +336,9 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
   }
   if (key == "repair.denoise.noiseEstimator") {
     const int estimator = vi();
+    // The upper bound names the last enumerator, so it moves whenever one is added.
     if (estimator < static_cast<int>(repair::DenoiseNoiseEstimator::Quantile) ||
-        estimator > static_cast<int>(repair::DenoiseNoiseEstimator::Imcra)) {
+        estimator > static_cast<int>(repair::DenoiseNoiseEstimator::Spp)) {
       throw SonareException(ErrorCode::InvalidParameter, "unknown denoise noise estimator");
     }
     cfg.repair.denoise.config.noise_estimator =

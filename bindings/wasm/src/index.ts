@@ -51,6 +51,7 @@ export type {
   DeclipOptions,
   DecrackleMode,
   DecrackleOptions,
+  DehumMode,
   DehumOptions,
   DenoiseClassicalMode,
   DenoiseClassicalNoiseEstimator,

@@ -120,6 +120,7 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   add_field(params, "repair.dehum.adaptation", cfg.repair.dehum.config.adaptation);
   add_field(params, "repair.dehum.frameSize", cfg.repair.dehum.config.frame_size);
   add_field(params, "repair.dehum.pllBandwidth", cfg.repair.dehum.config.pll_bandwidth);
+  add_field(params, "repair.dehum.mode", static_cast<int>(cfg.repair.dehum.config.mode));
 
   add_field(params, "repair.dereverb.enabled", cfg.repair.dereverb.enabled);
   add_field(params, "repair.dereverb.threshold", cfg.repair.dereverb.config.threshold);

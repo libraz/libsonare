@@ -254,8 +254,18 @@ mastering::repair::DenoiseNoiseEstimator parseDenoiseNoiseEstimator(const std::s
   if (s == "quantile") return mastering::repair::DenoiseNoiseEstimator::Quantile;
   if (s == "mcra") return mastering::repair::DenoiseNoiseEstimator::Mcra;
   if (s == "imcra") return mastering::repair::DenoiseNoiseEstimator::Imcra;
+  if (s == "spp") return mastering::repair::DenoiseNoiseEstimator::Spp;
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                 "unknown denoise noise estimator: " + name);
+}
+
+mastering::repair::DehumMode parseDehumMode(const std::string& name) {
+  std::string s = name;
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (s == "subtract") return mastering::repair::DehumMode::Subtract;
+  if (s == "notch") return mastering::repair::DehumMode::Notch;
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown dehum mode: " + name);
 }
 
 // Read a denoise options bag over `config`, leaving absent keys alone. The nFft
@@ -631,6 +641,12 @@ val js_mastering_repair_dehum(val samples, const val& sample_rate, val options) 
     cfg.adaptation = repairFloatOption(options, "adaptation", cfg.adaptation);
     cfg.frame_size = repairIntOption(options, "frameSize", cfg.frame_size);
     cfg.pll_bandwidth = repairFloatOption(options, "pllBandwidth", cfg.pll_bandwidth);
+    if (hasProperty(options, "mode")) {
+      val value = val::undefined();
+      if (repairOptionValue(options, "mode", &value)) {
+        cfg.mode = parseDehumMode(value.as<std::string>());
+      }
+    }
   }
   Audio result = mastering::repair::dehum(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());
@@ -688,6 +704,12 @@ val js_mastering_repair_dehum_stereo(val left_samples, val right_samples,
     cfg.adaptation = repairFloatOption(options, "adaptation", cfg.adaptation);
     cfg.frame_size = repairIntOption(options, "frameSize", cfg.frame_size);
     cfg.pll_bandwidth = repairFloatOption(options, "pllBandwidth", cfg.pll_bandwidth);
+    if (hasProperty(options, "mode")) {
+      val value = val::undefined();
+      if (repairOptionValue(options, "mode", &value)) {
+        cfg.mode = parseDehumMode(value.as<std::string>());
+      }
+    }
   }
   mastering::repair::DehumStereoResult result = mastering::repair::dehum_stereo(left, right, cfg);
   std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
@@ -1049,6 +1071,12 @@ val js_mastering_repair_detect_hum(val samples, const val& sample_rate, val opti
     cfg.adaptation = repairFloatOption(options, "adaptation", cfg.adaptation);
     cfg.frame_size = repairIntOption(options, "frameSize", cfg.frame_size);
     cfg.pll_bandwidth = repairFloatOption(options, "pllBandwidth", cfg.pll_bandwidth);
+    if (hasProperty(options, "mode")) {
+      val value = val::undefined();
+      if (repairOptionValue(options, "mode", &value)) {
+        cfg.mode = parseDehumMode(value.as<std::string>());
+      }
+    }
   }
   return humDetectionToVal(
       mastering::repair::detect_hum(audio.data(), audio.size(), audio.sample_rate(), cfg));

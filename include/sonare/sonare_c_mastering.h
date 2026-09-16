@@ -871,6 +871,10 @@ void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* han
 #define SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE 0  // Quietest-frames quantile
 #define SONARE_DENOISE_NOISE_ESTIMATOR_MCRA 1      // Minimum-controlled recursive averaging
 #define SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA 2     // Improved MCRA with SPP gating
+#define SONARE_DENOISE_NOISE_ESTIMATOR_SPP \
+  3  // Speech-presence-probability PSD,
+     // tracking no minima and so carrying
+     // no minimum-statistics bias correction
 
 /// @brief Flat POD mirror of @c mastering::repair::DeclickConfig.
 /// @details Pass NULL to @ref sonare_mastering_repair_declick to use library defaults.
@@ -1229,7 +1233,9 @@ typedef struct {
   size_t replaced_samples;          // median mode: samples the filter overwrote,
                                     // equal to detected.sample_count since the
                                     // detector and the repair share a criterion
-  size_t detail_coefficients;       // wavelet mode: detail coefficients examined
+  size_t detail_coefficients;       // wavelet mode: detail coefficients examined by
+                                    // the unshifted pass, not by every pass the
+                                    // mode averages
   size_t shrunk_coefficients;       // wavelet mode: of those, driven to zero
   float noise_sigma;                // wavelet mode: the MAD noise estimate that
                                     // set every level's threshold, which the
@@ -1259,6 +1265,9 @@ SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const fl
                                                      const SonareDecrackleConfig* config,
                                                      SonareDecrackleStereoResult* out);
 
+#define SONARE_DEHUM_MODE_SUBTRACT 0  // Subtracts the tracked harmonic series
+#define SONARE_DEHUM_MODE_NOTCH 1     // Cascaded RBJ notches, hum or programme
+
 /// @brief Flat POD mirror of @c mastering::repair::DehumConfig.
 typedef struct {
   float fundamental_hz;   // mains-hum fundamental (default 50 Hz)
@@ -1269,6 +1278,8 @@ typedef struct {
   float adaptation;       // tracking step size (default 0.25)
   int frame_size;         // analysis frame size (default 2048, must be >= 16)
   float pll_bandwidth;    // PLL bandwidth (default 0.01)
+  int mode;               // SONARE_DEHUM_MODE_* (default SUBTRACT, so a
+                          // zero-initialized config selects it)
 } SonareDehumConfig;
 
 /// @brief Offline mains-hum remover (cascaded notch filters with optional PLL tracking).

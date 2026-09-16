@@ -1279,9 +1279,15 @@
         "name": "pll_bandwidth",
         "offset": 28,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "mode",
+        "offset": 32,
+        "size": 4
       }
     ],
-    "size": 32
+    "size": 36
   },
   "SonareDehumReport": {
     "align": 4,

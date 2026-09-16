@@ -91,7 +91,7 @@ export function masteringRepairDeclickStereo(
 export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction';
 
 /** Noise PSD estimators accepted by `masteringRepairDenoiseClassical`. */
-export type DenoiseClassicalNoiseEstimator = 'quantile' | 'mcra' | 'imcra';
+export type DenoiseClassicalNoiseEstimator = 'quantile' | 'mcra' | 'imcra' | 'spp';
 
 /** Options for `masteringRepairDenoiseClassical`. */
 export interface DenoiseClassicalOptions {
@@ -323,6 +323,16 @@ export interface MasteringRepairDecrackleStereoRequest extends DecrackleOptions 
   sampleRate?: number;
 }
 
+/**
+ * How `masteringRepairDehum` removes the harmonic series.
+ *
+ * `subtract` tracks each harmonic's amplitude and phase and subtracts the tone they describe,
+ * so material sitting at the same frequency but uncorrelated with the tracked series survives.
+ * `notch` cascades one RBJ notch per harmonic and removes everything inside each notch's
+ * bandwidth, hum or programme alike.
+ */
+export type DehumMode = 'subtract' | 'notch';
+
 /** Options for `masteringRepairDehum`. */
 export interface DehumOptions {
   fundamentalHz?: number;
@@ -333,6 +343,8 @@ export interface DehumOptions {
   adaptation?: number;
   frameSize?: number;
   pllBandwidth?: number;
+  /** Defaults to `'subtract'`. */
+  mode?: DehumMode;
 }
 export interface MasteringRepairDehumRequest extends DehumOptions {
   samples: Float32Array;

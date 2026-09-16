@@ -119,6 +119,7 @@ SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION = 2
 SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE = 0
 SONARE_DENOISE_NOISE_ESTIMATOR_MCRA = 1
 SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA = 2
+SONARE_DENOISE_NOISE_ESTIMATOR_SPP = 3
 
 
 class SonareDenoiseClassicalConfig(CStruct):
@@ -274,6 +275,11 @@ class SonareDecrackleStereoResult(CStruct):
     ]
 
 
+# SonareDehumConfig.mode values.
+SONARE_DEHUM_MODE_SUBTRACT = 0
+SONARE_DEHUM_MODE_NOTCH = 1
+
+
 class SonareDehumConfig(CStruct):
     """Maps to SonareDehumConfig in sonare_c.h."""
 
@@ -286,6 +292,7 @@ class SonareDehumConfig(CStruct):
         ("adaptation", ctypes.c_float),
         ("frame_size", ctypes.c_int),
         ("pll_bandwidth", ctypes.c_float),
+        ("mode", ctypes.c_int),
     ]
 
 

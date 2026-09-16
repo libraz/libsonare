@@ -53,6 +53,8 @@ sonare::mastering::repair::DenoiseNoiseEstimator to_cpp_denoise_noise_estimator(
       return sonare::mastering::repair::DenoiseNoiseEstimator::Imcra;
     case SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE:
       return sonare::mastering::repair::DenoiseNoiseEstimator::Quantile;
+    case SONARE_DENOISE_NOISE_ESTIMATOR_SPP:
+      return sonare::mastering::repair::DenoiseNoiseEstimator::Spp;
   }
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                 "unknown denoise noise estimator");
@@ -106,6 +108,16 @@ sonare::mastering::repair::DecrackleConfig to_cpp_decrackle_config(
   return cpp;
 }
 
+sonare::mastering::repair::DehumMode to_cpp_dehum_mode(int mode) {
+  switch (mode) {
+    case SONARE_DEHUM_MODE_SUBTRACT:
+      return sonare::mastering::repair::DehumMode::Subtract;
+    case SONARE_DEHUM_MODE_NOTCH:
+      return sonare::mastering::repair::DehumMode::Notch;
+  }
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown dehum mode");
+}
+
 sonare::mastering::repair::DehumConfig to_cpp_dehum_config(const SonareDehumConfig* config) {
   sonare::mastering::repair::DehumConfig cpp;
   if (!config) return cpp;
@@ -115,6 +127,7 @@ sonare::mastering::repair::DehumConfig to_cpp_dehum_config(const SonareDehumConf
   cpp.adaptive = config->adaptive != 0;
   cpp.search_range_hz = config->search_range_hz;
   cpp.adaptation = config->adaptation;
+  cpp.mode = to_cpp_dehum_mode(config->mode);
   cpp.frame_size = config->frame_size;
   cpp.pll_bandwidth = config->pll_bandwidth;
   return cpp;

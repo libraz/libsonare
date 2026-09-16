@@ -524,6 +524,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     config.adaptation = f(params, "adaptation", config.adaptation);
     config.frame_size = i(params, "frameSize", config.frame_size);
     config.pll_bandwidth = f(params, "pllBandwidth", config.pll_bandwidth);
+    config.mode = checked_enum<repair::DehumMode>(i(params, "mode", 0), 2, "dehum mode");
     apply_linked_or_per_channel(
         channels, sample_rate,
         [&](const Audio& l, const Audio& r) { return repair::dehum_stereo(l, r, config); },
@@ -532,7 +533,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     repair::DenoiseClassicalConfig config;
     config.mode = checked_enum<repair::DenoiseMode>(i(params, "mode", 0), 3, "denoise mode");
     config.noise_estimator = checked_enum<repair::DenoiseNoiseEstimator>(
-        i(params, "noiseEstimator", 0), 3, "denoise noise estimator");
+        i(params, "noiseEstimator", 0), 4, "denoise noise estimator");
     config.n_fft = i(params, "nFft", config.n_fft);
     config.hop_length = i(params, "hopLength", config.hop_length);
     config.dd_alpha = f(params, "ddAlpha", config.dd_alpha);
@@ -855,7 +856,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     repair::DenoiseClassicalConfig config;
     config.mode = checked_enum<repair::DenoiseMode>(i(map, "mode", 0), 3, "denoise mode");
     config.noise_estimator = checked_enum<repair::DenoiseNoiseEstimator>(
-        i(map, "noiseEstimator", 0), 3, "denoise noise estimator");
+        i(map, "noiseEstimator", 0), 4, "denoise noise estimator");
     config.n_fft = i(map, "nFft", config.n_fft);
     config.hop_length = i(map, "hopLength", config.hop_length);
     config.dd_alpha = f(map, "ddAlpha", config.dd_alpha);

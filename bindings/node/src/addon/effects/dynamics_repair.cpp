@@ -92,6 +92,7 @@ sonare::mastering::repair::DenoiseNoiseEstimator parse_denoise_noise_estimator(
   if (s == "quantile") return sonare::mastering::repair::DenoiseNoiseEstimator::Quantile;
   if (s == "mcra") return sonare::mastering::repair::DenoiseNoiseEstimator::Mcra;
   if (s == "imcra") return sonare::mastering::repair::DenoiseNoiseEstimator::Imcra;
+  if (s == "spp") return sonare::mastering::repair::DenoiseNoiseEstimator::Spp;
   throw std::runtime_error("unknown denoise noise estimator: " +
                            value.As<Napi::String>().Utf8Value());
 }
@@ -606,6 +607,18 @@ sonare::mastering::repair::DecrackleMode parse_decrackle_mode(
   throw std::runtime_error("unknown decrackle mode: " + value.As<Napi::String>().Utf8Value());
 }
 
+int parse_dehum_mode(const Napi::Object& options, int fallback) {
+  Napi::Value value = options.Get("mode");
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  if (!value.IsString()) throw std::runtime_error("dehum mode must be a string");
+  std::string s = value.As<Napi::String>().Utf8Value();
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (s == "subtract") return SONARE_DEHUM_MODE_SUBTRACT;
+  if (s == "notch") return SONARE_DEHUM_MODE_NOTCH;
+  throw std::runtime_error("unknown dehum mode: " + value.As<Napi::String>().Utf8Value());
+}
+
 sonare::mastering::repair::TrimSilenceMode parse_trim_silence_mode(
     const Napi::Object& options, sonare::mastering::repair::TrimSilenceMode fallback) {
   Napi::Value value = options.Get("mode");
@@ -957,6 +970,7 @@ SonareDehumConfig read_dehum_config_c(const Napi::Object& options, SonareDehumCo
   config.adaptation = FloatProperty(options, "adaptation", config.adaptation);
   config.frame_size = IntProperty(options, "frameSize", config.frame_size);
   config.pll_bandwidth = FloatProperty(options, "pllBandwidth", config.pll_bandwidth);
+  config.mode = parse_dehum_mode(options, config.mode);
   return config;
 }
 
@@ -999,7 +1013,8 @@ Napi::Value SonareWrap::MasteringRepairDehumStereo(const Napi::CallbackInfo& inf
   const int sr = node_narrow_int(env, info[2], "sampleRate");
   // Library defaults (sonare_c_mastering.h SonareDehumConfig), applied before
   // any options key overrides a field.
-  SonareDehumConfig config{50.0f, 4, 20.0f, 0, 2.0f, 0.25f, 2048, 0.01f};
+  SonareDehumConfig config{
+      50.0f, 4, 20.0f, 0, 2.0f, 0.25f, 2048, 0.01f, SONARE_DEHUM_MODE_SUBTRACT};
   if (info.Length() >= 4 && info[3].IsObject()) {
     config = read_dehum_config_c(info[3].As<Napi::Object>(), config);
   }
@@ -1382,7 +1397,8 @@ constexpr SonareDenoiseClassicalConfig kDenoiseConfigDefaults{
     1};
 constexpr SonareDeclipConfig kDeclipConfigDefaults{0.98f, 36, 2, 0.65f};
 constexpr SonareDecrackleConfig kDecrackleConfigDefaults{0.4f, SONARE_DECRACKLE_MODE_MEDIAN, 4};
-constexpr SonareDehumConfig kDehumConfigDefaults{50.0f, 4, 20.0f, 0, 2.0f, 0.25f, 2048, 0.01f};
+constexpr SonareDehumConfig kDehumConfigDefaults{
+    50.0f, 4, 20.0f, 0, 2.0f, 0.25f, 2048, 0.01f, SONARE_DEHUM_MODE_SUBTRACT};
 constexpr SonareDereverbClassicalConfig kDereverbConfigDefaults{0.0f, 1.0f,  1024, 256, 0.4f, 50.0f,
                                                                 1.0f, 0.08f, 0,    2,   3,    0.7f};
 constexpr SonareTrimSilenceConfig kTrimSilenceConfigDefaults{

@@ -14,12 +14,15 @@ from ._ffi import (
     SONARE_COMPRESSOR_DETECTOR_RMS,
     SONARE_DECRACKLE_MODE_MEDIAN,
     SONARE_DECRACKLE_MODE_WAVELET_SHRINKAGE,
+    SONARE_DEHUM_MODE_NOTCH,
+    SONARE_DEHUM_MODE_SUBTRACT,
     SONARE_DENOISE_MODE_LOG_MMSE,
     SONARE_DENOISE_MODE_MMSE_STSA,
     SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,
     SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA,
     SONARE_DENOISE_NOISE_ESTIMATOR_MCRA,
     SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,
+    SONARE_DENOISE_NOISE_ESTIMATOR_SPP,
     SONARE_REPAIR_NOISE_BAND_COUNT,
     SONARE_TRIM_SILENCE_MODE_LUFS_GATED,
     SONARE_TRIM_SILENCE_MODE_PEAK,
@@ -233,6 +236,7 @@ _DENOISE_ESTIMATOR_NAMES = {
     "quantile": SONARE_DENOISE_NOISE_ESTIMATOR_QUANTILE,  # noqa: F405
     "mcra": SONARE_DENOISE_NOISE_ESTIMATOR_MCRA,  # noqa: F405
     "imcra": SONARE_DENOISE_NOISE_ESTIMATOR_IMCRA,  # noqa: F405
+    "spp": SONARE_DENOISE_NOISE_ESTIMATOR_SPP,  # noqa: F405
 }
 
 
@@ -526,7 +530,7 @@ def mastering_repair_denoise_classical(
         sample_rate: Sample rate in Hz (default 22050).
         mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
-        noise_estimator: ``"quantile"`` (default), ``"mcra"``, or ``"imcra"``.
+        noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
         hop_length: Hop size in samples (default 256).
         dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
@@ -629,7 +633,7 @@ def mastering_repair_detect_noise_floor(
         sample_rate: Sample rate in Hz (default 22050).
         mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
-        noise_estimator: ``"quantile"`` (default), ``"mcra"``, or ``"imcra"``.
+        noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
         hop_length: Hop size in samples (default 256).
         dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
@@ -794,7 +798,7 @@ def mastering_repair_denoise_classical_stereo(
         sample_rate: Sample rate in Hz (default 22050).
         mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
-        noise_estimator: ``"quantile"`` (default), ``"mcra"``, or ``"imcra"``.
+        noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
         hop_length: Hop size in samples (default 256).
         dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
@@ -973,7 +977,7 @@ def mastering_repair_denoise_classical_linked(
         sample_rate: Sample rate in Hz, shared by every channel (default 22050).
         mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
-        noise_estimator: ``"quantile"`` (default), ``"mcra"``, or ``"imcra"``.
+        noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
         n_fft: STFT size, must be a positive power of two (default 1024).
         hop_length: Hop size in samples (default 256).
         dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
@@ -1055,12 +1059,28 @@ _TRIM_SILENCE_MODE_NAMES = {
     "lufs": SONARE_TRIM_SILENCE_MODE_LUFS_GATED,  # noqa: F405
 }
 
+_DEHUM_MODE_NAMES = {
+    "subtract": SONARE_DEHUM_MODE_SUBTRACT,  # noqa: F405
+    "notch": SONARE_DEHUM_MODE_NOTCH,  # noqa: F405
+}
+
 
 def _coerce_decrackle_mode(value: int | str) -> int:
     return _resolve_enum(
         value,
         _DECRACKLE_MODE_NAMES,
         "decrackle mode",
+        underscore=True,
+        strip=True,
+        validate_int=True,
+    )
+
+
+def _coerce_dehum_mode(value: int | str) -> int:
+    return _resolve_enum(
+        value,
+        _DEHUM_MODE_NAMES,
+        "dehum mode",
         underscore=True,
         strip=True,
         validate_int=True,
@@ -1466,8 +1486,14 @@ def mastering_repair_dehum(
     adaptation: float = 0.25,
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
+    mode: int | str = "subtract",
 ) -> np.ndarray:
-    """Offline mains-hum remover."""
+    """Offline mains-hum remover.
+
+    Args:
+        mode: ``"subtract"`` (default) or ``"notch"``; an integer in
+            ``SONARE_DEHUM_MODE_*`` is also accepted.
+    """
     config = SonareDehumConfig(  # noqa: F405
         fundamental_hz=float(fundamental_hz),
         harmonics=int(harmonics),
@@ -1477,6 +1503,7 @@ def mastering_repair_dehum(
         adaptation=float(adaptation),
         frame_size=int(frame_size),
         pll_bandwidth=float(pll_bandwidth),
+        mode=_coerce_dehum_mode(mode),
     )
     return _run_repair(_get_lib().sonare_mastering_repair_dehum, samples, sample_rate, config)
 
@@ -1503,6 +1530,7 @@ def mastering_repair_detect_hum(
     adaptation: float = 0.25,
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
+    mode: int | str = "subtract",
 ) -> HumDetection:
     """Measure mains hum without filtering it.
 
@@ -1535,6 +1563,8 @@ def mastering_repair_detect_hum(
         adaptation: Tracking step size (default 0.25).
         frame_size: Analysis frame size, must be >= 16 (default 2048).
         pll_bandwidth: PLL bandwidth (default 0.01).
+        mode: ``"subtract"`` (default) or ``"notch"``; an integer in
+            ``SONARE_DEHUM_MODE_*`` is also accepted.
 
     Returns:
         :class:`~libsonare.types.HumDetection`.
@@ -1552,6 +1582,7 @@ def mastering_repair_detect_hum(
         adaptation=float(adaptation),
         frame_size=int(frame_size),
         pll_bandwidth=float(pll_bandwidth),
+        mode=_coerce_dehum_mode(mode),
     )
     return _extract_hum_detection(
         _run_detection(
@@ -1587,6 +1618,7 @@ def mastering_repair_dehum_stereo(
     adaptation: float = 0.25,
     frame_size: int = 2048,
     pll_bandwidth: float = 0.01,
+    mode: int | str = "subtract",
 ) -> DehumStereoResult:
     """Dehums a stereo pair, sharing the tracked fundamental when tracking is on.
 
@@ -1613,6 +1645,8 @@ def mastering_repair_dehum_stereo(
         adaptation: Tracking step size (default 0.25).
         frame_size: Analysis frame size, must be >= 16 (default 2048).
         pll_bandwidth: PLL bandwidth (default 0.01).
+        mode: ``"subtract"`` (default) or ``"notch"``; an integer in
+            ``SONARE_DEHUM_MODE_*`` is also accepted.
 
     Returns:
         :class:`DehumStereoResult` with the dehummed channels and each
@@ -1632,6 +1666,7 @@ def mastering_repair_dehum_stereo(
         adaptation=float(adaptation),
         frame_size=int(frame_size),
         pll_bandwidth=float(pll_bandwidth),
+        mode=_coerce_dehum_mode(mode),
     )
     out = SonareDehumStereoResult()  # noqa: F405
     rc = lib.sonare_mastering_repair_dehum_stereo(
