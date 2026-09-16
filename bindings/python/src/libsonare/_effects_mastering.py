@@ -57,6 +57,7 @@ from ._ffi import (
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
+    _SIZE_T_MAX,
     ErrorCode,
     SonareError,
     SonareValueError,
@@ -316,7 +317,14 @@ def mastering_repair_declick(
     Returns:
         ``numpy.ndarray`` of ``float32`` with the same length as the input.
     """
-    if max_click_samples <= 0:
+    # Narrowed ahead of the sign check: int() takes 8.7 as 8, a run length nobody asked for.
+    max_click_value = _narrow_int(
+        max_click_samples, "mastering_repair_declick: max_click_samples", _C_INT_MIN, _C_INT_MAX
+    )
+    lpc_order_value = _narrow_int(
+        lpc_order, "mastering_repair_declick: lpc_order", _C_INT_MIN, _C_INT_MAX
+    )
+    if max_click_value <= 0:
         raise SonareValueError("max_click_samples must be positive")
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
@@ -325,8 +333,8 @@ def mastering_repair_declick(
     config = SonareDeclickConfig(  # noqa: F405
         threshold=float(threshold),
         neighbor_ratio=float(neighbor_ratio),
-        max_click_samples=int(max_click_samples),
-        lpc_order=int(lpc_order),
+        max_click_samples=max_click_value,
+        lpc_order=lpc_order_value,
         residual_ratio=float(residual_ratio),
     )
     with _out_float_array(lib) as (out, out_length):
@@ -396,13 +404,22 @@ def mastering_repair_detect_clicks(
             buffer is empty or carries a non-finite sample.
         SonareError: If the C call rejects the request.
     """
-    if max_click_samples <= 0:
+    max_click_value = _narrow_int(
+        max_click_samples,
+        "mastering_repair_detect_clicks: max_click_samples",
+        _C_INT_MIN,
+        _C_INT_MAX,
+    )
+    lpc_order_value = _narrow_int(
+        lpc_order, "mastering_repair_detect_clicks: lpc_order", _C_INT_MIN, _C_INT_MAX
+    )
+    if max_click_value <= 0:
         raise SonareValueError("max_click_samples must be positive")
     config = SonareDeclickConfig(  # noqa: F405
         threshold=float(threshold),
         neighbor_ratio=float(neighbor_ratio),
-        max_click_samples=int(max_click_samples),
-        lpc_order=int(lpc_order),
+        max_click_samples=max_click_value,
+        lpc_order=lpc_order_value,
         residual_ratio=float(residual_ratio),
     )
     return _extract_click_detection(
@@ -462,7 +479,16 @@ def mastering_repair_declick_stereo(
         :class:`DeclickStereoResult` with the declicked channels and each
         channel's own detection/repair report.
     """
-    if max_click_samples <= 0:
+    max_click_value = _narrow_int(
+        max_click_samples,
+        "mastering_repair_declick_stereo: max_click_samples",
+        _C_INT_MIN,
+        _C_INT_MAX,
+    )
+    lpc_order_value = _narrow_int(
+        lpc_order, "mastering_repair_declick_stereo: lpc_order", _C_INT_MIN, _C_INT_MAX
+    )
+    if max_click_value <= 0:
         raise SonareValueError("max_click_samples must be positive")
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
@@ -472,8 +498,8 @@ def mastering_repair_declick_stereo(
     config = SonareDeclickConfig(  # noqa: F405
         threshold=float(threshold),
         neighbor_ratio=float(neighbor_ratio),
-        max_click_samples=int(max_click_samples),
-        lpc_order=int(lpc_order),
+        max_click_samples=max_click_value,
+        lpc_order=lpc_order_value,
         residual_ratio=float(residual_ratio),
     )
     out = SonareDeclickStereoResult()  # noqa: F405
@@ -552,8 +578,12 @@ def mastering_repair_denoise_classical(
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
-    _require_power_of_two(n_fft, "n_fft")
-    if hop_length <= 0:
+    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    # Narrowed ahead of the sign check: int() takes 256.7 as 256, a hop nobody asked for.
+    hop_length_value = _narrow_int(
+        hop_length, "mastering_repair_denoise_classical: hop_length", _C_INT_MIN, _C_INT_MAX
+    )
+    if hop_length_value <= 0:
         raise SonareValueError("hop_length must be positive")
 
     lib = _get_lib()
@@ -563,8 +593,8 @@ def mastering_repair_denoise_classical(
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode),
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
-        n_fft=int(n_fft),
-        hop_length=int(hop_length),
+        n_fft=n_fft_value,
+        hop_length=hop_length_value,
         dd_alpha=float(dd_alpha),
         reduction_db=float(reduction_db),
         over_subtraction=float(over_subtraction),
@@ -656,14 +686,17 @@ def mastering_repair_detect_noise_floor(
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
-    _require_power_of_two(n_fft, "n_fft")
-    if hop_length <= 0:
+    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    hop_length_value = _narrow_int(
+        hop_length, "mastering_repair_detect_noise_floor: hop_length", _C_INT_MIN, _C_INT_MAX
+    )
+    if hop_length_value <= 0:
         raise SonareValueError("hop_length must be positive")
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode),
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
-        n_fft=int(n_fft),
-        hop_length=int(hop_length),
+        n_fft=n_fft_value,
+        hop_length=hop_length_value,
         dd_alpha=float(dd_alpha),
         reduction_db=float(reduction_db),
         over_subtraction=float(over_subtraction),
@@ -823,8 +856,14 @@ def mastering_repair_denoise_classical_stereo(
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
-    _require_power_of_two(n_fft, "n_fft")
-    if hop_length <= 0:
+    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    hop_length_value = _narrow_int(
+        hop_length,
+        "mastering_repair_denoise_classical_stereo: hop_length",
+        _C_INT_MIN,
+        _C_INT_MAX,
+    )
+    if hop_length_value <= 0:
         raise SonareValueError("hop_length must be positive")
 
     lib = _get_lib()
@@ -835,8 +874,8 @@ def mastering_repair_denoise_classical_stereo(
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode),
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
-        n_fft=int(n_fft),
-        hop_length=int(hop_length),
+        n_fft=n_fft_value,
+        hop_length=hop_length_value,
         dd_alpha=float(dd_alpha),
         reduction_db=float(reduction_db),
         over_subtraction=float(over_subtraction),
@@ -1003,8 +1042,14 @@ def mastering_repair_denoise_classical_linked(
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
-    _require_power_of_two(n_fft, "n_fft")
-    if hop_length <= 0:
+    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    hop_length_value = _narrow_int(
+        hop_length,
+        "mastering_repair_denoise_classical_linked: hop_length",
+        _C_INT_MIN,
+        _C_INT_MAX,
+    )
+    if hop_length_value <= 0:
         raise SonareValueError("hop_length must be positive")
 
     lib = _get_lib()
@@ -1016,8 +1061,8 @@ def mastering_repair_denoise_classical_linked(
     config = SonareDenoiseClassicalConfig(  # noqa: F405
         mode=_coerce_denoise_mode(mode),
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
-        n_fft=int(n_fft),
-        hop_length=int(hop_length),
+        n_fft=n_fft_value,
+        hop_length=hop_length_value,
         dd_alpha=float(dd_alpha),
         reduction_db=float(reduction_db),
         over_subtraction=float(over_subtraction),
@@ -1142,10 +1187,15 @@ def mastering_repair_declip(
     raising: ``lpc_order``, ``iterations`` and ``lpc_blend`` have no effect on the
     interpolated run.
     """
+    # Narrowed rather than coerced: int() takes 2.7 as 2, an iteration count nobody asked for.
     config = SonareDeclipConfig(  # noqa: F405
         clip_threshold=float(clip_threshold),
-        lpc_order=int(lpc_order),
-        iterations=int(iterations),
+        lpc_order=_narrow_int(
+            lpc_order, "mastering_repair_declip: lpc_order", _C_INT_MIN, _C_INT_MAX
+        ),
+        iterations=_narrow_int(
+            iterations, "mastering_repair_declip: iterations", _C_INT_MIN, _C_INT_MAX
+        ),
         lpc_blend=float(lpc_blend),
     )
     return _run_repair(_get_lib().sonare_mastering_repair_declip, samples, sample_rate, config)
@@ -1206,8 +1256,12 @@ def mastering_repair_detect_clipping(
     """
     config = SonareDeclipConfig(  # noqa: F405
         clip_threshold=float(clip_threshold),
-        lpc_order=int(lpc_order),
-        iterations=int(iterations),
+        lpc_order=_narrow_int(
+            lpc_order, "mastering_repair_detect_clipping: lpc_order", _C_INT_MIN, _C_INT_MAX
+        ),
+        iterations=_narrow_int(
+            iterations, "mastering_repair_detect_clipping: iterations", _C_INT_MIN, _C_INT_MAX
+        ),
         lpc_blend=float(lpc_blend),
     )
     return _extract_clip_detection(
@@ -1273,8 +1327,12 @@ def mastering_repair_declip_stereo(
         raise SonareValueError("left and right channel lengths must match")
     config = SonareDeclipConfig(  # noqa: F405
         clip_threshold=float(clip_threshold),
-        lpc_order=int(lpc_order),
-        iterations=int(iterations),
+        lpc_order=_narrow_int(
+            lpc_order, "mastering_repair_declip_stereo: lpc_order", _C_INT_MIN, _C_INT_MAX
+        ),
+        iterations=_narrow_int(
+            iterations, "mastering_repair_declip_stereo: iterations", _C_INT_MIN, _C_INT_MAX
+        ),
         lpc_blend=float(lpc_blend),
     )
     out = SonareDeclipStereoResult()  # noqa: F405
@@ -1320,7 +1378,8 @@ def mastering_repair_decrackle(
     config = SonareDecrackleConfig(  # noqa: F405
         threshold=float(threshold),
         mode=_coerce_decrackle_mode(mode),
-        levels=int(levels),
+        # Narrowed rather than coerced: int() takes 4.7 as 4, a depth nobody asked for.
+        levels=_narrow_int(levels, "mastering_repair_decrackle: levels", _C_INT_MIN, _C_INT_MAX),
     )
     return _run_repair(_get_lib().sonare_mastering_repair_decrackle, samples, sample_rate, config)
 
@@ -1376,7 +1435,9 @@ def mastering_repair_detect_crackle(
     config = SonareDecrackleConfig(  # noqa: F405
         threshold=float(threshold),
         mode=_coerce_decrackle_mode(mode),
-        levels=int(levels),
+        levels=_narrow_int(
+            levels, "mastering_repair_detect_crackle: levels", _C_INT_MIN, _C_INT_MAX
+        ),
     )
     return _extract_crackle_detection(
         _run_detection(
@@ -1441,7 +1502,9 @@ def mastering_repair_decrackle_stereo(
     config = SonareDecrackleConfig(  # noqa: F405
         threshold=float(threshold),
         mode=_coerce_decrackle_mode(mode),
-        levels=int(levels),
+        levels=_narrow_int(
+            levels, "mastering_repair_decrackle_stereo: levels", _C_INT_MIN, _C_INT_MAX
+        ),
     )
     out = SonareDecrackleStereoResult()  # noqa: F405
     rc = lib.sonare_mastering_repair_decrackle_stereo(
@@ -1496,12 +1559,17 @@ def mastering_repair_dehum(
     """
     config = SonareDehumConfig(  # noqa: F405
         fundamental_hz=float(fundamental_hz),
-        harmonics=int(harmonics),
+        # Narrowed rather than coerced: int() takes 4.7 as 4, a notch count nobody asked for.
+        harmonics=_narrow_int(
+            harmonics, "mastering_repair_dehum: harmonics", _C_INT_MIN, _C_INT_MAX
+        ),
         q=float(q),
         adaptive=1 if adaptive else 0,
         search_range_hz=float(search_range_hz),
         adaptation=float(adaptation),
-        frame_size=int(frame_size),
+        frame_size=_narrow_int(
+            frame_size, "mastering_repair_dehum: frame_size", _C_INT_MIN, _C_INT_MAX
+        ),
         pll_bandwidth=float(pll_bandwidth),
         mode=_coerce_dehum_mode(mode),
     )
@@ -1575,12 +1643,16 @@ def mastering_repair_detect_hum(
     """
     config = SonareDehumConfig(  # noqa: F405
         fundamental_hz=float(fundamental_hz),
-        harmonics=int(harmonics),
+        harmonics=_narrow_int(
+            harmonics, "mastering_repair_detect_hum: harmonics", _C_INT_MIN, _C_INT_MAX
+        ),
         q=float(q),
         adaptive=1 if adaptive else 0,
         search_range_hz=float(search_range_hz),
         adaptation=float(adaptation),
-        frame_size=int(frame_size),
+        frame_size=_narrow_int(
+            frame_size, "mastering_repair_detect_hum: frame_size", _C_INT_MIN, _C_INT_MAX
+        ),
         pll_bandwidth=float(pll_bandwidth),
         mode=_coerce_dehum_mode(mode),
     )
@@ -1659,12 +1731,16 @@ def mastering_repair_dehum_stereo(
         raise SonareValueError("left and right channel lengths must match")
     config = SonareDehumConfig(  # noqa: F405
         fundamental_hz=float(fundamental_hz),
-        harmonics=int(harmonics),
+        harmonics=_narrow_int(
+            harmonics, "mastering_repair_dehum_stereo: harmonics", _C_INT_MIN, _C_INT_MAX
+        ),
         q=float(q),
         adaptive=1 if adaptive else 0,
         search_range_hz=float(search_range_hz),
         adaptation=float(adaptation),
-        frame_size=int(frame_size),
+        frame_size=_narrow_int(
+            frame_size, "mastering_repair_dehum_stereo: frame_size", _C_INT_MIN, _C_INT_MAX
+        ),
         pll_bandwidth=float(pll_bandwidth),
         mode=_coerce_dehum_mode(mode),
     )
@@ -1719,21 +1795,32 @@ def mastering_repair_dereverb_classical(
     """Offline classical dereverberator (spectral subtraction + optional WPE)."""
     # The core requires a power of two here (dereverb_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
-    _require_power_of_two(n_fft, "n_fft")
-    if hop_length <= 0 or hop_length > n_fft:
+    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    # Narrowed ahead of the range check: int() takes 256.7 as 256, a hop nobody asked for.
+    hop_length_value = _narrow_int(
+        hop_length, "mastering_repair_dereverb_classical: hop_length", _C_INT_MIN, _C_INT_MAX
+    )
+    if hop_length_value <= 0 or hop_length_value > n_fft_value:
         raise SonareValueError("hop_length must be in (0, n_fft]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=float(threshold),
         attenuation=float(attenuation),
-        n_fft=int(n_fft),
-        hop_length=int(hop_length),
+        n_fft=n_fft_value,
+        hop_length=hop_length_value,
         t60_sec=float(t60_sec),
         late_delay_ms=float(late_delay_ms),
         over_subtraction=float(over_subtraction),
         spectral_floor=float(spectral_floor),
         wpe_enabled=1 if wpe_enabled else 0,
-        wpe_iterations=int(wpe_iterations),
-        wpe_taps=int(wpe_taps),
+        wpe_iterations=_narrow_int(
+            wpe_iterations,
+            "mastering_repair_dereverb_classical: wpe_iterations",
+            _C_INT_MIN,
+            _C_INT_MAX,
+        ),
+        wpe_taps=_narrow_int(
+            wpe_taps, "mastering_repair_dereverb_classical: wpe_taps", _C_INT_MIN, _C_INT_MAX
+        ),
         wpe_strength=float(wpe_strength),
     )
     return _run_repair(
@@ -1819,21 +1906,28 @@ def mastering_repair_detect_reverb(
     """
     # The core requires a power of two here (dereverb_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
-    _require_power_of_two(n_fft, "n_fft")
-    if hop_length <= 0 or hop_length > n_fft:
+    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    hop_length_value = _narrow_int(
+        hop_length, "mastering_repair_detect_reverb: hop_length", _C_INT_MIN, _C_INT_MAX
+    )
+    if hop_length_value <= 0 or hop_length_value > n_fft_value:
         raise SonareValueError("hop_length must be in (0, n_fft]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=float(threshold),
         attenuation=float(attenuation),
-        n_fft=int(n_fft),
-        hop_length=int(hop_length),
+        n_fft=n_fft_value,
+        hop_length=hop_length_value,
         t60_sec=float(t60_sec),
         late_delay_ms=float(late_delay_ms),
         over_subtraction=float(over_subtraction),
         spectral_floor=float(spectral_floor),
         wpe_enabled=1 if wpe_enabled else 0,
-        wpe_iterations=int(wpe_iterations),
-        wpe_taps=int(wpe_taps),
+        wpe_iterations=_narrow_int(
+            wpe_iterations, "mastering_repair_detect_reverb: wpe_iterations", _C_INT_MIN, _C_INT_MAX
+        ),
+        wpe_taps=_narrow_int(
+            wpe_taps, "mastering_repair_detect_reverb: wpe_taps", _C_INT_MIN, _C_INT_MAX
+        ),
         wpe_strength=float(wpe_strength),
     )
     return _extract_reverb_detection(
@@ -1922,8 +2016,14 @@ def mastering_repair_dereverb_classical_stereo(
     """
     # The core requires a power of two here (dereverb_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
-    _require_power_of_two(n_fft, "n_fft")
-    if hop_length <= 0 or hop_length > n_fft:
+    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    hop_length_value = _narrow_int(
+        hop_length,
+        "mastering_repair_dereverb_classical_stereo: hop_length",
+        _C_INT_MIN,
+        _C_INT_MAX,
+    )
+    if hop_length_value <= 0 or hop_length_value > n_fft_value:
         raise SonareValueError("hop_length must be in (0, n_fft]")
 
     lib = _get_lib()
@@ -1934,15 +2034,25 @@ def mastering_repair_dereverb_classical_stereo(
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=float(threshold),
         attenuation=float(attenuation),
-        n_fft=int(n_fft),
-        hop_length=int(hop_length),
+        n_fft=n_fft_value,
+        hop_length=hop_length_value,
         t60_sec=float(t60_sec),
         late_delay_ms=float(late_delay_ms),
         over_subtraction=float(over_subtraction),
         spectral_floor=float(spectral_floor),
         wpe_enabled=1 if wpe_enabled else 0,
-        wpe_iterations=int(wpe_iterations),
-        wpe_taps=int(wpe_taps),
+        wpe_iterations=_narrow_int(
+            wpe_iterations,
+            "mastering_repair_dereverb_classical_stereo: wpe_iterations",
+            _C_INT_MIN,
+            _C_INT_MAX,
+        ),
+        wpe_taps=_narrow_int(
+            wpe_taps,
+            "mastering_repair_dereverb_classical_stereo: wpe_taps",
+            _C_INT_MIN,
+            _C_INT_MAX,
+        ),
         wpe_strength=float(wpe_strength),
     )
     out = SonareDereverbStereoResult()  # noqa: F405
@@ -2053,8 +2163,14 @@ def mastering_repair_dereverb_classical_linked(
     """
     # The core requires a power of two here (dereverb_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
-    _require_power_of_two(n_fft, "n_fft")
-    if hop_length <= 0 or hop_length > n_fft:
+    n_fft_value = _require_power_of_two(n_fft, "n_fft")
+    hop_length_value = _narrow_int(
+        hop_length,
+        "mastering_repair_dereverb_classical_linked: hop_length",
+        _C_INT_MIN,
+        _C_INT_MAX,
+    )
+    if hop_length_value <= 0 or hop_length_value > n_fft_value:
         raise SonareValueError("hop_length must be in (0, n_fft]")
 
     lib = _get_lib()
@@ -2066,15 +2182,25 @@ def mastering_repair_dereverb_classical_linked(
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=float(threshold),
         attenuation=float(attenuation),
-        n_fft=int(n_fft),
-        hop_length=int(hop_length),
+        n_fft=n_fft_value,
+        hop_length=hop_length_value,
         t60_sec=float(t60_sec),
         late_delay_ms=float(late_delay_ms),
         over_subtraction=float(over_subtraction),
         spectral_floor=float(spectral_floor),
         wpe_enabled=1 if wpe_enabled else 0,
-        wpe_iterations=int(wpe_iterations),
-        wpe_taps=int(wpe_taps),
+        wpe_iterations=_narrow_int(
+            wpe_iterations,
+            "mastering_repair_dereverb_classical_linked: wpe_iterations",
+            _C_INT_MIN,
+            _C_INT_MAX,
+        ),
+        wpe_taps=_narrow_int(
+            wpe_taps,
+            "mastering_repair_dereverb_classical_linked: wpe_taps",
+            _C_INT_MIN,
+            _C_INT_MAX,
+        ),
         wpe_strength=float(wpe_strength),
     )
     out_buffers, out_ptrs = _linked_output_planes(len(arrays), frame_count)
@@ -2182,15 +2308,34 @@ def mastering_repair_dereverb_config_for_room(
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=float(threshold),
         attenuation=float(attenuation),
-        n_fft=int(n_fft),
-        hop_length=int(hop_length),
+        # Integrality alone: this entry rewrites two fields and takes the rest
+        # literally, so it carries none of the dereverb call's own domains.
+        n_fft=_narrow_int(
+            n_fft, "mastering_repair_dereverb_config_for_room: n_fft", _C_INT_MIN, _C_INT_MAX
+        ),
+        hop_length=_narrow_int(
+            hop_length,
+            "mastering_repair_dereverb_config_for_room: hop_length",
+            _C_INT_MIN,
+            _C_INT_MAX,
+        ),
         t60_sec=float(t60_sec),
         late_delay_ms=float(late_delay_ms),
         over_subtraction=float(over_subtraction),
         spectral_floor=float(spectral_floor),
         wpe_enabled=1 if wpe_enabled else 0,
-        wpe_iterations=int(wpe_iterations),
-        wpe_taps=int(wpe_taps),
+        wpe_iterations=_narrow_int(
+            wpe_iterations,
+            "mastering_repair_dereverb_config_for_room: wpe_iterations",
+            _C_INT_MIN,
+            _C_INT_MAX,
+        ),
+        wpe_taps=_narrow_int(
+            wpe_taps,
+            "mastering_repair_dereverb_config_for_room: wpe_taps",
+            _C_INT_MIN,
+            _C_INT_MAX,
+        ),
         wpe_strength=float(wpe_strength),
     )
     _check(
@@ -2228,7 +2373,10 @@ def mastering_repair_trim_silence(
         raise SonareValueError("padding_samples must be non-negative")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold=float(threshold),
-        padding_samples=int(padding_samples),
+        # Narrowed rather than coerced: int() takes 0.5 as 0, which is "no padding at all".
+        padding_samples=_narrow_int(
+            padding_samples, "mastering_repair_trim_silence: padding_samples", 0, _SIZE_T_MAX
+        ),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=float(gate_lufs),
         window_ms=float(window_ms),
@@ -2308,7 +2456,9 @@ def mastering_repair_detect_trim_range(
         raise SonareValueError("padding_samples must be non-negative")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold=float(threshold),
-        padding_samples=int(padding_samples),
+        padding_samples=_narrow_int(
+            padding_samples, "mastering_repair_detect_trim_range: padding_samples", 0, _SIZE_T_MAX
+        ),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=float(gate_lufs),
         window_ms=float(window_ms),
@@ -2387,7 +2537,12 @@ def mastering_repair_detect_trim_range_stereo(
         raise SonareValueError("left and right channel lengths must match")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold=float(threshold),
-        padding_samples=int(padding_samples),
+        padding_samples=_narrow_int(
+            padding_samples,
+            "mastering_repair_detect_trim_range_stereo: padding_samples",
+            0,
+            _SIZE_T_MAX,
+        ),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=float(gate_lufs),
         window_ms=float(window_ms),
@@ -2483,7 +2638,12 @@ def mastering_repair_trim_silence_stereo(
         raise SonareValueError("left and right channel lengths must match")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold=float(threshold),
-        padding_samples=int(padding_samples),
+        padding_samples=_narrow_int(
+            padding_samples,
+            "mastering_repair_trim_silence_stereo: padding_samples",
+            0,
+            _SIZE_T_MAX,
+        ),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=float(gate_lufs),
         window_ms=float(window_ms),

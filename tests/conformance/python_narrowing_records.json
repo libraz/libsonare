@@ -87,6 +87,12 @@
       "reason": "Already narrowed: the .value of the probe above, past its finite and at-or-below-0-dBFS check."
     },
     {
+      "file": "_features_metering.py",
+      "argument": "levels",
+      "type": "c_size_t",
+      "reason": "Already narrowed: every entry is built by _narrow_int on the size_t range, ahead of the positivity check, so the list reaching this conversion holds only values it cannot change."
+    },
+    {
       "file": "_mastering_streaming.py",
       "argument": "peak",
       "type": "c_float",

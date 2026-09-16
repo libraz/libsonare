@@ -958,26 +958,30 @@ def waveform_peak_pyramid(
             (default ``(512, 1024, 2048, 4096)``).
     """
     sample_buf = _validate_samples("waveform_peak_pyramid", samples, validate=validate)
-    levels = [int(level) for level in samples_per_bucket_levels]
+    # Narrowed per entry rather than coerced, and ahead of the positivity check
+    # below: int(512.7) is 512, a width the call then runs at and reports back as
+    # the one asked for, and a width past the size_t ceiling would reach the core
+    # as the 0 that check refuses under someone else's name.
+    levels = [
+        _narrow_int(
+            level, f"waveform_peak_pyramid: samples_per_bucket_levels[{index}]", 0, _SIZE_T_MAX
+        )
+        for index, level in enumerate(samples_per_bucket_levels)
+    ]
     if channels <= 0 or len(sample_buf) % channels != 0:
         raise SonareValueError(
             "waveform_peak_pyramid: samples length must be a multiple of channels"
         )
-    if not levels or any(level <= 0 for level in levels):
-        raise SonareValueError(
-            "waveform_peak_pyramid: samples_per_bucket_levels must be non-empty and > 0"
-        )
+    if not levels:
+        raise SonareValueError("waveform_peak_pyramid: samples_per_bucket_levels must be non-empty")
+    for index, level in enumerate(levels):
+        if level <= 0:
+            raise SonareValueError(
+                f"waveform_peak_pyramid: samples_per_bucket_levels[{index}] must be > 0"
+            )
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
-    # Narrowed per entry: a value that wrapped would arrive as the 0 refused above.
-    c_levels = (ctypes.c_size_t * len(levels))(
-        *[
-            _narrow_int(
-                level, f"waveform_peak_pyramid: samples_per_bucket_levels[{i}]", 0, _SIZE_T_MAX
-            )
-            for i, level in enumerate(levels)
-        ]
-    )
+    c_levels = (ctypes.c_size_t * len(levels))(*levels)
     out = SonareWaveformPeakPyramidResult()
     rc = lib.sonare_waveform_peak_pyramid(
         c_array,

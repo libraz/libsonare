@@ -21,10 +21,13 @@ import numpy as np
 
 from ._mastering_offline import _mastering_params
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
     SonareValueError,
     _as_float32_buffer,
     _check,
     _get_lib,
+    _narrow_int,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -202,7 +205,10 @@ def _suggest(
     # probe for here. _check turns that answer into the same error class every
     # other unsupported call raises.
     lib = _get_lib()
-    if int(sample_rate) <= 0:
+    # Narrowed ahead of the sign check: int() takes 44100.7 as 44100, a rate the
+    # whole suggestion would then be computed at.
+    sample_rate_value = _narrow_int(sample_rate, f"{fn_name}: sample_rate", _C_INT_MIN, _C_INT_MAX)
+    if sample_rate_value <= 0:
         raise SonareValueError(f"{fn_name}: sample_rate must be positive")
     arrays = _build_track_arrays(fn_name, tracks)
     param_array, param_count = _assistant_params(fn_name, options)
@@ -214,7 +220,7 @@ def _suggest(
         arrays.names,
         arrays.lengths,
         ctypes.c_size_t(arrays.count),
-        _to_c_int(int(sample_rate), "sample_rate"),
+        _to_c_int(sample_rate_value, "sample_rate"),
         param_array,
         _to_c_size_t(param_count, "param_count"),
         ctypes.byref(json_ptr),

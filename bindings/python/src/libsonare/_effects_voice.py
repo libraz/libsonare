@@ -23,6 +23,8 @@ from ._ffi import (
     SonareRealtimeVoiceChangerConfig,
 )
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
     SonareValueError,
     _as_float32_buffer,
     _check,
@@ -30,6 +32,7 @@ from ._runtime import (
     _float_array_result,
     _from_c_float_array,
     _get_lib,
+    _narrow_int,
     _out_float_array,
     _to_c_double,
     _to_c_float,
@@ -256,7 +259,13 @@ class RealtimeVoiceChanger:
         Returns a ``numpy.ndarray`` of dtype ``float32`` in the same
         interleaved layout as the input.
         """
-        ch = self._channels if channels is None else int(channels)
+        # Narrowed rather than coerced: int() takes 2.7 as 2, which lays the
+        # buffer out as a stereo interleave nobody asked for.
+        ch = (
+            self._channels
+            if channels is None
+            else _narrow_int(channels, "channels", _C_INT_MIN, _C_INT_MAX)
+        )
         in_buf = _as_float32_buffer(samples)
         total_samples = int(in_buf.shape[0])
         if ch <= 0 or total_samples % ch != 0:
@@ -693,7 +702,13 @@ class StreamingRetune:
         re-derives the grain instead of freezing the first rate's answer.
         """
         current = self.config()
-        requested_grain_size = self._requested_grain_size if grain_size is None else int(grain_size)
+        # Narrowed rather than coerced: int() takes 0.5 as the 0 this field reads
+        # as "derive the grain from the sample rate".
+        requested_grain_size = (
+            self._requested_grain_size
+            if grain_size is None
+            else _narrow_int(grain_size, "grain_size", _C_INT_MIN, _C_INT_MAX)
+        )
         _check(
             self._lib.sonare_streaming_retune_set_config(
                 self._handle,

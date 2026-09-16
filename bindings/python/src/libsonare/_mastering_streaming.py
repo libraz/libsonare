@@ -14,12 +14,15 @@ from ._ffi import (
 )
 from ._mastering_offline import _chain_params
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
     SonareValueError,
     _check,
     _check_realtime,
     _get_lib,
     _guard_buffer,
     _narrow_float,
+    _narrow_int,
     _to_c_float,
     _to_c_float_array,
     _to_c_float_array_owned,
@@ -150,15 +153,19 @@ class StreamingMasteringChain:
                 (imager, monoMaker) are skipped when ``num_channels`` is 1.
         """
         self._ensure_open()
+        # Narrowed rather than coerced: int() takes 512.7 as 512, and the block
+        # layout remembered here would then differ from the one asked for.
+        max_block_value = _narrow_int(max_block_size, "max_block_size", _C_INT_MIN, _C_INT_MAX)
+        channels_value = _narrow_int(num_channels, "num_channels", _C_INT_MIN, _C_INT_MAX)
         rc = self._lib.sonare_streaming_mastering_chain_prepare(
             self._handle,
-            _to_c_int(int(sample_rate), "sample_rate"),
-            _to_c_int(int(max_block_size), "max_block_size"),
-            _to_c_int(int(num_channels), "num_channels"),
+            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(max_block_value, "max_block_size"),
+            _to_c_int(channels_value, "num_channels"),
         )
         _check(rc)
-        self._prepared_channels = int(num_channels)
-        self._max_block_size = int(max_block_size)
+        self._prepared_channels = channels_value
+        self._max_block_size = max_block_value
 
     def process_mono(self, samples: Sequence[float] | list[float]) -> list[float]:
         """Process one mono block, returning the processed samples (length unchanged).
@@ -381,15 +388,19 @@ class StreamingEqualizer:
         lib = _get_lib()
         if not hasattr(lib, "sonare_eq_create"):
             raise RuntimeError("libsonare was built without streaming equalizer support")
+        # Narrowed rather than coerced: the rate reaches the C create as a float
+        # but every later call as an int, so int() here would split the two.
+        sample_rate_value = _narrow_int(sample_rate, "sample_rate", _C_INT_MIN, _C_INT_MAX)
+        max_block_value = _narrow_int(max_block_size, "max_block_size", _C_INT_MIN, _C_INT_MAX)
         handle = lib.sonare_eq_create(
-            float(sample_rate), _to_c_int(max_block_size, "max_block_size")
+            float(sample_rate_value), _to_c_int(max_block_value, "max_block_size")
         )
         if not handle:
             raise RuntimeError("failed to create StreamingEqualizer")
         self._lib = lib
         self._handle = ctypes.c_void_p(handle)
-        self.sample_rate = int(sample_rate)
-        self.max_block_size = int(max_block_size)
+        self.sample_rate = sample_rate_value
+        self.max_block_size = max_block_value
         self._sidechain_refs: object | None = None
 
     def set_band(self, index: int, band: dict[str, Any] | str) -> None:
@@ -397,7 +408,7 @@ class StreamingEqualizer:
         self._ensure_open()
         payload = band if isinstance(band, str) else json.dumps(band, separators=(",", ":"))
         rc = self._lib.sonare_eq_set_band(
-            self._handle, _to_c_int(int(index), "index"), payload.encode("utf-8")
+            self._handle, _to_c_int(index, "index"), payload.encode("utf-8")
         )
         _check(rc)
 
@@ -415,7 +426,7 @@ class StreamingEqualizer:
                 raise SonareValueError(f"unknown EQ phase mode: {mode}")
             value = self._PHASES[key]
         else:
-            value = int(mode)
+            value = _narrow_int(mode, "mode", _C_INT_MIN, _C_INT_MAX)
         _check(self._lib.sonare_eq_set_phase_mode(self._handle, _to_c_int(value, "value")))
 
     def set_auto_gain(self, enabled: bool) -> None:
@@ -515,7 +526,7 @@ class StreamingEqualizer:
             reference_array,
             _to_c_size_t(source_length, "source_length"),
             _to_c_int(self.sample_rate, "sample_rate"),
-            _to_c_int(int(max_bands), "max_bands"),
+            _to_c_int(max_bands, "max_bands"),
         )
         _check(rc)
 

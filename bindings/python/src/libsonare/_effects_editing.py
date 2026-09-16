@@ -33,6 +33,11 @@ from ._ffi import (
     SonareSpectralRegionOp,
 )
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
+    _INT64_MAX,
+    _INT64_MIN,
+    _UINT32_MAX,
     ErrorCode,
     SonareError,
     SonareValueError,
@@ -42,6 +47,7 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _narrow_int,
     _out_float_array,
     _require_power_of_two,
     _resolve_enum,
@@ -494,9 +500,15 @@ def pitch_correct_timevarying(
         SONARE_PITCH_TARGET_SCALE if mode == "scale" else SONARE_PITCH_TARGET_FIXED_MIDI
     )
     config.target_midi = float(target_midi)
-    config.scale_root = int(scale_root)
+    # Narrowed rather than coerced: int() takes 3.7 as 3, a root and a degree set
+    # the caller never asked for.
+    config.scale_root = _narrow_int(
+        scale_root, "pitch_correct_timevarying: scale_root", _C_INT_MIN, _C_INT_MAX
+    )
     if scale_mode_mask is not None:
-        config.scale_mode_mask = int(scale_mode_mask)
+        config.scale_mode_mask = _narrow_int(
+            scale_mode_mask, "pitch_correct_timevarying: scale_mode_mask", 0, _UINT32_MAX
+        )
     if reference_midi is not None:
         config.scale_reference_midi = float(reference_midi)
     if retune_amount is not None:
@@ -932,10 +944,20 @@ def _notes_to_c(fn_name: str, notes: Sequence[NoteObject]) -> tuple[object, int,
         curves.append(curve)
         # The metrics and the amplitude offset are not marshalled: nothing on
         # the far side reads them back.
-        c_notes[i].onset_sample = int(note.onset_sample)
-        c_notes[i].offset_sample = int(note.offset_sample)
-        c_notes[i].frame_start = int(note.frame_start)
-        c_notes[i].frame_end = int(note.frame_end)
+        # Narrowed rather than coerced, as the edit below is: int() takes 100.7
+        # as 100, and the note would be rendered from a boundary nobody asked for.
+        c_notes[i].onset_sample = _narrow_int(
+            note.onset_sample, f"{fn_name}: notes[{i}].onset_sample", _INT64_MIN, _INT64_MAX
+        )
+        c_notes[i].offset_sample = _narrow_int(
+            note.offset_sample, f"{fn_name}: notes[{i}].offset_sample", _INT64_MIN, _INT64_MAX
+        )
+        c_notes[i].frame_start = _narrow_int(
+            note.frame_start, f"{fn_name}: notes[{i}].frame_start", _C_INT_MIN, _C_INT_MAX
+        )
+        c_notes[i].frame_end = _narrow_int(
+            note.frame_end, f"{fn_name}: notes[{i}].frame_end", _C_INT_MIN, _C_INT_MAX
+        )
         c_notes[i].median_hz = float(note.median_hz)
         c_notes[i].edit = SonareNoteEdit(
             # Narrowed rather than coerced: int(0.5) is 0, which is this field's
@@ -1323,7 +1345,7 @@ def split_note(
         ),
         (
             _to_c_size_t(_note_set_index("split_note", "index", index), "index"),
-            _to_c_int32(int(frame), "frame"),
+            _to_c_int32(frame, "frame"),
         ),
     )
 
@@ -1554,8 +1576,18 @@ def _percussive_events_to_c(events: Sequence[PercussiveEvent]) -> tuple[object, 
     for i, event in enumerate(events):
         # The three measured figures are not marshalled: rendering reads the span
         # and the edit, so nothing on the far side reads them back.
-        c_events[i].onset_sample = int(event.onset_sample)
-        c_events[i].offset_sample = int(event.offset_sample)
+        c_events[i].onset_sample = _narrow_int(
+            event.onset_sample,
+            f"render_percussive_events: events[{i}].onset_sample",
+            _INT64_MIN,
+            _INT64_MAX,
+        )
+        c_events[i].offset_sample = _narrow_int(
+            event.offset_sample,
+            f"render_percussive_events: events[{i}].offset_sample",
+            _INT64_MIN,
+            _INT64_MAX,
+        )
         c_events[i].edit = SonarePercussiveEventEdit(
             # Narrowed rather than coerced: int(0.5) is 0, which is this field's
             # identity, so a sub-sample shift would render unmoved and report
@@ -1953,9 +1985,16 @@ def spectral_edit(
         for i, op in enumerate(ops):
             # An omitted end_sample (-1 sentinel) spans to the end of the signal,
             # matching the Node/WASM facades; the core clamps to [0, length].
-            end_sample = int(op.end_sample) if op.end_sample >= 0 else length
+            # Narrowed ahead of the sentinel test: int() takes -0.5 as 0 and 100.7
+            # as 100, so a fraction would read as a span the caller never asked for.
+            requested_end = _narrow_int(
+                op.end_sample, f"spectral_edit: ops[{i}].end_sample", _INT64_MIN, _INT64_MAX
+            )
+            end_sample = requested_end if requested_end >= 0 else length
             c_ops[i] = SonareSpectralRegionOp(
-                start_sample=int(op.start_sample),
+                start_sample=_narrow_int(
+                    op.start_sample, f"spectral_edit: ops[{i}].start_sample", _INT64_MIN, _INT64_MAX
+                ),
                 end_sample=end_sample,
                 low_hz=float(op.low_hz),
                 high_hz=float(op.high_hz),

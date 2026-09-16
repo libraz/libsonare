@@ -8,6 +8,8 @@ from collections.abc import Sequence
 
 from ._ffi import SonareMixGoniometerPoint, SonareSurroundPan
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
     AutomationCurve,
     MeterTap,
     MixMeterSnapshot,
@@ -21,6 +23,7 @@ from ._runtime import (
     _get_lib,
     _meter_tap_value,
     _mix_meter_from_c,
+    _narrow_int,
     _pan_law_value,
     _pan_mode_value,
     _send_timing_value,
@@ -833,10 +836,14 @@ class Mixer:
         """
         self._require()
         # Unify the accepted range with the Node and WASM facades: an integer in
-        # [1, block_size]. Reject non-integer floats rather than truncating them.
-        if isinstance(num_samples, float) and not num_samples.is_integer():
-            raise SonareValueError(f"num_samples must be an integer in [1, {self._block_size}]")
-        count = int(num_samples)
+        # [1, block_size]. The integrality half is the shared narrowing rather
+        # than a `float` test, which a numpy scalar walks straight past.
+        try:
+            count = _narrow_int(num_samples, "num_samples", _C_INT_MIN, _C_INT_MAX)
+        except SonareValueError as exc:
+            raise SonareValueError(
+                f"num_samples must be an integer in [1, {self._block_size}]"
+            ) from exc
         if count < 1 or count > self._block_size:
             raise SonareValueError(f"num_samples must be an integer in [1, {self._block_size}]")
         out_left = (ctypes.c_float * count)()
