@@ -24,10 +24,13 @@ are otherwise the same output.
 
 from __future__ import annotations
 
-import importlib.util
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import ts_surface_walk as walk  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_SOURCE = REPO_ROOT / "src/analysis/analysis_json.cpp"
@@ -42,15 +45,6 @@ SCHEMAS = {
     "meter_result_schema_paths": "MeterEstimate",
 }
 ROOT_INTERFACE = SCHEMAS["analysis_result_schema_paths"]
-
-# The TypeScript walk -- union members, named types, brace matching -- is the
-# same one the mastering parameter check needs, so it is imported rather than
-# repeated.
-_WALK_PATH = Path(__file__).resolve().parent / "check_mastering_param_surfaces.py"
-_SPEC = importlib.util.spec_from_file_location("libsonare_ts_walk", _WALK_PATH)
-assert _SPEC is not None and _SPEC.loader is not None
-walk = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(walk)
 
 
 def schema_paths(
