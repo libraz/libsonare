@@ -125,10 +125,12 @@ def functions(path: Path) -> list[str]:
 
 def has_request_overload(text: str, name: str) -> bool:
     # Canonical overloads are adjacent to legacy overloads and use a Request
-    # type. Keeping this simple makes deviations visible during review.
+    # type. Keeping this simple makes deviations visible during review. The
+    # parameter is optional wherever every request field has a default, so `?`
+    # is part of the canonical shape rather than a deviation from it.
     return bool(
         re.search(
-            rf"export function {re.escape(name)}\(\s*\w+:\s*[^)]*Request",
+            rf"export function {re.escape(name)}\(\s*\w+\??:\s*[^)]*Request",
             text,
         )
     )
