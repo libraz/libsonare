@@ -321,8 +321,9 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   // arguments, not of the input length.
   SONARE_CHECK_MSG(numeric::finite_positive(config.fmin), ErrorCode::InvalidParameter,
                    "fmin must be finite and > 0, got " + util::to_text(config.fmin));
-  SONARE_CHECK_MSG(config.fmax > config.fmin, ErrorCode::InvalidParameter,
-                   "fmax must be > fmin, got " + util::to_text(config.fmax));
+  SONARE_CHECK_MSG(numeric::finite(config.fmax) && config.fmax > config.fmin,
+                   ErrorCode::InvalidParameter,
+                   "fmax must be finite and > fmin, got " + util::to_text(config.fmax));
 
   int sr = audio.sample_rate();
   std::vector<float> padded;
@@ -392,8 +393,11 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   // arguments, not of the input length.
   SONARE_CHECK_MSG(numeric::finite_positive(config.fmin), ErrorCode::InvalidParameter,
                    "fmin must be finite and > 0, got " + util::to_text(config.fmin));
-  SONARE_CHECK_MSG(config.fmax > config.fmin, ErrorCode::InvalidParameter,
-                   "fmax must be > fmin, got " + util::to_text(config.fmax));
+  // Finite, not merely > fmin: n_pitch_bins below is cast to int from
+  // log2(fmax / fmin), and an infinite fmax makes that conversion undefined.
+  SONARE_CHECK_MSG(numeric::finite(config.fmax) && config.fmax > config.fmin,
+                   ErrorCode::InvalidParameter,
+                   "fmax must be finite and > fmin, got " + util::to_text(config.fmax));
 
   int sr = audio.sample_rate();
   std::vector<float> padded;
@@ -700,10 +704,13 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
   SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
   SONARE_CHECK_MSG(numeric::finite_positive(fmin), ErrorCode::InvalidParameter,
                    "fmin must be finite and > 0, got " + util::to_text(fmin));
-  SONARE_CHECK_MSG(fmax > fmin, ErrorCode::InvalidParameter,
-                   "fmax must be > fmin, got " + util::to_text(fmax));
-  SONARE_CHECK_MSG(threshold >= 0.0f, ErrorCode::InvalidParameter,
-                   "threshold must be >= 0, got " + util::to_text(threshold));
+  SONARE_CHECK_MSG(numeric::finite(fmax) && fmax > fmin, ErrorCode::InvalidParameter,
+                   "fmax must be finite and > fmin, got " + util::to_text(fmax));
+  // An infinite threshold makes `mag > threshold` false in every bin, so the scan
+  // reports "no pitch anywhere" for a request it could not evaluate. In the core
+  // rather than the C-ABI wrapper: WASM calls this function directly.
+  SONARE_CHECK_MSG(numeric::finite_non_negative(threshold), ErrorCode::InvalidParameter,
+                   "threshold must be finite and >= 0, got " + util::to_text(threshold));
 
   StftConfig cfg;
   cfg.n_fft = n_fft;
