@@ -45,18 +45,26 @@ describe('waveformPeaks', () => {
     // 100 % 2.5 === 0, so the length rule alone lets this through.
     expect(LENGTH % 2.5).toBe(0);
     expect(() => waveformPeaks(fixture(), 2.5, { samplesPerBucket: 10 })).toThrow(
-      /waveformPeaks: channels must be a positive integer/,
+      /waveformPeaks: channels must be an integer/,
     );
   });
 
-  it('refuses a channel count at and below zero', () => {
-    expect(() => waveformPeaks(fixture(), 0, { samplesPerBucket: 10 })).toThrow(RangeError);
-    expect(() => waveformPeaks(fixture(), -1, { samplesPerBucket: 10 })).toThrow(RangeError);
+  it('refuses a channel count at and below zero, naming the sign rather than the type', () => {
+    // The other half of the split the fractional case above asserts: 2.5 is
+    // positive and is told it must be an integer, while these are integers and
+    // are told they must be positive. One message for both would name a
+    // property one of the two values already has.
+    expect(() => waveformPeaks(fixture(), 0, { samplesPerBucket: 10 })).toThrow(
+      /channels must be a positive integer/,
+    );
+    expect(() => waveformPeaks(fixture(), -1, { samplesPerBucket: 10 })).toThrow(
+      /channels must be a positive integer/,
+    );
   });
 
   it('refuses a fractional bucket width', () => {
     expect(() => waveformPeaks(fixture(), 2, { samplesPerBucket: 10.5 })).toThrow(
-      /waveformPeaks: samplesPerBucket must be a positive integer/,
+      /waveformPeaks: samplesPerBucket must be an integer/,
     );
   });
 });
@@ -72,7 +80,7 @@ describe('waveformPeakPyramid', () => {
 
   it('names the level it refused rather than the list', () => {
     expect(() => waveformPeakPyramid(fixture(), 2, { samplesPerBucketLevels: [10, 7.5] })).toThrow(
-      /samplesPerBucketLevels\[1\] must be a positive integer/,
+      /samplesPerBucketLevels\[1\] must be an integer/,
     );
   });
 

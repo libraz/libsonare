@@ -130,7 +130,7 @@ describe('STFT entry points share one nFft rule', () => {
   it.each(Object.keys(stftEntryPoints))('%s rejects an odd nFft the same way', (name) => {
     expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](511)).toThrow(RangeError);
     expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](511)).toThrow(
-      /nFft must be an even integer >= 2/,
+      /nFft must be an even integer/,
     );
   });
 });

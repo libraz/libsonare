@@ -113,14 +113,17 @@ export function assertVqtGamma(fnName: string, gamma: number): void {
   }
 }
 
-export function assertSampleRate(fnName: string, sampleRate: number): void {
-  if (
-    !Number.isInteger(sampleRate) ||
-    sampleRate < MIN_AUDIO_SAMPLE_RATE ||
-    sampleRate > MAX_AUDIO_SAMPLE_RATE
-  ) {
+export function assertSampleRate(fnName: string, sampleRate: number, argName = 'sampleRate'): void {
+  // Two refusals, not one: 22050.7 sits inside the range, so reporting it as
+  // out of range names an argument that is not the one at fault. `argName` is
+  // the same point for a rate the caller spelled something else, such as a
+  // resampler's source and target.
+  if (!Number.isInteger(sampleRate)) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer`);
+  }
+  if (sampleRate < MIN_AUDIO_SAMPLE_RATE || sampleRate > MAX_AUDIO_SAMPLE_RATE) {
     throw new RangeError(
-      `${fnName}: sampleRate out of supported range [${MIN_AUDIO_SAMPLE_RATE}, ${MAX_AUDIO_SAMPLE_RATE}]`,
+      `${fnName}: ${argName} out of supported range [${MIN_AUDIO_SAMPLE_RATE}, ${MAX_AUDIO_SAMPLE_RATE}]`,
     );
   }
 }
@@ -238,9 +241,51 @@ export function assertNonNegativeInteger(fnName: string, value: number, argName:
   }
 }
 
+/** Integer strictly greater than zero, up to the native `int` ceiling. */
 export function assertPositiveInteger(fnName: string, value: number, argName: string): void {
-  if (!Number.isInteger(value) || value <= 0) {
+  // Two refusals, not one: 512.7 is positive, so reporting it as non-positive
+  // names a property it has. The ceiling travels with the sign rather than with
+  // integrality, because both describe a value the native `int` can carry.
+  if (!Number.isInteger(value)) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer`);
+  }
+  if (value <= 0 || value > C_INT_MAX) {
     throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
+  }
+}
+
+/**
+ * The type and integrality halves as one refusal.
+ *
+ * `Number.isInteger` already returns `false` for a value that is not a
+ * `number` at all, so a separate `typeof` guard ahead of it would be dead
+ * code: the two collapse to one class (`TypeError`) and one message here.
+ */
+export function assertIntegerType(
+  fnName: string,
+  value: unknown,
+  argName: string,
+): asserts value is number {
+  if (!Number.isInteger(value)) {
+    throw new TypeError(`${fnName}: ${argName} must be an integer`);
+  }
+}
+
+/** Even integer in `[min, max]`, for an FFT-style size where only parity matters. */
+export function assertEvenIntegerAtLeast(
+  fnName: string,
+  value: number,
+  argName: string,
+  min: number,
+  max: number,
+): void {
+  // Range and parity are separate refusals: 2 ** 31 is already even, so telling
+  // its caller the value must be even names a property it has.
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [${min}, ${max}]`);
+  }
+  if (value % 2 !== 0) {
+    throw new RangeError(`${fnName}: ${argName} must be an even integer`);
   }
 }
 
