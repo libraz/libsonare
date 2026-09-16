@@ -1,7 +1,12 @@
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type { ValidateOptions } from './validation';
-import { assertSamples, assertSamplesInWindow } from './validation';
+import {
+  assertInterleavedSamples,
+  assertPositiveInteger,
+  assertSamples,
+  assertSamplesInWindow,
+} from './validation';
 
 // The FFT size the library falls back to when `nFft` is 0 or omitted. Mirrored
 // here so the windowed pre-scan covers exactly the span the call will read; a
@@ -714,14 +719,14 @@ export function waveformPeaks(
     samples instanceof Float32Array
       ? { samples, channels: channels as number, ...options }
       : samples;
-  assertSamples('waveformPeaks', request.samples, request.validate !== false);
-  if (request.channels <= 0 || request.samples.length % request.channels !== 0) {
-    throw new RangeError('waveformPeaks: samples length must be a multiple of channels');
-  }
+  assertInterleavedSamples(
+    'waveformPeaks',
+    request.samples,
+    request.channels,
+    request.validate !== false,
+  );
   const samplesPerBucket = request.samplesPerBucket ?? 512;
-  if (samplesPerBucket <= 0) {
-    throw new RangeError('waveformPeaks: samplesPerBucket must be > 0');
-  }
+  assertPositiveInteger('waveformPeaks', samplesPerBucket, 'samplesPerBucket');
   return requireModule().waveformPeaks(request.samples, request.channels, samplesPerBucket);
 }
 
@@ -741,13 +746,18 @@ export function waveformPeakPyramid(
     samples instanceof Float32Array
       ? { samples, channels: channels as number, ...options }
       : samples;
-  assertSamples('waveformPeakPyramid', request.samples, request.validate !== false);
-  if (request.channels <= 0 || request.samples.length % request.channels !== 0) {
-    throw new RangeError('waveformPeakPyramid: samples length must be a multiple of channels');
-  }
+  assertInterleavedSamples(
+    'waveformPeakPyramid',
+    request.samples,
+    request.channels,
+    request.validate !== false,
+  );
   const levels = request.samplesPerBucketLevels ?? [512, 1024, 2048, 4096];
-  if (levels.length === 0 || levels.some((level) => level <= 0)) {
-    throw new RangeError('waveformPeakPyramid: samplesPerBucketLevels must be non-empty and > 0');
+  if (levels.length === 0) {
+    throw new RangeError('waveformPeakPyramid: samplesPerBucketLevels must not be empty');
   }
+  levels.forEach((level, index) => {
+    assertPositiveInteger('waveformPeakPyramid', level, `samplesPerBucketLevels[${index}]`);
+  });
   return requireModule().waveformPeakPyramid(request.samples, request.channels, levels);
 }
