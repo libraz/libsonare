@@ -14,7 +14,10 @@
 ///
 /// An array contributes its element type's paths under a `[]` segment and
 /// nothing of its own, so a fixture must populate every array it wants covered:
-/// an empty one is indistinguishable from a field that does not exist.
+/// an empty one is indistinguishable from a field that does not exist. Every
+/// element is walked rather than the first: a catalog's entries do not all carry
+/// the same keys, and reading one of them would report the whole array on the
+/// strength of whichever entry happened to sort first.
 
 #include <set>
 #include <string>
@@ -34,8 +37,10 @@ inline void collect_schema_paths(const sonare::util::json::Value& value, const s
     }
     return;
   }
-  if (value.is_array() && value.size() > 0) {
-    collect_schema_paths(value[static_cast<std::size_t>(0)], prefix + "[]", out);
+  if (value.is_array()) {
+    for (std::size_t i = 0; i < value.size(); ++i) {
+      collect_schema_paths(value[i], prefix + "[]", out);
+    }
   }
 }
 
