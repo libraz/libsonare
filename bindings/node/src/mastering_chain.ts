@@ -16,6 +16,7 @@ import type {
   StereoAnalysis,
   StreamingPlatform,
 } from './types.js';
+import { assertSampleRate } from './validation.js';
 
 export type NormalizeMode = 'peak' | 'rms';
 
@@ -44,9 +45,11 @@ export function normalize(
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, targetDb, mode } : samples;
   const resolvedMode = resolveNormalizeMode(request.mode);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('normalize', resolvedSampleRate);
   return addon.normalize(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.targetDb ?? 0.0,
     resolvedMode,
   );
@@ -272,9 +275,11 @@ export function mastering(
   options: MasteringOptions = {},
 ): MasteringResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('mastering', resolvedSampleRate);
   return addon.mastering(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.targetLufs ?? -14.0,
     request.ceilingDb ?? -1.0,
     request.truePeakOversample ?? 4,
@@ -300,10 +305,12 @@ export function masteringProcess(
     typeof processorName === 'string'
       ? { processorName, samples: samples as Float32Array, sampleRate, params }
       : processorName;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringProcess', resolvedSampleRate);
   return addon.masteringProcess(
     request.processorName,
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.params ?? {},
   );
 }
@@ -335,11 +342,13 @@ export function masteringProcessStereo(
           params,
         }
       : processorName;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringProcessStereo', resolvedSampleRate);
   return addon.masteringProcessStereo(
     request.processorName,
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.params ?? {},
   );
 }
@@ -360,16 +369,18 @@ export function masteringChain(
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, config, onProgress } : samples;
   const flat = flattenChainConfig(request.config ?? {});
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringChain', resolvedSampleRate);
   if (request.onProgress || request.cancel) {
     return addon.masteringChainWithProgress(
       request.samples,
-      request.sampleRate ?? 22050,
+      resolvedSampleRate,
       flat,
       request.onProgress ?? (() => {}),
       request.cancel ?? (() => false),
     );
   }
-  return addon.masteringChain(request.samples, request.sampleRate ?? 22050, flat);
+  return addon.masteringChain(request.samples, resolvedSampleRate, flat);
 }
 
 export function masteringChainStereo(
@@ -394,17 +405,19 @@ export function masteringChainStereo(
       ? { left, right: right as Float32Array, sampleRate, config, onProgress }
       : left;
   const flat = flattenChainConfig(request.config ?? {});
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringChainStereo', resolvedSampleRate);
   if (request.onProgress || request.cancel) {
     return addon.masteringChainStereoWithProgress(
       request.left,
       request.right,
-      request.sampleRate ?? 22050,
+      resolvedSampleRate,
       flat,
       request.onProgress ?? (() => {}),
       request.cancel ?? (() => false),
     );
   }
-  return addon.masteringChainStereo(request.left, request.right, request.sampleRate ?? 22050, flat);
+  return addon.masteringChainStereo(request.left, request.right, resolvedSampleRate, flat);
 }
 
 export function masteringPresetNames(): MasteringPreset[] {
@@ -493,22 +506,19 @@ export function masterAudio(
 ): MasteringChainResult {
   const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
   const flat = flattenChainConfig(request.overrides ?? {});
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masterAudio', resolvedSampleRate);
   if (request.onProgress || request.cancel) {
     return addon.masterAudioWithProgress(
       request.preset ?? 'pop',
       request.samples,
-      request.sampleRate ?? 22050,
+      resolvedSampleRate,
       flat,
       request.onProgress ?? (() => {}),
       request.cancel ?? (() => false),
     );
   }
-  return addon.masterAudio(
-    request.preset ?? 'pop',
-    request.samples,
-    request.sampleRate ?? 22050,
-    flat,
-  );
+  return addon.masterAudio(request.preset ?? 'pop', request.samples, resolvedSampleRate, flat);
 }
 
 /**
@@ -545,10 +555,12 @@ export function masterAudioAsync(
   // contract so `fn(...).catch(h)` sees every validation failure.
   try {
     const request = masterAudioRequest(samples, sampleRate, presetName, overrides);
+    const resolvedSampleRate = request.sampleRate ?? 22050;
+    assertSampleRate('masterAudioAsync', resolvedSampleRate);
     return addon.masterAudioAsync(
       request.preset ?? 'pop',
       request.samples,
-      request.sampleRate ?? 22050,
+      resolvedSampleRate,
       flattenChainConfig(request.overrides ?? {}),
     );
   } catch (error) {
@@ -582,12 +594,14 @@ export function masterAudioStereo(
     onProgress,
   );
   const flat = flattenChainConfig(request.overrides ?? {});
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masterAudioStereo', resolvedSampleRate);
   if (request.onProgress || request.cancel) {
     return addon.masterAudioStereoWithProgress(
       request.preset ?? 'pop',
       request.left,
       request.right,
-      request.sampleRate ?? 22050,
+      resolvedSampleRate,
       flat,
       request.onProgress ?? (() => {}),
       request.cancel ?? (() => false),
@@ -597,7 +611,7 @@ export function masterAudioStereo(
     request.preset ?? 'pop',
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     flat,
   );
 }
@@ -639,11 +653,13 @@ export function masterAudioStereoAsync(
   // contract so `fn(...).catch(h)` sees every validation failure.
   try {
     const request = masterAudioStereoRequest(left, right, sampleRate, presetName, overrides);
+    const resolvedSampleRate = request.sampleRate ?? 22050;
+    assertSampleRate('masterAudioStereoAsync', resolvedSampleRate);
     return addon.masterAudioStereoAsync(
       request.preset ?? 'pop',
       request.left,
       request.right,
-      request.sampleRate ?? 22050,
+      resolvedSampleRate,
       flattenChainConfig(request.overrides ?? {}),
     );
   } catch (error) {
@@ -858,11 +874,13 @@ export function masteringPairProcess(
           params,
         }
       : processorName;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringPairProcess', resolvedSampleRate);
   return addon.masteringPairProcess(
     request.processorName,
     request.source,
     request.reference,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.params ?? {},
   );
 }
@@ -886,11 +904,9 @@ export function masteringPairProcess(
 export function masteringAbMatchLoudness(
   request: MasteringAbMatchLoudnessRequest,
 ): LoudnessMatchResult {
-  return addon.masteringAbMatchLoudness(
-    request.source,
-    request.reference,
-    request.sampleRate ?? 22050,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringAbMatchLoudness', resolvedSampleRate);
+  return addon.masteringAbMatchLoudness(request.source, request.reference, resolvedSampleRate);
 }
 
 /**
@@ -922,11 +938,13 @@ export function masteringPairAnalyze(
           params,
         }
       : analysisName;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringPairAnalyze', resolvedSampleRate);
   return addon.masteringPairAnalyze(
     request.analysisName,
     request.source,
     request.reference,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.params ?? {},
   );
 }
@@ -956,11 +974,13 @@ export function masteringStereoAnalyze(
           params,
         }
       : analysisName;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringStereoAnalyze', resolvedSampleRate);
   return addon.masteringStereoAnalyze(
     request.analysisName,
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.params ?? {},
   );
 }
@@ -977,11 +997,9 @@ export function masteringAssistantSuggest(
   params: MasteringAssistantParams = {},
 ): string {
   const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
-  return addon.masteringAssistantSuggest(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.params ?? {},
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringAssistantSuggest', resolvedSampleRate);
+  return addon.masteringAssistantSuggest(request.samples, resolvedSampleRate, request.params ?? {});
 }
 
 export function masteringAudioProfile(request: MasteringAudioProfileRequest): string;
@@ -996,11 +1014,9 @@ export function masteringAudioProfile(
   params: Record<string, number | boolean> = {},
 ): string {
   const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
-  return addon.masteringAudioProfile(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.params ?? {},
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringAudioProfile', resolvedSampleRate);
+  return addon.masteringAudioProfile(request.samples, resolvedSampleRate, request.params ?? {});
 }
 
 export function masteringStreamingPreview(request: MasteringStreamingPreviewRequest): string;
@@ -1015,9 +1031,11 @@ export function masteringStreamingPreview(
   platforms: StreamingPlatform[] = [],
 ): string {
   const request = samples instanceof Float32Array ? { samples, sampleRate, platforms } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringStreamingPreview', resolvedSampleRate);
   return addon.masteringStreamingPreview(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.platforms ?? [],
   );
 }
@@ -1032,10 +1050,12 @@ export function masteringStreamingPreview(
 export function masteringAssistantSuggestStereo(
   request: MasteringAssistantSuggestStereoRequest,
 ): string {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringAssistantSuggestStereo', resolvedSampleRate);
   return addon.masteringAssistantSuggestStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.params ?? {},
   );
 }
@@ -1050,10 +1070,12 @@ export function masteringAssistantSuggestStereo(
  * comparable with {@link masteringAudioProfile}.
  */
 export function masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): string {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringAudioProfileStereo', resolvedSampleRate);
   return addon.masteringAudioProfileStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.params ?? {},
   );
 }
@@ -1070,10 +1092,12 @@ export function masteringAudioProfileStereo(request: MasteringAudioProfileStereo
 export function masteringStreamingPreviewStereo(
   request: MasteringStreamingPreviewStereoRequest,
 ): string {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringStreamingPreviewStereo', resolvedSampleRate);
   return addon.masteringStreamingPreviewStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.platforms ?? [],
   );
 }

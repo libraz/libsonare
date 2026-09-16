@@ -127,14 +127,31 @@ export function assertNonNegativeScalar(fnName: string, value: number, argName: 
 export const MIN_AUDIO_SAMPLE_RATE = 8000;
 export const MAX_AUDIO_SAMPLE_RATE = 384000;
 
+/**
+ * The integrality half of {@link assertSampleRate}, for an entry point whose
+ * core carries no range at all.
+ *
+ * A fraction is still refused, because the addon narrowing truncates it onto a
+ * rate the core accepts: `44100.7` renders at `44100` with nothing anywhere
+ * reporting the substitution. What is deliberately not refused is a rate
+ * outside `[8000, 384000]`, which the signal generators do accept.
+ */
+export function assertIntegralSampleRate(
+  fnName: string,
+  sampleRate: number,
+  argName = 'sampleRate',
+): void {
+  if (!Number.isInteger(sampleRate)) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer`);
+  }
+}
+
 export function assertSampleRate(fnName: string, sampleRate: number, argName = 'sampleRate'): void {
   // Two refusals, not one: 22050.7 sits inside the range, so reporting it as
   // out of range names an argument that is not the one at fault. `argName` is
   // the same point for a rate the caller spelled something else, such as a
   // resampler's source and target.
-  if (!Number.isInteger(sampleRate)) {
-    throw new RangeError(`${fnName}: ${argName} must be an integer`);
-  }
+  assertIntegralSampleRate(fnName, sampleRate, argName);
   if (sampleRate < MIN_AUDIO_SAMPLE_RATE || sampleRate > MAX_AUDIO_SAMPLE_RATE) {
     throw new RangeError(
       `${fnName}: ${argName} out of supported range [${MIN_AUDIO_SAMPLE_RATE}, ${MAX_AUDIO_SAMPLE_RATE}]`,

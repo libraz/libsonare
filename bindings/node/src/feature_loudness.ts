@@ -2,7 +2,7 @@ import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { LufsResult, LufsSeriesResult } from './types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples } from './validation.js';
+import { assertSampleRate, assertSamples } from './validation.js';
 
 /** Input for LUFS feature functions, including optional input validation control. */
 export interface LufsRequest extends FeatureSamplesRequest, ValidateOptions {}
@@ -28,7 +28,9 @@ export function lufsInterleaved(
   sampleRate = 22050,
 ): LufsResult {
   const request = samples instanceof Float32Array ? { samples, channels, sampleRate } : samples;
-  return addon.lufsInterleaved(request.samples, request.channels, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('lufsInterleaved', resolvedSampleRate);
+  return addon.lufsInterleaved(request.samples, request.channels, resolvedSampleRate);
 }
 
 /**
@@ -70,11 +72,9 @@ export function lufsSeriesInterleaved(
   sampleRate = 22050,
 ): LufsSeriesResult {
   const request = samples instanceof Float32Array ? { samples, channels, sampleRate } : samples;
-  return addon.lufsSeriesInterleaved(
-    request.samples,
-    request.channels,
-    request.sampleRate ?? 22050,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('lufsSeriesInterleaved', resolvedSampleRate);
+  return addon.lufsSeriesInterleaved(request.samples, request.channels, resolvedSampleRate);
 }
 
 /**
@@ -89,7 +89,9 @@ export function ebur128LoudnessRange(
   sampleRate = 22050,
 ): number {
   const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
-  return addon.ebur128LoudnessRange(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('ebur128LoudnessRange', resolvedSampleRate);
+  return addon.ebur128LoudnessRange(request.samples, resolvedSampleRate);
 }
 
 /**
@@ -110,7 +112,9 @@ export function lufs(
 ): LufsResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('lufs', request.samples, request.validate !== false);
-  return addon.lufs(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('lufs', resolvedSampleRate);
+  return addon.lufs(request.samples, resolvedSampleRate);
 }
 
 /**
@@ -130,7 +134,9 @@ export function momentaryLufs(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('momentaryLufs', request.samples, request.validate !== false);
-  return addon.momentaryLufs(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('momentaryLufs', resolvedSampleRate);
+  return addon.momentaryLufs(request.samples, resolvedSampleRate);
 }
 
 /**
@@ -150,5 +156,7 @@ export function shortTermLufs(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('shortTermLufs', request.samples, request.validate !== false);
-  return addon.shortTermLufs(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('shortTermLufs', resolvedSampleRate);
+  return addon.shortTermLufs(request.samples, resolvedSampleRate);
 }

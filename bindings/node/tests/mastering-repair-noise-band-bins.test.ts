@@ -120,22 +120,31 @@ describe('masteringRepairNoiseBandBins', () => {
     }
   });
 
-  it('refuses a non-positive sampleRate', () => {
+  it('refuses a non-positive sampleRate on its own authority', () => {
+    // A RangeError rather than the addon's coded refusal: the facade checks the
+    // rate before the request leaves it. The nFft case above is untouched and
+    // still carries the code, so this cannot read as the entry point having
+    // stopped refusing altogether.
     for (const sampleRate of [0, -48000]) {
-      let caught: { code?: number } | undefined;
-      try {
-        masteringRepairNoiseBandBins({ sampleRate });
-      } catch (error) {
-        caught = error as { code?: number };
-      }
-      expect(caught, `sampleRate ${sampleRate} should be refused`).toBeDefined();
-      expect(caught?.code).toBe(ErrorCode.InvalidParameter);
+      expect(
+        () => masteringRepairNoiseBandBins({ sampleRate }),
+        `sampleRate ${sampleRate} should be refused`,
+      ).toThrow(/sampleRate must be a positive integer/);
     }
+  });
+
+  it('refuses a fractional sampleRate the addon narrowing would truncate', () => {
+    // 22050.7 is the shape a fixed probe misses: it narrows onto 22050, which
+    // the core accepts, so without this check the call answers for a rate the
+    // caller never asked for.
+    expect(() => masteringRepairNoiseBandBins({ sampleRate: 22050.7 })).toThrow(
+      /sampleRate must be a positive integer/,
+    );
   });
 
   it('refuses a sampleRate that is not a number rather than substituting its default', () => {
     expect(() =>
       masteringRepairNoiseBandBins({ sampleRate: 'not-a-number' as unknown as number }),
-    ).toThrow(/sampleRate must be a number/);
+    ).toThrow(/sampleRate must be a positive integer/);
   });
 });

@@ -5,6 +5,7 @@ import {
   assertInterleavedSamples,
   assertNonNegativeSafeInteger,
   assertPositiveInteger,
+  assertSampleRate,
   assertSamples,
   assertSamplesInWindow,
 } from './validation.js';
@@ -103,7 +104,9 @@ export function meteringPeakDb(
 ): number {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('meteringPeakDb', request.samples, request.validate !== false);
-  return addon.meteringPeakDb(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringPeakDb', resolvedSampleRate);
+  return addon.meteringPeakDb(request.samples, resolvedSampleRate);
 }
 
 export function meteringRmsDb(request: MeteringSamplesRequest): number;
@@ -119,7 +122,9 @@ export function meteringRmsDb(
 ): number {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('meteringRmsDb', request.samples, request.validate !== false);
-  return addon.meteringRmsDb(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringRmsDb', resolvedSampleRate);
+  return addon.meteringRmsDb(request.samples, resolvedSampleRate);
 }
 
 export interface MeteringSilenceRatioRequest extends MeteringSamplesRequest {
@@ -150,9 +155,11 @@ export function meteringSilenceRatio(
       ? { samples, sampleRate, thresholdDb, frameLength, hopLength, ...options }
       : samples;
   assertSamples('meteringSilenceRatio', request.samples, request.validate !== false);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringSilenceRatio', resolvedSampleRate);
   return addon.meteringSilenceRatio(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.thresholdDb ?? -45,
     request.frameLength ?? 1024,
     request.hopLength ?? 256,
@@ -172,7 +179,9 @@ export function meteringCrestFactorDb(
 ): number {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('meteringCrestFactorDb', request.samples, request.validate !== false);
-  return addon.meteringCrestFactorDb(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringCrestFactorDb', resolvedSampleRate);
+  return addon.meteringCrestFactorDb(request.samples, resolvedSampleRate);
 }
 
 /**
@@ -186,11 +195,9 @@ export function meteringCrestFactorDb(
 export function meteringCrestFactorDbStereo(request: MeteringStereoRequest): number {
   assertSamples('meteringCrestFactorDbStereo', request.left, request.validate !== false);
   assertSamples('meteringCrestFactorDbStereo', request.right, request.validate !== false);
-  return addon.meteringCrestFactorDbStereo(
-    request.left,
-    request.right,
-    request.sampleRate ?? 22050,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringCrestFactorDbStereo', resolvedSampleRate);
+  return addon.meteringCrestFactorDbStereo(request.left, request.right, resolvedSampleRate);
 }
 
 export function meteringDcOffset(request: MeteringSamplesRequest): number;
@@ -206,7 +213,9 @@ export function meteringDcOffset(
 ): number {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('meteringDcOffset', request.samples, request.validate !== false);
-  return addon.meteringDcOffset(request.samples, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringDcOffset', resolvedSampleRate);
+  return addon.meteringDcOffset(request.samples, resolvedSampleRate);
 }
 
 /**
@@ -231,6 +240,8 @@ export function meteringTruePeakDb(
       ? { samples, sampleRate, oversampleFactor, ...options }
       : samples;
   assertSamples('meteringTruePeakDb', request.samples, request.validate !== false);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringTruePeakDb', resolvedSampleRate);
   // 0 is the sentinel for "use the library default", so a value the addon's
   // truncation would land inside (-1, 1) selects the default and reports
   // success. The power-of-two rule stays the core's, which names the field.
@@ -241,7 +252,7 @@ export function meteringTruePeakDb(
   );
   return addon.meteringTruePeakDb(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.oversampleFactor ?? 4,
   );
 }
@@ -265,11 +276,13 @@ export function meteringDetectClipping(
 ): ClippingReport {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('meteringDetectClipping', request.samples, request.validate !== false);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringDetectClipping', resolvedSampleRate);
   const minRegionSamples = request.minRegionSamples ?? 1;
   assertNonNegativeSafeInteger('meteringDetectClipping', minRegionSamples, 'minRegionSamples');
   return addon.meteringDetectClipping(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.threshold ?? 0.999,
     minRegionSamples,
   );
@@ -295,9 +308,11 @@ export function meteringDynamicRange(
 ): DynamicRangeReport {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('meteringDynamicRange', request.samples, request.validate !== false);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringDynamicRange', resolvedSampleRate);
   return addon.meteringDynamicRange(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.windowSec ?? 0,
     request.hopSec ?? 0,
     request.lowPercentile ?? -1,
@@ -409,7 +424,9 @@ export function meteringStereoCorrelation(
   const validate = request.validate !== false;
   assertSamples('meteringStereoCorrelation', request.left, validate, 'left');
   assertSamples('meteringStereoCorrelation', request.right, validate, 'right');
-  return addon.meteringStereoCorrelation(request.left, request.right, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringStereoCorrelation', resolvedSampleRate);
+  return addon.meteringStereoCorrelation(request.left, request.right, resolvedSampleRate);
 }
 
 /**
@@ -442,7 +459,9 @@ export function meteringStereoWidth(
   const validate = request.validate !== false;
   assertSamples('meteringStereoWidth', request.left, validate, 'left');
   assertSamples('meteringStereoWidth', request.right, validate, 'right');
-  return addon.meteringStereoWidth(request.left, request.right, request.sampleRate ?? 22050);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringStereoWidth', resolvedSampleRate);
+  return addon.meteringStereoWidth(request.left, request.right, resolvedSampleRate);
 }
 
 /** Options for the decimated scope functions. */
@@ -480,6 +499,8 @@ export function meteringVectorscope(
   const validate = request.validate !== false;
   assertSamples('meteringVectorscope', request.left, validate, 'left');
   assertSamples('meteringVectorscope', request.right, validate, 'right');
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringVectorscope', resolvedSampleRate);
   // 0 is the sentinel for "emit every sample". The addon floors a negative to
   // that same 0, so an out-of-domain request would select no decimation at all
   // and come back a success.
@@ -487,7 +508,7 @@ export function meteringVectorscope(
   return addon.meteringVectorscope(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.maxPoints ?? 0,
   );
 }
@@ -517,12 +538,14 @@ export function meteringPhaseScope(
   const validate = request.validate !== false;
   assertSamples('meteringPhaseScope', request.left, validate, 'left');
   assertSamples('meteringPhaseScope', request.right, validate, 'right');
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringPhaseScope', resolvedSampleRate);
   // The sentinel and the flooring are the vectorscope's; see there.
   assertNonNegativeSafeInteger('meteringPhaseScope', request.maxPoints ?? 0, 'maxPoints');
   return addon.meteringPhaseScope(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.maxPoints ?? 0,
   );
 }
@@ -548,8 +571,10 @@ export function meteringSpectrum(
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const validate = request.validate !== false;
   assertSamples('meteringSpectrum', request.samples, validate);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringSpectrum', resolvedSampleRate);
   assertSpectrumOptions('meteringSpectrum', request);
-  return addon.meteringSpectrum(request.samples, request.sampleRate ?? 22050, request);
+  return addon.meteringSpectrum(request.samples, resolvedSampleRate, request);
 }
 
 /**
@@ -580,6 +605,8 @@ export function meteringSpectrumFrame(
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, frameOffset, ...options } : samples;
   const validate = request.validate !== false;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('meteringSpectrumFrame', resolvedSampleRate);
   // Ahead of the pre-scan below, which would otherwise size its window from a
   // fractional nFft before this saw it.
   assertSpectrumOptions('meteringSpectrumFrame', request);
@@ -597,7 +624,7 @@ export function meteringSpectrumFrame(
   );
   return addon.meteringSpectrumFrame(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.frameOffset ?? 0,
     request,
   );

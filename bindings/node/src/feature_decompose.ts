@@ -2,7 +2,7 @@ import { resolveFftOptions } from './_fft_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
-import { assertHpssKernels, assertInt32, assertSamples } from './validation.js';
+import { assertHpssKernels, assertInt32, assertSampleRate, assertSamples } from './validation.js';
 
 function resolveHardMaskOption(fnName: string, value: unknown): boolean {
   if (value === undefined) {
@@ -283,6 +283,8 @@ export function decompose(
  */
 export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsResult {
   assertSamples('decomposeStems', request.samples, true);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('decomposeStems', resolvedSampleRate);
   // Each of the four is its own "0 => the documented default" on the C side, and
   // the addon's narrowing truncates onto that 0.
   for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
@@ -291,7 +293,7 @@ export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsRe
       assertInt32('decomposeStems', value, field);
     }
   }
-  return addon.decomposeStems(request.samples, request.sampleRate ?? 22050, {
+  return addon.decomposeStems(request.samples, resolvedSampleRate, {
     nComponents: request.nComponents,
     nFft: request.nFft,
     hopLength: request.hopLength,
@@ -356,10 +358,12 @@ export function remix(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, intervals, sampleRate, alignZeros } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('remix', resolvedSampleRate);
   return addon.remix(
     request.samples,
     request.intervals,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.alignZeros ?? false,
   );
 }
@@ -391,10 +395,12 @@ export function remixAlignedIntervals(
 ): Int32Array {
   const request =
     samples instanceof Float32Array ? { samples, intervals, sampleRate, alignZeros } : samples;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('remixAlignedIntervals', resolvedSampleRate);
   return addon.remixAlignedIntervals(
     request.samples,
     request.intervals,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.alignZeros ?? true,
   );
 }
@@ -443,9 +449,11 @@ export function hpssWithResidual(
   const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
   const resolvedKernelPercussive = request.kernelPercussive ?? 31;
   assertHpssKernels('hpssWithResidual', resolvedKernelHarmonic, resolvedKernelPercussive);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('hpssWithResidual', resolvedSampleRate);
   return addon.hpssWithResidual(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     resolvedKernelHarmonic,
     resolvedKernelPercussive,
     fftOptions.nFft,

@@ -1,6 +1,6 @@
 import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples } from './validation.js';
+import { assertSampleRate, assertSamples } from './validation.js';
 
 /** Detector mode for `masteringDynamicsCompressor`. */
 export type CompressorDetector = 'peak' | 'rms' | 'log_rms' | 'logRms' | 0 | 1 | 2;
@@ -86,7 +86,9 @@ export function masteringDynamicsCompressor(
 ): DynamicsProcessorResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('masteringDynamicsCompressor', request.samples, request.validate !== false);
-  return addon.masteringDynamicsCompressor(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringDynamicsCompressor', resolvedSampleRate);
+  return addon.masteringDynamicsCompressor(request.samples, resolvedSampleRate, request);
 }
 
 /** Offline noise gate with hysteresis, hold, and optional key HPF. */
@@ -105,7 +107,9 @@ export function masteringDynamicsGate(
 ): DynamicsProcessorResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('masteringDynamicsGate', request.samples, request.validate !== false);
-  return addon.masteringDynamicsGate(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringDynamicsGate', resolvedSampleRate);
+  return addon.masteringDynamicsGate(request.samples, resolvedSampleRate, request);
 }
 
 /** Offline transient shaper (envelope-difference attack/sustain control). */
@@ -124,9 +128,7 @@ export function masteringDynamicsTransientShaper(
 ): DynamicsProcessorResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('masteringDynamicsTransientShaper', request.samples, request.validate !== false);
-  return addon.masteringDynamicsTransientShaper(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringDynamicsTransientShaper', resolvedSampleRate);
+  return addon.masteringDynamicsTransientShaper(request.samples, resolvedSampleRate, request);
 }

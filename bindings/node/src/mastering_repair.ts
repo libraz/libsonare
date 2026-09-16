@@ -18,6 +18,7 @@ import type {
   TrimRange,
   TrimSilenceStereoResult,
 } from './types.js';
+import { assertPositiveInteger, assertSampleRate } from './validation.js';
 
 /** Common input fields for offline repair processors. */
 export interface MasteringRepairSamplesRequest {
@@ -74,7 +75,9 @@ export function masteringRepairDeclick(
   options: DeclickOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.masteringRepairDeclick(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDeclick', resolvedSampleRate);
+  return addon.masteringRepairDeclick(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDeclickStereo`. */
@@ -101,10 +104,12 @@ export interface MasteringRepairDeclickStereoRequest extends DeclickOptions {
 export function masteringRepairDeclickStereo(
   request: MasteringRepairDeclickStereoRequest,
 ): DeclickStereoResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDeclickStereo', resolvedSampleRate);
   return addon.masteringRepairDeclickStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request,
   );
 }
@@ -124,11 +129,9 @@ export function masteringRepairDenoiseClassical(
   options: DenoiseClassicalOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.masteringRepairDenoiseClassical(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDenoiseClassical', resolvedSampleRate);
+  return addon.masteringRepairDenoiseClassical(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDenoiseClassicalStereo`. */
@@ -176,10 +179,12 @@ export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseCla
 export function masteringRepairDenoiseClassicalStereo(
   request: MasteringRepairDenoiseClassicalStereoRequest,
 ): DenoiseStereoResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDenoiseClassicalStereo', resolvedSampleRate);
   return addon.masteringRepairDenoiseClassicalStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request,
   );
 }
@@ -235,11 +240,9 @@ export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseCla
 export function masteringRepairDenoiseClassicalLinked(
   request: MasteringRepairDenoiseClassicalLinkedRequest,
 ): DenoiseLinkedResult {
-  return addon.masteringRepairDenoiseClassicalLinked(
-    request.channels,
-    request.sampleRate ?? 22050,
-    request,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDenoiseClassicalLinked', resolvedSampleRate);
+  return addon.masteringRepairDenoiseClassicalLinked(request.channels, resolvedSampleRate, request);
 }
 
 /** Options for `masteringRepairDeclip`. */
@@ -354,7 +357,9 @@ export function masteringRepairDeclip(
   options: DeclipOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.masteringRepairDeclip(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDeclip', resolvedSampleRate);
+  return addon.masteringRepairDeclip(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDeclipStereo`. */
@@ -381,10 +386,12 @@ export interface MasteringRepairDeclipStereoRequest extends DeclipOptions {
 export function masteringRepairDeclipStereo(
   request: MasteringRepairDeclipStereoRequest,
 ): DeclipStereoResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDeclipStereo', resolvedSampleRate);
   return addon.masteringRepairDeclipStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request,
   );
 }
@@ -402,7 +409,9 @@ export function masteringRepairDecrackle(
   options: DecrackleOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.masteringRepairDecrackle(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDecrackle', resolvedSampleRate);
+  return addon.masteringRepairDecrackle(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDecrackleStereo`. */
@@ -426,10 +435,12 @@ export interface MasteringRepairDecrackleStereoRequest extends DecrackleOptions 
 export function masteringRepairDecrackleStereo(
   request: MasteringRepairDecrackleStereoRequest,
 ): DecrackleStereoResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDecrackleStereo', resolvedSampleRate);
   return addon.masteringRepairDecrackleStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request,
   );
 }
@@ -447,7 +458,9 @@ export function masteringRepairDehum(
   options: DehumOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.masteringRepairDehum(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDehum', resolvedSampleRate);
+  return addon.masteringRepairDehum(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDehumStereo`. */
@@ -475,12 +488,9 @@ export interface MasteringRepairDehumStereoRequest extends DehumOptions {
 export function masteringRepairDehumStereo(
   request: MasteringRepairDehumStereoRequest,
 ): DehumStereoResult {
-  return addon.masteringRepairDehumStereo(
-    request.left,
-    request.right,
-    request.sampleRate ?? 22050,
-    request,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDehumStereo', resolvedSampleRate);
+  return addon.masteringRepairDehumStereo(request.left, request.right, resolvedSampleRate, request);
 }
 
 /** Offline classical dereverberator (spectral subtraction + optional WPE). */
@@ -498,11 +508,9 @@ export function masteringRepairDereverbClassical(
   options: DereverbClassicalOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.masteringRepairDereverbClassical(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDereverbClassical', resolvedSampleRate);
+  return addon.masteringRepairDereverbClassical(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDereverbClassicalStereo`. */
@@ -550,10 +558,12 @@ export interface MasteringRepairDereverbClassicalStereoRequest extends DereverbC
 export function masteringRepairDereverbClassicalStereo(
   request: MasteringRepairDereverbClassicalStereoRequest,
 ): DereverbStereoResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDereverbClassicalStereo', resolvedSampleRate);
   return addon.masteringRepairDereverbClassicalStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request,
   );
 }
@@ -610,9 +620,11 @@ export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbC
 export function masteringRepairDereverbClassicalLinked(
   request: MasteringRepairDereverbClassicalLinkedRequest,
 ): DereverbLinkedResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDereverbClassicalLinked', resolvedSampleRate);
   return addon.masteringRepairDereverbClassicalLinked(
     request.channels,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request,
   );
 }
@@ -692,7 +704,9 @@ export function masteringRepairTrimSilence(
   options: TrimSilenceOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  return addon.masteringRepairTrimSilence(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairTrimSilence', resolvedSampleRate);
+  return addon.masteringRepairTrimSilence(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairTrimSilenceStereo`. */
@@ -750,10 +764,12 @@ export interface MasteringRepairTrimSilenceStereoRequest extends TrimSilenceOpti
 export function masteringRepairTrimSilenceStereo(
   request: MasteringRepairTrimSilenceStereoRequest,
 ): TrimSilenceStereoResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairTrimSilenceStereo', resolvedSampleRate);
   return addon.masteringRepairTrimSilenceStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request,
   );
 }
@@ -782,7 +798,9 @@ export interface MasteringRepairDetectClicksRequest
 export function masteringRepairDetectClicks(
   request: MasteringRepairDetectClicksRequest,
 ): ClickDetection {
-  return addon.masteringRepairDetectClicks(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDetectClicks', resolvedSampleRate);
+  return addon.masteringRepairDetectClicks(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDetectNoiseFloor`. */
@@ -812,11 +830,9 @@ export interface MasteringRepairDetectNoiseFloorRequest
 export function masteringRepairDetectNoiseFloor(
   request: MasteringRepairDetectNoiseFloorRequest,
 ): NoiseDetection {
-  return addon.masteringRepairDetectNoiseFloor(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDetectNoiseFloor', resolvedSampleRate);
+  return addon.masteringRepairDetectNoiseFloor(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairNoiseBandBins`. */
@@ -868,6 +884,14 @@ export interface MasteringRepairNoiseBandBinsRequest {
 export function masteringRepairNoiseBandBins(
   request: MasteringRepairNoiseBandBinsRequest,
 ): Int32Array {
+  // Geometry only, no audio read: the core requires sample_rate > 0, not the
+  // [8000, 384000] audio-analysis bound the other repair entries carry. Only
+  // what the caller supplied, because the whole request travels to the addon's
+  // own options reader -- resolving a default here would check this file's guess
+  // at one the reader owns.
+  if (request.sampleRate !== undefined) {
+    assertPositiveInteger('masteringRepairNoiseBandBins', request.sampleRate, 'sampleRate');
+  }
   return addon.masteringRepairNoiseBandBins(request);
 }
 
@@ -897,7 +921,9 @@ export interface MasteringRepairDetectClippingRequest
 export function masteringRepairDetectClipping(
   request: MasteringRepairDetectClippingRequest,
 ): ClipDetection {
-  return addon.masteringRepairDetectClipping(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDetectClipping', resolvedSampleRate);
+  return addon.masteringRepairDetectClipping(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDetectCrackle`. */
@@ -921,7 +947,9 @@ export interface MasteringRepairDetectCrackleRequest
 export function masteringRepairDetectCrackle(
   request: MasteringRepairDetectCrackleRequest,
 ): CrackleDetection {
-  return addon.masteringRepairDetectCrackle(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDetectCrackle', resolvedSampleRate);
+  return addon.masteringRepairDetectCrackle(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDetectHum`. */
@@ -945,7 +973,9 @@ export interface MasteringRepairDetectHumRequest
  * ```
  */
 export function masteringRepairDetectHum(request: MasteringRepairDetectHumRequest): HumDetection {
-  return addon.masteringRepairDetectHum(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDetectHum', resolvedSampleRate);
+  return addon.masteringRepairDetectHum(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDetectReverb`. */
@@ -974,7 +1004,9 @@ export interface MasteringRepairDetectReverbRequest
 export function masteringRepairDetectReverb(
   request: MasteringRepairDetectReverbRequest,
 ): ReverbDetection {
-  return addon.masteringRepairDetectReverb(request.samples, request.sampleRate ?? 22050, request);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDetectReverb', resolvedSampleRate);
+  return addon.masteringRepairDetectReverb(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDetectTrimRange`. */
@@ -999,11 +1031,9 @@ export interface MasteringRepairDetectTrimRangeRequest
 export function masteringRepairDetectTrimRange(
   request: MasteringRepairDetectTrimRangeRequest,
 ): TrimRange {
-  return addon.masteringRepairDetectTrimRange(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
-  );
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDetectTrimRange', resolvedSampleRate);
+  return addon.masteringRepairDetectTrimRange(request.samples, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDetectTrimRangeStereo`. */
@@ -1035,10 +1065,12 @@ export interface MasteringRepairDetectTrimRangeStereoRequest extends TrimSilence
 export function masteringRepairDetectTrimRangeStereo(
   request: MasteringRepairDetectTrimRangeStereoRequest,
 ): TrimRange {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringRepairDetectTrimRangeStereo', resolvedSampleRate);
   return addon.masteringRepairDetectTrimRangeStereo(
     request.left,
     request.right,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request,
   );
 }

@@ -185,7 +185,7 @@ describe('masteringRepairDenoiseClassicalLinked', () => {
     ).toThrow();
     expect(() =>
       masteringRepairDenoiseClassicalLinked({ channels: [left], sampleRate: Number.NaN }),
-    ).toThrow(/finite number/);
+    ).toThrow(/sampleRate must be an integer/);
     expect(() =>
       masteringRepairDenoiseClassicalLinked({ channels: [left], sampleRate: SR, nFft: 1000 }),
     ).toThrow();
@@ -317,7 +317,7 @@ describe('masteringRepairDereverbClassicalLinked', () => {
     ).toThrow();
     expect(() =>
       masteringRepairDereverbClassicalLinked({ channels: [left], sampleRate: Number.NaN }),
-    ).toThrow(/finite number/);
+    ).toThrow(/sampleRate must be an integer/);
     expect(() =>
       masteringRepairDereverbClassicalLinked({ channels: [left], sampleRate: SR, nFft: 1000 }),
     ).toThrow();

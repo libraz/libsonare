@@ -76,10 +76,15 @@ describe('masteringAbMatchLoudness', () => {
     expect(matched.sampleRate).toBe(22050);
   });
 
-  it('rejects an invalid sample rate with a SonareError', () => {
+  it('rejects an invalid sample rate on its own authority, ahead of the core', () => {
+    // A RangeError rather than a SonareError: the facade refuses the rate here,
+    // so the refusal belongs to this surface rather than being a code the core
+    // sent back. The case below still fails inside the core and still carries
+    // the code, which is what keeps this from reading as the guard having moved
+    // everything off the coded path.
     const caught = capture(() => masteringAbMatchLoudness({ source, reference, sampleRate: 0 }));
-    expect(isSonareError(caught)).toBe(true);
-    expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
+    expect(caught).toBeInstanceOf(RangeError);
+    expect((caught as RangeError).message).toMatch(/sampleRate out of supported range/);
   });
 
   it('rejects a non-finite sample in the reference', () => {

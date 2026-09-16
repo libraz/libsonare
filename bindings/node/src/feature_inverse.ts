@@ -1,7 +1,12 @@
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { InverseMelResult, InverseStftResult } from './types.js';
-import { assertFiniteScalar } from './validation.js';
+import {
+  assertFiniteScalar,
+  assertIntegralSampleRate,
+  assertPositiveInteger,
+  assertSampleRate,
+} from './validation.js';
 
 export interface CqtToAudioRequest {
   magnitude: Float32Array;
@@ -112,11 +117,13 @@ export function cqtToAudio(
     magnitude instanceof Float32Array
       ? { magnitude, nBins, nFrames, sampleRate, hopLength, fmin, binsPerOctave, nIter }
       : magnitude;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('cqtToAudio', resolvedSampleRate);
   return addon.cqtToAudio(
     request.magnitude,
     request.nBins,
     request.nFrames,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.hopLength ?? 512,
     request.fmin ?? 32.70319566257483,
     request.binsPerOctave ?? 12,
@@ -164,6 +171,7 @@ export function vqtToAudio(
       magnitude.nIter,
     );
   }
+  assertSampleRate('vqtToAudio', sampleRate);
   return addon.vqtToAudio(
     magnitude,
     nBins,
@@ -201,11 +209,15 @@ export function melToStft(
 ): InverseStftResult {
   const request =
     mel instanceof Float32Array ? { mel, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk } : mel;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  // No range bound here: the core only requires sample_rate > 0 for this
+  // reconstruction, unlike the [8000, 384000] audio-analysis bound.
+  assertPositiveInteger('melToStft', resolvedSampleRate, 'sampleRate');
   return addon.melToStft(
     request.mel,
     request.nMels,
     request.nFrames,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.nFft ?? 2048,
     request.fmin ?? 0,
     request.fmax ?? 0,
@@ -243,11 +255,15 @@ export function melToAudio(
     mel instanceof Float32Array
       ? { mel, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk }
       : mel;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  // No range bound here: the core only requires sample_rate > 0 for this
+  // reconstruction, unlike the [8000, 384000] audio-analysis bound.
+  assertPositiveInteger('melToAudio', resolvedSampleRate, 'sampleRate');
   return addon.melToAudio(
     request.mel,
     request.nMels,
     request.nFrames,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.nFft ?? 2048,
     request.hopLength ?? 512,
     request.fmin ?? 0,
@@ -283,11 +299,13 @@ export function griffinLim(
     magnitude instanceof Float32Array
       ? { magnitude, nBins, nFrames, sampleRate, nFft, hopLength, nIter, momentum }
       : magnitude;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('griffinLim', resolvedSampleRate);
   return addon.griffinLim(
     request.magnitude,
     request.nBins,
     request.nFrames,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.nFft ?? 2048,
     request.hopLength ?? 512,
     request.nIter ?? 32,
@@ -355,12 +373,16 @@ export function mfccToAudio(
     mfcc instanceof Float32Array
       ? { mfcc, nMfcc, nFrames, nMels, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk, lifter }
       : mfcc;
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  // No range bound here: the core only requires sample_rate > 0 for this
+  // reconstruction, unlike the [8000, 384000] audio-analysis bound.
+  assertPositiveInteger('mfccToAudio', resolvedSampleRate, 'sampleRate');
   return addon.mfccToAudio(
     request.mfcc,
     request.nMfcc,
     request.nFrames,
     request.nMels ?? 128,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.nFft ?? 2048,
     request.hopLength ?? 512,
     request.fmin ?? 0,
@@ -390,9 +412,11 @@ export function phaseVocoder(
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, rate, nFft, hopLength } : samples;
   assertFiniteScalar('phaseVocoder', request.rate, 'rate');
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('phaseVocoder', resolvedSampleRate);
   return addon.phaseVocoder(
     request.samples,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.rate,
     request.nFft ?? 2048,
     request.hopLength ?? 512,
@@ -419,9 +443,13 @@ export function tone(
     typeof frequency === 'number'
       ? { frequency, sampleRate, duration, phase, amplitude }
       : frequency;
+  // Integrality only: a generator's rate has no domain in the core, so the
+  // audio-analysis bound would refuse rates it renders correctly today.
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertIntegralSampleRate('tone', resolvedSampleRate);
   return addon.tone(
     request.frequency ?? 440,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.duration ?? 1,
     request.phase ?? 0,
     request.amplitude ?? 1,
@@ -445,10 +473,13 @@ export function chirp(
   linear = true,
 ): Float32Array {
   const request = typeof fmin === 'number' ? { fmin, fmax, sampleRate, duration, linear } : fmin;
+  // Integrality only, as `tone`: a generator's rate has no domain in the core.
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertIntegralSampleRate('chirp', resolvedSampleRate);
   return addon.chirp(
     request.fmin ?? 440,
     request.fmax ?? 880,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.duration ?? 1,
     request.linear ?? true,
   );
@@ -472,9 +503,12 @@ export function clicks(
 ): Float32Array {
   const request =
     times instanceof Float32Array ? { times, sampleRate, length, frequency, clickDuration } : times;
+  // Integrality only, as `tone`: a generator's rate has no domain in the core.
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertIntegralSampleRate('clicks', resolvedSampleRate);
   return addon.clicks(
     request.times,
-    request.sampleRate ?? 22050,
+    resolvedSampleRate,
     request.length ?? 0,
     request.frequency ?? 1000,
     request.clickDuration ?? 0.1,
