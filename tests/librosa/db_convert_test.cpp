@@ -132,6 +132,85 @@ TEST_CASE("dB conversions reject non-finite scalar parameters", "[db_convert][ed
   REQUIRE_THROWS_AS(db_to_amplitude(input, inf), SonareException);
 }
 
+// A NaN bin must reach the caller as NaN: librosa 0.11.0 returns nan here
+// (np.maximum propagates, unlike np.fmax), and a floored NaN is indistinguishable
+// from a genuinely silent bin. The finite and infinite bins are the control --
+// the argument order in std::max moves nothing else.
+TEST_CASE("power_to_db propagates a non-finite bin", "[librosa][db_convert][edge]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  SECTION("a NaN bin comes out NaN and leaves its neighbours untouched") {
+    const std::vector<float> S{1.0f, nan, 1e-12f, 0.25f};
+    const auto got = power_to_db(S, 1.0f, 1e-10f, -1.0f);
+
+    REQUIRE(got.size() == 4);
+    REQUIRE(std::isnan(got[1]));
+    // librosa.power_to_db([1, nan, 1e-12, 0.25], ref=1.0, amin=1e-10, top_db=None)
+    // -> [0.0, nan, -100.0, -6.0206003]
+    REQUIRE_THAT(got[0], WithinAbs(0.0f, 1e-4f));
+    REQUIRE_THAT(got[2], WithinAbs(-100.0f, 1e-4f));
+    REQUIRE_THAT(got[3], WithinAbs(-6.0206003f, 1e-4f));
+
+    // The same bins without the NaN present are bit-identical, so the NaN does
+    // not perturb the accumulation it passes through.
+    const std::vector<float> finite_only{1.0f, 1e-12f, 0.25f};
+    const auto reference = power_to_db(finite_only, 1.0f, 1e-10f, -1.0f);
+    REQUIRE(got[0] == reference[0]);
+    REQUIRE(got[2] == reference[1]);
+    REQUIRE(got[3] == reference[2]);
+  }
+
+  SECTION("an infinite bin is unchanged: +inf stays +inf, -inf floors at amin") {
+    const std::vector<float> S{1.0f, inf, -inf, 0.25f};
+    const auto got = power_to_db(S, 1.0f, 1e-10f, -1.0f);
+
+    REQUIRE(std::isinf(got[1]));
+    REQUIRE(got[1] > 0.0f);
+    REQUIRE_THAT(got[2], WithinAbs(-100.0f, 1e-4f));
+    REQUIRE_THAT(got[0], WithinAbs(0.0f, 1e-4f));
+    REQUIRE_THAT(got[3], WithinAbs(-6.0206003f, 1e-4f));
+  }
+
+  SECTION("top_db leaves a NaN alone in both passes") {
+    // Neither `db > max_db` nor `out[i] < floor_db` is true for a NaN, so it is
+    // excluded from the maximum and skipped by the clamp. librosa instead takes
+    // a NaN maximum and returns nan for every bin; only the NaN bin agrees.
+    const std::vector<float> S{1.0f, nan, 1e-12f, 0.25f};
+    const auto got = power_to_db(S, 1.0f, 1e-10f, 80.0f);
+
+    REQUIRE(std::isnan(got[1]));
+    REQUIRE_THAT(got[0], WithinAbs(0.0f, 1e-4f));
+    REQUIRE_THAT(got[2], WithinAbs(-80.0f, 1e-4f));
+    REQUIRE_THAT(got[3], WithinAbs(-6.0206003f, 1e-4f));
+  }
+
+  SECTION("the max-reference sentinel keeps a finite reference") {
+    // resolve_ref folds with the accumulator first, so it absorbs the NaN and the
+    // reference stays the finite maximum. librosa's ref=np.max is NaN instead and
+    // returns nan for every bin; the divergence is the reference, not this bin.
+    const std::vector<float> S{1.0f, nan, 1e-12f, 0.25f};
+    const auto got = power_to_db(S, -1.0f, 1e-10f, -1.0f);
+
+    REQUIRE(std::isnan(got[1]));
+    REQUIRE_THAT(got[0], WithinAbs(0.0f, 1e-4f));
+    REQUIRE_THAT(got[2], WithinAbs(-100.0f, 1e-4f));
+    REQUIRE_THAT(got[3], WithinAbs(-6.0206003f, 1e-4f));
+  }
+
+  SECTION("amplitude_to_db inherits the propagation through the squaring") {
+    const std::vector<float> A{1.0f, nan, 1e-6f, 0.5f};
+    const auto got = amplitude_to_db(A, 1.0f, 1e-5f, -1.0f);
+
+    REQUIRE(std::isnan(got[1]));
+    // librosa.amplitude_to_db([1, nan, 1e-6, 0.5], ref=1.0, amin=1e-5, top_db=None)
+    // -> [0.0, nan, -100.0, -6.0206003]
+    REQUIRE_THAT(got[0], WithinAbs(0.0f, 1e-3f));
+    REQUIRE_THAT(got[2], WithinAbs(-100.0f, 1e-3f));
+    REQUIRE_THAT(got[3], WithinAbs(-6.0206003f, 1e-3f));
+  }
+}
+
 TEST_CASE("dB finite non-positive references retain max-reference sentinel semantics",
           "[db_convert][edge]") {
   const std::vector<float> input{4.0f, 1.0f};

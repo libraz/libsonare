@@ -44,7 +44,10 @@ std::vector<float> power_to_db(const float* S, std::size_t n, float ref, float a
 
   float max_db = -std::numeric_limits<float>::infinity();
   for (std::size_t i = 0; i < n; ++i) {
-    const float val = std::max(amin, S[i]);
+    // S[i] first on purpose: std::max returns its first argument for a NaN second
+    // one, so amin first would floor an unmeasurable bin to a finite dB nothing
+    // downstream can tell from silence. numpy's np.maximum propagates likewise.
+    const float val = std::max(S[i], amin);
     const float db = power_to_db_scalar(val) - ref_db;
     out[i] = db;
     if (db > max_db) max_db = db;

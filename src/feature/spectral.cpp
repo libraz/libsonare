@@ -364,6 +364,8 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
     if (b < n_bands && !band_indices.empty()) {
       band_indices.pop_back();
     }
+    // A band the trim empties clamps this to 0 and the average below becomes 0/0.
+    // That NaN is the reported value: librosa's mean over an empty slice is NaN too.
     q_count = std::min(q_count, static_cast<int>(band_indices.size()));
 
     // Stage the band bin-major in frame tiles instead of gathering a column per frame.
