@@ -80,26 +80,31 @@ class StreamAnalyzer:
         # Seed real-time defaults from the native layer, then override.
         _check(lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)))
         if config is not None:
-            raw.sample_rate = int(config.sample_rate)
-            raw.n_fft = int(config.n_fft)
-            raw.hop_length = int(config.hop_length)
-            raw.n_mels = int(config.n_mels)
+            # Integer fields are assigned bare: SonareStreamConfig is a CStruct, so
+            # each field narrows onto its own declared type and refuses a fraction
+            # an int() here would have truncated into a legal setting.
+            raw.sample_rate = config.sample_rate
+            raw.n_fft = config.n_fft
+            raw.hop_length = config.hop_length
+            raw.n_mels = config.n_mels
             raw.fmin = float(config.fmin)
             raw.fmax = float(config.fmax)
             raw.tuning_ref_hz = float(config.tuning_ref_hz)
+            # The flags are the exception: that guard refuses a bool, so the 0/1 is
+            # spelled out here.
             raw.compute_magnitude = int(config.compute_magnitude)
             raw.compute_mel = int(config.compute_mel)
             raw.compute_chroma = int(config.compute_chroma)
             raw.compute_onset = int(config.compute_onset)
             raw.compute_spectral = int(config.compute_spectral)
-            raw.emit_every_n_frames = int(config.emit_every_n_frames)
-            raw.magnitude_downsample = int(config.magnitude_downsample)
-            raw.max_pending_frames = int(config.max_pending_frames)
-            raw.max_progression_entries = int(config.max_progression_entries)
+            raw.emit_every_n_frames = config.emit_every_n_frames
+            raw.magnitude_downsample = config.magnitude_downsample
+            raw.max_pending_frames = config.max_pending_frames
+            raw.max_progression_entries = config.max_progression_entries
             raw.key_update_interval_sec = float(config.key_update_interval_sec)
             raw.bpm_update_interval_sec = float(config.bpm_update_interval_sec)
-            raw.window = int(config.window)
-            raw.output_format = int(config.output_format)
+            raw.window = config.window
+            raw.output_format = config.output_format
         handle = ctypes.c_void_p()
         _check(lib.sonare_stream_analyzer_create(ctypes.byref(raw), ctypes.byref(handle)))
         self._handle = handle

@@ -284,18 +284,20 @@ def detect_onsets(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out_times, out_count):
+        # Counts go in unconverted: the struct's own narrowing refuses a
+        # fraction, which int() truncated into a legal frame count instead.
         config = SonareOnsetDetectConfig(
-            n_fft=int(n_fft),
-            hop_length=int(hop_length),
+            n_fft=n_fft,
+            hop_length=hop_length,
             threshold=float(threshold),
-            pre_max=int(pre_max),
-            post_max=int(post_max),
-            pre_avg=int(pre_avg),
-            post_avg=int(post_avg),
+            pre_max=pre_max,
+            post_max=post_max,
+            pre_avg=pre_avg,
+            post_avg=post_avg,
             delta=float(delta),
-            wait=int(wait),
+            wait=wait,
             backtrack=int(backtrack),
-            backtrack_range=int(backtrack_range),
+            backtrack_range=backtrack_range,
         )
         rc = lib.sonare_detect_onsets_ex(
             c_array,

@@ -69,6 +69,8 @@ def detect_chords(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareChordAnalysisResult()
+    # The key ordinals go in unconverted: the struct's own narrowing refuses a
+    # fraction, which int() truncated into a neighbouring pitch class or mode.
     options = SonareChordDetectionOptions(
         min_duration,
         smoothing_window,
@@ -80,8 +82,8 @@ def detect_chords(
         1 if use_hmm else 0,
         hmm_beam_width,
         1 if use_key_context else 0,
-        int(key_root),
-        int(key_mode),
+        key_root,
+        key_mode,
         1 if detect_inversions else 0,
         chroma_method_value,
     )
@@ -169,6 +171,8 @@ def chord_functional_analysis(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareStringArray()
+    # The key ordinals go in unconverted: the struct's own narrowing refuses a
+    # fraction, which int() truncated into a neighbouring pitch class or mode.
     options = SonareChordDetectionOptions(
         min_duration,
         smoothing_window,
@@ -180,8 +184,8 @@ def chord_functional_analysis(
         1 if use_hmm else 0,
         hmm_beam_width,
         1 if use_key_context else 0,
-        int(key_root),
-        int(key_mode),
+        key_root,
+        key_mode,
         1 if detect_inversions else 0,
         chroma_method_value,
     )
@@ -190,8 +194,8 @@ def chord_functional_analysis(
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(options),
-        _to_c_int32(int(key_root), "key_root"),
-        _to_c_int32(int(key_mode), "key_mode"),
+        _to_c_int32(key_root, "key_root"),
+        _to_c_int32(key_mode, "key_mode"),
         ctypes.byref(out),
     )
     _check(rc)

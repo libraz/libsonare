@@ -157,7 +157,7 @@ def analyze(
     numerators = (
         tuple(_DEFAULT_METER_CANDIDATE_NUMERATORS)
         if meter_candidate_numerators is None
-        else tuple(int(value) for value in meter_candidate_numerators)
+        else tuple(meter_candidate_numerators)
     )
     # The flat C array cannot carry an over-long list, so reject it here rather
     # than truncating it into a set the caller never asked for. Entries are
@@ -463,7 +463,7 @@ def estimate_meter(
     numerators = (
         tuple(_DEFAULT_METER_CANDIDATE_NUMERATORS)
         if candidate_numerators is None
-        else tuple(int(value) for value in candidate_numerators)
+        else tuple(candidate_numerators)
     )
     # The flat C array cannot carry an over-long list, so reject it here rather
     # than truncating it into a set the caller never asked for. Entries are
