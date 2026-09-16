@@ -85,6 +85,19 @@ bool refuses(Fn&& call) {
   return false;
 }
 
+/// The text of a refusal, for the one case where accept/reject cannot tell two
+/// guards apart. Empty when the call was accepted, so a missing refusal fails
+/// the substring test rather than passing it vacuously.
+template <typename Fn>
+std::string refusal_message(Fn&& call) {
+  try {
+    call();
+  } catch (const SonareException& error) {
+    return error.what();
+  }
+  return {};
+}
+
 Audio test_tone(int sample_rate = 22050, std::size_t samples = 8192) {
   std::vector<float> data(samples);
   for (std::size_t i = 0; i < data.size(); ++i) {
@@ -219,18 +232,26 @@ TEST_CASE("The spectral features refuse a saturated shape argument", "[conforman
       refuses([&] { zero_crossings(ramp.data(), ramp.size(), kSaturated, false, true, true); }));
 }
 
-TEST_CASE("spectralContrast refuses a saturated fmin, but not where it looks",
-          "[conformance][wasm]") {
-  // The guard that reads as fmin's -- `fmin > 0.0f` -- ADMITS an infinity. What
-  // refuses it is the band-topology test below it, which is about whether the
-  // highest band fits under nyquist and catches the infinity incidentally.
-  // Pinned as its own case because the two are separable: simplifying the band
-  // test would remove a refusal nothing names.
+TEST_CASE("spectralContrast refuses a saturated fmin by name", "[conformance][wasm]") {
+  // fmin is refused by its own finiteness guard. It has not always been: a bare
+  // `fmin > 0.0f` admits an infinity, and the refusal fell through to the
+  // band-topology check further down, which is about whether the highest band
+  // fits under Nyquist and caught the infinity incidentally. Kept as its own
+  // case because reverting that guard to a bare positivity test would restore
+  // the fall-through silently -- the call is refused either way, so only the
+  // second assertion here can tell the two apart.
   const Audio audio = test_tone();
   const Spectrogram spec = test_spectrogram(audio);
 
-  REQUIRE(kSaturated > 0.0f);  // the guard that does NOT do the work
+  REQUIRE(kSaturated > 0.0f);  // positivity alone cannot be the guard
   REQUIRE(refuses([&] { spectral_contrast(spec, 22050, 4, kSaturated, 0.02f); }));
+  // Accept/reject cannot separate the two guards -- an infinity overflows any
+  // finite Nyquist whatever n_bands is, so both refuse it. The message is the
+  // only observable that differs, so that is what is asserted: matched on
+  // "finite" rather than on the full wording, which is not this file's to pin.
+  const std::string message =
+      refusal_message([&] { spectral_contrast(spec, 22050, 4, kSaturated, 0.02f); });
+  REQUIRE(message.find("finite") != std::string::npos);
 
   // fmin 100 and 400 measured all 325 elements differing, worst by 30.58 dB.
   // A vector `!=` would also pass on one element differing in its last bit.
