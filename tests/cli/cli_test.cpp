@@ -19,6 +19,7 @@
 #include <limits>
 #include <locale>
 #include <memory>
+#include <random>
 #include <set>
 #include <sstream>
 #include <string>
@@ -255,6 +256,24 @@ void create_clipped_wav(const std::string& path, int sample_rate = 22050) {
   for (size_t i = 0; i < n_samples; ++i) {
     const float t = static_cast<float>(i) / sample_rate;
     samples[i] = (i >= clip_begin && i < clip_end) ? 1.0f : 0.25f * std::sin(two_pi * 220.0f * t);
+  }
+  save_wav(path, samples, sample_rate);
+}
+
+/// @brief Creates a WAV whose noise floor sits close under its programme.
+/// @details The assistant selects repair from measurement, so a clean tone
+///   selects nothing and cannot show whether a flag reached the suggester. The
+///   noise is loud enough that the floor lands well inside the rule rather than
+///   at its edge, so the fixture does not become a threshold test by accident.
+void create_noisy_wav(const std::string& path, int sample_rate = 22050) {
+  const size_t n_samples = static_cast<size_t>(sample_rate * 3);
+  std::vector<float> samples(n_samples);
+  std::mt19937 rng(7);
+  std::uniform_real_distribution<float> noise(-0.3f, 0.3f);
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / sample_rate;
+    samples[i] = 0.5f * std::sin(two_pi * 440.0f * t) + noise(rng);
   }
   save_wav(path, samples, sample_rate);
 }
@@ -3264,18 +3283,24 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   SECTION("--no-streaming-safe reaches the suggester") {
     // prefer_streaming_safe defaults to true, so the reachable control is the
     // one that turns it off, and the repair explanation is where the suggester
-    // reports which of the two it applied.
+    // reports which of the two it applied. The material has to carry the defect
+    // the flag governs: repair is selected from measurement, so on a clean tone
+    // neither branch says anything and the flag looks unreachable.
+    const std::string noisy = unique_temp_path("_noisy.wav");
+    create_noisy_wav(noisy);
+
     auto [safe_code, safe_output] = exec_command(
-        CLI + " mastering " + TEST_WAV + " --assistant --enable-repair --explain --json -q");
+        CLI + " mastering " + noisy + " --assistant --enable-repair --explain --json -q");
     REQUIRE(safe_code == 0);
-    REQUIRE_THAT(safe_output, ContainsSubstring("streaming-safe repair enabled"));
+    REQUIRE_THAT(safe_output, ContainsSubstring("streaming-safe was asked for"));
 
     auto [open_code, open_output] =
-        exec_command(CLI + " mastering " + TEST_WAV +
+        exec_command(CLI + " mastering " + noisy +
                      " --assistant --enable-repair --no-streaming-safe --explain --json -q");
     REQUIRE(open_code == 0);
-    REQUIRE_THAT(open_output, !ContainsSubstring("streaming-safe repair enabled"));
-    REQUIRE_THAT(open_output, ContainsSubstring("repair stages enabled"));
+    REQUIRE_THAT(open_output, !ContainsSubstring("streaming-safe was asked for"));
+    REQUIRE_THAT(open_output, ContainsSubstring("the noise floor is loud under the programme"));
+    std::remove(noisy.c_str());
   }
 
   SECTION("a --params key the processor does not read is named and refused") {

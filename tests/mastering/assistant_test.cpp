@@ -301,19 +301,34 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   REQUIRE(cinema_result.config.loudness.target_lufs == -14.0f);
   REQUIRE(cinema_result.config.loudness.ceiling_db == -1.0f);
 
+  // Repair is selected from the defect measurement, so the profile has to carry
+  // one. A floor 6 dB under the programme clears the rule; the click count is a
+  // count the detector either found or did not.
+  assistant::AudioProfile damaged = profile;
+  damaged.loudness.integrated_lufs = -14.0f;
+  damaged.defects.measured = true;
+  damaged.defects.click_count = 5;
+  damaged.defects.noise_floor_dbfs = -20.0f;
+
   assistant::AssistantConfig streaming_safe;
   streaming_safe.enable_repair = true;
   streaming_safe.prefer_streaming_safe = true;
-  auto safe_result = assistant::suggest_chain(profile, streaming_safe);
+  auto safe_result = assistant::suggest_chain(damaged, streaming_safe);
   REQUIRE(safe_result.config.repair.declick.enabled);
   REQUIRE_FALSE(safe_result.config.repair.denoise.enabled);
 
   assistant::AssistantConfig offline_repair;
   offline_repair.enable_repair = true;
   offline_repair.prefer_streaming_safe = false;
-  auto repair_result = assistant::suggest_chain(profile, offline_repair);
+  auto repair_result = assistant::suggest_chain(damaged, offline_repair);
   REQUIRE(repair_result.config.repair.declick.enabled);
   REQUIRE(repair_result.config.repair.denoise.enabled);
+
+  // An unmeasured profile selects nothing, whatever enable_repair says: "nobody
+  // looked" must not read as "nothing is wrong".
+  auto unmeasured = assistant::suggest_chain(profile, offline_repair);
+  REQUIRE_FALSE(unmeasured.config.repair.declick.enabled);
+  REQUIRE_FALSE(unmeasured.config.repair.denoise.enabled);
 }
 
 namespace {

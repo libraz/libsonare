@@ -64,6 +64,86 @@ api::Preset preset_for_genre(const std::string& genre) {
 
 void explain(std::vector<std::string>& out, std::string text) { out.push_back(std::move(text)); }
 
+// Each threshold is the highest value reached by any corpus draw WITHOUT that
+// defect, so neither rule fires on clean material. Recall is partial and that is
+// the intended trade: a false alarm processes a clean recording, a miss leaves
+// it alone.
+constexpr float kNoiseFloorOverProgrammeDb = -12.0f;  // loudest clean draw: -12.34
+constexpr float kHumProminence = 10.0f;               // most prominent non-hum draw: 4.14
+constexpr float kMainsToleranceHz = 0.25f;
+
+/// The profiling the suggestion needs, which is more than the profiling a caller
+/// asking only for a chain needs: the six detectors run only when a repair
+/// decision will read them.
+AudioProfileConfig profile_config_for(const AssistantConfig& config) {
+  AudioProfileConfig profile_config;
+  profile_config.detect_defects = config.enable_repair;
+  return profile_config;
+}
+
+/// Whether the measured series is mains hum rather than programme content.
+/// @details Prominence alone cannot tell them apart: a sustained bass note is a
+///   prominent low peak too, and clean material reaches a prominence of 4 on
+///   this corpus. Real hum sits on the mains frequency to well under a hertz,
+///   so the frequency is what decides and the prominence only sizes it.
+bool hum_is_mains(const DefectProfile& defects) {
+  const float distance = std::min(std::abs(defects.hum_fundamental_hz - 50.0f),
+                                  std::abs(defects.hum_fundamental_hz - 60.0f));
+  return distance <= kMainsToleranceHz && defects.hum_fundamental_prominence > kHumProminence;
+}
+
+/// Turns on the repair stages the measurement supports, and only those.
+/// @details Three stages are selected on a count the detector either found or
+///   did not; two more are selected against a threshold measured on real
+///   material. Dereverb is absent on purpose: its statistic reads *higher* on a
+///   sustaining dry signal than on a short reverberant one, so no threshold over
+///   it separates the two, and it stays under caller control until one does.
+///   The noise estimator is left at its default, which outperforms the adaptive
+///   trackers on every kind of material measured so far.
+void select_repair_stages(const AudioProfile& profile, const AssistantConfig& config,
+                          api::MasteringChainConfig& out, std::vector<std::string>& explanation) {
+  const DefectProfile& defects = profile.defects;
+  if (!defects.measured) {
+    explain(explanation,
+            "repair requested but nothing measured the recording, so no repair "
+            "stage was selected");
+    return;
+  }
+
+  if (defects.clip_sample_count > 0) {
+    out.repair.declip.enabled = true;
+    explain(explanation, "declip: samples reach the clipping threshold");
+  }
+  if (defects.click_count > 0) {
+    out.repair.declick.enabled = true;
+    explain(explanation, "declick: impulsive runs stand out from their neighbours");
+  }
+  if (defects.crackle_sample_count > 0) {
+    out.repair.decrackle.enabled = true;
+    explain(explanation, "decrackle: samples depart from the local median");
+  }
+  if (hum_is_mains(defects)) {
+    out.repair.dehum.enabled = true;
+    // The tracked frequency, not the default: the detector searched both mains
+    // frequencies and this is the one it found.
+    out.repair.dehum.config.fundamental_hz = defects.hum_fundamental_hz;
+    explain(explanation, "dehum: a prominent harmonic series sits on a mains frequency");
+  }
+  // Referred to the programme rather than to full scale, so a quiet recording
+  // with an inaudible floor is not treated like a loud one with the same floor.
+  const float floor_over_programme = defects.noise_floor_dbfs - profile.loudness.integrated_lufs;
+  if (floor_over_programme > kNoiseFloorOverProgrammeDb) {
+    if (config.prefer_streaming_safe) {
+      explain(explanation,
+              "denoise: the noise floor is loud under the programme, but the stage "
+              "needs the whole signal and streaming-safe was asked for");
+    } else {
+      out.repair.denoise.enabled = true;
+      explain(explanation, "denoise: the noise floor is loud under the programme");
+    }
+  }
+}
+
 void resolve_platform_loudness(const AssistantConfig& config, float* target_lufs,
                                float* ceiling_db) {
   *target_lufs = config.target_lufs;
@@ -104,7 +184,7 @@ AssistantResult suggest_chain(const float* samples, std::size_t length, int samp
 }
 
 AssistantResult suggest_chain(const Audio& audio, const AssistantConfig& config) {
-  return suggest_chain(analyze_audio_profile(audio), config);
+  return suggest_chain(analyze_audio_profile(audio, profile_config_for(config)), config);
 }
 
 AssistantResult suggest_chain_interleaved(const float* samples, std::size_t frames, int channels,
@@ -112,7 +192,8 @@ AssistantResult suggest_chain_interleaved(const float* samples, std::size_t fram
   if (samples == nullptr || frames == 0 || channels <= 0 || sample_rate <= 0) {
     return suggest_chain(AudioProfile{}, config);
   }
-  return suggest_chain(analyze_audio_profile_interleaved(samples, frames, channels, sample_rate),
+  return suggest_chain(analyze_audio_profile_interleaved(samples, frames, channels, sample_rate,
+                                                         profile_config_for(config)),
                        config);
 }
 
@@ -178,13 +259,7 @@ AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig
   }
 
   if (config.enable_repair) {
-    result.config.repair.declick.enabled = true;
-    if (profile.spectral.flatness > 0.35f && !config.prefer_streaming_safe) {
-      result.config.repair.denoise.enabled = true;
-    }
-    explain(result.explanation, config.prefer_streaming_safe
-                                    ? "streaming-safe repair enabled by AssistantConfig"
-                                    : "repair stages enabled by AssistantConfig");
+    select_repair_stages(profile, config, result.config, result.explanation);
   }
 
   return result;
