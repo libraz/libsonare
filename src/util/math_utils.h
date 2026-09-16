@@ -19,8 +19,10 @@ namespace sonare {
 ///          against a non-finite value is false -- so a NaN left here as a
 ///          plausible in-range value with nothing downstream able to tell it
 ///          from a computed one. This is a pure function returning to its
-///          caller (SampleDestination::kCallerReturn), so a non-finite value
-///          propagates and is itself the report.
+///          caller (SampleDestination::kCallerReturn), so a NaN propagates and
+///          is itself the report. An infinity does not: it takes the caller's
+///          own bound, because that is what clamping a value past the bound
+///          means rather than a substitution this rule would cover.
 /// @tparam T Numeric type
 /// @param value Value to clamp
 /// @param min_val Minimum bound

@@ -2,7 +2,7 @@
 /// @brief The destination rule for a sample that cannot be represented.
 ///
 /// Every assertion here is on a VALUE or on a COUNT. A finiteness assertion
-/// would pass whether or not the substitution ran, which is what let this
+/// would pass whether or not the substitution ran, which is what lets this
 /// decision live in twelve places at once.
 
 #include "util/non_finite_sample.h"
