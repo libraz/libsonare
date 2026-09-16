@@ -52,7 +52,9 @@ It is built through the injected insert factory, so `sonare_midi` does not depen
 
 For the electric programs the voice's `drive` is zero, or small and justified as pickup nonlinearity. The distortion is the rig's.
 
-The same rule generalises: **no voice carries a baked-in room, cabinet or ambience.** Where a family is only ever heard through something — a pipe organ through a building — that something is a stage with a default binding, on the same terms.
+The same rule generalises: **no voice carries a baked-in room, cabinet or ambience.** Where a family is only ever heard through something — a pipe organ through a building — that something is bound by default rather than baked, on the same terms.
+
+**Which of the two forms it takes is decided by the next section's test, and for the organ's building the answer is the weight.** A file already has a handle on the room — CC91 — so the building is a send multiplier and not an insert stage; an organ part told to send nothing comes out dry, which is what makes it a binding. Building a second organ-room stage would put a room the controller cannot reach in front of one it can, and the two would compound. The amplifier takes the other form only because no file-controlled "amp amount" exists for a weight to scale.
 
 ## The test that separates a weight from a baked-in effect
 
@@ -136,6 +138,7 @@ The gains, the tone stack and the two slot selectors are ordinary tunables and a
 
 - **The voice produces the instrument. The rig is a stage.** A patch field that models something downstream of the instrument's boundary is misplaced.
 - **A default binding is not a baked-in effect.** It must be visible, addressable and removable, or it is the thing this design replaces.
+- **A host must be able to re-amp.** Reading the bound rig, replacing it stage by stage, and rendering the instrument alone are all requirements rather than conveniences: the split only pays for itself if the rig can be swapped after the fact, and a bank binding that could only be accepted or cleared would be a bake with one switch on it.
 - **A spec-compliant file must come out sounding complete without asking.** That is the acceptance criterion for any change to how a rig is bound.
 - **One implementation per rig component.** Reuse the calibrated one; do not write a lightweight second copy inside the synth.
 - **Capture the instrument at its own boundary.** A reference that bakes in a rig is fitted as instrument-and-rig together, and the model's own boundary is then unmeasured.
