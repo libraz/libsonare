@@ -3,6 +3,7 @@
 
 #include "core/fft.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -295,7 +296,7 @@ TEST_CASE("FFT forward_complex builds its backend on first use", "[fft]") {
   // call rather than in the constructor. The null-pointer guards above return before that
   // point, so they cannot show the lazily built state is correct. These two sizes straddle
   // the backend split: one is served by the SIMD backend, the other falls back.
-  for (int n : {64, 12}) {
+  for (int n : {64, 12, 2048}) {
     CAPTURE(n);
 
     std::vector<float> real_input(static_cast<size_t>(n));
@@ -315,16 +316,19 @@ TEST_CASE("FFT forward_complex builds its backend on first use", "[fft]") {
 
     // The real transform of the same signal agrees on the one-sided bins, whatever the
     // sign convention is -- so this pins the lazily built complex path without hard-coding
-    // a reference DFT.
+    // a reference DFT. Two algorithms rather than one, so this one is near rather than
+    // exact, and the bound tracks n because an unwindowed bin grows with it: a fixed
+    // absolute bound is tight at the largest size and slack at the smallest.
+    const float agreement = 1e-3f * std::max(1.0f, static_cast<float>(n) / 64.0f);
     FFT real_only(n);
     std::vector<std::complex<float>> from_real(static_cast<size_t>(n / 2 + 1));
     real_only.forward(real_input.data(), from_real.data());
     for (int k = 0; k <= n / 2; ++k) {
       CAPTURE(k);
       REQUIRE_THAT(from_complex[static_cast<size_t>(k)].real(),
-                   WithinAbs(from_real[static_cast<size_t>(k)].real(), 1e-3f));
+                   WithinAbs(from_real[static_cast<size_t>(k)].real(), agreement));
       REQUIRE_THAT(from_complex[static_cast<size_t>(k)].imag(),
-                   WithinAbs(from_real[static_cast<size_t>(k)].imag(), 1e-3f));
+                   WithinAbs(from_real[static_cast<size_t>(k)].imag(), agreement));
     }
 
     // Running a real transform first must not change what the complex one returns, and a
@@ -336,12 +340,13 @@ TEST_CASE("FFT forward_complex builds its backend on first use", "[fft]") {
     real_first.forward_complex(input.data(), after_real.data());
     std::vector<std::complex<float>> repeated(static_cast<size_t>(n));
     real_first.forward_complex(input.data(), repeated.data());
+    // Exact, not near: this is one algorithm on one input differing only in which
+    // transform ran first, so any difference at all is the lazy build producing a
+    // different backend rather than rounding. A tolerance wide enough to absorb
+    // rounding here spans hundreds of ulp and cannot see that.
     for (int k = 0; k < n; ++k) {
       CAPTURE(k);
-      REQUIRE_THAT(after_real[static_cast<size_t>(k)].real(),
-                   WithinAbs(from_complex[static_cast<size_t>(k)].real(), 1e-4f));
-      REQUIRE_THAT(after_real[static_cast<size_t>(k)].imag(),
-                   WithinAbs(from_complex[static_cast<size_t>(k)].imag(), 1e-4f));
+      REQUIRE(after_real[static_cast<size_t>(k)] == from_complex[static_cast<size_t>(k)]);
       REQUIRE(repeated[static_cast<size_t>(k)] == after_real[static_cast<size_t>(k)]);
     }
   }
