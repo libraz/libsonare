@@ -181,9 +181,11 @@ Napi::Value MixerWrap::BusNonFiniteDiscardCount(const Napi::CallbackInfo& info) 
   }
   const std::string bus_id = info[0].As<Napi::String>().Utf8Value();
   uint32_t count = 0;
-  const SonareError err = sonare_mixer_bus_non_finite_discard_count(mixer_, bus_id.c_str(), &count);
-  if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to read bus non-finite discard count: ");
+  // The entry carries SONARE_C_RT_API_ENTRY, so it records no message of its
+  // own and the thread-local one would belong to an unrelated earlier call.
+  sonare_node::ThrowIfRealtimeError(
+      env, sonare_mixer_bus_non_finite_discard_count(mixer_, bus_id.c_str(), &count));
+  if (env.IsExceptionPending()) {
     return env.Undefined();
   }
   return Napi::Number::New(env, count);
@@ -259,9 +261,9 @@ Napi::Value MixerWrap::StripNonFiniteDiscardCount(const Napi::CallbackInfo& info
     return env.Undefined();
   }
   uint32_t count = 0;
-  SonareError err = sonare_strip_non_finite_discard_count(strip, &count);
-  if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to read strip non-finite discard count: ");
+  // Same audio-thread entry policy as the bus counterpart above.
+  sonare_node::ThrowIfRealtimeError(env, sonare_strip_non_finite_discard_count(strip, &count));
+  if (env.IsExceptionPending()) {
     return env.Undefined();
   }
   return Napi::Number::New(env, count);
