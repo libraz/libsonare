@@ -14,25 +14,13 @@
 #include "core/audio_io.h"
 #include "sonare_c_test_helpers.h"
 #include "support/alloc_guard.h"
+#include "support/schema_paths.h"
 #include "util/constants.h"
 #include "util/json.h"
 
 namespace {
 
-void collect_schema_paths(const sonare::util::json::Value& value, const std::string& prefix,
-                          std::set<std::string>& out) {
-  if (value.is_object()) {
-    for (const auto& [key, child] : value.as_object()) {
-      const std::string path = prefix.empty() ? key : prefix + "." + key;
-      out.insert(path);
-      collect_schema_paths(child, path, out);
-    }
-    return;
-  }
-  if (value.is_array() && value.size() > 0) {
-    collect_schema_paths(value[static_cast<std::size_t>(0)], prefix + "[]", out);
-  }
-}
+using sonare::test::collect_schema_paths;
 
 TEST_CASE("sonare_detect_onsets_ex", "[c_api]") {
   const auto samples = generate_clicks(120.0f, 22050, 2.0f);
