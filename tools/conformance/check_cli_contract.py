@@ -853,6 +853,7 @@ def main(argv: list[str] | None = None) -> int:
                     python_payloads[key],
                     manifest,
                     case["id"],
+                    case["artifact"] != "none",
                 )
                 if mismatch:
                     report.append(("fail", f"surface comparison: {mismatch}"))

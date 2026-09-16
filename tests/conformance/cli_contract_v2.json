@@ -5796,6 +5796,17 @@
             "sample_rate": "integer",
             "output": "path"
           }
+        },
+        "non_finite_output": {
+          "keys": {
+            "processor": "string",
+            "input_lufs": "number",
+            "output_lufs": "null",
+            "applied_gain_db": "number",
+            "latency_samples": "integer",
+            "sample_rate": "integer",
+            "output": "path"
+          }
         }
       },
       "cases": [
@@ -5826,9 +5837,81 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "non_finite_samples",
+          "argv": [
+            "eq",
+            "{audio}",
+            "--output-gain-db",
+            "100000",
+            "--output",
+            "{eq_non_finite_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "non_finite_output",
+          "artifact": "non_finite_wav",
+          "stdout": "json"
+        },
+        {
+          "id": "non_finite_samples_24bit",
+          "argv": [
+            "eq",
+            "{audio}",
+            "--output-gain-db",
+            "100000",
+            "--bits",
+            "24",
+            "--output",
+            "{eq_non_finite_output_24bit}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "non_finite_output",
+          "artifact": "non_finite_wav_24bit",
+          "stdout": "json"
+        },
+        {
+          "id": "saturating_samples",
+          "argv": [
+            "eq",
+            "{audio}",
+            "--output-gain-db",
+            "700",
+            "--output",
+            "{eq_saturating_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "saturating_wav",
+          "stdout": "json"
         }
       ],
-      "artifacts": {}
+      "artifacts": {
+        "non_finite_wav": {
+          "placeholder": "eq_non_finite_output",
+          "kind": "wav",
+          "sample_rate_key": "sample_rate",
+          "sha256": "b21a76aa4d0b9c147a2eb6a2093670c945ce68378568cfc14ab09e95b20d3305"
+        },
+        "non_finite_wav_24bit": {
+          "placeholder": "eq_non_finite_output_24bit",
+          "kind": "wav",
+          "sample_rate_key": "sample_rate",
+          "sha256": "3941b1511e31e3fb46de1c06392e6c66b554603ce35f673c564d4c397b2496bd"
+        },
+        "saturating_wav": {
+          "placeholder": "eq_saturating_output",
+          "kind": "wav",
+          "sample_rate_key": "sample_rate",
+          "sha256": "1d71bc7678b8a74d308c430a95cfaf86337000b4555700b8cfbdfe03f618d7d3"
+        }
+      }
     },
     {
       "path": "mastering-processor",

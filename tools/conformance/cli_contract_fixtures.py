@@ -58,6 +58,19 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     paths["mastering_report"] = str(directory / "mastering-report.json")
     paths["preset_missing"] = str(directory / "preset-does-not-exist.json")
     paths["output"] = str(directory / "rejected-output.wav")
+    # The WAV writers are the only place the two surfaces hold separate code for
+    # the same bytes, and a sample with no PCM image is the one input where they
+    # can disagree. The writers' guard is not against a non-finite the caller
+    # supplied -- the decoder refuses that before any writer runs, so no fixture
+    # can carry one -- but against a non-finite the library computed, which is
+    # why these cases reach it through an output gain past what a 32-bit float
+    # holds. The sibling gain that still fits is the control: without it a
+    # writer emitting silence for everything would satisfy the other two.
+    paths["eq_non_finite_output"] = str(directory / "eq-non-finite-output.wav")
+    paths["eq_non_finite_output_24bit"] = str(
+        directory / "eq-non-finite-output-24bit.wav"
+    )
+    paths["eq_saturating_output"] = str(directory / "eq-saturating-output.wav")
     paths["rir_output"] = str(directory / "rir-output.wav")
     paths["render_output"] = str(directory / "render-output.wav")
     paths["resample_output"] = str(directory / "resample-output.wav")

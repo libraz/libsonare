@@ -293,10 +293,21 @@ def _compare_values(
 
 
 def _compare_payloads(
-    path: str, left: Any, right: Any, manifest: dict[str, Any], case_id: str
+    path: str,
+    left: Any,
+    right: Any,
+    manifest: dict[str, Any],
+    case_id: str,
+    writes_surface_artifact: bool = False,
 ) -> str | None:
     absolute = float(manifest["comparison"]["absolute"])
     relative = float(manifest["comparison"]["relative"])
+    if writes_surface_artifact and isinstance(left, dict) and isinstance(right, dict):
+        # A case that declares an artifact is given a per-surface destination so
+        # the two files survive to be digested, so the path each payload echoes
+        # is the harness's, not the surface's. The bytes at it are compared.
+        left = {key: value for key, value in left.items() if key != "output"}
+        right = {key: value for key, value in right.items() if key != "output"}
     if path == "version":
         if not isinstance(left, dict) or not isinstance(right, dict):
             return f"{path}.{case_id}: expected objects for surface comparison"
