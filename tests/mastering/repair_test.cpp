@@ -17,6 +17,7 @@
 #include "mastering/repair/decrackle.h"
 #include "mastering/repair/dehum.h"
 #include "mastering/repair/denoise_classical.h"
+#include "mastering/repair/denoise_internal.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/trim_silence.h"
 #include "support/audio_fixtures.h"
@@ -1081,6 +1082,105 @@ TEST_CASE("DenoiseClassical noise estimation does not depend on the traversal",
     }
     // A silent oracle would compare two zero buffers and agree for the wrong reason.
     REQUIRE(rms(want) > 0.0f);
+  }
+}
+
+namespace {
+
+/// @brief The gain smoother as a whole-plane median, which is what it replaced.
+/// @details Reads the [bins x frames] plane directly and truncates the window at
+///   every edge. The streaming smoother has to reproduce this exactly: it sees
+///   one frame at a time and cannot look up how many are still coming, so the
+///   last frame's truncation is the case a ring buffer gets wrong.
+std::vector<double> oracle_smooth_gain_3x3(const std::vector<double>& gains, int bins, int frames) {
+  std::vector<double> smoothed = gains;
+  std::vector<double> window;
+  window.reserve(9);
+  for (int b = 0; b < bins; ++b) {
+    for (int t = 0; t < frames; ++t) {
+      window.clear();
+      for (int db = -1; db <= 1; ++db) {
+        const int bb = b + db;
+        if (bb < 0 || bb >= bins) continue;
+        for (int dt = -1; dt <= 1; ++dt) {
+          const int tt = t + dt;
+          if (tt < 0 || tt >= frames) continue;
+          window.push_back(gains[static_cast<size_t>(bb * frames + tt)]);
+        }
+      }
+      std::nth_element(window.begin(), window.begin() + window.size() / 2, window.end());
+      smoothed[static_cast<size_t>(b * frames + t)] = window[window.size() / 2];
+    }
+  }
+  return smoothed;
+}
+
+}  // namespace
+
+TEST_CASE("Denoise gain smoothing reads the same window frame by frame as it did plane-wide",
+          "[mastering][repair][denoise]") {
+  // The only part of the denoiser that is not causal. A ring buffer that answers
+  // the last frame as though a successor existed, or that indexes the ring by the
+  // wrong offset, moves the mask on exactly the frames an averaged comparison
+  // cannot see -- so this compares every cell with ==.
+  std::mt19937 rng(20260917);
+  std::uniform_real_distribution<double> dist(0.02, 1.0);
+
+  struct Geometry {
+    int bins;
+    int frames;
+  };
+  // Every truncation corner: one bin, one frame, and both at once, alongside a
+  // plane large enough to have interior cells that are truncated nowhere.
+  const std::vector<Geometry> geometries = {{1, 1}, {1, 5},  {2, 2},  {3, 1},
+                                            {5, 3}, {17, 9}, {33, 64}};
+
+  for (const Geometry geometry : geometries) {
+    CAPTURE(geometry.bins, geometry.frames);
+    const int bins = geometry.bins;
+    const int frames = geometry.frames;
+
+    std::vector<double> raw(static_cast<size_t>(bins * frames), 0.0);
+    for (double& value : raw) value = dist(rng);
+
+    const std::vector<double> want = oracle_smooth_gain_3x3(raw, bins, frames);
+
+    // A median that returned its input would agree with the oracle everywhere and
+    // prove nothing. One frame of a 3x3 median over independent draws moves almost
+    // every cell, so this is a demand rather than a hope -- but it is asserted.
+    if (bins > 1 || frames > 1) {
+      REQUIRE(want != raw);
+    }
+
+    mastering::repair::detail::MedianGainSmoother smoother(bins);
+    std::vector<double> got(static_cast<size_t>(bins * frames), 0.0);
+    std::vector<double> frame_in(static_cast<size_t>(bins), 0.0);
+    int emitted = 0;
+    const auto store = [&](const double* out) {
+      for (int b = 0; b < bins; ++b) {
+        got[static_cast<size_t>(b * frames + emitted)] = out[b];
+      }
+      ++emitted;
+    };
+
+    for (int t = 0; t < frames; ++t) {
+      for (int b = 0; b < bins; ++b) {
+        frame_in[static_cast<size_t>(b)] = raw[static_cast<size_t>(b * frames + t)];
+      }
+      const double* ready = smoother.push(frame_in.data());
+      if (ready != nullptr) store(ready);
+    }
+    const double* tail = smoother.flush();
+    if (tail != nullptr) store(tail);
+
+    REQUIRE(emitted == frames);
+    for (int b = 0; b < bins; ++b) {
+      for (int t = 0; t < frames; ++t) {
+        const size_t idx = static_cast<size_t>(b * frames + t);
+        CAPTURE(b, t);
+        REQUIRE(got[idx] == want[idx]);
+      }
+    }
   }
 }
 

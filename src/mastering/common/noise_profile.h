@@ -71,6 +71,19 @@ struct NoiseFloorDbfs {
 NoiseFloorDbfs noise_floor_dbfs(const double* noise_psd, const float* power, int bins, int frames,
                                 double signal_mean_square, int sample_rate);
 
+/// @brief @ref noise_floor_dbfs from per-bin sums instead of the two planes.
+/// @details The plane entry folds both inputs to one sum per bin before it does
+///   anything else, so a caller walking the STFT frame by frame accumulates the
+///   same two arrays and never holds a [bins x frames] plane. Each bin sums its
+///   frames in ascending order either way, which is what makes the two entries
+///   agree bit for bit rather than merely closely.
+/// @param noise_psd_sum Sum over frames of the noise PSD, one per bin.
+/// @param power_sum Sum over frames of the observed power, one per bin.
+/// @param frames Number of frames the sums span.
+NoiseFloorDbfs noise_floor_dbfs_from_sums(const double* noise_psd_sum, const double* power_sum,
+                                          int bins, int frames, double signal_mean_square,
+                                          int sample_rate);
+
 /// @brief STFTs of a channel set on one analysis grid.
 /// @details Holds each channel's spectrum plus the channel-summed power a linked
 ///   gain mask is built from. Single-channel use is not a special case: the sum

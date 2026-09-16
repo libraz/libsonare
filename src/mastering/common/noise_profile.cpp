@@ -37,6 +37,13 @@ std::vector<double> median_across_bins(const std::vector<double>& psd) {
   return smoothed;
 }
 
+/// The answer for an input nothing could be measured from: every band at the floor.
+NoiseFloorDbfs floor_result() {
+  NoiseFloorDbfs result;
+  std::fill(std::begin(result.bands), std::end(result.bands), kFloorDb);
+  return result;
+}
+
 float power_to_dbfs(double power) {
   if (!(power > 0.0)) return kFloorDb;
   return std::max(kFloorDb, static_cast<float>(10.0 * std::log10(power)));
@@ -65,22 +72,37 @@ void repair_noise_band_bins(int n_fft, int sample_rate, int* out) {
 
 NoiseFloorDbfs noise_floor_dbfs(const double* noise_psd, const float* power, int bins, int frames,
                                 double signal_mean_square, int sample_rate) {
-  NoiseFloorDbfs result;
-  std::fill(std::begin(result.bands), std::end(result.bands), kFloorDb);
-  if (noise_psd == nullptr || power == nullptr || bins <= 0 || frames <= 0) return result;
+  if (noise_psd == nullptr || power == nullptr || bins <= 0 || frames <= 0) return floor_result();
+
+  std::vector<double> noise_sum(static_cast<size_t>(bins), 0.0);
+  std::vector<double> power_sum(static_cast<size_t>(bins), 0.0);
+  for (int b = 0; b < bins; ++b) {
+    const size_t row = static_cast<size_t>(b) * static_cast<size_t>(frames);
+    double noise = 0.0;
+    double observed = 0.0;
+    for (int t = 0; t < frames; ++t) {
+      noise += noise_psd[row + static_cast<size_t>(t)];
+      observed += static_cast<double>(power[row + static_cast<size_t>(t)]);
+    }
+    noise_sum[static_cast<size_t>(b)] = noise;
+    power_sum[static_cast<size_t>(b)] = observed;
+  }
+  return noise_floor_dbfs_from_sums(noise_sum.data(), power_sum.data(), bins, frames,
+                                    signal_mean_square, sample_rate);
+}
+
+NoiseFloorDbfs noise_floor_dbfs_from_sums(const double* noise_psd_sum, const double* power_sum,
+                                          int bins, int frames, double signal_mean_square,
+                                          int sample_rate) {
+  NoiseFloorDbfs result = floor_result();
+  if (noise_psd_sum == nullptr || power_sum == nullptr || bins <= 0 || frames <= 0) return result;
 
   std::vector<double> per_bin(static_cast<size_t>(bins), 0.0);
   double observed = 0.0;
   for (int b = 0; b < bins; ++b) {
-    const size_t row = static_cast<size_t>(b) * static_cast<size_t>(frames);
-    double noise_sum = 0.0;
-    double power_sum = 0.0;
-    for (int t = 0; t < frames; ++t) {
-      noise_sum += noise_psd[row + static_cast<size_t>(t)];
-      power_sum += static_cast<double>(power[row + static_cast<size_t>(t)]);
-    }
-    per_bin[static_cast<size_t>(b)] = noise_sum / static_cast<double>(frames);
-    observed += bin_weight(b, bins) * power_sum;
+    per_bin[static_cast<size_t>(b)] =
+        noise_psd_sum[static_cast<size_t>(b)] / static_cast<double>(frames);
+    observed += bin_weight(b, bins) * power_sum[static_cast<size_t>(b)];
   }
   if (!(observed > 0.0) || !(signal_mean_square > 0.0)) return result;
 
