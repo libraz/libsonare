@@ -221,7 +221,12 @@ export function assertEvenIntegerAtLeast(
   min: number,
   max: number,
 ): void {
-  if (!Number.isInteger(value) || value < min || value > max || value % 2 !== 0) {
+  // Range and parity are separate refusals: 2 ** 31 is already even, so telling
+  // its caller the value must be even names a property it has.
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [${min}, ${max}]`);
+  }
+  if (value % 2 !== 0) {
     throw new RangeError(`${fnName}: ${argName} must be an even integer >= ${min}`);
   }
 }
