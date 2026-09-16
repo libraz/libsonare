@@ -396,6 +396,7 @@ if(BUILD_MASTERING)
     mastering/common/loudness_measure.cpp
     mastering/common/noise_profile.cpp
     mastering/common/noise_tracker.cpp
+    mastering/common/stft_stream.cpp
     mastering/dynamics/brickwall_limiter.cpp
     mastering/dynamics/compressor.cpp
     mastering/dynamics/deesser.cpp

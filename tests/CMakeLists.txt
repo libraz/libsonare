@@ -261,6 +261,7 @@ if(BUILD_MASTERING)
     mastering/true_peak_limiter_block_invariance_test.cpp
     mastering/spectral_test.cpp
     mastering/stereo_test.cpp
+    mastering/stft_stream_test.cpp
   )
   if(NOT BUILD_MIXING)
     target_link_libraries(sonare_tests PRIVATE sonare_mastering)
