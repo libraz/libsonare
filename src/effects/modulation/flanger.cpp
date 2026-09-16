@@ -80,7 +80,7 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
 void Flanger::discard_non_finite() noexcept {
   if (!feedback_non_finite_) return;
   feedback_non_finite_ = false;
-  discard_run_if_non_finite(feedback_.begin(), feedback_.end(), 0.0f);
+  static_cast<void>(discard_run_if_non_finite(feedback_.begin(), feedback_.end(), 0.0f));
   // Each line is fed by the feedback cell that reads it, so the poison
   // recirculates instead of flowing out. O(line), recovery only.
   for (auto& delay : delays_) delay.reset();

@@ -92,7 +92,8 @@ void StereoDelay::discard_non_finite() noexcept {
   bool discarded = false;
   if (feedback_non_finite_) {
     feedback_non_finite_ = false;
-    discard_run_if_non_finite(feedback_state_.begin(), feedback_state_.end(), 0.0f);
+    static_cast<void>(
+        discard_run_if_non_finite(feedback_state_.begin(), feedback_state_.end(), 0.0f));
     // Both lines are fed by the feedback cells that read them, so the poison
     // recirculates instead of flowing out. O(line), recovery only.
     for (auto& delay : delays_) delay.reset();

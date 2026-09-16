@@ -18,7 +18,7 @@ class EnvelopeFollower {
   ///          it cannot be reached through @ref reset, which a live stream has
   ///          no reason to call.
   /// @return true when the envelope was discarded.
-  bool discard_if_non_finite() noexcept;
+  [[nodiscard]] bool discard_if_non_finite() noexcept;
 
  private:
   double sample_rate_ = 48000.0;

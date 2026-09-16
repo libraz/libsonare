@@ -19,6 +19,12 @@
 /// The owner applies the rule, once per block over its own cells. A per-sample
 /// primitive cannot: a check in its inner loop is the O(samples) scan a realtime
 /// contract exists to avoid, and inspecting the cells costs O(cells) instead.
+///
+/// Every helper here is [[nodiscard]]: the return is what the owner folds into
+/// its own per-block discard count, and dropping it leaves an inherited counter
+/// reading zero while the cells really were discarded — indistinguishable, to a
+/// caller, from a block that never lost anything. An owner that means to ignore
+/// it says so with a cast.
 
 #include <algorithm>
 #include <cmath>
@@ -29,7 +35,7 @@ namespace sonare {
 ///        reached it.
 /// @return true when @p cell was discarded.
 template <typename T>
-bool discard_if_non_finite(T& cell, T post_reset_value) noexcept {
+[[nodiscard]] bool discard_if_non_finite(T& cell, T post_reset_value) noexcept {
   if (std::isfinite(cell)) {
     return false;
   }
@@ -43,7 +49,7 @@ bool discard_if_non_finite(T& cell, T post_reset_value) noexcept {
 /// half-usable, so any non-finite cell returns the whole group to zero.
 /// @return true when the group was discarded.
 template <typename... Cells>
-bool discard_group_if_non_finite(Cells&... cells) noexcept {
+[[nodiscard]] bool discard_group_if_non_finite(Cells&... cells) noexcept {
   if ((... && std::isfinite(cells))) {
     return false;
   }
@@ -58,7 +64,8 @@ bool discard_group_if_non_finite(Cells&... cells) noexcept {
 /// cell by cell without the length being written down twice.
 /// @return true when the run was discarded.
 template <typename Iterator, typename T>
-bool discard_run_if_non_finite(Iterator first, Iterator last, T post_reset_value) noexcept {
+[[nodiscard]] bool discard_run_if_non_finite(Iterator first, Iterator last,
+                                             T post_reset_value) noexcept {
   if (std::all_of(first, last, [](T cell) { return std::isfinite(cell); })) {
     return false;
   }
