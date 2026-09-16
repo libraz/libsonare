@@ -13,6 +13,10 @@ population while still printing a count.
 So the two rules a caller inherits: resolve each segment inside the block its
 parent named, and treat a path whose block could not be reached as a failure
 rather than a pass.
+
+A mapped type is expanded only when its keys are decidable: `Record<Union, T>`
+over string literals becomes the object it stands for, while `Record<string, T>`
+resolves to nothing, because no declaration says which keys such a value carries.
 """
 
 from __future__ import annotations
@@ -55,17 +59,134 @@ def skip_trivia(text: str, index: int) -> int:
     return index
 
 
-def named_type_bodies(whole: str, name: str) -> list[str]:
-    """Bodies of `interface <name> {...}` / `type <name> = {...}`."""
-    bodies = []
+def type_alias_rhs(whole: str, name: str) -> str | None:
+    """The right-hand side of `type <name> = ...;`, or None."""
+    match = re.search(r"\btype\s+" + re.escape(name) + r"\b\s*=\s*", whole)
+    if match is None:
+        return None
+    end = whole.find(";", match.end())
+    return whole[match.end() : end if end != -1 else len(whole)]
+
+
+def union_literals(whole: str, expr: str, depth: int = 3) -> list[str]:
+    """The string-literal members of a union, following alias hops."""
+    expr = expr.strip()
+    literals = re.findall(r"'([^']*)'", expr)
+    if literals:
+        return literals
+    if depth <= 0 or re.fullmatch(r"[A-Za-z_]\w*", expr) is None:
+        return []
+    rhs = type_alias_rhs(whole, expr)
+    return [] if rhs is None else union_literals(whole, rhs, depth - 1)
+
+
+def _generic_args(text: str, start: int) -> tuple[list[str], int]:
+    """The arguments of the `<...>` beginning at `start`, and the index past it."""
+    depth = 0
+    args: list[str] = []
+    current: list[str] = []
+    for index in range(start, len(text)):
+        char = text[index]
+        if char == "<":
+            depth += 1
+            if depth == 1:
+                continue
+        elif char == ">":
+            depth -= 1
+            if depth == 0:
+                args.append("".join(current))
+                return args, index + 1
+        elif char == "," and depth == 1:
+            args.append("".join(current))
+            current = []
+            continue
+        if depth >= 1:
+            current.append(char)
+    return [], start
+
+
+def record_body(whole: str, text: str, start: int) -> tuple[str | None, int]:
+    """Expand `Record<K, V>` at `start` into an equivalent object body.
+
+    Only a key type that resolves to a union of string literals can be expanded.
+    A `Record<string, T>` has an open key set, so no path below it is decidable
+    from the declarations -- the caller gets None and reports the path as one it
+    could not compare, which is the honest answer rather than a pass.
+    """
+    index = skip_trivia(text, start)
+    if index >= len(text) or text[index] != "<":
+        return None, start
+    args, end = _generic_args(text, index)
+    if len(args) != 2:
+        return None, end
+    keys = union_literals(whole, args[0])
+    if not keys:
+        return None, end
+    value = args[1].strip()
+    return "{" + "".join(f"{key}: {value};" for key in keys) + "}", end
+
+
+_DEPTH = 6
+
+
+def expression_bodies(
+    whole: str, text: str, index: int, depth: int = _DEPTH
+) -> list[str]:
+    """Every object body the type expression at `index` in `text` can take.
+
+    One resolver for both a property's type and a type alias's right-hand side,
+    so a shape either side can spell -- a union, an array, a named type, a mapped
+    type -- is followed identically wherever it appears.
+    """
+    bodies: list[str] = []
+    if depth <= 0:
+        return bodies
+    index = skip_trivia(text, index)
+    while index < len(text):
+        if text[index] == "|":
+            index = skip_trivia(text, index + 1)
+            continue
+        if text[index] == "{":
+            body = brace_body(text, index)
+            if body is None:
+                break
+            bodies.append(body)
+            index = skip_trivia(text, index + len(body))
+            continue
+        identifier = re.match(r"[A-Za-z_]\w*(\[\])?", text[index:])
+        if identifier is None:
+            break
+        after = index + identifier.end()
+        name = identifier.group(0).replace("[]", "")
+        if name == "Record":
+            body, after = record_body(whole, text, after)
+            if body is not None:
+                bodies.append(body)
+        else:
+            bodies += named_type_bodies(whole, name, depth - 1)
+        index = skip_trivia(text, after)
+    return bodies
+
+
+def named_type_bodies(whole: str, name: str, depth: int = _DEPTH) -> list[str]:
+    """Bodies of `interface <name> {...}` / `type <name> = ...`.
+
+    An alias with no brace of its own is resolved through its right-hand side
+    rather than by searching forward for a brace: the next one in the file
+    belongs to an unrelated declaration, and adopting it reports a leaf as
+    present under a name that never carried it.
+    """
+    bodies: list[str] = []
     pattern = re.compile(r"\b(?:interface|type)\s+" + re.escape(name) + r"\b[^{=]*[={]")
     for match in pattern.finditer(whole):
-        brace = whole.find("{", match.start())
-        if brace == -1:
+        if whole[match.end() - 1] == "{":
+            body = brace_body(whole, match.end() - 1)
+            if body is not None:
+                bodies.append(body)
             continue
-        body = brace_body(whole, brace)
-        if body is not None:
-            bodies.append(body)
+        terminator = whole.find(";", match.end())
+        end = len(whole) if terminator == -1 else terminator
+        bodies += expression_bodies(whole, whole[:end], match.end(), depth - 1)
     return bodies
 
 
@@ -74,23 +195,7 @@ def property_bodies(text: str, prop: str, whole: str) -> list[str]:
     bodies: list[str] = []
     header = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(prop) + r"\s*\??\s*:")
     for match in header.finditer(text):
-        index = skip_trivia(text, match.end())
-        while index < len(text):
-            if text[index] == "|":
-                index = skip_trivia(text, index + 1)
-                continue
-            if text[index] == "{":
-                body = brace_body(text, index)
-                if body is None:
-                    break
-                bodies.append(body)
-                index = skip_trivia(text, index + len(body))
-                continue
-            identifier = re.match(r"[A-Za-z_]\w*(\[\])?", text[index:])
-            if identifier is None:
-                break
-            bodies += named_type_bodies(whole, identifier.group(0).replace("[]", ""))
-            index = skip_trivia(text, index + identifier.end())
+        bodies += expression_bodies(whole, text, match.end())
     return bodies
 
 
