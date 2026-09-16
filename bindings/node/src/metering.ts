@@ -2,7 +2,9 @@ import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
 import {
   assertInt32,
+  assertInterleavedSamples,
   assertNonNegativeSafeInteger,
+  assertPositiveInteger,
   assertSamples,
   assertSamplesInWindow,
 } from './validation.js';
@@ -229,6 +231,14 @@ export function meteringTruePeakDb(
       ? { samples, sampleRate, oversampleFactor, ...options }
       : samples;
   assertSamples('meteringTruePeakDb', request.samples, request.validate !== false);
+  // 0 is the sentinel for "use the library default", so a value the addon's
+  // truncation would land inside (-1, 1) selects the default and reports
+  // success. The power-of-two rule stays the core's, which names the field.
+  assertNonNegativeSafeInteger(
+    'meteringTruePeakDb',
+    request.oversampleFactor ?? 4,
+    'oversampleFactor',
+  );
   return addon.meteringTruePeakDb(
     request.samples,
     request.sampleRate ?? 22050,
@@ -470,6 +480,10 @@ export function meteringVectorscope(
   const validate = request.validate !== false;
   assertSamples('meteringVectorscope', request.left, validate, 'left');
   assertSamples('meteringVectorscope', request.right, validate, 'right');
+  // 0 is the sentinel for "emit every sample". The addon floors a negative to
+  // that same 0, so an out-of-domain request would select no decimation at all
+  // and come back a success.
+  assertNonNegativeSafeInteger('meteringVectorscope', request.maxPoints ?? 0, 'maxPoints');
   return addon.meteringVectorscope(
     request.left,
     request.right,
@@ -503,6 +517,8 @@ export function meteringPhaseScope(
   const validate = request.validate !== false;
   assertSamples('meteringPhaseScope', request.left, validate, 'left');
   assertSamples('meteringPhaseScope', request.right, validate, 'right');
+  // The sentinel and the flooring are the vectorscope's; see there.
+  assertNonNegativeSafeInteger('meteringPhaseScope', request.maxPoints ?? 0, 'maxPoints');
   return addon.meteringPhaseScope(
     request.left,
     request.right,
@@ -567,6 +583,10 @@ export function meteringSpectrumFrame(
   // Ahead of the pre-scan below, which would otherwise size its window from a
   // fractional nFft before this saw it.
   assertSpectrumOptions('meteringSpectrumFrame', request);
+  // The layer assertSamplesInWindow's floor defers to. Without it a fractional
+  // offset reaches the addon, is truncated there, and reads a different frame
+  // than the one asked for.
+  assertNonNegativeSafeInteger('meteringSpectrumFrame', request.frameOffset ?? 0, 'frameOffset');
   const nFft = request.nFft ?? 0;
   assertSamplesInWindow(
     'meteringSpectrumFrame',
@@ -596,14 +616,14 @@ export function waveformPeaks(
   options: WaveformPeaksOptions = {},
 ): WaveformPeaksReport {
   const request = samples instanceof Float32Array ? { samples, channels, ...options } : samples;
-  assertSamples('waveformPeaks', request.samples, request.validate !== false);
-  if (request.channels <= 0 || request.samples.length % request.channels !== 0) {
-    throw new RangeError('waveformPeaks: samples length must be a multiple of channels');
-  }
+  assertInterleavedSamples(
+    'waveformPeaks',
+    request.samples,
+    request.channels,
+    request.validate !== false,
+  );
   const samplesPerBucket = request.samplesPerBucket ?? 512;
-  if (samplesPerBucket <= 0) {
-    throw new RangeError('waveformPeaks: samplesPerBucket must be > 0');
-  }
+  assertPositiveInteger('waveformPeaks', samplesPerBucket, 'samplesPerBucket');
   return addon.waveformPeaks(request.samples, request.channels, samplesPerBucket);
 }
 
@@ -620,14 +640,19 @@ export function waveformPeakPyramid(
   options: WaveformPeakPyramidOptions = {},
 ): WaveformPeaksReport[] {
   const request = samples instanceof Float32Array ? { samples, channels, ...options } : samples;
-  assertSamples('waveformPeakPyramid', request.samples, request.validate !== false);
-  if (request.channels <= 0 || request.samples.length % request.channels !== 0) {
-    throw new RangeError('waveformPeakPyramid: samples length must be a multiple of channels');
-  }
+  assertInterleavedSamples(
+    'waveformPeakPyramid',
+    request.samples,
+    request.channels,
+    request.validate !== false,
+  );
   const levels = request.samplesPerBucketLevels ?? [512, 1024, 2048, 4096];
-  if (levels.length === 0 || levels.some((level) => level <= 0)) {
-    throw new RangeError('waveformPeakPyramid: samplesPerBucketLevels must be non-empty and > 0');
+  if (levels.length === 0) {
+    throw new RangeError('waveformPeakPyramid: samplesPerBucketLevels must not be empty');
   }
+  levels.forEach((level, index) => {
+    assertPositiveInteger('waveformPeakPyramid', level, `samplesPerBucketLevels[${index}]`);
+  });
   return addon.waveformPeakPyramid(request.samples, request.channels, levels);
 }
 

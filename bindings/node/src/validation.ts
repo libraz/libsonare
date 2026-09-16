@@ -82,6 +82,28 @@ export function assertSamplesInWindow(
   }
 }
 
+/**
+ * Check an interleaved buffer against the channel count that divides it.
+ *
+ * The channel count is narrowed into a C `int` by the addon, which truncates
+ * rather than refuses, so a fractional count has to be refused here or not at
+ * all: `2.5` divides a 100-sample buffer exactly, reaches the addon as `2`, and
+ * comes back as a successful two-channel answer to a question nobody asked.
+ * Mirrors the WASM validator of the same name.
+ */
+export function assertInterleavedSamples(
+  fnName: string,
+  samples: ArrayLike<number>,
+  channels: number,
+  validate: boolean,
+): void {
+  assertSamples(fnName, samples, validate);
+  assertPositiveInteger(fnName, channels, 'channels');
+  if (samples.length % channels !== 0) {
+    throw new RangeError(`${fnName}: samples length must be a multiple of channels`);
+  }
+}
+
 export function assertFiniteScalar(fnName: string, value: number, argName: string): void {
   if (!Number.isFinite(value)) {
     throw new RangeError(`${fnName}: ${argName} must be a finite number`);

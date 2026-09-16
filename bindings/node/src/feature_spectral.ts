@@ -8,7 +8,7 @@ import type {
   StftDbResult,
   StftResult,
 } from './types.js';
-import { assertNonNegativeScalar, assertSamples } from './validation.js';
+import { assertNonNegativeScalar, assertPositiveInteger, assertSamples } from './validation.js';
 
 /** Common input for one-shot feature extraction requests. */
 export interface FeatureSamplesRequest {
@@ -204,13 +204,13 @@ export function melDelta(
     features instanceof Float32Array
       ? { features, nFeatures: nFeatures ?? 0, nFrames: nFrames ?? 0, width }
       : features;
-  if (
-    !Number.isInteger(request.nFeatures) ||
-    !Number.isInteger(request.nFrames) ||
-    request.nFeatures <= 0 ||
-    request.nFrames <= 0 ||
-    request.features.length !== request.nFeatures * request.nFrames
-  ) {
+  assertPositiveInteger('melDelta', request.nFeatures, 'nFeatures');
+  assertPositiveInteger('melDelta', request.nFrames, 'nFrames');
+  assertPositiveInteger('melDelta', request.width ?? 9, 'width');
+  if ((request.width ?? 9) < 3 || (request.width ?? 9) % 2 === 0) {
+    throw new RangeError('melDelta: width must be an odd integer of at least 3');
+  }
+  if (request.features.length !== request.nFeatures * request.nFrames) {
     throw new TypeError('melDelta: feature matrix length must equal nFeatures * nFrames');
   }
   return addon.melDelta(request.features, request.nFeatures, request.nFrames, request.width ?? 9);
@@ -571,5 +571,10 @@ export function pcen(
     nFrames: requestFrames,
     ...requestOptions
   } = request;
+  // The addon's matrix-dimension rule runs on the NARROWED values, so a
+  // fractional pair that divides the buffer once truncated passes it: 2.5 x 50
+  // over 100 values is checked as 2 x 50 and answers as a 2-bin result.
+  assertPositiveInteger('pcen', requestBins, 'nBins');
+  assertPositiveInteger('pcen', requestFrames, 'nFrames');
   return addon.pcen(requestValues, requestBins, requestFrames, requestOptions);
 }
