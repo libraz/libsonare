@@ -221,6 +221,114 @@ export interface MixAssistantOptions {
   hopLength?: number;
 }
 
+/** One processor slot on a scene strip or bus. */
+export interface MixSceneInsert {
+  slot: string;
+  processor: string;
+  /** Processor parameters, as a nested JSON string. */
+  params: string;
+  /** Present only when the insert is keyed off another strip. */
+  sidechainKey?: string;
+}
+
+/** A strip send to a destination bus. */
+export interface MixSceneSend {
+  id: string;
+  destinationBusId: string;
+  sendDb: number;
+  /** Send tap point; one of {@link SendTiming}. */
+  timing: string;
+}
+
+/** A channel strip in a mixer scene. */
+export interface MixSceneStrip {
+  id: string;
+  inputTrimDb: number;
+  faderDb: number;
+  vcaOffsetDb: number;
+  pan: number;
+  width: number;
+  muted: boolean;
+  soloed: boolean;
+  soloSafe: boolean;
+  /** Pan mode as its raw ordinal; the named forms are {@link PanMode}. */
+  panMode: number;
+  dualPanLeft: number;
+  dualPanRight: number;
+  polarityInvertLeft: boolean;
+  polarityInvertRight: boolean;
+  /** Pan law as its raw ordinal; the named forms are {@link PanLaw}. */
+  panLaw: number;
+  channelDelaySamples: number;
+  /** Present only for a non-stereo source. */
+  sourceLayout?: string;
+  /** Present only when the surround pan has moved off its centered default. */
+  surroundPan?: {
+    azimuth: number;
+    elevation: number;
+    divergence: number;
+    lfe: number;
+    distance: number;
+  };
+  /**
+   * Meter configuration for this strip's pre/post taps. Present only when the
+   * strip has opted out of some of its metering; absent means the full default
+   * (LUFS + true peak at 4x).
+   *
+   * Fixed when the mixer is built from the scene: a strip's meters size their
+   * buffers up front, so there is no setter for this. A full meter costs about
+   * 646 KB at 48 kHz and a strip carries two, so `lufs: false` (about 83 KB per
+   * meter) or `enabled: false` (about 145 KB for the whole strip instead of
+   * 1.4 MB) is worth setting for strips whose meters are never read.
+   */
+  metering?: {
+    enabled: boolean;
+    lufs: boolean;
+    truePeak: boolean;
+    /** Requested factor; the meter resolves it to the nearest of 2x / 4x / 8x. */
+    truePeakOversample: number;
+  };
+  inserts: MixSceneInsert[];
+  sends: MixSceneSend[];
+}
+
+/** A bus in a mixer scene. Defaulted fields are omitted from the document. */
+export interface MixSceneBus {
+  id: string;
+  role: string;
+  layout?: string;
+  inputTrimDb?: number;
+  width?: number;
+  polarityInvertLeft?: boolean;
+  polarityInvertRight?: boolean;
+  inserts: MixSceneInsert[];
+}
+
+/** A VCA group in a mixer scene. */
+export interface MixSceneVcaGroup {
+  id: string;
+  gainDb: number;
+  members: string[];
+}
+
+/** A routing edge in a mixer scene. */
+export interface MixSceneConnection {
+  source: string;
+  destination: string;
+}
+
+/**
+ * A mixer scene document, in the schema {@link Mixer.fromSceneJson} reads.
+ * {@link suggestMixSceneJson} returns the same document as its JSON text.
+ */
+export interface MixSceneDocument {
+  version: number;
+  strips: MixSceneStrip[];
+  buses: MixSceneBus[];
+  vcaGroups: MixSceneVcaGroup[];
+  connections: MixSceneConnection[];
+}
+
 /** What the assistant measured about one input track. */
 export interface MixAssistantTrackProfile {
   stripId: string;
@@ -310,7 +418,7 @@ export interface MixAssistantMixProfile {
  */
 export interface MixAssistantResult {
   /** The suggested scene, in the schema {@link Mixer.fromSceneJson} reads. */
-  scene: Record<string, unknown>;
+  scene: MixSceneDocument;
   /** One entry per input track, in input order. */
   tracks: MixAssistantTrackProfile[];
   mix: MixAssistantMixProfile;
