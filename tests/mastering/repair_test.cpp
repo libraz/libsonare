@@ -619,6 +619,94 @@ TEST_CASE("DenoiseClassical SPP estimator is its own path, not a fallback", "[ma
   REQUIRE(max_abs_diff(spp, run(DenoiseNoiseEstimator::Quantile)) > 0.005f);
 }
 
+namespace {
+
+/// A tone that occupies its band half the time, over a stationary floor.
+/// @details Returns the clean reference and the noisy input. The duty cycle is
+///   what separates the estimators: a band that falls silent between bursts lets
+///   an estimator see its own floor, and one that reads the floor while the band
+///   is busy subtracts the programme instead of the noise.
+struct IntermittentTone {
+  Audio clean;
+  Audio noisy;
+};
+
+IntermittentTone intermittent_tone(int sample_rate, int samples, float tone_freq, float tone_amp,
+                                   float noise_amp, double burst_seconds, uint32_t seed) {
+  std::vector<float> clean(static_cast<size_t>(samples));
+  std::vector<float> noisy(static_cast<size_t>(samples));
+  std::mt19937 rng(seed);
+  std::normal_distribution<float> noise(0.0f, noise_amp);
+  for (int i = 0; i < samples; ++i) {
+    const double t = static_cast<double>(i) / sample_rate;
+    const bool on = static_cast<int>(t / burst_seconds) % 2 == 1;
+    const float value =
+        on ? static_cast<float>(tone_amp * std::sin(sonare::constants::kTwoPiD * tone_freq * t))
+           : 0.0f;
+    clean[static_cast<size_t>(i)] = value;
+    noisy[static_cast<size_t>(i)] = value + noise(rng);
+  }
+  return {Audio::from_vector(std::move(clean), sample_rate),
+          Audio::from_vector(std::move(noisy), sample_rate)};
+}
+
+/// Segmental SNR against a reference, over the frames where the reference has energy.
+/// @details Silent frames are excluded rather than floored: they hold only the
+///   error term, so including them measures noise removal in the gaps and hides
+///   what the processing did to the programme, which is the axis under test.
+double segmental_snr_db(const Audio& reference, const Audio& test, size_t frame = 512) {
+  REQUIRE(reference.size() == test.size());
+  const size_t frames = reference.size() / frame;
+  REQUIRE(frames > 0);
+  std::vector<double> reference_power(frames, 0.0);
+  std::vector<double> error_power(frames, 0.0);
+  for (size_t f = 0; f < frames; ++f) {
+    for (size_t i = 0; i < frame; ++i) {
+      const double r = reference[f * frame + i];
+      const double e = static_cast<double>(test[f * frame + i]) - r;
+      reference_power[f] += r * r;
+      error_power[f] += e * e;
+    }
+  }
+  const double loudest = *std::max_element(reference_power.begin(), reference_power.end());
+  double total = 0.0;
+  size_t counted = 0;
+  for (size_t f = 0; f < frames; ++f) {
+    if (reference_power[f] <= loudest * 1e-6) continue;
+    total += 10.0 * std::log10(reference_power[f] / std::max(error_power[f], 1e-30));
+    ++counted;
+  }
+  REQUIRE(counted > 0);  // no live frames would make every comparison below vacuous
+  return total / static_cast<double>(counted);
+}
+
+}  // namespace
+
+TEST_CASE("DenoiseClassical keeps the floor under an intermittently occupied band",
+          "[mastering][repair]") {
+  // A minimum-tracking estimator needs the floor to become observable between
+  // programme events. Its smoothed power carries a burst forward, so on a band
+  // that is busy half the time the tracked minimum sits well above the real
+  // floor and the gain rule subtracts the programme.
+  const IntermittentTone signal =
+      intermittent_tone(22050, 22050 * 4, 1000.0f, 0.2f, 0.01f, 0.5, 20260917);
+
+  DenoiseClassicalConfig config{};
+  config.mode = DenoiseMode::LogMmse;
+  auto gain_db = [&](DenoiseNoiseEstimator estimator) {
+    config.noise_estimator = estimator;
+    return segmental_snr_db(signal.clean, denoise_classical(signal.noisy, config)) -
+           segmental_snr_db(signal.clean, signal.noisy);
+  };
+
+  // Measured: quantile +15.1 dB, spp +14.1 dB. The two minimum-tracking modes sit
+  // at +0.6 and +0.5 on the same signal and are deliberately not asserted here --
+  // an assertion pinning that would have to be deleted by whoever repairs them,
+  // and a test that goes red on a fix is worse than no test.
+  REQUIRE(gain_db(DenoiseNoiseEstimator::Quantile) > 8.0);
+  REQUIRE(gain_db(DenoiseNoiseEstimator::Spp) > 8.0);
+}
+
 TEST_CASE("DenoiseClassical rejects inputs shorter than n_fft", "[mastering][repair]") {
   REQUIRE_THROWS_AS(denoise_classical(make_audio({0.03f, 0.05f})), SonareException);
 }
