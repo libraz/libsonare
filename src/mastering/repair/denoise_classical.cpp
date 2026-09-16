@@ -62,10 +62,37 @@ const double* MedianGainSmoother::emit(int target, bool has_next) {
   return out_.data();
 }
 
+common::NoiseTracker::Mode tracker_mode_for(DenoiseNoiseEstimator estimator) {
+  switch (estimator) {
+    case DenoiseNoiseEstimator::Quantile:
+      throw SonareException(ErrorCode::InvalidState,
+                            "quantile noise estimation does not run through NoiseTracker");
+    case DenoiseNoiseEstimator::Mcra:
+      return common::NoiseTracker::Mode::Mcra;
+    case DenoiseNoiseEstimator::Imcra:
+      return common::NoiseTracker::Mode::Imcra;
+    case DenoiseNoiseEstimator::Spp:
+      return common::NoiseTracker::Mode::Spp;
+  }
+  throw SonareException(ErrorCode::InvalidParameter, "invalid denoise noise estimator");
+}
+
+void frame_powers(const std::complex<float>* frame, int bins, float* power_f, double* power_d) {
+  for (int b = 0; b < bins; ++b) {
+    const float re = frame[b].real();
+    const float im = frame[b].imag();
+    power_f[b] = re * re + im * im;
+    const double magnitude = std::abs(frame[b]);
+    power_d[b] = magnitude * magnitude;
+  }
+}
+
 }  // namespace detail
 
 namespace {
 
+using detail::frame_powers;
+using detail::tracker_mode_for;
 using sonare::constants::kPiD;
 
 /// @brief Gain below which an attenuation is reported as the mask's floor.
@@ -83,22 +110,6 @@ StftConfig analysis_config(const DenoiseClassicalConfig& config) {
   stft_config.window = WindowType::Hann;
   stft_config.center = true;
   return stft_config;
-}
-
-/// @brief One frame's two power spectra, each as its own consumer wants it.
-/// @details The estimator and the reported floor read what Spectrogram::power()
-///   holds, re^2 + im^2 in float; the gain recursion reads |z|^2 widened from the
-///   magnitude. The two part company in the last bits and this module has always
-///   been defined by that pair, so both are derived from the frame rather than
-///   one from the other.
-void frame_powers(const std::complex<float>* frame, int bins, float* power_f, double* power_d) {
-  for (int b = 0; b < bins; ++b) {
-    const float re = frame[b].real();
-    const float im = frame[b].imag();
-    power_f[b] = re * re + im * im;
-    const double magnitude = std::abs(frame[b]);
-    power_d[b] = magnitude * magnitude;
-  }
 }
 
 /// Whether @p mode names one of the gain functions this module implements.
@@ -128,25 +139,6 @@ bool is_known_noise_estimator(DenoiseNoiseEstimator estimator) {
       return true;
   }
   return false;
-}
-
-/// Maps an estimator onto the NoiseTracker mode that implements it.
-/// @details Exhaustive and without a `default`, so a new estimator cannot inherit
-///   whichever mode an initializer happens to name. Quantile throws rather than
-///   falling through: it is answered before this is reached, not by a tracker.
-common::NoiseTracker::Mode tracker_mode_for(DenoiseNoiseEstimator estimator) {
-  switch (estimator) {
-    case DenoiseNoiseEstimator::Quantile:
-      throw SonareException(ErrorCode::InvalidState,
-                            "quantile noise estimation does not run through NoiseTracker");
-    case DenoiseNoiseEstimator::Mcra:
-      return common::NoiseTracker::Mode::Mcra;
-    case DenoiseNoiseEstimator::Imcra:
-      return common::NoiseTracker::Mode::Imcra;
-    case DenoiseNoiseEstimator::Spp:
-      return common::NoiseTracker::Mode::Spp;
-  }
-  throw SonareException(ErrorCode::InvalidParameter, "invalid denoise noise estimator");
 }
 
 // Exponential integral E1(x) = integral from x to infinity of (e^-t / t) dt.
@@ -252,116 +244,6 @@ bool uses_spectral_subtraction(DenoiseMode mode) {
   }
   throw SonareException(ErrorCode::InvalidParameter, "invalid denoise mode");
 }
-
-/// @brief The gain mask, one STFT frame in and one out.
-/// @details State is O(bins): the decision-directed recursion's previous clean
-///   power, plus the smoother's own three frames when gain smoothing is on.
-///   Everything but that smoother is causal already -- the recursion carries one
-///   frame, and spectral subtraction carries nothing -- so the one frame of
-///   latency @ref latency reports is the smoother's.
-class GainStage {
- public:
-  GainStage(int bins, const DenoiseClassicalConfig& config)
-      : bins_(bins),
-        config_(config),
-        floor_gain_(gain_floor_of(config)),
-        berouti_(uses_spectral_subtraction(config.mode)),
-        log_spectral_(berouti_ ? false : uses_log_spectral_gain(config.mode)),
-        prev_clean_power_(static_cast<size_t>(bins), 0.0),
-        raw_(static_cast<size_t>(bins), 1.0),
-        out_(static_cast<size_t>(bins), 1.0) {
-    if (!berouti_ && config.gain_smoothing) {
-      smoother_ = std::make_unique<detail::MedianGainSmoother>(bins);
-    }
-  }
-
-  /// Frames between a pushed spectrum and the gain frame that answers for it.
-  int latency() const { return smoother_ ? 1 : 0; }
-
-  /// @brief Feeds one frame's |z|^2 and per-bin noise PSD.
-  /// @return The finished gain frame for the frame @ref latency back, or null
-  ///         while the smoother has yet to see a successor.
-  const double* push(const double* power_frame, const double* noise_frame) {
-    compute_raw(power_frame, noise_frame, raw_.data());
-    if (smoother_ == nullptr) return finish(raw_.data());
-    const double* smoothed = smoother_->push(raw_.data());
-    return smoothed == nullptr ? nullptr : finish(smoothed);
-  }
-
-  /// @brief Answers for the last pushed frame, which has no successor.
-  /// @return Null when nothing is pending, which is every non-smoothing pass.
-  const double* flush() {
-    if (smoother_ == nullptr) return nullptr;
-    const double* smoothed = smoother_->flush();
-    return smoothed == nullptr ? nullptr : finish(smoothed);
-  }
-
- private:
-  void compute_raw(const double* power_frame, const double* noise_frame, double* raw) {
-    if (berouti_) {
-      const double alpha = static_cast<double>(config_.over_subtraction);
-      const double beta = static_cast<double>(config_.spectral_floor);
-      for (int b = 0; b < bins_; ++b) {
-        const double power = power_frame[b];
-        const double mag = std::sqrt(power);
-        const double noise_pow = std::max(noise_frame[b], 1e-12);
-        const double floor_pow = beta * noise_pow;
-        const double clean_power = std::max(power - alpha * noise_pow, floor_pow);
-        raw[b] = mag > 1e-12 ? std::sqrt(clean_power) / mag : 0.0;
-      }
-      return;
-    }
-
-    const double alpha = config_.dd_alpha;
-    for (int b = 0; b < bins_; ++b) {
-      const double power = power_frame[b];
-      const double noise = std::max(noise_frame[b], 1e-12);
-
-      // a posteriori SNR.
-      const double gamma_post = std::max(power / noise, 1e-6);
-      // Decision-directed a priori SNR (Ephraim-Malah recursion).
-      const double ml_estimate = std::max(gamma_post - 1.0, 0.0);
-      const double ksi = std::max(
-          alpha * prev_clean_power_[static_cast<size_t>(b)] / noise + (1.0 - alpha) * ml_estimate,
-          1e-6);
-
-      double gain = log_spectral_ ? gain_logmmse(ksi, gamma_post) : gain_mmse_stsa(ksi, gamma_post);
-      if (config_.speech_presence_gain) {
-        const double presence = speech_presence_probability(ksi, gamma_post);
-        gain = std::pow(std::max(gain, floor_gain_), presence) *
-               std::pow(std::max(floor_gain_, 1.0e-6), 1.0 - presence);
-      }
-      gain = std::max(gain, floor_gain_);
-      gain = std::min(gain, 1.0);
-
-      raw[b] = gain;
-      // The recursion feeds on the raw gain: smoothing happens after this frame
-      // has already set the next one's prior.
-      prev_clean_power_[static_cast<size_t>(b)] = power * gain * gain;
-    }
-  }
-
-  /// Rounds the mask to float. Deliberately here rather than at the multiply: the
-  /// mask is one real number per cell and every channel is scaled by the same one.
-  const double* finish(const double* source) {
-    if (berouti_) return source;
-    for (int b = 0; b < bins_; ++b) {
-      out_[static_cast<size_t>(b)] =
-          static_cast<double>(static_cast<float>(std::clamp(source[b], floor_gain_, 1.0)));
-    }
-    return out_.data();
-  }
-
-  int bins_;
-  DenoiseClassicalConfig config_;
-  double floor_gain_;
-  bool berouti_;
-  bool log_spectral_;
-  std::vector<double> prev_clean_power_;
-  std::vector<double> raw_;
-  std::vector<double> out_;
-  std::unique_ptr<detail::MedianGainSmoother> smoother_;
-};
 
 double mean_square(const float* samples, size_t size) {
   double sum = 0.0;
@@ -567,7 +449,7 @@ void denoise_channels(LinkedFrameReader& reader, int sample_rate, std::size_t le
   const std::size_t channels = reader.channel_count();
 
   NoisePsdSource noise(reader, sample_rate, config);
-  GainStage stage(bins, config);
+  detail::GainStage stage(bins, config);
   MaskSummary summary(bins, frames, config);
   std::vector<std::unique_ptr<common::IstftAccumulator>> synthesis;
   synthesis.reserve(channels);
@@ -623,6 +505,94 @@ void denoise_channels(LinkedFrameReader& reader, int sample_rate, std::size_t le
 }
 
 }  // namespace
+
+namespace detail {
+
+GainStage::GainStage(int bins, const DenoiseClassicalConfig& config)
+    : bins_(bins),
+      config_(config),
+      floor_gain_(gain_floor_of(config)),
+      berouti_(uses_spectral_subtraction(config.mode)),
+      log_spectral_(berouti_ ? false : uses_log_spectral_gain(config.mode)),
+      prev_clean_power_(static_cast<size_t>(bins), 0.0),
+      raw_(static_cast<size_t>(bins), 1.0),
+      out_(static_cast<size_t>(bins), 1.0) {
+  if (!berouti_ && config.gain_smoothing) {
+    smoother_ = std::make_unique<MedianGainSmoother>(bins);
+  }
+}
+
+int GainStage::latency() const { return smoother_ ? 1 : 0; }
+
+const double* GainStage::push(const double* power_frame, const double* noise_frame) {
+  compute_raw(power_frame, noise_frame, raw_.data());
+  if (smoother_ == nullptr) return finish(raw_.data());
+  const double* smoothed = smoother_->push(raw_.data());
+  return smoothed == nullptr ? nullptr : finish(smoothed);
+}
+
+const double* GainStage::flush() {
+  if (smoother_ == nullptr) return nullptr;
+  const double* smoothed = smoother_->flush();
+  return smoothed == nullptr ? nullptr : finish(smoothed);
+}
+
+void GainStage::compute_raw(const double* power_frame, const double* noise_frame, double* raw) {
+  if (berouti_) {
+    const double alpha = static_cast<double>(config_.over_subtraction);
+    const double beta = static_cast<double>(config_.spectral_floor);
+    for (int b = 0; b < bins_; ++b) {
+      const double power = power_frame[b];
+      const double mag = std::sqrt(power);
+      const double noise_pow = std::max(noise_frame[b], 1e-12);
+      const double floor_pow = beta * noise_pow;
+      const double clean_power = std::max(power - alpha * noise_pow, floor_pow);
+      raw[b] = mag > 1e-12 ? std::sqrt(clean_power) / mag : 0.0;
+    }
+    return;
+  }
+
+  const double alpha = config_.dd_alpha;
+  for (int b = 0; b < bins_; ++b) {
+    const double power = power_frame[b];
+    const double noise = std::max(noise_frame[b], 1e-12);
+
+    // a posteriori SNR.
+    const double gamma_post = std::max(power / noise, 1e-6);
+    // Decision-directed a priori SNR (Ephraim-Malah recursion).
+    const double ml_estimate = std::max(gamma_post - 1.0, 0.0);
+    const double ksi = std::max(
+        alpha * prev_clean_power_[static_cast<size_t>(b)] / noise + (1.0 - alpha) * ml_estimate,
+        1e-6);
+
+    double gain = log_spectral_ ? gain_logmmse(ksi, gamma_post) : gain_mmse_stsa(ksi, gamma_post);
+    if (config_.speech_presence_gain) {
+      const double presence = speech_presence_probability(ksi, gamma_post);
+      gain = std::pow(std::max(gain, floor_gain_), presence) *
+             std::pow(std::max(floor_gain_, 1.0e-6), 1.0 - presence);
+    }
+    gain = std::max(gain, floor_gain_);
+    gain = std::min(gain, 1.0);
+
+    raw[b] = gain;
+    // The recursion feeds on the raw gain: smoothing happens after this frame
+    // has already set the next one's prior.
+    prev_clean_power_[static_cast<size_t>(b)] = power * gain * gain;
+  }
+}
+
+/// Rounds the mask to float. Deliberately here rather than at the multiply: the
+/// mask is one real number per cell and every channel is scaled by the same one.
+const double* GainStage::finish(const double* source) {
+  if (berouti_) return source;
+  for (int b = 0; b < bins_; ++b) {
+    out_[static_cast<size_t>(b)] =
+        static_cast<double>(static_cast<float>(std::clamp(source[b], floor_gain_, 1.0)));
+  }
+  return out_.data();
+}
+
+}  // namespace detail
 
 void validate_config(const DenoiseClassicalConfig& config) {
   if (!is_known_denoise_mode(config.mode)) {

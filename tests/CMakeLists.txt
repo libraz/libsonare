@@ -249,6 +249,7 @@ if(BUILD_MASTERING)
     mastering/param_wiring_test.cpp
     mastering/config_zero_init_test.cpp
     mastering/repair_test.cpp
+    mastering/denoise_streaming_test.cpp
     mastering/repair_stereo_denoise_test.cpp
     mastering/named_processor_stereo_repair_test.cpp
     mastering/repair_stereo_impulse_test.cpp

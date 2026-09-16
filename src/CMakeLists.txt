@@ -436,6 +436,7 @@ if(BUILD_MASTERING)
     mastering/repair/decrackle.cpp
     mastering/repair/dehum.cpp
     mastering/repair/denoise_classical.cpp
+    mastering/repair/denoise_streaming.cpp
     mastering/repair/dereverb_classical.cpp
     mastering/repair/trim_silence.cpp
     mastering/saturation/amp_physics.cpp
