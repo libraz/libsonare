@@ -1051,6 +1051,40 @@ TEST_CASE("Griffin-Lim's fast path matches the public-API reference at a KissFFT
   REQUIRE(std::memcmp(fast.data(), reference.data(), fast.size() * sizeof(float)) == 0);
 }
 
+TEST_CASE("Griffin-Lim bounds the reconstruction its own geometry asks for",
+          "[spectrum][griffin_lim]") {
+  // The length is (n_frames - 1) * hop_length, and none of that is a buffer the
+  // caller passed, so nothing upstream bounds it: a hop that wraps the int
+  // product reached std::vector and came back as a length error carrying
+  // InvalidState and the word "vector", while a merely large one allocated past
+  // the offline ceiling and returned successfully.
+  constexpr int sr = 22050;
+  constexpr int n_fft = 32;
+  constexpr int n_bins = n_fft / 2 + 1;
+  constexpr int n_frames = 2;
+  const std::vector<float> mag(static_cast<size_t>(n_bins) * n_frames, 1.0f);
+
+  GriffinLimConfig gl_config;
+  gl_config.n_iter = 1;
+
+  // Non-vacuity: the same shape reconstructs at a hop the geometry allows, so a
+  // refusal below is the bound rather than anything else about these inputs.
+  Audio allowed = griffin_lim(mag, n_bins, n_frames, n_fft, n_fft / 2, sr, gl_config);
+  REQUIRE(allowed.size() > 0);
+
+  const auto refusal_code = [&](int hop_length) {
+    try {
+      griffin_lim(mag, n_bins, n_frames, n_fft, hop_length, sr, gl_config);
+    } catch (const SonareException& e) {
+      return e.code();
+    }
+    return ErrorCode::Ok;
+  };
+  // Just past the ceiling, and far enough past it to wrap the int product.
+  REQUIRE(refusal_code(500'000'001) == ErrorCode::InvalidParameter);
+  REQUIRE(refusal_code(std::numeric_limits<int>::max()) == ErrorCode::InvalidParameter);
+}
+
 TEST_CASE("iSTFT with win_length < n_fft", "[spectrum]") {
   constexpr int sr = 22050;
   constexpr int samples = sr;  // 1 second

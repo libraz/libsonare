@@ -593,13 +593,32 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
 
   // Previous complex STFT estimate for the momentum update (librosa's `tprev`).
   std::vector<std::complex<float>> tprev(total, std::complex<float>(0.0f, 0.0f));
-  const int target_length = std::max(0, (n_frames - 1) * hop_length);
 
   // Create spectrogram wrapper for iSTFT
   StftConfig stft_config;
   stft_config.n_fft = n_fft;
   stft_config.hop_length = hop_length;
   stft_config.center = true;
+
+  // Validated ahead of the geometry both branches derive from it, so a
+  // hop_length this refuses never reaches the int product below.
+  const StftConfig checked = Validated<StftConfig>::make(stft_config).get();
+
+  // The reconstruction length comes from the geometry rather than from any
+  // buffer the caller passed, so it is bounded here. Past this ceiling the int
+  // product wraps, and what the caller receives is std::vector's own length
+  // error, which names neither the argument nor a limit.
+  std::size_t reconstructed_samples = 0;
+  if (!numeric::checked_size_product(static_cast<std::size_t>(n_frames - 1),
+                                     static_cast<std::size_t>(checked.hop_length),
+                                     kMaxAudioBufferSize, &reconstructed_samples) ||
+      !numeric::checked_add(reconstructed_samples, static_cast<std::size_t>(checked.n_fft),
+                            &reconstructed_samples) ||
+      reconstructed_samples > kMaxAudioBufferSize) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "griffin_lim: reconstruction exceeds the offline resource limit");
+  }
+  const int target_length = std::max(0, (n_frames - 1) * hop_length);
 
   if (n_frames <= 1) {
     // to_audio(0) takes the auto-trim path and can return an empty
@@ -637,7 +656,6 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
     // hoist the FFT plan and the per-iteration buffers out of the loop instead
     // of paying Spectrogram::from_complex's copy and Spectrogram::compute's
     // fresh allocation (and a fresh FFT plan for each) on every pass.
-    const StftConfig checked = Validated<StftConfig>::make(stft_config).get();
     const int win_length = checked.actual_win_length();
     std::vector<float> analysis_window =
         build_padded_window(checked.window, win_length, n_fft, true);
