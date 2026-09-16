@@ -81,6 +81,22 @@ FAMILIES = {
             "wasm": WASM / "mastering_core.ts",
         },
     },
+    "mix_assistant_result_schema_paths": {
+        "source": REPO_ROOT / "src/mixing/assistant/suggester.cpp",
+        "root": "MixAssistantResult",
+        "surfaces": {
+            "node": NODE / "types_mixing.ts",
+            "wasm": WASM / "public_types_mixing.ts",
+        },
+    },
+    "scene_schema_paths": {
+        "source": REPO_ROOT / "src/mixing/api/scene_json.cpp",
+        "root": "MixSceneDocument",
+        "surfaces": {
+            "node": NODE / "types_mixing.ts",
+            "wasm": WASM / "public_types_mixing.ts",
+        },
+    },
     "capability_catalog_schema_paths": {
         "source": REPO_ROOT / "src/c_api/sonare_c_mastering_apply.cpp",
         "root": "CapabilityCatalog",

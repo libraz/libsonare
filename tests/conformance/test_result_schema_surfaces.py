@@ -116,6 +116,21 @@ class ArraySegments(unittest.TestCase):
         self.assertEqual(comparisons, 3)
         self.assertEqual(missing, ["[].missing"])
 
+    def test_an_opaque_record_field_is_not_counted_as_compared(self):
+        """The shape this check was extended to catch: a surface described a
+        nested document as an open bag, so every path below it was undecidable
+        rather than absent -- and silence there reads exactly like agreement."""
+        surface = """
+        export interface Inner { id: string }
+        export interface Opaque { scene: Record<string, unknown>; tracks: Inner[] }
+        """
+        missing, unreached, comparisons = check.scan(
+            ["scene.version", "tracks[].id"], surface, "Opaque"
+        )
+        self.assertEqual(missing, [])
+        self.assertEqual(unreached, ["scene.version"])
+        self.assertEqual(comparisons, 1)
+
     def test_a_path_that_is_only_brackets_is_not_counted_as_compared(self):
         missing, unreached, comparisons = check.scan(["[]"], ELEMENT_SURFACE, "Entry")
         self.assertEqual(comparisons, 0)
