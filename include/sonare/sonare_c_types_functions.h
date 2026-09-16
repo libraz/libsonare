@@ -37,11 +37,15 @@ SonareError sonare_audio_file_channel_count(const char* path, int* out_channels)
 #endif
 
 void sonare_audio_free(SonareAudio* audio);
-/// @brief Borrowed view of the handle's interleaved samples, or NULL for a NULL
+/// @brief Borrowed view of the handle's mono samples, or NULL for a NULL
 ///        @p audio.
 /// @details Owned by the @ref SonareAudio handle, not the caller: valid until
 ///          @ref sonare_audio_free, and never to be freed separately. Use
-///          @ref sonare_audio_length for the element count.
+///          @ref sonare_audio_length for the element count, which is a sample
+///          count and not frames times channels: a handle carries one plane, and
+///          a multi-channel source is downmixed as the handle is built.
+///          @ref sonare_audio_file_channel_count reports the channel count of a
+///          file on disk, never the handle's.
 const float* sonare_audio_data(const SonareAudio* audio);
 size_t sonare_audio_length(const SonareAudio* audio);
 int sonare_audio_sample_rate(const SonareAudio* audio);
