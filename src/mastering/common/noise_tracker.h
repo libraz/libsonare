@@ -9,7 +9,12 @@ namespace sonare::mastering::common {
 
 class NoiseTracker {
  public:
-  enum class Mode { Static, Mcra, Imcra };
+  /// @brief How the noise PSD is tracked.
+  /// @details Static, Mcra and Imcra follow a minimum over a sliding window, which
+  ///   biases the estimate low and needs a compensation factor. Spp
+  ///   (Gerkmann-Hendriks 2012) estimates the noise periodogram from a
+  ///   speech-presence probability instead: no minimum tracking, no bias factor.
+  enum class Mode { Static, Mcra, Imcra, Spp };
 
   NoiseTracker(int n_bins, int sample_rate, Mode mode = Mode::Imcra, int hop_length = 512);
 
@@ -24,6 +29,8 @@ class NoiseTracker {
   void validate_power(const float* power_spectrum) const;
   void initialize(const float* power_spectrum);
   void update_minima();
+  void update_spp(const float* power_spectrum);
+  bool tracks_minima() const noexcept { return mode_ != Mode::Spp; }
 
   int n_bins_ = 0;
   int sample_rate_ = 48000;
@@ -34,10 +41,13 @@ class NoiseTracker {
   bool initialized_ = false;
   std::vector<float> noise_psd_;
   std::vector<float> speech_presence_;
+  // Minimum-statistics state; left empty in Spp mode, which tracks no minimum.
   std::vector<float> smoothed_power_;
   std::vector<float> local_min_;
   std::vector<float> previous_min_;
   std::vector<float> candidate_min_;
+  // Spp mode only: time-smoothed presence probability feeding the stagnation guard.
+  std::vector<float> smoothed_presence_;
 };
 
 }  // namespace sonare::mastering::common

@@ -31,6 +31,10 @@ enum class DenoiseNoiseEstimator {
   Mcra,
   /// Improved MCRA with speech-presence probability gating.
   Imcra,
+  /// MMSE noise-power estimation weighted by speech-presence probability
+  /// (Gerkmann-Hendriks 2012). Tracks no spectral minimum, so it carries neither
+  /// a window length nor the bias compensation the two MCRA variants need.
+  Spp,
 };
 
 /// @brief STFT-based denoiser supporting three classical gain functions.

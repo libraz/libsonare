@@ -97,6 +97,54 @@ std::vector<double> estimate_quantile_noise_psd(const float* power, int bins, in
   return noise;
 }
 
+/// Whether @p mode names one of the gain functions this module implements.
+/// @details Exhaustive and without a `default`, for the reason on its estimator
+///   sibling below. The trailing `false` is for an integer cast from outside the
+///   enumeration, which no case can catch.
+bool is_known_denoise_mode(DenoiseMode mode) {
+  switch (mode) {
+    case DenoiseMode::LogMmse:
+    case DenoiseMode::MmseStsa:
+    case DenoiseMode::SpectralSubtraction:
+      return true;
+  }
+  return false;
+}
+
+/// Whether @p estimator names one of the estimators this module implements.
+/// @details Exhaustive and without a `default`, so adding an estimator is a build
+///   error here rather than a value the validator quietly rejects. The trailing
+///   `false` is for an integer cast from outside the enumeration.
+bool is_known_noise_estimator(DenoiseNoiseEstimator estimator) {
+  switch (estimator) {
+    case DenoiseNoiseEstimator::Quantile:
+    case DenoiseNoiseEstimator::Mcra:
+    case DenoiseNoiseEstimator::Imcra:
+    case DenoiseNoiseEstimator::Spp:
+      return true;
+  }
+  return false;
+}
+
+/// Maps an estimator onto the NoiseTracker mode that implements it.
+/// @details Exhaustive and without a `default`, so a new estimator cannot inherit
+///   whichever mode an initializer happens to name. Quantile throws rather than
+///   falling through: it is answered before this is reached, not by a tracker.
+common::NoiseTracker::Mode tracker_mode_for(DenoiseNoiseEstimator estimator) {
+  switch (estimator) {
+    case DenoiseNoiseEstimator::Quantile:
+      throw SonareException(ErrorCode::InvalidState,
+                            "quantile noise estimation does not run through NoiseTracker");
+    case DenoiseNoiseEstimator::Mcra:
+      return common::NoiseTracker::Mode::Mcra;
+    case DenoiseNoiseEstimator::Imcra:
+      return common::NoiseTracker::Mode::Imcra;
+    case DenoiseNoiseEstimator::Spp:
+      return common::NoiseTracker::Mode::Spp;
+  }
+  throw SonareException(ErrorCode::InvalidParameter, "invalid denoise noise estimator");
+}
+
 std::vector<double> estimate_noise_psd_frames(const float* power, int bins, int frames,
                                               int sample_rate,
                                               const DenoiseClassicalConfig& config) {
@@ -114,11 +162,8 @@ std::vector<double> estimate_noise_psd_frames(const float* power, int bins, int 
     return noise;
   }
 
-  common::NoiseTracker::Mode mode = common::NoiseTracker::Mode::Imcra;
-  if (config.noise_estimator == DenoiseNoiseEstimator::Mcra) {
-    mode = common::NoiseTracker::Mode::Mcra;
-  }
-  common::NoiseTracker tracker(bins, sample_rate, mode, config.hop_length);
+  common::NoiseTracker tracker(bins, sample_rate, tracker_mode_for(config.noise_estimator),
+                               config.hop_length);
 
   // The tracker is recursive in t, so this is a tiling rather than an exchange: a bounded block
   // lets the read and the write-back run along bin rows while the tracker still sees whole
@@ -254,6 +299,23 @@ std::vector<double> smooth_gain_3x3(const std::vector<double>& gains, int bins, 
   return smoothed;
 }
 
+/// Whether @p mode takes the log-spectral gain rather than the amplitude one.
+/// @details Exhaustive and without a `default`, so a new mode is a build error
+///   rather than inheriting whichever branch an `else` names. SpectralSubtraction
+///   throws: gains_berouti answers it, this gain function never does.
+bool uses_log_spectral_gain(DenoiseMode mode) {
+  switch (mode) {
+    case DenoiseMode::LogMmse:
+      return true;
+    case DenoiseMode::MmseStsa:
+      return false;
+    case DenoiseMode::SpectralSubtraction:
+      throw SonareException(ErrorCode::InvalidState,
+                            "spectral subtraction does not use the Ephraim-Malah gain");
+  }
+  throw SonareException(ErrorCode::InvalidParameter, "invalid denoise mode");
+}
+
 std::vector<double> gains_ephraim_malah(const double* power_cells, const double* noise_psd_frames,
                                         int bins, int frames,
                                         const DenoiseClassicalConfig& config) {
@@ -262,6 +324,8 @@ std::vector<double> gains_ephraim_malah(const double* power_cells, const double*
   std::vector<double> prev_clean_power(static_cast<size_t>(bins), 0.0);
   const double alpha = config.dd_alpha;
   const double floor_gain = gain_floor_of(config);
+  // Hoisted: the mode cannot change mid-pass, so the cell loop carries no test.
+  const bool log_spectral = uses_log_spectral_gain(config.mode);
 
   for (int t = 0; t < frames; ++t) {
     for (int b = 0; b < bins; ++b) {
@@ -277,12 +341,7 @@ std::vector<double> gains_ephraim_malah(const double* power_cells, const double*
           alpha * prev_clean_power[static_cast<size_t>(b)] / noise + (1.0 - alpha) * ml_estimate,
           1e-6);
 
-      double gain;
-      if (config.mode == DenoiseMode::LogMmse) {
-        gain = gain_logmmse(ksi, gamma_post);
-      } else {
-        gain = gain_mmse_stsa(ksi, gamma_post);
-      }
+      double gain = log_spectral ? gain_logmmse(ksi, gamma_post) : gain_mmse_stsa(ksi, gamma_post);
       if (config.speech_presence_gain) {
         const double presence = speech_presence_probability(ksi, gamma_post);
         gain = std::pow(std::max(gain, floor_gain), presence) *
@@ -329,10 +388,16 @@ std::vector<double> gains_berouti(const double* power_cells, const double* noise
 
 std::vector<double> compute_gains(const double* power_cells, const double* noise_psd_frames,
                                   int bins, int frames, const DenoiseClassicalConfig& config) {
-  if (config.mode == DenoiseMode::SpectralSubtraction) {
-    return gains_berouti(power_cells, noise_psd_frames, bins, frames, config);
+  // No default: a new mode is a build error here rather than falling through to
+  // whichever gain function the trailing return names.
+  switch (config.mode) {
+    case DenoiseMode::SpectralSubtraction:
+      return gains_berouti(power_cells, noise_psd_frames, bins, frames, config);
+    case DenoiseMode::LogMmse:
+    case DenoiseMode::MmseStsa:
+      return gains_ephraim_malah(power_cells, noise_psd_frames, bins, frames, config);
   }
-  return gains_ephraim_malah(power_cells, noise_psd_frames, bins, frames, config);
+  throw SonareException(ErrorCode::InvalidParameter, "invalid denoise mode");
 }
 
 double mean_square(const float* samples, size_t size) {
@@ -373,13 +438,10 @@ void summarize_mask(const std::vector<double>& gains, const DenoiseClassicalConf
 }  // namespace
 
 void validate_config(const DenoiseClassicalConfig& config) {
-  if (config.mode != DenoiseMode::LogMmse && config.mode != DenoiseMode::MmseStsa &&
-      config.mode != DenoiseMode::SpectralSubtraction) {
+  if (!is_known_denoise_mode(config.mode)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid denoise mode");
   }
-  if (config.noise_estimator != DenoiseNoiseEstimator::Quantile &&
-      config.noise_estimator != DenoiseNoiseEstimator::Mcra &&
-      config.noise_estimator != DenoiseNoiseEstimator::Imcra) {
+  if (!is_known_noise_estimator(config.noise_estimator)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid denoise noise estimator");
   }
   if (config.n_fft <= 0 || (config.n_fft & (config.n_fft - 1)) != 0) {

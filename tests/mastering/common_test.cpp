@@ -3,6 +3,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
@@ -615,6 +616,161 @@ TEST_CASE("NoiseTracker reset clears learned state", "[mastering]") {
   tracker.reset();
 
   REQUIRE(tracker.noise_psd()[0] < 0.000001f);
+  REQUIRE_THROWS(tracker.update(nullptr));
+}
+
+namespace {
+
+// A stationary noise bin's periodogram is exponentially distributed about its
+// PSD, so feeding a constant would hide every estimator's bias: the minimum
+// trackers only under-read once the input actually has a spread to take a
+// minimum over. Deterministic LCG so the numbers below are reproducible.
+class ExponentialPeriodogram {
+ public:
+  explicit ExponentialPeriodogram(std::uint32_t seed) : state_(seed) {}
+
+  float draw(float psd) {
+    state_ = state_ * 1664525u + 1013904223u;
+    const float uniform = static_cast<float>((state_ >> 8) & 0xffffffu) / 16777216.0f;
+    return psd * -std::log(std::max(1.0f - uniform, 1.0e-7f));
+  }
+
+ private:
+  std::uint32_t state_;
+};
+
+// Mean of the tracked PSD over the tail of a stationary run, in units of the true
+// PSD. 1.0 is unbiased.
+float stationary_psd_ratio(NoiseTracker::Mode mode, float true_psd, int frames, int tail_frames) {
+  NoiseTracker tracker(1, 48000, mode);
+  ExponentialPeriodogram source(0x13579bdfu);
+  double sum = 0.0;
+  int counted = 0;
+  for (int frame = 0; frame < frames; ++frame) {
+    const float power = source.draw(true_psd);
+    tracker.update(&power);
+    if (frame >= frames - tail_frames) {
+      sum += static_cast<double>(tracker.noise_psd()[0]);
+      ++counted;
+    }
+  }
+  return static_cast<float>(sum / static_cast<double>(counted) / static_cast<double>(true_psd));
+}
+
+// Mean |dB| distance between the tracked PSD and the true one, over a floor that
+// steps up mid-run with speech sitting 25 dB above it half the time.
+double stepping_floor_db_error(NoiseTracker::Mode mode) {
+  constexpr int kFrames = 1200;
+  constexpr int kSkip = 200;
+  NoiseTracker tracker(1, 48000, mode);
+  ExponentialPeriodogram source(0x51ed270fu);
+  double sum = 0.0;
+  int counted = 0;
+  for (int frame = 0; frame < kFrames; ++frame) {
+    const double truth = frame < kFrames / 2 ? 0.05 : 0.5;
+    float power = source.draw(static_cast<float>(truth));
+    if ((frame / 30) % 4 >= 2) power += static_cast<float>(truth * 316.0);
+    tracker.update(&power);
+    if (frame >= kSkip) {
+      sum += std::abs(10.0 * std::log10(std::max<double>(tracker.noise_psd()[0], 1e-18) / truth));
+      ++counted;
+    }
+  }
+  return sum / static_cast<double>(counted);
+}
+
+}  // namespace
+
+TEST_CASE("NoiseTracker SPP mode follows a floor the minimum trackers lose", "[mastering]") {
+  const double spp = stepping_floor_db_error(NoiseTracker::Mode::Spp);
+  const double mcra = stepping_floor_db_error(NoiseTracker::Mode::Mcra);
+  const double imcra = stepping_floor_db_error(NoiseTracker::Mode::Imcra);
+
+  // Measured mean |dB| error: spp 3.0, mcra 11.7, imcra 10.8. The minimum trackers
+  // lose to the 0.95 power smoothing dragging burst energy across the gaps.
+  REQUIRE(spp < 4.0);
+  REQUIRE(spp < mcra);
+  REQUIRE(spp < imcra);
+
+  // Without speech the soft gate still under-reads a stationary floor: the gate
+  // freezes on high periodogram draws, so only low ones move the estimate. The
+  // closed-loop fixed point of the paper's 15 dB prior is 0.81; measured 0.75.
+  const float stationary = stationary_psd_ratio(NoiseTracker::Mode::Spp, 0.4f, 3000, 2000);
+  REQUIRE(stationary > 0.6f);
+  REQUIRE(stationary < 0.9f);
+}
+
+TEST_CASE("NoiseTracker SPP mode holds the floor through speech bursts", "[mastering]") {
+  NoiseTracker tracker(1, 48000, NoiseTracker::Mode::Spp);
+  ExponentialPeriodogram source(0x2468ace0u);
+  REQUIRE(tracker.mode() == NoiseTracker::Mode::Spp);
+
+  for (int frame = 0; frame < 300; ++frame) {
+    const float power = source.draw(1.0f);
+    tracker.update(&power);
+  }
+  const float settled = tracker.noise_psd()[0];
+  REQUIRE_THAT(settled, WithinAbs(1.0f, 0.4f));
+
+  // 30-frame bursts, short enough that the stagnation guard never arms: a level
+  // that outlasts the guard's ~44-frame fuse is a noise change, and the estimator
+  // is meant to follow it.
+  float peak = settled;
+  float burst_presence = 0.0f;
+  for (int cycle = 0; cycle < 8; ++cycle) {
+    for (int frame = 0; frame < 30; ++frame) {
+      const float power = source.draw(1.0f) + 100.0f;
+      tracker.update(&power);
+    }
+    burst_presence = tracker.speech_presence_probability()[0];
+    for (int frame = 0; frame < 50; ++frame) {
+      const float power = source.draw(1.0f);
+      tracker.update(&power);
+    }
+    peak = std::max(peak, tracker.noise_psd()[0]);
+  }
+
+  REQUIRE(burst_presence > 0.9f);
+  REQUIRE(tracker.speech_presence_probability()[0] < 0.5f);
+  // Measured: settled 0.83, peak 1.29 across the eight cycles, final 0.45 against
+  // a true PSD of 1.0. Only the gap frames move the estimate, so the soft gate's
+  // under-read deepens with the speech duty; what must not happen is the 101x
+  // burst level being taken for noise.
+  REQUIRE(peak < 2.0f * settled);
+  REQUIRE(tracker.noise_psd()[0] > 0.25f);
+  REQUIRE(tracker.noise_psd()[0] < 1.5f);
+}
+
+TEST_CASE("NoiseTracker SPP mode does not freeze on a sustained level change", "[mastering]") {
+  // Constant input rather than draws: a periodogram that fluctuates dips below the
+  // gate a few percent of the time on its own, which escapes a frozen estimate
+  // without the stagnation guard ever arming and leaves the guard untested.
+  NoiseTracker tracker(1, 48000, NoiseTracker::Mode::Spp);
+  const float quiet = 0.01f;
+  const float loud = 1.0f;
+  for (int frame = 0; frame < 300; ++frame) tracker.update(&quiet);
+  const float before = tracker.noise_psd()[0];
+
+  for (int frame = 0; frame < 900; ++frame) tracker.update(&loud);
+
+  // At 100x the presence rounds to exactly 1, so the recursion becomes an identity
+  // and the estimate never moves; the guard caps it at 0.99 once the smoothed
+  // presence crosses the limit. Measured 0.01 -> 0.97; 0.01 frozen without it.
+  REQUIRE_THAT(before, WithinAbs(0.01f, 0.0005f));
+  REQUIRE(tracker.noise_psd()[0] > 0.5f);
+}
+
+TEST_CASE("NoiseTracker SPP mode allocates no minimum-statistics state", "[mastering]") {
+  NoiseTracker tracker(4, 48000, NoiseTracker::Mode::Spp, 256);
+  const float power[] = {0.2f, 0.2f, 0.2f, 0.2f};
+  for (int frame = 0; frame < 40; ++frame) tracker.update(power);
+  REQUIRE(tracker.n_bins() == 4);
+
+  tracker.reset();
+  for (int bin = 0; bin < 4; ++bin) {
+    REQUIRE(tracker.noise_psd()[bin] < 0.000001f);
+    REQUIRE(tracker.speech_presence_probability()[bin] == 0.0f);
+  }
   REQUIRE_THROWS(tracker.update(nullptr));
 }
 
