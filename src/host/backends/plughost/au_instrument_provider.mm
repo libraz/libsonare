@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -130,8 +131,12 @@ struct alignas(AudioBufferList) BufferListStorage {
 /// AU property change on the render thread. `render_chans` is the AU's negotiated
 /// channel count, `chans` the clamped host channel count, `num_channels` the
 /// caller's channel count.
-void finalize_au_output(float* const* channels, int num_channels, int chans, int render_chans,
+/// @return Whether any sample was scrubbed. The caller counts the call rather
+///   than the samples, so this is a flag and not a tally: the published unit is
+///   one process() call, across every channel of the block.
+bool finalize_au_output(float* const* channels, int num_channels, int chans, int render_chans,
                         int render_samples, int num_samples, bool render_ok) noexcept {
+  bool discarded = false;
   if (!render_ok) {
     for (int c = 0; c < chans; ++c) {
       if (channels[c] != nullptr) {
@@ -141,9 +146,10 @@ void finalize_au_output(float* const* channels, int num_channels, int chans, int
   } else {
     for (int c = 0; c < render_chans && c < chans; ++c) {
       if (channels[c] == nullptr) continue;
-      // The count is discarded because the provider exposes no counter for it.
-      (void)resolve_non_finite_run(SampleDestination::kIrreversibleOutput, channels[c],
-                                   static_cast<size_t>(render_samples));
+      // The run returns how many SAMPLES it replaced; the flag is narrowed here
+      // so the call site cannot mistake the tally for the published unit.
+      discarded |= resolve_non_finite_run(SampleDestination::kIrreversibleOutput, channels[c],
+                                          static_cast<size_t>(render_samples)) != 0u;
     }
   }
   // Silence host channels the AU did not fill (host supplied more than the AU renders).
@@ -160,6 +166,7 @@ void finalize_au_output(float* const* channels, int num_channels, int chans, int
       }
     }
   }
+  return discarded;
 }
 
 }  // namespace
@@ -299,8 +306,12 @@ class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentT
     ts.mSampleTime = static_cast<Float64>(position_);
     const OSStatus status =
         api_->render(unit_, &flags, &ts, 0, static_cast<UInt32>(render_samples), list);
-    finalize_au_output(channels, num_channels, chans, render_chans, render_samples, num_samples,
-                       status == noErr);
+    if (finalize_au_output(channels, num_channels, chans, render_chans, render_samples, num_samples,
+                           status == noErr)) {
+      // One bump per call, never per sample or per channel: the block lost its
+      // output once, and the number must not depend on how many samples went.
+      note_non_finite_discard();
+    }
     position_ += num_samples;
   }
 
@@ -437,8 +448,12 @@ class AuEffectProcessor final : public rt::ProcessorBase {
     ts.mSampleTime = static_cast<Float64>(position_);
     const OSStatus status =
         api_->render(unit_, &flags, &ts, 0, static_cast<UInt32>(render_samples), list);
-    finalize_au_output(channels, num_channels, chans, render_chans, render_samples, num_samples,
-                       status == noErr);
+    if (finalize_au_output(channels, num_channels, chans, render_chans, render_samples, num_samples,
+                           status == noErr)) {
+      // One bump per call, never per sample or per channel: the block lost its
+      // output once, and the number must not depend on how many samples went.
+      note_non_finite_discard();
+    }
     position_ += num_samples;
     in_channels_ = nullptr;
     in_samples_ = 0;
@@ -532,6 +547,12 @@ struct AuCallSpyState {
   size_t midi_event_count = 0;
   std::array<Float64, 8> render_sample_times{};
   size_t render_sample_time_count = 0;
+
+  // --- non-finite output probe ---
+  // Leading samples of every rendered plane spy_render fills with a NaN, standing
+  // in for an AU that blew up internally. The host has no say in what a hosted AU
+  // writes, so this is the only way the scrub path is reachable at all.
+  UInt32 poison_samples = 0;
 };
 
 thread_local AuCallSpyState* g_au_call_spy = nullptr;
@@ -566,8 +587,18 @@ OSStatus spy_uninitialize(AudioUnit) {
 }
 
 OSStatus spy_render(AudioUnit, AudioUnitRenderActionFlags* flags, const AudioTimeStamp* ts,
-                    UInt32 bus, UInt32 /*frames*/, AudioBufferList* /*data*/) {
+                    UInt32 bus, UInt32 /*frames*/, AudioBufferList* data) {
   ++g_au_call_spy->render_calls;
+  if (g_au_call_spy->poison_samples > 0 && data != nullptr) {
+    for (UInt32 b = 0; b < data->mNumberBuffers; ++b) {
+      auto* plane = static_cast<float*>(data->mBuffers[b].mData);
+      if (plane == nullptr) continue;
+      const UInt32 valid = data->mBuffers[b].mDataByteSize / sizeof(float);
+      for (UInt32 i = 0; i < g_au_call_spy->poison_samples && i < valid; ++i) {
+        plane[i] = std::numeric_limits<float>::quiet_NaN();
+      }
+    }
+  }
   if (ts != nullptr &&
       g_au_call_spy->render_sample_time_count < g_au_call_spy->render_sample_times.size()) {
     g_au_call_spy->render_sample_times[g_au_call_spy->render_sample_time_count++] = ts->mSampleTime;
@@ -903,6 +934,52 @@ detail::AuParameterMetadataProbeResult detail::run_au_parameter_metadata_probe()
       translate(kAudioUnitParameterUnit_Generic,
                 kAudioUnitParameterFlag_IsWritable | kAudioUnitParameterFlag_NonRealTime)
           .realtime_safe;
+  result.ran = true;
+  return result;
+}
+
+detail::AuNonFiniteDiscardProbeResult detail::run_au_non_finite_discard_probe() {
+  constexpr int kProbeBlock = 8;
+  AuCallSpyState state;
+  g_au_call_spy = &state;
+  auto fake_unit = reinterpret_cast<AudioUnit>(static_cast<uintptr_t>(1));
+
+  detail::AuNonFiniteDiscardProbeResult result;
+  std::array<float, kProbeBlock> left{};
+  std::array<float, kProbeBlock> right{};
+  std::array<float*, 2> stereo{left.data(), right.data()};
+  {
+    AuMidiInstrument instrument(fake_unit, &kSpyAuRuntimeApi);
+    instrument.prepare(48000.0, kProbeBlock);
+    result.instrument_before = instrument.non_finite_discard_count();
+    state.poison_samples = 0;
+    instrument.process(stereo.data(), 2, kProbeBlock);
+    result.instrument_after_clean = instrument.non_finite_discard_count();
+    state.poison_samples = 1;
+    instrument.process(stereo.data(), 2, kProbeBlock);
+    result.instrument_after_poison = instrument.non_finite_discard_count();
+    // Every sample of both planes, so a per-sample or per-channel bump separates
+    // from a per-call one here rather than agreeing with it.
+    state.poison_samples = kProbeBlock;
+    instrument.process(stereo.data(), 2, kProbeBlock);
+    result.instrument_after_many = instrument.non_finite_discard_count();
+  }
+  {
+    AuEffectProcessor effect(fake_unit, &kSpyAuRuntimeApi);
+    effect.prepare(48000.0, kProbeBlock);
+    result.effect_before = effect.non_finite_discard_count();
+    state.poison_samples = 0;
+    effect.process(stereo.data(), 2, kProbeBlock);
+    result.effect_after_clean = effect.non_finite_discard_count();
+    state.poison_samples = 1;
+    effect.process(stereo.data(), 2, kProbeBlock);
+    result.effect_after_poison = effect.non_finite_discard_count();
+    state.poison_samples = kProbeBlock;
+    effect.process(stereo.data(), 2, kProbeBlock);
+    result.effect_after_many = effect.non_finite_discard_count();
+  }
+  state.poison_samples = 0;
+  g_au_call_spy = nullptr;
   result.ran = true;
   return result;
 }

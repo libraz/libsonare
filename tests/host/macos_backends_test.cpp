@@ -414,6 +414,24 @@ TEST_CASE("AU MusicDevice instrument's dropped-event counter is reachable and co
   REQUIRE(result.dropped_after_overflow == 1);
 }
 
+TEST_CASE("AU adapters count a block whose render emitted a non-finite sample", "[host][au]") {
+  // Both adapters inherit rt::ProcessorBase's discard counter, and both scrub a
+  // hosted AU's output through the same helper — but neither bumped the counter,
+  // so a plugin quietly emitting NaNs on every block reported the same zero as
+  // one behaving. The published unit is one process() call: the last block below
+  // poisons every sample of both planes and must still advance the count by one.
+  const auto result = sonare::host::backends::detail::run_au_non_finite_discard_probe();
+  REQUIRE(result.ran);
+  REQUIRE(result.instrument_before == 0);
+  REQUIRE(result.instrument_after_clean == 0);
+  REQUIRE(result.instrument_after_poison == 1);
+  REQUIRE(result.instrument_after_many == 2);
+  REQUIRE(result.effect_before == 0);
+  REQUIRE(result.effect_after_clean == 0);
+  REQUIRE(result.effect_after_poison == 1);
+  REQUIRE(result.effect_after_many == 2);
+}
+
 TEST_CASE("AU MusicDevice instrument places events against the host transport frame",
           "[host][au]") {
   // Events reach the adapter stamped in DEVICE render frames (see "Event clock

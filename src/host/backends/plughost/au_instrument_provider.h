@@ -138,6 +138,26 @@ struct AuParameterMetadataProbeResult {
 
 AuParameterMetadataProbeResult run_au_parameter_metadata_probe();
 
+/// Result from probing the non-finite discard counter both AU adapters inherit
+/// from rt::ProcessorBase. A hosted AU's output is the only thing that can drive
+/// the scrub path, so the probe renders through a stand-in that writes NaNs. The
+/// published unit is one process() call: a block carrying many NaNs across many
+/// channels lost its output once, so `*_after_many` must advance by one, not by
+/// the number of samples. No SDK object or installed plugin is required.
+struct AuNonFiniteDiscardProbeResult {
+  bool ran = false;
+  uint32_t instrument_before = 0;
+  uint32_t instrument_after_clean = 0;
+  uint32_t instrument_after_poison = 0;
+  uint32_t instrument_after_many = 0;
+  uint32_t effect_before = 0;
+  uint32_t effect_after_clean = 0;
+  uint32_t effect_after_poison = 0;
+  uint32_t effect_after_many = 0;
+};
+
+AuNonFiniteDiscardProbeResult run_au_non_finite_discard_probe();
+
 }  // namespace detail
 
 /// Factory over the system's Audio Units. Control-thread only; instantiation
