@@ -283,6 +283,8 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
                ErrorCode::InvalidParameter);
 
   float nyquist = 0.5f * static_cast<float>(sr);
+  // Also the only thing refusing an infinite fmin: `fmin > 0.0f` above admits
+  // one. Keep this two-sided if the band topology is ever reworked.
   SONARE_CHECK(fmin * std::pow(2.0f, static_cast<float>(n_bands - 1)) < nyquist,
                ErrorCode::InvalidParameter);
 

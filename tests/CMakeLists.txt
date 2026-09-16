@@ -151,6 +151,7 @@ add_executable(sonare_tests
   api/sonare_c_percussive_events_test.cpp
   api/sonare_c_metering_extra_test.cpp
   conformance/public_input_conformance_test.cpp
+  conformance/wasm_float_saturation_test.cpp
   librosa/convert_test.cpp
   librosa/mel_test.cpp
   librosa/mfcc_test.cpp
