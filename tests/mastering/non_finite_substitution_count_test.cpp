@@ -778,6 +778,21 @@ TEST_CASE("A limiter's own gain can go non-finite over a clean input",
     CHECK(ordinary.non_finite_substitution_count() == 0u);
     CHECK(finite_peak(ordinary_out) > 0.0f);
   }
+
+  SECTION("the automation path cannot reach that coefficient") {
+    // Which route poisons the gain is not a property of the value: the in-place
+    // release setter clamps with std::max, whose comparison against a NaN is
+    // false, so it yields zero instead of passing the value on. prepare() has no
+    // such clamp, which is the whole reason the sections above can reach the
+    // guard at all.
+    sonare::mastering::dynamics::BrickwallLimiter owner({-1.0f, 1.0f, 50.0f});
+    owner.prepare(kSampleRate, kBlockSize);
+    REQUIRE(owner.set_parameter(1, kNaN));
+    const std::vector<float> out = drive(owner, -1, 0.0f);
+    CHECK(non_finite_count(out) == 0u);
+    CHECK(owner.non_finite_substitution_count() == 0u);
+    CHECK(finite_peak(out) > 0.0f);
+  }
 }
 
 TEST_CASE("A limiter passes a finite sample at its ceiling through uncounted",
