@@ -111,6 +111,13 @@ jobs:
         run: brew install eigen
 
       - name: Build native CLI
+        env:
+          # Pins the macOS asset's minimum OS. Left unset, clang stamps the
+          # runner image's own OS version into LC_BUILD_VERSION, so the published
+          # binary's requirement would silently rise every time GitHub moves
+          # macos-latest forward. 14.0 is the oldest release Apple still issues
+          # security updates for. Ignored on Linux.
+          MACOSX_DEPLOYMENT_TARGET: '14.0'
         run: |
           cmake -B build-cli -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
                              -DBUILD_SHARED=ON -DSONARE_WITH_FFMPEG=OFF
