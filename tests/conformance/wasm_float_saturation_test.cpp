@@ -28,6 +28,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -150,8 +151,12 @@ TEST_CASE("The dB conversions refuse a saturated reference", "[conformance][wasm
   REQUIRE(refuses([&] { db_to_power(values, kSaturated); }));
   REQUIRE(refuses([&] { db_to_amplitude(values, kSaturated); }));
 
-  REQUIRE(power_to_db(values, 1.0f, 1e-10f, 80.0f)[0] !=
-          power_to_db(values, 4.0f, 1e-10f, 80.0f)[0]);
+  // ref 1 and ref 4 measured 0 dB and -6.0206 dB, a 6.02 dB gap. The margin is
+  // asserted rather than inequality: a bare != is satisfied by a real
+  // separation and by a rounding wobble alike, and the two read the same in a
+  // green run.
+  REQUIRE(std::abs(power_to_db(values, 1.0f, 1e-10f, 80.0f)[0] -
+                   power_to_db(values, 4.0f, 1e-10f, 80.0f)[0]) > 1.0f);
 }
 
 TEST_CASE("The generators refuse a saturated duration or frequency", "[conformance][wasm]") {
@@ -194,12 +199,16 @@ TEST_CASE("The spectral features refuse a saturated shape argument", "[conforman
   const Spectrogram spec = test_spectrogram(audio);
 
   // spectralBandwidth.p, named in its own finite_positive guard.
+  // p = 2 and p = 3 measured 1033.81 Hz and 1877.08 Hz: an 843 Hz gap.
   REQUIRE(refuses([&] { spectral_bandwidth(spec, 22050, kSaturated); }));
-  REQUIRE(spectral_bandwidth(spec, 22050, 2.0f)[0] != spectral_bandwidth(spec, 22050, 3.0f)[0]);
+  REQUIRE(std::abs(spectral_bandwidth(spec, 22050, 2.0f)[0] -
+                   spectral_bandwidth(spec, 22050, 3.0f)[0]) > 100.0f);
 
   // spectralRolloff.rollPercent, refused by the upper half of a two-sided test.
+  // 0.85 and 0.25 measured 689.06 Hz and 344.53 Hz, one bin-quantized octave.
   REQUIRE(refuses([&] { spectral_rolloff(spec, 22050, kSaturated); }));
-  REQUIRE(spectral_rolloff(spec, 22050, 0.85f)[0] != spectral_rolloff(spec, 22050, 0.25f)[0]);
+  REQUIRE(std::abs(spectral_rolloff(spec, 22050, 0.85f)[0] -
+                   spectral_rolloff(spec, 22050, 0.25f)[0]) > 50.0f);
 
   // spectralContrast.quantile, the same two-sided shape.
   REQUIRE(refuses([&] { spectral_contrast(spec, 22050, 4, 200.0f, kSaturated); }));
@@ -223,9 +232,16 @@ TEST_CASE("spectralContrast refuses a saturated fmin, but not where it looks",
   REQUIRE(kSaturated > 0.0f);  // the guard that does NOT do the work
   REQUIRE(refuses([&] { spectral_contrast(spec, 22050, 4, kSaturated, 0.02f); }));
 
+  // fmin 100 and 400 measured all 325 elements differing, worst by 30.58 dB.
+  // A vector `!=` would also pass on one element differing in its last bit.
   const std::vector<float> low = spectral_contrast(spec, 22050, 4, 100.0f, 0.02f);
   const std::vector<float> high = spectral_contrast(spec, 22050, 4, 400.0f, 0.02f);
-  REQUIRE(low != high);
+  REQUIRE(low.size() == high.size());
+  float worst = 0.0f;
+  for (std::size_t i = 0; i < low.size(); ++i) {
+    worst = std::max(worst, std::abs(low[i] - high[i]));
+  }
+  REQUIRE(worst > 1.0f);
 }
 
 TEST_CASE("The pitch trackers refuse a saturated bound or threshold", "[conformance][wasm]") {
@@ -256,7 +272,12 @@ TEST_CASE("The pitch trackers refuse a saturated bound or threshold", "[conforma
   // pitchTuning.resolution and estimateTuning.resolution share one guard.
   REQUIRE(refuses([&] { pitch_tuning({440.0f}, kSaturated, 12); }));
   REQUIRE(refuses([&] { estimate_tuning(audio, 512, 128, kSaturated, 12); }));
-  REQUIRE(pitch_tuning({445.0f}, 0.01f, 12) != pitch_tuning({435.0f}, 0.01f, 12));
+  // 445 Hz and 435 Hz measured +0.19 and -0.20 fractional bins: a 0.39 gap, and
+  // on opposite sides of zero, which no rounding wobble reproduces.
+  const float sharp = pitch_tuning({445.0f}, 0.01f, 12);
+  const float flat = pitch_tuning({435.0f}, 0.01f, 12);
+  REQUIRE(sharp > 0.05f);
+  REQUIRE(flat < -0.05f);
 }
 
 TEST_CASE("Key and chord analysis refuse a saturated configuration", "[conformance][wasm]") {
@@ -313,9 +334,11 @@ TEST_CASE("Metering refuses a saturated window or threshold", "[conformance][was
   REQUIRE(refuses([&] { metering::clipping_params_from_public(kSaturated, 0); }));
   REQUIRE_FALSE(refuses([&] { metering::clipping_params_from_public(0.99f, 0); }));
 
+  // -80 dB and -1 dB measured 0.0 and 1.0 against this tone: the full range of
+  // the result, so the threshold is read rather than ignored.
   REQUIRE(refuses([&] { metering::silence_ratio(audio, kSaturated, 2048, 512); }));
-  REQUIRE(metering::silence_ratio(audio, -80.0f, 2048, 512) !=
-          metering::silence_ratio(audio, -1.0f, 2048, 512));
+  REQUIRE(metering::silence_ratio(audio, -80.0f, 2048, 512) < 0.25f);
+  REQUIRE(metering::silence_ratio(audio, -1.0f, 2048, 512) > 0.75f);
 
   REQUIRE(refuses([&] { metering::dynamic_range_config_from_public(kSaturated, 0, 0, 0); }));
   REQUIRE(refuses([&] { metering::dynamic_range_config_from_public(0, kSaturated, 0, 0); }));
