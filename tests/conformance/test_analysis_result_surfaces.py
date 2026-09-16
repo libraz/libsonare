@@ -39,13 +39,27 @@ def _drop_property(text: str, prop: str) -> str:
 
 class AnalysisResultSurfaces(unittest.TestCase):
     def test_the_repository_declares_every_schema_path_on_both_surfaces(self):
-        paths = check.schema_paths(check.SCHEMA_SOURCE.read_text())
-        self.assertGreater(len(paths), 50, "the core's path list stopped parsing")
-        for _, ts_path in check.TS_SURFACES.items():
-            missing, unreached, comparisons = check.scan(paths, ts_path.read_text())
-            self.assertEqual(unreached, [])
-            self.assertEqual(missing, [])
-            self.assertEqual(comparisons, len(paths))
+        source = check.SCHEMA_SOURCE.read_text()
+        # Both published lists, so covering one and reporting clean is not a pass.
+        self.assertEqual(len(check.SCHEMAS), 2)
+        for accessor, root in check.SCHEMAS.items():
+            paths = check.schema_paths(source, accessor)
+            self.assertGreater(len(paths), 10, f"{accessor} stopped parsing")
+            for _, ts_path in check.TS_SURFACES.items():
+                missing, unreached, comparisons = check.scan(
+                    paths, ts_path.read_text(), root
+                )
+                self.assertEqual(unreached, [], accessor)
+                self.assertEqual(missing, [], accessor)
+                self.assertEqual(comparisons, len(paths))
+
+    def test_the_two_lists_are_distinct_populations(self):
+        """A reader that returned the same list twice would pass the case above."""
+        source = check.SCHEMA_SOURCE.read_text()
+        analysis = check.schema_paths(source, "analysis_result_schema_paths")
+        meter = check.schema_paths(source, "meter_result_schema_paths")
+        self.assertNotEqual(analysis, meter)
+        self.assertGreater(len(analysis), len(meter))
 
     def test_a_top_level_path_missing_from_the_root_is_reported(self):
         """The case a file-anchored walk accepts: the leaf exists elsewhere."""
@@ -90,6 +104,9 @@ class AnalysisResultSurfaces(unittest.TestCase):
 
     def test_the_path_reader_returns_nothing_when_the_list_moves(self):
         self.assertEqual(check.schema_paths("int unrelated() { return 0; }"), [])
+        self.assertEqual(
+            check.schema_paths(check.SCHEMA_SOURCE.read_text(), "no_such_accessor"), []
+        )
 
 
 if __name__ == "__main__":
