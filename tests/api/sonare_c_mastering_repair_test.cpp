@@ -299,7 +299,8 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
   SECTION("the reported floor is the pair's, not a channel's") {
     // The estimator runs on the channel-summed power, so duplicating a channel
     // doubles it. Measured against a silent partner, whose summed power is the
-    // single channel's, that is exactly 10*log10(2).
+    // single channel's, that is 10*log10(2) -- the power ratio is exactly two,
+    // the dB conversion is float32.
     SonareDenoiseStereoResult doubled{};
     SonareDenoiseStereoResult single{};
     REQUIRE(sonare_mastering_repair_denoise_classical_stereo(

@@ -181,7 +181,7 @@ export function masteringRepairDenoiseClassical(
  *
  * `report.detected` is therefore a *pair-level* measurement, and the only absolute one in the
  * result. Its levels are dBFS on the channel-summed power, so two identical channels read
- * exactly `10*log10(2)` above the same material through
+ * `10*log10(2)` — about 3.01 dB — above the same material through
  * {@link masteringRepairDenoiseClassical}. A stereo floor is comparable only against another
  * stereo floor, never against a mono one.
  *
@@ -245,7 +245,7 @@ export function masteringRepairDenoiseClassicalStereo(
  * left plane and `channels[1]` the right.
  *
  * `report.detected` carries absolute levels and they are the SET's: the floor is referred to the
- * summed mean square of every channel, so N identical channels read exactly `10*log10(N)` above
+ * summed mean square of every channel, so N identical channels read `10*log10(N)` above
  * one of them — about 3.01 dB at two channels and 4.77 dB at three. Compare a floor only against
  * one measured over the same number of channels. Every other field of the report is a fraction
  * and does not move with the channel count.

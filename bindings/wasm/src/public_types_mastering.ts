@@ -475,8 +475,8 @@ export interface MasteringRepairDehumStereoResult {
  * {@link MasteringRepairDenoiseClassicalStereoResult}.
  *
  * A pair-level measurement, and the only absolute one in that result: the estimator runs on
- * the channel-summed power, so two identical channels read exactly `10*log10(2)` -- about
- * 3 dB -- above the same material through `masteringRepairDenoiseClassical`. Compare a stereo
+ * the channel-summed power, so two identical channels read `10*log10(2)` -- about
+ * 3.01 dB -- above the same material through `masteringRepairDenoiseClassical`. Compare a stereo
  * floor only against another stereo floor.
  */
 export interface NoiseDetection {

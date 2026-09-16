@@ -92,8 +92,10 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
     const single = masteringRepairDenoiseClassicalStereo({ left, right: silent, sampleRate: SR });
 
     // The estimator runs on the channel-summed power, so doubling the content
-    // moves the floor by exactly 10*log10(2) = 3.0103 dB. This is why a stereo
-    // floor is comparable only against another stereo floor.
+    // moves the floor by 10*log10(2) = 3.0103 dB. The power ratio is exactly
+    // two, but the dB conversion is float32, which is what the tolerance below
+    // is for. This is why a stereo floor is comparable only against another
+    // stereo floor.
     expect(pair.report.detected.floorDbfs - single.report.detected.floorDbfs).toBeCloseTo(
       10 * Math.log10(2),
       4,
