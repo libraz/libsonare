@@ -2,9 +2,9 @@
 
 The bank is the master. A capture, a reference profile, a gate and a calibration
 candidate are all attachments to a bank entry, and each was readable only
-through the tool that produced it — `profile.py status --all` covers the four
-instruments a capture exists for and says nothing about the other 124, which is
-the half of the bank where the next round's work actually is.
+through the tool that produced it — `profile.py status --all` covers the
+instruments a capture exists for and says nothing about the voices no capture
+covers, which is where the next round's work usually is.
 
 So this walks all of it and writes `tools/voice-status.json`, which is committed
 and is what the CLI table and the audition page's bank map both read. Generating
@@ -73,6 +73,7 @@ from toneclass import canonical_dimensions  # noqa: E402
 HERE = Path(__file__).resolve().parent
 REFERENCE_DIR = HERE / "reference"
 CALIBRATIONS = HERE / "calibrations.json"
+POLICY = HERE / "policy.json"
 OUT_PATH = REPO_ROOT / "tools" / "voice-status.json"
 BANK_VERSIONS = REPO_ROOT / "tools" / "bank-versions.json"
 
@@ -131,6 +132,72 @@ def open_candidates() -> dict[str, list[str]]:
         if slug.startswith("_"):
             continue
         out[slug] = [v["name"] for v in entry.get("variants", [])]
+    return out
+
+
+def tier_of(pol: dict, program: int, bank: int) -> tuple[int, str]:
+    """The working-priority tier a slot falls in, as (rank, name).
+
+    Read at print time rather than written into `tools/voice-status.json`,
+    because a tier is a decision and that file holds what the library and the
+    references reported. Baking it in would make an ordering change need a
+    `-DBUILD_TUNING=ON` rebuild to take effect, and would make the generated
+    file stale every time the policy moved with no voice having changed.
+
+    A variation is ranked with its capital rather than on its own: it is the
+    capital copied and narrowed, so it cannot be worked before the capital and
+    has no priority of its own. `variations_follow_capital` records that the
+    tier is deliberately shared, and the caller is what defers the work.
+    """
+    tiers = pol.get("tiers") or []
+    if not tiers:
+        # No policy loaded at all. Rank 0 rather than 1: the caller renders it as
+        # `t-`, where a number would read as the top tier and quietly report the
+        # whole bank — the long tail included — as the most urgent thing to work
+        # on, which is the one answer a missing file must not be able to give.
+        return 0, "unranked"
+    fallback = (len(tiers) + 1, "unranked")
+    for t in tiers:
+        if t.get("default"):
+            fallback = (int(t.get("rank", fallback[0])), t["name"])
+            continue
+        if program in set(t.get("programs") or []) or program in set(t.get("kits") or []):
+            return int(t["rank"]), t["name"]
+    return fallback
+
+
+def goal_members(goal: dict, rows: list[dict]) -> list[dict]:
+    """The rows a goal names.
+
+    A goal names capital tones and kits, never a variation: a variation is not
+    something a file is owed, and one listed here would block the goal on a
+    capture nobody has a source for.
+    """
+    progs = set(goal.get("programs") or [])
+    kits = set(goal.get("kits") or [])
+    return [r for r in rows if not r["bank"]
+            and (r["program"] in kits if r["kit"] else r["program"] in progs)]
+
+
+def goal_progress(pol: dict, rows: list[dict]) -> list[dict]:
+    """Each goal's members and how many of them have reached its step.
+
+    Reported, never enforced. Calibrating a voice is open-ended analog work, so
+    a version whose date arrives with a goal unmet ships with it unmet and the
+    goal carries over; nothing built on this may block a release, a merge or a
+    CI run, and a goal named after a version is not thereby a due date.
+    """
+    out = []
+    for name, goal in sorted((pol.get("goals") or {}).items()):
+        want = float(goal.get("stage", 1.0))
+        here = goal_members(goal, rows)
+        out.append({
+            "name": name,
+            "stage": want,
+            "total": len(here),
+            "met": len([r for r in here if r["stage"] >= want]),
+            "short": [r for r in here if r["stage"] < want],
+        })
     return out
 
 
@@ -356,9 +423,19 @@ def build(catalogue) -> list[dict]:
     return rows
 
 
-def render_table(rows: list[dict], *, every: bool) -> None:
+def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None = None) -> None:
     """The CLI view: grouped by GM family, one line per voice."""
-    shown = rows if every else [r for r in rows if r["stage"] > 0.2 or r["open_candidates"]]
+    goals = goal_progress(pol, rows)
+    if goal is not None:
+        match = next((g for g in goals if g["name"] == goal), None)
+        if match is None:
+            known = ", ".join(g["name"] for g in goals) or "none declared"
+            print(f"  no goal named {goal} in {_display(POLICY)} — have: {known}")
+            return
+        rows = goal_members((pol.get("goals") or {})[goal], rows)
+        goals = [match]
+    shown = rows if every or goal else [
+        r for r in rows if r["stage"] > 0.2 or r["open_candidates"]]
     if not shown:
         print("  nothing past stage 0.2 — pass --all for the whole bank")
         return
@@ -370,7 +447,9 @@ def render_table(rows: list[dict], *, every: bool) -> None:
         bar = "#" * int(r["stage"] * 5) + "." * (5 - int(r["stage"] * 5))
         flag = f"  [{len(r['open_candidates'])} unwritten]" if r["open_candidates"] else ""
         oracle = r["capture"] or "-"
-        print(f"    {r['slug']:<32} {r['stage']:.1f} {bar}  {r['engine'] or '?':<15}"
+        rank, _name = tier_of(pol, r["program"], r["bank"])
+        tier = f"t{rank}" if rank else "t-"
+        print(f"    {r['slug']:<32} {tier} {r['stage']:.1f} {bar}  {r['engine'] or '?':<15}"
               f" {oracle:<10}{flag}".rstrip())
         # Only past the oracle step, where the line differs per voice. Below it
         # every voice says the same sentence, and 150 copies of it bury the four
@@ -391,6 +470,14 @@ def render_table(rows: list[dict], *, every: bool) -> None:
     unwritten = sum(len(r["open_candidates"]) for r in rows)
     if unwritten:
         print(f"  {unwritten} recorded calibration setting(s) not written back")
+    for g in goals:
+        step = STAGES[int(round(g["stage"] * 5))]
+        print(f"  goal {g['name']}: {g['met']}/{g['total']} at {step} ({g['stage']:.1f})")
+        if g["short"] and goal is not None:
+            print("    short: " + ", ".join(r["slug"] for r in g["short"]))
+    if goals:
+        print("  a goal is where attention goes, never a condition on shipping: a version "
+              "whose date arrives with the set unmet ships and the goal carries over")
 
 
 def main() -> int:
@@ -404,8 +491,13 @@ def main() -> int:
                     help="fail if the generated file is stale")
     ap.add_argument("--all", action="store_true",
                     help="print every voice, not only those past stage 0.2")
+    ap.add_argument("--goal", default=None, metavar="NAME",
+                    help=f"print one goal's members and what each still needs "
+                         f"(goals are declared in {_display(POLICY)}; a goal is "
+                         f"never a condition on shipping)")
     ap.add_argument("--sr", type=int, default=48000)
     args = ap.parse_args()
+    pol = _load(POLICY)
 
     if args.write or args.check:
         catalogue = catalogue_mod.dump_catalogue(0, "sustain", args.lib, sr=args.sr)
@@ -422,7 +514,7 @@ def main() -> int:
             return 0
         OUT_PATH.write_text(payload)
         print(f"{_display(OUT_PATH)}: {len(rows)} voices")
-        render_table(rows, every=args.all)
+        render_table(rows, every=args.all, pol=pol, goal=args.goal)
         return 0
 
     # The reading path needs no build: the generated file is committed precisely
@@ -431,7 +523,7 @@ def main() -> int:
         print(f"{OUT_PATH}: missing — run `make voice-status-refresh` "
               f"(needs a -DBUILD_TUNING=ON build)")
         return 0
-    render_table(_load(OUT_PATH)["voices"], every=args.all)
+    render_table(_load(OUT_PATH)["voices"], every=args.all, pol=pol, goal=args.goal)
     return 0
 
 

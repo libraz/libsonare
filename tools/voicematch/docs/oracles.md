@@ -13,6 +13,8 @@ The model side is fixed: libsonare's GM fallback bank, rendered through the work
 
 `assets/MuseScore_General.sf3`, downloaded from the OSUOSL MuseScore mirror; override with `--sf2` or `VOICEMATCH_SF2`. Rendered **dry** (`-R 0 -C 0`), since reverb tails would contaminate release and noise metrics — so anything a room measurement finds on this route is the instrument, not a space.
 
+**A hardware module reached through `--oracle-wav` owes the same dryness, and it is the one route where nothing enforces it.** Reverb, chorus, delay and the insertion effect all come up non-zero from a power-on reset, so a render taken without turning them off carries a tank that `room.py` will then match the model to — the model acquires a space the instrument never had, and every release and noise metric is measured through it. Select the tone map explicitly for the same reason a corpus records its own: a reference taken on whichever map the unit was left on is a measurement of a tone nobody can name afterwards.
+
 ## `--corpus`: the captured grid
 
 When a capture exists, this is the route to use. `--corpus` points at the directory `capture.py corpus` wrote (or its `manifest.json`) and the probe *becomes* the capture: its notes, its velocities and its eight-second gate come from the manifest, and the oracle is the captured audio assembled onto that same timeline, one slot per recording.

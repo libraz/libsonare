@@ -7,8 +7,21 @@ make voice-status              # the whole bank, only what is past the oracle st
 make voice-status-all          # every voice
 make voice-status-refresh      # regenerate tools/voice-status.json  (needs BUILD_TUNING)
 make voice-status-check        # fail if it is stale
-make voice-readiness           # the four captured instruments, in profile-column detail
+make voice-readiness           # every captured instrument, in profile-column detail
+python3 tools/voicematch/status.py --goal 1.8.0   # one release goal's members and what each still needs
 ```
+
+## Priority and goals come from `policy.json`, and are read rather than stored
+
+`tools/voicematch/policy.json` carries the working-priority tiers and the goals; [objective.md](objective.md) argues them. Each printed row shows its tier as `t1`–`t3`, and the summary carries one line per goal.
+
+**A goal is where attention goes and never a condition on shipping.** Calibration is open-ended analog work and a version whose date arrives with the set unmet ships with it unmet, the goal carrying over. Nothing here may grow into a gate: `status.py` exits 0 whatever it finds, and `make voice-status` is documented as read-only for the same reason — a target that failed on "there is work to do" could not be the thing a loop reads to decide where to start.
+
+**They are resolved when the table is printed, never written into `tools/voice-status.json`.** That file holds what the library and the references reported, and a tier is a decision — baking one in would make reordering the bank need a `-DBUILD_TUNING=ON` rebuild to take effect, and would mark the generated file stale every time the policy moved with no voice having changed. The two kinds of fact are kept in different files for the same reason the bank registry keeps a shared calibration unit apart from the patches that use it.
+
+**A variation carries its capital's tier rather than one of its own.** It is that capital copied and then narrowed, so it cannot be worked first; `variations_follow_capital` records that the shared rank is deliberate rather than an omission.
+
+**A goal names capital tones and kits only.** A goal listing a variation would be blocked on a capture nobody has a source for, which is a fact about the reference market rather than about the voice.
 
 `tools/voice-status.json` is **committed**, so reading it needs nothing. Generating it needs a `-DBUILD_TUNING=ON` library, because the engine voicing each patch is reported by the library rather than parsed out of it.
 

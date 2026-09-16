@@ -6,11 +6,61 @@ This page exists because the harness's own criteria kept being mistaken for the 
 
 **Reproduce the sounds the SC-8850's GS map names.** The map says which slots exist and what each one is — an acoustic grand at program 0, a darker one at bank 2, a standard kit on channel 10. That is the specification, and it is the only thing the machine supplies.
 
-**It does not say what any of them should sound like.** The samples are a quarter-century old and were degraded to fit the hardware of their day; a recording made now is a better instrument than the one they hold. So the map is followed and the timbre is not, which is the same split `src/midi/synth/docs/gs.md` already states from the other side: "sounding like an SC-88Pro is explicitly out of scope."
+**It does not say what any of them should sound like.** The samples are a quarter-century old and were degraded to fit the hardware of their day; a recording made now is a better instrument than the one they hold. So the map is followed and the timbre is not — for a slot naming an instrument that exists outside the machine. It inverts for one naming a sound the machine invented, and the next section draws the line.
 
-**Physical modelling and FM are the technique, not the product.** An exact match to any sampled source is impossible by construction and is not what is being attempted. What is being attempted is that a listener hears the instrument the slot names.
+**This page is the only place that line is drawn.** `src/midi/synth/docs/gs.md` is the protocol contract and says explicitly that what a slot should sound like is not its business, which is what keeps a timbre decision from existing in two documents that can part company.
+
+**Physical modelling and FM are the technique, not the product.** An exact match to any sampled source is impossible by construction. For a slot naming a real instrument it is also not what is being attempted — what is attempted there is that a listener hears the instrument the slot names. For a slot naming a sound the machine invented the same impossibility holds and the aim is the opposite one: get as close to it as the engines reach, because there the sampled source *is* the instrument and there is nothing else to hear.
 
 **Building a correct general-purpose physical model is not the objective.** It is welcome where it happens, and it is often the cheapest route to a voice that sounds right, but no voice is finished because a model is principled and none is unfinished because a model is ad hoc.
+
+## Two kinds of slot, and the timbre rule is not the same for both
+
+Follow the map and ignore the timbre is right for an instrument that exists outside the machine and wrong for one that does not, so the line is drawn exactly there.
+
+**A slot naming a real instrument is aimed at that instrument as it is recorded today.** A grand, a harpsichord, a church organ, an electric bass. The map says which slot exists; a modern reference says what it sounds like; the sampled original is not the target and being unlike it is not a defect.
+
+**A slot naming a machine's own sound is aimed at the machine, timbre included.** The synth leads and pads, synth brass, synth strings, synth bass, the orchestra hit, the sound effects. Nothing stands behind these for a recording to be made of — the sound *is* the module's, and a file that plays one is playing that sound rather than referring to something else through it. Here reproduction is the goal, as closely as the engines reach, and the machine is the reference rather than the oracle of last resort.
+
+**The reason is that the arrangement stops working, not that the timbre is missed.** A pad or a synth brass line carries harmonic and rhythmic weight, and a substitute with a different envelope and a different spectrum does not carry it — the part stops doing its job in the mix. A better grand piano never breaks a piano part that way. This is the one place where sounding like the hardware is the requirement rather than a nostalgia.
+
+**Drums follow the machine as well, for a third reason: the envelope rather than the timbre.** A kit's slots do name real instruments, so their colour comes from a modern reference like any other. What a groove actually rests on is how long each piece rings, how it damps, and where the members sit against each other — properties of the module rather than of a snare drum, and the first thing that stops a file sounding like itself. So a kit's timbre is aimed at a modern reference and its behaviour is aimed at the SC-8850, and those are not in conflict because they are different measurements.
+
+**Which rule a slot falls under is data.** `tools/voicematch/policy.json` names the machine-defined set; everything unlisted is an instrument. Deciding it per case in prose would leave the boundary somewhere different in each tool that needs it.
+
+## A slot the model cannot reach falls back to its nearest neighbour
+
+Some slots name a mechanism this bank does not have and is not going to grow one for — a massed choir is the shape of the problem, where what a listener hears is dozens of uncorrelated singers and the model has one tract.
+
+**The answer is the nearest voice the bank already has: never silence, and never a stand-in built to fill the hole.** A neighbour is chosen because it exists and is maintained, so it improves when the voice it borrows from improves; a purpose-built approximation is a voice nobody fits and nobody retires.
+
+**An approximation is declared as data, in `policy.json`'s `approximated` block, naming the slot, the voice answering it and what the model cannot reach.** One declared in prose alone reads as an oversight — the same discipline as a capture's `dimensions_na` and the parity allowlist, for the same reason. Nothing downstream can tell an approximation from an unfinished voice, and the difference is whether anyone should spend an afternoon on it.
+
+**The block is empty today and that is a claim rather than an omission**: every slot in the bank is currently answered by a patch written for it. Two programs sharing one patch is not an approximation — an electric piano voicing both of its slots is one instrument with two numbers.
+
+## Diversity beyond GM/GS is not a GS extension
+
+Two wants get confused here, so they are separated: **playing a file written for the hardware**, and **making sounds the hardware could not**. The first is what GS is for and everything above is its contract. The second has nothing to do with GS.
+
+**GS cannot express modern synth voicing, and adding addresses would not change that.** The entire per-part sound-design surface is the eight TONE MODIFY parameters — vibrato rate, depth and delay, filter cutoff and resonance, amplitude attack, decay and release — plus the variation banks and the effect blocks. No oscillator selection, no modulation routing, no envelope past three segments, no unison, no wavetable position. What GS offers is a choice among presets, not a way to build one.
+
+**So diversity lives in the patch API and the preset catalogue, and the GS address space is left alone.** A host names a preset or supplies a whole patch with fields overridden, and none of that travels as a controller. The tempting alternative — libsonare addresses inside the GS space, on the pattern the extra insertion units already use — is refused: the only sender that could reach them is a host that knows this library, and a host that knows this library can set the patch directly. It would be a narrower copy of an API that already exists, bought by putting sound design inside a document whose whole value is that it describes somebody else's standard.
+
+**The one case that would earn a wire format is a self-contained file**, where the SMF is the deliverable and has to carry its own voices. That is a container question and not a GS one, and a patch in a meta event answers it without touching the address space.
+
+**A voice built this way carries no GM or GS program number.** The bank answers those and is the only thing that does. A preset that wanted one would be a second answer to a question that has one correct answer, and which of the two won would depend on load order.
+
+## What order the bank is worked in
+
+**Frequency of use first.** Piano, the standard kit, the synths, the electric guitars and basses: a bank's worst voice costs nothing until a file plays it, and these are the ones files play.
+
+**Pipe organ, harpsichord and classical guitar are worked ahead of their frequency.** That is this project's own interest rather than anything the corpus implies, and it is written down as such so the ordering is not later read as a measurement.
+
+**A variation waits for its capital.** A variation patch is its capital copied and then changed by whatever its name claims is different, so a capital that moves invalidates every variation hanging under it. Fitting one first gains nothing and loses a round of rework — which is why all of them sit at the same step today, and the only ones worth starting are those whose capital is finished.
+
+**The ordering is data.** `policy.json` carries the tiers and the goals and `make voice-status` reads it. A goal is a named set of voices and the step each is being worked toward — not a date, and not a fraction of the bank.
+
+**A goal never gates a release.** Calibrating a voice is open-ended analog work: listen, try something, listen again, and it takes the time it takes. A version whose date arrives with the set unmet ships with it unmet and the goal carries over — that is the expected case rather than a failure, and a voice is never late. So nothing is to be built that blocks a release, a merge or a CI run on a voice's stage, and a goal named after a version is not thereby a due date. `status.py` is read-only and exits 0 whatever it finds, which is the mechanical half of the same statement.
 
 ## One reference is enough, and it is a target rather than a sample
 
@@ -27,6 +77,10 @@ So:
 1. A product dedicated to that instrument, played direct — the closest thing to the instrument alone.
 2. A general instrument library.
 3. The SC-8850 itself, as the oracle of last resort, for slots nothing else reaches.
+
+**For a machine-defined slot that order is inverted and the machine is first**, since the sound being reproduced is its own. The GS variations are the bulk of this: their slots exist because the machine defines them, and no instrument library ships a "Piano 1w".
+
+**A capture taken from the machine is taken with its effects off** — reverb, chorus, delay and the insertion effect — and with the tone map selected explicitly rather than left at whatever the unit was last set to. A reference with the module's reverb inside it drives the room correction into matching a tank instead of a building, and a reference taken on an unknown tone map is a measurement of a tone nobody can name. The audio stays under the scratch root and is never committed, on the same terms as every other capture; only the measurement is.
 
 Which product answered a given capture is recorded only in its untracked `capture/<id>.local.json`, as everywhere else.
 
@@ -57,3 +111,4 @@ Named so that a later reading of the older documents does not quietly restore th
 - **Agreement against the reference spread as a promotion criterion.**
 - **Structural validation across an instrument family as a ladder step.** Comparing a whole family — how loop loss scales with pitch, whether a body resonance tracks — remains a good way to find out *why* a voice will not reach its target, and it is a debugging tool rather than a stage a voice passes.
 - **The outstanding capture backlog that existed only to supply second timbres.** What remains is the much smaller set where the current reference is the wrong signal, plus the GS variations, whose slots only the machine can define.
+- **"A modern recording is the target" as a rule over the whole bank.** It is the default branch of two, and the other branch — a slot naming a sound the machine invented — aims at the machine and reproduces its timbre deliberately. Reading the rule as universal would make the synth and effect programs look finished when they are aimed at nothing.

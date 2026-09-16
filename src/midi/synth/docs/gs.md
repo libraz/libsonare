@@ -10,7 +10,7 @@ Per-address detail — offsets, ranges, defaults — is not restated here. It co
 
 ## What is being made compatible is the control protocol, not the sound
 
-**GS is implemented here as a way to control physical-model instruments, and the resemblance to a sound module stops at the wire.** The voices are physical models fitted against modern references (`voicing.md`); sounding like an SC-88Pro is explicitly out of scope, and a report that a program's timbre differs from the hardware's is not a defect against this page. What is owed is that a file's messages arrive, are understood, and move the parameter they name in the direction and by the amount the manual gives.
+**GS is implemented here as a way to control physical-model and FM instruments, and the resemblance to a sound module stops at the wire.** What is owed by this page is that a file's messages arrive, are understood, and move the parameter they name in the direction and by the amount the manual gives. **What any slot should sound like is not this page's business at all** — a report that a program's timbre differs from the hardware's is never a defect against this page, whichever way it is meant to differ. Which reference a slot is aimed at is decided in `tools/voicematch/docs/objective.md`, and it is not one answer for the whole bank: a slot naming a real instrument is aimed at a modern recording of it, while a slot naming a sound the machine invented is aimed at the machine, timbre included. Do not read either rule off this page, and do not restate them here — two copies of that boundary would part company on the first slot anybody argued about.
 
 Two things follow, and both are load-bearing:
 

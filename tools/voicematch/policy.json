@@ -1,0 +1,62 @@
+{
+  "_": "The bank's policy as data: which timbre rule a slot falls under, what order the bank is worked in, which slots are answered by a neighbour, and what each release goal asks for. The prose that argues all of it is docs/objective.md; this file is what tooling reads, so an ordering cannot drift from the page that justifies it. Programs are zero-based GM numbers throughout, for a kit as much as for a melodic voice: a kit is named by the rhythm-part program a file selects it with, which is the number tools/voice-status.json carries, and never by its kGsDrumKits index.",
+
+  "reference_layer": {
+    "_": "Which reference a slot is aimed at, on two independent axes. `timbre` is what it should sound like and `behaviour` is how it should ring, damp and sit against its neighbours. A slot naming an instrument that exists outside the machine takes a modern recording on both; a slot naming a sound the machine invented takes the machine on both, because nothing stands behind it for a recording to be made of.",
+    "default": {
+      "timbre": "instrument",
+      "behaviour": "instrument",
+      "reason": "every program not listed below names a real instrument"
+    },
+    "machine_defined": {
+      "timbre": "machine",
+      "behaviour": "machine",
+      "programs": [38, 39, 50, 51, 54, 55, 62, 63, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 120, 121, 122, 123, 124, 125, 126, 127],
+      "reason": "synth bass, synth strings, synth voice, the orchestra hit, synth brass, the leads, pads and effects, and the sound effects: a file playing one of these is playing that sound rather than referring to an instrument through it, so a substitute with a different envelope and spectrum stops the arrangement working"
+    },
+    "kits": {
+      "timbre": "instrument",
+      "behaviour": "machine",
+      "reason": "a kit's slots name real drums, so their colour comes from a modern reference; what a groove rests on is ring, damping and the relations between members, which are the module's rather than the drum's"
+    }
+  },
+
+  "tiers": [
+    {
+      "name": "core",
+      "rank": 1,
+      "programs": [0, 1, 2, 3, 4, 5, 6, 19, 24, 26, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95],
+      "kits": [0],
+      "reason": "the voices most files reach — piano, the standard kit, the synth leads and pads, the electric guitars and basses — plus pipe organ, harpsichord and classical guitar, which are this project's own interest and are worked ahead of their frequency rather than because the corpus asks for it"
+    },
+    {
+      "name": "long-tail",
+      "rank": 3,
+      "programs": [104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127],
+      "reason": "the ethnic, percussive and sound-effect end: reached by few files and, for the percussive half, largely one strike with no ladder to climb"
+    },
+    {
+      "name": "common",
+      "rank": 2,
+      "default": true,
+      "reason": "everything else — the orchestral, wind, organ and guitar families a file reaches often enough to notice but not often enough to precede the core"
+    }
+  ],
+
+  "variations_follow_capital": true,
+  "_variations_follow_capital": "A GS variation is its capital copied and then changed by whatever its name claims is different, so a capital that moves invalidates every variation under it. A variation therefore ranks behind its capital's tier until that capital is finished, and starting one first buys a round of rework.",
+
+  "approximated": {},
+  "_approximated": "A slot whose mechanism this bank does not have and is deliberately answering with the nearest voice it does have. Each entry names the voice answering it and what the model cannot reach, because nothing downstream can tell an approximation from an unfinished voice. Empty is a claim rather than an omission: every slot is currently answered by a patch written for it. Two programs sharing one patch is not an approximation — an electric piano voicing both of its slots is one instrument with two numbers.",
+
+  "goals": {
+    "1.8.0": {
+      "stage": 0.8,
+      "programs": [0, 1, 2, 3, 4, 5, 6, 19, 26, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95],
+      "kits": [0],
+      "reason": "piano and the standard kit, the synths, the electric guitars and basses, the pipe organ and the harpsichord, each listened to and signed off rather than merely gated. Classical guitar is worked at the same priority and is deliberately not in this set: it is the project's interest and not something a file is owed."
+    }
+  },
+  "_goals": "A goal is a named set of voices and the step each is being worked toward. `stage` is a rung of the ladder in docs/status.md; 0.8 is `heard`, which is the first step a measurement cannot grant.",
+  "_goals_do_not_gate": "A goal says where attention goes and never whether a version may ship. Calibrating a voice is open-ended analog work — listening, trying something, listening again — and it takes whatever time it takes; a release whose date arrives with the set unmet ships with it unmet, and the goal carries over rather than holding the version. Nothing may be built that blocks a release, a merge or a CI run on a voice's stage, and the name of a goal being a version number does not make it a due date. `status.py` is read-only and exits 0 by design for this reason."
+}

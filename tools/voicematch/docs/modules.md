@@ -21,6 +21,7 @@
 - `phrases.py` — the phrase sets an audition page plays: three written for one instrument each, five generic ones filled in from the program's own compass, one per `ToneClass`
 - `calibration.py` / `calibrations.json` — named calibration settings recorded per voice, so a batch across the bank carries per-voice candidates and a listening question outlives the shell history that asked it. Tracked, since an override string is knob names and numbers
 - `status.py` / `tools/voice-status.json` — where every voice in the bank stands, as one number and the reasons for it. See [status.md](status.md)
+- `policy.json` — the bank's policy as data: which timbre rule each slot falls under, the working-priority tiers, the declared approximations and the release goals. Read at print time by `status.py` and argued in [objective.md](objective.md)
 - `signoff.py` / `signoff.json` — the structural residual and the musical sign-off, the two claims the last step needs and the only two nothing on disk implies. Each carries the bank generation and patch version it was taken against, so it expires with them
 - `make_audition.py` — the listening set for [`tools/audition`](../../audition/README.md)
 - `render_corpus.py` / `compare_metrics.py` — a whole-bank phrase render and a diff of two of them; a broad before/after sweep rather than a per-note comparison

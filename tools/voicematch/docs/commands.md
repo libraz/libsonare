@@ -258,6 +258,20 @@ compare_metrics.py <dir-a> <dir-b>                        # diff two render_corp
 
 What `dataset.py` costs and what it is for is [dataset.md](dataset.md); what `make_audition.py` renders, and how a voice with no captured reference is auditioned anyway, is [audition.md](audition.md).
 
+## `status.py` — where the bank stands, and what a release goal still needs
+
+```sh
+make voice-status                          # every voice past the oracle step, with its tier
+make voice-status-all                      # the whole bank
+status.py --goal 1.8.0                     # one goal's members and what each still needs
+```
+
+| script | flags |
+|---|---|
+| `status.py` | `--all`, `--goal`, `--lib`, `--write`, `--check`, `--sr` |
+
+Reading needs nothing — `tools/voice-status.json` is committed. `--write` and `--check` regenerate and verify it and need a `-DBUILD_TUNING=ON` library, since the engine voicing each patch is reported by the library rather than parsed. The ladder the stage column reports is [status.md](status.md); the tiers and goals it prints are `policy.json`, argued in [objective.md](objective.md).
+
 ## Environment
 
 | variable | what it does |
