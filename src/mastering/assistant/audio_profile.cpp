@@ -17,6 +17,12 @@
 #include "feature/onset.h"
 #include "feature/spectral.h"
 #include "mastering/common/loudness_measure.h"
+#include "mastering/repair/declick.h"
+#include "mastering/repair/declip.h"
+#include "mastering/repair/decrackle.h"
+#include "mastering/repair/dehum.h"
+#include "mastering/repair/denoise_classical.h"
+#include "mastering/repair/dereverb_classical.h"
 #include "metering/basic.h"
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
@@ -285,6 +291,61 @@ AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int
 
 namespace {
 
+// Runs the six repair detectors over one signal, each with its own default
+// config. Nothing here can throw: the detectors reject only a non-positive
+// sample rate and, for the noise floor, an input shorter than its STFT, and both
+// are settled before the first call.
+DefectProfile measure_defects(const Audio& audio) {
+  DefectProfile defects;
+
+  const repair::DenoiseClassicalConfig denoise_config;
+  // An input this short leaves the whole block unmeasured rather than five
+  // detectors filled and a noise floor left at 0.0f, which reads as 0 dBFS.
+  if (audio.size() < static_cast<std::size_t>(denoise_config.n_fft)) return defects;
+
+  const float* samples = audio.data();
+  const std::size_t size = audio.size();
+  const int sample_rate = audio.sample_rate();
+
+  const auto clicks = repair::detect_clicks(samples, size, sample_rate);
+  defects.click_count = clicks.count;
+  defects.click_rejected = clicks.rejected;
+  defects.click_longest_run_samples = clicks.longest_run_samples;
+  defects.click_per_second = clicks.per_second;
+
+  const auto crackle = repair::detect_crackle(samples, size, sample_rate);
+  defects.crackle_sample_count = crackle.sample_count;
+  defects.crackle_sample_fraction = crackle.sample_fraction;
+  defects.crackle_per_second = crackle.per_second;
+
+  const auto clipping = repair::detect_clipping(samples, size, sample_rate);
+  defects.clip_sample_count = clipping.sample_count;
+  defects.clip_run_count = clipping.run_count;
+  defects.clip_longest_run_samples = clipping.longest_run_samples;
+  defects.clip_sample_fraction = clipping.sample_fraction;
+
+  const auto noise = repair::detect_noise_floor(samples, size, sample_rate, denoise_config);
+  defects.noise_floor_dbfs = noise.floor_dbfs;
+  const auto* peak_band = std::max_element(noise.band_floor_dbfs,
+                                           noise.band_floor_dbfs + repair::kRepairNoiseBandCount);
+  defects.noise_band_peak_dbfs = *peak_band;
+  defects.noise_band_peak_index = static_cast<int>(peak_band - noise.band_floor_dbfs);
+
+  const auto hum = repair::detect_hum(samples, size, sample_rate);
+  defects.hum_fundamental_hz = hum.fundamental_hz;
+  defects.hum_fundamental_prominence = hum.fundamental_prominence;
+  defects.hum_harmonics = hum.harmonics;
+  defects.hum_fundamental_dbfs = hum.harmonic_dbfs[0];
+  defects.hum_peak_harmonic_dbfs =
+      *std::max_element(hum.harmonic_dbfs, hum.harmonic_dbfs + repair::kDehumMaxHarmonics);
+
+  defects.late_decay_ratio_db =
+      repair::detect_reverb(samples, size, sample_rate).late_decay_ratio_db;
+
+  defects.measured = true;
+  return defects;
+}
+
 // Everything outside the loudness block: spectral shape, dynamics and tempo.
 // These describe shape and timing rather than absolute level, so the stereo
 // entry point measures them on the downmix and only replaces the loudness
@@ -381,6 +442,8 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
   }
 
   profile.genre_candidates = infer_genres(profile.bpm, profile.spectral, profile.dynamics);
+
+  if (config.detect_defects) profile.defects = measure_defects(audio);
 }
 
 }  // namespace
@@ -474,6 +537,38 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
   dynamics.emplace("attackDensity", json::Value(profile.dynamics.attack_density));
   dynamics.emplace("sustainRatio", json::Value(profile.dynamics.sustain_ratio));
 
+  // Emitted whatever `measured` says, so the object's shape does not depend on
+  // the config: a consumer reads one flag rather than having to tell an absent
+  // block from a core too old to write one.
+  json::Object defects;
+  defects.emplace("measured", json::Value(profile.defects.measured));
+  defects.emplace("clickCount", json::Value(static_cast<double>(profile.defects.click_count)));
+  defects.emplace("clickRejected",
+                  json::Value(static_cast<double>(profile.defects.click_rejected)));
+  defects.emplace("clickLongestRunSamples",
+                  json::Value(static_cast<double>(profile.defects.click_longest_run_samples)));
+  defects.emplace("clickPerSecond", json::Value(profile.defects.click_per_second));
+  defects.emplace("crackleSampleCount",
+                  json::Value(static_cast<double>(profile.defects.crackle_sample_count)));
+  defects.emplace("crackleSampleFraction", json::Value(profile.defects.crackle_sample_fraction));
+  defects.emplace("cracklePerSecond", json::Value(profile.defects.crackle_per_second));
+  defects.emplace("clipSampleCount",
+                  json::Value(static_cast<double>(profile.defects.clip_sample_count)));
+  defects.emplace("clipRunCount", json::Value(static_cast<double>(profile.defects.clip_run_count)));
+  defects.emplace("clipLongestRunSamples",
+                  json::Value(static_cast<double>(profile.defects.clip_longest_run_samples)));
+  defects.emplace("clipSampleFraction", json::Value(profile.defects.clip_sample_fraction));
+  defects.emplace("noiseFloorDbfs", json::Value(profile.defects.noise_floor_dbfs));
+  defects.emplace("noiseBandPeakDbfs", json::Value(profile.defects.noise_band_peak_dbfs));
+  defects.emplace("noiseBandPeakIndex", json::Value(profile.defects.noise_band_peak_index));
+  defects.emplace("humFundamentalHz", json::Value(profile.defects.hum_fundamental_hz));
+  defects.emplace("humFundamentalProminence",
+                  json::Value(profile.defects.hum_fundamental_prominence));
+  defects.emplace("humHarmonics", json::Value(profile.defects.hum_harmonics));
+  defects.emplace("humFundamentalDbfs", json::Value(profile.defects.hum_fundamental_dbfs));
+  defects.emplace("humPeakHarmonicDbfs", json::Value(profile.defects.hum_peak_harmonic_dbfs));
+  defects.emplace("lateDecayRatioDb", json::Value(profile.defects.late_decay_ratio_db));
+
   json::Array genre_candidates;
   genre_candidates.reserve(profile.genre_candidates.size());
   for (const auto& candidate : profile.genre_candidates) {
@@ -490,6 +585,7 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
   root.emplace("loudness", json::Value(std::move(loudness)));
   root.emplace("spectral", json::Value(std::move(spectral)));
   root.emplace("dynamics", json::Value(std::move(dynamics)));
+  root.emplace("defects", json::Value(std::move(defects)));
   root.emplace("genreCandidates", json::Value(std::move(genre_candidates)));
   return json::dump(json::Value(std::move(root)));
 }

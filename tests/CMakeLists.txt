@@ -206,6 +206,7 @@ endif()
 
 if(BUILD_MASTERING)
   target_sources(sonare_tests PRIVATE
+    mastering/assistant_defect_profile_test.cpp
     mastering/assistant_test.cpp
     mastering/band_state_non_finite_recovery_test.cpp
     mastering/chain_test.cpp
