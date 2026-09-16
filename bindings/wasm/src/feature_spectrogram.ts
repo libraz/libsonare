@@ -1,3 +1,4 @@
+import { resolveFftOptions } from './_fft_options';
 import { getSonareModule } from './module_state';
 import type {
   ChromaResult,
@@ -305,8 +306,8 @@ export function stft(
     return stft(request.samples, request.sampleRate, request.nFft, request.hopLength, request);
   }
   validateSpectrogramSamples('stft', samples, sampleRate, options);
-  validatePositiveIntegers('stft', { nFft, hopLength });
-  return requireModule().stft(samples, sampleRate, nFft, hopLength);
+  const fft = resolveFftOptions('stft', nFft, hopLength);
+  return requireModule().stft(samples, sampleRate, fft.nFft, fft.hopLength);
 }
 
 /**
@@ -342,8 +343,8 @@ export function stftDb(
     return stftDb(request.samples, request.sampleRate, request.nFft, request.hopLength, request);
   }
   validateSpectrogramSamples('stftDb', samples, sampleRate, options);
-  validatePositiveIntegers('stftDb', { nFft, hopLength });
-  return requireModule().stftDb(samples, sampleRate, nFft, hopLength);
+  const fft = resolveFftOptions('stftDb', nFft, hopLength);
+  return requireModule().stftDb(samples, sampleRate, fft.nFft, fft.hopLength);
 }
 
 /**
@@ -531,13 +532,14 @@ export function melSpectrogram(
     );
   }
   validateSpectrogramSamples('melSpectrogram', samples, sampleRate, options);
-  validatePositiveIntegers('melSpectrogram', { nFft, hopLength, nMels });
+  const fft = resolveFftOptions('melSpectrogram', nFft, hopLength);
+  validatePositiveIntegers('melSpectrogram', { nMels });
   validateMelFrequencyRange('melSpectrogram', fmin, fmax, sampleRate);
   return requireModule().melSpectrogram(
     samples,
     sampleRate,
-    nFft,
-    hopLength,
+    fft.nFft,
+    fft.hopLength,
     nMels,
     fmin,
     fmax,
@@ -604,13 +606,14 @@ export function mfcc(
     );
   }
   validateSpectrogramSamples('mfcc', samples, sampleRate, options);
-  validatePositiveIntegers('mfcc', { nFft, hopLength, nMels, nMfcc });
+  const fft = resolveFftOptions('mfcc', nFft, hopLength);
+  validatePositiveIntegers('mfcc', { nMels, nMfcc });
   validateMelFrequencyRange('mfcc', fmin, fmax, sampleRate);
   return requireModule().mfcc(
     samples,
     sampleRate,
-    nFft,
-    hopLength,
+    fft.nFft,
+    fft.hopLength,
     nMels,
     nMfcc,
     fmin,
@@ -761,6 +764,9 @@ export function melToStft(
   }
   assertSampleRate('melToStft', sampleRate);
   validateMatrix('melToStft', melPower, nMels, nFrames, 'melPower', 'nMels', options);
+  // Not on the shared FFT rule: this inverts a filterbank rather than running a
+  // transform, so `nFft` only sizes the output to `nFft / 2 + 1` bins and an odd
+  // size is accepted by the core and by the Node surface alike.
   validatePositiveIntegers('melToStft', { nFft });
   validateMelFrequencyRange('melToStft', fmin, fmax, sampleRate);
   return requireModule().melToStft(melPower, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk);
@@ -827,15 +833,16 @@ export function melToAudio(
   }
   assertSampleRate('melToAudio', sampleRate);
   validateMatrix('melToAudio', melPower, nMels, nFrames, 'melPower', 'nMels', options);
-  validatePositiveIntegers('melToAudio', { nFft, hopLength, nIter });
+  const fft = resolveFftOptions('melToAudio', nFft, hopLength);
+  validatePositiveIntegers('melToAudio', { nIter });
   validateMelFrequencyRange('melToAudio', fmin, fmax, sampleRate);
   return requireModule().melToAudio(
     melPower,
     nMels,
     nFrames,
     sampleRate,
-    nFft,
-    hopLength,
+    fft.nFft,
+    fft.hopLength,
     fmin,
     fmax,
     nIter,
@@ -883,14 +890,15 @@ export function griffinLim(
   }
   assertSampleRate('griffinLim', sampleRate);
   validateMatrix('griffinLim', magnitude, nBins, nFrames, 'magnitude', 'nBins', options);
-  validatePositiveIntegers('griffinLim', { nFft, hopLength, nIter });
+  const fft = resolveFftOptions('griffinLim', nFft, hopLength);
+  validatePositiveIntegers('griffinLim', { nIter });
   return requireModule().griffinLim(
     magnitude,
     nBins,
     nFrames,
     sampleRate,
-    nFft,
-    hopLength,
+    fft.nFft,
+    fft.hopLength,
     nIter,
     momentum,
   );
@@ -1023,7 +1031,8 @@ export function mfccToAudio(
     'nMfcc',
     options,
   );
-  validatePositiveIntegers('mfccToAudio', { nMels, nFft, hopLength, nIter });
+  const fft = resolveFftOptions('mfccToAudio', nFft, hopLength);
+  validatePositiveIntegers('mfccToAudio', { nMels, nIter });
   validateMelFrequencyRange('mfccToAudio', fmin, fmax, sampleRate);
   return requireModule().mfccToAudio(
     mfccCoefficients,
@@ -1031,8 +1040,8 @@ export function mfccToAudio(
     nFrames,
     nMels,
     sampleRate,
-    nFft,
-    hopLength,
+    fft.nFft,
+    fft.hopLength,
     fmin,
     fmax,
     nIter,
@@ -1080,6 +1089,6 @@ export function chroma(
     return chroma(request.samples, request.sampleRate, request.nFft, request.hopLength, request);
   }
   validateSpectrogramSamples('chroma', samples, sampleRate, options);
-  validatePositiveIntegers('chroma', { nFft, hopLength });
-  return requireModule().chroma(samples, sampleRate, nFft, hopLength);
+  const fft = resolveFftOptions('chroma', nFft, hopLength);
+  return requireModule().chroma(samples, sampleRate, fft.nFft, fft.hopLength);
 }

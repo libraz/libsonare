@@ -1,3 +1,4 @@
+import { resolveFftOptions } from './_fft_options';
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type {
@@ -704,8 +705,9 @@ export function onsetEnvelope(
     );
   }
   validateMusicSamples('onsetEnvelope', samples, sampleRate, options);
-  validatePositiveIntegers('onsetEnvelope', { nFft, hopLength, nMels });
-  return requireModule().onsetEnvelope(samples, sampleRate, nFft, hopLength, nMels);
+  const fft = resolveFftOptions('onsetEnvelope', nFft, hopLength);
+  validatePositiveIntegers('onsetEnvelope', { nMels });
+  return requireModule().onsetEnvelope(samples, sampleRate, fft.nFft, fft.hopLength, nMels);
 }
 
 /**
@@ -751,8 +753,16 @@ export function onsetStrengthMulti(
     );
   }
   validateMusicSamples('onsetStrengthMulti', samples, sampleRate, options);
-  validatePositiveIntegers('onsetStrengthMulti', { nFft, hopLength, nMels, nBands });
-  return requireModule().onsetStrengthMulti(samples, sampleRate, nFft, hopLength, nMels, nBands);
+  const fft = resolveFftOptions('onsetStrengthMulti', nFft, hopLength);
+  validatePositiveIntegers('onsetStrengthMulti', { nMels, nBands });
+  return requireModule().onsetStrengthMulti(
+    samples,
+    sampleRate,
+    fft.nFft,
+    fft.hopLength,
+    nMels,
+    nBands,
+  );
 }
 
 /**

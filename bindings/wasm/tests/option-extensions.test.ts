@@ -1,13 +1,24 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyzeImpulseResponse,
+  chroma as chromaStft,
+  griffinLim,
   hpss,
   hpssWithResidual,
   init,
+  melSpectrogram,
+  melToAudio,
+  melToStft,
+  mfcc,
+  mfccToAudio,
   nnlsChroma,
   normalize,
+  onsetEnvelope,
+  onsetStrengthMulti,
   phaseVocoder,
   pitchShift,
+  stft,
+  stftDb,
   timeStretch,
   trim,
 } from '../src/index';
@@ -132,5 +143,121 @@ describe('STFT entry points share one nFft rule', () => {
     expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](511)).toThrow(
       /nFft must be an even integer/,
     );
+  });
+});
+
+// The same one rule across the feature facades. These used to route `nFft`
+// through a positivity-only helper, so an identical fault reported as three
+// different classes depending on which entry point the caller reached, and an
+// odd size was refused by the core rather than by the argument check.
+describe('feature entry points share one nFft rule', () => {
+  const nMels = 64;
+  const nMfcc = 20;
+  type Framing = { nFft?: number; hopLength?: number };
+  let featureEntryPoints: Record<string, (framing: Framing) => unknown>;
+  let names: string[];
+
+  beforeAll(async () => {
+    await init();
+    // Every fixture carries the geometry nFft 2048 produces, so the default
+    // framing is a call each entry point completes -- the control the refusals
+    // below are measured against.
+    const mel = melSpectrogram({ samples, sampleRate, nFft: 2048, hopLength: 512, nMels });
+    const spectrum = stft({ samples, sampleRate, nFft: 2048, hopLength: 512 });
+    const cepstrum = mfcc({ samples, sampleRate, nFft: 2048, hopLength: 512, nMels, nMfcc });
+
+    featureEntryPoints = {
+      stft: (f) => stft({ samples, sampleRate, ...f }),
+      stftDb: (f) => stftDb({ samples, sampleRate, ...f }),
+      melSpectrogram: (f) => melSpectrogram({ samples, sampleRate, nMels, ...f }),
+      mfcc: (f) => mfcc({ samples, sampleRate, nMels, nMfcc, ...f }),
+      chroma: (f) => chromaStft({ samples, sampleRate, ...f }),
+      onsetEnvelope: (f) => onsetEnvelope({ samples, sampleRate, nMels, ...f }),
+      onsetStrengthMulti: (f) => onsetStrengthMulti({ samples, sampleRate, nMels, ...f }),
+      melToAudio: (f) =>
+        melToAudio({
+          melPower: mel.power,
+          nMels,
+          nFrames: mel.nFrames,
+          sampleRate,
+          nIter: 2,
+          ...f,
+        }),
+      griffinLim: (f) =>
+        griffinLim({
+          magnitude: spectrum.magnitude,
+          nBins: spectrum.nBins,
+          nFrames: spectrum.nFrames,
+          sampleRate,
+          nIter: 2,
+          ...f,
+        }),
+      mfccToAudio: (f) =>
+        mfccToAudio({
+          mfccCoefficients: cepstrum.coefficients,
+          nMfcc,
+          nFrames: cepstrum.nFrames,
+          nMels,
+          sampleRate,
+          nIter: 2,
+          ...f,
+        }),
+    };
+    names = Object.keys(featureEntryPoints);
+    expect(names).toHaveLength(10);
+  });
+
+  // Named rather than derived from the map, because `it.each` is collected
+  // before `beforeAll` fills it; a name dropped from the map fails here as an
+  // undefined entry point instead of silently shrinking the population.
+  const entryPointNames = [
+    'stft',
+    'stftDb',
+    'melSpectrogram',
+    'mfcc',
+    'chroma',
+    'onsetEnvelope',
+    'onsetStrengthMulti',
+    'melToAudio',
+    'griffinLim',
+    'mfccToAudio',
+  ];
+
+  it.each(entryPointNames)('%s completes at the framing the refusals use', (name) => {
+    expect(() => featureEntryPoints[name]({})).not.toThrow();
+  });
+
+  it.each(entryPointNames)('%s reports a fractional nFft as a TypeError, as Node does', (name) => {
+    expect(() => featureEntryPoints[name]({ nFft: 2048.9 })).toThrow(TypeError);
+    expect(() => featureEntryPoints[name]({ nFft: 2048.9 })).toThrow(/nFft must be an integer/);
+  });
+
+  it.each(entryPointNames)('%s reports a fractional hopLength as a TypeError', (name) => {
+    expect(() => featureEntryPoints[name]({ hopLength: 512.5 })).toThrow(TypeError);
+    expect(() => featureEntryPoints[name]({ hopLength: 512.5 })).toThrow(
+      /hopLength must be an integer/,
+    );
+  });
+
+  it.each(entryPointNames)('%s rejects an odd nFft the same way', (name) => {
+    expect(() => featureEntryPoints[name]({ nFft: 2049 })).toThrow(RangeError);
+    expect(() => featureEntryPoints[name]({ nFft: 2049 })).toThrow(/nFft must be an even integer/);
+  });
+
+  it('accepts a non-power-of-two even nFft', () => {
+    expect(() => stft({ samples, sampleRate, nFft: 1536, hopLength: 256 })).not.toThrow();
+    expect(() => melSpectrogram({ samples, sampleRate, nFft: 1536, hopLength: 256 })).not.toThrow();
+  });
+
+  // melToStft inverts a filterbank instead of running a transform, so its nFft
+  // only sizes the output; an odd value is a supported geometry here, in the
+  // core, and on the Node surface, and the parity rule would refuse it.
+  it('keeps melToStft off the parity rule, where an odd nFft is a distinct result', () => {
+    const mel = melSpectrogram({ samples, sampleRate, nFft: 2048, hopLength: 512, nMels });
+    const shared = { melPower: mel.power, nMels, nFrames: mel.nFrames, sampleRate };
+    const even = melToStft({ ...shared, nFft: 2048 });
+    const odd = melToStft({ ...shared, nFft: 2049 });
+    expect(odd.nBins).toBe(even.nBins);
+    expect(Array.from(odd.power)).not.toEqual(Array.from(even.power));
   });
 });
