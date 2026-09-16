@@ -774,6 +774,10 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
       float a = row_below[t];
       float b = row[t];
       float c = row_above[t];
+      // A non-finite neighbour answers false to every test below, so the bin is
+      // admitted as a peak; at the top edge the shift is a fixed 0 and the
+      // frequency stays finite, leaving a positive pitch with a NaN magnitude.
+      if (!std::isfinite(a) || !std::isfinite(b) || !std::isfinite(c)) continue;
       // librosa.util.localmax uses a strict rising edge and an inclusive falling
       // edge, selecting the first bin of a flat-topped spectral peak.
       if (b <= a || b < c || b < gate[static_cast<size_t>(t)]) continue;

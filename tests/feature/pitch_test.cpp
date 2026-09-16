@@ -981,3 +981,46 @@ TEST_CASE("pyin resolves a single-frame input", "[pitch][edge]") {
   // Landing on 440 Hz is what separates the two.
   REQUIRE_THAT(result.f0[0], WithinRel(440.0f, 0.03f));
 }
+
+// The local-max test compares b against its neighbours and the gate, and a
+// non-finite answers false to all of them, so the bin is admitted as a peak.
+// Below the top edge that self-corrects -- the parabolic shift goes non-finite
+// too and the frequency with it, so the pitch is not positive and nothing reads
+// the magnitude. At the top edge the shift is a fixed 0, so the frequency stays
+// finite and a positive pitch is reported carrying a NaN magnitude. Reaching it
+// needs fmax at Nyquist, which the default band excludes.
+TEST_CASE("piptrack does not report a positive pitch with a non-finite magnitude",
+          "[pitch][edge]") {
+  const int sr = 22050;
+  const int n = 8192;
+  auto alternating = [&](float amp) {
+    std::vector<float> samples(static_cast<size_t>(n));
+    // Alternating sign puts the energy in the Nyquist bin, the one treated as the
+    // top edge; at this amplitude the spectrum itself goes non-finite.
+    for (int i = 0; i < n; ++i) samples[static_cast<size_t>(i)] = (i % 2 == 0) ? amp : -amp;
+    return Audio::from_vector(std::move(samples), sr);
+  };
+  auto count = [](const PiptrackResult& pp) {
+    std::pair<size_t, size_t> counts{0, 0};
+    for (size_t i = 0; i < pp.pitches.size(); ++i) {
+      if (pp.pitches[i] > 0.0f) {
+        ++counts.first;
+        if (!std::isfinite(pp.magnitudes[i])) ++counts.second;
+      }
+    }
+    return counts;
+  };
+
+  SECTION("a spectrum that has gone non-finite yields no poisoned peak") {
+    const auto counts = count(piptrack(alternating(1e38f), 2048, 512, 150.0f, 11025.0f, 0.1f));
+    REQUIRE(counts.second == 0);
+  }
+
+  SECTION("the non-vacuity control: the same band on a finite spectrum still reports peaks") {
+    // Without this the case above is satisfied by returning nothing at all, which
+    // is what an over-broad refusal would do.
+    const auto counts = count(piptrack(alternating(1e20f), 2048, 512, 150.0f, 11025.0f, 0.1f));
+    REQUIRE(counts.first > 0);
+    REQUIRE(counts.second == 0);
+  }
+}
