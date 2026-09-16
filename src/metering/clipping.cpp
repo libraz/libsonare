@@ -26,7 +26,9 @@ ClippingResult detect_clipping(const Audio& audio, float threshold, size_t min_r
   const float* data = audio.data();
   size_t i = 0;
   while (i < audio.size()) {
-    if (std::abs(data[i]) < threshold) {
+    // Negated inner test, so the two are exact complements: a NaN fails both, and
+    // only the inner loop advances i -- a bare `< threshold` here never terminates.
+    if (!(std::abs(data[i]) >= threshold)) {
       ++i;
       continue;
     }

@@ -145,6 +145,62 @@ TEST_CASE("clipping detector returns regions and counts", "[meter]") {
   REQUIRE(clipping.regions[1].end_sample == 6);
 }
 
+// Pre-repair, this case does not fail an assertion -- it HANGS. A NaN answered
+// false to both the outer skip and the inner region scan, so nothing advanced
+// the index; a CI timeout here is the regression, not infrastructure flake.
+TEST_CASE("clipping detector terminates on a non-finite sample", "[meter][numeric]") {
+  const float nan_sample = std::numeric_limits<float>::quiet_NaN();
+  const float inf_sample = std::numeric_limits<float>::infinity();
+
+  SECTION("a NaN between finite samples advances and reads as not clipped") {
+    const std::vector<float> samples = {0.0f, 1.0f, nan_sample, 1.0f, 0.0f};
+    const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
+
+    const auto clipping = metering::detect_clipping(audio, 0.999f, 1);
+
+    REQUIRE(clipping.clipped_samples == 2);
+    REQUIRE_THAT(clipping.clipping_ratio, WithinAbs(2.0f / 5.0f, 0.001f));
+    REQUIRE_THAT(clipping.max_clipped_peak, WithinAbs(1.0f, 0.001f));
+    REQUIRE(clipping.regions.size() == 2);
+    REQUIRE(clipping.regions[0].start_sample == 1);
+    REQUIRE(clipping.regions[0].end_sample == 2);
+    REQUIRE(clipping.regions[1].start_sample == 3);
+    REQUIRE(clipping.regions[1].end_sample == 4);
+    REQUIRE_THAT(metering::clipping_ratio(audio, 0.999f), WithinAbs(2.0f / 5.0f, 0.001f));
+  }
+
+  SECTION("a NaN inside a clipped run splits it instead of extending it") {
+    const std::vector<float> samples = {-1.0f, nan_sample, -1.0f};
+    const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
+
+    const auto clipping = metering::detect_clipping(audio, 0.999f, 1);
+
+    REQUIRE(clipping.clipped_samples == 2);
+    REQUIRE_THAT(clipping.clipping_ratio, WithinAbs(2.0f / 3.0f, 0.001f));
+    REQUIRE(clipping.regions.size() == 2);
+    REQUIRE(clipping.regions[0].length == 1);
+    REQUIRE(clipping.regions[1].length == 1);
+    REQUIRE_THAT(clipping.regions[1].peak, WithinAbs(1.0f, 0.001f));
+  }
+
+  SECTION("an infinity is clipped and carries an infinite peak") {
+    const std::vector<float> samples = {0.0f, inf_sample, -inf_sample, 0.0f};
+    const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
+
+    const auto clipping = metering::detect_clipping(audio, 0.999f, 1);
+
+    REQUIRE(clipping.clipped_samples == 2);
+    REQUIRE_THAT(clipping.clipping_ratio, WithinAbs(0.5f, 0.001f));
+    REQUIRE(std::isinf(clipping.max_clipped_peak));
+    REQUIRE(clipping.max_clipped_peak > 0.0f);
+    REQUIRE(clipping.regions.size() == 1);
+    REQUIRE(clipping.regions[0].start_sample == 1);
+    REQUIRE(clipping.regions[0].end_sample == 3);
+    REQUIRE(clipping.regions[0].length == 2);
+    REQUIRE(std::isinf(clipping.regions[0].peak));
+  }
+}
+
 TEST_CASE("clipping params resolve only the documented sentinel", "[meter][numeric]") {
   using sonare::metering::clipping_params_from_public;
   using sonare::metering::kDefaultClippingMinRegionSamples;
