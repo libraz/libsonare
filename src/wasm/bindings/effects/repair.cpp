@@ -71,6 +71,67 @@ mastering::repair::DereverbClassicalConfig readDereverbConfig(
   return config;
 }
 
+// Reads a JS array of Float32Array channels for the linked entry points,
+// running loadValidatedAudio over EVERY channel. The core guards channels[0]
+// alone and scans no channel at all for a non-finite sample, so this loop is
+// the whole non-finite guard on the set; a wrapper that validated only the
+// first channel would pass a NaN straight into the mask. `entry` names the
+// caller in each message.
+std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate,
+                                           const char* entry) {
+  const std::string subject(entry);
+  if (channels.isUndefined() || channels.isNull()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  subject + ": channels must be an array of Float32Array");
+  }
+  const std::size_t count = wasmArrayLikeLength(channels, "channels");
+  if (count == 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  subject + ": channels must hold at least one channel");
+  }
+  const std::string budget = subject + " input";
+  std::vector<Audio> loaded;
+  loaded.reserve(std::min(count, kMaxWasmObjectArrayReserve));
+  std::size_t cumulative = 0;
+  std::size_t length = 0;
+  for (std::size_t index = 0; index < count; ++index) {
+    const val channel = channels[index];
+    if (channel.isUndefined() || channel.isNull()) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          subject + ": channels[" + std::to_string(index) + "] must be a Float32Array");
+    }
+    const std::size_t frames =
+        accumulateWasmFloat32ArrayLength(channel, "channels entry", budget.c_str(), &cumulative);
+    if (index == 0) {
+      length = frames;
+    } else if (frames != length) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    subject + ": channel lengths must match");
+    }
+    loaded.push_back(loadValidatedAudio(channel, sample_rate));
+  }
+  return loaded;
+}
+
+// Pointers are taken only once every channel is in place, so no later growth
+// can invalidate one.
+std::vector<const Audio*> channelSetPointers(const std::vector<Audio>& channels) {
+  std::vector<const Audio*> pointers;
+  pointers.reserve(channels.size());
+  for (const Audio& channel : channels) pointers.push_back(&channel);
+  return pointers;
+}
+
+val channelSetToVal(const std::vector<Audio>& channels) {
+  val out = val::array();
+  for (const Audio& channel : channels) {
+    out.call<void>("push", vectorToFloat32Array(std::vector<float>(
+                               channel.data(), channel.data() + channel.size())));
+  }
+  return out;
+}
+
 }  // namespace
 
 val js_mastering_repair_declick(val samples, const val& sample_rate, val options) {
@@ -309,6 +370,45 @@ val js_mastering_repair_denoise_classical_stereo(val left_samples, val right_sam
   out.set("left", vectorToFloat32Array(left_out));
   out.set("right", vectorToFloat32Array(right_out));
   out.set("report", denoiseReportToVal(result.report));
+  return out;
+}
+
+// Denoises any number of channels with one channel-linked gain mask: the
+// N-channel form of the pair above, carrying the same guarantee over the whole
+// set. One channel reproduces the mono entry bit for bit, two reproduce the
+// stereo entry plane for plane. `report.detected` is the SET's and absolute, so
+// N identical channels read 10*log10(N) above one; every other field is a
+// fraction and does not move. Rejects an input shorter than nFft, the opposite
+// of the dereverb linked entry, which pads. Calls the core directly rather than
+// the C ABI, matching every other wrapper in this file -- so the per-channel
+// validation the C ABI would have done is loadValidatedChannelSet's here.
+val js_mastering_repair_denoise_classical_linked(val channels, const val& sample_rate_val,
+                                                 val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const std::vector<Audio> loaded =
+      loadValidatedChannelSet(channels, sample_rate, "masteringRepairDenoiseClassicalLinked");
+  mastering::repair::DenoiseClassicalConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg = readDenoiseConfig(options, cfg);
+  }
+  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDenoiseClassicalLinked: nFft must be a positive power of two");
+  }
+  if (cfg.hop_length <= 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDenoiseClassicalLinked: hopLength must be positive");
+  }
+  const std::vector<const Audio*> pointers = channelSetPointers(loaded);
+  std::vector<Audio> processed;
+  const mastering::repair::DenoiseReport report = mastering::repair::denoise_classical_linked(
+      pointers.data(), pointers.size(), &processed, cfg);
+
+  val out = val::object();
+  out.set("channels", channelSetToVal(processed));
+  out.set("report", denoiseReportToVal(report));
   return out;
 }
 
@@ -683,6 +783,46 @@ val js_mastering_repair_dereverb_classical_stereo(val left_samples, val right_sa
   return out;
 }
 
+// Dereverberates any number of channels with one channel-linked mask: the
+// N-channel form of the pair above, with the WPE predictor set fitted over
+// every channel's statistics rather than just two. One channel reproduces the
+// mono entry bit for bit, two reproduce the stereo entry plane for plane. Every
+// field of the report is a ratio or a fraction, so unlike the denoise linked
+// entry nothing here moves with the channel count. An input shorter than nFft
+// is padded rather than rejected, again the opposite of that entry. Calls the
+// core directly rather than the C ABI, matching every other wrapper in this
+// file -- so the per-channel validation the C ABI would have done is
+// loadValidatedChannelSet's here.
+val js_mastering_repair_dereverb_classical_linked(val channels, const val& sample_rate_val,
+                                                  val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const std::vector<Audio> loaded =
+      loadValidatedChannelSet(channels, sample_rate, "masteringRepairDereverbClassicalLinked");
+  mastering::repair::DereverbClassicalConfig cfg;
+  if (!options.isUndefined() && !options.isNull()) {
+    cfg = readDereverbConfig(options, cfg);
+  }
+  if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDereverbClassicalLinked: nFft must be a positive power of two");
+  }
+  if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "masteringRepairDereverbClassicalLinked: hopLength must be in (0, nFft]");
+  }
+  const std::vector<const Audio*> pointers = channelSetPointers(loaded);
+  std::vector<Audio> processed;
+  const mastering::repair::DereverbReport report = mastering::repair::dereverb_classical_linked(
+      pointers.data(), pointers.size(), &processed, cfg);
+
+  val out = val::object();
+  out.set("channels", channelSetToVal(processed));
+  out.set("report", dereverbReportToVal(report));
+  return out;
+}
+
 val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
   if (estimate.isUndefined() || estimate.isNull()) {
     throw sonare::SonareException(
@@ -946,6 +1086,7 @@ void registerRepairBindings() {
   function("masteringRepairDeclickStereo", &js_mastering_repair_declick_stereo);
   function("masteringRepairDenoiseClassical", &js_mastering_repair_denoise_classical);
   function("masteringRepairDenoiseClassicalStereo", &js_mastering_repair_denoise_classical_stereo);
+  function("masteringRepairDenoiseClassicalLinked", &js_mastering_repair_denoise_classical_linked);
   function("masteringRepairDeclip", &js_mastering_repair_declip);
   function("masteringRepairDeclipStereo", &js_mastering_repair_declip_stereo);
   function("masteringRepairDecrackle", &js_mastering_repair_decrackle);
@@ -955,6 +1096,8 @@ void registerRepairBindings() {
   function("masteringRepairDereverbClassical", &js_mastering_repair_dereverb_classical);
   function("masteringRepairDereverbClassicalStereo",
            &js_mastering_repair_dereverb_classical_stereo);
+  function("masteringRepairDereverbClassicalLinked",
+           &js_mastering_repair_dereverb_classical_linked);
   function("masteringRepairDereverbConfigForRoom", &js_mastering_repair_dereverb_config_for_room);
   function("masteringRepairTrimSilence", &js_mastering_repair_trim_silence);
   function("masteringRepairTrimSilenceStereo", &js_mastering_repair_trim_silence_stereo);

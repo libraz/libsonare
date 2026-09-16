@@ -35,8 +35,10 @@ from ._ffi import (
     SonareDehumConfig,
     SonareDehumStereoResult,
     SonareDenoiseClassicalConfig,
+    SonareDenoiseReport,
     SonareDenoiseStereoResult,
     SonareDereverbClassicalConfig,
+    SonareDereverbReport,
     SonareDereverbStereoResult,
     SonareGateConfig,
     SonareHumDetection,
@@ -62,7 +64,9 @@ from ._runtime import (
     _guard_buffer,
     _int_refusal,
     _narrow_int,
+    _not_planar_channels,
     _out_float_array,
+    _planar_channel_arrays,
     _require_power_of_two,
     _resolve_enum,
     _to_c_float,
@@ -84,9 +88,11 @@ from .types import (
     DecrackleStereoResult,
     DehumReport,
     DehumStereoResult,
+    DenoiseLinkedResult,
     DenoiseReport,
     DenoiseStereoResult,
     DereverbClassicalConfig,
+    DereverbLinkedResult,
     DereverbReport,
     DereverbStereoResult,
     HumDetection,
@@ -801,6 +807,177 @@ def mastering_repair_denoise_classical_stereo(
             lib.sonare_free_floats(out.left)
         if out.right:
             lib.sonare_free_floats(out.right)
+
+
+def _linked_channel_planes(
+    fn_name: str,
+    channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
+) -> list[np.ndarray]:
+    """Coerce and preflight the channel set of an N-channel linked repair.
+
+    The rank and emptiness rejections are the ones
+    :func:`_planar_channel_arrays` raises; what is added here is a per-channel
+    non-finite scan that names WHICH channel. The C entry validates every
+    plane rather than only the first, and an index in the message is the
+    difference between a caller checking one buffer and checking all of them.
+    """
+    if isinstance(channels, np.ndarray):
+        if channels.ndim != 2:
+            raise _not_planar_channels(channels, "channels")
+        planes: list[Any] = list(channels)
+    else:
+        try:
+            planes = list(channels)
+        except TypeError as exc:
+            raise _not_planar_channels(channels, "channels") from exc
+    if not planes:
+        raise SonareValueError(f"{fn_name}: channels must not be empty")
+    return [
+        _validate_samples(fn_name, plane, arg_name=f"channels[{index}]")
+        for index, plane in enumerate(planes)
+    ]
+
+
+def _linked_output_planes(
+    channel_count: int, frame_count: int
+) -> tuple[list[np.ndarray], ctypes.Array[Any]]:
+    """Allocate the caller-owned output planes an N-channel linked repair writes.
+
+    Nothing is heap-allocated by these C entries, so there is no result struct
+    to free: the planes handed in are the ones that come back, which is why the
+    numpy buffers are returned alongside the pointer table.
+    """
+    buffers = [np.zeros(frame_count, dtype=np.float32) for _ in range(channel_count)]
+    arrays = [(ctypes.c_float * frame_count).from_buffer(buffer) for buffer in buffers]
+    ptr_type = ctypes.POINTER(ctypes.c_float) * channel_count
+    ptrs = ptr_type(*[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in arrays])
+    setattr(ptrs, "_plane_arrays", arrays)  # noqa: B010 -- pin the views for the call's duration.
+    return buffers, ptrs
+
+
+def mastering_repair_denoise_classical_linked(
+    channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    mode: int | str = "logMmse",
+    noise_estimator: int | str = "quantile",
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    dd_alpha: float = 0.98,
+    reduction_db: float = 26.0,
+    over_subtraction: float = 2.0,
+    spectral_floor: float = 0.05,
+    noise_estimation_quantile: float = 0.1,
+    speech_presence_gain: bool = True,
+    gain_smoothing: bool = True,
+) -> DenoiseLinkedResult:
+    """Denoises any number of channels with one channel-linked gain mask.
+
+    The N-channel form of
+    :func:`mastering_repair_denoise_classical_stereo`, carrying the same
+    guarantee for the whole set: one mask built from the channel-summed power
+    and applied unchanged to every channel, so no interchannel level or phase
+    difference moves however many channels there are. That is also why the
+    result carries one ``report`` rather than one per channel.
+
+    A single channel reproduces :func:`mastering_repair_denoise_classical`
+    bit for bit, and two channels reproduce
+    :func:`mastering_repair_denoise_classical_stereo` plane for plane, with
+    ``channels[0]`` the left and ``channels[1]`` the right::
+
+        result = libsonare.mastering_repair_denoise_classical_linked(
+            [left, right, centre], 44100
+        )
+        assert len(result.channels) == 3
+
+    Needs at least ``n_fft`` samples and rejects a shorter input, unlike
+    :func:`mastering_repair_dereverb_classical_linked`, which pads one.
+
+    ``report.detected`` is the one part that moves with the channel count. Its
+    levels are absolute dBFS referred to the summed mean square of every
+    channel, so N identical channels read ``10*log10(N)`` dB above one of
+    them -- about 3.01 dB for a pair and 4.77 dB for three. Compare a floor
+    only against one measured over the same number of channels. The
+    attenuation figures on the report are fractions and do not move.
+
+    Which config fields are live depends on ``mode``: ``over_subtraction``
+    and ``spectral_floor`` are read only by ``"spectralSubtraction"``, and
+    ``speech_presence_gain`` and ``gain_smoothing`` only by the other two, so
+    at the default mode the first pair does nothing.
+
+    Args:
+        channels: One input buffer per channel, in the order the outputs come
+            back, or a 2-D ``(channels, frames)`` array. All channels must be
+            the same length; the C form has one length for the set.
+        sample_rate: Sample rate in Hz, shared by every channel (default 22050).
+        mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
+              an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
+        noise_estimator: ``"quantile"`` (default), ``"mcra"``, or ``"imcra"``.
+        n_fft: STFT size, must be a positive power of two (default 1024).
+        hop_length: Hop size in samples (default 256).
+        dd_alpha: Decision-directed a priori SNR smoothing (default 0.98).
+        reduction_db: Deepest attenuation the mask may apply, in dB, >= 0
+            (default 26.0).
+        over_subtraction: Berouti alpha; SpectralSubtraction only (default 2.0).
+        spectral_floor: Berouti beta; SpectralSubtraction only (default 0.05).
+        noise_estimation_quantile: Fraction of frames assumed noise-only (default 0.1).
+        speech_presence_gain: Apply speech-presence probability gating (default True).
+        gain_smoothing: Smooth gains across time (default True).
+
+    Returns:
+        :class:`DenoiseLinkedResult` with one output buffer per input channel
+        and the one report the shared mask produced.
+
+    Raises:
+        SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved,
+            if ``n_fft`` is not a power of two, if ``hop_length`` is not
+            positive, if ``channels`` is empty, if the channels disagree in
+            length, or if any channel is empty or carries a non-finite sample.
+        SonareError: If the C call rejects the request, which includes an input
+            shorter than ``n_fft``.
+    """
+    # The core requires a power of two here (denoise_classical.cpp), narrower
+    # than the shared even-size rule; check it eagerly so the message names it.
+    _require_power_of_two(n_fft, "n_fft")
+    if hop_length <= 0:
+        raise SonareValueError("hop_length must be positive")
+
+    lib = _get_lib()
+    symbol = "sonare_mastering_repair_denoise_classical_linked"
+    if not hasattr(lib, symbol):
+        raise _unsupported_effect_symbol(symbol)
+    planes = _linked_channel_planes("mastering_repair_denoise_classical_linked", channels)
+    arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
+    config = SonareDenoiseClassicalConfig(  # noqa: F405
+        mode=_coerce_denoise_mode(mode),
+        noise_estimator=_coerce_denoise_estimator(noise_estimator),
+        n_fft=int(n_fft),
+        hop_length=int(hop_length),
+        dd_alpha=float(dd_alpha),
+        reduction_db=float(reduction_db),
+        over_subtraction=float(over_subtraction),
+        spectral_floor=float(spectral_floor),
+        noise_estimation_quantile=float(noise_estimation_quantile),
+        speech_presence_gain=1 if speech_presence_gain else 0,
+        gain_smoothing=1 if gain_smoothing else 0,
+    )
+    out_buffers, out_ptrs = _linked_output_planes(len(arrays), frame_count)
+    report = SonareDenoiseReport()  # noqa: F405
+    _check(
+        lib.sonare_mastering_repair_denoise_classical_linked(
+            ctypes.cast(in_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+            _to_c_size_t(len(arrays), "channel_count"),
+            _to_c_size_t(frame_count, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            ctypes.byref(config),
+            ctypes.cast(out_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+            ctypes.byref(report),
+        )
+    )
+    return DenoiseLinkedResult(
+        channels=out_buffers,
+        report=_extract_denoise_report(report),
+    )
 
 
 _DECRACKLE_MODE_NAMES = {
@@ -1699,6 +1876,128 @@ def mastering_repair_dereverb_classical_stereo(
             lib.sonare_free_floats(out.left)
         if out.right:
             lib.sonare_free_floats(out.right)
+
+
+def mastering_repair_dereverb_classical_linked(
+    channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
+    sample_rate: int = 22050,
+    *,
+    threshold: float = 0.0,
+    attenuation: float = 1.0,
+    n_fft: int = 1024,
+    hop_length: int = 256,
+    t60_sec: float = 0.4,
+    late_delay_ms: float = 50.0,
+    over_subtraction: float = 1.0,
+    spectral_floor: float = 0.08,
+    wpe_enabled: bool = False,
+    wpe_iterations: int = 2,
+    wpe_taps: int = 3,
+    wpe_strength: float = 0.7,
+) -> DereverbLinkedResult:
+    """Dereverberates any number of channels with one channel-linked mask.
+
+    The N-channel form of
+    :func:`mastering_repair_dereverb_classical_stereo`. Both stages are shared
+    across the whole set rather than just a pair: one mask over the
+    channel-summed power, and one WPE predictor set fitted over every
+    channel's statistics, so neither can move an interchannel level or phase
+    difference however many channels there are. That is also why the result
+    carries one ``report`` rather than one per channel.
+
+    A single channel reproduces :func:`mastering_repair_dereverb_classical`
+    bit for bit, and two channels reproduce
+    :func:`mastering_repair_dereverb_classical_stereo` plane for plane, with
+    ``channels[0]`` the left and ``channels[1]`` the right::
+
+        result = libsonare.mastering_repair_dereverb_classical_linked(
+            [left, right, centre], 44100
+        )
+        assert len(result.channels) == 3
+
+    An input shorter than ``n_fft`` is padded for analysis rather than
+    rejected, which is the opposite of
+    :func:`mastering_repair_denoise_classical_linked`.
+
+    Every field of the report is a ratio or a fraction, so unlike the denoise
+    entry nothing here shifts with the channel count and a figure measured
+    over a set is comparable against a mono one.
+    ``detected.late_predictability`` and ``wpe_predictor_norm`` are both
+    exactly zero unless ``wpe_enabled`` is set, which it is not by default --
+    that is the measurement, not an unset field.
+
+    Args:
+        channels: One input buffer per channel, in the order the outputs come
+            back, or a 2-D ``(channels, frames)`` array. All channels must be
+            the same length; the C form has one length for the set.
+        sample_rate: Sample rate in Hz, shared by every channel (default 22050).
+        threshold: Late-reverb detection gate; 0 admits everything (default 0).
+        attenuation: Suppression amount, linear (default 1.0, full).
+        n_fft: STFT size, must be a positive power of two (default 1024).
+        hop_length: Hop size in samples, in ``(0, n_fft]`` (default 256).
+        t60_sec: Estimated T60 in seconds (default 0.4).
+        late_delay_ms: Late-reverb onset relative to direct (default 50.0).
+        over_subtraction: Berouti alpha (default 1.0).
+        spectral_floor: Berouti beta (default 0.08).
+        wpe_enabled: Enable the WPE pre-stage (default False).
+        wpe_iterations: WPE EM iterations (default 2).
+        wpe_taps: WPE filter taps (default 3).
+        wpe_strength: WPE blend weight (default 0.7).
+
+    Returns:
+        :class:`DereverbLinkedResult` with one output buffer per input channel
+        and the one report the shared mask produced.
+
+    Raises:
+        SonareValueError: If ``n_fft`` is not a power of two, if ``hop_length``
+            is outside ``(0, n_fft]``, if ``channels`` is empty, if the
+            channels disagree in length, or if any channel is empty or carries
+            a non-finite sample.
+        SonareError: If the C call rejects the request.
+    """
+    # The core requires a power of two here (dereverb_classical.cpp), narrower
+    # than the shared even-size rule; check it eagerly so the message names it.
+    _require_power_of_two(n_fft, "n_fft")
+    if hop_length <= 0 or hop_length > n_fft:
+        raise SonareValueError("hop_length must be in (0, n_fft]")
+
+    lib = _get_lib()
+    symbol = "sonare_mastering_repair_dereverb_classical_linked"
+    if not hasattr(lib, symbol):
+        raise _unsupported_effect_symbol(symbol)
+    planes = _linked_channel_planes("mastering_repair_dereverb_classical_linked", channels)
+    arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
+    config = SonareDereverbClassicalConfig(  # noqa: F405
+        threshold=float(threshold),
+        attenuation=float(attenuation),
+        n_fft=int(n_fft),
+        hop_length=int(hop_length),
+        t60_sec=float(t60_sec),
+        late_delay_ms=float(late_delay_ms),
+        over_subtraction=float(over_subtraction),
+        spectral_floor=float(spectral_floor),
+        wpe_enabled=1 if wpe_enabled else 0,
+        wpe_iterations=int(wpe_iterations),
+        wpe_taps=int(wpe_taps),
+        wpe_strength=float(wpe_strength),
+    )
+    out_buffers, out_ptrs = _linked_output_planes(len(arrays), frame_count)
+    report = SonareDereverbReport()  # noqa: F405
+    _check(
+        lib.sonare_mastering_repair_dereverb_classical_linked(
+            ctypes.cast(in_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+            _to_c_size_t(len(arrays), "channel_count"),
+            _to_c_size_t(frame_count, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            ctypes.byref(config),
+            ctypes.cast(out_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+            ctypes.byref(report),
+        )
+    )
+    return DereverbLinkedResult(
+        channels=out_buffers,
+        report=_extract_dereverb_report(report),
+    )
 
 
 def mastering_repair_dereverb_config_for_room(

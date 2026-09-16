@@ -357,6 +357,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringRepairDenoiseClassicalStereo",
               Napi::Function::New(env, &SonareWrap::MasteringRepairDenoiseClassicalStereo,
                                   "masteringRepairDenoiseClassicalStereo"));
+  exports.Set("masteringRepairDenoiseClassicalLinked",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDenoiseClassicalLinked,
+                                  "masteringRepairDenoiseClassicalLinked"));
   exports.Set("masteringRepairDeclip", Napi::Function::New(env, &SonareWrap::MasteringRepairDeclip,
                                                            "masteringRepairDeclip"));
   exports.Set("masteringRepairDeclipStereo",
@@ -379,6 +382,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringRepairDereverbClassicalStereo",
               Napi::Function::New(env, &SonareWrap::MasteringRepairDereverbClassicalStereo,
                                   "masteringRepairDereverbClassicalStereo"));
+  exports.Set("masteringRepairDereverbClassicalLinked",
+              Napi::Function::New(env, &SonareWrap::MasteringRepairDereverbClassicalLinked,
+                                  "masteringRepairDereverbClassicalLinked"));
   exports.Set("masteringRepairDereverbConfigForRoom",
               Napi::Function::New(env, &SonareWrap::MasteringRepairDereverbConfigForRoom,
                                   "masteringRepairDereverbConfigForRoom"));

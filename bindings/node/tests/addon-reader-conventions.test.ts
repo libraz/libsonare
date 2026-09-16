@@ -43,8 +43,10 @@ import {
   masteringRepairDehum,
   masteringRepairDehumStereo,
   masteringRepairDenoiseClassical,
+  masteringRepairDenoiseClassicalLinked,
   masteringRepairDenoiseClassicalStereo,
   masteringRepairDereverbClassical,
+  masteringRepairDereverbClassicalLinked,
   masteringRepairDereverbClassicalStereo,
   masteringRepairDereverbConfigForRoom,
   masteringRepairDetectClicks,
@@ -488,6 +490,17 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       ).slice(0, 32),
   },
   {
+    jsName: 'masteringRepairDenoiseClassicalLinked',
+    invoke: (o) =>
+      Array.from(
+        masteringRepairDenoiseClassicalLinked({
+          ...o,
+          channels: [sine(2048), sine(2048, 660)],
+          sampleRate: SR,
+        }).channels[0],
+      ).slice(0, 32),
+  },
+  {
     jsName: 'masteringRepairDereverbClassical',
     invoke: (o) => Array.from(masteringRepairDereverbClassical(sine(2048), SR, o)).slice(0, 32),
   },
@@ -501,6 +514,17 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           right: sine(2048),
           sampleRate: SR,
         }).left,
+      ).slice(0, 32),
+  },
+  {
+    jsName: 'masteringRepairDereverbClassicalLinked',
+    invoke: (o) =>
+      Array.from(
+        masteringRepairDereverbClassicalLinked({
+          ...o,
+          channels: [sine(2048), sine(2048, 660)],
+          sampleRate: SR,
+        }).channels[0],
       ).slice(0, 32),
   },
   {

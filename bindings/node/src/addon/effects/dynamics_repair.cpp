@@ -1586,6 +1586,135 @@ Napi::Value SonareWrap::MasteringRepairDetectTrimRangeStereo(const Napi::Callbac
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+/// @brief Input and output planes of one channel-linked repair call.
+/// @details The linked C entries write caller-owned output planes in place, so
+///   the Float32Arrays handed back to JS are allocated up front and passed in
+///   rather than copied out of a library allocation.
+struct LinkedPlanes {
+  std::vector<Napi::Float32Array> inputs;
+  std::vector<const float*> in_ptrs;
+  std::vector<Napi::Float32Array> outputs;
+  std::vector<float*> out_ptrs;
+  size_t length = 0;
+};
+
+/// @brief Reads N Float32Array channels and allocates the matching output planes.
+/// @details Refuses what the C form cannot express: a non-Float32Array element,
+///   and a length disagreement, which the single @c length argument has no way to
+///   carry. An empty list goes through to the C entry, which owns that rejection.
+bool ReadLinkedPlanes(Napi::Env env, const Napi::Value& value, const char* fn_name,
+                      LinkedPlanes* planes) {
+  Napi::Array channels = value.As<Napi::Array>();
+  const size_t count = channels.Length();
+  planes->inputs.reserve(count);
+  planes->in_ptrs.reserve(count);
+  planes->outputs.reserve(count);
+  planes->out_ptrs.reserve(count);
+  for (size_t index = 0; index < count; ++index) {
+    Napi::Value channel = channels.Get(index);
+    if (!IsFloat32Array(channel)) {
+      Napi::TypeError::New(env, std::string(fn_name) + ": every channel must be a Float32Array")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    planes->inputs.push_back(channel.As<Napi::Float32Array>());
+    const size_t length = planes->inputs.back().ElementLength();
+    if (index == 0) {
+      planes->length = length;
+    } else if (length != planes->length) {
+      Napi::Error::New(env, std::string(fn_name) + ": every channel must have the same length")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    planes->in_ptrs.push_back(planes->inputs.back().Data());
+    planes->outputs.push_back(Napi::Float32Array::New(env, planes->length));
+    planes->out_ptrs.push_back(planes->outputs.back().Data());
+  }
+  return true;
+}
+
+/// @brief Packs the output planes into a JS array, in input order.
+Napi::Array EmitLinkedChannels(Napi::Env env, const LinkedPlanes& planes) {
+  Napi::Array out = Napi::Array::New(env, planes.outputs.size());
+  for (size_t index = 0; index < planes.outputs.size(); ++index) {
+    out.Set(static_cast<uint32_t>(index), planes.outputs[index]);
+  }
+  return out;
+}
+
+/// @brief Argument check shared by the channel-linked entries, which both take
+///        (Float32Array[], sampleRate, options?).
+bool CheckLinkedArgs(Napi::Env env, const Napi::CallbackInfo& info) {
+  if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array[] channels, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  return true;
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringRepairDenoiseClassicalLinked(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!CheckLinkedArgs(env, info)) return env.Undefined();
+
+  SONARE_NODE_TRY
+  LinkedPlanes planes;
+  if (!ReadLinkedPlanes(env, info[0], "masteringRepairDenoiseClassicalLinked", &planes)) {
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  SonareDenoiseClassicalConfig config = kDenoiseConfigDefaults;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    config = read_denoise_config(info[2].As<Napi::Object>(), config);
+  }
+  SonareDenoiseReport report{};
+  SonareError err = sonare_mastering_repair_denoise_classical_linked(
+      planes.in_ptrs.data(), planes.in_ptrs.size(), planes.length, sr, &config,
+      planes.out_ptrs.data(), &report);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("channels", EmitLinkedChannels(env, planes));
+  out.Set("report", EmitDenoiseReport(env, report));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairDereverbClassicalLinked(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!CheckLinkedArgs(env, info)) return env.Undefined();
+
+  SONARE_NODE_TRY
+  LinkedPlanes planes;
+  if (!ReadLinkedPlanes(env, info[0], "masteringRepairDereverbClassicalLinked", &planes)) {
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  SonareDereverbClassicalConfig config = kDereverbConfigDefaults;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    config = read_dereverb_config_c(info[2].As<Napi::Object>(), config);
+  }
+  SonareDereverbReport report{};
+  SonareError err = sonare_mastering_repair_dereverb_classical_linked(
+      planes.in_ptrs.data(), planes.in_ptrs.size(), planes.length, sr, &config,
+      planes.out_ptrs.data(), &report);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("channels", EmitLinkedChannels(env, planes));
+  out.Set("report", EmitDereverbReport(env, report));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 

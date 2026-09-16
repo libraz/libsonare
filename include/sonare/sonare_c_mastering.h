@@ -1046,6 +1046,37 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareDenoiseClassicalConfig* config, SonareDenoiseStereoResult* out);
 
+/// @brief Denoises any number of channels with one channel-linked gain mask.
+/// @details The N-channel form of
+///   @ref sonare_mastering_repair_denoise_classical_stereo, carrying the same
+///   guarantee for the whole set: one mask over the channel-summed power, applied
+///   unchanged to every channel, so no interchannel level or phase difference
+///   moves however many channels there are. A @p channel_count of 1 reproduces
+///   @ref sonare_mastering_repair_denoise_classical bit for bit.
+///
+///   Needs at least @c config->n_fft samples and rejects a shorter input, unlike
+///   @ref sonare_mastering_repair_dereverb_classical_linked, which pads one.
+///
+///   @ref SonareNoiseDetection carries absolute levels, and they are the SET's:
+///   the floor is referred to the summed mean square of every channel, so the
+///   same material as a pair reads about 3 dB above the same material as one
+///   channel. The attenuation figures on @ref SonareDenoiseReport are fractions
+///   and do not move.
+/// @param channels @p channel_count buffers of @p length samples each; none NULL.
+/// @param channel_count Number of channels; at least one.
+/// @param length Samples per channel. One length for the set: the C form has no
+///        way to express the disagreement the core rejects.
+/// @param sample_rate Sample rate in Hz, shared by every channel.
+/// @param config Pass NULL to use library defaults.
+/// @param out_channels @p channel_count caller-owned buffers of @p length floats
+///        each, written in place. Unlike the stereo entry nothing is allocated
+///        here, so nothing needs releasing; a rejected call leaves them untouched.
+/// @param out_report Receives the one report the set shares. Must not be NULL.
+SonareError sonare_mastering_repair_denoise_classical_linked(
+    const float* const* channels, size_t channel_count, size_t length, int sample_rate,
+    const SonareDenoiseClassicalConfig* config, float* const* out_channels,
+    SonareDenoiseReport* out_report);
+
 /// @brief Flat POD mirror of @c mastering::repair::DeclipConfig.
 typedef struct {
   float clip_threshold;  // amplitude above which a sample is considered clipped (default 0.98)
@@ -1391,6 +1422,37 @@ typedef struct {
 SonareError sonare_mastering_repair_dereverb_classical_stereo(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareDereverbClassicalConfig* config, SonareDereverbStereoResult* out);
+
+/// @brief Dereverberates any number of channels with one channel-linked mask.
+/// @details The N-channel form of
+///   @ref sonare_mastering_repair_dereverb_classical_stereo. Both stages are
+///   shared across the whole set rather than just a pair: one mask over the
+///   channel-summed power, and one WPE predictor set fitted over every channel's
+///   statistics, so neither can move an interchannel level or phase difference
+///   however many channels there are. A @p channel_count of 1 reproduces
+///   @ref sonare_mastering_repair_dereverb_classical bit for bit.
+///
+///   An input shorter than @c config->n_fft is padded for analysis rather than
+///   rejected, which is the opposite of
+///   @ref sonare_mastering_repair_denoise_classical_linked.
+///
+///   Every field of the report is a ratio or a fraction, so unlike the denoise
+///   entry nothing here shifts with @p channel_count and a figure measured over
+///   a set is comparable against a mono one.
+/// @param channels @p channel_count buffers of @p length samples each; none NULL.
+/// @param channel_count Number of channels; at least one.
+/// @param length Samples per channel. One length for the set: the C form has no
+///        way to express the disagreement the core rejects.
+/// @param sample_rate Sample rate in Hz, shared by every channel.
+/// @param config Pass NULL to use library defaults.
+/// @param out_channels @p channel_count caller-owned buffers of @p length floats
+///        each, written in place. Unlike the stereo entry nothing is allocated
+///        here, so nothing needs releasing; a rejected call leaves them untouched.
+/// @param out_report Receives the one report the set shares. Must not be NULL.
+SonareError sonare_mastering_repair_dereverb_classical_linked(
+    const float* const* channels, size_t channel_count, size_t length, int sample_rate,
+    const SonareDereverbClassicalConfig* config, float* const* out_channels,
+    SonareDereverbReport* out_report);
 
 /// @brief Applies a room estimate to a dereverb config IN PLACE: overwrites the
 ///        two fields a measurement determines and leaves the rest alone.

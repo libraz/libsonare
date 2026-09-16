@@ -1060,6 +1060,26 @@ export interface DenoiseStereoResult {
 }
 
 /**
+ * A denoised channel set and the one mask that produced it, from
+ * {@link masteringRepairDenoiseClassicalLinked}.
+ *
+ * The N-channel form of {@link DenoiseStereoResult}, carrying one `report` for
+ * the same reason: the gain mask is built from the channel-summed power and
+ * applied unchanged to every channel, so a per-channel pair would be N copies of
+ * one measurement.
+ *
+ * `report.detected` is a measurement of the SET. Its levels are absolute dBFS
+ * taken on the summed power, so N identical channels read `10*log10(N)` dB above
+ * one of them alone. The attenuation figures on {@link DenoiseReport} are
+ * fractions and do not move with the channel count.
+ */
+export interface DenoiseLinkedResult {
+  /** One output per input channel, in input order. */
+  channels: Float32Array[];
+  report: DenoiseReport;
+}
+
+/**
  * What a dehum analysis found, from {@link masteringRepairDehumStereo}.
  *
  * Always measured through the estimation path, whatever `adaptive` is
@@ -1183,6 +1203,24 @@ export interface DereverbReport {
 export interface DereverbStereoResult {
   left: Float32Array;
   right: Float32Array;
+  report: DereverbReport;
+}
+
+/**
+ * A dereverberated channel set and the one mask that produced it, from
+ * {@link masteringRepairDereverbClassicalLinked}.
+ *
+ * The N-channel form of {@link DereverbStereoResult}: one mask over the
+ * channel-summed power and one WPE predictor set fitted over every channel's
+ * statistics, so a per-channel report pair would be N copies of one measurement.
+ *
+ * Every field of that report is a ratio or a fraction, so unlike
+ * {@link DenoiseLinkedResult} nothing here shifts with the channel count and a
+ * figure measured over a set is comparable against a mono one.
+ */
+export interface DereverbLinkedResult {
+  /** One output per input channel, in input order. */
+  channels: Float32Array[];
   report: DereverbReport;
 }
 

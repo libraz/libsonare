@@ -524,6 +524,24 @@ export interface MasteringRepairDenoiseClassicalStereoResult {
 }
 
 /**
+ * A denoised channel set and the one mask that produced it.
+ *
+ * The N-channel form of {@link MasteringRepairDenoiseClassicalStereoResult}: one mask over the
+ * channel-summed power, applied unchanged to every channel, so no interchannel level or phase
+ * difference moves however many channels there are. One channel reproduces
+ * `masteringRepairDenoiseClassical` bit for bit; two reproduce the stereo entry plane for plane.
+ *
+ * `report.detected` is the SET's and absolute: N identical channels read `10*log10(N)` above one
+ * of them — about 3.01 dB for a pair and 4.77 dB for three. Every other field of the report is a
+ * fraction and does not move with the channel count.
+ */
+export interface MasteringRepairDenoiseClassicalLinkedResult {
+  /** One output per input channel, in input order. */
+  channels: Float32Array[];
+  report: DenoiseReport;
+}
+
+/**
  * What a dereverb analysis found in a
  * {@link MasteringRepairDereverbClassicalStereoResult}.
  *
@@ -577,6 +595,25 @@ export interface DereverbReport {
 export interface MasteringRepairDereverbClassicalStereoResult {
   left: Float32Array;
   right: Float32Array;
+  report: DereverbReport;
+}
+
+/**
+ * A dereverberated channel set and the one mask that produced it.
+ *
+ * The N-channel form of {@link MasteringRepairDereverbClassicalStereoResult}: one mask over the
+ * channel-summed power, and one WPE predictor set fitted over every channel's statistics, so
+ * neither stage can move an interchannel level or phase difference. One channel reproduces
+ * `masteringRepairDereverbClassical` bit for bit; two reproduce the stereo entry plane for plane.
+ *
+ * Every field of the report is a ratio or a fraction, so unlike
+ * {@link MasteringRepairDenoiseClassicalLinkedResult} nothing here shifts with the channel count.
+ * An input shorter than `nFft` is PADDED for analysis rather than rejected, again the opposite of
+ * that entry.
+ */
+export interface MasteringRepairDereverbClassicalLinkedResult {
+  /** One output per input channel, in input order. */
+  channels: Float32Array[];
   report: DereverbReport;
 }
 

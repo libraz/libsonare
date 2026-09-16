@@ -112,6 +112,9 @@ from ._types_analysis import (
     DehumStereoResult as DehumStereoResult,
 )
 from ._types_analysis import (
+    DenoiseLinkedResult as DenoiseLinkedResult,
+)
+from ._types_analysis import (
     DenoiseReport as DenoiseReport,
 )
 from ._types_analysis import (
@@ -119,6 +122,9 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     DereverbClassicalConfig as DereverbClassicalConfig,
+)
+from ._types_analysis import (
+    DereverbLinkedResult as DereverbLinkedResult,
 )
 from ._types_analysis import (
     DereverbReport as DereverbReport,

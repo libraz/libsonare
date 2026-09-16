@@ -486,6 +486,12 @@ export interface WasmDenoiseStereoResult {
   report: WasmDenoiseReport;
 }
 
+/** The N-channel form: one mask over the set, and one report whose `detected` is the set's. */
+export interface WasmDenoiseLinkedResult {
+  channels: Float32Array[];
+  report: WasmDenoiseReport;
+}
+
 /** What a dereverb analysis found, as `masteringRepairDereverbClassicalStereo` returns it. */
 export interface WasmReverbDetection {
   lateDecayRatioDb: number;
@@ -505,6 +511,12 @@ export interface WasmDereverbReport {
 export interface WasmDereverbStereoResult {
   left: Float32Array;
   right: Float32Array;
+  report: WasmDereverbReport;
+}
+
+/** The N-channel form: one mask and one WPE predictor set over the whole channel set. */
+export interface WasmDereverbLinkedResult {
+  channels: Float32Array[];
   report: WasmDereverbReport;
 }
 
@@ -2286,6 +2298,11 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => WasmDenoiseStereoResult;
+  masteringRepairDenoiseClassicalLinked: (
+    channels: Float32Array[],
+    sampleRate: number,
+    options: object,
+  ) => WasmDenoiseLinkedResult;
   masteringRepairDeclip: (
     samples: Float32Array,
     sampleRate: number,
@@ -2330,6 +2347,11 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => WasmDereverbStereoResult;
+  masteringRepairDereverbClassicalLinked: (
+    channels: Float32Array[],
+    sampleRate: number,
+    options: object,
+  ) => WasmDereverbLinkedResult;
   masteringRepairDereverbConfigForRoom: (
     estimate: WasmRoomEstimateResult,
     options: object,

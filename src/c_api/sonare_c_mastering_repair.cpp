@@ -306,6 +306,46 @@ SonareError run_detection(const float* samples, size_t length, int sample_rate, 
   SONARE_C_CATCH
 }
 
+/// Shared body of the channel-linked entry points, which differ only in their
+/// report type and the core call they wrap.
+template <typename CReport, typename Fn>
+SonareError run_linked(const float* const* channels, size_t channel_count, size_t length,
+                       int sample_rate, float* const* out_channels, CReport* out_report,
+                       Fn process) {
+  if (!out_report) return SONARE_ERROR_INVALID_PARAMETER;
+  // Cleared before any validation return, so a rejected call hands back a zero
+  // report rather than whatever the caller's stack slot held. The output planes
+  // are the caller's and stay untouched until the core has produced samples.
+  *out_report = CReport{};
+  if (!channels || !out_channels || channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  std::vector<Audio> inputs;
+  inputs.reserve(channel_count);
+  for (size_t c = 0; c < channel_count; ++c) {
+    if (!out_channels[c]) return SONARE_ERROR_INVALID_PARAMETER;
+    const SonareError err = validate_audio_params(channels[c], length, sample_rate);
+    if (err != SONARE_OK) return err;
+    inputs.push_back(Audio::from_buffer(channels[c], length, sample_rate));
+  }
+  std::vector<const Audio*> pointers;
+  pointers.reserve(channel_count);
+  for (const Audio& channel : inputs) pointers.push_back(&channel);
+
+  SONARE_C_TRY
+  std::vector<Audio> produced;
+  *out_report = process(pointers.data(), &produced);
+  if (produced.size() != channel_count) return SONARE_ERROR_INVALID_STATE;
+  for (size_t c = 0; c < channel_count; ++c) {
+    // The core resynthesizes every channel to the first one's input length, so
+    // this agrees with `length` by construction; checking is what keeps the copy
+    // from depending on that.
+    if (produced[c].size() != length) return SONARE_ERROR_INVALID_STATE;
+    std::memcpy(out_channels[c], produced[c].data(), length * sizeof(float));
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
 void clear_float_output(float** out, size_t* out_length) {
@@ -424,6 +464,26 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
   out->right = release_array(right_out);
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_repair_denoise_classical_linked(
+    const float* const* channels, size_t channel_count, size_t length, int sample_rate,
+    const SonareDenoiseClassicalConfig* config, float* const* out_channels,
+    SonareDenoiseReport* out_report) {
+  SONARE_C_API_ENTRY;
+  // Mirrors the mono and stereo entries' pre-check so the three agree on which
+  // configs they reject before the core ever sees them.
+  if (config) {
+    if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
+    if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  return run_linked(
+      channels, channel_count, length, sample_rate, out_channels, out_report,
+      [&](const Audio* const* inputs, std::vector<Audio>* produced) {
+        return to_c_denoise_report(sonare::mastering::repair::denoise_classical_linked(
+            inputs, channel_count, produced, to_cpp_denoise_config(config)));
+      });
 }
 
 SonareError sonare_mastering_repair_detect_noise_floor(const float* samples, size_t length,
@@ -661,6 +721,26 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
   out->right = release_array(right_out);
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_repair_dereverb_classical_linked(
+    const float* const* channels, size_t channel_count, size_t length, int sample_rate,
+    const SonareDereverbClassicalConfig* config, float* const* out_channels,
+    SonareDereverbReport* out_report) {
+  SONARE_C_API_ENTRY;
+  // Mirrors the mono and stereo entries' pre-check so the three agree on which
+  // configs they reject before the core ever sees them.
+  if (config) {
+    if (!is_power_of_two(config->n_fft)) return SONARE_ERROR_INVALID_PARAMETER;
+    if (config->hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  return run_linked(
+      channels, channel_count, length, sample_rate, out_channels, out_report,
+      [&](const Audio* const* inputs, std::vector<Audio>* produced) {
+        return to_c_dereverb_report(sonare::mastering::repair::dereverb_classical_linked(
+            inputs, channel_count, produced, to_cpp_dereverb_config(config)));
+      });
 }
 
 SonareError sonare_mastering_repair_detect_reverb(const float* samples, size_t length,

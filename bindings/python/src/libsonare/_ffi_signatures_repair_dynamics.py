@@ -99,6 +99,35 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareDereverbStereoResult),
         ]
 
+    # The N-channel repairs take a pointer table in and a pointer table out, and
+    # allocate nothing: the output planes are the caller's, written in place, so
+    # the result is a plain report out-param rather than one of the *StereoResult
+    # structs the pair entries fill with heap buffers.
+    for _name, _linked_cfg, _linked_report in (
+        (
+            "sonare_mastering_repair_denoise_classical_linked",
+            SonareDenoiseClassicalConfig,
+            SonareDenoiseReport,
+        ),
+        (
+            "sonare_mastering_repair_dereverb_classical_linked",
+            SonareDereverbClassicalConfig,
+            SonareDereverbReport,
+        ),
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int32
+            _fn.argtypes = [
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.c_size_t,
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(_linked_cfg),
+                ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+                ctypes.POINTER(_linked_report),
+            ]
+
     if hasattr(lib, "sonare_mastering_repair_trim_silence_stereo"):
         lib.sonare_mastering_repair_trim_silence_stereo.restype = ctypes.c_int32
         lib.sonare_mastering_repair_trim_silence_stereo.argtypes = [

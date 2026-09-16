@@ -9,7 +9,9 @@ import type {
   MasteringRepairDeclipStereoResult,
   MasteringRepairDecrackleStereoResult,
   MasteringRepairDehumStereoResult,
+  MasteringRepairDenoiseClassicalLinkedResult,
   MasteringRepairDenoiseClassicalStereoResult,
+  MasteringRepairDereverbClassicalLinkedResult,
   MasteringRepairDereverbClassicalStereoResult,
   MasteringRepairTrimSilenceStereoResult,
   NoiseDetection,
@@ -114,6 +116,13 @@ export interface MasteringRepairDenoiseClassicalRequest extends DenoiseClassical
 export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseClassicalOptions {
   left: Float32Array;
   right: Float32Array;
+  sampleRate?: number;
+}
+
+/** Request form of `masteringRepairDenoiseClassicalLinked`. */
+export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseClassicalOptions {
+  /** At least one channel; all the same length. */
+  channels: Float32Array[];
   sampleRate?: number;
 }
 
@@ -222,6 +231,58 @@ export function masteringRepairDenoiseClassicalStereo(
   );
 }
 
+/**
+ * Offline STFT-domain classical denoiser for any number of channels, driven by one
+ * channel-linked gain mask.
+ *
+ * The N-channel form of {@link masteringRepairDenoiseClassicalStereo}, carrying the same
+ * guarantee over the whole set: the mask is built from the channel-summed power and applied
+ * unchanged to every channel, so no interchannel level or phase difference moves however many
+ * channels there are. One `report` for the set, and one output per input channel in input order.
+ *
+ * A single channel reproduces {@link masteringRepairDenoiseClassical} bit for bit, and two
+ * reproduce {@link masteringRepairDenoiseClassicalStereo} plane for plane — `channels[0]` is the
+ * left plane and `channels[1]` the right.
+ *
+ * `report.detected` carries absolute levels and they are the SET's: the floor is referred to the
+ * summed mean square of every channel, so N identical channels read exactly `10*log10(N)` above
+ * one of them — about 3.01 dB at two channels and 4.77 dB at three. Compare a floor only against
+ * one measured over the same number of channels. Every other field of the report is a fraction
+ * and does not move with the channel count.
+ *
+ * Needs at least `nFft` samples and REJECTS a shorter input, which is the opposite of
+ * {@link masteringRepairDereverbClassicalLinked} — that one pads.
+ *
+ * @example
+ * ```ts
+ * const { channels, report } = masteringRepairDenoiseClassicalLinked({
+ *   channels: [frontLeft, frontRight, centre],
+ *   sampleRate: 48000,
+ *   reductionDb: 18,
+ * });
+ * console.log(channels.length, report.detected.floorDbfs);
+ * ```
+ */
+export function masteringRepairDenoiseClassicalLinked(
+  request: MasteringRepairDenoiseClassicalLinkedRequest,
+): MasteringRepairDenoiseClassicalLinkedResult;
+export function masteringRepairDenoiseClassicalLinked(
+  channels: Float32Array[],
+  sampleRate: number,
+  config?: DenoiseClassicalOptions,
+): MasteringRepairDenoiseClassicalLinkedResult;
+export function masteringRepairDenoiseClassicalLinked(
+  channels: Float32Array[] | MasteringRepairDenoiseClassicalLinkedRequest,
+  sampleRate?: number,
+  config: DenoiseClassicalOptions = {},
+): MasteringRepairDenoiseClassicalLinkedResult {
+  const request: MasteringRepairDenoiseClassicalLinkedRequest = Array.isArray(channels)
+    ? { channels, sampleRate, ...config }
+    : channels;
+  const { channels: input, sampleRate: rate, ...options } = request;
+  return requireModule().masteringRepairDenoiseClassicalLinked(input, rate ?? 22050, options);
+}
+
 /** Options for `masteringRepairDeclip`. */
 export interface DeclipOptions {
   clipThreshold?: number;
@@ -309,6 +370,13 @@ export interface MasteringRepairDereverbClassicalRequest extends DereverbClassic
 export interface MasteringRepairDereverbClassicalStereoRequest extends DereverbClassicalOptions {
   left: Float32Array;
   right: Float32Array;
+  sampleRate?: number;
+}
+
+/** Request form of `masteringRepairDereverbClassicalLinked`. */
+export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbClassicalOptions {
+  /** At least one channel; all the same length. */
+  channels: Float32Array[];
   sampleRate?: number;
 }
 
@@ -609,6 +677,62 @@ export function masteringRepairDereverbClassicalStereo(
     rate ?? 22050,
     options,
   );
+}
+
+/**
+ * Offline classical dereverberator for any number of channels (spectral subtraction plus an
+ * optional WPE pre-stage), driven by one channel-linked mask.
+ *
+ * The N-channel form of {@link masteringRepairDereverbClassicalStereo}: the mask is built from
+ * the channel-summed power and the WPE stage accumulates over every channel and applies one
+ * predictor set to each, so neither stage can move an interchannel level or phase difference
+ * however many channels there are. One `report` for the set, and one output per input channel in
+ * input order.
+ *
+ * A single channel reproduces {@link masteringRepairDereverbClassical} bit for bit, and two
+ * reproduce {@link masteringRepairDereverbClassicalStereo} plane for plane — `channels[0]` is the
+ * left plane and `channels[1]` the right.
+ *
+ * Every field of the report is a ratio or a fraction, so nothing in it shifts with the channel
+ * count: a figure measured over a set is comparable against a mono one. That is the opposite of
+ * {@link masteringRepairDenoiseClassicalLinked}, whose `detected` levels are absolute and move by
+ * `10*log10(N)`.
+ *
+ * An input shorter than `nFft` is PADDED for analysis rather than rejected — again the opposite
+ * of that entry, which refuses one.
+ *
+ * Two report fields are gated on the WPE stage, which is off unless `wpeEnabled` is set:
+ * `detected.latePredictability` and `wpePredictorNorm` are then both exactly 0, which is the
+ * measurement rather than an unset field.
+ *
+ * @example
+ * ```ts
+ * const { channels, report } = masteringRepairDereverbClassicalLinked({
+ *   channels: [frontLeft, frontRight, centre],
+ *   sampleRate: 48000,
+ *   wpeEnabled: true,
+ * });
+ * console.log(channels.length, report.detected.lateDecayRatioDb);
+ * ```
+ */
+export function masteringRepairDereverbClassicalLinked(
+  request: MasteringRepairDereverbClassicalLinkedRequest,
+): MasteringRepairDereverbClassicalLinkedResult;
+export function masteringRepairDereverbClassicalLinked(
+  channels: Float32Array[],
+  sampleRate: number,
+  config?: DereverbClassicalOptions,
+): MasteringRepairDereverbClassicalLinkedResult;
+export function masteringRepairDereverbClassicalLinked(
+  channels: Float32Array[] | MasteringRepairDereverbClassicalLinkedRequest,
+  sampleRate?: number,
+  config: DereverbClassicalOptions = {},
+): MasteringRepairDereverbClassicalLinkedResult {
+  const request: MasteringRepairDereverbClassicalLinkedRequest = Array.isArray(channels)
+    ? { channels, sampleRate, ...config }
+    : channels;
+  const { channels: input, sampleRate: rate, ...options } = request;
+  return requireModule().masteringRepairDereverbClassicalLinked(input, rate ?? 22050, options);
 }
 
 /**

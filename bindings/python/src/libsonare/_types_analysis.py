@@ -1595,6 +1595,26 @@ class DenoiseStereoResult:
 
 
 @dataclass(frozen=True, slots=True)
+class DenoiseLinkedResult:
+    """Any number of denoised channels and the one mask that produced them.
+
+    ``channels`` holds one output buffer per input channel, in input order.
+    The N-channel form of :class:`DenoiseStereoResult`, carrying the same
+    guarantee for the whole set: one mask over the channel-summed power,
+    applied unchanged to every channel, so no interchannel level or phase
+    difference moves however many channels there are.
+
+    ``report.detected`` is the one part that moves with the channel count --
+    :class:`NoiseDetection` carries absolute levels, and they are the SET's,
+    so N identical channels read ``10*log10(N)`` dB above one of them. Every
+    attenuation figure on :class:`DenoiseReport` is a fraction and stays put.
+    """
+
+    channels: list[NDArray[np.float32]]
+    report: DenoiseReport
+
+
+@dataclass(frozen=True, slots=True)
 class ReverbDetection:
     """What a dereverb pass measured while deciding how much to subtract.
 
@@ -1648,6 +1668,25 @@ class DereverbStereoResult:
     left: list[float]
     right: list[float]
     length: int
+    report: DereverbReport
+
+
+@dataclass(frozen=True, slots=True)
+class DereverbLinkedResult:
+    """Any number of dereverberated channels and the one mask behind them.
+
+    ``channels`` holds one output buffer per input channel, in input order.
+    The N-channel form of :class:`DereverbStereoResult`: one mask over the
+    channel-summed power and one WPE predictor set fitted over every
+    channel's statistics, so neither stage can move an interchannel level or
+    phase difference however many channels there are.
+
+    Every field of ``report`` is a ratio or a fraction, so unlike
+    :class:`DenoiseLinkedResult` nothing here shifts with the channel count
+    and a figure measured over a set is comparable against a mono one.
+    """
+
+    channels: list[NDArray[np.float32]]
     report: DereverbReport
 
 

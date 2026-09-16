@@ -1257,6 +1257,15 @@ class DenoiseStereoResult:
         report: DenoiseReport,
     ) -> None: ...
 
+class DenoiseLinkedResult:
+    channels: list[NDArray[np.float32]]
+    report: DenoiseReport
+    def __init__(
+        self,
+        channels: list[NDArray[np.float32]],
+        report: DenoiseReport,
+    ) -> None: ...
+
 class ReverbDetection:
     late_decay_ratio_db: float
     late_predictability: float
@@ -1289,6 +1298,15 @@ class DereverbStereoResult:
         left: list[float],
         right: list[float],
         length: int,
+        report: DereverbReport,
+    ) -> None: ...
+
+class DereverbLinkedResult:
+    channels: list[NDArray[np.float32]]
+    report: DereverbReport
+    def __init__(
+        self,
+        channels: list[NDArray[np.float32]],
         report: DereverbReport,
     ) -> None: ...
 

@@ -346,10 +346,16 @@ from .analyzer import (
     mastering_repair_denoise_classical as mastering_repair_denoise_classical,
 )
 from .analyzer import (
+    mastering_repair_denoise_classical_linked as mastering_repair_denoise_classical_linked,
+)
+from .analyzer import (
     mastering_repair_denoise_classical_stereo as mastering_repair_denoise_classical_stereo,
 )
 from .analyzer import (
     mastering_repair_dereverb_classical as mastering_repair_dereverb_classical,
+)
+from .analyzer import (
+    mastering_repair_dereverb_classical_linked as mastering_repair_dereverb_classical_linked,
 )
 from .analyzer import (
     mastering_repair_dereverb_classical_stereo as mastering_repair_dereverb_classical_stereo,
@@ -775,12 +781,18 @@ from .types import (
     DehumStereoResult as DehumStereoResult,
 )
 from .types import (
+    DenoiseLinkedResult as DenoiseLinkedResult,
+)
+from .types import (
     DenoiseReport as DenoiseReport,
 )
 from .types import (
     DenoiseStereoResult as DenoiseStereoResult,
 )
 from .types import DereverbClassicalConfig as DereverbClassicalConfig
+from .types import (
+    DereverbLinkedResult as DereverbLinkedResult,
+)
 from .types import (
     DereverbReport as DereverbReport,
 )

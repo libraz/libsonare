@@ -7,7 +7,9 @@ import type {
   DeclipStereoResult,
   DecrackleStereoResult,
   DehumStereoResult,
+  DenoiseLinkedResult,
   DenoiseStereoResult,
+  DereverbLinkedResult,
   DereverbStereoResult,
   HumDetection,
   NoiseDetection,
@@ -177,6 +179,64 @@ export function masteringRepairDenoiseClassicalStereo(
   return addon.masteringRepairDenoiseClassicalStereo(
     request.left,
     request.right,
+    request.sampleRate ?? 22050,
+    request,
+  );
+}
+
+/** Request form of `masteringRepairDenoiseClassicalLinked`. */
+export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseClassicalOptions {
+  /** One plane per channel, all of the same length. At least one. */
+  channels: Float32Array[];
+  sampleRate?: number;
+}
+
+/**
+ * Offline STFT-domain classical denoiser for any number of channels, driven by
+ * one channel-linked gain mask.
+ *
+ * The N-channel form of {@link masteringRepairDenoiseClassicalStereo}, carrying
+ * the same guarantee for the whole set: the mask is built from the
+ * channel-summed power and applied unchanged to every channel, so no
+ * interchannel level or phase difference moves however many channels there are.
+ * That is also why the result carries a single `report` rather than one per
+ * channel. One channel reproduces {@link masteringRepairDenoiseClassical}
+ * sample for sample, and two reproduce
+ * {@link masteringRepairDenoiseClassicalStereo} plane for plane, `channels[0]`
+ * being the left.
+ *
+ * `report.detected` is a measurement of the SET and its levels are absolute
+ * dBFS taken on the summed power, so N identical channels read `10*log10(N)` dB
+ * above one of them alone — about 3 dB at two channels and 4.77 dB at three.
+ * The attenuation figures on the report are fractions and do not move. Compare a
+ * floor only against another measured over the same number of channels.
+ *
+ * Needs at least `nFft` samples and REJECTS a shorter input, which is the
+ * opposite of {@link masteringRepairDereverbClassicalLinked} — that one pads.
+ *
+ * Every channel must be the same length: the library takes one length for the
+ * set, so a disagreement is refused here rather than silently truncated.
+ *
+ * Which options are live depends on `mode`: `overSubtraction` and
+ * `spectralFloor` are read only by `spectralSubtraction`, and
+ * `speechPresenceGain` and `gainSmoothing` only by the other two, so at the
+ * default `logMmse` the first pair does nothing.
+ *
+ * @example
+ * ```ts
+ * const { channels, report } = masteringRepairDenoiseClassicalLinked({
+ *   channels: [left, right, centre],
+ *   sampleRate: 48000,
+ *   reductionDb: 18,
+ * });
+ * console.log(channels.length, report.detected.floorDbfs);
+ * ```
+ */
+export function masteringRepairDenoiseClassicalLinked(
+  request: MasteringRepairDenoiseClassicalLinkedRequest,
+): DenoiseLinkedResult {
+  return addon.masteringRepairDenoiseClassicalLinked(
+    request.channels,
     request.sampleRate ?? 22050,
     request,
   );
@@ -481,6 +541,65 @@ export function masteringRepairDereverbClassicalStereo(
   return addon.masteringRepairDereverbClassicalStereo(
     request.left,
     request.right,
+    request.sampleRate ?? 22050,
+    request,
+  );
+}
+
+/** Request form of `masteringRepairDereverbClassicalLinked`. */
+export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbClassicalOptions {
+  /** One plane per channel, all of the same length. At least one. */
+  channels: Float32Array[];
+  sampleRate?: number;
+}
+
+/**
+ * Offline classical dereverberator for any number of channels (spectral
+ * subtraction plus an optional WPE pre-stage), driven by one channel-linked
+ * mask.
+ *
+ * The N-channel form of {@link masteringRepairDereverbClassicalStereo}, sharing
+ * both stages across the whole set rather than just a pair: one mask over the
+ * channel-summed power, and one WPE predictor set fitted over every channel's
+ * statistics, so neither stage can move an interchannel level or phase
+ * difference. That is also why the result carries a single `report`. One channel
+ * reproduces {@link masteringRepairDereverbClassical} sample for sample, and two
+ * reproduce {@link masteringRepairDereverbClassicalStereo} plane for plane,
+ * `channels[0]` being the left.
+ *
+ * Every field of the report is a ratio or a fraction, so unlike
+ * {@link masteringRepairDenoiseClassicalLinked} nothing here shifts with the
+ * channel count: a figure measured over six channels is comparable against a
+ * mono one.
+ *
+ * An input shorter than `nFft` is PADDED for analysis rather than rejected, the
+ * opposite of {@link masteringRepairDenoiseClassicalLinked}.
+ *
+ * Every channel must be the same length: the library takes one length for the
+ * set, so a disagreement is refused here rather than silently truncated.
+ *
+ * Two report fields are gated on the WPE stage, which is off unless
+ * `wpeEnabled` is set: `detected.latePredictability` and `wpePredictorNorm` are
+ * then both exactly 0, which is the measurement rather than an unset field.
+ * `detected.lateDecayRatioDb` runs the other way from what its name suggests —
+ * less negative means the material sustains across the module's late lag, so a
+ * reverberant input reads *higher* than the same material dry.
+ *
+ * @example
+ * ```ts
+ * const { channels, report } = masteringRepairDereverbClassicalLinked({
+ *   channels: [left, right, centre],
+ *   sampleRate: 48000,
+ *   wpeEnabled: true,
+ * });
+ * console.log(channels.length, report.wpePredictorNorm);
+ * ```
+ */
+export function masteringRepairDereverbClassicalLinked(
+  request: MasteringRepairDereverbClassicalLinkedRequest,
+): DereverbLinkedResult {
+  return addon.masteringRepairDereverbClassicalLinked(
+    request.channels,
     request.sampleRate ?? 22050,
     request,
   );
