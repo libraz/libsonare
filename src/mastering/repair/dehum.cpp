@@ -15,6 +15,7 @@
 
 namespace sonare::mastering::repair {
 
+using sonare::constants::kEpsilon;
 using sonare::constants::kFloorDb;
 using sonare::constants::kTwoPi;
 using sonare::constants::kTwoPiD;
@@ -54,19 +55,100 @@ Notch make_notch(float frequency_hz, float sample_rate, float q) {
   return notch;
 }
 
+/// One harmonic's subtraction: a running estimate of its quadrature amplitudes,
+/// corrected from the residual it leaves behind.
+/// @details The pair is the harmonic's amplitude and phase in Cartesian form,
+///   so @c estimate is a resynthesis of the tone they describe and the output is
+///   the input minus it. Programme material at the same frequency is
+///   uncorrelated with the reference and drives the estimate nowhere, which is
+///   what separates this from a notch: the notch removes the band, this removes
+///   the tone.
+struct HarmonicCanceller {
+  float cosine_gain = 0.0f;
+  float sine_gain = 0.0f;
+  float step = 0.0f;
+
+  /// @details The correction decays at step*sample_rate/2, which is the same
+  ///   selectivity a notch of bandwidth @p frequency_hz / @p q has, expressed as
+  ///   a rate rather than as a pole pair -- so q means one thing in both modes.
+  void set_selectivity(float frequency_hz, float sample_rate, float q) {
+    step = kTwoPi * (frequency_hz / q) / sample_rate;
+  }
+
+  float process(float x, float cosine, float sine) {
+    const float residual = x - (cosine_gain * cosine + sine_gain * sine);
+    cosine_gain += step * residual * cosine;
+    sine_gain += step * residual * sine;
+    return residual;
+  }
+};
+
+/// Corner of the detector's low-pass as a fraction of the tracked frequency.
+/// Two cascaded poles at 0.06*f0 put the detector's own image at 2*f0 sixty dB
+/// down and still sit six times above the loop bandwidth. The tracked frequency
+/// moved by under a factor of two across a sweep from 0.02 to 0.5, so the value
+/// is a margin on both bounds rather than a tuned one.
+constexpr float kDetectorCornerRatio = 0.06f;
+
+/// Damping of the PI loop. Critically damped, so a frequency step settles
+/// without overshoot rather than swinging past the harmonic it is tracking.
+constexpr float kLoopDamping = 1.0f;
+
+/// Rate at which the applied frequency relaxes towards the frame estimate, as a
+/// fraction of the loop bandwidth. A frame cannot resolve the window it chooses
+/// from, so its winner jumps a grid step between frames, and an order under the
+/// loop keeps that jitter off the applied frequency. The ordering is what
+/// matters: slewed four times faster than the loop, as the removed pull term
+/// was, the coarse estimate overrides the loop instead of seeding it and the
+/// harmonics come out five to seven dB less removed.
+constexpr float kAnchorSlewRatio = 0.1f;
+
+/// Decay of the PI integrator as a fraction of the loop's natural frequency.
+/// An order below it, so the leak cannot fight the tracking while still
+/// returning the offset to the anchor over seconds when nothing locks.
+constexpr float kIntegratorLeakRatio = 0.1f;
+
+/// Second-order PLL around the per-frame frequency estimate.
+/// @details A quadrature detector, a low-pass pair, and a PI loop filter. The
+///   products a phase detector forms carry an image at twice the tracked
+///   frequency; without the low-pass that image reached the frequency
+///   integrator and modulated the applied frequency at 2*f0. Dividing the
+///   quadrature arm by the pair's magnitude leaves the sine of the phase error,
+///   so the loop gain no longer scales with the input level.
 struct PllTracker {
   float frequency_hz = 50.0f;
   float phase = 0.0f;
+  float anchor_hz = 50.0f;  ///< The frame estimate, slewed to a per-sample rate.
+  float in_phase = 0.0f;
+  float in_phase_smoothed = 0.0f;
+  float quadrature = 0.0f;
+  float quadrature_smoothed = 0.0f;
+  float offset_hz = 0.0f;  ///< PI integrator: the standing error from the anchor.
 
   float process(float sample, float target_hz, int sample_rate, const DehumConfig& config) {
-    const float detector = sample * std::cos(phase);
-    const float pull = config.adaptation * 0.001f * (target_hz - frequency_hz);
-    frequency_hz += config.pll_bandwidth * detector + pull;
+    const float rate = static_cast<float>(sample_rate);
+    const float alpha = std::min(1.0f, kTwoPi * kDetectorCornerRatio * target_hz / rate);
+    in_phase += alpha * (sample * std::sin(phase) - in_phase);
+    in_phase_smoothed += alpha * (in_phase - in_phase_smoothed);
+    quadrature += alpha * (sample * std::cos(phase) - quadrature);
+    quadrature_smoothed += alpha * (quadrature - quadrature_smoothed);
+
+    const float magnitude = std::sqrt(in_phase_smoothed * in_phase_smoothed +
+                                      quadrature_smoothed * quadrature_smoothed);
+    const float error = quadrature_smoothed / std::max(magnitude, kEpsilon);
+
+    const float loop_hz = config.pll_bandwidth * target_hz;
+    anchor_hz += kAnchorSlewRatio * kTwoPi * loop_hz / rate * (target_hz - anchor_hz);
+    offset_hz += kTwoPi * loop_hz * loop_hz * error / rate;
+    offset_hz -= kIntegratorLeakRatio * kTwoPi * loop_hz * offset_hz / rate;
+    offset_hz = std::clamp(offset_hz, -config.search_range_hz, config.search_range_hz);
+
+    frequency_hz = anchor_hz + 2.0f * kLoopDamping * loop_hz * error + offset_hz;
     frequency_hz =
         std::clamp(frequency_hz, std::max(1.0f, config.fundamental_hz - config.search_range_hz),
                    std::min(static_cast<float>(sample_rate) * 0.49f,
                             config.fundamental_hz + config.search_range_hz));
-    phase += kTwoPi * frequency_hz / static_cast<float>(sample_rate);
+    phase += kTwoPi * frequency_hz / rate;
     if (phase > kTwoPi) {
       phase -= kTwoPi;
     }
@@ -194,14 +276,14 @@ size_t detection_frame(size_t size, int sample_rate) {
 
 // ----------------------------------------------------------------- processing
 
-/// What one channel's cascade did, for the report.
+/// What one channel's pass did, in either mode, for the report.
 struct PassTrace {
   int notched_harmonics = 0;
   float applied_fundamental_hz = 0.0f;
   float fundamental_drift_hz = 0.0f;
 };
 
-PassTrace run_fixed(std::vector<float>& samples, int sample_rate, const DehumConfig& config) {
+PassTrace run_fixed_notch(std::vector<float>& samples, int sample_rate, const DehumConfig& config) {
   PassTrace trace;
   trace.applied_fundamental_hz = config.fundamental_hz;
   for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
@@ -214,6 +296,69 @@ PassTrace run_fixed(std::vector<float>& samples, int sample_rate, const DehumCon
   return trace;
 }
 
+/// Seeds a canceller from a least-squares projection over the opening window.
+/// @details Starting the pair at zero costs the loop its own time constant --
+///   an eighth of a second at the default q on a 50 Hz series -- during which
+///   the harmonic passes through unattenuated. The window is the detector's, one
+///   second, over which a mains harmonic completes a whole number of cycles.
+void seed_canceller(HarmonicCanceller& canceller, const std::vector<float>& samples, size_t count,
+                    float frequency_hz, int sample_rate) {
+  if (count == 0) return;
+  double cosine_sum = 0.0;
+  double sine_sum = 0.0;
+  for (size_t i = 0; i < count; ++i) {
+    const double phase =
+        kTwoPiD * frequency_hz * static_cast<double>(i) / static_cast<double>(sample_rate);
+    cosine_sum += samples[i] * std::cos(phase);
+    sine_sum += samples[i] * std::sin(phase);
+  }
+  const double scale = 2.0 / static_cast<double>(count);
+  canceller.cosine_gain = static_cast<float>(scale * cosine_sum);
+  canceller.sine_gain = static_cast<float>(scale * sine_sum);
+}
+
+PassTrace run_fixed_subtract(std::vector<float>& samples, int sample_rate,
+                             const DehumConfig& config) {
+  PassTrace trace;
+  trace.applied_fundamental_hz = config.fundamental_hz;
+  const float rate = static_cast<float>(sample_rate);
+  const size_t seed_window = detection_frame(samples.size(), sample_rate);
+
+  std::vector<HarmonicCanceller> cancellers;
+  std::vector<double> increments;
+  std::vector<double> phases;
+  for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
+    const float frequency = config.fundamental_hz * static_cast<float>(harmonic);
+    if (frequency >= rate * 0.5f) break;
+    HarmonicCanceller canceller;
+    canceller.set_selectivity(frequency, rate, config.q);
+    seed_canceller(canceller, samples, seed_window, frequency, sample_rate);
+    cancellers.push_back(canceller);
+    increments.push_back(kTwoPiD * frequency / static_cast<double>(sample_rate));
+    phases.push_back(0.0);
+    ++trace.notched_harmonics;
+  }
+
+  // The references are the same phase origin the seed projected onto, so a
+  // cancellation that was correct over the window stays correct past it.
+  for (size_t i = 0; i < samples.size(); ++i) {
+    float residual = samples[i];
+    for (size_t k = 0; k < cancellers.size(); ++k) {
+      residual = cancellers[k].process(residual, static_cast<float>(std::cos(phases[k])),
+                                       static_cast<float>(std::sin(phases[k])));
+      phases[k] += increments[k];
+      if (phases[k] > kTwoPiD) phases[k] -= kTwoPiD;
+    }
+    samples[i] = residual;
+  }
+  return trace;
+}
+
+PassTrace run_fixed(std::vector<float>& samples, int sample_rate, const DehumConfig& config) {
+  if (config.mode == DehumMode::Subtract) return run_fixed_subtract(samples, sample_rate, config);
+  return run_fixed_notch(samples, sample_rate, config);
+}
+
 /// Runs the tracking cascade over every channel from one shared frequency.
 /// @p tracking drives the search and the PLL; for a single channel it is that
 /// channel's own unfiltered samples, which is what makes the mono result
@@ -223,21 +368,41 @@ PassTrace run_adaptive(const std::vector<std::vector<float>*>& channels,
                        const DehumConfig& config) {
   const size_t channel_count = channels.size();
   const size_t harmonic_count = static_cast<size_t>(config.harmonics);
+  const bool subtracting = config.mode == DehumMode::Subtract;
   float fundamental = config.fundamental_hz;
   float target_fundamental = fundamental;
-  PllTracker tracker{fundamental, 0.0f};
-  std::vector<std::vector<Notch>> cascades(channel_count, std::vector<Notch>(harmonic_count));
-  for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
-    const Notch seed = make_notch(fundamental * static_cast<float>(harmonic),
-                                  static_cast<float>(sample_rate), config.q);
-    for (auto& cascade : cascades) cascade[static_cast<size_t>(harmonic - 1)] = seed;
+  PllTracker tracker;
+  tracker.frequency_hz = fundamental;
+  tracker.anchor_hz = fundamental;
+  std::vector<std::vector<Notch>> cascades;
+  // Unlike the fixed path the cancellers start at zero: their phase origin is
+  // the tracker's own oscillator, which does not exist before the pass runs, so
+  // there is nothing for a projection to be referred to. Each converges over
+  // the same time constant the notch it replaces rings for.
+  std::vector<std::vector<HarmonicCanceller>> cancellers;
+  if (subtracting) {
+    cancellers.assign(channel_count, std::vector<HarmonicCanceller>(harmonic_count));
+    for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
+      HarmonicCanceller seed;
+      seed.set_selectivity(fundamental * static_cast<float>(harmonic),
+                           static_cast<float>(sample_rate), config.q);
+      for (auto& channel : cancellers) channel[static_cast<size_t>(harmonic - 1)] = seed;
+    }
+  } else {
+    cascades.assign(channel_count, std::vector<Notch>(harmonic_count));
+    for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
+      const Notch seed = make_notch(fundamental * static_cast<float>(harmonic),
+                                    static_cast<float>(sample_rate), config.q);
+      for (auto& cascade : cascades) cascade[static_cast<size_t>(harmonic - 1)] = seed;
+    }
   }
 
   // The PLL fundamental drifts slowly (pll_bandwidth is small), so recomputing
-  // the RBJ notch coefficients (sin/cos/division per harmonic) on every sample
-  // is wasteful. Refresh them only when the tracked fundamental has moved by
-  // more than a small relative amount since the last refresh; the filter state
-  // carries across untouched, so the adaptive tracking behavior is preserved.
+  // the RBJ notch coefficients (sin/cos/division per harmonic) or the
+  // cancellers' step on every sample is wasteful. Refresh them only when the
+  // tracked fundamental has moved by more than a small relative amount since the
+  // last refresh; the filter state carries across untouched, so the adaptive
+  // tracking behavior is preserved.
   constexpr float kCoeffRefreshRatio = 1e-3f;
   float last_coeff_fundamental = 0.0f;
   PassTrace trace;
@@ -255,9 +420,15 @@ PassTrace run_adaptive(const std::vector<std::vector<float>*>& channels,
         for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
           const float frequency = fundamental * static_cast<float>(harmonic);
           if (frequency >= static_cast<float>(sample_rate) * 0.5f) break;
-          for (auto& cascade : cascades) {
-            cascade[static_cast<size_t>(harmonic - 1)].set_coefficients(
-                frequency, static_cast<float>(sample_rate), config.q);
+          const size_t slot = static_cast<size_t>(harmonic - 1);
+          if (subtracting) {
+            for (auto& channel : cancellers) {
+              channel[slot].set_selectivity(frequency, static_cast<float>(sample_rate), config.q);
+            }
+          } else {
+            for (auto& cascade : cascades) {
+              cascade[slot].set_coefficients(frequency, static_cast<float>(sample_rate), config.q);
+            }
           }
         }
         last_coeff_fundamental = fundamental;
@@ -267,9 +438,23 @@ PassTrace run_adaptive(const std::vector<std::vector<float>*>& channels,
       for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
         const float frequency = fundamental * static_cast<float>(harmonic);
         if (frequency >= static_cast<float>(sample_rate) * 0.5f) break;
-        for (size_t channel = 0; channel < channel_count; ++channel) {
-          std::vector<float>& samples = *channels[channel];
-          samples[i] = cascades[channel][static_cast<size_t>(harmonic - 1)].process(samples[i]);
+        const size_t slot = static_cast<size_t>(harmonic - 1);
+        if (subtracting) {
+          // The tracker's oscillator is the fundamental's phase, so a harmonic's
+          // reference is that phase multiplied -- one oscillator for the series
+          // rather than one per harmonic drifting apart from the others.
+          const float harmonic_phase = static_cast<float>(harmonic) * tracker.phase;
+          const float cosine = std::cos(harmonic_phase);
+          const float sine = std::sin(harmonic_phase);
+          for (size_t channel = 0; channel < channel_count; ++channel) {
+            std::vector<float>& samples = *channels[channel];
+            samples[i] = cancellers[channel][slot].process(samples[i], cosine, sine);
+          }
+        } else {
+          for (size_t channel = 0; channel < channel_count; ++channel) {
+            std::vector<float>& samples = *channels[channel];
+            samples[i] = cascades[channel][slot].process(samples[i]);
+          }
         }
         ++applied;
       }
@@ -327,6 +512,9 @@ void validate_config(const DehumConfig& config) {
   if (!std::isfinite(config.pll_bandwidth) || config.pll_bandwidth < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "pll_bandwidth must be finite and non-negative");
+  }
+  if (config.mode != DehumMode::Subtract && config.mode != DehumMode::Notch) {
+    throw SonareException(ErrorCode::InvalidParameter, "invalid dehum mode");
   }
 }
 

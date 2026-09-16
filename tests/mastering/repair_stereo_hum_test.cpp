@@ -226,6 +226,20 @@ uint32_t digest(const Audio& audio) {
 
 uint32_t digest(const std::vector<float>& samples) { return digest(view(samples)); }
 
+/// Level at @p hz in dBFS, from a sin/cos projection over the whole buffer.
+double tone_dbfs(const std::vector<float>& samples, double hz) {
+  double cosine_sum = 0.0;
+  double sine_sum = 0.0;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const double phase = constants::kTwoPiD * hz * static_cast<double>(i) / kSampleRate;
+    cosine_sum += samples[i] * std::cos(phase);
+    sine_sum += samples[i] * std::sin(phase);
+  }
+  const double amplitude = 2.0 * std::sqrt(cosine_sum * cosine_sum + sine_sum * sine_sum) /
+                           static_cast<double>(samples.size());
+  return 20.0 * std::log10(std::max(1.0e-12, amplitude));
+}
+
 double rmse(const std::vector<float>& got, const std::vector<float>& want) {
   double sum = 0.0;
   for (size_t i = 0; i < got.size(); ++i) {
@@ -589,7 +603,10 @@ TEST_CASE("Dehum and trim mono output are unchanged by the report and stereo wor
 // match another. It stays a same-environment refactor tripwire, run through
 // `make test-golden`. The decrackle digests precede the split of the forward
 // transform, the shrinkage and the inverse into separate steps; the dehum ones
-// precede the report and the stereo work.
+// are the subtraction default and the PLL loop filter, and every one of the five
+// moved with them -- the fixed pair because the default mode is no longer a
+// notch cascade, the adaptive pair and the chord because the tracker reaches a
+// different frequency as well.
 TEST_CASE("Dehum and decrackle mono digests stay stable", "[.][repair][stereo][hum][golden]") {
   const std::vector<float> crackle_left = crackle_fixture(0.0);
   const std::vector<float> crackle_right = crackle_fixture(0.35);
@@ -600,11 +617,25 @@ TEST_CASE("Dehum and decrackle mono digests stay stable", "[.][repair][stereo][h
 
   const std::vector<float> hum_left = hum50_fixture(0.0);
   const std::vector<float> hum_right = hum50_fixture(0.35);
-  CHECK(digest(dehum(view(hum_left), kHum50Fixed)) == 0xd6be71c3u);
-  CHECK(digest(dehum(view(hum_right), kHum50Fixed)) == 0x2c0f05e4u);
-  CHECK(digest(dehum(view(hum_left), kHum50Adaptive)) == 0xe65b6560u);
-  CHECK(digest(dehum(view(hum_right), kHum50Adaptive)) == 0x5a343eccu);
-  CHECK(digest(dehum(view(hum60_fixture()), DehumConfig{60.0f, 3, 20.0f})) == 0x6d434fe1u);
+  CHECK(digest(dehum(view(hum_left), kHum50Fixed)) == 0x3522646bu);
+  CHECK(digest(dehum(view(hum_right), kHum50Fixed)) == 0xf5f4765eu);
+  // The adaptive pair is recorded twice, and it is the only pair here that has to
+  // be: the tracked loop's output moves by 1 ULP on 13% of the samples between -O0
+  // and -O1 or above, while the fixed pair and the chord hold at every level. What
+  // the loop reports does not move -- applied_fundamental_hz is bit-identical, the
+  // tracked trajectory differs by 3.8e-6 Hz against its own 0.011 Hz steady-state
+  // spread, and the four harmonics' removal depths agree to 4e-6 dB -- so the
+  // digest is finer than the behaviour. Both values are recorded rather than one
+  // skipped, because `make test-golden` configures Debug and a skip there would
+  // leave the sanctioned path checking nothing.
+#ifdef NDEBUG
+  CHECK(digest(dehum(view(hum_left), kHum50Adaptive)) == 0xb8aa5682u);
+  CHECK(digest(dehum(view(hum_right), kHum50Adaptive)) == 0xae820256u);
+#else
+  CHECK(digest(dehum(view(hum_left), kHum50Adaptive)) == 0x752c32f6u);
+  CHECK(digest(dehum(view(hum_right), kHum50Adaptive)) == 0x8e0a8b97u);
+#endif
+  CHECK(digest(dehum(view(hum60_fixture()), DehumConfig{60.0f, 3, 20.0f})) == 0x1f5cd3fau);
 }
 
 TEST_CASE("Dehum reports what the cascade did without moving the output", "[repair][stereo][hum]") {
@@ -637,6 +668,78 @@ TEST_CASE("Dehum reports what the cascade did without moving the output", "[repa
   dehum(view(samples), high, &clipped);
   REQUIRE(clipped.notched_harmonics == 7);
   REQUIRE(clipped.notched_harmonics < high.harmonics);
+}
+
+TEST_CASE("Dehum subtracts the harmonic series by default and notches on request",
+          "[repair][stereo][hum]") {
+  const std::vector<float> dirty = hum50_fixture(0.0);
+  const std::vector<float> clean = hum50_clean(0.0);
+  REQUIRE(DehumConfig{}.mode == DehumMode::Subtract);
+
+  DehumConfig notching = kHum50Fixed;
+  notching.mode = DehumMode::Notch;
+  const std::vector<float> subtracted = to_vector(dehum(view(dirty), kHum50Fixed));
+  const std::vector<float> notched = to_vector(dehum(view(dirty), notching));
+
+  // Two removals, not one behind two names.
+  REQUIRE(digest(subtracted) != digest(notched));
+  REQUIRE(digest(subtracted) != digest(dirty));
+  REQUIRE(digest(notched) != digest(dirty));
+
+  // Both recover the bed and the subtraction recovers more of it: the cascade
+  // reaches the bed through four notches' phase response, which a resynthesis
+  // referred to the harmonic frequencies alone does not impose.
+  const double untreated = rmse(dirty, clean);
+  const double notched_error = rmse(notched, clean);
+  const double subtracted_error = rmse(subtracted, clean);
+  CAPTURE(untreated, notched_error, subtracted_error);
+  REQUIRE(notched_error < untreated);
+  REQUIRE(subtracted_error < notched_error);
+
+  // A mode outside the enum used to be unrepresentable. It is now a value the
+  // config can carry, so the shared oracle refuses it rather than letting it
+  // fall into whichever branch the comparison happens to take.
+  DehumConfig unknown_mode = kHum50Fixed;
+  unknown_mode.mode = static_cast<DehumMode>(7);
+  REQUIRE_THROWS(dehum(view(dirty), unknown_mode));
+  REQUIRE_THROWS(detect_hum(dirty.data(), dirty.size(), kSampleRate, unknown_mode));
+  REQUIRE_THROWS(dehum_stereo(view(dirty), view(dirty), unknown_mode));
+}
+
+/// Tolerance on where the tracker settles. A phase detector's product carries an
+/// image at twice the tracked frequency; fed to the frequency integrator raw it
+/// modulated the applied frequency at 2*f0 and left the loop following a
+/// per-frame estimate the frame is too short to resolve, so the settled value
+/// sat 0.63 Hz below the planted tone -- a quarter of the notch's own bandwidth
+/// at q = 20. This is six times tighter than that.
+constexpr double kSettledFundamentalToleranceHz = 0.1;
+
+TEST_CASE("The tracker settles on the planted fundamental rather than near it",
+          "[repair][stereo][hum]") {
+  const std::vector<float> samples = hum50_fixture(0.0);
+  DehumReport report;
+  dehum(view(samples), kHum50Adaptive, &report);
+
+  CAPTURE(report.applied_fundamental_hz, report.fundamental_drift_hz);
+  REQUIRE_THAT(report.applied_fundamental_hz,
+               WithinAbs(kPlantedHum50Hz, kSettledFundamentalToleranceHz));
+  // The tracker moved to get there, and it cannot leave the search window.
+  REQUIRE(report.fundamental_drift_hz > 0.0f);
+  REQUIRE(report.fundamental_drift_hz <= kHum50Adaptive.search_range_hz);
+
+  // Landing on the tone is what the removal is bought with: the cascade sits on
+  // each harmonic rather than a fraction of its bandwidth away. Measured on this
+  // fixture, weakest of the four harmonics: 15.4 dB before the loop filter,
+  // 17.6 dB after.
+  DehumConfig notching = kHum50Adaptive;
+  notching.mode = DehumMode::Notch;
+  const std::vector<float> cleaned = to_vector(dehum(view(samples), notching));
+  for (size_t k = 0; k < kPlantedHum50Db.size(); ++k) {
+    const double hz = kPlantedHum50Hz * static_cast<double>(k + 1);
+    const double removed = tone_dbfs(samples, hz) - tone_dbfs(cleaned, hz);
+    CAPTURE(k, hz, removed);
+    REQUIRE(removed > 16.0);
+  }
 }
 
 TEST_CASE("Decrackle reports the shrinkage the wavelet mode performed", "[repair][stereo][hum]") {
@@ -741,11 +844,10 @@ TEST_CASE("Stereo entrypoints with identical channels equal the mono path bit fo
   REQUIRE_THROWS(trim_silence_stereo(gated_audio, view(shorter_gated), kTrim));
 }
 
-TEST_CASE("A shared tracked fundamental beats the shared mono transfer on a hum pair",
+TEST_CASE("A shared tracked fundamental holds a hum pair on one frequency",
           "[repair][stereo][hum]") {
-  // The same 50 Hz series at two levels. The quieter side's own search is the
-  // one the programme material can pull, which is the case the shared tracker
-  // exists for.
+  // The same 50 Hz series at two levels, eight dB apart. The quieter side is
+  // where a loop whose gain follows the hum level falls behind.
   const std::vector<float> clean_left = hum50_clean(0.0);
   const std::vector<float> clean_right = hum50_clean(0.35);
   std::vector<double> bed_left = sine_bed(48000, 0.0);
@@ -774,29 +876,35 @@ TEST_CASE("A shared tracked fundamental beats the shared mono transfer on a hum 
   // notch: it leaves the pair further apart than it found them.
   REQUIRE(transfer_image > untreated_image);
   REQUIRE(linked_image < transfer_image);
-  REQUIRE(linked_image < split_image);
   REQUIRE(linked_image < untreated_image);
+  REQUIRE(split_image < untreated_image);
 
   // Per-channel fidelity beats the transfer on both sides as well, so the image
   // was not bought with distortion.
   REQUIRE(rmse(linked_left, clean_left) < rmse(transfer.first, clean_left));
   REQUIRE(rmse(linked_right, clean_right) < rmse(transfer.second, clean_right));
 
-  // The link acted, and this is where it shows without differencing the audio:
-  // the two cascades sat on one frequency, while tracking the channels apart put
-  // them a third of a hertz from each other -- an eighth of the notch's own
-  // bandwidth at q = 20.
+  // What the link guarantees is one frequency for both cascades, and it is an
+  // identity rather than a tolerance.
   REQUIRE(linked.left_report.applied_fundamental_hz == linked.right_report.applied_fundamental_hz);
+
+  // Tracking the channels apart used to reach two frequencies 0.329 Hz apart on
+  // this pair -- an eighth of the notch's own bandwidth at q = 20 -- because a
+  // detector reading the raw product carried the hum's level into the loop gain
+  // and the quieter channel lagged. Normalizing by the projection magnitude
+  // takes the level out, so the two now agree to 5e-5 Hz and the split result is
+  // no longer measurably worse: 0.6 percent apart here, against 7.4 percent when
+  // the link was the only thing holding them together. The link is kept because
+  // it is the construction that cannot diverge, not because this pair separates.
   DehumReport alone_left;
   DehumReport alone_right;
   dehum(view(dirty_left), kHum50Adaptive, &alone_left);
   dehum(view(dirty_right), kHum50Adaptive, &alone_right);
   CAPTURE(alone_left.applied_fundamental_hz, alone_right.applied_fundamental_hz);
-  REQUIRE(alone_left.applied_fundamental_hz != alone_right.applied_fundamental_hz);
-  // The shared estimate is not one channel's answer imposed on the other: it
-  // lies between the two the channels reach alone.
-  REQUIRE(linked.left_report.applied_fundamental_hz > alone_left.applied_fundamental_hz);
-  REQUIRE(linked.left_report.applied_fundamental_hz < alone_right.applied_fundamental_hz);
+  REQUIRE(std::abs(alone_left.applied_fundamental_hz - alone_right.applied_fundamental_hz) < 0.01f);
+  REQUIRE(std::abs(linked_image - split_image) < 0.05 * split_image);
+  REQUIRE_THAT(linked.left_report.applied_fundamental_hz,
+               WithinAbs(kPlantedHum50Hz, kSettledFundamentalToleranceHz));
 }
 
 TEST_CASE("Per-channel decrackle beats the shared mono transfer on a crackle pair",

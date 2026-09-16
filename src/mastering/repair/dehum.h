@@ -6,15 +6,32 @@
 
 namespace sonare::mastering::repair {
 
+/// @brief How a dehum pass removes the harmonic series.
+enum class DehumMode {
+  /// Tracks each harmonic's amplitude and phase and subtracts the tone those
+  /// describe. What leaves the pass is the input minus a sinusoid, so material
+  /// sitting at the same frequency but uncorrelated with the series survives.
+  Subtract,
+  /// Cascade of RBJ notches, one per harmonic. Removes everything inside each
+  /// notch's bandwidth, hum or programme.
+  Notch,
+};
+
 struct DehumConfig {
   float fundamental_hz = 50.0f;
   int harmonics = 4;
+  /// Selectivity of the removal. In Notch mode the biquad Q; in Subtract mode
+  /// the same quantity read as a rate, the cancellation converging over the
+  /// time a notch of bandwidth fundamental_hz / q rings.
   float q = 20.0f;
   bool adaptive = false;
   float search_range_hz = 2.0f;
   float adaptation = 0.25f;
   int frame_size = 2048;
+  /// PLL loop bandwidth as a fraction of the tracked frequency. Adaptive
+  /// tracking only.
   float pll_bandwidth = 0.01f;
+  DehumMode mode = DehumMode::Subtract;
 };
 
 /// @brief Longest harmonic series a dehum pass tracks.
@@ -54,9 +71,10 @@ HumDetection detect_hum(const float* samples, size_t size, int sample_rate,
 /// @brief What a dehum pass found in one channel and what it did to it.
 struct DehumReport {
   HumDetection detected;                ///< Analysis of the input, before filtering.
-  int notched_harmonics = 0;            ///< Harmonics the cascade reached. Fewer than
-                                        ///  config.harmonics once k*f0 hits Nyquist.
-  float applied_fundamental_hz = 0.0f;  ///< Frequency the last notch refresh used.
+  int notched_harmonics = 0;            ///< Harmonics the pass reached, in either mode.
+                                        ///  Fewer than config.harmonics once k*f0 hits
+                                        ///  Nyquist.
+  float applied_fundamental_hz = 0.0f;  ///< Frequency the last coefficient refresh used.
   float fundamental_drift_hz = 0.0f;    ///< Largest excursion of the tracked
                                         ///  frequency from the configured one.
                                         ///  Zero without adaptive tracking, which
@@ -78,10 +96,13 @@ struct DehumStereoResult {
 
 /// @brief Dehums a stereo pair on one shared tracked fundamental.
 /// @details Mains hum is one physical source, so the two channels carry the same
-///   frequency and tracking them apart puts the notches at two frequencies that
-///   differ by whatever each channel's programme material pulled its own search
-///   to -- an image shift the hum itself never had. The tracker therefore reads
-///   the channel mean and both cascades follow it. Only the frequency is shared:
+///   frequency, while tracking them apart lets each channel's programme material
+///   pull its own search and puts the notches at frequencies the hum never
+///   differed by. The tracker therefore reads the channel mean and both cascades
+///   follow it. On material where both channels can be tracked the loop lands
+///   them together anyway, so sharing the frequency is what makes that a
+///   guarantee rather than an outcome, and it is what still holds when one
+///   channel's hum is too masked to track. Only the frequency is shared:
 ///   each channel keeps its own filter state, so neither channel's transient
 ///   rings through the other.
 DehumStereoResult dehum_stereo(const Audio& left, const Audio& right,
