@@ -339,6 +339,56 @@ TEST_CASE("segment C APIs return owned matrices and index vectors", "[c_api][fea
   sonare_free_segment_matrix(&recurrence);
 }
 
+TEST_CASE("the segment C APIs refuse a feature matrix they cannot order",
+          "[c_api][features][numeric]") {
+  // These entries take a feature matrix rather than audio, so they never pass
+  // through the audio validator every other analysis entry shares. 64 columns,
+  // because the neighbour selection has to leave its small-input paths.
+  const int rows = 4;
+  const int cols = 64;
+  std::vector<float> features(static_cast<size_t>(rows) * cols);
+  uint32_t state = 0xc0ffeeu;
+  for (auto& value : features) {
+    state = state * 1664525u + 1013904223u;
+    value = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+  }
+  const std::vector<float> clean = features;
+  features[30] = std::numeric_limits<float>::quiet_NaN();
+
+  SonareSegmentMatrix matrix{};
+  SonareSegmentIndices indices{};
+
+  // One poisoned cell used to leave here as 16 non-finite affinity cells, or 126
+  // connectivity cells, behind a SONARE_OK.
+  CHECK(sonare_segment_recurrence_matrix(features.data(), rows, cols, 0, 1, 0, "cosine", "affinity",
+                                         &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_segment_cross_similarity(features.data(), rows, cols, features.data(), rows, cols, 0,
+                                        "cosine", "connectivity",
+                                        &matrix) == SONARE_ERROR_INVALID_PARAMETER);
+  const std::vector<int> parents = {0, 32, 64};
+  CHECK(sonare_segment_subsegment(features.data(), rows, cols, parents.data(), parents.size(), 4,
+                                  &indices) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_segment_agglomerative(features.data(), rows, cols, 4, "average", &indices) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+
+  // The same four calls with that one cell finite, so the case cannot pass for a
+  // guard that refused everything.
+  REQUIRE(sonare_segment_recurrence_matrix(clean.data(), rows, cols, 0, 1, 0, "cosine", "affinity",
+                                           &matrix) == SONARE_OK);
+  REQUIRE(matrix.rows == cols);
+  for (int i = 0; i < matrix.rows * matrix.cols; ++i) REQUIRE(std::isfinite(matrix.values[i]));
+  sonare_free_segment_matrix(&matrix);
+  REQUIRE(sonare_segment_cross_similarity(clean.data(), rows, cols, clean.data(), rows, cols, 0,
+                                          "cosine", "connectivity", &matrix) == SONARE_OK);
+  sonare_free_segment_matrix(&matrix);
+  REQUIRE(sonare_segment_subsegment(clean.data(), rows, cols, parents.data(), parents.size(), 4,
+                                    &indices) == SONARE_OK);
+  sonare_free_segment_indices(&indices);
+  REQUIRE(sonare_segment_agglomerative(clean.data(), rows, cols, 4, "average", &indices) ==
+          SONARE_OK);
+  sonare_free_segment_indices(&indices);
+}
+
 TEST_CASE("sonare_spectral_bandwidth_ex accepts the Minkowski exponent", "[c_api][features]") {
   const auto samples = generate_sine(440.0f, 22050, 1.0f);
   float* p1 = nullptr;

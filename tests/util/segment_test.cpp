@@ -5,6 +5,9 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "util/exception.h"
@@ -196,5 +199,64 @@ TEST_CASE("top-k trimming zeroes every position outside a row's own top k",
       CAPTURE(i);
       REQUIRE(R[i] == expected[i]);
     }
+  }
+}
+
+TEST_CASE("the segment primitives refuse features they cannot order", "[util][segment][numeric]") {
+  // 64 columns, because the neighbour selection has to leave the small-input
+  // paths that answer a mixed range the same way with or without the guard.
+  const int rows = 4;
+  const int cols = 64;
+  std::vector<float> clean(static_cast<size_t>(rows) * cols);
+  uint32_t state = 0xc0ffeeu;
+  for (auto& v : clean) {
+    state = state * 1664525u + 1013904223u;
+    v = static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+  }
+  std::vector<float> poisoned = clean;
+  poisoned[30] = std::numeric_limits<float>::quiet_NaN();
+
+  // One cell used to leave as 16 non-finite affinity cells and 126 connectivity
+  // cells, and the k-th-neighbour sort ran over a range with no ordering at all.
+  CHECK_THROWS_AS(recurrence_matrix(poisoned.data(), rows, cols, 0, 1, false, "cosine", "affinity"),
+                  SonareException);
+  CHECK_THROWS_AS(
+      recurrence_matrix(poisoned.data(), rows, cols, 0, 1, false, "euclidean", "connectivity"),
+      SonareException);
+  CHECK_THROWS_AS(cross_similarity(poisoned.data(), rows, cols, poisoned.data(), rows, cols, 0,
+                                   "cosine", "affinity"),
+                  SonareException);
+  CHECK_THROWS_AS(subsegment(poisoned.data(), rows, cols, {0, 32, 64}, 4), SonareException);
+  CHECK_THROWS_AS(agglomerative(poisoned.data(), rows, cols, 4, "average"), SonareException);
+
+  // The same four calls on the same matrix with that one cell finite. Without
+  // this the case would pass just as well for a guard that refused everything.
+  const auto affinity =
+      recurrence_matrix(clean.data(), rows, cols, 0, 1, false, "cosine", "affinity");
+  REQUIRE(affinity.size() == static_cast<size_t>(cols) * cols);
+  for (float v : affinity) REQUIRE(std::isfinite(v));
+  REQUIRE_NOTHROW(cross_similarity(clean.data(), rows, cols, clean.data(), rows, cols, 0, "cosine",
+                                   "affinity"));
+  REQUIRE_NOTHROW(subsegment(clean.data(), rows, cols, {0, 32, 64}, 4));
+  REQUIRE_NOTHROW(agglomerative(clean.data(), rows, cols, 4, "average"));
+
+  SECTION("a matrix the caller already computed is carried rather than refused") {
+    // These three reshape or filter a similarity matrix instead of deriving
+    // distances from features, so they have no ordering to protect and no
+    // opinion about the values they were handed. The split is deliberate.
+    const int n = 16;
+    std::vector<float> rec(static_cast<size_t>(n) * n, 0.25f);
+    rec[static_cast<size_t>(7 * n + 11)] = std::numeric_limits<float>::quiet_NaN();
+
+    const auto lag = recurrence_to_lag(rec.data(), n, false);
+    const auto back = lag_to_recurrence(rec.data(), n, n);
+    const auto enhanced = path_enhance(rec.data(), n, 3, 2, 1, 7);
+    const auto count_bad = [](const std::vector<float>& v) {
+      return std::count_if(v.begin(), v.end(), [](float x) { return !std::isfinite(x); });
+    };
+    // A reshape moves the one cell; the filter spreads it over its own support.
+    CHECK(count_bad(lag) == 1);
+    CHECK(count_bad(back) == 1);
+    CHECK(count_bad(enhanced) > 0);
   }
 }

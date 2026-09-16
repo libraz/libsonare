@@ -5,15 +5,25 @@
 #include <cstdint>
 #include <limits>
 #include <numeric>
+#include <string>
 #include <unordered_map>
 
 #include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
 namespace {
+
+// These entries take a feature matrix rather than audio, so nothing upstream has
+// checked it. One non-finite cell poisons its whole column norm and every distance
+// drawn from it, leaving the neighbour sorts below no ordering to work with.
+void require_finite_features(const float* m, int rows, int cols, const char* fn) {
+  SONARE_CHECK_MSG(numeric::all_finite(m, rows, cols), ErrorCode::InvalidParameter,
+                   std::string(fn) + ": features contain a non-finite value");
+}
 
 inline float column_norm(const float* X, int rows, int cols, int j) {
   float s = 0.0f;
@@ -162,6 +172,8 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
       static_cast<int64_t>(std::numeric_limits<int>::max())) {
     throw SonareException(ErrorCode::InvalidParameter, "cross_similarity: matrix too large");
   }
+  require_finite_features(X, X_rows, X_cols, "cross_similarity");
+  if (Y != X) require_finite_features(Y, Y_rows, Y_cols, "cross_similarity");
 
   if (mode == "affinity") {
     // librosa default: k = min(n_ref, 2*ceil(sqrt(n_ref))).
@@ -226,6 +238,7 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
       static_cast<int64_t>(std::numeric_limits<int>::max())) {
     throw SonareException(ErrorCode::InvalidParameter, "recurrence_matrix: matrix too large");
   }
+  require_finite_features(data, rows, cols, "recurrence_matrix");
   if (width < 1) width = 1;
 
   if (mode == "affinity") {
@@ -419,6 +432,7 @@ std::vector<int> contiguous_ward_runs(const float* block, int rows, int len, int
 std::vector<int> subsegment(const float* data, int rows, int cols,
                             const std::vector<int>& boundaries, int n_segments) {
   if (data == nullptr || rows <= 0 || cols <= 0 || n_segments <= 0) return boundaries;
+  require_finite_features(data, rows, cols, "subsegment");
 
   // Normalize the parent boundaries: clamp into [0, cols], add the 0 and cols
   // endpoints, and drop duplicates so each [a, b) parent span is well-formed.
@@ -482,6 +496,7 @@ std::vector<int> agglomerative(const float* data, int rows, int cols, int k,
   }
   k = std::min(k, cols);
   if (cols <= 0) return {};
+  require_finite_features(data, rows, cols, "agglomerative");
   if (k >= cols) {
     std::vector<int> labels(cols);
     for (int i = 0; i < cols; ++i) labels[i] = i;
