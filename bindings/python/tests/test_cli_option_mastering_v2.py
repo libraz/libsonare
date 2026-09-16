@@ -613,12 +613,19 @@ def test_unknown_target_platform_is_rejected_against_the_delivery_table() -> Non
 def test_no_streaming_safe_reaches_the_suggester(capsys, monkeypatch) -> None:
     """prefer_streaming_safe defaults to true, so the reachable control turns it off."""
     import math
+    import random
 
     from libsonare import _cli_mastering, cli
 
+    # The material has to carry the defect the flag governs. Repair stages are
+    # selected from measurement, so on a clean tone neither setting says anything
+    # about repair, the two explanations come out identical, and the assertions
+    # below stop distinguishing the settings while still reading as a test of them.
     sample_rate = 22_050
+    rng = random.Random(7)
     samples = [
-        0.5 * math.sin(2.0 * math.pi * 440.0 * index / sample_rate) for index in range(sample_rate)
+        0.5 * math.sin(2.0 * math.pi * 440.0 * index / sample_rate) + rng.uniform(-0.3, 0.3)
+        for index in range(sample_rate * 3)
     ]
     monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: (samples, sample_rate))
 
@@ -637,10 +644,18 @@ def test_no_streaming_safe_reaches_the_suggester(capsys, monkeypatch) -> None:
         assert _cli_mastering.cmd_mastering(args) == 0
         return json.loads(capsys.readouterr().out)["explanation"]
 
-    assert any("streaming-safe repair enabled" in line for line in explanation())
+    # The same substring the C++ CLI test pins, so the two surfaces assert on one
+    # phrase rather than each on its own paraphrase of it. Both settings mention
+    # the noise floor, so only the clause naming the preference separates them.
+    safe_lines = explanation()
+    assert any("streaming-safe was asked for" in line for line in safe_lines)
+
     open_lines = explanation("--no-streaming-safe")
-    assert not any("streaming-safe repair enabled" in line for line in open_lines)
-    assert any("repair stages enabled" in line for line in open_lines)
+    assert not any("streaming-safe was asked for" in line for line in open_lines)
+    # Both settings select denoise; the preference decides the noise estimator,
+    # which this output does not carry. Asserting its absence here would say the
+    # stage had been dropped, which is what it used to do and no longer does.
+    assert any("the noise floor is loud under the programme" in line for line in open_lines)
 
 
 @pytest.mark.parametrize(
