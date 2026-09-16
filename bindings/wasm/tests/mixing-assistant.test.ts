@@ -11,7 +11,7 @@
 
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { MixAssistantTrack, SuggestMixSceneRequest } from '../dist/index.js';
+import type { MixAssistantTrack, MixSceneDocument, SuggestMixSceneRequest } from '../dist/index.js';
 import {
   init,
   mixSourceClassFromName,
@@ -74,25 +74,9 @@ function rumblingVoiceTracks(): MixAssistantTrack[] {
   return [{ id: 'vox', name: 'Lead Vox', left: voiceWithRumble() }];
 }
 
-/**
- * Just enough of the scene document to find an insert or a send; a result's
- * `scene` is a `Record<string, unknown>`, because the scene's own shape belongs
- * to the project schema rather than to this facade's types.
- */
-interface SceneView {
-  strips: { id: string; inserts: { processor: string }[]; sends: { destinationBusId: string }[] }[];
-  buses: { id: string; inserts: { processor: string }[] }[];
-}
-
-/** The one place the untyped scene is read as a {@link SceneView}. */
-function sceneView(scene: Record<string, unknown>): SceneView {
-  return scene as unknown as SceneView;
-}
-
 /** Ids of the strips and buses carrying a high-pass insert, in scene order. */
-function highPassOwners(scene: Record<string, unknown>): string[] {
-  const view = sceneView(scene);
-  return [...view.strips, ...view.buses]
+function highPassOwners(scene: MixSceneDocument): string[] {
+  return [...scene.strips, ...scene.buses]
     .filter((node) => node.inserts.some((insert) => insert.processor === 'eq.cutFilter'))
     .map((node) => node.id);
 }
@@ -285,7 +269,7 @@ describe('mixing assistant (WASM)', () => {
       // master *because* it was never classified. That assertion passes whether
       // or not the class was resolved, which is the one outcome this case
       // exists to tell apart.
-      const strip = sceneView(result.scene).strips.find((candidate) => candidate.id === 'keys');
+      const strip = result.scene.strips.find((candidate) => candidate.id === 'keys');
       expect(strip?.inserts.length ?? 0).toBeGreaterThan(0);
       expect(strip?.sends.length ?? 0).toBeGreaterThan(0);
     });
