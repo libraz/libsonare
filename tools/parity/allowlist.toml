@@ -63,7 +63,6 @@ node = [
   # used to spell inline live in one place. Each is a shape the list above does
   # not already cover, which is why they are separate rather than folded.
   "assert_non_negative_scalar",   # finite scalar with a floor of zero
-  "assert_integer_type",          # integrality alone, reported as a type error
   "assert_integer_value",         # integrality, splitting the non-number case from the fractional one
   "assert_bounded_integer",       # integer inside a caller-named interval, which assert_u7 and assert_nibble fix
   "assert_positive_integer",      # integer above zero, capped at the C int range
@@ -91,7 +90,7 @@ wasm = [
   "assert_u7",
   "assert_nibble",
   "assert_u32",
-  "assert_integer_type",          # integrality alone, reported as a type error
+  "assert_integer_value",         # integrality, splitting the non-number case from the fractional one
   "assert_bounded_integer",       # integer inside a caller-named interval, which assert_u7 and assert_nibble fix
   "assert_even_integer_at_least", # even integer with a floor, for an FFT size
   "to_int32_array",               # the element shape of the family above, for an index array whose conversion would otherwise fold each entry
