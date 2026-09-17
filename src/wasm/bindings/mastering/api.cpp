@@ -140,19 +140,7 @@ val js_master_audio(std::string preset_name, val samples, const val& sample_rate
       preset, data.data(), data.size(), sample_rate,
       overrides_vec.empty() ? nullptr : overrides_vec.data(), overrides_vec.size());
 
-  val out = val::object();
-  out.set("samples", vectorToFloat32Array(result.samples));
-  out.set("sampleRate", result.sample_rate);
-  out.set("inputLufs", result.input_lufs);
-  out.set("outputLufs", result.output_lufs);
-  out.set("appliedGainDb", result.applied_gain_db);
-  val stages = val::array();
-  for (const auto& s : result.stages) {
-    stages.call<void>("push", s);
-  }
-  out.set("stages", stages);
-  setChainMetrics(out, result);
-  return out;
+  return masteringMonoResultToVal(result);
 }
 
 val js_master_audio_stereo(std::string preset_name, val left_samples, val right_samples,
@@ -168,20 +156,7 @@ val js_master_audio_stereo(std::string preset_name, val left_samples, val right_
       preset, left.data(), right.data(), left.size(), sample_rate,
       overrides_vec.empty() ? nullptr : overrides_vec.data(), overrides_vec.size());
 
-  val out = val::object();
-  out.set("left", vectorToFloat32Array(result.left));
-  out.set("right", vectorToFloat32Array(result.right));
-  out.set("sampleRate", result.sample_rate);
-  out.set("inputLufs", result.input_lufs);
-  out.set("outputLufs", result.output_lufs);
-  out.set("appliedGainDb", result.applied_gain_db);
-  val stages = val::array();
-  for (const auto& s : result.stages) {
-    stages.call<void>("push", s);
-  }
-  out.set("stages", stages);
-  setChainMetrics(out, result);
-  return out;
+  return masteringStereoResultToVal(result);
 }
 
 val js_master_audio_with_progress(std::string preset_name, val samples, const val& sample_rate_val,
@@ -196,33 +171,13 @@ val js_master_audio_with_progress(std::string preset_name, val samples, const va
                                                  overrides_vec.size());
   }
   mastering::api::MasteringChain chain(std::move(config));
-  if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
-    chain.set_progress_callback([progress_callback](float progress, const char* stage) {
-      progress_callback(progress, std::string(stage ? stage : ""));
-    });
-  }
-  if (!cancel_callback.isNull() && !cancel_callback.isUndefined()) {
-    chain.set_cancel_callback(
-        [cancel_callback] { return cancelCallbackRequested(cancel_callback); });
-  }
+  installMasteringChainCallbacks(chain, progress_callback, cancel_callback);
   const auto result = chain.process_mono_cancellable(data.data(), data.size(), sample_rate);
   if (!result) {
     throw SonareException(ErrorCode::Cancelled, "mastering cancelled");
   }
 
-  val out = val::object();
-  out.set("samples", vectorToFloat32Array(result->samples));
-  out.set("sampleRate", result->sample_rate);
-  out.set("inputLufs", result->input_lufs);
-  out.set("outputLufs", result->output_lufs);
-  out.set("appliedGainDb", result->applied_gain_db);
-  val stages = val::array();
-  for (const auto& s : result->stages) {
-    stages.call<void>("push", s);
-  }
-  out.set("stages", stages);
-  setChainMetrics(out, *result);
-  return out;
+  return masteringMonoResultToVal(*result);
 }
 
 val js_master_audio_stereo_with_progress(std::string preset_name, val left_samples,
@@ -242,35 +197,14 @@ val js_master_audio_stereo_with_progress(std::string preset_name, val left_sampl
                                                  overrides_vec.size());
   }
   mastering::api::MasteringChain chain(std::move(config));
-  if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
-    chain.set_progress_callback([progress_callback](float progress, const char* stage) {
-      progress_callback(progress, std::string(stage ? stage : ""));
-    });
-  }
-  if (!cancel_callback.isNull() && !cancel_callback.isUndefined()) {
-    chain.set_cancel_callback(
-        [cancel_callback] { return cancelCallbackRequested(cancel_callback); });
-  }
+  installMasteringChainCallbacks(chain, progress_callback, cancel_callback);
   const auto result =
       chain.process_stereo_cancellable(left.data(), right.data(), left.size(), sample_rate);
   if (!result) {
     throw SonareException(ErrorCode::Cancelled, "mastering cancelled");
   }
 
-  val out = val::object();
-  out.set("left", vectorToFloat32Array(result->left));
-  out.set("right", vectorToFloat32Array(result->right));
-  out.set("sampleRate", result->sample_rate);
-  out.set("inputLufs", result->input_lufs);
-  out.set("outputLufs", result->output_lufs);
-  out.set("appliedGainDb", result->applied_gain_db);
-  val stages = val::array();
-  for (const auto& s : result->stages) {
-    stages.call<void>("push", s);
-  }
-  out.set("stages", stages);
-  setChainMetrics(out, *result);
-  return out;
+  return masteringStereoResultToVal(*result);
 }
 
 val js_mastering_pair_processor_names() {

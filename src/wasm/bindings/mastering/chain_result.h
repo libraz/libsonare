@@ -5,9 +5,12 @@
 
 #include <emscripten/val.h>
 
+#include <string>
 #include <vector>
 
+#include "mastering/api/chain.h"
 #include "mastering/api/result_types.h"
+#include "wasm/bindings/common/common.h"
 
 namespace sonare {
 
@@ -56,6 +59,58 @@ inline void setChainMetrics(emscripten::val& out, const Result& metrics) {
   }
   out.set("stageGainReductions", reductions);
   setMasteringReport(out, metrics.report);
+}
+
+/// @brief Write the level, stage-list and metric fields every mastering-chain
+/// result object carries, whichever channel layout produced it.
+template <typename Result>
+inline void setChainLevelsAndStages(emscripten::val& out, const Result& result) {
+  out.set("sampleRate", result.sample_rate);
+  out.set("inputLufs", result.input_lufs);
+  out.set("outputLufs", result.output_lufs);
+  out.set("appliedGainDb", result.applied_gain_db);
+  emscripten::val stages = emscripten::val::array();
+  for (const auto& stage : result.stages) {
+    stages.call<void>("push", stage);
+  }
+  out.set("stages", stages);
+  setChainMetrics(out, result);
+}
+
+/// @brief The JS object every mono mastering entry point returns. `master_audio`
+/// and the chain share one result type, so this is one owner for both.
+inline emscripten::val masteringMonoResultToVal(
+    const sonare::mastering::api::MonoChainResult& result) {
+  emscripten::val out = emscripten::val::object();
+  out.set("samples", vectorToFloat32Array(result.samples));
+  setChainLevelsAndStages(out, result);
+  return out;
+}
+
+/// @brief The JS object every stereo mastering entry point returns.
+inline emscripten::val masteringStereoResultToVal(
+    const sonare::mastering::api::StereoChainResult& result) {
+  emscripten::val out = emscripten::val::object();
+  out.set("left", vectorToFloat32Array(result.left));
+  out.set("right", vectorToFloat32Array(result.right));
+  setChainLevelsAndStages(out, result);
+  return out;
+}
+
+/// @brief Install the JS progress and cancel callbacks on a chain. A callback
+/// that is null or undefined is left uninstalled rather than wrapped.
+inline void installMasteringChainCallbacks(sonare::mastering::api::MasteringChain& chain,
+                                           const emscripten::val& progress_callback,
+                                           const emscripten::val& cancel_callback) {
+  if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
+    chain.set_progress_callback([progress_callback](float progress, const char* stage) {
+      progress_callback(progress, std::string(stage ? stage : ""));
+    });
+  }
+  if (!cancel_callback.isNull() && !cancel_callback.isUndefined()) {
+    chain.set_cancel_callback(
+        [cancel_callback] { return cancelCallbackRequested(cancel_callback); });
+  }
 }
 
 }  // namespace sonare
