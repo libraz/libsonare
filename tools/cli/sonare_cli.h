@@ -39,6 +39,7 @@
 #include "editing/polyphony/polyphonic_edit.h"
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/voice_changer.h"
+#include "effects/decompose.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
 #include "effects/pitch_shift.h"
@@ -180,6 +181,7 @@ int cmd_voice_presets(const CliArgs& args, const Audio& audio);
 int cmd_voice_preset(const CliArgs& args, const Audio& audio);
 int cmd_voice_preset_validate(const CliArgs& args, const Audio& audio);
 int cmd_hpss(const CliArgs& args, const Audio& audio);
+int cmd_decompose_stems(const CliArgs& args, const Audio& audio);
 int cmd_preemphasis(const CliArgs& args, const Audio& audio);
 int cmd_deemphasis(const CliArgs& args, const Audio& audio);
 int cmd_trim_silence(const CliArgs& args, const Audio& audio);
@@ -249,4 +251,6 @@ int cmd_clicks(const CliArgs& args, const Audio& audio);
 
 #ifdef SONARE_WITH_ARRANGEMENT
 int cmd_project(const CliArgs& args, const Audio& audio);
+int cmd_midi_render(const CliArgs& args, const Audio& audio);
+int cmd_transcribe(const CliArgs& args, const Audio& audio);
 #endif

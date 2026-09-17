@@ -3467,6 +3467,307 @@
           "required": false,
           "domain": null
         }
+      ],
+      "decompose-stems": [
+        {
+          "name": "beta",
+          "type": "number",
+          "default": 2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "init",
+          "type": "string",
+          "default": "random",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "random",
+              "nndsvd"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "mask-power",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-components",
+          "type": "integer",
+          "default": 4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-iter",
+          "type": "integer",
+          "default": 100,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "midi-render": [
+        {
+          "name": "block-size",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "channels",
+          "type": "integer",
+          "default": 2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "frames",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "instrument-latency",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "synth",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "transcribe": [
+        {
+          "name": "channel",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "fixed-velocity",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "fmax",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "fmin",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "group",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-note-ms",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "polyphonic",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-hz",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "segmentation-threshold-cents",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "tempo-bpm",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "velocity-floor-db",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
       ]
     }
   },
@@ -4120,11 +4421,9 @@
       "option_status": "active"
     },
     "midi-render": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "no native route to rendering a MIDI file to audio"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "mix": {
       "classification": "intentional_variant",
@@ -4139,18 +4438,14 @@
       "option_status": "active"
     },
     "decompose-stems": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "no native route to NMF separation; hpss is a harmonic-percussive split rather than a component decomposition"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "transcribe": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "no native route to audio-to-MIDI; polyphonic-notes reports the notes as JSON and project.export-smf writes a file from a project, so neither reaches the transcription the command performs"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "suggest-mix": {
       "classification": "python_only",
@@ -11729,6 +12024,638 @@
             "{audio}",
             "--params",
             "targetLufs=abc",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "decompose-stems",
+      "options": [
+        {
+          "name": "beta",
+          "type": "number",
+          "default": 2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "init",
+          "type": "string",
+          "default": "random",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "random",
+              "nndsvd"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "mask-power",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-components",
+          "type": "integer",
+          "default": 4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-iter",
+          "type": "integer",
+          "default": 100,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "count": "integer",
+            "length": "integer",
+            "sample_rate": "integer",
+            "energies": {
+              "type": "array",
+              "items": "number"
+            },
+            "components": {
+              "type": "array",
+              "items": "path"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "decompose-stems",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--n-components",
+            "2",
+            "--n-iter",
+            "10",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "unknown_init",
+          "argv": [
+            "decompose-stems",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--init",
+            "bogus",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "zero_components",
+          "argv": [
+            "decompose-stems",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--n-components",
+            "0",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "mask_power_below_one",
+          "argv": [
+            "decompose-stems",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--mask-power",
+            "0.5",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "midi-render",
+      "options": [
+        {
+          "name": "block-size",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "channels",
+          "type": "integer",
+          "default": 2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "frames",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "instrument-latency",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "synth",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "string",
+            "frames": "integer",
+            "channels": "integer",
+            "sample_rate": "integer",
+            "synth": "boolean"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "midi-render",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "unknown_preset",
+          "argv": [
+            "midi-render",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--synth",
+            "no-such-preset",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "unsupported_channels",
+          "argv": [
+            "midi-render",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--channels",
+            "3",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "sample_rate_mismatch",
+          "argv": [
+            "midi-render",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "128",
+            "-o",
+            "{bounce_output}",
+            "--sample-rate",
+            "8000",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "transcribe",
+      "options": [
+        {
+          "name": "channel",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "fixed-velocity",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "fmax",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "fmin",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "group",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-note-ms",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "polyphonic",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-hz",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "segmentation-threshold-cents",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "tempo-bpm",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "velocity-floor-db",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "string",
+            "note_count": "integer",
+            "tempo_bpm": "number",
+            "bytes": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "transcribe",
+            "{audio}",
+            "-o",
+            "{smf_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "explicit_tempo",
+          "argv": [
+            "transcribe",
+            "{audio}",
+            "-o",
+            "{smf_output}",
+            "--tempo-bpm",
+            "120",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "zero_tempo",
+          "argv": [
+            "transcribe",
+            "{audio}",
+            "-o",
+            "{smf_output}",
+            "--tempo-bpm",
+            "0",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "inverted_pitch_range",
+          "argv": [
+            "transcribe",
+            "{audio}",
+            "-o",
+            "{smf_output}",
+            "--fmin",
+            "900",
+            "--fmax",
+            "100",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "fixed_velocity_out_of_range",
+          "argv": [
+            "transcribe",
+            "{audio}",
+            "-o",
+            "{smf_output}",
+            "--fixed-velocity",
+            "200",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "channel_out_of_range",
+          "argv": [
+            "transcribe",
+            "{audio}",
+            "-o",
+            "{smf_output}",
+            "--channel",
+            "20",
             "--json"
           ],
           "exit": 3,

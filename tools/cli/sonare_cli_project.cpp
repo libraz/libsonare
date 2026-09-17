@@ -457,8 +457,7 @@ int cmd_project_compile(const CliArgs& args) {
 // rendered through the NativeSynth catalog. A named preset is a fixed patch;
 // the bare flag follows GM bank/program changes and routes channel 10 through
 // the GM drum-kit map. Without --synth MIDI tracks render silently.
-int cmd_project_bounce(const CliArgs& args) {
-  const bool use_synth = args.has("synth");
+int project_bounce_impl(const CliArgs& args, bool use_synth) {
   SonareSynthInstrumentBinding synth_binding{};
   if (use_synth) {
     const std::string requested = args.get_string("synth");
@@ -552,6 +551,120 @@ int cmd_project_bounce(const CliArgs& args) {
   } else if (!args.quiet) {
     std::cout << color::green << "Bounced " << frames << " frames (" << channels << " ch @ "
               << sample_rate << " Hz" << (use_synth ? ", NativeSynth" : "") << ") to "
+              << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_project_bounce(const CliArgs& args) { return project_bounce_impl(args, args.has("synth")); }
+
+// `midi-render --in in.json -o out.wav [--synth preset]` — the same render with
+// the synth pinned on, so a MIDI project reaches audio without the caller
+// having to know it is a project bounce underneath. An empty `--synth` follows
+// GM bank/program changes, which is what makes the bare form useful on a
+// general-MIDI file.
+int cmd_midi_render(const CliArgs& args, const Audio&) { return project_bounce_impl(args, true); }
+
+// `transcribe in.wav -o out.mid` — audio to a Standard MIDI File. The notes
+// land on a PROJECT's tempo map, which is why an explicit --tempo-bpm is
+// installed as that map rather than handed to the transcriber: the clip entry
+// takes no tempo at all. Omitting it detects one from the take.
+int cmd_transcribe(const CliArgs& args, const Audio& audio) {
+  const bool tempo_given = args.has("tempo-bpm");
+  if (tempo_given && !(args.get_float("tempo-bpm", 0.0f) > 0.0f)) {
+    throw std::invalid_argument("--tempo-bpm must be greater than 0");
+  }
+
+  ProjectHandle handle;
+  SonareError err = sonare_project_create(&handle.ptr);
+  if (err != SONARE_OK) {
+    project_report_error("create project", err);
+    return project_exit_code(err);
+  }
+
+  float tempo_bpm = 0.0f;
+  if (tempo_given) {
+    tempo_bpm = args.get_float("tempo-bpm", 0.0f);
+    SonareProjectTempoSegment segment{};
+    segment.start_ppq = 0.0;
+    segment.bpm = static_cast<double>(tempo_bpm);
+    err = sonare_project_set_tempo_segments(handle.ptr, &segment, 1);
+    if (err != SONARE_OK) {
+      project_report_error("set tempo", err);
+      return project_exit_code(err);
+    }
+  } else {
+    const SonareProjectTempoOptions options = sonare_project_tempo_options_default();
+    err = sonare_project_auto_tempo_with_options(handle.ptr, audio.data(), audio.size(),
+                                                 audio.sample_rate(), &options, 0, 0, &tempo_bpm);
+    if (err != SONARE_OK) {
+      project_report_error("detect tempo", err);
+      return project_exit_code(err);
+    }
+  }
+
+  // PPQ coordinates are beats, so the take's length in beats is what the clip
+  // has to span for its last note-off to fall inside it.
+  const double duration =
+      audio.sample_rate() > 0 ? static_cast<double>(audio.size()) / audio.sample_rate() : 0.0;
+  const double length_ppq = std::max(1.0, std::ceil(duration * tempo_bpm / 60.0));
+  uint32_t track_id = 0;
+  uint32_t clip_id = 0;
+  err = sonare_project_add_midi_clip(handle.ptr, 0.0, length_ppq, &track_id, &clip_id);
+  if (err != SONARE_OK) {
+    project_report_error("add MIDI clip", err);
+    return project_exit_code(err);
+  }
+
+  // 0 is the C ABI's "keep the library default" for every field here, which is
+  // what an unset option means, so an absent option is left at 0 rather than
+  // given a value this CLI would have to keep in step with the core's.
+  SonareTranscribeConfig config{};
+  config.struct_version = 1;
+  config.polyphonic = args.has("polyphonic") ? 1 : 0;
+  config.reference_hz = args.get_float("reference-hz", 0.0f);
+  config.fmin = args.get_float("fmin", 0.0f);
+  config.fmax = args.get_float("fmax", 0.0f);
+  config.min_note_ms = args.get_float("min-note-ms", 0.0f);
+  config.segmentation_threshold_cents = args.get_float("segmentation-threshold-cents", 0.0f);
+  config.velocity_floor_db = args.get_float("velocity-floor-db", 0.0f);
+  config.fixed_velocity = args.get_int("fixed-velocity", 0);
+  config.group = args.get_int("group", 0);
+  config.channel = args.get_int("channel", 0);
+
+  size_t note_count = 0;
+  err = sonare_project_transcribe_to_clip(handle.ptr, clip_id, audio.data(), audio.size(),
+                                          audio.sample_rate(), &config, &note_count);
+  if (err != SONARE_OK) {
+    project_report_error("transcribe", err);
+    return project_exit_code(err);
+  }
+
+  uint8_t* bytes = nullptr;
+  size_t len = 0;
+  err = sonare_project_export_smf(handle.ptr, &bytes, &len);
+  if (err != SONARE_OK) {
+    project_report_error("export SMF", err);
+    return project_exit_code(err);
+  }
+  const bool ok = write_binary_file(args.output_file, bytes, len);
+  sonare_free_bytes(bytes);
+  if (!ok) {
+    return report_output_write_failure(args.output_file);
+  }
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("note_count", note_count)
+        .kv("tempo_bpm", tempo_bpm)
+        .kv("bytes", len)
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cout << color::green << "Transcribed " << note_count << " notes at " << std::fixed
+              << std::setprecision(2) << tempo_bpm << std::defaultfloat << " BPM to "
               << args.output_file << color::reset << "\n";
   }
   return 0;

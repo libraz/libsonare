@@ -697,6 +697,84 @@ int cmd_voice_preset_validate(const CliArgs&, const Audio&) {
 
 #endif  // SONARE_WITH_VOICE_CHANGER
 
+int cmd_decompose_stems(const CliArgs& args, const Audio& audio) {
+  DecomposeStemsConfig config;
+  config.n_components = args.get_int("n-components", 4);
+  config.n_fft = args.n_fft;
+  config.hop_length = args.hop_length;
+  config.n_iter = args.get_int("n-iter", 100);
+  config.beta = args.get_float("beta", 2.0f);
+  config.init = args.get_string("init", "random");
+  config.mask_power = args.get_float("mask-power", 1.0f);
+
+  if (!args.quiet) {
+    std::cerr << color::blue << "Decomposing into components..." << color::reset << "\n";
+  }
+
+  const DecomposeStemsResult result =
+      decompose_stems(audio.data(), audio.size(), audio.sample_rate(), config);
+
+  // Same base-name shape hpss uses: the destination names the set rather than a
+  // single file, and the suffix is stripped case-insensitively so `-o out.WAV`
+  // and `-o out.wav` name the same set.
+  std::string base = args.output_file;
+  if (base.size() > 4) {
+    std::string suffix = base.substr(base.size() - 4);
+    for (char& c : suffix) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (suffix == ".wav") base = base.substr(0, base.size() - 4);
+  }
+
+  // Mean absolute amplitude, the level summary both CLIs publish per component.
+  auto component_energy = [](const std::vector<float>& component) {
+    if (component.empty()) return 0.0f;
+    float total = 0.0f;
+    for (float sample : component) total += std::fabs(sample);
+    return total / static_cast<float>(component.size());
+  };
+
+  std::vector<std::string> paths;
+  std::vector<float> energies;
+  paths.reserve(result.components.size());
+  energies.reserve(result.components.size());
+  for (size_t index = 0; index < result.components.size(); ++index) {
+    const std::vector<float>& component = result.components[index];
+    std::string path = base + "_component" + std::to_string(index + 1) + ".wav";
+    save_wav(path, component.data(), component.size(), audio.sample_rate());
+    paths.push_back(std::move(path));
+    energies.push_back(component_energy(component));
+  }
+
+  if (args.json_output) {
+    JsonBuilder builder;
+    builder.begin_object()
+        .kv("count", paths.size())
+        .kv("length", result.components.empty() ? size_t{0} : result.components.front().size())
+        .kv("sample_rate", audio.sample_rate())
+        .key("energies")
+        .begin_array();
+    for (float energy : energies) builder.value(energy);
+    builder.end_array().key("components").begin_array();
+    for (const std::string& path : paths) builder.value(path);
+    builder.end_array().end_object().print();
+  } else {
+    std::cout << "  Stems: " << paths.size() << " components\n";
+    for (size_t index = 0; index < paths.size(); ++index) {
+      std::cout << "    " << std::setw(2) << (index + 1) << ". energy " << std::fixed
+                << std::setprecision(6) << energies[index] << std::defaultfloat << "  "
+                << paths[index] << "\n";
+    }
+    if (!paths.empty()) {
+      std::cout << "  Wrote: ";
+      for (size_t index = 0; index < paths.size(); ++index) {
+        if (index != 0) std::cout << ", ";
+        std::cout << paths[index];
+      }
+      std::cout << "\n";
+    }
+  }
+  return 0;
+}
+
 int cmd_hpss(const CliArgs& args, const Audio& audio) {
   const int output_mode_count = static_cast<int>(args.has("harmonic-only")) +
                                 static_cast<int>(args.has("percussive-only")) +

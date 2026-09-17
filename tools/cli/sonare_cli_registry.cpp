@@ -502,6 +502,16 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         {int_value("kernel-harmonic", 31), int_value("kernel-percussive", 31), required_output(),
          flag("harmonic-only"), flag("percussive-only"), flag("with-residual"), flag("hard-mask"),
          global_int("n-fft", 2048), global_int("hop-length", 512)});
+    // `init` is refused here because nothing below refuses it: the core's
+    // validate_config checks the numeric fields only and reads any other name
+    // as its own default, so an unrecognised initialiser is caught at the
+    // surface or not at all.
+    add_command(commands, "decompose-stems", true,
+                {int_value("n-components", 4), int_value("n-iter", 100), number_value("beta", 2.0),
+                 with_domain(string_value("init", "random"),
+                             choices_of({"random", "nndsvd"}, CliOptionDomainStage::Parameter)),
+                 number_value("mask-power", 1.0), required_output(), global_int("n-fft", 2048),
+                 global_int("hop-length", 512)});
     add_command(commands, "preemphasis", true, {number_value("coef", 0.97), required_output()});
     add_command(commands, "deemphasis", true, {number_value("coef", 0.97), required_output()});
     add_command(commands, "trim-silence", true,
@@ -778,6 +788,24 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          int_value("block-size", 0), int_value("channels", 2), int_value("instrument-latency", 0),
          optional_string("synth")},
         &validate_project_bounce_channels);
+    // `project bounce` with the synth pinned on, as a top-level leaf: it takes
+    // no subcommand positional, and `--synth` is a plain value rather than an
+    // optional flag because the rendering always goes through NativeSynth and
+    // only the preset is in question.
+    add_command(commands, "midi-render", false,
+                {required_path("in"), required_output(), int_value("sample-rate"),
+                 int_value("frames", 0), int_value("block-size", 0), int_value("channels", 2),
+                 int_value("instrument-latency", 0), string_value("synth", "")},
+                {}, &validate_project_bounce_channels);
+    // Every numeric here means "keep the library default" when absent, and the
+    // C ABI spells that 0 and refuses an out-of-domain value by name, so the
+    // domains stay on that one entry rather than being restated per surface.
+    add_command(commands, "transcribe", true,
+                {required_output(), number_value("tempo-bpm"), flag("polyphonic"),
+                 number_value("reference-hz"), number_value("fmin"), number_value("fmax"),
+                 number_value("min-note-ms"), number_value("segmentation-threshold-cents"),
+                 number_value("velocity-floor-db"), int_value("fixed-velocity"),
+                 int_value("group", 0), int_value("channel", 0)});
     add_project_command("project.export-smf", {required_path("in"), required_output()});
     add_project_command("project.import-smf", {required_path("smf"), required_output()});
     add_project_command("project.export-midi2", {required_path("in"), required_output()});

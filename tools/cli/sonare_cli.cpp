@@ -58,6 +58,8 @@ const std::vector<CommandInfo>& get_commands() {
       {"voice-preset-validate", "Normalize a realtime voice changer preset JSON",
        cmd_voice_preset_validate, false},
       {"hpss", "Harmonic-percussive separation", cmd_hpss, true},
+      {"decompose-stems", "Separate into NMF components that keep the original phase",
+       cmd_decompose_stems, true},
       {"preemphasis", "Apply pre-emphasis filtering", cmd_preemphasis, true},
       {"deemphasis", "Apply de-emphasis filtering", cmd_deemphasis, true},
       {"trim-silence", "Trim leading/trailing silence", cmd_trim_silence, true},
@@ -139,6 +141,8 @@ const std::vector<CommandInfo>& get_commands() {
 #ifdef SONARE_WITH_ARRANGEMENT
       {"project", "Headless arrangement / DAW project (abi/new/validate/compile/bounce/...)",
        cmd_project, false},
+      {"midi-render", "Render a MIDI project through NativeSynth", cmd_midi_render, false},
+      {"transcribe", "Transcribe audio to a Standard MIDI File", cmd_transcribe, true},
 #endif
   };
   return commands;

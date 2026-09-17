@@ -61,6 +61,12 @@ if(BUILD_ARRANGEMENT)
     ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
+    # Reads SONARE_WITH_PITCH_EDITOR as well as SONARE_WITH_ARRANGEMENT, and
+    # compiles a not-supported stub without either. Listed here because the
+    # arrangement define is the one that decides whether `transcribe` exists at
+    # all; without the pitch editor it exists and reports not-supported, which
+    # is what the other surfaces do.
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_transcribe.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_memory.cpp
   )
   target_link_libraries(sonare PRIVATE

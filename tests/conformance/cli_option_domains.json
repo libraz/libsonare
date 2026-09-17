@@ -366,6 +366,19 @@
       "exclusiveMinimum": false,
       "maximum": 4095.0,
       "exclusiveMaximum": false
+    },
+    {
+      "command": "decompose-stems",
+      "option": "init",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "random",
+        "nndsvd"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
     }
   ],
   "requiredInvalidParameter": [
@@ -375,6 +388,10 @@
     },
     {
       "command": "clicks",
+      "option": "output"
+    },
+    {
+      "command": "decompose-stems",
       "option": "output"
     },
     {
@@ -403,6 +420,10 @@
     },
     {
       "command": "mfcc-to-audio",
+      "option": "output"
+    },
+    {
+      "command": "midi-render",
       "option": "output"
     },
     {
@@ -479,6 +500,10 @@
     },
     {
       "command": "tone",
+      "option": "output"
+    },
+    {
+      "command": "transcribe",
       "option": "output"
     },
     {
