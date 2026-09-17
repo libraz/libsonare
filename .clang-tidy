@@ -1,0 +1,32 @@
+# Editor-side static analysis. No CI job consumes this file: clangd and a manual
+# `clang-tidy -p build` run are the only readers, so WarningsAsErrors stays empty
+# and nothing here can turn a green build red.
+#
+# The list is deliberately narrow. Enabling a family wholesale over ~500
+# translation units buries the findings that matter, so checks are added one at a
+# time once the tree is clean of the ones already here.
+#
+# bugprone-narrowing-conversions is off on purpose: the build omits -Wconversion
+# for the same reason, since size_t/int and double/float boundaries are pervasive
+# in the DSP paths and the check reports them by the thousand.
+Checks: >
+  -*,
+  bugprone-use-after-move,
+  bugprone-dangling-handle,
+  bugprone-integer-division,
+  bugprone-signed-char-misuse,
+  bugprone-unused-raii,
+  performance-for-range-copy,
+  performance-unnecessary-value-param,
+  misc-uniqueptr-reset-release,
+  misc-unused-using-decls
+
+WarningsAsErrors: ''
+
+# Best-effort match on this project's own headers. clang-tidy 18 has no
+# exclude-side regex, so a vendored header under a directory that itself ends in
+# `src` can still slip through; the editor only surfaces diagnostics for the file
+# in front of you, which keeps that harmless in practice.
+HeaderFilterRegex: '(^|/)(src|include)/.*\.h$'
+
+FormatStyle: file
