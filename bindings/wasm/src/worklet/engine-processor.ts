@@ -1,7 +1,7 @@
 import type { EngineClip } from '../index';
 import { RealtimeEngine } from '../index';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types';
-import { requireChannelCount } from './guards';
+import { requireChannelCount, requireIntegerOption } from './guards';
 import {
   DEFAULT_METRONOME_CONFIG,
   type ResolvedMetronomeConfig,
@@ -119,7 +119,13 @@ export class SonareRealtimeEngineWorkletProcessor {
     this.blockSize = options.blockSize ?? 128;
     this.channelCount = requireChannelCount(options.channelCount, 2);
     this.transport = transport;
-    this.meterIntervalFrames = Math.max(0, Math.floor(options.meterIntervalFrames ?? 2048));
+    // Zero is the off switch for meter publication, so the floor is 0.
+    this.meterIntervalFrames = requireIntegerOption(
+      options.meterIntervalFrames,
+      2048,
+      'meterIntervalFrames',
+      0,
+    );
     this.commandRing = options.commandSharedBuffer
       ? this.commandRingFromSharedBuffer(options.commandSharedBuffer, options.commandRingCapacity)
       : undefined;
@@ -177,7 +183,13 @@ export class SonareRealtimeEngineWorkletProcessor {
     // band count follows the ring's record layout so writeScopeRing never
     // overruns its slot.
     if (this.scopeRing) {
-      const interval = Math.max(1, Math.floor(options.scopeIntervalFrames ?? this.blockSize));
+      // Zero is the engine's own off switch for the scope tap, so the floor is 0.
+      const interval = requireIntegerOption(
+        options.scopeIntervalFrames,
+        this.blockSize,
+        'scopeIntervalFrames',
+        0,
+      );
       this.engine.configureScopeTelemetry(interval, this.scopeRing.bands);
     }
   }

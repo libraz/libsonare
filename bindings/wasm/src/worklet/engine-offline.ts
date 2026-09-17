@@ -1,4 +1,5 @@
 import type { EngineCaptureStatus, EngineMarker, EngineTrackLane, RealtimeEngine } from '../index';
+import { requireChannelCount, requireInteger, requireIntegerOption } from './guards';
 import type { SonareEngineSyncCaptureMessage, SonareEngineTransportFacade } from './messages';
 
 /** Capture configuration options accepted by the engine's `configureCapture`. */
@@ -12,20 +13,22 @@ export interface CaptureOptions {
 
 /**
  * Normalizes capture options into the resolved config carried by the
- * `syncCapture` message, applying integer truncation and defaults.
+ * `syncCapture` message, applying defaults and refusing a non-integer count.
  *
  * @param options Raw capture options.
  * @param defaultChannels Channel count to use when `options.channels` is unset.
+ * @throws RangeError if a frame count, channel count or offset is not an integer.
  */
 export function buildCaptureConfig(
   options: CaptureOptions,
   defaultChannels: number,
 ): Omit<SonareEngineSyncCaptureMessage, 'type'> {
   return {
-    bufferFrames: Math.trunc(options.bufferFrames),
-    channels: Math.trunc(options.channels ?? defaultChannels),
+    // bufferFrames has no default; NaN makes the guard refuse an absent value.
+    bufferFrames: requireIntegerOption(options.bufferFrames, Number.NaN, 'bufferFrames', 1),
+    channels: requireChannelCount(options.channels, defaultChannels),
     source: options.source ?? 'output',
-    recordOffsetSamples: Math.trunc(options.recordOffsetSamples ?? 0),
+    recordOffsetSamples: requireInteger(options.recordOffsetSamples, 0, 'recordOffsetSamples'),
     inputMonitor: {
       enabled: Boolean(options.inputMonitor?.enabled),
       gain: options.inputMonitor?.gain ?? 1,

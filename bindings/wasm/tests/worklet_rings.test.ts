@@ -385,6 +385,37 @@ describe('Sonare worklet ring buffers', () => {
       expect(popSonareEngineCommandRingBuffer(ring)).toBeNull();
     });
 
+    it('holds type and targetId to the uint32 slot the readers are unsigned on', () => {
+      const ring = createSonareEngineCommandRingBuffer(8);
+      const push = (command: { type: number; targetId?: number }): boolean =>
+        pushSonareEngineCommandRingBuffer(ring, command);
+
+      // The slot is load-bearing: two ids round-trip as two distinct records,
+      // and the top of the domain survives rather than folding to 0.
+      expect(push({ type: SonareEngineCommandType.TransportSeekSample, targetId: 7 })).toBe(true);
+      expect(push({ type: SonareEngineCommandType.TransportSeekSample, targetId: 9 })).toBe(true);
+      expect(
+        push({ type: SonareEngineCommandType.TransportSeekSample, targetId: 0xffff_ffff }),
+      ).toBe(true);
+      expect(popSonareEngineCommandRingBuffer(ring)).toMatchObject({ targetId: 7 });
+      expect(popSonareEngineCommandRingBuffer(ring)).toMatchObject({ targetId: 9 });
+      expect(popSonareEngineCommandRingBuffer(ring)).toMatchObject({ targetId: 0xffff_ffff });
+
+      // A fraction truncates, a negative wraps to a legal id and 2**32 wraps to
+      // 0; none of the three is distinguishable downstream from a deliberate id.
+      for (const targetId of [7.5, -1, 2 ** 32, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(() => push({ type: SonareEngineCommandType.TransportSeekSample, targetId })).toThrow(
+          /targetId must be an integer within \[0, 4294967295\]/,
+        );
+      }
+      for (const type of [2.5, -1, 2 ** 32, Number.NaN]) {
+        expect(() => push({ type })).toThrow(/type must be an integer within \[0, 4294967295\]/);
+      }
+      // A refused push leaves the write index alone, so the next one reuses the slot.
+      expect(push({ type: SonareEngineCommandType.TransportStop, targetId: 11 })).toBe(true);
+      expect(popSonareEngineCommandRingBuffer(ring)).toMatchObject({ targetId: 11 });
+    });
+
     it('round-trips fixed-layout telemetry records with wraparound', () => {
       const ring = createSonareEngineTelemetryRingBuffer(2);
       expect(ring.header[2]).toBe(2);

@@ -127,6 +127,19 @@ describe('SonareRealtimeEngineNode', () => {
           }),
         ).toBe(false);
       }
+      // Every command carries its targetId through the same uint32 slot, so the
+      // domain cannot be a property of the monitor-mode type alone. This path
+      // answers false where the record writer throws.
+      expect(
+        node.sendCommand({ type: SonareEngineCommandType.TransportSeekSample, targetId: 5 }),
+      ).toBe(true);
+      expect(popSonareEngineCommandRingBuffer(commandRing)).toMatchObject({ targetId: 5 });
+      for (const targetId of [-1, 0x1_0000_0000, 5.5]) {
+        expect(
+          node.sendCommand({ type: SonareEngineCommandType.TransportSeekSample, targetId }),
+        ).toBe(false);
+      }
+      expect(popSonareEngineCommandRingBuffer(commandRing)).toBeNull();
 
       writeSonareEngineTelemetryRingBuffer(telemetryRing, {
         type: SonareEngineTelemetryType.ProcessBlock,

@@ -10,6 +10,7 @@ import {
   isExternalMidiBatchMessage,
   isMeterSnapshot,
   requireChannelCount,
+  requireIntegerOption,
 } from './guards';
 import type {
   SonareEngineCaptureRequestMessage,
@@ -30,6 +31,7 @@ import {
   createSonareMeterRingBuffer,
   createSonareScopeRingBuffer,
   isRecord,
+  isUint32Slot,
   pushSonareEngineCommandRingBuffer,
   readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
@@ -64,13 +66,6 @@ function isTrackMonitorMode(value: number | bigint | undefined): boolean {
   return typeof mode === 'number' && Number.isSafeInteger(mode) && mode >= 0 && mode <= 2;
 }
 
-/** A track-monitor command cannot infer a lane: its target is a uint32 index. */
-function isTrackMonitorLaneIndex(value: number | undefined): boolean {
-  return (
-    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 0xffff_ffff
-  );
-}
-
 function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
   const type = Number(command.type);
   if (
@@ -82,12 +77,15 @@ function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
     return false;
   }
   return (
-    (command.targetId === undefined || Number.isSafeInteger(command.targetId)) &&
+    // The record writer refuses a targetId outside the slot by throwing, and
+    // this path answers false instead, so it must reject the same domain here.
+    (command.targetId === undefined || isUint32Slot(command.targetId)) &&
     (command.argFloat === undefined || Number.isFinite(command.argFloat)) &&
     isFiniteInteger(command.argInt) &&
     isFiniteInteger(command.sampleTime) &&
+    // A track-monitor command cannot infer a lane: its target is required.
     (type !== SonareEngineCommandType.SetTrackMonitorMode ||
-      (isTrackMonitorLaneIndex(command.targetId) && isTrackMonitorMode(command.argInt)))
+      (isUint32Slot(command.targetId) && isTrackMonitorMode(command.argInt)))
   );
 }
 
@@ -275,38 +273,76 @@ export class SonareRealtimeEngineNode {
       );
     }
 
+    // Resolved before the transport branch, so a capacity the ring could not
+    // hold is refused by name whichever transport the caller ends up with.
+    const commandRingCapacity = requireIntegerOption(
+      options.commandRingCapacity,
+      128,
+      'commandRingCapacity',
+      1,
+    );
+    const telemetryRingCapacity = requireIntegerOption(
+      options.telemetryRingCapacity,
+      128,
+      'telemetryRingCapacity',
+      1,
+    );
+    const meterRingCapacity = requireIntegerOption(
+      options.meterRingCapacity,
+      128,
+      'meterRingCapacity',
+      1,
+    );
+    const scopeRingCapacity = requireIntegerOption(
+      options.scopeRingCapacity,
+      64,
+      'scopeRingCapacity',
+      1,
+    );
+    const scopeBands = requireIntegerOption(options.scopeBands, 48, 'scopeBands', 1);
+    const clipPageRequestRingCapacity = requireIntegerOption(
+      options.clipPageRequestRingCapacity,
+      128,
+      'clipPageRequestRingCapacity',
+      1,
+    );
+    const externalMidiRingCapacity = requireIntegerOption(
+      options.externalMidiRingCapacity,
+      256,
+      'externalMidiRingCapacity',
+      1,
+    );
     const commandRing =
-      mode === 'sab'
-        ? createSonareEngineCommandRingBuffer(options.commandRingCapacity ?? 128)
-        : undefined;
+      mode === 'sab' ? createSonareEngineCommandRingBuffer(commandRingCapacity) : undefined;
     const telemetryRing =
-      mode === 'sab'
-        ? createSonareEngineTelemetryRingBuffer(options.telemetryRingCapacity ?? 128)
-        : undefined;
+      mode === 'sab' ? createSonareEngineTelemetryRingBuffer(telemetryRingCapacity) : undefined;
     // Meter ring: the engine publishes meters into a SAB ring. Lock-free meter
     // delivery matches the telemetry path and keeps the audio render callback
     // allocation-free in SAB mode.
-    const meterRing =
-      mode === 'sab' ? createSonareMeterRingBuffer(options.meterRingCapacity ?? 128) : undefined;
+    const meterRing = mode === 'sab' ? createSonareMeterRingBuffer(meterRingCapacity) : undefined;
     // Scope ring (FFT spectrum + goniometer): opt-in. The per-block FFT is
     // heavier than the meter path, so it is created only when the caller
-    // requests scope telemetry via scopeIntervalFrames > 0.
-    const scopeIntervalFrames = Math.max(0, Math.floor(options.scopeIntervalFrames ?? 0));
+    // requests scope telemetry via scopeIntervalFrames > 0. Zero is the off
+    // switch, so the interval's floor is 0 rather than the capacities' 1.
+    const scopeIntervalFrames = requireIntegerOption(
+      options.scopeIntervalFrames,
+      0,
+      'scopeIntervalFrames',
+      0,
+    );
     const scopeRing =
       mode === 'sab' && scopeIntervalFrames > 0
-        ? createSonareScopeRingBuffer(options.scopeRingCapacity ?? 64, options.scopeBands ?? 48)
+        ? createSonareScopeRingBuffer(scopeRingCapacity, scopeBands)
         : undefined;
     // Paged-clip cache misses are a worklet-to-main-thread control signal. A
     // dedicated SPSC SAB ring keeps process() free of both embind request
     // objects and postMessage structured cloning.
     const clipPageRequestRing =
       mode === 'sab'
-        ? createSonareClipPageRequestRingBuffer(options.clipPageRequestRingCapacity ?? 128)
+        ? createSonareClipPageRequestRingBuffer(clipPageRequestRingCapacity)
         : undefined;
     const externalMidiRing =
-      mode === 'sab'
-        ? createSonareExternalMidiRingBuffer(options.externalMidiRingCapacity ?? 256)
-        : undefined;
+      mode === 'sab' ? createSonareExternalMidiRingBuffer(externalMidiRingCapacity) : undefined;
     const channelCount = requireChannelCount(options.channelCount, 2);
     const cueOutput = options.cueOutput === true;
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {

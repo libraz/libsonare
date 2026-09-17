@@ -298,16 +298,36 @@ export function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnap
 }
 
 /**
- * Resolves the channel count every worklet entry point accepts on its options.
+ * Resolves an integer option, refusing anything the field's own domain cannot
+ * hold instead of rounding it into range.
  *
- * Rounding a count into range gives the caller a working node with a channel
- * layout they never asked for, and nothing downstream can tell that apart from
- * the layout they meant. The ceiling stays with the engine, which owns it.
+ * Rounding hands the caller a working object configured with a value they never
+ * asked for, and nothing downstream can tell that apart from the value they
+ * meant. A ceiling, where one exists, stays with the layer that owns it.
  */
-export function requireChannelCount(channelCount: number | undefined, fallback: number): number {
-  const resolved = channelCount ?? fallback;
-  if (!Number.isSafeInteger(resolved) || resolved < 1) {
-    throw new RangeError('channelCount must be an integer of at least 1');
+export function requireIntegerOption(
+  value: number | undefined,
+  fallback: number,
+  name: string,
+  minimum: number,
+): number {
+  const resolved = value ?? fallback;
+  if (!Number.isSafeInteger(resolved) || resolved < minimum) {
+    throw new RangeError(`${name} must be an integer of at least ${minimum}`);
   }
   return resolved;
+}
+
+/** As {@link requireIntegerOption}, for a field whose domain admits either sign. */
+export function requireInteger(value: number | undefined, fallback: number, name: string): number {
+  const resolved = value ?? fallback;
+  if (!Number.isSafeInteger(resolved)) {
+    throw new RangeError(`${name} must be an integer`);
+  }
+  return resolved;
+}
+
+/** Resolves the channel count every worklet entry point accepts on its options. */
+export function requireChannelCount(channelCount: number | undefined, fallback: number): number {
+  return requireIntegerOption(channelCount, fallback, 'channelCount', 1);
 }

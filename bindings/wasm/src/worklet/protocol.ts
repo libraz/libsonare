@@ -974,6 +974,27 @@ function recordOffset(index: number, capacity: number, recordBytes: number): num
   return (index % capacity) * recordBytes;
 }
 
+/**
+ * The domain of a uint32 record slot: no fraction, no sign, no overflow.
+ *
+ * `setUint32` folds anything outside it into a legal value, so a negative id
+ * becomes a large one and 2**32 becomes 0. An absent value is out of domain;
+ * a slot with a default resolves it before asking.
+ */
+export function isUint32Slot(value: number | undefined): boolean {
+  return (
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 0xffff_ffff
+  );
+}
+
+function toUint32Slot(value: number | undefined, fallback: number, name: string): number {
+  const resolved = value ?? fallback;
+  if (!isUint32Slot(resolved)) {
+    throw new RangeError(`${name} must be an integer within [0, 4294967295]`);
+  }
+  return resolved;
+}
+
 function toSafeInteger(value: number | bigint | undefined, fallback: number): number {
   const resolved = typeof value === 'bigint' ? Number(value) : value;
   if (resolved === undefined) {
@@ -1002,8 +1023,10 @@ function writeEngineCommandRecord(
   offset: number,
   command: SonareEngineCommandRecord,
 ): void {
-  view.setUint32(offset, command.type, true);
-  view.setUint32(offset + 4, command.targetId ?? 0, true);
+  // Both slots are uint32 and the readers are unsigned, so the writer holds
+  // them to that domain; the command vocabulary itself is the node's check.
+  view.setUint32(offset, toUint32Slot(command.type, 0, 'type'), true);
+  view.setUint32(offset + 4, toUint32Slot(command.targetId, 0, 'targetId'), true);
   writeInt64Words(view, offset + 8, toSafeInteger(command.sampleTime, -1));
   // argFloat occupies a full 8-byte Float64 slot (replacing the old Float32 +
   // 4-byte pad) so PPQ scalars carried here keep full double precision over the

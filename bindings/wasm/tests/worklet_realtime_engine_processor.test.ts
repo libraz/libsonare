@@ -110,6 +110,81 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       expect(() => build(1e9)).toThrow(/max_channels must be within 1\.\./);
     });
 
+    it('refuses a meterIntervalFrames instead of rounding it into range', () => {
+      const blockSize = 128;
+      const meterCount = (meterIntervalFrames: number): number => {
+        const meters: unknown[] = [];
+        const processor = new SonareRealtimeEngineWorkletProcessor(
+          { sampleRate: 48000, blockSize, channelCount: 2, meterIntervalFrames },
+          { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
+        );
+        try {
+          for (let block = 0; block < 8; block++) {
+            expect(
+              processor.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+            ).toBe(true);
+          }
+        } finally {
+          processor.destroy();
+        }
+        return meters.length;
+      };
+
+      // The field is load-bearing: a longer interval publishes strictly fewer
+      // snapshots over the same block count, and 0 turns publication off.
+      const perBlock = meterCount(blockSize);
+      expect(perBlock).toBeGreaterThan(0);
+      expect(meterCount(blockSize * 4)).toBeLessThan(perBlock);
+      expect(meterCount(0)).toBe(0);
+
+      for (const meterIntervalFrames of [2048.5, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(() => meterCount(meterIntervalFrames)).toThrow(
+          /meterIntervalFrames must be an integer of at least 0/,
+        );
+      }
+    });
+
+    it('refuses a scopeIntervalFrames instead of rounding it into range', () => {
+      const blockSize = 256;
+      const scopeCount = (scopeIntervalFrames: number): number => {
+        const scopeRing = createSonareScopeRingBuffer(64, 32);
+        const processor = new SonareRealtimeEngineWorkletProcessor({
+          sampleRate: 48000,
+          blockSize,
+          channelCount: 2,
+          scopeSharedBuffer: scopeRing.sharedBuffer,
+          scopeRingCapacity: scopeRing.capacity,
+          scopeBands: scopeRing.bands,
+          scopeIntervalFrames,
+        });
+        try {
+          processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+          for (let block = 0; block < 12; block++) {
+            const input = new Float32Array(blockSize).fill(0.25);
+            expect(
+              processor.process(
+                [[input, input]],
+                [[new Float32Array(blockSize), new Float32Array(blockSize)]],
+              ),
+            ).toBe(true);
+          }
+        } finally {
+          processor.destroy();
+        }
+        return readSonareScopeRingBuffer(scopeRing).scopes.length;
+      };
+
+      const perBlock = scopeCount(blockSize);
+      expect(perBlock).toBeGreaterThan(0);
+      expect(scopeCount(blockSize * 4)).toBeLessThan(perBlock);
+
+      for (const scopeIntervalFrames of [256.5, -1, Number.NaN]) {
+        expect(() => scopeCount(scopeIntervalFrames)).toThrow(
+          /scopeIntervalFrames must be an integer of at least 0/,
+        );
+      }
+    });
+
     it('applies SAB transport commands within the next processed block', () => {
       const blockSize = 128;
       const commandRing = createSonareEngineCommandRingBuffer(8);

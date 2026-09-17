@@ -1,7 +1,7 @@
 import type { MixerRealtimeBuffer } from '../index';
 import { Mixer } from '../index';
 import type { WorkletInput, WorkletOutput } from './audio_types';
-import { isWorkletMessage } from './guards';
+import { isWorkletMessage, requireIntegerOption } from './guards';
 import type {
   SonareWorkletMessage,
   SonareWorkletProcessorOptions,
@@ -75,10 +75,20 @@ export class SonareWorkletProcessor {
     }
     this.sampleRate = options.sampleRate ?? 48000;
     this.blockSize = options.blockSize ?? 128;
-    this.meterIntervalFrames = Math.max(0, Math.floor(options.meterIntervalFrames ?? 2048));
-    this.spectrumIntervalFrames = Math.max(0, Math.floor(options.spectrumIntervalFrames ?? 0));
+    // Zero is the off switch for both publications, so the floor is 0.
+    this.meterIntervalFrames = requireIntegerOption(
+      options.meterIntervalFrames,
+      2048,
+      'meterIntervalFrames',
+      0,
+    );
+    this.spectrumIntervalFrames = requireIntegerOption(
+      options.spectrumIntervalFrames,
+      0,
+      'spectrumIntervalFrames',
+      0,
+    );
     this.transport = transport;
-    this.meterIntervalFrames = Math.max(0, Math.floor(options.meterIntervalFrames ?? 2048));
     this.meterRing = options.meterSharedBuffer
       ? meterRingFromSharedBuffer(options.meterSharedBuffer, options.meterRingCapacity)
       : undefined;

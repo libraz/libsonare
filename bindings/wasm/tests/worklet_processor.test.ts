@@ -230,6 +230,69 @@ describe('SonareWorkletProcessor', () => {
     }
   });
 
+  it('refuses a publication interval instead of rounding it into range', () => {
+    const sampleRate = 48000;
+    const blockSize = 128;
+    const counts = (
+      options: { meterIntervalFrames?: number; spectrumIntervalFrames?: number },
+      blocks = 8,
+    ): { meters: number; spectra: number } => {
+      const meters: unknown[] = [];
+      const spectra: unknown[] = [];
+      const processor = new SonareWorkletProcessor(
+        {
+          sceneJson: mixingScenePresetJson('vocalReverbSend'),
+          sampleRate,
+          blockSize,
+          spectrumBands: 8,
+          ...options,
+        },
+        {
+          onMeter: (meter) => meters.push(meter),
+          onSpectrum: (spectrum) => spectra.push(spectrum),
+        },
+      );
+      try {
+        for (let block = 0; block < blocks; block++) {
+          const inL = new Float32Array(blockSize).fill(0.25);
+          const inR = new Float32Array(blockSize).fill(0.25);
+          expect(
+            processor.process(
+              [[inL, inR]],
+              [[new Float32Array(blockSize), new Float32Array(blockSize)]],
+            ),
+          ).toBe(true);
+        }
+      } finally {
+        processor.destroy();
+      }
+      return { meters: meters.length, spectra: spectra.length };
+    };
+
+    // Both fields are load-bearing: a longer interval publishes strictly fewer
+    // snapshots over the same block count, and 0 turns the publication off.
+    const perBlock = counts({ meterIntervalFrames: blockSize, spectrumIntervalFrames: blockSize });
+    expect(perBlock.meters).toBeGreaterThan(0);
+    expect(perBlock.spectra).toBeGreaterThan(0);
+    const sparse = counts({
+      meterIntervalFrames: blockSize * 4,
+      spectrumIntervalFrames: blockSize * 4,
+    });
+    expect(sparse.meters).toBeLessThan(perBlock.meters);
+    expect(sparse.spectra).toBeLessThan(perBlock.spectra);
+    const off = counts({ meterIntervalFrames: 0, spectrumIntervalFrames: 0 });
+    expect(off).toEqual({ meters: 0, spectra: 0 });
+
+    for (const frames of [2048.5, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => counts({ meterIntervalFrames: frames })).toThrow(
+        /meterIntervalFrames must be an integer of at least 0/,
+      );
+      expect(() => counts({ spectrumIntervalFrames: frames })).toThrow(
+        /spectrumIntervalFrames must be an integer of at least 0/,
+      );
+    }
+  });
+
   it('can publish spectrum snapshots through postMessage and SharedArrayBuffer', () => {
     const sampleRate = 48000;
     const blockSize = 128;
