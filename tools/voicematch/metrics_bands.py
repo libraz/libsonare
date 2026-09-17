@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 
 # ISO 1/3-octave centres, 50 Hz to 12.5 kHz: the resolution a percussion hit's
@@ -51,6 +53,11 @@ def band_tilt_db(bands_db: list[float] | None) -> float | None:
         return None
     return float(np.mean(high) - np.mean(low))
 
+
+#: How far below its own loudest band a band still counts as present. The floor
+#: keeps bands with no content on either side from reading as a large difference
+#: between two noise floors.
+BAND_FLOOR_DB = -60.0
 
 #: How far a band's across-instrument spread may fall below the capture's own
 #: typical spread and still be called informative. Half: a band that separates
@@ -122,6 +129,90 @@ def measure_band_edge(rows: list[dict]) -> float | None:
     return None
 
 
+#: How far the systematic offset between two references may stand over their
+#: across-instrument scatter before a band is reporting the recordings rather
+#: than the instruments. One: past it what the two captures share outweighs what
+#: separates the objects they recorded. The drum capture answers 5 kHz anywhere
+#: in 0.79-1.27, so that answer does not sit on this number.
+BAND_AGREEMENT_MAX_RATIO = 1.0
+
+
+def _pair_agreement_edge(left: dict, right: dict) -> float | None:
+    """The highest band two references agree in, or `None` if unjudgeable."""
+    shared = [cell for cell in left if cell in right]
+    if len(shared) < BAND_EDGE_MIN_ROWS:
+        return None
+    a = np.asarray([left[c] for c in shared], dtype=np.float64)
+    b = np.asarray([right[c] for c in shared], dtype=np.float64)
+    for i in range(len(THIRD_OCTAVE_CENTERS) - 1, -1, -1):
+        # A cell floored on either side carries no reading to difference. They
+        # are dropped rather than differenced against the floor, which censors
+        # the disagreement towards zero — so this understates and can only
+        # place the edge too high.
+        live = (a[:, i] > BAND_FLOOR_DB) & (b[:, i] > BAND_FLOOR_DB)
+        if int(live.sum()) < BAND_EDGE_MIN_ROWS:
+            continue
+        lo, mid, hi = np.percentile(a[live, i] - b[live, i], (25, 50, 75))
+        # Multiplied rather than divided so a band the references read
+        # identically — zero shift over zero scatter — is the agreement it is,
+        # instead of a division that has to be special-cased into one.
+        if abs(float(mid)) > BAND_AGREEMENT_MAX_RATIO * float(hi - lo):
+            continue
+        if i == len(THIRD_OCTAVE_CENTERS) - 1:
+            return None
+        return float(THIRD_OCTAVE_CENTERS[i])
+    # Nothing agreed anywhere. Reported as the bottom of the vocabulary rather
+    # than as "no ceiling", because two references that share no band are a
+    # capture that has not been shown to measure one instrument.
+    return float(THIRD_OCTAVE_CENTERS[0])
+
+
+def measure_agreement_edge(rows: list[dict]) -> float | None:
+    """The highest 1/3-octave band this capture's references still agree in, in Hz.
+
+    `measure_band_edge` asks whether a band separates one instrument from the
+    next. That is necessary and it is not sufficient: a reference can separate
+    its own instruments perfectly while sitting tens of dB away from where they
+    actually are, and every instrument being wrong by the same amount is exactly
+    what a recording chain does. A band like that passes the spread test and
+    carries no usable target, so the model is fitted to the chain.
+
+    The separator is which part of the difference the references share. Two
+    recordings of the same instrument differ for two reasons — they are
+    different instruments, which scatters the difference from piece to piece,
+    and they are different chains, which shifts all of it one way. The scatter
+    is the across-instrument IQR and the shift is the median, so a band where
+    the median stands over the IQR is reporting the chains.
+
+    Measured on the two-kit drum capture: the median offset wanders between -9
+    and +6 dB from 50 Hz to 4 kHz against an IQR held near 12, then runs to
+    -11.4, -17.5 and -24.4 dB at 5, 6.3 and 8 kHz while the IQR does not move.
+    One reference is band-limited to about 11 kHz — its content at 14 kHz sits
+    120 dB under its own peak, which is removal rather than roll-off — and the
+    bands below that ceiling carry its anti-alias skirt as if it were the kit.
+
+    Walked from the top like `measure_band_edge`, and for the same reason: the
+    edge is where a roll-off begins, so a lone disagreeing band low down is a
+    resonance rather than a ceiling. `None` when there is no second reference to
+    compare against, which is most captures — an agreement test needs two
+    recordings and cannot be faked from one.
+    """
+    by_timbre: dict[str, dict[tuple, np.ndarray]] = {}
+    for row in rows or []:
+        profile = row.get("bands_db")
+        if not profile or len(profile) != len(THIRD_OCTAVE_CENTERS):
+            continue
+        cell = (row.get("note"), row.get("velocity"))
+        by_timbre.setdefault(str(row.get("timbre", "")), {})[cell] = np.asarray(
+            profile, dtype=np.float64)
+    if len(by_timbre) < 2:
+        return None
+    edges = [_pair_agreement_edge(by_timbre[x], by_timbre[y])
+             for x, y in itertools.combinations(sorted(by_timbre), 2)]
+    known = [e for e in edges if e is not None]
+    return min(known) if known else None
+
+
 def band_edges_by_timbre(rows: list[dict]) -> dict[str, float | None]:
     """Each reference's own measurable ceiling, one per timbre."""
     timbres = sorted({str(r.get("timbre", "")) for r in rows})
@@ -149,13 +240,32 @@ def shared_band_edge(rows: list[dict]) -> float | None:
 
     So the most restrictive ceiling wins, and a reference with no measurable one
     does not raise it. `None` throughout means no reference showed a ceiling.
+
+    Two things end a band's usefulness and this is where they are combined: a
+    reference that cannot tell its instruments apart up there
+    (`measure_band_edge`, one per reference) and references that can but do not
+    agree about where the instruments are (`measure_agreement_edge`, across
+    them). Neither implies the other — the drum capture's references each
+    discriminate to 8 kHz and stop agreeing at 5 — so the second cannot be left
+    to the first, and a capture carrying only one reference is judged by the
+    first alone.
     """
     known = [e for e in band_edges_by_timbre(rows).values() if e is not None]
+    agreement = measure_agreement_edge(rows)
+    if agreement is not None:
+        known.append(agreement)
     return min(known) if known else None
 
 
-def band_edge_index(max_band_hz: float | None) -> int:
-    """How many 1/3-octave bands sit at or below `max_band_hz`."""
+def band_edge_index(max_band_hz: float | None,
+                    centres: tuple[float, ...] = THIRD_OCTAVE_CENTERS) -> int:
+    """How many of `centres` sit at or below `max_band_hz`.
+
+    Takes the centre list so the octave decay bands are cut at the same place as
+    the 1/3-octave profile. A per-band measurement above the edge is the chain
+    whichever resolution it was taken at, and the two reading different ranges
+    would put a decay in the answer that the profile it sits beside excludes.
+    """
     if max_band_hz is None:
-        return len(THIRD_OCTAVE_CENTERS)
-    return sum(1 for c in THIRD_OCTAVE_CENTERS if c <= max_band_hz + 1e-6)
+        return len(centres)
+    return sum(1 for c in centres if c <= max_band_hz + 1e-6)

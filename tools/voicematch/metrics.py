@@ -60,8 +60,10 @@ from metrics_attack import (
     attack_peaks,
 )
 from metrics_bands import (
+    BAND_AGREEMENT_MAX_RATIO,
     BAND_EDGE_MIN_ROWS,
     BAND_EDGE_MIN_SPREAD_FRACTION,
+    BAND_FLOOR_DB,
     OCTAVE_CENTERS,
     OCTAVE_RATIO,
     THIRD_OCTAVE_CENTERS,
@@ -71,6 +73,7 @@ from metrics_bands import (
     band_edge_index,
     band_edges_by_timbre,
     band_tilt_db,
+    measure_agreement_edge,
     measure_band_edge,
     shared_band_edge,
 )
@@ -85,7 +88,6 @@ from metrics_decay import (
 )
 from metrics_hit import (
     ATTACK_FLOOR_MS,
-    BAND_FLOOR_DB,
     HIT_ATTACK_TOLERANCE_DB,
     HIT_ENVELOPE_HOP_MS,
     HIT_ENVELOPE_WIN_MS,

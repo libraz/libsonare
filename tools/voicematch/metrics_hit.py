@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 from metrics_bands import (
+    BAND_FLOOR_DB,
     OCTAVE_CENTERS,
     OCTAVE_RATIO,
     THIRD_OCTAVE_CENTERS,
@@ -18,9 +19,7 @@ from metrics_modal import measure_modes
 from metrics_signal import _db, _rms_envelope, _spectrum
 from smf import Note
 
-# Longest stretch of one hit that is analyzed, and how far below the loudest
-# band a band still counts as present. The floor keeps bands with no content in
-# either render from reading as a large difference between two noise floors.
+# Longest stretch of one hit that is analyzed.
 # The kit's long pieces, named once and read by three sides of the same
 # decision: the analysis ceiling below, the gap `patterns.drum_gap_for`
 # leaves after a hit, and the per-note `tail` a capture records them for.
@@ -54,7 +53,6 @@ HIT_MAX_SEC = 1.8
 #: still wanted — past the wash there is only the room — but it belongs where
 #: the instrument is, not where the shortest instrument is.
 HIT_LONG_MAX_SEC = 10.0
-BAND_FLOOR_DB = -60.0
 
 # A hit's envelope is read on a far finer grid than a sustained note's. Time to
 # peak is single-digit milliseconds for most of the kit, so the 5 ms hop that
@@ -62,6 +60,10 @@ BAND_FLOOR_DB = -60.0
 # quantisation rather than the attack.
 HIT_ENVELOPE_HOP_MS = 0.5
 HIT_ENVELOPE_WIN_MS = 2.0
+
+#: Widest the centroid is ever integrated over, when the capture set no ceiling
+#: of its own. Above it a kit carries no content a listener places the sound by.
+CENTROID_MAX_HZ = 16000.0
 
 # How far below the hit's own peak the strike is considered to have begun, and
 # how long after the note-on one may still be looked for. A hosted plugin does
@@ -307,14 +309,21 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
     peak by exactly its own length, dilutes the RMS the crest and level are
     measured against, and tilts every per-band decay fit.
 
-    `max_band_hz` is the reference's own measurable ceiling (`measure_band_edge`).
+    `max_band_hz` is the reference's own measurable ceiling (`shared_band_edge`).
     Bands above it are reported at the floor and, more importantly, are excluded
     from the normalisation, so the profile below the edge does not move when the
     model has content the capture could not have recorded. Both sides of a
     comparison must be measured with the same value or the profiles are
-    normalised against different things; `peak_band_hz` deliberately stays
-    full-range, because a wash that peaks above the reference's ceiling is
-    exactly what that field exists to show.
+    normalised against different things.
+
+    It reaches every field a comparison reads, which is three: the 1/3-octave
+    profile, the per-octave decay, and the centroid's integration range. They
+    were not all cut at first, and a partial cut is the worst of the three
+    states — the profile stops at the edge while the centroid keeps integrating
+    a chain's roll-off, so one gated dimension charges the model for the top
+    octave the other has already agreed is unmeasurable. `peak_band_hz`
+    deliberately stays full-range, because a wash that peaks above the
+    reference's ceiling is exactly what that field exists to show.
     """
     onset = _hit_onset(mono, sr, note.start, window_end)
     on = int(onset * sr)
@@ -329,13 +338,19 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
     bands = _band_power(freqs, power, THIRD_OCTAVE_CENTERS, THIRD_OCTAVE_RATIO)
     bands_db = np.asarray(_db(np.sqrt(bands)), dtype=np.float64)
     keep = band_edge_index(max_band_hz)
+    keep_octaves = band_edge_index(max_band_hz, OCTAVE_CENTERS)
     top = float(bands_db[:keep].max())
     bands_db = np.maximum(bands_db - top, BAND_FLOOR_DB)
     if keep < len(bands_db):
         bands_db[keep:] = BAND_FLOOR_DB
     peak_band = THIRD_OCTAVE_CENTERS[int(np.argmax(bands))]
 
-    in_range = freqs <= 16000.0
+    # Cut at whatever the kept bands cover, for the reason the profile is:
+    # a capture that cannot hear its own cymbals reports a centroid the chain
+    # decided, and a model with a real wash is charged the difference.
+    ceiling = CENTROID_MAX_HZ if max_band_hz is None else min(
+        CENTROID_MAX_HZ, max_band_hz * THIRD_OCTAVE_RATIO)
+    in_range = freqs <= ceiling
     centroid = float(
         np.sum(freqs[in_range] * mag[in_range]) / max(np.sum(mag[in_range]), 1e-12)
     )
@@ -376,8 +391,9 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
         peak_band_hz=peak_band,
         **tone,
         **drop,
-        band_decay_db_s=[None if v is None else round(v, 2)
-                         for v in _band_decay(seg, sr, OCTAVE_CENTERS, OCTAVE_RATIO)],
+        band_decay_db_s=[
+            None if v is None or i >= keep_octaves else round(v, 2)
+            for i, v in enumerate(_band_decay(seg, sr, OCTAVE_CENTERS, OCTAVE_RATIO))],
         centroid_hz=round(centroid, 1),
         onset_ms=round((onset - note.start) * 1000.0, 2),
         attack_ms=round(attack_ms, 2),

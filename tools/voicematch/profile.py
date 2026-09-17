@@ -107,6 +107,7 @@ from metrics import (
     band_tilt_db,
     fit_partial_series,
     ladder_present,
+    measure_agreement_edge,
     midi_to_hz,
     partial_hz,
     shared_band_edge,
@@ -365,6 +366,13 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
                 print(f"  {tid}: bandwidth "
                       f"{'no measurable ceiling' if edge is None else f'{edge / 1000.0:.1f} kHz'}",
                       file=sys.stderr)
+            # Printed beside them because it is a different question with the
+            # same answer type, and a ceiling nobody can attribute reads as one
+            # reference being narrow when it is the two of them disagreeing.
+            agreed = measure_agreement_edge(rows)
+            print(f"  references agree to "
+                  f"{'their whole range' if agreed is None else f'{agreed / 1000.0:.1f} kHz'}",
+                  file=sys.stderr)
     if band_edge is not None:
         print(f"\ncapture bandwidth: {band_edge / 1000.0:.1f} kHz — re-measuring so "
               f"the band profile is normalised over what this capture carries",
