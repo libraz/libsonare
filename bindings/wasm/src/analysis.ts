@@ -16,11 +16,14 @@ export * from './feature_core';
 // never registers, so those are re-exported by name rather than wholesale:
 // `export *` published symbols that imported fine and then threw
 // "is not a function" at call time, on a binary that never had them. Types stay
-// wholesale — a type cannot fail to resolve. The lists are not maintained by
-// hand: `analysis-entry.test.ts` compares every function this entry exports
-// against the registrations of the module it loads and fails on a mismatch in
-// either direction, so adding a name here that the analysis binary lacks, or
-// omitting one it gained, is a test failure rather than a runtime surprise.
+// wholesale — a type cannot fail to resolve. `analysis-entry.test.ts` guards
+// these lists in one direction: every function the entry exports must be
+// registered by the module it loads, so a name the analysis binary lacks fails
+// as a test rather than at a caller's first call. The other direction is not
+// guarded and a strict form of it would be wrong — the module also registers
+// enums, emscripten internals and raw `_` / `Ex` variants this entry withholds
+// deliberately — so a name dropped from a list below shrinks the published
+// surface silently.
 export type * from './feature_decompose';
 export {
   segmentAgglomerative,
