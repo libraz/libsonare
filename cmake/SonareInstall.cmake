@@ -39,10 +39,16 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/sonare
 # Excluded: the WASM embind wrappers and the macOS host backends. Neither is
 # part of any distributed configuration, and the backends include OS SDK
 # headers a consumer has no reason to be offered.
+#
+# Also excluded: c_api, whose public face is include/sonare and whose own
+# headers are implementation detail. Nothing outside c_api and wasm includes
+# one, so installing them only put internal headers — several with a
+# file-scope `using namespace` — into the consumer's search space.
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/sonare/cpp
   FILES_MATCHING
     PATTERN "*.h"
+    PATTERN "c_api" EXCLUDE
     PATTERN "wasm" EXCLUDE
     PATTERN "host/backends" EXCLUDE
 )
