@@ -61,6 +61,7 @@
     "vel_range",
     "register"
   ],
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `honky_tonk.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/honky_tonk.json` and need nothing.",
   "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: five of its sixteen slots were captured in an earlier round, so the map can be confirmed rather than argued. Rendered at note 60 velocity 104 under this capture's own gate, slot 5 returns a peak of -15.40 dBFS and the committed profile for GM 005 reads -15.40 at that same cell; slot 8 returns -17.06 and the profile for GM 008 reads -17.06. Two exact agreements fix the numbering with nothing left to interpret, and every slot of the eight tracks the key it is sent at notes 36, 60 and 84. This slot: the only slot in the family with a split fundamental. Over the first two seconds of note 60 it has two peaks where every other slot has one: 263.0 Hz at full level and 260.0 Hz 8.3 dB under it, three hertz and about twenty cents apart. A deliberately mistuned unison is what a honky-tonk piano is, it is measurable on one note, and nothing else on this rack has one -- so this slot is identified by its own measurement and not only by the numbering."
 }

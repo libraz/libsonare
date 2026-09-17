@@ -50,6 +50,7 @@
   "dimensions_na": {
     "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, 550 dB under the signal, so the width is zero by construction rather than by voicing"
   },
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `gunshot.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/gunshot.json` and need nothing.",
   "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements rather than argued from a spectrum: six of its sixteen slots were captured in an earlier round. Rendered under each of those captures' own gates at a cell its profile holds, slot 1 returns a peak of -13.81 dBFS against a committed -13.81, slot 2 returns -18.62 against -18.62, slot 5 returns -16.48 against -16.48 and slot 7 returns -13.65 against -13.65. Four exact agreements fix slot n as GM program 111+n with nothing left to interpret. This slot: the one slot that is a single impulse: it is over in 918 ms at middle C with its energy peak in the first fifth of the event, and it is the only slot that both transposes at half rate and ends by itself rather than running to the gate. A one-shot report rather than a loop."
 }

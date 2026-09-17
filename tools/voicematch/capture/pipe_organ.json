@@ -67,5 +67,6 @@
     "attack",
     "register"
   ],
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `pipe_organ.local.json`: the plugin's component triple and each timbre's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/pipe_organ.json` and need nothing."
 }

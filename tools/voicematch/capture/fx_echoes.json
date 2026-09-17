@@ -56,6 +56,7 @@
     "vel_range",
     "register"
   ],
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `fx_echoes.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/fx_echoes.json` and need nothing.",
   "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: six of its sixteen slots were captured in an earlier round, so the map can be confirmed rather than argued. Rendered at note 60 velocity 104, slot 10 returns a peak of -11.62 dBFS and the committed profile for GM 106 reads -11.62 at that same cell; slot 13 returns -13.96 and the profile for GM 109 reads -13.96. Two exact agreements at two points in the rack fix the numbering with nothing left to interpret. Two further readings hold it in between: slots 9 to 13 all decay while the key is still down and slots 14 to 16 all hold their level until it lifts, so the plucked-and-sustained seam lands exactly where GM puts the kalimba and the bagpipe, and every slot tracks the key it is sent across the whole grid. This slot: the slowest tail of the eight relative to its own release: 1.27 s to fall 40 dB after note-off but only 26.1 dB down at one second, so the fall is stepped rather than smooth, which is what a repeat is."
 }

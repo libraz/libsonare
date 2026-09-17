@@ -63,6 +63,7 @@
     "vel_range",
     "register"
   ],
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `guitar_harmonics.local.json`. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/guitar_harmonics.json` and need nothing.",
   "_slots": "Slot identity is measured, never taken from a name or a position. The rack is addressed by MIDI channel; this program answers on channel 16, and it was rendered at its own three probe notes before anything else was written, reading 0.968 or better of its energy on the series of the key pressed. The same renders are what say the slot rings at all: four slots of these racks hold a sample that is at the numerical floor half a second into a six-second key, and a grid written for one of those would take every measurement on silence."
 }

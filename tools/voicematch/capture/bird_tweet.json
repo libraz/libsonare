@@ -50,6 +50,7 @@
   "dimensions_na": {
     "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, 550 dB under the signal, so the width is zero by construction rather than by voicing"
   },
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `bird_tweet.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/bird_tweet.json` and need nothing.",
   "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements rather than argued from a spectrum: six of its sixteen slots were captured in an earlier round. Rendered under each of those captures' own gates at a cell its profile holds, slot 1 returns a peak of -13.81 dBFS against a committed -13.81, slot 2 returns -18.62 against -18.62, slot 5 returns -16.48 against -16.48 and slot 7 returns -13.65 against -13.65. Four exact agreements fix slot n as GM program 111+n with nothing left to interpret. This slot: the one sustained slot carrying substantial harmonic content: 0.47 of its energy sits within two per cent of the first twelve harmonics of its estimated pitch, against 0.10 to 0.17 for the other four slots that run through the gate. A repeating pitched call rather than a bed. That narrows it but does not name it, so the slot is read off the confirmed numbering with its own measurements recorded beside it."
 }

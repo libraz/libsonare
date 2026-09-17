@@ -58,6 +58,7 @@
     "vel_range",
     "register"
   ],
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `melodic_tom.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/melodic_tom.json`.",
   "_slots": "Slot identity is measured, never taken from a name or a position. This program answers on channel 6, rendered at its own three probe notes before anything else was written; only 0.004 of its energy sits on the played key's series, which is what an unpitched membrane does and is why `tnr` is excused. The same renders are what say the slot is usable at all: four slots of these two racks are a cliff rather than a decay, reproducing bit-identically at a fifth of a second, and are not captured."
 }

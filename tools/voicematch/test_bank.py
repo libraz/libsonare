@@ -65,6 +65,29 @@ def test_a_capture_is_matched_to_its_own_voice_and_not_another():
         assert melodic.id != kit.id
 
 
+def test_every_capture_says_what_kind_of_source_answered_it():
+    """The product itself is untracked, so the class is all a consumer can read.
+
+    A slot the policy aims at the machine and a slot aimed at a recording are
+    fitted against different things, and nothing downstream could tell them
+    apart from the committed files alone. The values are held to their set by
+    `tests/conformance/check_bank_policy.py`.
+    """
+    pool = bank.captures()
+    if not pool:
+        pytest.skip("no capture definitions in this checkout")
+    for capture in pool:
+        assert capture.source_class in ("module", "dedicated", "library"), capture.id
+
+
+def test_an_unclassified_capture_reads_as_unclassified_and_not_as_a_default(tmp_path):
+    """The dangerous reading is the one a missing field falls into."""
+    definition = tmp_path / "unclassified.json"
+    definition.write_text(json.dumps(
+        {"id": "unclassified", "program": 0, "takes": "sustained", "timbres": []}))
+    assert bank.load_capture(definition).source_class is None
+
+
 def test_a_captured_voice_keeps_the_captures_phrase_set():
     """The reference archive is keyed by take id.
 

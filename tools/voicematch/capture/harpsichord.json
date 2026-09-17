@@ -66,5 +66,6 @@
     88,
     120
   ],
+  "source_class": "library",
   "_identity": "Which product this was captured from lives in the untracked sibling `harpsichord.local.json`: the plugin's component triple and each timbre's preset. Everything here is the method, which is the part worth keeping. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/harpsichord.json` and need nothing."
 }

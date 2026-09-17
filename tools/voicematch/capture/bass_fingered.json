@@ -65,5 +65,6 @@
     "vel_range",
     "register"
   ],
+  "source_class": "dedicated",
   "_identity": "Which product this is captured from lives in the untracked sibling `bass_fingered.local.json`. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/bass_fingered.json` and need nothing."
 }

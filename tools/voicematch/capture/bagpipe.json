@@ -58,6 +58,7 @@
     "vel_range",
     "register"
   ],
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `bagpipe.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/bagpipe.json`.",
   "_slots": "Slot identity is measured, never taken from a name or a position. This program answers on channel 14, rendered at its own three probe notes before anything else was written, reading 1.000 of its energy on the played key's series. The same renders are what say the slot is usable at all: four slots of these two racks are a cliff rather than a decay, reproducing bit-identically at a fifth of a second, and are not captured."
 }

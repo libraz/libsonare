@@ -62,6 +62,7 @@
     "vel_range",
     "register"
   ],
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `xylophone.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/xylophone.json`.",
   "_slots": "Slot identity is measured, never taken from a name or a position. The rack is addressed by MIDI channel; this program answers on channel 14, and it was rendered at its own three probe notes before anything else was written, reading 1.000 of its energy on the played key's series."
 }

@@ -56,6 +56,7 @@
     "vel_range",
     "register"
   ],
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `synth_strings_2.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/synth_strings_2.json` and need nothing.",
   "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: six of its sixteen slots were captured in an earlier round. Rendered under its own capture's gate at a cell its profile holds, slot 1 returns a peak of -33.22 dBFS against a committed -33.22, which fixes slot n as GM program 47+n. Slots 2 to 5 were then compared against each other as audio rather than as peaks at notes 36, 48, 60, 72, 84 and 91, and no pair comes within 15 dB of being the same recording -- the closest is -1.7 dB relative to the signal, against the -35 dB that marks a shared sample on the three slots of another rack that do share one."
 }

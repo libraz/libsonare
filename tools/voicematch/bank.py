@@ -96,6 +96,15 @@ class Capture:
     timbres: tuple[dict, ...]
     dry: bool
     title: str
+    #: What kind of source answered this capture — `module`, `dedicated` or
+    #: `library` — or None where nothing says. A classification rather than an
+    #: identity, so it belongs in the tracked definition while the product
+    #: itself stays in the untracked overlay. **None is unclassified and never
+    #: a default**: a slot aimed at the machine and fitted against a library's
+    #: idea of the sound is indistinguishable from a finished one otherwise,
+    #: which is the same hazard `voicing.md`'s `rig` field exists for. The
+    #: values are held to their set by `tests/conformance/check_bank_policy.py`.
+    source_class: str | None
     #: The definition as read, overlay folded in. `capture.source_for` wants the
     #: whole thing — the plugin triple, the params, the preset of a timbre —
     #: and mirroring those fields here would be a second copy that can disagree.
@@ -127,6 +136,7 @@ def load_capture(path: Path) -> Capture | None:
         timbres=tuple(cfg.get("timbres") or ()),
         dry=bool(cfg.get("dry", True)),
         title=cfg.get("audition_title", f"libsonare vs {cfg.get('label', 'reference')}"),
+        source_class=cfg.get("source_class"),
         raw=cfg,
     )
 

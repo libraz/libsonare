@@ -75,5 +75,6 @@
     "vel_range",
     "register"
   ],
+  "source_class": "dedicated",
   "_identity": "Which product this is captured from lives in the untracked sibling `electric_guitar_di.local.json`. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/electric_guitar_di.json` and need nothing."
 }

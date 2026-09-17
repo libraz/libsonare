@@ -60,6 +60,7 @@
     "register"
   ],
   "_history": "This voice was previously recorded as unusable because its samples were said to stop while the key is still down. Re-measured, they do not: it holds 5.6 dB under its peak at the end of an eight-second gate, and the steepest single 10 ms step anywhere inside the held note is 2.5 dB, which is the instrument's own movement. A sample running out reads quite differently -- the two voices on the neighbouring racks that genuinely do it step 47 and 53 dB in one window and are at the noise floor immediately after.",
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `choir_aahs.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/choir_aahs.json` and need nothing.",
   "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: six of its sixteen slots were captured in an earlier round. Rendered under that capture's own gate at a cell its profile holds, slot 9 returns a peak of -13.58 dBFS against a committed -13.58, which fixes slot n as GM program 47+n. Every slot of this rack near this one was compared against its neighbours at both ends of this grid and at its middle, and all are distinct audio -- the sample sharing that three slots of another rack show outside their instruments' ranges does not happen here."
 }

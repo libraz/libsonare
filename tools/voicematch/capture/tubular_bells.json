@@ -59,6 +59,7 @@
     "vel_range",
     "register"
   ],
+  "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `tubular_bells.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/tubular_bells.json`.",
   "_slots": "Slot identity is measured, never taken from a name or a position. The rack is addressed by MIDI channel; this program answers on channel 15, and it was rendered at its own three probe notes before anything else was written, reading only 0.363 of its energy on the played key's series - which is what a struck tube does, its partials not being a harmonic series, and is why `tnr` is excused rather than gated."
 }
