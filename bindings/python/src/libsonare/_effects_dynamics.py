@@ -27,11 +27,6 @@ from ._runtime import (
     _validate_samples,
 )
 
-# ---------------------------------------------------------------------------
-# Offline mastering dynamics processors
-# ---------------------------------------------------------------------------
-
-
 _COMPRESSOR_DETECTOR_NAMES: dict[str, int] = {
     "peak": SONARE_COMPRESSOR_DETECTOR_PEAK,
     "rms": SONARE_COMPRESSOR_DETECTOR_RMS,
