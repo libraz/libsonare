@@ -30,6 +30,6 @@ pluggy==1.6.0
 pygments==2.21.0
     # via pytest
 pytest==9.1.1
-ruff==0.16.8
+ruff==0.15.22
 typing-extensions==4.16.0
     # via mypy
