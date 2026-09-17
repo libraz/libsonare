@@ -80,6 +80,22 @@ describe('remix validates its input like the C ABI run_offline path', () => {
     const out = remix(sine(), new Int32Array([0, 1024]), SR);
     expect(out.length).toBe(1024);
   });
+
+  // The boundary is an ordinal, so folding one onto the next legal index cuts
+  // the slice somewhere the caller never named and nothing downstream can tell
+  // the two apart. The control is in the same case: without it a refusal would
+  // pass here even if the argument had stopped selecting anything.
+  it('refuses a fractional boundary rather than truncating it onto a legal index', () => {
+    expect(remix(sine(), [0, 1024], SR).length).toBe(1024);
+    expect(remix(sine(), [0, 512], SR).length).toBe(512);
+    expect(() => remix(sine(), [0, 1024.7], SR)).toThrow(/intervals\[1\] must be an integer/);
+  });
+
+  it('refuses a boundary past the native int range, naming the range', () => {
+    expect(() => remix(sine(), [0, 2 ** 31], SR)).toThrow(
+      /intervals\[1\] must be an integer in \[-2147483648, 2147483647\]/,
+    );
+  });
 });
 
 describe('masteringChain validates input on every entry (mono + stereo)', () => {

@@ -17,6 +17,7 @@ import {
   assertPositiveInteger,
   assertSampleRate,
   assertSamples,
+  toInt32Array,
 } from './validation';
 
 function requireModule() {
@@ -597,14 +598,10 @@ export function remix(
     const r = samples;
     return remix(r.samples, r.intervals, r.sampleRate, r.alignZeros);
   }
-  // Sample indices must reach the native side as exact 32-bit integers. Passing
-  // a Float32Array (or a number[] holding fractional/large values) would round
-  // boundaries above 2^24 and misalign the slice. Coerce to an Int32Array,
-  // truncating toward zero, so callers can hand us any numeric array safely.
-  const intervalsI32 =
-    intervals instanceof Int32Array
-      ? intervals
-      : Int32Array.from(intervals as ArrayLike<number>, (v) => Math.trunc(v));
+  // Sample indices must reach the native side as exact 32-bit integers, and a
+  // boundary the conversion changed would cut the slice somewhere the caller
+  // never named.
+  const intervalsI32 = toInt32Array('remix', intervals as ArrayLike<number>, 'intervals');
   return requireModule().remix(samples, intervalsI32, sampleRate, alignZeros);
 }
 
@@ -640,10 +637,11 @@ export function remixAlignedIntervals(
     const r = samples;
     return remixAlignedIntervals(r.samples, r.intervals, r.sampleRate, r.alignZeros ?? true);
   }
-  const intervalsI32 =
-    intervals instanceof Int32Array
-      ? intervals
-      : Int32Array.from(intervals as ArrayLike<number>, (v) => Math.trunc(v));
+  const intervalsI32 = toInt32Array(
+    'remixAlignedIntervals',
+    intervals as ArrayLike<number>,
+    'intervals',
+  );
   return requireModule().remixAlignedIntervals(samples, intervalsI32, sampleRate, alignZeros);
 }
 

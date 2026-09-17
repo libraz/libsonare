@@ -322,6 +322,40 @@ export function assertU32(fnName: string, value: number, argName: string): void 
   }
 }
 
+/**
+ * Convert a caller-supplied index array to `Int32Array`, refusing any element
+ * the conversion would change rather than folding it.
+ *
+ * `Int32Array.from(values, Math.trunc)` turns the sample index `1000.7` into
+ * `1000` and `2 ** 31` into `-2 ** 31`. The C ABI takes `const int*`, so both
+ * arrive as values nothing downstream can separate from ones the caller chose.
+ * An `Int32Array` is returned as-is: its elements are already exact.
+ */
+export function toInt32Array(
+  fnName: string,
+  values: Int32Array | ArrayLike<number>,
+  argName: string,
+): Int32Array {
+  if (values instanceof Int32Array) {
+    return values;
+  }
+  const out = new Int32Array(values.length);
+  for (let i = 0; i < values.length; i++) {
+    const element = values[i];
+    // Two refusals, so each names the property that element actually lacks.
+    if (!Number.isInteger(element)) {
+      throw new RangeError(`${fnName}: ${argName}[${i}] must be an integer`);
+    }
+    if (element < C_INT_MIN || element > C_INT_MAX) {
+      throw new RangeError(
+        `${fnName}: ${argName}[${i}] must be an integer in [${C_INT_MIN}, ${C_INT_MAX}]`,
+      );
+    }
+    out[i] = element;
+  }
+  return out;
+}
+
 export function assertInterleavedSamples(
   fnName: string,
   samples: ArrayLike<number>,
