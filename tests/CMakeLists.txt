@@ -1,11 +1,15 @@
-# Catch2
-Include(FetchContent)
-FetchContent_Declare(
-  Catch2
-  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-  GIT_TAG v3.8.1
-)
-FetchContent_MakeAvailable(Catch2)
+# Catch2. Prefer a system install so configuring needs no network, matching how
+# the root list finds Eigen; the fetch is the fallback for a host without one.
+find_package(Catch2 3 QUIET)
+if(NOT Catch2_FOUND)
+  Include(FetchContent)
+  FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG v3.8.1
+  )
+  FetchContent_MakeAvailable(Catch2)
+endif()
 
 # Test executable
 add_executable(sonare_tests
