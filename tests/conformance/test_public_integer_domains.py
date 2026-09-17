@@ -767,6 +767,45 @@ class KeyedMemberEntryTest(_SyntheticTree):
         self.assertEqual(counts["keyed_member_entries"], 0)
         self.assertEqual(counts["bag_members"], 0)
 
+    def test_moving_one_entry_between_categories_swaps_both_counters(self) -> None:
+        """The transition, which asserting each category alone does not reach.
+
+        Two entries of different categories on different fixtures agree with a
+        pair of counters that never talk to each other. Re-filing the SAME entry
+        is what shows they are one partition: one count falls by exactly one as
+        the other rises by exactly one, off an entry that stays live throughout,
+        so neither category can answer in the other's place.
+        """
+        root = self.tree(
+            "def f(n: dict[str, int]) -> None: ...\n",
+            "def f(n):\n    return n\n",
+        )
+        filed = {
+            category: domains.Report(
+                root, exclusions={"m.f": {"n": (category, "measured; see the note")}}
+            ).counts()
+            for category in ("integral_member_is_a_key", "guarded_past_the_ffi")
+        }
+        keyed = filed["integral_member_is_a_key"]
+        ffi = filed["guarded_past_the_ffi"]
+
+        self.assertEqual(
+            (keyed["keyed_member_entries"], keyed["past_the_ffi_entries"]), (1, 0)
+        )
+        self.assertEqual(
+            (ffi["keyed_member_entries"], ffi["past_the_ffi_entries"]), (0, 1)
+        )
+        self.assertEqual(
+            ffi["keyed_member_entries"] - keyed["keyed_member_entries"], -1
+        )
+        self.assertEqual(ffi["past_the_ffi_entries"] - keyed["past_the_ffi_entries"], 1)
+        # Live on both sides, so the swap is a reclassification and not one
+        # entry going stale while an unrelated one appears.
+        self.assertEqual(keyed["excused"], 1)
+        self.assertEqual(ffi["excused"], 1)
+        self.assertEqual(keyed["unreached"], 0)
+        self.assertEqual(ffi["unreached"], 0)
+
     def test_an_entry_retires_when_the_member_stops_being_a_key(self) -> None:
         """Its stated retirement condition, and the only one that can satisfy it.
 
@@ -797,6 +836,115 @@ class KeyedMemberEntryTest(_SyntheticTree):
         report, failures = self.evaluate(root)
         self.assertEqual(report.counts()["keyed_member_entries"], 0)
         self.only(failures, "reach no guard")
+
+
+class BypassTest(_SyntheticTree):
+    """A guard that covers the body it sits in, and one that does not.
+
+    Two-sided on purpose, and the second side is the one that decides whether the
+    rule is usable: a body routinely opens with an early exit that reads the
+    value (`if value is None: continue`, `if count <= 0: return []`) and bypasses
+    nothing, because no value survives it. Only a branch that WRITES the value
+    out and leaves is a detour around the guard. A rule that cannot separate
+    those two reports the whole tree and is worth nothing.
+    """
+
+    def bag(self, branch: str) -> Path:
+        return self.tree(
+            "def f(options: dict[str, int]) -> None: ...\n",
+            "from ._runtime import _to_c_int\n\n\ndef f(options):\n"
+            "    out = {}\n"
+            "    for name, value in options.items():\n"
+            + branch
+            + "        out[name] = _to_c_int(value, name)\n"
+            "    return out\n",
+        )
+
+    def test_a_branch_that_writes_the_value_out_is_a_failure(self) -> None:
+        root = self.bag(
+            "        if isinstance(value, bool):\n"
+            "            out[name] = value\n"
+            "            continue\n"
+        )
+        report, failures = self.evaluate(root)
+        self.assertEqual(report.counts()["bypass"], 1)
+        lines = self.only(failures, "do not cover every path")
+        self.assertIn("isinstance(value, bool)", lines[0])
+        self.assertIn("out[name] = value", lines[0])
+        # Still `guarded`: the guard is there, it just does not cover this path.
+        self.assertEqual([v.verdict for v in report.verdicts], ["guarded"])
+
+    def test_a_branch_that_consumes_nothing_is_not_a_failure(self) -> None:
+        """`if value is None: continue` -- read, exited, and nothing written out."""
+        root = self.bag("        if value is None:\n            continue\n")
+        report, failures = self.evaluate(root)
+        self.assertEqual(report.counts()["conditional"], 1)
+        self.assertEqual(report.counts()["bypass"], 0)
+        self.clean(failures)
+
+    def test_an_early_return_that_consumes_nothing_is_not_a_failure(self) -> None:
+        """The other spelling the tree uses: `if count <= 0: return []`."""
+        root = self.tree(
+            "def f(count: int) -> None: ...\n",
+            "from ._runtime import _to_c_int\n\n\ndef f(count):\n"
+            "    if count <= 0:\n        return []\n"
+            "    return _to_c_int(count, 'count')\n",
+        )
+        report, failures = self.evaluate(root)
+        self.assertEqual(report.counts()["conditional"], 1)
+        self.assertEqual(report.counts()["bypass"], 0)
+        self.clean(failures)
+
+    def test_a_branch_that_forwards_the_value_is_a_failure(self) -> None:
+        """Handed to a call rather than assigned: the same detour, another spelling."""
+        root = self.bag(
+            "        if isinstance(value, bool):\n"
+            "            out[name] = _flag(value)\n"
+            "            continue\n"
+        )
+        report, failures = self.evaluate(root)
+        self.assertEqual(report.counts()["bypass"], 1)
+        self.only(failures, "do not cover every path")
+
+    def test_every_earlier_branch_is_examined_not_the_first(self) -> None:
+        """The benign branch above the detour must not hide it.
+
+        A body that opens with `if value is None: continue` and then writes the
+        value out on a second branch is the real shape, and a search that stops
+        at the first match reads the harmless one and reports nothing -- which is
+        how this rule first measured zero on a tree that had a bypass in it.
+        """
+        root = self.bag(
+            "        if value is None:\n            continue\n"
+            "        if isinstance(value, bool):\n"
+            "            out[name] = value\n"
+            "            continue\n"
+        )
+        report, failures = self.evaluate(root)
+        self.assertEqual(report.counts()["conditional"], 2)
+        self.assertEqual(report.counts()["bypass"], 1)
+        self.only(failures, "do not cover every path")
+
+    def test_a_branch_below_the_guard_is_not_a_bypass(self) -> None:
+        """Nothing above the guard to leave from, so there is nothing to report."""
+        root = self.tree(
+            "def f(n: int) -> None: ...\n",
+            "from ._runtime import _to_c_int\n\n\ndef f(n):\n"
+            "    narrowed = _to_c_int(n, 'n')\n"
+            "    if n > 10:\n        return narrowed\n    return None\n",
+        )
+        report, failures = self.evaluate(root)
+        self.assertEqual(report.counts()["conditional"], 0)
+        self.clean(failures)
+
+    def test_a_dead_branch_search_is_the_only_report(self) -> None:
+        """`bypass: 0` has to mean nothing was found, not nothing was looked at."""
+        root = self.bag("        if value is None:\n            continue\n")
+        lines = self.only(
+            self.evaluate(root, floor={"conditional": 2})[1],
+            "no longer finds the population",
+        )
+        self.assertIn("conditional: found 1", lines[0])
 
 
 class FailureTextTest(_SyntheticTree):

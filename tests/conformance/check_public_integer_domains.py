@@ -99,7 +99,7 @@ having changed nothing.
 
 WHAT THIS CHECK DOES NOT ASK, AND CANNOT
 ----------------------------------------
-Three limits, stated because a reader should not have to infer any of them from
+Four limits, stated because a reader should not have to infer any of them from
 a count that looks complete.
 
 **Ordering.** Whether the guard runs *before the value is used*. The question
@@ -126,6 +126,28 @@ one that is excused carries a measurement of its own: passing on the *shape*
 would turn "I cannot see a guard" into "there is no finding" for every bag
 written from now on, which is this check's own reach problem wearing a derived
 class.
+
+**A bypass written in the caller rather than beside the guard.** The flow asks
+whether the value reaches a mechanism on *some* path, not on every path, and
+what closes most of that gap is ``bypass``: an earlier branch in the guard's own
+body that writes the value out and leaves is a failure, because the guard then
+answers for every value except the ones that took the branch. The shape it
+catches::
+
+    if isinstance(value, bool):
+        params[key] = value          # written out, unnarrowed
+        continue
+    params[key] = _validate_c_int_field(fn_name, value, name)
+
+``True`` is an ``int`` subclass, so it never fails a range check -- which is why
+the narrowing family refuses a ``bool`` outright -- and in that order it never
+reaches the narrowing at all.
+
+The limit is that the branch search is **body-local**. It reads the frame the
+mechanism was found in, so a value written out and handed on one frame up, in the
+caller, is outside it: the credit crosses the hand-off and the branch that
+skipped the guard is never examined. What is checked is that a guard covers the
+body it sits in, not that the value took no other route to C on the way there.
 
 The first two compound: the mastering assistant's ``nFft``, ``hopLength`` and
 ``true_peak_oversample`` were cast with ``static_cast<int>`` for as long as the
@@ -292,6 +314,13 @@ FLOORS: dict[str, int] = {
     "refused": 8,
     "struct": 40,
     "bag_members": 8,
+    # Sized on what is there now. A body-local branch search that stopped
+    # matching would take this to 0 with no total moving and no finding lost,
+    # and `bypass: 0` would then mean "nothing was looked at" rather than
+    # "nothing was found" -- the same shape the reach floors above are sized
+    # against. `bypass` itself carries no floor: 0 is the correct answer on this
+    # tree and any value above it is a failure, not a population.
+    "conditional": 8,
     "marshalled_records": 40,
     "record_field_readers": 30,
     "fold_sites": 10,
@@ -514,6 +543,10 @@ class Reach(typing.NamedTuple):
     verdict: str
     detail: str
     hops: int = 0
+    # The line the mechanism was found on, so a branch can be asked whether it
+    # sits above it. Stamped by `_direct`; a hand-off keeps the callee's line,
+    # which is the frame the branch search runs in.
+    line: int = 0
 
 
 UNREACHED = Reach("unreached", "")
@@ -933,6 +966,33 @@ def _fold_spelling(node: ast.AST) -> str | None:
     return None
 
 
+class Conditional(typing.NamedTuple):
+    """A credit an earlier branch in the same body can leave before reaching.
+
+    `stores` is the whole distinction: `if value is None: continue` reads the
+    value and exits, and bypasses nothing, because no value survives it. `if
+    isinstance(value, bool): params[key] = value; continue` writes the value out
+    and skips what was going to narrow it, so the guard below answers for every
+    value except the ones that took this branch.
+    """
+
+    subject: str
+    module: str
+    branch_line: int
+    mechanism_line: int
+    test: str
+    stores: bool
+    source: str
+
+    @property
+    def display(self) -> str:
+        first = "; ".join(self.source.splitlines()[:2])
+        return (
+            f"{self.module}.py:{self.branch_line} `if {self.test}: {first}` "
+            f"leaves before the guard at :{self.mechanism_line}  <- {self.subject}"
+        )
+
+
 def _callee_name(callee: ast.AST) -> str | None:
     if isinstance(callee, ast.Name):
         return callee.id
@@ -1034,6 +1094,8 @@ class Flow:
         # checked against: the guard has to see the value the fold folded, not
         # the fold's result and not a guard one hop away.
         self.answered: set[tuple[str, int, str]] = set()
+        # Credits an earlier branch in the same body can leave before reaching.
+        self.conditional: set[Conditional] = set()
 
     def follow(
         self,
@@ -1074,6 +1136,7 @@ class Flow:
             reach = self._direct(scope, node, aliases)
             if reach is not UNREACHED:
                 self.answered.add(marker)
+                self._record_branches(module, function, aliases, reach, subject)
                 return reach
             if isinstance(node, ast.Call):
                 deferred.extend(self._handoffs(scope, node, aliases, containers))
@@ -1088,6 +1151,61 @@ class Flow:
                 self.answered.add(marker)
                 return reach._replace(hops=reach.hops + 1)
         return UNREACHED
+
+    def _record_branches(
+        self,
+        module: str,
+        function: ast.AST,
+        aliases: frozenset[str],
+        reach: Reach,
+        subject: str,
+    ) -> None:
+        """Every earlier branch that reads this value and leaves before the guard.
+
+        Every one of them, not the first: a body routinely opens with a benign
+        `if value is None: continue`, and stopping there would read the harmless
+        branch and never reach the one that writes the value out. Which is how
+        this was first measured at zero on a tree that had one.
+        """
+        for node in _own_body(function):
+            if not isinstance(node, ast.If) or node.lineno >= reach.line:
+                continue
+            if not self._touches(node.test, aliases):
+                continue
+            for branch in (node.body, node.orelse):
+                if not any(
+                    isinstance(child, (ast.Continue, ast.Return, ast.Break))
+                    for statement in branch
+                    for child in ast.walk(statement)
+                ):
+                    continue
+                self.conditional.add(
+                    Conditional(
+                        subject,
+                        module,
+                        node.lineno,
+                        reach.line,
+                        ast.unparse(node.test)[:90],
+                        self._stores(branch, aliases),
+                        "\n".join(ast.unparse(statement) for statement in branch)[:160],
+                    )
+                )
+
+    def _stores(self, branch, aliases: frozenset[str]) -> bool:
+        """Whether the branch writes the value out or hands it on before leaving."""
+        for statement in branch:
+            for node in ast.walk(statement):
+                if isinstance(node, ast.Assign) and self._is_identity(
+                    node.value, aliases
+                ):
+                    return True
+                if isinstance(node, ast.Return) and self._is_identity(
+                    node.value, aliases
+                ):
+                    return True
+                if isinstance(node, ast.Call) and self._passes(node, aliases):
+                    return True
+        return False
 
     def _aliases(
         self, scope: Scope, function: ast.AST, root: str
@@ -1235,7 +1353,13 @@ class Flow:
         )
 
     def _direct(self, scope: Scope, node: ast.AST, aliases: frozenset[str]) -> Reach:
-        """The mechanisms decided inside the function being read."""
+        """The mechanisms decided inside the function being read, with their line."""
+        found = self._mechanism(scope, node, aliases)
+        if found is UNREACHED or found.line:
+            return found
+        return found._replace(line=getattr(node, "lineno", 0))
+
+    def _mechanism(self, scope: Scope, node: ast.AST, aliases: frozenset[str]) -> Reach:
         if isinstance(node, ast.Call):
             named = _callee_name(node.func)
             if self._passes(node, aliases, scope):
@@ -1774,6 +1898,8 @@ class Report:
         # would turn "I cannot see a guard" into "there is no finding", for every
         # bag written from now on, without anyone deciding so.
         tally["bag_members"] = sum(1 for p in self.surface.parameters if p.bag_only)
+        tally["conditional"] = len(self.flow.conditional)
+        tally["bypass"] = len(self.bypass())
         tally["fold_sites"] = len(self.flow.folds)
         # Folds the domination check never judges, because their argument was
         # excused and the exclusion's reason covers the whole route. Printed
@@ -1810,6 +1936,10 @@ class Report:
 
     def unreached(self) -> list[Verdict]:
         return [verdict for verdict in self.verdicts if verdict.verdict == "unreached"]
+
+    def bypass(self) -> list[Conditional]:
+        """Credits whose guard an earlier branch writes the value out and skips."""
+        return sorted(entry for entry in self.flow.conditional if entry.stores)
 
     def undominated(self) -> list[Fold]:
         """Folds whose own value no mechanism in the same function also saw."""
@@ -1955,6 +2085,20 @@ def evaluate(
             )
         )
 
+    bypassed = report.bypass()
+    if bypassed:
+        failures.append(
+            (
+                "These guards do not cover every path their value can take: an "
+                "earlier branch in the same body writes the value out and leaves "
+                "before reaching the guard, so the guard answers for every value "
+                "except the ones that took that branch. A `bool` is the one that "
+                "matters most -- it is an `int` subclass, so it can never fail a "
+                "range check, which is exactly why the narrowing family refuses it",
+                [f"  {entry.display}" for entry in bypassed],
+            )
+        )
+
     undominated = report.undominated()
     if undominated:
         failures.append(
@@ -2017,6 +2161,8 @@ def main() -> int:
         "excused",
         "unreached",
         "bag_members",
+        "conditional",
+        "bypass",
         "answered_in_body",
         "answered_via_handoff",
         "deepest_handoff",
