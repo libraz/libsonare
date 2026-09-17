@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Mastering chain metrics: integrated loudness, true peak, short-term loudness spread, per-band
 energy delta.
 
@@ -73,10 +72,9 @@ Run the definition pins with
 
 from __future__ import annotations
 
+import libsonare
 import numpy as np
 import numpy.typing as npt
-
-import libsonare
 
 BAND_COUNT = 32
 """Number of logarithmic band centres. Mirrors ``SONARE_MASTERING_REPORT_BAND_COUNT`` so a harness

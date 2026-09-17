@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate the image-source-method (ISM) golden fixture from pyroomacoustics.
 
 This is the independent cross-engine oracle for the image-source code: the

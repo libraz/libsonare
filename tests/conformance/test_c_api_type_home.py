@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the C-ABI type-placement checker.
 
 The dangerous direction here is over-reporting.  Most public types are defined
@@ -231,6 +230,7 @@ class TreeTest(unittest.TestCase):
                     str(MIN_TYPEDEFS),
                 ],
                 capture_output=True,
+                check=False,
                 text=True,
             )
         self.assertEqual(result.returncode, 2)

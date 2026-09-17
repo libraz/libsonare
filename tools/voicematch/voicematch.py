@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Voice-match harness: render the same MIDI through libsonare's GM fallback
 (physical models under tuning) and a reference GM synth, then report per-note
 timbre deltas.
@@ -29,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from catalogue import dump_catalogue
 from gm_names import drum_name, gm_name
+from loss import fixed_resonances
 from metrics import (
     OCTAVE_CENTERS,
     THIRD_OCTAVE_CENTERS,
@@ -41,7 +41,6 @@ from metrics import (
     note_onset,
     to_mono,
 )
-from loss import fixed_resonances
 from patterns import (
     DRUM_GATE_HELP,
     PATTERN_BUILDERS,
@@ -518,19 +517,19 @@ def run_room_match(args: argparse.Namespace) -> int:
         return 1
 
     child = (
-        "import sys; sys.path.insert(0, %r)\n"
+        f"import sys; sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
         "from patterns import build_pattern, pattern_length\n"
         "from smf import write_smf\n"
         "from room import estimate_room\n"
         "import render_model\n"
         "prog, cc91 = int(sys.argv[1]), int(sys.argv[2])\n"
-        "pat = build_pattern(%r, prog)\n"
+        f"pat = build_pattern({args.pattern!r}, prog)\n"
         "smf = write_smf(pat.notes, program=prog, channel=pat.channel, "
         "end_pad=pat.tail, sends=(cc91, 0, 0))\n"
         "a = render_model.render_model(smf, pattern_length(pat), 48000)\n"
         "r = estimate_room(a, 48000, [(n.start, n.start + n.dur) for n in pat.notes])\n"
         "print(f'{r.rt60_s} {r.tail_db} {r.hf_ratio}')\n"
-    ) % (str(Path(__file__).resolve().parent), args.pattern)
+    )
 
     def measure(cc91: int, decay_scale: float):
         from room import Room
@@ -538,7 +537,7 @@ def run_room_match(args: argparse.Namespace) -> int:
         env["SONARE_TUNING_OVERRIDES"] = f"{DECAY_SCALE_KEY}={decay_scale}"
         proc = subprocess.run(
             [sys.executable, "-c", child, str(program), str(cc91)],
-            env=env, capture_output=True, text=True,
+            env=env, capture_output=True, check=False, text=True,
         )
         if proc.returncode != 0:
             raise SystemExit(proc.stderr[-1200:])

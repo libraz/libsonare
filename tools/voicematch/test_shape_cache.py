@@ -18,13 +18,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shape.loss import ShapeLoss  # noqa: E402
-from shape.render import (  # noqa: E402
-    DRUM_SCOPE, Signals, corpus_fingerprint, read_overrides, scope_overrides,
+from shape.loss import ShapeLoss
+from shape.render import (
+    DRUM_SCOPE,
+    Signals,
+    corpus_fingerprint,
+    read_overrides,
+    scope_overrides,
 )
-from shape.spectro import Spectro  # noqa: E402
-from test_shape import synth  # noqa: E402
-
+from shape.spectro import Spectro
+from test_shape import synth
 
 # --- override scoping ----------------------------------------------------
 
@@ -90,7 +93,7 @@ _CANDIDATES = ("", "d042.x=3.0", "d042.x=6.0", "d042.x=6.0,d044.y=2.0",
 def _cache_pair(leaky: bool = False):
     """A cached loss and an uncached one over the same struck grid."""
     notes, vels = (42, 44, 46), (64, 100)
-    kw = dict(spectro=Spectro(seconds=10.0), velocities=vels, pitched=False)
+    kw = {"spectro": Spectro(seconds=10.0), "velocities": vels, "pitched": False}
     hot = ShapeLoss(signals=_Scoped(leaky=leaky), **kw)
     cold = ShapeLoss(signals=_Scoped(leaky=leaky), cache_mb=0.0, **kw)
     return notes, hot, cold

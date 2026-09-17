@@ -39,8 +39,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import catalogue as catalogue_mod  # noqa: E402
-from catalogue import resolve_knob_name, scan_tunables  # noqa: E402
+import catalogue as catalogue_mod
+from catalogue import resolve_knob_name, scan_tunables
 
 HERE = Path(__file__).resolve().parent
 SPEC_DIR = HERE / "specs"

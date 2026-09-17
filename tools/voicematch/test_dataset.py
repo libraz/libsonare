@@ -19,8 +19,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import dataset  # noqa: E402
-from knobs import Knob, format_value  # noqa: E402
+import dataset
+from knobs import Knob, format_value
 
 
 def _knob(label: str, lo: float, hi: float, log: bool, start: float) -> Knob:

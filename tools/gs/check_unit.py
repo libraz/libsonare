@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Compare the GS address table against what a measured unit actually answered.
 
 ``src/midi/synth/docs/gs.md`` names the SC-8850 as the target. Which manual a row
@@ -123,7 +122,7 @@ RANGE_UNDECIDED = "unchanging, so a clamp and a refusal cannot be told apart"
 # second way into unit 0 rather than a hole: it is as much a claim about the
 # hardware as the other fifteen.
 EXTENSION_ADDRESSES = frozenset(
-    (0x40 << 16) | (0x30 + unit) << 8 | low for unit in range(0, 16) for low in range(0x00, 0x20)
+    (0x40 << 16) | (0x30 + unit) << 8 | low for unit in range(16) for low in range(0x20)
 )
 
 
@@ -247,7 +246,7 @@ def agreed_values(unit: Path, files: list[str]) -> tuple[dict, dict, list]:
             if held != value:
                 disputed.setdefault(address, {}).update({name: value})
     reports = [
-        {"address": address, "readings": sorted(set([answered[address], *by_record.values()]))}
+        {"address": address, "readings": sorted({answered[address], *by_record.values()})}
         for address, by_record in sorted(disputed.items())
     ]
     values = {a: v for a, v in answered.items() if a not in disputed}
@@ -588,36 +587,36 @@ def main() -> int:
         },
         "derived_from": provenance(unit, (META, BOUNDARY, *power_on_files, *write_probe_files)),
         "what_the_comparison_cannot_see": [
-            "The records are not shown to be one state of the machine. Several do not "
+            ("The records are not shown to be one state of the machine. Several do not "
             "hold the moment they were taken, so the ordering available for those is the "
             "day each was published, under derived_from, and that bounds them from above "
             "rather than placing them. A setting changed between two runs would read "
-            "here as a property of the unit.",
-            "Where two captures of the power-on state disagree, neither is preferred: the "
+            "here as a property of the unit."),
+            ("Where two captures of the power-on state disagree, neither is preferred: the "
             "address is carried under power_on_reads_disagree and no default verdict is "
             "taken from it. It still counts among the addresses a read answered, which is "
-            "not what the two disagree about.",
-            "No row is shown to be absent from the machine. A read that answers nothing "
+            "not what the two disagree about."),
+            ("No row is shown to be absent from the machine. A read that answers nothing "
             "leaves the address unproven, because a block read starting earlier reaches "
             "addresses a single-byte read does not -- which is the boundary probe's own "
-            "finding about this unit.",
-            "The extent a read reached is taken as contiguous, the count being all the "
+            "finding about this unit."),
+            ("The extent a read reached is taken as contiguous, the count being all the "
             "boundary probe keeps. It bounds the reach; it does not say each address "
-            "inside it answered on its own.",
+            "inside it answered on its own."),
             "The window blocks are excluded, so nothing is said about them at all.",
-            "A range is compared only against the values the write probe actually sent; a "
-            "value it never tried is neither inside nor outside as far as this is concerned.",
-            "A range is compared only where the probe reached a verdict. A byte it read "
+            ("A range is compared only against the values the write probe actually sent; a "
+            "value it never tried is neither inside nor outside as far as this is concerned."),
+            ("A range is compared only where the probe reached a verdict. A byte it read "
             "back unchanged for every value is carried apart, since the machine's answer "
-            "there is one held value rather than a range.",
-            "Whether the machine clamps an out-of-range value or refuses it is not "
+            "there is one held value rather than a range."),
+            ("Whether the machine clamps an out-of-range value or refuses it is not "
             "compared. It bounds the range either way, which is what is being read here, "
             "and which of the two libsonare does is a decision gs.md takes rather than a "
-            "property the table records.",
-            "Levels are libsonare's own promises about its implementation and are not a "
-            "property of the machine, so they are reported and never compared.",
-            "One unit is one unit. A disagreement is between this table and this machine, "
-            "and a second SC-8850 has not been measured.",
+            "property the table records."),
+            ("Levels are libsonare's own promises about its implementation and are not a "
+            "property of the machine, so they are reported and never compared."),
+            ("One unit is one unit. A disagreement is between this table and this machine, "
+            "and a second SC-8850 has not been measured."),
         ],
         "summary": {
             "table_rows": len(table["rows"]),

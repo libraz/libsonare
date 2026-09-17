@@ -80,7 +80,7 @@ def profile_levels(config: str, notes, lib: str, overrides: str) -> dict[int, fl
     p = subprocess.run(
         [sys.executable, str(here / "profile.py"), "compare", "--config", config,
          "--notes", ",".join(str(n) for n in notes)],
-        capture_output=True, text=True, env=env, cwd=here.parents[1])
+        capture_output=True, check=False, text=True, env=env, cwd=here.parents[1])
     if p.returncode:
         raise RuntimeError(p.stderr[-3000:])
     return parse_profile_levels(p.stdout)

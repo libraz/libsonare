@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Capture a reference corpus from an AudioUnit instrument, and calibrate the rig.
 
 Four commands, in the order they are used:
@@ -56,9 +55,11 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import au_oracle  # noqa: E402
-from _repo import REPO_ROOT  # noqa: E402
-from au_oracle import (  # noqa: E402
+import itertools
+
+import au_oracle
+from _repo import REPO_ROOT
+from au_oracle import (
     AuRenderError,
     AuSource,
     dry_params,
@@ -66,9 +67,9 @@ from au_oracle import (  # noqa: E402
     summary_json,
     with_keyswitches,
 )
-from metrics import analyze_hit, harmonic_share, midi_to_hz, to_mono  # noqa: E402
-from smf import Note, write_smf  # noqa: E402
-from wavio import read_wav  # noqa: E402
+from metrics import analyze_hit, harmonic_share, midi_to_hz, to_mono
+from smf import Note, write_smf
+from wavio import read_wav
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_CONFIG = HERE / "capture" / "piano.json"
@@ -498,7 +499,7 @@ def _probe(source: AuSource, out: Path, note: int, velocity: int, gate_ms: int,
     """One calibration render. Returns aubounce's summary, or the refusal as data."""
     argv = _note_argv(source, out, note, velocity, gate_ms, sends=sends)
     started = time.monotonic()
-    proc = subprocess.run(argv, capture_output=True, text=True)
+    proc = subprocess.run(argv, capture_output=True, check=False, text=True)
     wall = time.monotonic() - started
     if proc.returncode != 0:
         return {"error": proc.stderr.strip()[:400], "wall_s": wall}
@@ -545,7 +546,7 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
                    scratch / f"rt_{realtime}.wav", note, velocity, gate_ms, sends=sends)
         rt_rows.append({"realtime": realtime, **{k: s.get(k) for k in
                                                  ("peak", "dropout_ms", "seconds", "wall_s", "error")}})
-        print(f"  realtime={str(realtime):5s} peak={s.get('peak', 0):.4f} "
+        print(f"  realtime={realtime!s:5s} peak={s.get('peak', 0):.4f} "
               f"dropout={s.get('dropout_ms', '?')}ms wall={s.get('wall_s', 0):.1f}s", file=sys.stderr)
     report["realtime"] = rt_rows
     realtime_required = bool(next(r for r in rt_rows if not r["realtime"])["dropout_ms"])
@@ -644,7 +645,7 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
         report["room"] = {"rt60_s": rt60, "hf_ratio": float(getattr(room, "hf_ratio", 0.0) or 0.0)}
         print(f"  measured RT60 {rt60:.2f}s "
               f"({'dry' if rt60 < 0.35 else 'A ROOM IS IN THE CAPTURE'})", file=sys.stderr)
-    except Exception as exc:  # room measurement is a report, never a gate
+    except Exception as exc:  # noqa: BLE001 -- room measurement is a report, never a gate
         report["room"] = {"error": f"{type(exc).__name__}: {exc}"}
 
     # 5. Level at the reference velocity, so a later capture can be compared to
@@ -931,7 +932,7 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
     for attempt in range(attempts):
         proc = subprocess.run(
             _note_argv(src, out, note, vel, gate_ms, sends=sends),
-            capture_output=True, text=True,
+            capture_output=True, check=False, text=True,
         )
         if proc.returncode != 0:
             last = proc.stderr.strip()[:400]
@@ -1263,7 +1264,7 @@ def verify(out: Path) -> int:
 
     for (timbre, note), pts in sorted(levels.items()):
         pts.sort()
-        for (v0, r0), (v1, r1) in zip(pts, pts[1:]):
+        for (v0, r0), (v1, r1) in itertools.pairwise(pts):
             if r1 < r0 * 0.98:
                 doubts.append(
                     f"{timbre} n{note}: velocity {v1} is quieter than {v0} "

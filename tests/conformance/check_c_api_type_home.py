@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Check that a public type lives in the header whose declarations use it.
 
 A header can define a type none of its own declarations mention and hand it to a

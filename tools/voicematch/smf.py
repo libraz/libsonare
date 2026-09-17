@@ -44,7 +44,7 @@ def _vlq(value: int) -> bytes:
 
 
 def _sec_to_ticks(sec: float) -> int:
-    return int(round(sec * TICKS_PER_SEC))
+    return round(sec * TICKS_PER_SEC)
 
 
 def write_smf(

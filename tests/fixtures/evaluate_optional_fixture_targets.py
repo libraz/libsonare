@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Evaluate optional fixture report observations against quality targets."""
 
 from __future__ import annotations
@@ -11,7 +10,6 @@ from statistics import mean
 from typing import Any
 
 from json_safe import dumps_strict, write_json_strict
-
 
 DEFAULT_TARGETS = {
     "bpm": {"pass_rate_min": 0.85, "octave_error_rate_max": 0.05, "min_count": 50},

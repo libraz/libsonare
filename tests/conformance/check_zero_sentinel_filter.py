@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Keep the "0 selects the library default" sentinel from being spelled ``> 0``.
 
 An optional scalar whose documented ``0`` means "keep the library default" has
@@ -258,11 +257,11 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if unrecorded:
         failures.append(
             (
-                "These test the zero-default sentinel with `> 0`, so a negative or "
+                ("These test the zero-default sentinel with `> 0`, so a negative or "
                 "non-finite request is promoted to the default instead of reaching "
                 "the validator that would refuse it. Route them through "
                 "sonare::ZeroIsDefault, or test the sentinel with `== 0` where the "
-                "value is an integer",
+                "value is an integer"),
                 [f"  {site.display}  {site.text}" for site in unrecorded],
             )
         )
@@ -271,10 +270,10 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if stale:
         failures.append(
             (
-                "These records matched nothing. A record that suppresses nothing "
+                ("These records matched nothing. A record that suppresses nothing "
                 "still asserts a reviewed decision about a field, so the next one "
                 "to take that name inherits the blessing unexamined -- delete the "
-                "record in the change that converts its site",
+                "record in the change that converts its site"),
                 [f"  {name}" for name in stale],
             )
         )

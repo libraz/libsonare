@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Keep every JS-to-C++ numeric narrowing in ``src/wasm`` accounted for.
 
 Three populations, all enforced here, all drifting for the same reason -- a new
@@ -1346,8 +1345,8 @@ def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[s
     if missing_reasons:
         failures.append(
             (
-                "These passthroughs carry no reason, so they allow a saturated "
-                "value through without saying on what grounds",
+                ("These passthroughs carry no reason, so they allow a saturated "
+                "value through without saying on what grounds"),
                 [f"  {name}" for name in missing_reasons],
             )
         )
@@ -1356,10 +1355,10 @@ def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[s
     if unsupported:
         failures.append(
             (
-                "These passthroughs claim a contract that cannot be read where "
+                ("These passthroughs claim a contract that cannot be read where "
                 "they say it is. Letting a value through unrefused is the "
                 "expensive verdict on purpose: it points at the text, and the "
-                "text has to be there",
+                "text has to be there"),
                 [f"  {line}" for line in unsupported],
             )
         )
@@ -1368,10 +1367,10 @@ def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[s
     if counts:
         failures.append(
             (
-                "These files no longer hold the float parameters the "
+                ("These files no longer hold the float parameters the "
                 "distribution records. The count moving either way is the "
                 "report: a parameter landing needs its triage in this change, "
-                "and one leaving needs its record deleted in the same one",
+                "and one leaving needs its record deleted in the same one"),
                 [f"  {line}" for line in counts],
             )
         )
@@ -1384,10 +1383,10 @@ def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[s
     if counted_floats:
         failures.append(
             (
-                "These float parameters are named like a count or an index, "
+                ("These float parameters are named like a count or an index, "
                 "which is the one float shape the wrapping question reaches; the "
                 "float exclusion from the positional population was written on "
-                "there being none",
+                "there being none"),
                 [f"  {p.display}" for p in sorted(counted_floats, key=lambda p: p.display)],
             )
         )
@@ -1396,9 +1395,9 @@ def evaluate_floats(scan: PositionalScan, records: FloatRecords) -> list[tuple[s
     if stale:
         failures.append(
             (
-                "These passthroughs matched no parameter. A record that allows "
+                ("These passthroughs matched no parameter. A record that allows "
                 "nothing still asserts a contract about a spelling, so the next "
-                "parameter to take it inherits permission unexamined",
+                "parameter to take it inherits permission unexamined"),
                 [f"  {name}" for name in stale],
             )
         )
@@ -1435,8 +1434,8 @@ def evaluate_positional(
     if ungraded:
         failures.append(
             (
-                "These positional records carry no verdict, so they suppress a "
-                "site on no stated mechanism and on no stated defect",
+                ("These positional records carry no verdict, so they suppress a "
+                "site on no stated mechanism and on no stated defect"),
                 [f"  {line}" for line in ungraded],
             )
         )
@@ -1445,8 +1444,8 @@ def evaluate_positional(
     if missing_reasons:
         failures.append(
             (
-                "These positional records carry no reason, so they suppress a "
-                "site without saying on what grounds",
+                ("These positional records carry no reason, so they suppress a "
+                "site without saying on what grounds"),
                 [f"  {name}" for name in missing_reasons],
             )
         )
@@ -1455,9 +1454,9 @@ def evaluate_positional(
     if unsupported_open:
         failures.append(
             (
-                "These records are open without saying what a wrapped value "
+                ("These records are open without saying what a wrapped value "
                 "selects, which is the whole content of the claim -- an open "
-                "record that names no consequence is a pending one renamed",
+                "record that names no consequence is a pending one renamed"),
                 [f"  {name}" for name in unsupported_open],
             )
         )
@@ -1466,9 +1465,9 @@ def evaluate_positional(
     if unsupported_benign:
         failures.append(
             (
-                "These records claim a mechanism that cannot be read where they "
+                ("These records claim a mechanism that cannot be read where they "
                 "say it is. Benign is the expensive verdict on purpose: it points "
-                "at the text, and the text has to be there",
+                "at the text, and the text has to be there"),
                 [f"  {line}" for line in unsupported_benign],
             )
         )
@@ -1482,8 +1481,8 @@ def evaluate_positional(
     if scan.unresolved:
         failures.append(
             (
-                "These registrations bind a symbol no declaration in the tree "
-                "matches, so nothing can say what their parameters are",
+                ("These registrations bind a symbol no declaration in the tree "
+                "matches, so nothing can say what their parameters are"),
                 [f"  {r.display}  {r.js_name} -> {r.symbol}" for r in scan.unresolved],
             )
         )
@@ -1491,8 +1490,8 @@ def evaluate_positional(
     if scan.conflicting:
         failures.append(
             (
-                "These registrations resolve to declarations that disagree on a "
-                "signature, so the parameter list read here is one of several",
+                ("These registrations resolve to declarations that disagree on a "
+                "signature, so the parameter list read here is one of several"),
                 [
                     f"  {r.display}  {r.js_name} -> "
                     + " | ".join(sorted({d.signature for d in candidates}))
@@ -1505,8 +1504,8 @@ def evaluate_positional(
     if disagreements:
         failures.append(
             (
-                "The two routes disagree on these parameters, so a registration "
-                "resolved to a declaration the other route did not reach",
+                ("The two routes disagree on these parameters, so a registration "
+                "resolved to a declaration the other route did not reach"),
                 [f"  {line}" for line in disagreements],
             )
         )
@@ -1515,9 +1514,9 @@ def evaluate_positional(
     if unrecorded:
         failures.append(
             (
-                "These positional parameters are declared as a narrow integer and "
+                ("These positional parameters are declared as a narrow integer and "
                 "are not recorded, so embind converts them by a rule -- wrapping "
-                "modulo 2^32 -- that nothing here has graded",
+                "modulo 2^32 -- that nothing here has graded"),
                 [f"  {p.display}" for p in sorted(unrecorded, key=lambda p: p.display)],
             )
         )
@@ -1526,9 +1525,9 @@ def evaluate_positional(
     if counts:
         failures.append(
             (
-                "These shapes no longer cover the population they record. A shape "
+                ("These shapes no longer cover the population they record. A shape "
                 "is a pattern AND a count, because a pattern alone absorbs the "
-                "next parameter to take a covered name",
+                "next parameter to take a covered name"),
                 [f"  {line}" for line in counts],
             )
         )
@@ -1543,9 +1542,9 @@ def evaluate_positional(
     if unrecorded_constructors:
         failures.append(
             (
-                "These embind constructors take a narrow integer positionally and "
+                ("These embind constructors take a narrow integer positionally and "
                 "the record does not match. They name their types in place rather "
-                "than pointing at a declaration, so the arity is the only key",
+                "than pointing at a declaration, so the arity is the only key"),
                 unrecorded_constructors,
             )
         )
@@ -1555,9 +1554,9 @@ def evaluate_positional(
     if misdeclared:
         failures.append(
             (
-                "These records state a conversion rule their parameters' types do "
+                ("These records state a conversion rule their parameters' types do "
                 "not have. embind picks its glue by the C++ type, so the rule is "
-                "derived here rather than believed",
+                "derived here rather than believed"),
                 [f"  {line}" for line in misdeclared],
             )
         )
@@ -1566,9 +1565,9 @@ def evaluate_positional(
     if stale:
         failures.append(
             (
-                "These positional records matched nothing. A record that "
+                ("These positional records matched nothing. A record that "
                 "suppresses nothing still asserts a reviewed decision about a "
-                "spelling, so the next parameter to take it inherits the verdict",
+                "spelling, so the next parameter to take it inherits the verdict"),
                 [f"  {name}" for name in stale],
             )
         )
@@ -1596,8 +1595,8 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if ungraded:
         failures.append(
             (
-                "These records enumerate a site without grading what it does, so "
-                "they suppress it on no stated mechanism",
+                ("These records enumerate a site without grading what it does, so "
+                "they suppress it on no stated mechanism"),
                 sorted(ungraded),
             )
         )
@@ -1610,8 +1609,8 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if orphans:
         failures.append(
             (
-                "These narrowings sit in no val-taking body, so the declaration "
-                "pattern is too narrow to see the function they are in",
+                ("These narrowings sit in no val-taking body, so the declaration "
+                "pattern is too narrow to see the function they are in"),
                 [f"  {site.display}  {site.receiver}.as<{site.type}>()" for site in orphans],
             )
         )
@@ -1620,8 +1619,8 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if disagreements:
         failures.append(
             (
-                "The two scans disagree on these bodies, so a body span was "
-                "mis-measured and one of the counts is wrong",
+                ("The two scans disagree on these bodies, so a body span was "
+                "mis-measured and one of the counts is wrong"),
                 [f"  {line}" for line in disagreements],
             )
         )
@@ -1635,9 +1634,9 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if local_readers:
         failures.append(
             (
-                "These file-local readers convert a JS value outside the shared "
+                ("These file-local readers convert a JS value outside the shared "
                 "reader family, so a change to the conversion contract does not "
-                "reach their call sites",
+                "reach their call sites"),
                 [
                     f"  {_display(c.path)}  {c.returns} {c.name}(val)"
                     for c in sorted(local_readers, key=lambda c: (str(c.path), c.name))
@@ -1649,8 +1648,8 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if unrecorded:
         failures.append(
             (
-                "These narrowings are neither performed by the shared reader nor "
-                "recorded with the mechanism that makes them harmless",
+                ("These narrowings are neither performed by the shared reader nor "
+                "recorded with the mechanism that makes them harmless"),
                 [
                     f"  {site.display}  {site.receiver}.as<{site.type}>()"
                     for site in unrecorded
@@ -1662,9 +1661,9 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if stale:
         failures.append(
             (
-                "These records matched nothing. A record that suppresses nothing "
+                ("These records matched nothing. A record that suppresses nothing "
                 "still asserts a reviewed decision about a spelling, so the next "
-                "narrowing to take it inherits the blessing unexamined",
+                "narrowing to take it inherits the blessing unexamined"),
                 [f"  {name}" for name in stale],
             )
         )

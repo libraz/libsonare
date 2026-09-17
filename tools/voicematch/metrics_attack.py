@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-
 from smf import Note
-
 
 # The attack window, and how it is cut up. Six 20 ms slices covering the first
 # 120 ms: long enough to reach past the hammer contact and the bloom, short
@@ -253,7 +251,7 @@ def attack_peaks(mono: np.ndarray, sr: int, note: Note,
     freqs = np.fft.rfftfreq(win, 1.0 / sr)
     db = 10.0 * np.log10(power + 1e-30)
     bin_hz = float(freqs[1] - freqs[0])
-    half = max(1, int(round(ATTACK_PEAK_BASELINE_HZ / bin_hz / 2.0)))
+    half = max(1, round(ATTACK_PEAK_BASELINE_HZ / bin_hz / 2.0))
     kernel = np.ones(2 * half + 1)
     # Divided by how many bins each output actually saw, rather than by the
     # kernel width. A plain smoothing pads the ends with zeros, and these are dB

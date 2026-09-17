@@ -23,28 +23,43 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shape import terms  # noqa: E402
-from shape.bed import Bed  # noqa: E402
-from shape.density import (  # noqa: E402
+import itertools
+
+from shape import (
+    attack,
+    struck,
+    terms,
+)
+from shape.__main__ import holdout
+from shape.bed import Bed
+from shape.density import (
     RAYLEIGH_CV,
     band_snr_db,
     diffuse_floor,
     envelope_diffuseness,
     modal_density,
 )
-from shape import attack, struck  # noqa: E402
-from shape.__main__ import holdout  # noqa: E402
-from shape.search import split_velocities  # noqa: E402
-from shape.loss import (  # noqa: E402
-    DEFAULT_WEIGHTS, STRUCK_WEIGHTS, ShapeLoss, Terms,
+from shape.loss import (
+    DEFAULT_WEIGHTS,
+    STRUCK_WEIGHTS,
+    ShapeLoss,
+    Terms,
 )
-from shape.partials import (  # noqa: E402
-    Track, band_envelope, decay_db_s, fit_inharmonicity, harmonic_rows, note_hz,
+from shape.partials import (
+    Track,
+    band_envelope,
+    decay_db_s,
+    fit_inharmonicity,
+    harmonic_rows,
+    note_hz,
 )
-from shape.probes import decay_bins, sustain_colour, tail_residue  # noqa: E402
-from shape.render import read_overrides, write_overrides  # noqa: E402
-from shape.search import split_notes  # noqa: E402
-from shape.spectro import DEFAULT_SCALES, Spectro, rows_hz  # noqa: E402
+from shape.probes import decay_bins, sustain_colour, tail_residue
+from shape.render import read_overrides, write_overrides
+from shape.search import (
+    split_notes,
+    split_velocities,
+)
+from shape.spectro import DEFAULT_SCALES, Spectro, rows_hz
 
 SR = 48000
 
@@ -651,7 +666,7 @@ def test_adding_noise_to_a_note_lowers_its_purity_monotonically():
     rng = np.random.default_rng(5)
     got = [purity_db(sp, base + rng.standard_normal(len(base)) * rms * a, 60,
                      (0.2, 3.0)) for a in (0.0, 0.05, 0.2, 0.8)]
-    assert all(a > b for a, b in zip(got, got[1:])), got
+    assert all(a > b for a, b in itertools.pairwise(got)), got
 
 
 def test_a_tail_sitting_on_its_own_floor_is_flagged_by_the_floor_share():
@@ -1096,8 +1111,10 @@ def test_digital_silence_is_not_a_level():
     x = np.zeros(int(2.0 * SR))
     x[:int(0.1 * SR)] = 0.5
     hi, mid, lo = drawn(x, SR, (0.0, 2.0))
-    assert hi == hi                       # the burst is a real level
-    assert lo != lo and mid != mid        # the silence is not
+    # The self-comparisons are the NaN test, so the linter's "compared with
+    # itself" is exactly what these two lines assert.
+    assert hi == hi                       # noqa: PLR0124 -- the burst is a real level
+    assert lo != lo and mid != mid        # noqa: PLR0124 -- the silence is not
 
 
 def test_a_variant_is_not_mistaken_for_the_reference():
@@ -1522,8 +1539,8 @@ def test_attack_reads_a_band_that_builds_against_the_rest_of_its_own_strike():
     together = high + low
     builds = high + low * (1.0 - np.exp(-t / 0.03))
     diff = attack.compare(together, builds, sr)
-    band = [i for i, (lo, hi) in enumerate(attack.ATTACK_BANDS) if lo <= 350 < hi][0]
-    top = [i for i, (lo, hi) in enumerate(attack.ATTACK_BANDS) if lo <= 5000 < hi][0]
+    band = next(i for i, (lo, hi) in enumerate(attack.ATTACK_BANDS) if lo <= 350 < hi)
+    top = next(i for i, (lo, hi) in enumerate(attack.ATTACK_BANDS) if lo <= 5000 < hi)
     early = attack.ATTACK_WINDOWS.index(0.005)
     late = attack.ATTACK_WINDOWS.index(0.250)
     # The low band is present at once in one and not the other...

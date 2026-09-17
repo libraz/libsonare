@@ -70,11 +70,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from _repo import REPO_ROOT  # noqa: E402
-from autofit import render_model_rows_subprocess  # noqa: E402
-from build_lib import dylib_path  # noqa: E402
-from catalogue import dump_catalogue  # noqa: E402
-from knobs import (  # noqa: E402
+from _repo import REPO_ROOT
+from autofit import render_model_rows_subprocess
+from build_lib import dylib_path
+from catalogue import dump_catalogue
+from knobs import (
     Knob,
     auto_spec,
     build_knobs,

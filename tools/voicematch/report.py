@@ -22,7 +22,6 @@ from writeback import (
     write_patch_fields,
 )
 
-
 #: How far a fit may move the voice's whole-grid level before the report says so
 #: rather than leaving it to be noticed by ear. Generous, because a voicing
 #: change legitimately moves the level a little; anything past this is the fit

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the C-ABI out-parameter initialisation checker.
 
 The checker's failure mode is a false clean: every way it can break -- a body

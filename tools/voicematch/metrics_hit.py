@@ -6,7 +6,6 @@ import math
 from dataclasses import asdict, dataclass
 
 import numpy as np
-
 from metrics_bands import (
     OCTAVE_CENTERS,
     OCTAVE_RATIO,
@@ -18,7 +17,6 @@ from metrics_decay import _band_decay, _band_power
 from metrics_modal import measure_modes
 from metrics_signal import _db, _rms_envelope, _spectrum
 from smf import Note
-
 
 # Longest stretch of one hit that is analyzed, and how far below the loudest
 # band a band still counts as present. The floor keeps bands with no content in

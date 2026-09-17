@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Measure and enforce deterministic size budgets for shipped WASM files.
 
 Only ``raw`` and ``gzip`` are compared against the baseline. ``code``, ``data``
@@ -21,8 +20,8 @@ import argparse
 import gzip
 import hashlib
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Any
 
 

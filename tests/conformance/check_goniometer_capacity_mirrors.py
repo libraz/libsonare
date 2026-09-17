@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Hold the goniometer read cap equal across the core ring and its two mirrors.
 
 ``ChannelStrip::kGoniometerCapacity`` sizes the goniometer ring, and the Node
@@ -160,11 +159,11 @@ def python_declarations(text: str, path: str) -> list[Declaration]:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
             continue
         target, value = node.targets[0], node.value
-        if isinstance(target, ast.Name) and isinstance(value, ast.Constant):
-            if isinstance(value.value, int) and not isinstance(value.value, bool):
-                found.append(
-                    Declaration(path, node.lineno, None, target.id, value.value)
-                )
+        if not isinstance(target, ast.Name) or not isinstance(value, ast.Constant):
+            continue
+        if not isinstance(value.value, int) or isinstance(value.value, bool):
+            continue
+        found.append(Declaration(path, node.lineno, None, target.id, value.value))
     return found
 
 

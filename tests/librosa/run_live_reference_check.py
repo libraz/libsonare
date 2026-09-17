@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate live librosa references and run the C++ reference tests against them.
 
 This keeps committed fixtures stable while making it easy to verify compatibility

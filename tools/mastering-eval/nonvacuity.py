@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Show that each metric moves for its own degradation and not for the others.
 
 The contract's gate: a set of metrics that all move together is one metric
@@ -64,11 +63,10 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-import metrics_chain  # noqa: E402
-import metrics_repair  # noqa: E402
-from run import DOWNMIX, _as_stereo, load_item, mono_feeds, provenance  # noqa: E402
-
-import libsonare  # noqa: E402
+import libsonare
+import metrics_chain
+import metrics_repair
+from run import DOWNMIX, _as_stereo, load_item, mono_feeds, provenance
 
 SCHEMA = 1
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 # --------------------------------------------------------------------------- #
 # Modal profile — the partial series of everything that is not a string
 # --------------------------------------------------------------------------- #
@@ -73,7 +72,7 @@ def measure_modes(freqs: np.ndarray, mag: np.ndarray, *,
         return []
     db = 20.0 * np.log10(np.maximum(mag, 1e-12))
     bin_hz = float(freqs[1] - freqs[0])
-    half = max(1, int(round(MODAL_BASELINE_HZ / bin_hz / 2.0)))
+    half = max(1, round(MODAL_BASELINE_HZ / bin_hz / 2.0))
     kernel = np.ones(2 * half + 1) / (2 * half + 1)
     baseline = np.convolve(db, kernel, mode="same")
     top = float(db.max())

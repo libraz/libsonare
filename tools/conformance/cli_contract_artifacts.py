@@ -52,14 +52,17 @@ def _check_artifact(
                     f"{label}: payload {sample_rate_key}={payload_rate!r} does not equal WAV sample rate {sample_rate}",
                 )
             )
-        if isinstance(payload, dict) and isinstance(payload.get("samples"), int):
-            if payload["samples"] != frame_count:
-                report.append(
-                    (
-                        "fail",
-                        f"{label}: payload samples={payload['samples']!r} does not equal WAV frames {frame_count}",
-                    )
+        if (
+            isinstance(payload, dict)
+            and isinstance(payload.get("samples"), int)
+            and payload["samples"] != frame_count
+        ):
+            report.append(
+                (
+                    "fail",
+                    f"{label}: payload samples={payload['samples']!r} does not equal WAV frames {frame_count}",
                 )
+            )
         actual_digest = hashlib.sha256(data).hexdigest()
         if actual_digest != artifact["sha256"]:
             report.append(
@@ -116,8 +119,8 @@ def _check_artifact(
         report.append(
             (
                 "fail",
-                f"{label}: artifact SHA-256 {actual_digest} does not match "
-                f"{artifact['sha256']}",
+                (f"{label}: artifact SHA-256 {actual_digest} does not match "
+                f"{artifact['sha256']}"),
             )
         )
     try:

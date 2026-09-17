@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-
 from metrics import _db, _spectrum, to_mono
 from phrases import build_takes
 from room import Room, match_sends, measurable_room
@@ -17,8 +16,7 @@ from wavio import read_wav
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 
-from _repo import REPO_ROOT  # noqa: E402
-
+from _repo import REPO_ROOT
 
 # --------------------------------------------------------------------------
 # phrase takes: the half of an instrument that only exists between notes
@@ -333,7 +331,7 @@ def room_match(cfg: dict, *, archive: Path, take_id: str, program: int, verbose:
     # is read once when the library loads, so a sweep inside one process would
     # measure the first tank setting at every point.
     child = (
-        "import sys; sys.path.insert(0, %r)\n"
+        f"import sys; sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})\n"
         "import json\n"
         "from phrases import build_takes\n"
         "from smf import write_smf\n"
@@ -346,14 +344,14 @@ def room_match(cfg: dict, *, archive: Path, take_id: str, program: int, verbose:
         "a = render_model(smf, t.duration(), 48000)\n"
         "r = estimate_room(a, 48000, [(n.start, n.start + n.dur) for n in t.notes])\n"
         "print(f'{r.rt60_s} {r.tail_db} {r.hf_ratio}')\n"
-    ) % (str(Path(__file__).resolve().parent),)
+    )
 
     def measure(cc91: int, decay_scale: float):
         env = dict(os.environ)
         env["SONARE_TUNING_OVERRIDES"] = f"{DECAY_SCALE_KEY}={decay_scale}"
         proc = subprocess.run(
             [sys.executable, "-c", child, str(program), str(cc91), take.id, cfg["takes"]],
-            env=env, capture_output=True, text=True, cwd=str(REPO_ROOT))
+            env=env, capture_output=True, check=False, text=True, cwd=str(REPO_ROOT))
         if proc.returncode:
             raise SystemExit(proc.stderr[-1200:])
         rt, tail, hf = (float(v) for v in proc.stdout.strip().split()[-3:])

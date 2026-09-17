@@ -98,16 +98,10 @@ def _parse_param(decl: str) -> Param:
         structural = True  # callback/user_data/json_out/... no facade analog
     elif lname in ("samples", "data", "length", "sample_rate", "size", "len"):
         structural = True  # input-buffer plumbing folded by facades
-    elif is_ptr and lname in (
-        "audio",
-        "self",
-        "handle",
-        "engine",
-        "out_key",
-        "out_bpm",
+    elif name == "" or (
+        is_ptr
+        and lname in ("audio", "self", "handle", "engine", "out_key", "out_bpm")
     ):
-        structural = True
-    elif name == "":
         structural = True
 
     return Param(
@@ -269,9 +263,11 @@ def _mark_structural_fields(fields: list[RecordField]) -> None:
     """
     has_indirect = any(("*" in f.type or f.type.endswith("[]")) for f in fields)
     for f in fields:
-        if _PADDING_FIELD_RE.match(f.name) or f.name in _ABI_PLUMBING_FIELDS:
-            f.structural = True
-        elif has_indirect and _LENGTH_FIELD_RE.match(f.name) and _is_int_type(f.type):
+        if (
+            _PADDING_FIELD_RE.match(f.name)
+            or f.name in _ABI_PLUMBING_FIELDS
+            or (has_indirect and _LENGTH_FIELD_RE.match(f.name) and _is_int_type(f.type))
+        ):
             f.structural = True
 
 

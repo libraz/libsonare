@@ -10,8 +10,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import bank  # noqa: E402
-from phrases import TAKE_SETS  # noqa: E402
+import bank
+from phrases import TAKE_SETS
 
 
 def test_the_whole_bank_is_addressable():

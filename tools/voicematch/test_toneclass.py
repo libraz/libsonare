@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from loss import (  # noqa: E402
+from loss import (
     BAND_REFERENCE_FLOOR_DB,
     LOSS_TERMS,
     LossWeights,
@@ -26,25 +26,25 @@ from loss import (  # noqa: E402
     loss_terms,
     percussion_terms,
 )
-from metrics import (  # noqa: E402
+from metrics import (
     THIRD_OCTAVE_CENTERS,
     a_weight_db,
     analyze_hit,
     analyze_note,
     audibility_weights,
+    band_edges_by_timbre,
     channel_correlation,
     hit_tone,
     ladder_present,
-    band_edges_by_timbre,
     measure_band_edge,
-    shared_band_edge,
     modulation_note,
     pitch_drop,
+    shared_band_edge,
     to_mono,
 )
-from patterns import LONG_DECAY_DRUM_NOTES, build_pattern, drum_gap_for  # noqa: E402
-from smf import Note  # noqa: E402
-from toneclass import ToneClass, default_weights, tone_class  # noqa: E402
+from patterns import LONG_DECAY_DRUM_NOTES, build_pattern, drum_gap_for
+from smf import Note
+from toneclass import ToneClass, default_weights, tone_class
 
 SR = 48000
 

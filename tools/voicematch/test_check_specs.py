@@ -11,7 +11,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import check_specs  # noqa: E402
+import check_specs
 
 
 def _spec(tmp_path: Path, payload, name: str = "spec.json") -> Path:

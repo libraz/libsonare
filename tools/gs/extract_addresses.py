@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Census the GS address space as real Standard MIDI Files use it.
 
 The address table in ``src/midi/synth/gs_address_table.h`` promises that every
@@ -31,7 +30,7 @@ import json
 import os
 import struct
 import sys
-from typing import Iterator
+from collections.abc import Iterator
 
 # Roland framing.
 ROLAND_ID = 0x41
@@ -145,7 +144,7 @@ def format_address(addr: int, mask: int) -> str:
         elif nibble_mask == 0xF0:
             out.append("*%X" % (byte & 0x0F))
         else:
-            out.append("%02X" % byte)
+            out.append(f"{byte:02X}")
     return " ".join(out)
 
 
@@ -184,7 +183,7 @@ class Census:
         saw_gs = False
         try:
             messages = list(iter_sysex(path))
-        except Exception:
+        except Exception:  # noqa: BLE001 -- an unreadable file is counted, not diagnosed
             self.unparsed_files += 1
             return
         for msg in messages:
@@ -201,13 +200,13 @@ class Census:
                 continue
             model, command = msg[2], msg[3]
             if model != GS_MODEL:
-                self.messages["roland_model_%02X" % model] += 1
+                self.messages[f"roland_model_{model:02X}"] += 1
                 continue
             if command == CMD_RQ1:
                 self.messages["gs_rq1"] += 1
                 continue
             if command != CMD_DT1:
-                self.messages["gs_command_%02X" % command] += 1
+                self.messages[f"gs_command_{command:02X}"] += 1
                 continue
             # A corpus off the open web contains garbled messages, and a census
             # that skips the checksum turns each one into a fictional address
@@ -236,7 +235,7 @@ class Census:
         for addr, row in sorted(self.rows.items()):
             addresses.append(
                 [
-                    "%02X %02X %02X" % (addr >> 16, (addr >> 8) & 0xFF, addr & 0xFF),
+                    f"{addr >> 16:02X} {(addr >> 8) & 0xFF:02X} {addr & 0xFF:02X}",
                     row["count"],
                     len(row["files"]),
                     row["len_min"],
@@ -317,7 +316,7 @@ def main() -> int:
     census.duplicate_files = len(paths) - len(unique)
     paths = unique
     if not paths:
-        print("no MIDI files under %s" % args.corpus, file=sys.stderr)
+        print(f"no MIDI files under {args.corpus}", file=sys.stderr)
         return 1
     for index, path in enumerate(paths):
         census.scan(path, index)
@@ -328,15 +327,10 @@ def main() -> int:
         handle.write("\n")
 
     print(
-        "scanned %d unique files (%d duplicates dropped, %d carry GS, %d unparsed)"
-        " -> %d distinct addresses"
-        % (
-            payload["files_scanned"],
-            payload["files_duplicate"],
-            payload["files_with_gs"],
-            payload["files_unparsed"],
-            payload["distinct_addresses"],
-        )
+        f"scanned {payload['files_scanned']} unique files "
+        f"({payload['files_duplicate']} duplicates dropped, "
+        f"{payload['files_with_gs']} carry GS, {payload['files_unparsed']} unparsed)"
+        f" -> {payload['distinct_addresses']} distinct addresses"
     )
     return 0
 

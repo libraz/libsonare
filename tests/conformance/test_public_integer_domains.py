@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the public-integer-domain checker.
 
 Every case drives :func:`check_public_integer_domains.evaluate` -- the function

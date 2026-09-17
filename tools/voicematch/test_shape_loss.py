@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shape.loss import STRUCK_WEIGHTS, compares_notes  # noqa: E402
+from shape.loss import STRUCK_WEIGHTS, compares_notes
 
 
 def test_one_piece_at_several_velocities_still_only_holds_one_note():

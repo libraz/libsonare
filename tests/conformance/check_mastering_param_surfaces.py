@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Every mastering chain parameter key must be declared on both TS config types.
 
 The chain's parameter setter accepts dotted string keys, so a new key is a
@@ -29,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ts_surface_walk import camel, declares_leaf, property_bodies  # noqa: E402
+from ts_surface_walk import camel, declares_leaf, property_bodies
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAM_SOURCE = REPO_ROOT / "src/mastering/api/chain_params.cpp"

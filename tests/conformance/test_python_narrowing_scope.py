@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the Python narrowing-scope checker.
 
 Every case drives :func:`check_python_narrowing_scope.evaluate` -- the function

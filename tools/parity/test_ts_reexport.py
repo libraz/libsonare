@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression tests for the TypeScript facade extractor.
 
 Focus: ``ts_common.extract_ts`` must follow ``export ... from './module'``
@@ -22,7 +21,7 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-from extractors.ts_common import _reexport_closure, extract_ts  # noqa: E402
+from extractors.ts_common import _reexport_closure, extract_ts
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -207,7 +206,7 @@ def _run_all() -> int:
         try:
             t()
             print(f"ok   {t.__name__}")
-        except AssertionError as e:  # noqa: PERF203
+        except AssertionError as e:
             failed += 1
             print(f"FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")

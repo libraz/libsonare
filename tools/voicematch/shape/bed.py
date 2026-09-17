@@ -51,7 +51,7 @@ class Bed:
 
     @classmethod
     def measure(cls, spectro, ref_signals: dict, anchor=DEFAULT_ANCHOR,
-                window=(0.7, 1.7), agree_band=(4000.0, 14000.0)) -> "Bed":
+                window=(0.7, 1.7), agree_band=(4000.0, 14000.0)) -> Bed:
         """Freeze the shape from a set of reference renders.
 
         Each note is put on its own bed gain, read off the anchor band, and the
@@ -130,7 +130,7 @@ class Bed:
                  **{f"anchor{s}": v for s, v in self.anchor_rows.items()})
 
     @classmethod
-    def load(cls, path: Path | str, scales) -> "Bed":
+    def load(cls, path: Path | str, scales) -> Bed:
         z = np.load(path)
         n = len(scales)
         # A bed is measured against one analysis geometry, so a cache written

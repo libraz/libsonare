@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regenerate or check the tracked version registry of the instrument bank.
 
 The bank is a product that is edited: a voice is fitted against a reference, a
@@ -218,7 +217,8 @@ def main() -> int:
     if not units:
         raise SystemExit(f"{args.library}: the knob dump was empty")
     registry = load_registry(args.output)
-    when = args.date or date_type.today().isoformat()
+    # A registry entry records the calendar day of a bump, not an instant.
+    when = args.date or date_type.today().isoformat()  # noqa: DTZ011
     rebuilt, changed, gone = rebuild(registry, units, patches, args.note, when)
 
     if args.check:

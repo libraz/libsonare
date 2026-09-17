@@ -20,17 +20,18 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import au_oracle  # noqa: E402
-import capture  # noqa: E402
-from au_oracle import AuSource, _strip_preroll, with_keyswitches  # noqa: E402
-from metrics import harmonic_share, midi_to_hz  # noqa: E402
-from profile import (  # noqa: E402
+from profile import (
     _short_ring_window,
     double_decay,
     find_partials,
     measure_note,
 )
-from wavio import write_wav  # noqa: E402
+
+import au_oracle
+import capture
+from au_oracle import AuSource, _strip_preroll, with_keyswitches
+from metrics import harmonic_share, midi_to_hz
+from wavio import write_wav
 
 SR = 48000
 

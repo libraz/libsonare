@@ -42,7 +42,6 @@ import math
 from dataclasses import asdict, dataclass
 
 import numpy as np
-
 from metrics_attack import (
     ATTACK_ANCHOR_HZ,
     ATTACK_BANDS_HZ,
@@ -52,8 +51,8 @@ from metrics_attack import (
     ATTACK_PEAK_FLOOR_DB,
     ATTACK_PEAK_FLOOR_HZ,
     ATTACK_PEAK_PROMINENCE_DB,
-    ATTACK_WINDOWS,
     ATTACK_WINDOW_MS,
+    ATTACK_WINDOWS,
     _anchor_power,
     _bands_against_anchor,
     attack_bands,
@@ -95,7 +94,6 @@ from metrics_hit import (
     HIT_ONSET_FLOOR_DB,
     HIT_ONSET_SEARCH_SEC,
     HIT_TONE_WINDOW_S,
-    HitMetrics,
     LONG_DECAY_DRUM_NOTES,
     PITCH_DROP_FLOOR_DB,
     PITCH_DROP_FRAME_S,
@@ -103,6 +101,7 @@ from metrics_hit import (
     PITCH_DROP_POINTS,
     PITCH_DROP_SPAN,
     PITCH_DROP_WINDOW_S,
+    HitMetrics,
     _hit_onset,
     analyze_hit,
     compare_hit,
@@ -136,9 +135,9 @@ from metrics_note import (
     HELD_FLOOR_DB,
     HELD_WINDOW_S,
     MIN_SUSTAIN_SEC,
-    NoteMetrics,
     SILENT_WINDOW_DB,
     SUSTAIN_WINDOW_S,
+    NoteMetrics,
     _under_peak_db,
     analyze_note,
     compare_note,

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Prove a new mechanism is inert at its default, and reachable when it is not.
 
 Adding a mechanism to a voice means adding fields to a shared patch struct, a
@@ -58,7 +57,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shape.render import DRUM_SCOPE, scope_overrides  # noqa: E402
+from shape.render import DRUM_SCOPE, scope_overrides
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -121,7 +120,7 @@ def render_batch(lib: str, program: int, channel: int, pairs: list[tuple[int, in
     p = subprocess.run(
         [sys.executable, "-c", _WORKER, str(program), str(channel),
          str(SECONDS), str(GATE_S), json.dumps([list(x) for x in pairs]), str(bank)],
-        capture_output=True, text=True, env=env, cwd=REPO_ROOT)
+        capture_output=True, check=False, text=True, env=env, cwd=REPO_ROOT)
     if p.returncode:
         raise RuntimeError(f"{lib}: {p.stderr[-2000:]}")
     out = []

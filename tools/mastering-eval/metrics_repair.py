@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Restoration quality metrics: segmental SNR, log kurtosis ratio, log-spectral distance.
 
 These three metrics exist in two languages. This module is the Python half; the C++ half is

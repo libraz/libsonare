@@ -70,7 +70,7 @@ def build_shared(build_dir: Path, cmake: str, jobs: int) -> None:
     """Rebuild the shared library target in the isolated build dir."""
     proc = subprocess.run(
         [cmake, "--build", str(build_dir), "--target", "sonare_shared", f"-j{jobs}"],
-        capture_output=True, text=True,
+        capture_output=True, check=False, text=True,
     )
     if proc.returncode != 0:
         raise RuntimeError(
@@ -81,7 +81,7 @@ def build_shared(build_dir: Path, cmake: str, jobs: int) -> None:
     if sys.platform == "darwin" and dylib is not None and shutil.which("install_name_tool"):
         subprocess.run(
             ["install_name_tool", "-id", "@loader_path/libsonare.dylib", str(dylib)],
-            capture_output=True, text=True,
+            capture_output=True, check=False, text=True,
         )
 
 

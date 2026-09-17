@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Run the eval corpus through the processors and write one run ledger.
 
 This module owns the *bookkeeping* and nothing else: which item, which feed,
@@ -41,9 +40,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "voicematch"))
 # a same-named module there would shadow one of ours without saying so.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from wavio import read_wav  # noqa: E402
-
-import libsonare  # noqa: E402
+import libsonare
+from wavio import read_wav
 
 LEDGER_SCHEMA = 1
 

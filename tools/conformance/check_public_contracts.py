@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Check the cross-language streaming contract snapshot and corpus schema."""
 
 from __future__ import annotations

@@ -17,8 +17,7 @@ def _write_wav(path: Path, fixture: dict[str, Any]) -> None:
     amplitude = float(fixture["amplitude"])
     samples = bytearray()
     for index in range(frames):
-        sample = int(
-            round(
+        sample = round(
                 max(
                     -1.0,
                     min(
@@ -29,7 +28,6 @@ def _write_wav(path: Path, fixture: dict[str, Any]) -> None:
                 )
                 * 32767.0
             )
-        )
         samples.extend(struct.pack("<h", sample))
     with wave.open(str(path), "wb") as output:
         output.setnchannels(1)

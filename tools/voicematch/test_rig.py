@@ -19,9 +19,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from corpus import load_corpus  # noqa: E402
-from rig import curve_distance, measure_rotary, measure_skirt  # noqa: E402
-from wavio import write_wav  # noqa: E402
+from corpus import load_corpus
+from rig import curve_distance, measure_rotary, measure_skirt
+from wavio import write_wav
 
 SR = 48000
 NOTES = (40, 47, 54)

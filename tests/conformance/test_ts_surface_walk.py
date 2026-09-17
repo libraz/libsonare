@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import ts_surface_walk as walk  # noqa: E402
+import ts_surface_walk as walk
 
 SURFACE = """
 export type Band = 'sub' | 'low' | 'lowMid';

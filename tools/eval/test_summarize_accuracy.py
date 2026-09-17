@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression tests for the accuracy roll-up.
 
 What these pin is the honesty of the aggregate, not the arithmetic of a mean.
@@ -21,7 +20,7 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-import summarize_accuracy as summarizer  # noqa: E402
+import summarize_accuracy as summarizer
 
 
 def _report(*observations: dict) -> dict:
@@ -210,7 +209,7 @@ def _run_all() -> int:
         try:
             test()
             print(f"ok   {test.__name__}")
-        except AssertionError as error:  # noqa: PERF203
+        except AssertionError as error:
             failed += 1
             print(f"FAIL {test.__name__}: {error}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")

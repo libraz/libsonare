@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Turn a run ledger into the committed baseline, as strict JSON.
 
 ``run.py --emit-baseline`` writes the right numbers in the right shape, but it
@@ -55,7 +54,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from nonvacuity import corpus_digest, corpus_paths, corpus_tree_digest  # noqa: E402
+from nonvacuity import corpus_digest, corpus_paths, corpus_tree_digest
 
 SCHEMA = 1
 

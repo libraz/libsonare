@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Check the hand-written key set the Python `repair` CLI subcommand carries.
 
 `bindings/python/src/libsonare/_cli_mastering.py` hardcodes

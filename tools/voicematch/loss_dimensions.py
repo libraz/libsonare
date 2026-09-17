@@ -5,13 +5,11 @@ from __future__ import annotations
 import math
 
 import numpy as np
-
 from metrics import (
     MIN_PARTIALS_FOR_B,
     THIRD_OCTAVE_CENTERS,
     stretch_cents,
 )
-
 
 # The terms the loss is built from, in report order. `harm`/`cents`/`tnr`/`init`/
 # `slope`/`tail`/`hf`/`lf` come from the harmonic metric set and `band`/`bdecay`

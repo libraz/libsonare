@@ -10,8 +10,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import bank  # noqa: E402
-import signoff  # noqa: E402
+import bank
+import signoff
 
 
 def _write(tmp_path: Path, payload: dict) -> Path:

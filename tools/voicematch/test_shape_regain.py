@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shape import regain  # noqa: E402
+from shape import regain
 
 BASE = {"d042.gain": 1.0, "d049.gain": 2.0, "d052.gain": 4.0}
 
@@ -45,7 +45,7 @@ def test_a_piece_the_clamp_cannot_satisfy_is_named_rather_than_truncated():
     gains, stuck = regain.corrections(BASE, {}, {52: -12.0})
     assert gains["d052.gain"] == regain.GAIN_MAX
     assert [n for n, _want, _got in stuck] == [52]
-    want = [w for n, w, _ in stuck][0]
+    want = next(w for n, w, _ in stuck)
     assert want > regain.GAIN_MAX
 
 

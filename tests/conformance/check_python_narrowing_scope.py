@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Keep every Python-to-C numeric narrowing in the ctypes binding accounted for.
 
 Four populations, all enforced here, all drifting for the same reason -- a new
@@ -826,8 +825,8 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if disagreements:
         failures.append(
             (
-                "The two scans disagree on these files, so one of them stopped "
-                "seeing a shape the other still sees",
+                ("The two scans disagree on these files, so one of them stopped "
+                "seeing a shape the other still sees"),
                 [f"  {line}" for line in disagreements],
             )
         )
@@ -839,8 +838,8 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if aliased:
         failures.append(
             (
-                "These modules import a ctypes numeric type directly, which puts "
-                "a conversion beyond the qualification both scans depend on",
+                ("These modules import a ctypes numeric type directly, which puts "
+                "a conversion beyond the qualification both scans depend on"),
                 [f"  {_display(p)}:{line}  from ctypes import {name}" for p, line, name in aliased],
             )
         )
@@ -853,9 +852,9 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if plain:
         failures.append(
             (
-                f"These structs subclass ctypes.Structure directly instead of "
+                (f"These structs subclass ctypes.Structure directly instead of "
                 f"{STRUCT_BASE}, so assigning an out-of-range value to an integer "
-                "field wraps it into a different legal setting",
+                "field wraps it into a different legal setting"),
                 [f"  {_display(p)}:{line}  class {name}(ctypes.Structure)" for p, line, name in plain],
             )
         )
@@ -868,9 +867,9 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if masked:
         failures.append(
             (
-                "These width masks fold a value into range in front of a struct "
+                ("These width masks fold a value into range in front of a struct "
                 f"field, so the {STRUCT_BASE} range check behind the assignment is "
-                "handed a value that can no longer fail it",
+                "handed a value that can no longer fail it"),
                 [
                     f"  {_display(p)}:{line}  {target} = ... & {mask:#x}"
                     for p, line, target, mask in masked
@@ -886,9 +885,9 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if local:
         failures.append(
             (
-                "These file-local readers convert to a ctypes integer outside the "
+                ("These file-local readers convert to a ctypes integer outside the "
                 "shared family, so a change to the conversion contract does not "
-                "reach their call sites",
+                "reach their call sites"),
                 [f"  {_display(p)}:{line}  {name}()" for p, line, name in local],
             )
         )
@@ -897,8 +896,8 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if unrecorded:
         failures.append(
             (
-                "These narrowings are neither performed by the shared reader nor "
-                "recorded with the mechanism that makes them harmless",
+                ("These narrowings are neither performed by the shared reader nor "
+                "recorded with the mechanism that makes them harmless"),
                 [f"  {site.display}  {site.text}" for site in unrecorded],
             )
         )
@@ -907,9 +906,9 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if unchecked:
         failures.append(
             (
-                "These arguments reach a parameter whose argtypes declares a "
+                ("These arguments reach a parameter whose argtypes declares a "
                 "narrowing C type, so ctypes applies the conversion inside the "
-                "call with nothing having checked the range first",
+                "call with nothing having checked the range first"),
                 [f"  {site.display}  {site.text}" for site in unchecked],
             )
         )
@@ -918,9 +917,9 @@ def evaluate(scan: Scan, records: Records, floor: dict) -> list[tuple[str, list[
     if stale:
         failures.append(
             (
-                "These records matched nothing. A record that suppresses nothing "
+                ("These records matched nothing. A record that suppresses nothing "
                 "still asserts a reviewed decision about a spelling, so the next "
-                "narrowing to take it inherits the blessing unexamined",
+                "narrowing to take it inherits the blessing unexamined"),
                 [f"  {name}" for name in stale],
             )
         )

@@ -164,7 +164,7 @@ def reach(loss, base, moves, notes, velocity, steps=(0.8, 1.25),
             try:
                 out.append(measure(
                     loss, write_overrides({**start, coord: c}, base), notes, velocity))
-            except Exception:
+            except Exception:  # noqa: BLE001, S112 -- a candidate that fails to render is dropped
                 continue
         return coord, out
 
@@ -185,8 +185,7 @@ def reach(loss, base, moves, notes, velocity, steps=(0.8, 1.25),
                     if d > movement[n]:
                         movement[n] = d
                         mover[n] = coord
-                    if abs(e[n]) < best[n]:
-                        best[n] = abs(e[n])
+                    best[n] = min(best[n], abs(e[n]))
     return err0, movement, best, mover
 
 
@@ -196,8 +195,8 @@ def report(err0, movement, best, mover):
     for n in sorted(err0):
         rows.append((movement[n] < DEAD_DB, -abs(err0[n]), n))
     rows.sort()
-    out = [f"{'bucket':<18}{'error':>9}{'best knob moves it':>20}"
-           f"{'best reaches':>14}   verdict / largest mover"]
+    out = [(f"{'bucket':<18}{'error':>9}{'best knob moves it':>20}"
+           f"{'best reaches':>14}   verdict / largest mover")]
     for dead, _, n in rows:
         verdict = "UNREACHABLE" if dead else (
             "reachable" if best[n] < abs(err0[n]) - DEAD_DB else "moves, no gain")

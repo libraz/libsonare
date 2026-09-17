@@ -20,11 +20,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import profile as profile_module  # noqa: E402
-from capture import note_groups, note_map  # noqa: E402
-from loss import _kit_terms, kit_report  # noqa: E402
-import metrics as metrics_module  # noqa: E402
-from metrics import _spectrum  # noqa: E402
+import profile as profile_module
+
+import metrics as metrics_module
+from capture import note_groups, note_map
+from loss import _kit_terms, kit_report
+from metrics import _spectrum
 
 SR = 48000
 
@@ -1678,7 +1679,6 @@ def test_measure_reads_only_the_timbres_the_capture_declares(tmp_path):
     the retired reference is usually retired for being wrong.
     """
     import numpy as np
-
     from wavio import write_wav
 
     root = tmp_path / "corpus"

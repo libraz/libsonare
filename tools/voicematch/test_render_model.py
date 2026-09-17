@@ -20,7 +20,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import render_model  # noqa: E402
+import render_model
 
 HOUR = 3600.0
 

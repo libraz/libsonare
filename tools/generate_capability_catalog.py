@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regenerate or check the tracked capability catalog from a shared library."""
 
 from __future__ import annotations
@@ -6,11 +5,10 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 from typing import Any
-
 
 README_DEFAULT_COUNT_PATTERNS = {
     Path("README.md"): r"(\d+) distinct named DSP processors",
@@ -47,7 +45,9 @@ def parse_args() -> argparse.Namespace:
 
 def require_object(value: Any, path: str) -> dict[str, Any]:
     if not isinstance(value, dict):
-        raise ValueError(f"{path} must be an object")
+        raise ValueError(# noqa: TRY004 -- one error class per document
+            f"{path} must be an object"
+        )
     return value
 
 
@@ -78,9 +78,12 @@ def validate_parameter(parameter: dict[str, Any], path: str) -> None:
     for bound in ("min", "max"):
         if not optional_number(parameter[bound]):
             raise ValueError(f"{path}.{bound} must be a number or null")
-    if parameter["min"] is not None and parameter["max"] is not None:
-        if parameter["min"] > parameter["max"]:
-            raise ValueError(f"{path} publishes a min above its max")
+    if (
+        parameter["min"] is not None
+        and parameter["max"] is not None
+        and parameter["min"] > parameter["max"]
+    ):
+        raise ValueError(f"{path} publishes a min above its max")
     if parameter["type"] == "boolean":
         # A boolean carries a JSON boolean default and no range: it cannot be out
         # of range, and 0/1 would read as a number to every typed facade.
@@ -99,13 +102,17 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
     root = require_object(catalog, "catalog")
     require_keys(root, "catalog", {"version", "abi", "processors", "presets"})
     if not isinstance(root["version"], str):
-        raise ValueError("catalog.version must be a string")
+        raise ValueError(# noqa: TRY004 -- one error class per document
+            "catalog.version must be a string"
+        )
     abi = require_object(root["abi"], "catalog.abi")
     require_keys(abi, "catalog.abi", {"project", "engine"})
     if not all(isinstance(abi[name], int) for name in ("project", "engine")):
         raise ValueError("catalog.abi values must be integers")
     if not isinstance(root["processors"], list):
-        raise ValueError("catalog.processors must be an array")
+        raise ValueError(# noqa: TRY004 -- one error class per document
+            "catalog.processors must be an array"
+        )
     for index, processor_value in enumerate(root["processors"]):
         processor = require_object(processor_value, f"catalog.processors[{index}]")
         require_keys(
@@ -125,7 +132,9 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
             },
         )
         if not isinstance(processor["params"], list):
-            raise ValueError(f"catalog.processors[{index}].params must be an array")
+            raise ValueError(# noqa: TRY004 -- one error class per document
+                f"catalog.processors[{index}].params must be an array"
+            )
         realtime_cost = processor["realtimeCost"]
         if realtime_cost is not None and realtime_cost not in {"low", "moderate", "high"}:
             raise ValueError(

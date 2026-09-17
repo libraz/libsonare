@@ -15,9 +15,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import phrases  # noqa: E402
-from patterns import registers_for_program  # noqa: E402
-from toneclass import ToneClass  # noqa: E402
+import phrases
+from patterns import registers_for_program
+from toneclass import ToneClass
 
 EXCERPTS = sorted(phrases.EXCERPT_DIR.glob("*.json"))
 

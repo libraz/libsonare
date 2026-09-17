@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Render a voice of libsonare's own bank, and any reference it happens to have.
 
     rye run --pyproject bindings/python/pyproject.toml \
@@ -99,16 +98,16 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from _repo import REPO_ROOT  # noqa: E402
-from au_oracle import AuRenderError, render_oracle_au, with_keyswitches  # noqa: E402
-import calibration  # noqa: E402
-from bank import Voice, load_capture, parse_selection, voices, write_index  # noqa: E402
-from calibration import Variant  # noqa: E402
-from capture import CORPUS_ROOT, source_for  # noqa: E402
-from phrases import Take, build_takes  # noqa: E402
-from render_model import render_model  # noqa: E402
-from smf import write_smf  # noqa: E402
-from wavio import read_wav, write_wav  # noqa: E402
+import calibration
+from _repo import REPO_ROOT
+from au_oracle import AuRenderError, render_oracle_au, with_keyswitches
+from bank import Voice, load_capture, parse_selection, voices, write_index
+from calibration import Variant
+from capture import CORPUS_ROOT, source_for
+from phrases import Take, build_takes
+from render_model import render_model
+from smf import write_smf
+from wavio import read_wav, write_wav
 
 SR = 48000
 DEFAULT_OUT = CORPUS_ROOT / "audition"
@@ -160,7 +159,7 @@ def render_variant(smf: bytes, seconds: float, sr: int, overrides: str,
         proc = subprocess.run(
             [sys.executable, "-c", _VARIANT_WORKER, str(smf_path), str(out_path),
              str(seconds), str(sr), "1" if rig else "0"],
-            capture_output=True, text=True, env=env, cwd=str(REPO_ROOT))
+            capture_output=True, check=False, text=True, env=env, cwd=str(REPO_ROOT))
         if proc.returncode:
             raise RuntimeError(proc.stderr[-4000:])
         return np.load(out_path)
@@ -552,7 +551,7 @@ def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
     # `--no-music` is for the case where the ten seconds of polyphony are just
     # render time — a sweep across the bank narrowed with `--only`, say.
     music = None if args.no_music else (
-        (voice.capture.raw.get("music", "") if voice.capture else ""))
+        voice.capture.raw.get("music", "") if voice.capture else "")
     selected = [t for t in build_takes(voice.take_set, voice.program, music=music)
                 if not args.only_takes or t.id in args.only_takes]
     if not selected:

@@ -155,7 +155,5 @@ follow_imports_for_stubs = true
 dev-dependencies = [
     "mypy>=1.13",
     "pytest>=9.0.2",
-    # Held below 0.16: its new rules flag several hundred sites here, so the
-    # lock would install a linter that does not pass on this tree.
-    "ruff>=0.8,<0.16",
+    "ruff>=0.8",
 ]

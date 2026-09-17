@@ -74,10 +74,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import catalogue as catalogue_mod  # noqa: E402
-from catalogue import drum_patch_key, resolve_knob_name, scan_tunables  # noqa: E402
-from check_specs import SPEC_DIR  # noqa: E402
-from identity import PERCUSSION_CHANNEL, render_batch  # noqa: E402
+import catalogue as catalogue_mod
+from catalogue import drum_patch_key, resolve_knob_name, scan_tunables
+from check_specs import SPEC_DIR
+from identity import PERCUSSION_CHANNEL, render_batch
 
 #: Below this a render has not sounded. Well under the quietest real note the
 #: bank produces and well over the denormal dust a closed envelope leaves.
@@ -223,7 +223,7 @@ def derive_program(knobs: list[Knob], catalogue) -> tuple[int | None, str | None
             return program, head, bank, ""
     for knob in knobs:
         head = knob.name.split(".")[0]
-        mode = head[: -len("_voice")] if head.endswith("_voice") else head
+        mode = head.removesuffix("_voice")
         on_engine = sorted((patch for patch, engine in catalogue.modes.items()
                             if engine == mode and patch in addresses),
                            key=lambda p: (addresses[p][1] != 0, p))
@@ -344,7 +344,7 @@ def census(catalogue, lib: str, notes: tuple[int, ...], velocities: tuple[int, .
     because the bank takes minutes and a run that prints nothing until the end
     is indistinguishable from a hung one.
     """
-    from knobs import auto_spec  # noqa: PLC0415 -- import cost is a catalogue scan
+    from knobs import auto_spec
 
     for patch, program, bank, channel, grid, drum_note in census_jobs(catalogue, notes, drums):
         try:

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Cross-binding smoke/parity harness for the realtime voice changer.
 
 The script intentionally uses only stdlib plus the local Python package. It
@@ -18,7 +17,6 @@ import sys
 import tempfile
 import wave
 from pathlib import Path
-
 
 ROOT = Path(__file__).resolve().parents[2]
 SAMPLE_RATE = 48_000
@@ -41,7 +39,7 @@ def write_wav(path: Path, samples: list[float]) -> None:
         wav.setframerate(SAMPLE_RATE)
         frames = bytearray()
         for sample in samples:
-            value = max(-32768, min(32767, int(round(sample * 32767.0))))
+            value = max(-32768, min(32767, round(sample * 32767.0)))
             frames.extend(struct.pack("<h", value))
         wav.writeframes(bytes(frames))
 
@@ -83,8 +81,7 @@ def run() -> int:
             ],
             check=True,
             cwd=ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
 

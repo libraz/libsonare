@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Run optional external fixture checks and save an auditable report."""
 
 from __future__ import annotations
@@ -14,7 +13,6 @@ from typing import Any
 
 from audit_manifests import ManifestSpec, audit_manifest
 from json_safe import dumps_strict, write_json_strict
-
 
 SUITES = {
     "music": {

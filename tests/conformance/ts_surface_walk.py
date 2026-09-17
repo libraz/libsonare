@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Resolve a dotted path through hand-written TypeScript declarations.
 
 The core publishes several flat lists of dotted names -- parameter setter keys,

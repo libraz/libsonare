@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Accept the GM-program project bounce across the public language surfaces.
 
 The C ABI is the oracle.  Python drives that ABI through the existing ctypes
@@ -21,7 +20,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests" / "conformance" / "gm_program_project_v1.json"
@@ -381,7 +379,7 @@ def _compare_to_c_oracle(
     return diagnostics
 
 
-def _format_metric(value: float | int | bool) -> str:
+def _format_metric(value: float | bool) -> str:
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, int):
@@ -464,7 +462,7 @@ def main() -> int:
         print(f"gm cross-surface: FAIL: {exc}", file=sys.stderr)
         return 1
     except (
-        Exception
+        Exception  # noqa: BLE001 -- last resort of a CLI: report, never re-raise
     ) as exc:  # pragma: no cover - preserve actionable CLI failure context.
         print(
             f"gm cross-surface: FAIL: unexpected {type(exc).__name__}: {exc}",

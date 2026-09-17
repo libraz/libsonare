@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Hold every binding-layer translation unit to the same warning contract as the core.
 
 The core targets carry ``-Wall -Wextra -Wpedantic -Werror``, so an unhandled
@@ -130,19 +129,19 @@ def evaluate(layer: Layer, covered: list[str], uncovered: list[str]) -> list[tup
     if total < layer.floor:
         failures.append(
             (
-                f"{layer.name}: found {total} translation units of this repository, "
+                (f"{layer.name}: found {total} translation units of this repository, "
                 f"below the {layer.floor} it covered when this entry was written -- "
                 "the scan has stopped reading the layer, and an empty set carries "
-                "every flag",
+                "every flag"),
                 [],
             )
         )
     if uncovered:
         failures.append(
             (
-                f"{layer.name}: these compile without the warning contract the core "
+                (f"{layer.name}: these compile without the warning contract the core "
                 "targets carry, so a diagnostic here prints at most instead of "
-                "failing the build",
+                "failing the build"),
                 [f"  {line}" for line in uncovered],
             )
         )

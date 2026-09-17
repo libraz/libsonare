@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the documented bound mirror check.
 
 Every perturbation case drives :func:`check_documented_bound_mirrors.evaluate`

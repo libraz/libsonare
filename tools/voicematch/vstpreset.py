@@ -36,7 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from au_oracle import find_aubounce  # noqa: E402
+from au_oracle import find_aubounce
 
 VSTPRESET_MAGIC = b"VST3"
 

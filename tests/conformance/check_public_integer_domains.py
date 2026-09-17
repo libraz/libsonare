@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Hold every public integer argument of the Python binding to the C type it becomes.
 
 The question is not whether a module contains a conversion spelling -- that is
@@ -375,25 +374,25 @@ CATEGORIES = (
 # someone made about a named surface.
 _BAG = (
     "integral_member_is_a_key",
-    "keys fftSize / kernelSize / stages and the rest of the processor set; each "
+    ("keys fftSize / kernelSize / stages and the rest of the processor set; each "
     "refused PAST the FFI, by detail::assign_field -> assign_int_param in "
     "src/mastering/api/param_field_tables.h; measured on eq.linearPhase "
-    "kernelSize (127.5) and effects.modulation.phaser stages (4.5, 2**40)",
+    "kernelSize (127.5) and effects.modulation.phaser stages (4.5, 2**40)"),
 )
 _PROFILE_BAG = (
     "integral_member_is_a_key",
-    "keys nFft / hopLength / truePeakOversample; each refused PAST the FFI, by "
+    ("keys nFft / hopLength / truePeakOversample; each refused PAST the FFI, by "
     "assign_int_param in src/mastering/assistant/config_from_params.h; measured "
-    "on nFft (512.5) and truePeakOversample (2.5)",
+    "on nFft (512.5) and truePeakOversample (2.5)"),
 )
 _ASSISTANT_BAG = (
     "integral_member_is_a_key",
-    "its one integral key is targetPlatform, refused BEFORE the FFI, in Python, "
+    ("its one integral key is targetPlatform, refused BEFORE the FFI, in Python, "
     "by _assistant_params in bindings/python/src/libsonare/_mastering_offline.py "
     "(it takes a delivery-target name, so 1, 1.5 and 999 are all refused alike); "
     "measured. Filed here rather than under guarded_past_the_ffi because the "
     "guard is on this side: what keeps the member out of reach is that it is a "
-    "key, not where it is checked",
+    "key, not where it is checked"),
 )
 
 # Exclusions, as data. Each entry must excuse something: an entry that excused
@@ -661,12 +660,12 @@ def _without_mappings(annotation: ast.expr, aliases: dict[str, ast.expr]) -> ast
     """`annotation` with every mapping subscript replaced by a name nothing matches."""
 
     class Strip(ast.NodeTransformer):
-        def visit_Subscript(self, node: ast.Subscript) -> ast.expr:  # noqa: N802
+        def visit_Subscript(self, node: ast.Subscript) -> ast.expr:
             if _callee_name(node.value) in MAPPING_TYPES:
                 return ast.Name(id="__stripped__", ctx=ast.Load())
             return typing.cast(ast.expr, self.generic_visit(node))
 
-        def visit_Name(self, node: ast.Name) -> ast.expr:  # noqa: N802
+        def visit_Name(self, node: ast.Name) -> ast.expr:
             alias = aliases.get(node.id)
             if alias is None:
                 return node
@@ -1966,8 +1965,8 @@ class Report:
             return [f"  {root}: holds no *.py, so no implementation can be resolved"]
         if not self.surface.parameters:
             return [
-                f"  {root}: {len(self.surface.stubs)} stub(s) declare no parameter "
-                "admitting a caller-supplied integer"
+                (f"  {root}: {len(self.surface.stubs)} stub(s) declare no parameter "
+                "admitting a caller-supplied integer")
             ]
         return []
 
@@ -2008,8 +2007,8 @@ def evaluate(
     if unreadable:
         return [
             (
-                "This check read no published surface at all, so every population "
-                "below it is empty and every check over it would agree with nothing",
+                ("This check read no published surface at all, so every population "
+                "below it is empty and every check over it would agree with nothing"),
                 unreadable,
             )
         ]
@@ -2044,10 +2043,10 @@ def evaluate(
     if report.surface.alias_conflicts:
         failures.append(
             (
-                "These type aliases are declared differently in two stubs, so an "
+                ("These type aliases are declared differently in two stubs, so an "
                 "annotation naming one cannot be resolved -- and a parameter this "
                 "check cannot resolve the annotation of is absent from a population "
-                "that reports itself as discovered",
+                "that reports itself as discovered"),
                 [f"  {line}" for line in report.surface.alias_conflicts],
             )
         )
@@ -2089,12 +2088,12 @@ def evaluate(
     if bypassed:
         failures.append(
             (
-                "These guards do not cover every path their value can take: an "
+                ("These guards do not cover every path their value can take: an "
                 "earlier branch in the same body writes the value out and leaves "
                 "before reaching the guard, so the guard answers for every value "
                 "except the ones that took that branch. A `bool` is the one that "
                 "matters most -- it is an `int` subclass, so it can never fail a "
-                "range check, which is exactly why the narrowing family refuses it",
+                "range check, which is exactly why the narrowing family refuses it"),
                 [f"  {entry.display}" for entry in bypassed],
             )
         )
@@ -2181,13 +2180,13 @@ def main() -> int:
     # log keeps it rather than into a count nobody reads twice.
     for heading, entries in (
         (
-            "Named arguments whose guard sits past the FFI, with the measurement "
-            "behind each",
+            ("Named arguments whose guard sits past the FFI, with the measurement "
+            "behind each"),
             report.past_the_ffi_entries(),
         ),
         (
-            "Mapping parameters whose integers arrive at keys this check has no "
-            "unit for, with what refuses each member and where",
+            ("Mapping parameters whose integers arrive at keys this check has no "
+            "unit for, with what refuses each member and where"),
             report.keyed_member_entries(),
         ),
     ):

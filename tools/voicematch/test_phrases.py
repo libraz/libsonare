@@ -9,10 +9,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from phrases import (  # noqa: E402
-    DRUM_CHANNEL, GENERIC_SETS, TAKE_SETS, build_takes, is_drum_set, take_set_for,
+from phrases import (
+    DRUM_CHANNEL,
+    GENERIC_SETS,
+    TAKE_SETS,
+    build_takes,
+    is_drum_set,
+    take_set_for,
 )
-from toneclass import ToneClass  # noqa: E402
+from toneclass import ToneClass
 
 ALL_PROGRAMS = range(128)
 

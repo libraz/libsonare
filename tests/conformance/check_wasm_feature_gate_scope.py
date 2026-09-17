@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Check that a WASM module links nothing from a subsystem its own build turned off.
 
 A feature flag is read as a promise about the shipped binary: a module configured
@@ -41,7 +40,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from check_wasm_exception_scope import module_objects  # noqa: E402
+from check_wasm_exception_scope import module_objects
 
 ROOT = Path(__file__).resolve().parents[2]
 CMAKELISTS = ROOT / "src/CMakeLists.txt"

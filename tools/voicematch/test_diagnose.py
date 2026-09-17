@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from diagnose import (  # noqa: E402
+from diagnose import (
     CONNECTED_UNITS,
     TERM_MEANS,
     TERM_UNITS,
@@ -24,7 +24,7 @@ from diagnose import (  # noqa: E402
     print_report,
     probe_axes,
 )
-from loss import LOSS_TERMS, TERM_FLOORS, measured_terms  # noqa: E402
+from loss import LOSS_TERMS, TERM_FLOORS, measured_terms
 
 PITCHED_WEIGHTS = {"harm": 1.0, "cents": 1.0, "slope": 1.0, "env": 1.0}
 

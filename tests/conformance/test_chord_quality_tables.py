@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the chord-quality table check.
 
 Every case drives :func:`check_chord_quality_tables.evaluate` -- the function
@@ -27,6 +26,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 _SPEC = importlib.util.spec_from_file_location(
     "check_chord_quality_tables",
@@ -175,8 +175,13 @@ class ArrangementEnumTest(unittest.TestCase):
 class SwappedEntriesTest(_CopiedTree):
     """Two entries exchanged: the set holds, the mapping does not."""
 
-    WASM_SWAP = {WASM_CONST: ("  Major7: 5,\n  Minor7: 6,", "  Major7: 6,\n  Minor7: 5,")}
-    PY_SWAP = {PY_DETECTION: ('    5: "major7",\n    6: "minor7",', '    5: "minor7",\n    6: "major7",')}
+    WASM_SWAP: ClassVar[dict[Path, tuple[str, str]]] = {
+        WASM_CONST: ("  Major7: 5,\n  Minor7: 6,", "  Major7: 6,\n  Minor7: 5,")
+    }
+    PY_SWAP: ClassVar[dict[Path, tuple[str, str]]] = {
+        PY_DETECTION: ('    5: "major7",\n    6: "minor7",',
+                       '    5: "minor7",\n    6: "major7",')
+    }
 
     def test_a_swap_in_the_wasm_constant_is_reported_at_both_ordinals(self) -> None:
         failures = check.evaluate(self.tree(self.WASM_SWAP))
@@ -501,8 +506,10 @@ class SuffixDivergenceTest(_CopiedTree):
 class SuffixGroupSplitTest(_CopiedTree):
     """The template label is allowed to differ at Major. It is not required to."""
 
-    AGREES = {CORE_NAMES: ('    case ChordQuality::Major:\n      return "maj";',
-                           '    case ChordQuality::Major:\n      return "";')}
+    AGREES: ClassVar[dict[Path, tuple[str, str]]] = {
+        CORE_NAMES: ('    case ChordQuality::Major:\n      return "maj";',
+                     '    case ChordQuality::Major:\n      return "";')
+    }
 
     def test_agreeing_at_major_is_not_reported_as_a_divergence(self) -> None:
         failures = check.evaluate(self.tree(self.AGREES))
@@ -531,7 +538,9 @@ class SuffixGroupSplitTest(_CopiedTree):
 class SuffixKeySetTest(_CopiedTree):
     """The suffix map is keyed on a name, and a key nothing resolves is invisible."""
 
-    ONE_KEY = {PY_SUFFIXES: ('"halfDim7": "m7b5"', '"halfDiminished7": "m7b5"')}
+    ONE_KEY: ClassVar[dict[Path, tuple[str, str]]] = {
+        PY_SUFFIXES: ('"halfDim7": "m7b5"', '"halfDiminished7": "m7b5"')
+    }
 
     def value_only_passes(self, root: Path) -> bool:
         """What a check comparing only the values that still resolve would say.

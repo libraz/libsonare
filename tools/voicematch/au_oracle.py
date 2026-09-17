@@ -58,7 +58,6 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
-
 from smf import Note, strip_program_changes
 from wavio import read_wav
 
@@ -410,7 +409,7 @@ def dry_params(plugin: str, *, candidates=DRY_PARAM_CANDIDATES) -> tuple[str, ..
     """
     proc = subprocess.run(
         [str(find_aubounce()), "info", plugin, "--params"],
-        capture_output=True, text=True,
+        capture_output=True, check=False, text=True,
     )
     if proc.returncode != 0:
         raise AuRenderError(f"aubounce info failed for {plugin!r}:\n{proc.stderr.strip()}")
@@ -459,7 +458,7 @@ def _bounce_once(
     argv = source.argv(out_wav, midi=midi)
     if verbose:
         print("  " + " ".join(repr(a) if " " in a else a for a in argv), file=sys.stderr)
-    proc = subprocess.run(argv, capture_output=True, text=True)
+    proc = subprocess.run(argv, capture_output=True, check=False, text=True)
     if proc.returncode != 0:
         raise AuRenderError(
             f"aubounce failed (rc={proc.returncode}) for {source.plugin!r}:\n{proc.stderr.strip()}"
@@ -569,7 +568,7 @@ def _strip_preroll(audio: np.ndarray, preroll_ms: int, sr: int) -> np.ndarray:
     """Drop the silence aubounce writes before the first event."""
     if audio.ndim == 1:
         audio = audio[:, None]
-    n = int(round(preroll_ms * sr / 1000.0))
+    n = round(preroll_ms * sr / 1000.0)
     return audio[n:] if n < audio.shape[0] else audio[:0]
 
 

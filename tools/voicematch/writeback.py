@@ -137,7 +137,7 @@ _INDEXED_KEY = re.compile(r'"([a-z_0-9.]+)"\s*\+\s*(?:std::to_string\(|index\b)'
 def override_patch_names() -> list[str]:
     """Every `ProgramOverrides` member name, from the X-macro list that defines them."""
     header = (REPO_ROOT / "src/midi/synth/gm_fallback_data.h").read_text()
-    block = re.search(r"#define SONARE_GM_OVERRIDE_PATCHES\(X\)(.*?)\n\n", header, re.S)
+    block = re.search(r"#define SONARE_GM_OVERRIDE_PATCHES\(X\)(.*?)\n\n", header, re.DOTALL)
     if block is None:
         raise ValueError("SONARE_GM_OVERRIDE_PATCHES not found in gm_fallback_data.h")
     return re.findall(r"X\((\w+)\)", block.group(1))
@@ -179,8 +179,8 @@ def _typed_members() -> tuple[frozenset[str], frozenset[str]]:
     `array_members`, which drifted the one time it was a hand-written list.
     """
     text = (REPO_ROOT / TUNING_LAYER_FILE).read_text()
-    ints = frozenset(re.findall(r"^\s*I\(([\w.]+)\);", text, re.M))
-    switches = frozenset(re.findall(r"^\s*I_TYPED\(([\w.]+),", text, re.M))
+    ints = frozenset(re.findall(r"^\s*I\(([\w.]+)\);", text, re.MULTILINE))
+    switches = frozenset(re.findall(r"^\s*I_TYPED\(([\w.]+),", text, re.MULTILINE))
     if not ints or not switches:
         raise ValueError(f"no I / I_TYPED field declarations found in {TUNING_LAYER_FILE}")
     return ints, switches
@@ -301,7 +301,7 @@ def _splice_field_lines(
     for path, value in sorted(fields):
         member = f"{prefix}{path}"
         existing = re.compile(
-            rf"^([ \t]*){re.escape(member)}\s*=\s*[^;]+;([ \t]*//[^\n]*)?$", re.M)
+            rf"^([ \t]*){re.escape(member)}\s*=\s*[^;]+;([ \t]*//[^\n]*)?$", re.MULTILINE)
         # A count takes an integer literal. `2.0f` into an `int` member is a
         # -Wliteral-conversion error under this tree's -Werror, so the type has
         # to reach the literal — see `_typed_members`.
@@ -377,20 +377,20 @@ def _patch_site(text: str, patch: str) -> tuple[re.Pattern, str, int, int] | Non
 
     Returns None when the file does not build this patch.
     """
-    direct = re.compile(rf"^[ \t]*o\.{re.escape(patch)}\b.*$", re.M)
+    direct = re.compile(rf"^[ \t]*o\.{re.escape(patch)}\b.*$", re.MULTILINE)
     if direct.search(text):
         return direct, f"o.{patch}.", 0, len(text)
     decl = re.compile(
-        rf"^[ \t]*NativeSynthPatch&\s*(\w+)\s*=\s*o\.{re.escape(patch)}\s*;[ \t]*$", re.M
+        rf"^[ \t]*NativeSynthPatch&\s*(\w+)\s*=\s*o\.{re.escape(patch)}\s*;[ \t]*$", re.MULTILINE
     ).search(text)
     if decl is None:
         return None
     alias = decl.group(1)
-    following = re.compile(r"^[ \t]*NativeSynthPatch&\s*\w+\s*=", re.M).search(
+    following = re.compile(r"^[ \t]*NativeSynthPatch&\s*\w+\s*=", re.MULTILINE).search(
         text, decl.end()
     )
     end = following.start() if following is not None else len(text)
-    return re.compile(rf"^[ \t]*{re.escape(alias)}\b.*$", re.M), f"{alias}.", decl.start(), end
+    return re.compile(rf"^[ \t]*{re.escape(alias)}\b.*$", re.MULTILINE), f"{alias}.", decl.start(), end
 
 
 def write_patch_fields(
@@ -468,7 +468,7 @@ def write_drum_fields(
     original = text
     unplaced: list[str] = []
     for note, fields in sorted(per_note.items()):
-        anchor = re.compile(rf"^[ \t]*(?:t\[\d+\]\s*=\s*)*t\[{note}\][^\n]*$", re.M)
+        anchor = re.compile(rf"^[ \t]*(?:t\[\d+\]\s*=\s*)*t\[{note}\][^\n]*$", re.MULTILINE)
         if anchor.search(text) is None:
             unplaced.extend(f"d{note:03d}.{field}" for field, _ in fields)
             continue

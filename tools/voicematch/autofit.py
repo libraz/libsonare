@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Auto-fit physical-model voice calibration constants against an oracle.
 
 Closes the voicematch tuning loop mechanically: set one or more of a voice's
@@ -230,15 +229,37 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _repo import REPO_ROOT  # noqa: E402
-from build_lib import build_shared, configure_build, dylib_path  # noqa: E402
-from catalogue import Catalogue, drum_patch_key, dump_catalogue  # noqa: E402
-from capture import ROOM_NONE, model_rig  # noqa: E402
-from corpus import (  # noqa: E402
-    PERCUSSION_CHANNEL as CORPUS_PERCUSSION_CHANNEL,
-    Corpus, check_rig, corpus_oracle, corpus_pattern, describe, load_corpus,
+from _repo import REPO_ROOT
+
+# The split modules below hold what this file used to define inline. Every
+# importer reads this module by name and the tests patch attributes on it, so
+# the whole surface is re-exported here.
+# ruff: noqa: F401
+from autofit_report import report_pinned, winner_or_defaults
+from autofit_resolve import (
+    _score,
+    apply_spec_weights,
+    catalogue_pattern,
+    check_holdout_oracle,
+    resolve_corpus,
+    resolve_probe,
 )
-from knobs import (  # noqa: E402
+from build_lib import build_shared, configure_build, dylib_path
+from capture import ROOM_NONE, model_rig
+from catalogue import Catalogue, drum_patch_key, dump_catalogue
+from corpus import (
+    PERCUSSION_CHANNEL as CORPUS_PERCUSSION_CHANNEL,
+)
+from corpus import (
+    Corpus,
+    check_rig,
+    corpus_oracle,
+    corpus_pattern,
+    describe,
+    load_corpus,
+)
+from diagnose import run_diagnosis
+from knobs import (
     at_bound,
     auto_spec,
     build_knobs,
@@ -247,7 +268,7 @@ from knobs import (  # noqa: E402
     load_spec_weights,
     tunable_overrides,
 )
-from loss import (  # noqa: E402
+from loss import (
     KIT_MIN_MEMBERS,
     LOSS_TERMS,
     LossWeights,
@@ -257,42 +278,27 @@ from loss import (  # noqa: E402
     refused_weights,
     score_terms,
 )
-from diagnose import run_diagnosis  # noqa: E402
-from metrics import (  # noqa: E402
+from metrics import (
     MONO_MODES,
     channel_correlation,
     measure_band_edge,
     normalize_rms,
     to_mono,
 )
-from optimizers import cma_es, optimize  # noqa: E402
-from patterns import DRUM_GATE_HELP, build_pattern, pattern_length  # noqa: E402
-from render_model import render_model  # noqa: E402
-from render_oracle import (  # noqa: E402
+from optimizers import cma_es, optimize
+from patterns import DRUM_GATE_HELP, build_pattern, pattern_length
+from render_model import render_model
+from render_oracle import (
     add_oracle_args,
     check_oracle_rig,
     obtain_oracle,
     oracle_may_carry_room,
 )
-from report import report_result  # noqa: E402
-from room import apply_room, estimate_room, fit_room_ir  # noqa: E402
-from smf import write_smf  # noqa: E402
-from staging import SubEvaluator, run_stages, screen_knobs  # noqa: E402
-from writeback import materialize, restore, write_edits  # noqa: E402
-
-# The split modules below hold what this file used to define inline. Every
-# importer reads this module by name and the tests patch attributes on it, so
-# the whole surface is re-exported here.
-# ruff: noqa: F401
-from autofit_report import report_pinned, winner_or_defaults  # noqa: E402
-from autofit_resolve import (  # noqa: E402
-    _score,
-    apply_spec_weights,
-    catalogue_pattern,
-    check_holdout_oracle,
-    resolve_corpus,
-    resolve_probe,
-)
+from report import report_result
+from room import apply_room, estimate_room, fit_room_ir
+from smf import write_smf
+from staging import SubEvaluator, run_stages, screen_knobs
+from writeback import materialize, restore, write_edits
 
 SR = 48000
 #: Under this much inter-channel correlation, summing a stereo reference to mono
@@ -466,7 +472,7 @@ def render_model_rows_subprocess(
         audio_path = Path(tmp) / "model.npy"
         if want_audio:
             cmd += ["--dump-audio", str(audio_path)]
-        proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        proc = subprocess.run(cmd, capture_output=True, check=False, text=True, env=env)
         if proc.returncode != 0:
             raise RuntimeError(
                 f"model render failed (rc={proc.returncode}):\n{proc.stderr.strip()[-2000:]}"

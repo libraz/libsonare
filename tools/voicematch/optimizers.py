@@ -19,7 +19,6 @@ import math
 import sys
 
 import numpy as np
-
 from knobs import Knob
 
 
@@ -252,8 +251,8 @@ def optimize(evaluator, knobs: list[Knob], args) -> list[float]:
             a, b = _to_opt(knob, knob.lo), _to_opt(knob, knob.hi)
             tol = (b - a) * 1e-3
 
-            def objective(t: float, _i=i, _knob=knob) -> float:
-                trial = list(evaluator.best_values or current)
+            def objective(t: float, _i=i, _knob=knob, _current=current) -> float:
+                trial = list(evaluator.best_values or _current)
                 trial[_i] = min(max(_from_opt(_knob, t), _knob.lo), _knob.hi)
                 return evaluator(trial)
 

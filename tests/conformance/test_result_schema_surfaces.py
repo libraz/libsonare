@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import check_result_schema_surfaces as check  # noqa: E402
+import check_result_schema_surfaces as check
 
 ELEMENT_SURFACE = """
 export interface Entry { name: string; id: number }
@@ -67,7 +67,7 @@ class RootAnchoring(unittest.TestCase):
         """The case a file-anchored walk accepts: the leaf exists elsewhere."""
         family = check.FAMILIES["analysis_result_schema_paths"]
         text = family["surfaces"]["node"].read_text()
-        self.assertGreater(len(re.findall(r"^\s*bpm\s*:", text, re.M)), 1)
+        self.assertGreater(len(re.findall(r"^\s*bpm\s*:", text, re.MULTILINE)), 1)
         missing, unreached, _ = check.scan(
             ["bpm"], _drop_property(text, family["root"], "bpm"), family["root"]
         )

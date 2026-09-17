@@ -8,10 +8,10 @@ which compares those "design" defaults against the facade-declared defaults.
 
 from __future__ import annotations
 
-import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import tomllib
 from extractors.cpp_struct import (
     extract_func_defaults,
     extract_struct_defaults,

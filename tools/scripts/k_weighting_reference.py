@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 K-weighting filter reference data generator for libsonare tests.
 

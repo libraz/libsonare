@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Hold every numeric bound a facade doc states equal to the core constant that enforces it.
 
 A consumer cannot read a core constant, so a limit reaches them only as a

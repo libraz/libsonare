@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Compare two metrics.json sets from render_corpus.py, plus the reference.
 
 Usage:

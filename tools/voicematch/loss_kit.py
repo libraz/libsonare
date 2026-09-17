@@ -6,7 +6,6 @@ import math
 
 import numpy as np
 
-
 # --------------------------------------------------------------------------
 # What a kit is, as opposed to what is in it.
 #

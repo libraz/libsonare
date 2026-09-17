@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Roll per-fixture observations up into publishable accuracy figures.
 
 Input is the JSON report `tests/fixtures/run_optional_fixture_report.py` writes:
@@ -25,9 +24,9 @@ import argparse
 import json
 import statistics
 import sys
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any, Callable, Iterable
-
+from typing import Any
 
 # Relative BPM error counted as correct, the MIREX Acc1 convention.
 BPM_ACCURACY_TOLERANCE = 0.04

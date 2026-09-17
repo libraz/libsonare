@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Generate librosa reference values for libsonare tests.
 
@@ -10,9 +9,10 @@ Output:
 """
 
 import json
-import numpy as np
-import librosa
 from pathlib import Path
+
+import librosa
+import numpy as np
 
 OUTPUT_DIR = Path(__file__).parent / "reference"
 EXPECTED_LIBROSA_VERSION = "0.11.0"
@@ -962,7 +962,7 @@ def generate_silence_reference():
     parts.append(np.zeros(int(0.2 * sr), dtype=np.float32))
     y = np.concatenate(parts)
 
-    trimmed, index = librosa.effects.trim(
+    _trimmed, index = librosa.effects.trim(
         y, top_db=20, frame_length=2048, hop_length=512
     )
     intervals = librosa.effects.split(y, top_db=20, frame_length=2048, hop_length=512)
@@ -1397,7 +1397,7 @@ def generate_pitch_utilities_reference():
     n_fft = 2048
     hop_length = 512
 
-    pitches, magnitudes = librosa.piptrack(
+    pitches, _magnitudes = librosa.piptrack(
         y=y, sr=sr, n_fft=n_fft, hop_length=hop_length, fmin=150.0, fmax=4000.0
     )
     # Count non-zero pitch entries (peak count).
@@ -1525,7 +1525,7 @@ def generate_iirt_reference():
         # Identify row with max energy.
         peak_row = int(np.argmax(out.sum(axis=1)))
         synthetic_only = False
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001 -- any import or backend failure means the fallback
         # librosa.iirt may require scipy; fall back to synthetic expectation.
         # Expected: A4 row = 69 - midi_start = 48
         shape = [n_filters, 1 + int((duration * sr + win_length) // hop_length)]
@@ -1565,7 +1565,7 @@ def generate_inverse_features_reference():
         S_rec = librosa.feature.inverse.mel_to_stft(M, sr=sr, n_fft=n_fft, power=2.0)
         rec_shape = list(S_rec.shape)
         rec_min = float(S_rec.min())
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001 -- any import or backend failure means the fallback
         rec_shape = [n_fft // 2 + 1, int(M.shape[1])]
         rec_min = 0.0
 

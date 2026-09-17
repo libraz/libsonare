@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the zero-default sentinel-filter checker.
 
 Every case drives :func:`check_zero_sentinel_filter.evaluate` -- the function the

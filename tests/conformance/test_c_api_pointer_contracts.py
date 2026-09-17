@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the C-ABI pointer-contract checker.
 
 Two failure modes are pinned separately, because they hide from each other.

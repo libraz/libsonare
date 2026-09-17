@@ -135,11 +135,14 @@ def _split_members(body: str) -> list[str]:
         if ch == "\n":
             before = "".join(cur).rstrip()
             after = body[i + 1 :].lstrip()
-            if before and not before.endswith(_CONTINUES_BEFORE):
-                if not after.startswith(_CONTINUES_AFTER):
-                    parts.append(before)
-                    cur = []
-                    continue
+            if (
+                before
+                and not before.endswith(_CONTINUES_BEFORE)
+                and not after.startswith(_CONTINUES_AFTER)
+            ):
+                parts.append(before)
+                cur = []
+                continue
             cur.append(" ")
             continue
         cur.append(ch)

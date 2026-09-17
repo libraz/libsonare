@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The static gates say the same thing in every file that carries them.
 
 CI does not invoke the Makefile for linting. Both workflows inline their own

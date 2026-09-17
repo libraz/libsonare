@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from loss import MSS_FFT_SIZES, mss_distance
 
 

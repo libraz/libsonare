@@ -20,7 +20,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from wavio import read_wav, write_wav  # noqa: E402
+from wavio import read_wav, write_wav
 
 SR = 48000
 # Everything comes back as float32, so no format can be checked finer than this.

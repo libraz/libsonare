@@ -34,10 +34,10 @@ Loaded from ``allowlist.toml`` via the stdlib ``tomllib``. Entries fall into:
 
 from __future__ import annotations
 
-import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import tomllib
 
 #: What a comparison concluded about one name, passed by every consult site.
 #: The allowlist is asked only once the comparison has a verdict, so that "the

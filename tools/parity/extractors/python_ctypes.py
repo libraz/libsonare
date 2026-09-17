@@ -127,7 +127,7 @@ def extract_records(root: Path, ex: Extraction) -> None:
         rel = str(path.relative_to(root))
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
-        except SyntaxError as e:  # noqa: PERF203 - record, do not crash
+        except SyntaxError as e:
             ex.unparsed += 1
             ex.unparsed_notes.append(f"{rel}: parse error ({e})")
             continue

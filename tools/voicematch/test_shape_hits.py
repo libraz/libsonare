@@ -11,8 +11,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shape import hits  # noqa: E402
-from wavio import write_wav  # noqa: E402
+from shape import hits
+from wavio import write_wav
 
 SR = 8000
 

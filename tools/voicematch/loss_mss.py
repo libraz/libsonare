@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 MSS_FFT_SIZES = (512, 1024, 2048, 4096)
 
 

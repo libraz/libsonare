@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-
 from smf import Note
-
 
 # --------------------------------------------------------------------------- #
 # Movement: vibrato, tremolo, and the beat of an ensemble

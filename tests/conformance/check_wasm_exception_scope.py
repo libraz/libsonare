@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Keep the WASM exception-scope list in step with the units that catch.
 
 emscripten defaults to ``DISABLE_EXCEPTION_CATCHING=1``, which elides landing
@@ -65,6 +64,7 @@ file anyone can act on.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import re
 import shlex
@@ -220,7 +220,7 @@ def _link_lines(build_dir: Path) -> list[tuple[Path, list[str]]]:
 
 def _output_of(tokens: list[str]) -> str | None:
     """The ``-o`` argument of a link line, or None for an archiver line."""
-    for token, following in zip(tokens, tokens[1:]):
+    for token, following in itertools.pairwise(tokens):
         if token == "-o":
             return following
     return None

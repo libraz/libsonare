@@ -26,41 +26,26 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import autofit  # noqa: E402
-import build_lib  # noqa: E402
-import loss as loss_module  # noqa: E402
-import report as report_module  # noqa: E402
-import voicematch  # noqa: E402
-from _repo import REPO_ROOT  # noqa: E402
-from autofit import (  # noqa: E402
+import itertools
+import json
+import profile as profile_module
+
+import autofit
+import build_lib
+import loss as loss_module
+import metrics as metrics_module
+import report as report_module
+import voicematch
+from _repo import REPO_ROOT
+from autofit import (
     Evaluator,
     check_holdout_oracle,
     resolve_probe,
     validate,
     winner_or_defaults,
 )
-from build_lib import configure_build  # noqa: E402
-from catalogue import Catalogue  # noqa: E402
-from knobs import (  # noqa: E402
-    Knob,
-    _auto_range,
-    auto_spec,
-    format_value,
-    tunable_overrides,
-)
-from loss import (  # noqa: E402
-    LOSS_TERMS,
-    LossWeights,
-    cli_weights,
-    loss_terms,
-    percussion_terms,
-    probe_rows,
-    refused_weights,
-    score_terms,
-)
-import json  # noqa: E402
-import profile as profile_module  # noqa: E402
-from capture import (  # noqa: E402
+from build_lib import configure_build
+from capture import (
     RIG_BAKED,
     RIG_NONE,
     RIG_UNCLASSIFIED,
@@ -68,37 +53,54 @@ from capture import (  # noqa: E402
     ROOM_PRESENT,
     ROOM_UNCLASSIFIED,
 )
-from corpus import corpus_oracle, corpus_pattern, load_corpus  # noqa: E402
-from knobs import at_bound, load_spec, load_spec_weights  # noqa: E402
-from loss import (  # noqa: E402
+from catalogue import Catalogue
+from corpus import corpus_oracle, corpus_pattern, load_corpus
+from knobs import (
+    Knob,
+    _auto_range,
+    at_bound,
+    auto_spec,
+    format_value,
+    load_spec,
+    load_spec_weights,
+    tunable_overrides,
+)
+from loss import (
+    LOSS_TERMS,
+    LossWeights,
     _refine_grid,
     _refine_partial,
     _refine_partial_direct,
+    cli_weights,
+    loss_terms,
+    percussion_terms,
+    probe_rows,
+    refused_weights,
+    score_terms,
     skeleton_note,
 )
-import metrics as metrics_module  # noqa: E402
-from metrics import (  # noqa: E402
+from metrics import (
     analyze_note,
     attack_bands,
     attack_low_bands,
     level_of,
     note_onset,
 )
-from optimizers import cma_es, optimize  # noqa: E402
-from smf import Note  # noqa: E402
-from wavio import write_wav  # noqa: E402
-from patterns import (  # noqa: E402
+from optimizers import cma_es, optimize
+from patterns import (
     PATTERN_BUILDERS,
     analysis_window_end,
     build_pattern,
     pattern_length,
 )
-from render_model import DEFAULT_DYLIB, check_gm_fallback  # noqa: E402
-from render_oracle import oracle_may_carry_room  # noqa: E402
-from report import report_result  # noqa: E402
-from room import DRY  # noqa: E402
-from staging import _better_seed, screen_knobs, stage_of, staged_indices  # noqa: E402
-from writeback import (  # noqa: E402
+from render_model import DEFAULT_DYLIB, check_gm_fallback
+from render_oracle import oracle_may_carry_room
+from report import report_result
+from room import DRY
+from smf import Note
+from staging import _better_seed, screen_knobs, stage_of, staged_indices
+from wavio import write_wav
+from writeback import (
     DRUM_TABLE_FILE,
     TUNING_LAYER_FILE,
     array_members,
@@ -426,9 +428,9 @@ def _unassigned_violin_field() -> str:
     assigned = set(re.findall(r"o\.violin\.bowed_string\.(\w+)\s*=", tables))
     headers = "\n".join(p.read_text() for p in
                         sorted((REPO_ROOT / "src/midi/synth").glob("*.h")))
-    block = re.search(r"struct\s+BowedStringPatchParams\s*\{(.*?)\n\};", headers, re.S)
+    block = re.search(r"struct\s+BowedStringPatchParams\s*\{(.*?)\n\};", headers, re.DOTALL)
     assert block, "BowedStringPatchParams is not declared where this case looks for it"
-    declared = re.findall(r"^\s*(?:float|int|bool|uint8_t)\s+(\w+)\s*=", block.group(1), re.M)
+    declared = re.findall(r"^\s*(?:float|int|bool|uint8_t)\s+(\w+)\s*=", block.group(1), re.MULTILINE)
     free = sorted(set(declared) - assigned)
     assert free, "every bowed_string field is assigned; pick another struct for this case"
     return free[0]
@@ -479,18 +481,18 @@ def test_a_written_literal_always_carries_a_decimal_point():
 # --------------------------------------------------------------------------- #
 def _probe_args(**kwargs) -> argparse.Namespace:
     """A Namespace carrying what the probe, the weights and the oracle routes read."""
-    base = dict(
-        program=0, drum_note=None, pattern="sustain", notes="", velocities="",
+    base = {
+        "program": 0, "drum_note": None, "pattern": "sustain", "notes": "", "velocities": "",
         # Every weight is None, exactly as the parser leaves one that was not
         # given, so the instrument's class defaults are what these tests see.
-        w_harm=None, w_cents=None, w_tnr=None, w_env=None, w_init=None,
-        w_slope=None, w_mss=None, w_band=None, w_bdecay=None, n_harm=10,
-        w_tail=None, w_hf=None, w_level=None, w_crest=None, w_lf=None,
-        w_stiff=None, w_dyn=None, w_modes=None, w_mod=None, w_kit=None,
-        corpus="", corpus_timbre="", spec="auto",
-        oracle_wav="", au="", au_dry=False, room="auto",
-        validate_notes="", validate_velocities="", validate_oracle_wav="",
-    )
+        "w_harm": None, "w_cents": None, "w_tnr": None, "w_env": None, "w_init": None,
+        "w_slope": None, "w_mss": None, "w_band": None, "w_bdecay": None, "n_harm": 10,
+        "w_tail": None, "w_hf": None, "w_level": None, "w_crest": None, "w_lf": None,
+        "w_stiff": None, "w_dyn": None, "w_modes": None, "w_mod": None, "w_kit": None,
+        "corpus": "", "corpus_timbre": "", "spec": "auto",
+        "oracle_wav": "", "au": "", "au_dry": False, "room": "auto",
+        "validate_notes": "", "validate_velocities": "", "validate_oracle_wav": "",
+    }
     base.update(kwargs)
     return argparse.Namespace(**base)
 
@@ -1024,7 +1026,7 @@ def test_a_drum_hit_keeps_the_window_it_always_had(monkeypatch):
 # Which oracle carries a room
 # --------------------------------------------------------------------------- #
 def _oracle_args(**kwargs) -> argparse.Namespace:
-    base = dict(oracle_wav="", au="", au_dry=False, room="auto")
+    base = {"oracle_wav": "", "au": "", "au_dry": False, "room": "auto"}
     base.update(kwargs)
     return argparse.Namespace(**base)
 
@@ -1228,8 +1230,8 @@ def test_a_file_whose_knob_is_back_at_its_default_is_still_written(tmp_path):
 
 
 def _fit_args(**kwargs) -> argparse.Namespace:
-    base = dict(raw_loss=False, workers=1, cmake="cmake", jobs=1, n_harm=10,
-                percussive=False)
+    base = {"raw_loss": False, "workers": 1, "cmake": "cmake", "jobs": 1, "n_harm": 10,
+                "percussive": False}
     base.update(kwargs)
     return _probe_args(**base)
 
@@ -1394,8 +1396,8 @@ class _CacheOnlyEvaluator:
 
 
 def _optimizer_args(**kwargs) -> argparse.Namespace:
-    base = dict(max_evals=30, per_knob_evals=6, population=6, sigma0=0.25, seed=0,
-                restarts=0)
+    base = {"max_evals": 30, "per_knob_evals": 6, "population": 6, "sigma0": 0.25, "seed": 0,
+                "restarts": 0}
     base.update(kwargs)
     return argparse.Namespace(**base)
 
@@ -1472,7 +1474,7 @@ def _native_library_loads() -> bool:
     """Whether a libsonare dylib is available to load at all."""
     proc = subprocess.run(
         [sys.executable, "-c", _NATIVE_PROBE, str(DEFAULT_DYLIB)],
-        capture_output=True, text=True,
+        capture_output=True, check=False, text=True,
     )
     return proc.returncode == 0
 
@@ -1521,7 +1523,7 @@ def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
     env.pop("PYTHONPATH", None)  # never let an ambient path answer the question
     proc = subprocess.run(
         [sys.executable, "-c", _IMPORT_SMOKE, str(HERE), str(HERE / script)],
-        capture_output=True, text=True, cwd=tmp_path, env=env,
+        capture_output=True, check=False, text=True, cwd=tmp_path, env=env,
     )
     assert proc.returncode == 0, (
         f"{script} does not import on a clean interpreter "
@@ -1640,7 +1642,7 @@ def test_corpus_slots_are_spaced_by_the_capture_s_own_length(tmp_path):
     corpus = load_corpus(_write_corpus(tmp_path / "c"))
     probe = corpus_pattern(corpus)
     starts = [n.start for n in probe.notes]
-    assert all(b - a == pytest.approx(corpus.slot_s) for a, b in zip(starts, starts[1:]))
+    assert all(b - a == pytest.approx(corpus.slot_s) for a, b in itertools.pairwise(starts))
     # 10.1 s captured minus the 0.1 s preroll that is dropped on assembly.
     assert corpus.slot_s == pytest.approx(10.0)
     for note in probe.notes:
@@ -2209,7 +2211,7 @@ def test_the_dynamics_term_sees_a_curve_the_harmonic_ladder_cannot():
     them identically — it has no way not to — and the fit would pick either.
     """
     sr = 48000
-    ref = lambda v: (v - 40) / 87.0 * 5.0  # noqa: E731
+    ref = lambda v: (v - 40) / 87.0 * 5.0
     pattern, oracle = _velocity_probe(sr, ref)
     o = probe_rows(oracle, pattern, sr, raw=oracle)
 

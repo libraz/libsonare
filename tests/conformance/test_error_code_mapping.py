@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Assert every surface agrees on what each ``sonare::ErrorCode`` means.
 
 Five tables translate the core error enumeration for a consumer, and no two of
@@ -425,8 +424,8 @@ class NonVacuityTest(unittest.TestCase):
         self.assertEqual(
             problems,
             [
-                "Ok: the C ABI mapping has no case for it, so it answers by falling "
-                "through rather than by saying so"
+                ("Ok: the C ABI mapping has no case for it, so it answers by falling "
+                "through rather than by saying so")
             ],
         )
 

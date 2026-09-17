@@ -19,7 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from smf import Note, _read_vlq, _vlq, strip_program_changes, write_smf  # noqa: E402
+from smf import Note, _read_vlq, _vlq, strip_program_changes, write_smf
 
 
 def events(data: bytes) -> list[tuple[int, bytes]]:

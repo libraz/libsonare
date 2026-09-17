@@ -26,6 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
+
 def corpus_fingerprint(root) -> str:
     """What the reference cache has to change with when the corpus does.
 
@@ -146,7 +147,7 @@ class Signals:
             [sys.executable, "-c", _WORKER, json.dumps(pairs), str(tmp),
              str(self.corpus_root) if ref else "", str(self.program),
              str(self.gate_s), str(self.seconds), str(self.channel), self.timbre],
-            capture_output=True, text=True, env=env)
+            capture_output=True, check=False, text=True, env=env)
         if p.returncode:
             tmp.unlink(missing_ok=True)
             raise RuntimeError(p.stderr[-4000:])

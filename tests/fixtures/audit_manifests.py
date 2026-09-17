@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Audit optional fixture manifests without running audio analysis.
 
 This reports which rows are configured, which local audio/annotation files are

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Synthetic listening/performance gate for realtime voice changer presets."""
 
 from __future__ import annotations

@@ -20,7 +20,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from vstpreset import (  # noqa: E402
+from vstpreset import (
     VstPresetError,
     build_aupreset,
     component_codes,

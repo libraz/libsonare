@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from loss_dimensions import LOSS_TERMS, measured_terms
 from toneclass import default_weights
 
-
 # Smallest value a term is normalised against, in that term's own units: 1 dB of
 # harmonic-profile error, 1 cent, 1 dB of excess noise, and so on. Without a
 # floor a term that happens to start near zero — the noise penalty of a model

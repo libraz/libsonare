@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Verify the ABI-version mirrors agree across the C core and every binding.
 
 The C ABI carries several *independent* version counters, not one:
@@ -33,7 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from _repo import REPO_ROOT, public_header  # noqa: E402
+from _repo import REPO_ROOT, public_header
 
 
 def _read(rel: str) -> str:

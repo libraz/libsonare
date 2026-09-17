@@ -5,14 +5,19 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 import numpy as np
-
 from metrics_hit import HIT_ENVELOPE_HOP_MS, HIT_ENVELOPE_WIN_MS, _hit_onset
 from metrics_modal import modal_profile
 from metrics_modulation import f0_width_cents, modulation_note
 from metrics_partials import estimate_inharmonicity_b, ladder_present, partial_hz
-from metrics_signal import N_HARMONICS, _db, _peak_near, _rms_envelope, _spectrum, midi_to_hz
+from metrics_signal import (
+    N_HARMONICS,
+    _db,
+    _peak_near,
+    _rms_envelope,
+    _spectrum,
+    midi_to_hz,
+)
 from smf import Note
-
 
 MIN_SUSTAIN_SEC = 0.15
 # Furthest the sustain window may sit from the onset, in seconds. These are

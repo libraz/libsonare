@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Roll the multiple-F0 observations up into per-item and aggregate figures.
 
 The observations come from the ``[polyphony_eval]`` case, which renders its own

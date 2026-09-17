@@ -292,7 +292,7 @@ def canonical_dimensions(program: int, *, drum_note: int | None = None,
 PROGRAM_REGISTERS: dict[int, tuple[int, int, int]] = {
     # 0-7 pianos and keyboards: the compass is the point of a keyboard voice,
     # and a physical model diverges most at the ends of it.
-    **{p: (36, 60, 84) for p in range(0, 8)},
+    **{p: (36, 60, 84) for p in range(8)},
     # 8-15 chromatic percussion, each in its own written compass.
     8: (60, 72, 84),    # celesta (written C4-C8, sounds an octave up)
     9: (79, 91, 100),   # glockenspiel

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Render the tracked per-runtime capability matrix from the parity extractors.
 
 libsonare advertises one engine reachable from four runtimes. That claim is true
@@ -29,16 +28,16 @@ Usage:
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
+from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-import check_parity  # noqa: E402
-import compare  # noqa: E402
-from extractors import c_api  # noqa: E402
+import check_parity
+import compare
+from extractors import c_api
 
 DEFAULT_OUTPUT = Path("tools/parity/surface-coverage.md")
 FACADES = ("python", "node", "wasm", "cli")
@@ -117,20 +116,20 @@ def render(report, c_signatures: dict[str, str]) -> str:
     lines = [
         "# Runtime capability matrix",
         "",
-        "One C++ core, four hand-written runtimes. This table is what "
+        ("One C++ core, four hand-written runtimes. This table is what "
         '"the same engine everywhere" means concretely: per domain, how many of '
-        "the C ABI's entry points each runtime can reach.",
+        "the C ABI's entry points each runtime can reach."),
         "",
-        "**Generated — do not edit.** Run `make surface-coverage` to regenerate; "
+        ("**Generated — do not edit.** Run `make surface-coverage` to regenerate; "
         "`make surface-coverage-check` fails on a stale copy. The reachability "
         "decision is the parity checker's, so class methods, handle-prefix "
         "renames and verified aliases all count as reached; see "
-        "[README.md](README.md) for how that decision is made.",
+        "[README.md](README.md) for how that decision is made."),
         "",
-        "A gap here is a statement about reach, not about quality: the CLI is a "
+        ("A gap here is a statement about reach, not about quality: the CLI is a "
         "curated subset by design, and WASM cannot expose the host filesystem or "
         "anything that needs threads. An allowlisted divergence still counts as "
-        "a gap, because a reviewed absence is still an absence.",
+        "a gap, because a reviewed absence is still an absence."),
         "",
         "| domain | C entry points | Python | Node | WASM | CLI |",
         "|---|---:|---:|---:|---:|---:|",

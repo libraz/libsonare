@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from loss import KIT_MIN_MEMBERS, kit_report
 from metrics import band_tilt_db
 

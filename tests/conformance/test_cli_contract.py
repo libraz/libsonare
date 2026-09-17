@@ -1,15 +1,14 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the CLI contract manifest/checker."""
 
 from __future__ import annotations
 
 import copy
-from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
-from io import StringIO
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -906,19 +905,22 @@ class CliContractSelfTest(unittest.TestCase):
 
         stdout = StringIO()
         stderr = StringIO()
-        with mock.patch.object(CHECKER, "_run", fake_run):
-            with redirect_stdout(stdout), redirect_stderr(stderr):
-                result = CHECKER.main(
-                    [
-                        "--manifest",
-                        str(CHECKER.DEFAULT_MANIFEST),
-                        "--native",
-                        "native",
-                        "--python",
-                        "python",
-                        "--emit-shared-option-snapshot",
-                    ]
-                )
+        with (
+            mock.patch.object(CHECKER, "_run", fake_run),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            result = CHECKER.main(
+                [
+                    "--manifest",
+                    str(CHECKER.DEFAULT_MANIFEST),
+                    "--native",
+                    "native",
+                    "--python",
+                    "python",
+                    "--emit-shared-option-snapshot",
+                ]
+            )
         self.assertEqual(result, 0)
         self.assertEqual(stderr.getvalue(), "")
         snapshot = json.loads(stdout.getvalue())

@@ -465,8 +465,8 @@ class ShapeLoss:
         # like a statement about invariance.
         inv = []
         if compares_notes(keys):
-            for v in mcurves:
-                mi = terms.invariant_floor(mcurves[v])
+            for v, mcurve in mcurves.items():
+                mi = terms.invariant_floor(mcurve)
                 ri = terms.invariant_floor(rcurves[v])
                 live = ri > -300.0
                 inv.append(np.clip(np.maximum(mi[live] - ri[live], 0.0),
@@ -507,10 +507,10 @@ class ShapeLoss:
         # time puts exactly one note in every score.
         rec = []
         if compares_notes(keys):
-            for v in mpeaks:
-                if not mpeaks[v]:
+            for v, mpeak in mpeaks.items():
+                if not mpeak:
                     continue
-                mf = np.mean(np.stack(mpeaks[v]), axis=0) * 100.0
+                mf = np.mean(np.stack(mpeak), axis=0) * 100.0
                 rf = np.mean(np.stack(rpeaks[v]), axis=0) * 100.0
                 rec.append(np.clip(np.maximum(mf - rf, 0.0), 0.0, terms.RECUR_CLIP))
         # Left out of the total rather than entered at zero. Zero is this term's

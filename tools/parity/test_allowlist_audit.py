@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression tests for the allowlist audit: its three states, and held-empty sections.
 
 An allowlist entry is a recorded decision about one divergence. Once that
@@ -23,23 +22,23 @@ Stdlib only; no build needed. Run directly:
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-import allowlist as allowlist_mod  # noqa: E402
-import check_parity  # noqa: E402
-import compare  # noqa: E402
-from model import (  # noqa: E402
+import allowlist as allowlist_mod
+import check_parity
+import compare
+from model import (
+    SURFACES,
     Extraction,
     FunctionSig,
     Param,
     RecordField,
     RecordShape,
-    SURFACES,
 )
 
 
@@ -347,7 +346,7 @@ def _run_all() -> int:
         try:
             t()
             print(f"ok   {t.__name__}")
-        except AssertionError as e:  # noqa: PERF203
+        except AssertionError as e:
             failed += 1
             print(f"FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")

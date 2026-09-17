@@ -7,8 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shape import reach as R  # noqa: E402
-from shape.render import read_overrides  # noqa: E402
+from shape import reach as R
+from shape.render import read_overrides
 
 BASE = {"a": 1.0, "b": 2.0, "dead": 4.0}
 
@@ -43,8 +43,8 @@ def test_a_bucket_something_moves_but_nothing_improves_is_the_opposite_finding()
         return {"spent": 5.0 + 3.0 * len(ov)}
 
     err0, movement, best, mover = sweep(respond)
-    line = [ln for ln in R.report(err0, movement, best, mover).splitlines()
-            if ln.startswith("spent")][0]
+    line = next(ln for ln in R.report(err0, movement, best, mover).splitlines()
+            if ln.startswith("spent"))
     assert "moves, no gain" in line
     assert movement["spent"] >= R.DEAD_DB
 
@@ -56,8 +56,8 @@ def test_a_bucket_a_coordinate_reduces_is_reachable_and_names_its_mover():
     err0, movement, best, mover = sweep(respond)
     assert best["fixable"] == 0.2
     assert mover["fixable"] == "b"
-    line = [ln for ln in R.report(err0, movement, best, mover).splitlines()
-            if ln.startswith("fixable")][0]
+    line = next(ln for ln in R.report(err0, movement, best, mover).splitlines()
+            if ln.startswith("fixable"))
     assert "reachable" in line and "moves, no gain" not in line
 
 

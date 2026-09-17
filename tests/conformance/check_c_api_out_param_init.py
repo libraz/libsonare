@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Find C-ABI entry points that return before defining an out-parameter.
 
 A ``sonare_*`` entry point that writes an out-parameter on its success path owes

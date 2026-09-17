@@ -21,7 +21,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from _repo import REPO_ROOT
-from catalogue import Catalogue, TunableDef, drum_patch_key, resolve_knob_name, scan_tunables
+from catalogue import (
+    Catalogue,
+    TunableDef,
+    drum_patch_key,
+    resolve_knob_name,
+    scan_tunables,
+)
 
 
 @dataclass
@@ -81,7 +87,9 @@ def load_spec_weights(spec_path: Path) -> dict[str, float]:
     """The term weights a spec carries, or an empty dict when it carries none."""
     weights = _spec_document(spec_path).get("weights", {})
     if not isinstance(weights, dict):
-        raise ValueError(f"spec {spec_path}: 'weights' must be an object of term -> number")
+        raise ValueError(# noqa: TRY004 -- one error class per document
+            f"spec {spec_path}: 'weights' must be an object of term -> number"
+        )
     out = {}
     for term, value in weights.items():
         try:

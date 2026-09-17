@@ -141,31 +141,31 @@ def build(stem: str, *, ident: str, label: str, note: str, roles: list[str],
 #: that an isolated note cannot. A class rather than an instrument, because a
 #: musical take has to exist for every program and only four have a capture.
 CUTS = [
-    dict(stem="BWV846_prelude", ident="bwv846-prelude", roles=["manual"],
-         first_beat=0.0, last_beat=16.0,
-         label="WTC I — Prelude in C, opening",
-         note="broken chords held under each other: the bloom of overlapping "
-              "decays, and whether the next entry has room"),
-    dict(stem="BWV847_fugue", ident="bwv847-fugue", roles=["manual"],
-         first_beat=0.0, last_beat=18.0,
-         label="WTC I — Fugue in C minor, subject and answer",
-         note="two entries of one subject in different registers: whether the "
-              "ring of the first is still audible under the second"),
-    dict(stem="BWV639", ident="bwv639-chorale", roles=["manual", "pedal"],
-         first_beat=0.0, last_beat=8.0,
-         label="Ich ruf zu dir, BWV 639 — opening",
-         note="a sustained line over a moving inner voice and a pedal: register "
-              "balance across three parts that never stop"),
-    dict(stem="BWV996_1", ident="bwv996-prelude", roles=["v1", "v2"],
-         first_beat=0.0, last_beat=14.0,
-         label="Lute Suite BWV 996 — Praeludium, opening",
-         note="a plucked line against a held bass: how long a pluck lasts under "
-              "the next one, and whether the bass survives it"),
-    dict(stem="BWV1007_1", ident="bwv1007-prelude", roles=["solo_0", "solo_1"],
-         first_beat=0.0, last_beat=12.0,
-         label="Cello Suite No. 1 — Prelude, opening",
-         note="one line across a wide compass, mostly stepwise: where a bowed or "
-              "blown voice changes character as it climbs"),
+    {"stem": "BWV846_prelude", "ident": "bwv846-prelude", "roles": ["manual"],
+         "first_beat": 0.0, "last_beat": 16.0,
+         "label": "WTC I — Prelude in C, opening",
+         "note": "broken chords held under each other: the bloom of overlapping "
+              "decays, and whether the next entry has room"},
+    {"stem": "BWV847_fugue", "ident": "bwv847-fugue", "roles": ["manual"],
+         "first_beat": 0.0, "last_beat": 18.0,
+         "label": "WTC I — Fugue in C minor, subject and answer",
+         "note": "two entries of one subject in different registers: whether the "
+              "ring of the first is still audible under the second"},
+    {"stem": "BWV639", "ident": "bwv639-chorale", "roles": ["manual", "pedal"],
+         "first_beat": 0.0, "last_beat": 8.0,
+         "label": "Ich ruf zu dir, BWV 639 — opening",
+         "note": "a sustained line over a moving inner voice and a pedal: register "
+              "balance across three parts that never stop"},
+    {"stem": "BWV996_1", "ident": "bwv996-prelude", "roles": ["v1", "v2"],
+         "first_beat": 0.0, "last_beat": 14.0,
+         "label": "Lute Suite BWV 996 — Praeludium, opening",
+         "note": "a plucked line against a held bass: how long a pluck lasts under "
+              "the next one, and whether the bass survives it"},
+    {"stem": "BWV1007_1", "ident": "bwv1007-prelude", "roles": ["solo_0", "solo_1"],
+         "first_beat": 0.0, "last_beat": 12.0,
+         "label": "Cello Suite No. 1 — Prelude, opening",
+         "note": "one line across a wide compass, mostly stepwise: where a bowed or "
+              "blown voice changes character as it climbs"},
 ]
 
 

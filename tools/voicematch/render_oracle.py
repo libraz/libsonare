@@ -30,7 +30,6 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-
 from wavio import read_wav
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
@@ -80,7 +79,7 @@ def render_oracle_fluidsynth(
             str(sf2),
             str(mid_path),
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(cmd, capture_output=True, check=False, text=True)
         if proc.returncode != 0 or not wav_path.exists():
             raise RuntimeError(f"fluidsynth failed (rc={proc.returncode}):\n{proc.stderr.strip()}")
         audio, got_sr = read_wav(wav_path)
@@ -91,7 +90,7 @@ def render_oracle_fluidsynth(
 
 def fit_length(audio: np.ndarray, total_seconds: float, sr: int) -> np.ndarray:
     """Trim or zero-pad a (frames, channels) render to exactly `total_seconds`."""
-    want = int(round(total_seconds * sr))
+    want = round(total_seconds * sr)
     if audio.shape[0] >= want:
         return audio[:want]
     pad = np.zeros((want - audio.shape[0], audio.shape[1]), dtype=np.float32)
@@ -110,7 +109,7 @@ def resample_linear(audio: np.ndarray, src_sr: int, dst_sr: int) -> np.ndarray:
     if src_sr == dst_sr:
         return audio
     ratio = dst_sr / src_sr
-    n_out = int(round(audio.shape[0] * ratio))
+    n_out = round(audio.shape[0] * ratio)
     taps = 32
     cutoff = min(1.0, ratio)  # anti-alias when decimating
     src_pos = np.arange(n_out) / ratio
@@ -282,12 +281,12 @@ def estimate_alignment(
     strength = _onset_strength(audio.mean(axis=1), sr, hop)
     target = np.zeros(len(strength))
     for t in onsets_s:
-        idx = int(round(t * sr / hop))
+        idx = round(t * sr / hop)
         if 0 <= idx < len(target):
             target[idx] = 1.0
     if target.sum() == 0.0 or strength.sum() == 0.0:
         return 0.0
-    max_lag = int(round(max_shift_s * sr / hop))
+    max_lag = round(max_shift_s * sr / hop)
     lags = np.arange(-max_lag, max_lag + 1)
     best_lag, best_score = 0, -np.inf
     for lag in lags:
@@ -338,7 +337,7 @@ def load_oracle_wav(
     elif align:
         shift = estimate_alignment(audio, sr, list(onsets_s))
     if shift:
-        n = int(round(shift * sr))
+        n = round(shift * sr)
         if n > 0:
             audio = audio[n:] if n < audio.shape[0] else audio[:0]
         else:

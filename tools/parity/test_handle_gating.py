@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression tests for handle/class coverage GATING.
 
 The cross-binding checker treats handle/class C ops (``engine_*``, ``audio_*``,
@@ -27,9 +26,9 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-import allowlist as allowlist_mod  # noqa: E402
-import compare  # noqa: E402
-from model import Extraction, FunctionSig  # noqa: E402
+import allowlist as allowlist_mod
+import compare
+from model import Extraction, FunctionSig
 
 
 def _c(*keys: str) -> Extraction:
@@ -285,7 +284,7 @@ def _run_all() -> int:
         try:
             t()
             print(f"ok   {t.__name__}")
-        except AssertionError as e:  # noqa: PERF203
+        except AssertionError as e:
             failed += 1
             print(f"FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")

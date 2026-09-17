@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The bank version registry's bump discipline, without building anything.
 
 Everything here is the part that decides whether a voice's version has to move.
@@ -16,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
-import generate_bank_versions as gbv  # noqa: E402
+import generate_bank_versions as gbv
 
 PATCHES = {"concert_flute", "violin"}
 

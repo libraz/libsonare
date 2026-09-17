@@ -247,7 +247,7 @@ def _parse_text(
                 params = [
                 _parse_ts_param(p, enum_types) for p in split_top_level_commas(inner)
             ]
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S112 -- an unparsable signature is skipped
                 continue
             key = canonical_key(name, surface)
             ex.functions.append(

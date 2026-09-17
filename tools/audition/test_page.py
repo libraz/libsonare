@@ -89,7 +89,7 @@ def _run_all() -> int:
         try:
             t()
             print(f"ok   {t.__name__}")
-        except AssertionError as e:  # noqa: PERF203
+        except AssertionError as e:
             failed += 1
             print(f"FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")

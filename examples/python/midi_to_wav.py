@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Render a short MIDI phrase with a NativeSynth preset."""
 
 from __future__ import annotations

@@ -32,7 +32,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
-
 from capture import (
     RIG_BAKED,
     RIG_NONE,
@@ -540,10 +539,10 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
             f"resampling a reference"
         )
     last = max(pattern.notes, key=lambda n: n.start)
-    total = int(round(
-        (last.start + corpus.slot_for(corpus.capture_slot(last.note), last.velocity)) * sr))
+    total = round(
+        (last.start + corpus.slot_for(corpus.capture_slot(last.note), last.velocity)) * sr)
     out: np.ndarray | None = None
-    skip = int(round(corpus.preroll_s * sr))
+    skip = round(corpus.preroll_s * sr)
     # The pattern is written in the model's numbering; the renders are filed
     # under the notes the reference was struck on. See `Corpus.capture_slot`.
     for note in pattern.notes:
@@ -559,9 +558,9 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
         if out is None:
             out = np.zeros((total, audio.shape[1]), dtype=np.float64)
         seg = audio[skip:]
-        start = int(round(note.start * sr))
+        start = round(note.start * sr)
         slot = corpus.slot_for(slot_note, note.velocity)
-        room = min(len(seg), total - start, int(round(slot * sr)))
+        room = min(len(seg), total - start, round(slot * sr))
         if room > 0:
             out[start : start + room] += seg[:room]
     if out is None:

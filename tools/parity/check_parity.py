@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Cross-binding parity drift checker for libsonare.
 
 Compares every language surface (Python, Node, WASM, CLI) against the C API
@@ -29,12 +28,19 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-import allowlist as allowlist_mod  # noqa: E402
-import compare  # noqa: E402
-import core_defaults  # noqa: E402
-import report as report_mod  # noqa: E402
-from extractors import c_api, cli, node_ts, python_pyi, wasm_internal, wasm_ts  # noqa: E402
-from model import SURFACES  # noqa: E402
+import allowlist as allowlist_mod
+import compare
+import core_defaults
+import report as report_mod
+from extractors import (
+    c_api,
+    cli,
+    node_ts,
+    python_pyi,
+    wasm_internal,
+    wasm_ts,
+)
+from model import SURFACES
 
 #: Allowlist section names that differ from the finding category they gate, for
 #: matching an expired entry against the declined comparison behind it.

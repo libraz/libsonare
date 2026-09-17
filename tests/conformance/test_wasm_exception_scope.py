@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the WASM exception-scope checker.
 
 The checker's own failure mode is a false clean: every defect it has had made it
@@ -213,9 +212,13 @@ class SyntheticBuildTest(unittest.TestCase):
         for build in builds:
             argv += ["--build-dir", str(build)]
         out, err = StringIO(), StringIO()
-        with self._rooted(root), mock.patch("sys.argv", argv):
-            with redirect_stdout(out), redirect_stderr(err):
-                status = CHECKER.main()
+        with (
+            self._rooted(root),
+            mock.patch("sys.argv", argv),
+            redirect_stdout(out),
+            redirect_stderr(err),
+        ):
+            status = CHECKER.main()
         return status, out.getvalue(), err.getvalue()
 
     def test_sibling_archive_and_header_reachable_catches_are_reported(self) -> None:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 N_HARMONICS = 12
 
 

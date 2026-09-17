@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression tests for the RECORD-SHAPE extraction unit and its normalizer.
 
 The signature unit (``FunctionSig``) models argument lists and is blind to a
@@ -38,12 +37,11 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-import allowlist as allowlist_mod  # noqa: E402
-import compare  # noqa: E402
-from extractors import c_api, python_ctypes, ts_records  # noqa: E402
-from model import Extraction, RecordField, RecordShape  # noqa: E402
-from normalize import canonical_field_name, canonical_record_key  # noqa: E402
-
+import allowlist as allowlist_mod
+import compare
+from extractors import c_api, python_ctypes, ts_records
+from model import Extraction, RecordField, RecordShape
+from normalize import canonical_field_name, canonical_record_key
 
 # --------------------------------------------------------------------------
 # Normalizer
@@ -446,7 +444,7 @@ def test_extra_fields_allowlist_is_one_directional() -> None:
 
 def test_name_collision_record_is_not_matched_to_the_c_struct() -> None:
     """``_NOT_A_C_MIRROR`` states that two same-named types are unrelated."""
-    surface, key, raw = next(iter(compare._NOT_A_C_MIRROR))
+    surface, _key, raw = next(iter(compare._NOT_A_C_MIRROR))
     ex = _ex(surface, _rec(surface, raw, "samples"))
     assert compare._index_records(ex) == {}
 
@@ -457,7 +455,7 @@ def test_name_collision_entry_is_anchored_on_the_type_name() -> None:
     Anchoring on the surface-native name is what stops the entry from silently
     covering whatever takes that canonical key next.
     """
-    surface, key, raw = next(iter(compare._NOT_A_C_MIRROR))
+    surface, key, _raw = next(iter(compare._NOT_A_C_MIRROR))
     renamed = _rec(surface, "SomethingElse", "samples")
     renamed.key = key  # same canonical key, different declared type name
     assert compare._index_records(_ex(surface, renamed)) == {key: renamed}
@@ -543,7 +541,7 @@ def _run_all() -> int:
         try:
             t()
             print(f"ok   {t.__name__}")
-        except AssertionError as e:  # noqa: PERF203
+        except AssertionError as e:
             failed += 1
             print(f"FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")

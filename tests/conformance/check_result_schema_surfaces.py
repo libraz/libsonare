@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Every result schema path must be declared on both TypeScript result types.
 
 Several results cross to user code as a JSON string each facade parses and
@@ -37,7 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import ts_surface_walk as walk  # noqa: E402
+import ts_surface_walk as walk
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

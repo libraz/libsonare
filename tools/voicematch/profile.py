@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Turn a captured corpus into a reference profile, and score a model against it.
 
     profile.py measure                 # corpus WAVs -> reference/<id>.json
@@ -77,54 +76,130 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from capture import (  # noqa: E402
-    DEFAULT_CONFIG, PERCUSSION_CHANNEL, RIG_UNCLASSIFIED, ROOM_NONE, ROOM_UNCLASSIFIED,
-    load_config, model_rig, note_groups, note_map, out_root, tail_seconds,
+from _repo import REPO_ROOT
+from capture import (
+    DEFAULT_CONFIG,
+    PERCUSSION_CHANNEL,
+    RIG_UNCLASSIFIED,
+    ROOM_NONE,
+    ROOM_UNCLASSIFIED,
+    load_config,
+    model_rig,
+    note_groups,
+    note_map,
+    out_root,
+    tail_seconds,
 )
-from loss import KIT_MIN_MEMBERS, kit_report  # noqa: E402
-from metrics import (  # noqa: E402
-    ATTACK_FLOOR_MS, INHARMONICITY_TOLERANCES, MAX_FIT_PARTIALS, MIN_PARTIALS_FOR_B,
-    SILENT_WINDOW_DB, _db, _peak_near, _rms_envelope,
-    _spectrum, _under_peak_db, analyze_hit, band_edges_by_timbre, band_tilt_db,
-    fit_partial_series, ladder_present, midi_to_hz, partial_hz,
-    shared_band_edge, to_mono,
+from loss import KIT_MIN_MEMBERS, kit_report
+from metrics import (
+    ATTACK_FLOOR_MS,
+    INHARMONICITY_TOLERANCES,
+    MAX_FIT_PARTIALS,
+    MIN_PARTIALS_FOR_B,
+    SILENT_WINDOW_DB,
+    _db,
+    _peak_near,
+    _rms_envelope,
+    _spectrum,
+    _under_peak_db,
+    analyze_hit,
+    band_edges_by_timbre,
+    band_tilt_db,
+    fit_partial_series,
+    ladder_present,
+    midi_to_hz,
+    partial_hz,
+    shared_band_edge,
+    to_mono,
 )
-from phrases import TAKE_SETS, build_takes  # noqa: E402
-from _repo import REPO_ROOT  # noqa: E402
-from render_model import render_model  # noqa: E402
-from render_oracle import render_oracle_fluidsynth  # noqa: E402
-from room import Room, match_sends, measurable_room, place_model_in  # noqa: E402
-from smf import Note, write_smf  # noqa: E402
-from wavio import read_wav, write_wav  # noqa: E402
-from profile_gate import (  # noqa: E402
-    DELTA_LABELS, PER_NOTE_DIMENSIONS, check_gate, print_register_profile,
-    reference_spread, register_levels, register_spread_by_note, select_dimensions,
-    summarize_deltas, write_gate_file,
+from phrases import TAKE_SETS, build_takes
+from profile_gate import (
+    DELTA_LABELS,
+    PER_NOTE_DIMENSIONS,
+    check_gate,
+    print_register_profile,
+    reference_spread,
+    register_levels,
+    register_spread_by_note,
+    select_dimensions,
+    summarize_deltas,
+    write_gate_file,
 )
-from profile_measure import (  # noqa: E402
-    BODY_MIN_F0_HZ, BODY_WINDOW_S, DECAY_RANGE_DB, DECAY_SPAN_AGREEMENT,
-    MAX_PARTIALS, ONSET_SLACK_DB, REGISTER_MIN_NOTES, RISE_WINDOW_S,
-    SHORT_RING_FLOOR_DB, _above_fundamental, _short_ring_window, body_below_f0_db,
-    decay_origin_index, double_decay, double_decay_gap, find_partials,
-    is_percussion, measure_hit, measure_note, onset_index, partial_decay,
-    register_deltas, tone_to_noise_db, usable_decay_end,
+from profile_measure import (
+    BODY_MIN_F0_HZ,
+    BODY_WINDOW_S,
+    DECAY_RANGE_DB,
+    DECAY_SPAN_AGREEMENT,
+    MAX_PARTIALS,
+    ONSET_SLACK_DB,
+    REGISTER_MIN_NOTES,
+    RISE_WINDOW_S,
+    SHORT_RING_FLOOR_DB,
+    _above_fundamental,
+    _short_ring_window,
+    body_below_f0_db,
+    decay_origin_index,
+    double_decay,
+    double_decay_gap,
+    find_partials,
+    is_percussion,
+    measure_hit,
+    measure_note,
+    onset_index,
+    partial_decay,
+    register_deltas,
+    tone_to_noise_db,
+    usable_decay_end,
 )
-from profile_percussion import (  # noqa: E402
-    band_shape_error_db, mean_band_decay_delta, percussion_reference_spread,
-    percussion_row_deltas, print_kit_relations,
+from profile_percussion import (
+    band_shape_error_db,
+    mean_band_decay_delta,
+    percussion_reference_spread,
+    percussion_row_deltas,
+    print_kit_relations,
 )
-from profile_status import (  # noqa: E402
-    CAPTURE_DIR, committed_capture, measurement_stamp, profile_body, readiness, status,
+from profile_status import (
+    CAPTURE_DIR,
+    committed_capture,
+    measurement_stamp,
+    profile_body,
+    readiness,
+    status,
 )
-from profile_summary import (  # noqa: E402
-    LATE_ONSET_MS, a4_offset_cents, band_db, partial_balance_db, print_percussion_summary,
-    print_summary, profile_program, summarize, summarize_percussion, velocity_response,
+from profile_summary import (
+    LATE_ONSET_MS,
+    a4_offset_cents,
+    band_db,
+    partial_balance_db,
+    print_percussion_summary,
+    print_summary,
+    profile_program,
+    summarize,
+    summarize_percussion,
+    velocity_response,
 )
-from profile_take import (  # noqa: E402
-    SUSTAIN_CC, SUSTAIN_TONALITY_BAND, TAKE_BANDS, TAKE_LABELS, TAKE_SILENCE,
-    TAKE_SUBSONIC_HZ, TAKE_TAIL_LEAD_S, archived_take_ids, archived_take_references,
-    highpass, measure_take, room_match, signal_end_s, take_windows, usable_tail,
+from profile_take import (
+    SUSTAIN_CC,
+    SUSTAIN_TONALITY_BAND,
+    TAKE_BANDS,
+    TAKE_LABELS,
+    TAKE_SILENCE,
+    TAKE_SUBSONIC_HZ,
+    TAKE_TAIL_LEAD_S,
+    archived_take_ids,
+    archived_take_references,
+    highpass,
+    measure_take,
+    room_match,
+    signal_end_s,
+    take_windows,
+    usable_tail,
 )
+from render_model import render_model
+from render_oracle import render_oracle_fluidsynth
+from room import Room, match_sends, measurable_room, place_model_in
+from smf import Note, write_smf
+from wavio import read_wav, write_wav
 
 REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
 # A model render whose loudest sample is under this is a kit piece the GM
@@ -935,7 +1010,7 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")
             continue
 
-        def d(key, scale=1.0):
+        def d(key, scale=1.0, m=m, r=r):
             if key not in m or key not in r:
                 return None
             return (m[key] - r[key]) * scale
@@ -1286,20 +1361,20 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, help_text in (("measure", "corpus WAVs -> reference profile JSON"),
-                            ("render-grid", "render the model over the capture's own grid, "
-                                            "as one more timbre of the corpus"),
+                            ("render-grid", ("render the model over the capture's own grid, "
+                                            "as one more timbre of the corpus")),
                             ("compare", "render the same grid through libsonare and diff it"),
-                            ("agree", "measure a second, independent reference over the same "
-                                      "grid and report which dimensions the two agree on"),
+                            ("agree", ("measure a second, independent reference over the same "
+                                      "grid and report which dimensions the two agree on")),
                             ("dynamics", "diff the pp->ff swing rather than one velocity at a time"),
-                            ("takes", "measure the phrase takes, which is where the couplings "
-                                      "between notes live and where a note grid is blind"),
-                            ("status", "what an instrument has, what it is missing, and what "
-                                       "the next round needs — the entry point of a loop"),
-                            ("rig", "measure whether this reference was recorded through an "
-                                    "amplifier or a rotary, and say what the answer can be"),
-                            ("room-match", "what libsonare's own CC91 send and GS tank would "
-                                           "have to be to sit in the reference's room")):
+                            ("takes", ("measure the phrase takes, which is where the couplings "
+                                      "between notes live and where a note grid is blind")),
+                            ("status", ("what an instrument has, what it is missing, and what "
+                                       "the next round needs — the entry point of a loop")),
+                            ("rig", ("measure whether this reference was recorded through an "
+                                    "amplifier or a rotary, and say what the answer can be")),
+                            ("room-match", ("what libsonare's own CC91 send and GS tank would "
+                                           "have to be to sit in the reference's room"))):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--config", default=str(DEFAULT_CONFIG))
         p.add_argument("--corpus", default="", help="corpus directory (default: the capture output)")

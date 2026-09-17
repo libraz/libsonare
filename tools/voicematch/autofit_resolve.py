@@ -11,7 +11,13 @@ from pathlib import Path
 
 from corpus import (
     PERCUSSION_CHANNEL as CORPUS_PERCUSSION_CHANNEL,
-    Corpus, check_rig, corpus_pattern, describe, load_corpus,
+)
+from corpus import (
+    Corpus,
+    check_rig,
+    corpus_pattern,
+    describe,
+    load_corpus,
 )
 from knobs import load_spec_weights
 from loss import KIT_MIN_MEMBERS, LOSS_TERMS, cli_weights

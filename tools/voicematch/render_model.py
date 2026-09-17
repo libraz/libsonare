@@ -19,7 +19,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 
-from _repo import REPO_ROOT  # noqa: E402
+from _repo import REPO_ROOT
 
 DEFAULT_DYLIB = REPO_ROOT / "build-python-shared" / "lib" / "libsonare.dylib"
 REFRESH_HINT = "cmake --build build-python-shared --target sonare_shared -j"
@@ -117,7 +117,7 @@ def render_model(smf_bytes: bytes, total_seconds: float, sr: int = 48000, *,
         project.import_smf(smf_bytes)
         audio = project.bounce_with_sf2_instrument(
             libsonare.Sf2InstrumentConfig(clear_bank_rig=not rig),
-            total_frames=int(round(total_seconds * sr)),
+            total_frames=round(total_seconds * sr),
             sample_rate=sr,
         )
         manifest = project.soundfont_manifest()

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Helpers for writing strict JSON fixture reports."""
 
 from __future__ import annotations

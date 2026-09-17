@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Check that every public C-ABI header compiles as a translation unit's only include.
 
 A header that names a sibling's type without including that sibling still builds
@@ -92,6 +91,7 @@ def compile_alone(header_dir: Path, name: str, language: tuple) -> str | None:
             result = subprocess.run(
                 [compiler, std, "-I", str(include_root), "-fsyntax-only", str(probe)],
                 capture_output=True,
+                check=False,
                 text=True,
             )
         except OSError as error:

@@ -29,8 +29,16 @@ from pathlib import Path
 
 import numpy as np
 
-from .takes import (BANDS, SNR_DB, band_db, density_db, load, noise_db, rms_db,
-                    window_for)
+from .takes import (
+    BANDS,
+    SNR_DB,
+    band_db,
+    density_db,
+    load,
+    noise_db,
+    rms_db,
+    window_for,
+)
 
 #: Strikes within this of each other are one event. A drummer's flam is about
 #: 30 ms and reads as one thickened stroke rather than as two notes, so the line

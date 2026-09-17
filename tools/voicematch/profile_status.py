@@ -9,7 +9,6 @@ from pathlib import Path
 from capture import load_config
 from phrases import build_takes
 
-
 #: Every committed capture definition lives here. Globbed rather than listed:
 #: the failure worth catching is an instrument added without being added to a
 #: list, which a list cannot catch.

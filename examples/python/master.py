@@ -1,15 +1,14 @@
-#!/usr/bin/env python3
 """Master an input file to -14 LUFS, write a PCM WAV, and print its report."""
 
 from __future__ import annotations
 
+import json
+import math
 import sys
 import wave
 from array import array
+from collections.abc import Sequence
 from dataclasses import asdict
-import json
-import math
-from typing import Sequence
 
 import libsonare
 

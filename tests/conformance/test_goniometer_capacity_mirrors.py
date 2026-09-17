@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the goniometer capacity mirror check.
 
 Every case drives :func:`check_goniometer_capacity_mirrors.evaluate` -- the
@@ -118,7 +117,7 @@ class SameNameConstantTest(_CopiedTree):
             for declaration in check.cpp_declarations(header, check.CORE.path)
             if declaration.name == check.CORE.name
         ]
-        self.assertEqual([(d.scope, d.value) for d in same_name][0], ("MeterTelemetryTapFixture", 512))
+        self.assertEqual(next((d.scope, d.value) for d in same_name), ("MeterTelemetryTapFixture", 512))
         self.assertEqual(len(same_name), 2)
         self.assertEqual(check.find(root, check.CORE).value, 4096)
         self.assertEqual(check.evaluate(root), [])

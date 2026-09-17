@@ -25,7 +25,7 @@ to be expressed in to be usable.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 import numpy as np
 

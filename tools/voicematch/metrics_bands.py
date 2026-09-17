@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 # ISO 1/3-octave centres, 50 Hz to 12.5 kHz: the resolution a percussion hit's
 # spectrum is worth reporting at. Finer would resolve individual modes, which
 # move with every knob and are not what a fit should chase; coarser would merge

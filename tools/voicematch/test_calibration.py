@@ -10,9 +10,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import bank  # noqa: E402
-import calibration  # noqa: E402
-from _repo import REPO_ROOT  # noqa: E402
+import bank
+import calibration
+from _repo import REPO_ROOT
 
 
 def _write(tmp_path: Path, payload: dict) -> Path:

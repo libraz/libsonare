@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the C-ABI header self-containment checker.
 
 The checker can fail in two directions and each is pinned separately.
@@ -193,6 +192,7 @@ class TreeTest(unittest.TestCase):
                     str(MIN_HEADERS),
                 ],
                 capture_output=True,
+                check=False,
                 text=True,
             )
         self.assertEqual(result.returncode, 2)

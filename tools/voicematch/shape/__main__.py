@@ -23,19 +23,29 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from corpus import load_corpus  # noqa: E402
+from profile import PERCUSSION_CHANNEL, is_percussion
 
-from . import admittance, attack, probes, purity, struck, takes  # noqa: E402
-from .bed import Bed  # noqa: E402
-from profile import PERCUSSION_CHANNEL, is_percussion  # noqa: E402
+from corpus import load_corpus
 
-from .loss import ShapeLoss  # noqa: E402
-from .partials import Track  # noqa: E402
-from .render import Signals, load_knob_dump, read_overrides, write_overrides  # noqa: E402
-from .search import (  # noqa: E402
-    Descent, ablate, prune, split_notes, split_velocities, summarise,
+from . import admittance, attack, probes, purity, struck, takes
+from .bed import Bed
+from .loss import ShapeLoss
+from .partials import Track
+from .render import (
+    Signals,
+    load_knob_dump,
+    read_overrides,
+    write_overrides,
 )
-from .spectro import Spectro  # noqa: E402
+from .search import (
+    Descent,
+    ablate,
+    prune,
+    split_notes,
+    split_velocities,
+    summarise,
+)
+from .spectro import Spectro
 
 CAPTURE_DIR = Path(__file__).resolve().parents[1] / "capture"
 
@@ -300,8 +310,8 @@ def cmd_probe(args):
     print("ear calls metallic when it is too flat.")
     bands = list(probes.DECAY_BINS)
     print(f"{'':>12}" + "".join(f"{f'{lo}-{hi}':>13}" for lo, hi in bands))
-    for lab in pooled:
-        cells = probes.decay_bins(pooled[lab])
+    for lab, pool in pooled.items():
+        cells = probes.decay_bins(pool)
         print(f"{lab:>12}" + "".join(
             f"{cells[b][0]:>9.1f}/{cells[b][1]:<3d}" if cells[b][0] is not None
             else f"{'-':>13}" for b in bands))

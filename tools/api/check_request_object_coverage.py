@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Report JS/TS one-shot exports that still lack a request-object overload.
 
 This is deliberately a source-level guard: options/request reshapes are invisible
@@ -10,7 +9,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-
 
 ROOT = Path(__file__).resolve().parents[2]
 SURFACES = {
@@ -172,11 +170,11 @@ def exemption(path: Path, name: str, text: str) -> str | None:
 REQUEST = re.compile(r"\w+Request")
 STAR_REEXPORT = re.compile(r"export\s+\*\s+from\s+['\"]\./([\w/]+?)(?:\.js)?['\"]")
 NAMED_REEXPORT = re.compile(
-    r"export\s+(?:type\s+)?\{(.*?)\}\s*from\s*['\"]\./([\w/]+?)(?:\.js)?['\"]", re.S
+    r"export\s+(?:type\s+)?\{(.*?)\}\s*from\s*['\"]\./([\w/]+?)(?:\.js)?['\"]", re.DOTALL
 )
-NAMED_TYPE_EXPORT = re.compile(r"export\s+type\s*\{(.*?)\}", re.S)
+NAMED_TYPE_EXPORT = re.compile(r"export\s+type\s*\{(.*?)\}", re.DOTALL)
 EXPORTED_REQUEST_DEF = re.compile(r"export (?:interface|type) (\w+Request)\b")
-EXPORTED_FUNCTION_PARAMS = re.compile(r"export function \w+\s*\(([^;{]*?)\)\s*:", re.S)
+EXPORTED_FUNCTION_PARAMS = re.compile(r"export function \w+\s*\(([^;{]*?)\)\s*:", re.DOTALL)
 
 
 def _module_request_exports(mod_path: Path, visited: set[Path]) -> set[str]:

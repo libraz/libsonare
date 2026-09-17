@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-
 from metrics_signal import N_HARMONICS, _peak_near, _spectrum
-
 
 # A stiff string's partials are not at integer multiples: the nth sits at
 # n·f0·sqrt(1 + B·n²). B is small — a concert grand's bass runs around 4e-4,

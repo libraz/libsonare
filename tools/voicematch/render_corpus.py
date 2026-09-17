@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Render a GM listening/metrics corpus through the SF2-less fallback path.
 
 For each representative GM program this builds an idiomatic short phrase,
@@ -32,13 +31,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from render_model import check_gm_fallback, ensure_lib_path  # noqa: E402
-from smf import Note, write_smf  # noqa: E402
-from wavio import write_wav  # noqa: E402
+from render_model import check_gm_fallback, ensure_lib_path
+from smf import Note, write_smf
+from wavio import write_wav
 
 ensure_lib_path()
 
-import libsonare  # noqa: E402
+import libsonare
 
 SR = 48000
 

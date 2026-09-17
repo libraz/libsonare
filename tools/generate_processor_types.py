@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regenerate or check the per-binding processor-name declarations.
 
 The shipped processor-name set has exactly one origin: the tracked capability
@@ -11,9 +10,10 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import sys
-from typing import Any, Callable, NamedTuple
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = REPO_ROOT / "tools/capability-catalog.json"
@@ -51,7 +51,9 @@ def solo_processor_names(catalog: Any) -> list[str]:
     diffing this set against ``processor_names()``.
     """
     if not isinstance(catalog, dict) or not isinstance(catalog.get("processors"), list):
-        raise ValueError("catalog must be an object with a processors array")
+        raise ValueError(# noqa: TRY004 -- one error class per document
+            "catalog must be an object with a processors array"
+        )
     names: list[str] = []
     for processor in catalog["processors"]:
         if not isinstance(processor, dict) or "id" not in processor or "kind" not in processor:

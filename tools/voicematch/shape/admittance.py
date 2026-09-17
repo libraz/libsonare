@@ -82,7 +82,7 @@ def rates(track: Track, sig: np.ndarray, prompt=PROMPT, after=AFTER,
 
 
 def bins(f_lo: float = 40.0, f_hi: float = 6000.0, per_octave: int = 2):
-    n = int(round(np.log2(f_hi / f_lo) * per_octave))
+    n = round(np.log2(f_hi / f_lo) * per_octave)
     return f_lo * 2.0 ** (np.arange(n + 1) / per_octave)
 
 
@@ -156,9 +156,9 @@ def report(ref: dict, model: dict, sr: int = 48000, prompt=PROMPT, after=AFTER) 
         # band it went quiet in is countable instead of absent.
         mp[key] = rates(tracks[note], model[key], prompt, after, keep_unfittable=True)
     lines = [f"prompt {prompt}  after {after}",
-             f"{'band Hz':>9}{'notes':>6}{'pts':>5}"
+             (f"{'band Hz':>9}{'notes':>6}{'pts':>5}"
              f"{'ref prompt':>12}{'iqr':>7}{'mdl prompt':>12}{'iqr':>7}{'err':>7}"
-             f"{'ref after':>11}{'mdl after':>11}{'err':>7}{'quiet':>7}"]
+             f"{'ref after':>11}{'mdl after':>11}{'err':>7}{'quiet':>7}")]
     rc = {round(c): r for c, *r in collapse(rp, 1)}
     mc = {round(c): r for c, *r in collapse(mp, 1)}
     ra = {round(c): r for c, *r in collapse(rp, 2)}

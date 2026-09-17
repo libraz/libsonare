@@ -83,7 +83,7 @@ class Descent:
         loss = (self.hold_loss or self.loss) if hold else self.loss
         try:
             return float(loss.score(ov, notes=notes).total)
-        except Exception:
+        except Exception:  # noqa: BLE001 -- an unscorable candidate loses to every scorable one
             return float("inf")
 
     def run(self, start: dict | None = None) -> dict:

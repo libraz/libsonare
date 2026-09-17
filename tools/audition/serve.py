@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Serve directories of audio renders as an A/B listening page.
 
     python tools/audition/serve.py [<audition-dir> ...]
@@ -67,6 +66,7 @@ import urllib.error
 import urllib.request
 import webbrowser
 from pathlib import Path
+from typing import ClassVar
 
 APP_DIR = Path(__file__).resolve().parent
 REPO_ROOT = APP_DIR.parents[1]
@@ -262,9 +262,9 @@ class Sets:
     """
 
     #: What `main` was asked to serve, so a reload can repeat the same search.
-    paths: list[str] = []
-    by_id: dict[str, Path] = {}
-    index: list[dict] = []
+    paths: ClassVar[list[str]] = []
+    by_id: ClassVar[dict[str, Path]] = {}
+    index: ClassVar[list[dict]] = []
 
     @classmethod
     def reload(cls) -> None:
@@ -358,7 +358,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self) -> None:  # noqa: N802 - http.server's spelling
+    def do_GET(self) -> None:
         rel = self.path.split("?", 1)[0].lstrip("/")
         if rel == "sets.json":
             # Re-scan here, so a set rendered after the server started appears

@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import numpy as np
-
 from capture import PERCUSSION_CHANNEL
 from metrics import (
-    INHARMONICITY_TOLERANCES, MAX_FIT_PARTIALS, MIN_PARTIALS_FOR_B,
-    SILENT_WINDOW_DB, _db, _peak_near, _rms_envelope, _spectrum, _under_peak_db,
-    analyze_hit, fit_partial_series, midi_to_hz, partial_hz, to_mono,
+    INHARMONICITY_TOLERANCES,
+    MAX_FIT_PARTIALS,
+    MIN_PARTIALS_FOR_B,
+    SILENT_WINDOW_DB,
+    _db,
+    _peak_near,
+    _rms_envelope,
+    _spectrum,
+    _under_peak_db,
+    analyze_hit,
+    fit_partial_series,
+    midi_to_hz,
+    partial_hz,
+    to_mono,
 )
 from smf import Note
-
 
 # The partial count, the floor and the reliability gate all live with the fit in
 # `metrics`, so the reference profile and the model-vs-oracle comparison read a
@@ -178,7 +187,7 @@ def decay_origin_index(env_db: np.ndarray, hop_s: float) -> int:
     if env_db.size == 0:
         return 0
     start = onset_index(env_db)
-    span = max(1, int(round(RISE_WINDOW_S / max(hop_s, 1e-9))))
+    span = max(1, round(RISE_WINDOW_S / max(hop_s, 1e-9)))
     return start + int(np.argmax(env_db[start:min(env_db.size, start + span)]))
 
 

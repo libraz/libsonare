@@ -10,12 +10,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import signoff  # noqa: E402
-import status  # noqa: E402
-from toneclass import (  # noqa: E402
-    CANONICAL_DIMENSIONS, PERCUSSION_DIMENSIONS, ToneClass, canonical_dimensions,
+import signoff
+import status
+from toneclass import (
+    CANONICAL_DIMENSIONS,
+    PERCUSSION_DIMENSIONS,
+    ToneClass,
+    canonical_dimensions,
 )
-
 
 # --------------------------------------------------------------------------- #
 # The generated file

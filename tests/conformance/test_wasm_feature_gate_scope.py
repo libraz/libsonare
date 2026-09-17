@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the WASM feature-gate-scope checker.
 
 The checker's own failure mode is a false clean, and it has two distinct

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Stdlib self-tests for the WASM narrowing-scope checker.
 
 The checker's own failure mode is a false clean, and it has two shapes: a
@@ -21,6 +20,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -224,7 +224,7 @@ val entryPoint(val options) {
 }
 """
 
-    FLOOR = {"files": 1, "containers": 1, "narrowings": 1, "readers": 1}
+    FLOOR: ClassVar[dict[str, int]] = {"files": 1, "containers": 1, "narrowings": 1, "readers": 1}
 
     def _records(self, *, keep_reader: bool = True, keep_narrowing: bool = True) -> dict:
         data: dict = {"shapes": [], "narrowings": [], "readers": []}
@@ -330,7 +330,9 @@ EMSCRIPTEN_BINDINGS(unit) {
 }
 """
 
-    FLOOR = {"registrations": 1, "declarations": 1, "parameters": 1, "functions": 1, "files": 1}
+    FLOOR: ClassVar[dict[str, int]] = {
+        "registrations": 1, "declarations": 1, "parameters": 1, "functions": 1, "files": 1,
+    }
 
     def _records(self, **overrides) -> dict:
         shapes = [
@@ -490,7 +492,7 @@ EMSCRIPTEN_BINDINGS(unit) {
 
     # One below the fixture's population, so an ablation that removes a
     # parameter reddens the class under test and not the floor as well.
-    FLOOR = {"parameters": 1, "functions": 1, "files": 1}
+    FLOOR: ClassVar[dict[str, int]] = {"parameters": 1, "functions": 1, "files": 1}
 
     def _records(self, root: Path, **overrides) -> dict:
         _write(root / "cited.ts", "the conversion is total over the whole real line\n")
@@ -659,7 +661,9 @@ EMSCRIPTEN_BINDINGS(unit) {
 }
 """
 
-    FLOOR = {"registrations": 1, "declarations": 1, "parameters": 1, "functions": 1, "files": 1}
+    FLOOR: ClassVar[dict[str, int]] = {
+        "registrations": 1, "declarations": 1, "parameters": 1, "functions": 1, "files": 1,
+    }
     QUOTE = "the mechanism, readable here"
 
     def _records(self) -> dict:
@@ -781,10 +785,10 @@ EMSCRIPTEN_BINDINGS(unit) {
         self.assertEqual(
             lines,
             [
-                "  slot_index: benign is only reachable where the conversion "
-                "refuses, and ['unsigned int'] wraps",
-                "  slot_index: states defect 'refuses', but ['unsigned int'] is "
-                "converted by the 'wraps' rule",
+                ("  slot_index: benign is only reachable where the conversion "
+                "refuses, and ['unsigned int'] wraps"),
+                ("  slot_index: states defect 'refuses', but ['unsigned int'] is "
+                "converted by the 'wraps' rule"),
             ],
         )
 

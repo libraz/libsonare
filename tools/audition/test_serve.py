@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """What counts as a set, and what does not.
 
 Everything here is about `discover`, which decides what the page's set picker
@@ -19,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import serve  # noqa: E402
+import serve
 
 
 def _write_set(root: Path, takes: dict[str, list[str]], title: str = "") -> Path:
@@ -209,7 +208,7 @@ def _run_all() -> int:
         try:
             t()
             print(f"ok   {t.__name__}")
-        except AssertionError as e:  # noqa: PERF203
+        except AssertionError as e:
             failed += 1
             print(f"FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")

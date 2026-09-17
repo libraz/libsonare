@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Compare two optional fixture JSON reports for local regression triage."""
 
 from __future__ import annotations

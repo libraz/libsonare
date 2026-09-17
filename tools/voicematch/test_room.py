@@ -19,8 +19,17 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from room import (
-    DRY, Room, apply_room, estimate_room, fit_room_ir, match_sends, measurable_room,
-    place_model_in, room_distance, room_span_distance, synth_room_ir,
+    DRY,
+    Room,
+    apply_room,
+    estimate_room,
+    fit_room_ir,
+    match_sends,
+    measurable_room,
+    place_model_in,
+    room_distance,
+    room_span_distance,
+    synth_room_ir,
 )
 
 SR = 48000

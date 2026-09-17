@@ -20,35 +20,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from metrics import (  # noqa: E402
-    THIRD_OCTAVE_CENTERS,
-    _peak_near,
-    _spectrum,
-    analyze_hit,
-    analyze_note,
-    attack_bands,
-    attack_low_bands,
-    attack_peaks,
-    audibility_weights,
-    band_tilt_db,
-    MIN_PARTIALS_FOR_B,
-    estimate_inharmonicity_b,
-    ladder_present,
-    level_of,
-    midi_to_hz,
-    note_onset,
-    partial_hz,
-    partial_offset,
-    stretch_cents,
-)
-from patterns import analysis_window_end
-from toneclass import default_weights
-
 # The split modules below hold what this file used to define inline. Every
 # importer reads this module by name and one of them patches attributes on it,
 # so the whole surface is re-exported here.
 # ruff: noqa: F401
 from loss_dimensions import (
+    _SHARED_TERMS,
     BAND_DELTA_CAP_DB,
     BAND_REFERENCE_FLOOR_DB,
     BDECAY_MIN_RATE_DB_S,
@@ -60,11 +37,6 @@ from loss_dimensions import (
     LEVEL_DELTA_CAP_DB,
     LF_DELTA_CAP_DB,
     LOSS_TERMS,
-    MODE_CENTS_CAP,
-    MODE_CENTS_PER_DB,
-    MODE_DB_CAP,
-    MODE_PAIR_CENTS,
-    MODE_UNMATCHED_DB,
     MOD_CENTS_CAP,
     MOD_DEPTH_CAP,
     MOD_RATE_CAP_HZ,
@@ -73,12 +45,16 @@ from loss_dimensions import (
     MOD_VIB_CENTS_PER_UNIT,
     MOD_WIDTH_CAP,
     MOD_WIDTH_CENTS_PER_UNIT,
-    PERCUSSION_TERMS,
+    MODE_CENTS_CAP,
+    MODE_CENTS_PER_DB,
+    MODE_DB_CAP,
+    MODE_PAIR_CENTS,
+    MODE_UNMATCHED_DB,
     PERC_LF_MAX_HZ,
+    PERCUSSION_TERMS,
     PITCHED_TERMS,
     STIFF_DELTA_CENTS_CAP,
     TAIL_DELTA_CAP_DB_S,
-    _SHARED_TERMS,
     _absent_or,
     _attack_delta_ms,
     _brightness,
@@ -115,13 +91,36 @@ from loss_mss import (
     mss_distance,
 )
 from loss_weights import (
-    LossWeights,
     TERM_COUNT_KEYS,
     TERM_FLOORS,
     UNMEASURABLE_PENALTY,
+    LossWeights,
     cli_weights,
     refused_weights,
 )
+from metrics import (
+    MIN_PARTIALS_FOR_B,
+    THIRD_OCTAVE_CENTERS,
+    _peak_near,
+    _spectrum,
+    analyze_hit,
+    analyze_note,
+    attack_bands,
+    attack_low_bands,
+    attack_peaks,
+    audibility_weights,
+    band_tilt_db,
+    estimate_inharmonicity_b,
+    ladder_present,
+    level_of,
+    midi_to_hz,
+    note_onset,
+    partial_hz,
+    partial_offset,
+    stretch_cents,
+)
+from patterns import analysis_window_end
+from toneclass import default_weights
 
 # Longest analysis window per note. The probe patterns hold a note for two
 # seconds and this used to match them, which made the cap invisible — and made
@@ -452,7 +451,7 @@ def fixed_resonances(rows: list[dict], *,
                 peaks.append((float(freq), float(prom), note, not clear))
     if recurrence_only:
         need = max(RESONANCE_MIN_NOTES,
-                   int(round(len(contributing) * RESONANCE_RECURRENCE_FRACTION)))
+                   round(len(contributing) * RESONANCE_RECURRENCE_FRACTION))
     else:
         need = RESONANCE_MIN_NOTES
     peaks.sort()

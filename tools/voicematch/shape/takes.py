@@ -147,7 +147,8 @@ def load(directory, reference: str = "") -> dict:
     from wavio import read_wav
 
     d = Path(directory)
-    man = json.load(open(d / "manifest.json"))
+    with (d / "manifest.json").open(encoding="utf-8") as handle:
+        man = json.load(handle)
     out: dict = {"_reference": pick_reference(man, reference), "_manifest": man}
     for item in man["items"]:
         tid = item["id"]
@@ -305,7 +306,7 @@ def drawn(x, sr, window, col_s: float = DRAWN_COL_S):
     """
     a, b = int(window[0] * sr), min(int(window[1] * sr), len(x))
     seg = np.abs(np.asarray(x[a:b], dtype=np.float64))
-    n = max(1, int(round(col_s * sr)))
+    n = max(1, round(col_s * sr))
     if seg.size < n:
         return (float("nan"),) * 3
     cols = seg[:(seg.size // n) * n].reshape(-1, n).max(axis=1)
@@ -333,7 +334,9 @@ def envelope_report(tracks, references, window, col_s: float = DRAWN_COL_S) -> s
     """
     def fmt(v, width, sign=""):
         # `v == v` is the NaN test: a percentile that landed on digital silence.
-        return format(v, f">{sign}{width}.1f") if v == v else format("--", f">{width}")
+        if v != v:  # noqa: PLR0124
+            return format("--", f">{width}")
+        return format(v, f">{sign}{width}.1f")
 
     def cell(v, sign=""):
         return fmt(v, 8, sign)

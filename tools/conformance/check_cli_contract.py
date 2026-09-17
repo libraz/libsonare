@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Validate and exercise the cross-surface CLI JSON contract.
 
 The manifest is deliberately independent of either CLI implementation.  That
@@ -28,16 +27,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # `_validate_option` and `validate_payload` are not called here; the conformance
 # self-tests reach every checker helper through this module, so both stay part of
 # its surface.
-from cli_contract_artifacts import _check_artifact  # noqa: E402
-from cli_contract_fixtures import _resolve_argv, _write_fixtures  # noqa: E402
-from cli_contract_inventory import (  # noqa: E402
+from cli_contract_artifacts import _check_artifact
+from cli_contract_fixtures import _resolve_argv, _write_fixtures
+from cli_contract_inventory import (
     _accepted_names,
     _build_shared_option_snapshot,
     _compare_active_inventory_options,
     _expected_paths,
     _validate_inventory,
 )
-from cli_contract_payload import (  # noqa: E402
+from cli_contract_payload import (
     _compare_payloads,
     _compare_values,
     _validate_analyze_case_relationships,
@@ -46,7 +45,7 @@ from cli_contract_payload import (  # noqa: E402
     parse_single_json,
     validate_payload,  # noqa: F401
 )
-from cli_contract_schema import (  # noqa: E402
+from cli_contract_schema import (
     _normalized_option_inventory,
     _validate_option,  # noqa: F401
     validate_manifest,
@@ -116,8 +115,8 @@ def _resolved_python_library(python_executable: str, timeout: float) -> str | No
             [
                 python_executable,
                 "-c",
-                "from libsonare._ffi import resolved_library_path;"
-                "print(resolved_library_path())",
+                ("from libsonare._ffi import resolved_library_path;"
+                "print(resolved_library_path())"),
             ],
             cwd=str(cwd),
             env=environment,
@@ -278,8 +277,8 @@ def _check_artifact_skew(
     report.append(
         (
             "fail",
-            f"artifact skew: {straddling.relative_to(ROOT)} changed after {behind} "
-            f"was linked and before {ahead} was -- rebuild both before comparing",
+            (f"artifact skew: {straddling.relative_to(ROOT)} changed after {behind} "
+            f"was linked and before {ahead} was -- rebuild both before comparing"),
         )
     )
 
@@ -481,8 +480,8 @@ def _run_active_cases(
                 report.append(
                     (
                         "fail",
-                        f"{label}: expected {expected_stderr} stderr, "
-                        f"got {result['stderr'][:160]!r}",
+                        (f"{label}: expected {expected_stderr} stderr, "
+                        f"got {result['stderr'][:160]!r}"),
                     )
                 )
             _check_text_expectations(case, result, label, report)
@@ -541,8 +540,8 @@ def _run_active_cases(
                 report.append(
                     (
                         "fail",
-                        f"{label} [legacy]: expected {expected_stderr} stderr, "
-                        f"got {legacy_result['stderr'][:160]!r}",
+                        (f"{label} [legacy]: expected {expected_stderr} stderr, "
+                        f"got {legacy_result['stderr'][:160]!r}"),
                     )
                 )
             _check_text_expectations(case, legacy_result, f"{label} [legacy]", report)
@@ -642,8 +641,8 @@ def _check_text_expectations(
                 report.append(
                     (
                         "fail",
-                        f"{label}: expected {stream} to contain {needle!r}, "
-                        f"got {actual[:160]!r}",
+                        (f"{label}: expected {stream} to contain {needle!r}, "
+                        f"got {actual[:160]!r}"),
                     )
                 )
     for needle in case.get("stdout_excludes") or []:
@@ -651,8 +650,8 @@ def _check_text_expectations(
             report.append(
                 (
                     "fail",
-                    f"{label}: expected stdout not to contain {needle!r}, "
-                    f"got {result['stdout'][:160]!r}",
+                    (f"{label}: expected stdout not to contain {needle!r}, "
+                    f"got {result['stdout'][:160]!r}"),
                 )
             )
 

@@ -21,7 +21,6 @@ from cli_contract_schema import (
     _is_number,
 )
 
-
 _SECTION_TYPE_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 
 # A chord symbol as the core spells it: a root, a quality suffix, and an
@@ -404,12 +403,11 @@ def _validate_case_payload(
                 report.append(
                     (
                         "fail",
-                        f"{label}.sections[{index}].type: expected lowercase-kebab section type, "
-                        f"got {section_type!r}",
+                        (f"{label}.sections[{index}].type: expected lowercase-kebab section type, "
+                        f"got {section_type!r}"),
                     )
                 )
-    if path == "analyze":
-        if case_id == "with_seventh":
+    if path == "analyze" and case_id == "with_seventh":
             # What the flag promises is that the template set is not restricted
             # to the four triads, so that is what this asserts. It used to look
             # for a name ending in "7", which was a proxy rather than the
@@ -428,8 +426,8 @@ def _validate_case_payload(
                 report.append(
                     (
                         "fail",
-                        f"{label}.chords: --with-seventh must widen the vocabulary past the "
-                        f"four triads; got {chords!r}",
+                        (f"{label}.chords: --with-seventh must widen the vocabulary past the "
+                        f"four triads; got {chords!r}"),
                     )
                 )
     if path == "mastering" and case_id == "target_within_ceiling":
@@ -466,8 +464,8 @@ def _validate_case_payload(
             report.append(
                 (
                     "fail",
-                    f"{label}.output_lufs: ceiling-limited run must stop short of "
-                    f"its target, got {output_lufs!r}",
+                    (f"{label}.output_lufs: ceiling-limited run must stop short of "
+                    f"its target, got {output_lufs!r}"),
                 )
             )
     if path == "spectral":
@@ -510,8 +508,8 @@ def _validate_case_payload(
                     report.append(
                         (
                             "fail",
-                            f"{label}.features.{name}: canonical statistic keys differ "
-                            f"({'; '.join(details)})",
+                            (f"{label}.features.{name}: canonical statistic keys differ "
+                            f"({'; '.join(details)})"),
                         )
                     )
     if path == "voice-change":
@@ -785,16 +783,16 @@ def _validate_voice_case_relationships(
             report.append(
                 (
                     "fail",
-                    f"{surface}.voice-change.{case_id}.length: expected {expected_length}, "
-                    f"got {payload.get('length')!r}",
+                    (f"{surface}.voice-change.{case_id}.length: expected {expected_length}, "
+                    f"got {payload.get('length')!r}"),
                 )
             )
         if payload.get("sample_rate") != expected_rate:
             report.append(
                 (
                     "fail",
-                    f"{surface}.voice-change.{case_id}.sample_rate: expected {expected_rate}, "
-                    f"got {payload.get('sample_rate')!r}",
+                    (f"{surface}.voice-change.{case_id}.sample_rate: expected {expected_rate}, "
+                    f"got {payload.get('sample_rate')!r}"),
                 )
             )
     simple = payloads.get(("voice-change", "simple"))
@@ -815,16 +813,16 @@ def _validate_voice_case_relationships(
             report.append(
                 (
                     "fail",
-                    f"{surface}.voice-change.preset.preset: expected 'bright-idol', "
-                    f"got {preset.get('preset')!r}",
+                    (f"{surface}.voice-change.preset.preset: expected 'bright-idol', "
+                    f"got {preset.get('preset')!r}"),
                 )
             )
         if preset.get("latency_samples") != 1042:
             report.append(
                 (
                     "fail",
-                    f"{surface}.voice-change.preset.latency_samples: expected 1042, "
-                    f"got {preset.get('latency_samples')!r}",
+                    (f"{surface}.voice-change.preset.latency_samples: expected 1042, "
+                    f"got {preset.get('latency_samples')!r}"),
                 )
             )
     custom = payloads.get(("voice-change", "custom"))
@@ -832,7 +830,7 @@ def _validate_voice_case_relationships(
         report.append(
             (
                 "fail",
-                f"{surface}.voice-change.custom.latency_samples: expected actual custom latency 82, "
-                f"got {custom.get('latency_samples')!r}",
+                (f"{surface}.voice-change.custom.latency_samples: expected actual custom latency 82, "
+                f"got {custom.get('latency_samples')!r}"),
             )
         )

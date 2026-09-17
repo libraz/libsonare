@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Hold every chord-quality name table to the core enum, ordinal by ordinal.
 
 ``sonare::ChordQuality`` has no name accessor on the C ABI, so each surface
@@ -688,7 +687,7 @@ def find_constant(root: Path, where: tuple[str, str]) -> int | None:
         return None
     stripped = strip_lexical(text)
     values = re.findall(rf"\b{re.escape(name)}\b\s*=\s*(-?\d+)", stripped)
-    values += re.findall(rf"^\s*#\s*define\s+{re.escape(name)}\s+(-?\d+)", stripped, re.M)
+    values += re.findall(rf"^\s*#\s*define\s+{re.escape(name)}\s+(-?\d+)", stripped, re.MULTILINE)
     return int(values[0]) if len(values) == 1 else None
 
 
@@ -854,9 +853,9 @@ def _suffix_failures(scan: Scan) -> list[tuple[str, list[str]]]:
     if missing:
         failures.append(
             (
-                "These suffix tables could not be read. A suffix table nothing reads is "
+                ("These suffix tables could not be read. A suffix table nothing reads is "
                 "a spelling nothing compares, and the chord names it builds go on "
-                "looking like chord names -- re-point the entry at the table",
+                "looking like chord names -- re-point the entry at the table"),
                 missing,
             )
         )
@@ -871,12 +870,12 @@ def _suffix_failures(scan: Scan) -> list[tuple[str, list[str]]]:
     if stray:
         failures.append(
             (
-                "These suffix tables are looked up by a quality name, and a key that is "
+                ("These suffix tables are looked up by a quality name, and a key that is "
                 "not one can never be hit. The lookup falls back to the empty suffix, "
                 "which is also the spelling of a major chord, so a key set gone stale "
                 "renders every chord as a bare root -- a plausible-looking result rather "
                 "than a failure, and one that comparing the values that still resolve "
-                "cannot see",
+                "cannot see"),
                 stray,
             )
         )
@@ -918,10 +917,10 @@ def _suffix_failures(scan: Scan) -> list[tuple[str, list[str]]]:
     if split:
         failures.append(
             (
-                "These ordinals are spelled differently by two chord-symbol tables. Both "
+                ("These ordinals are spelled differently by two chord-symbol tables. Both "
                 "build a chord name a caller reads, so one chord is named two ways "
                 "depending on which surface produced it, and neither name is wrong on "
-                "its face",
+                "its face"),
                 split,
             )
         )
@@ -942,11 +941,11 @@ def _suffix_failures(scan: Scan) -> list[tuple[str, list[str]]]:
     if drift:
         failures.append(
             (
-                "The template-label table diverges from the chord symbols somewhere it "
+                ("The template-label table diverges from the chord symbols somewhere it "
                 "is not allowed to. It is a vocabulary of its own only at the declared "
                 "ordinals; everywhere else the two spell one suffix, and a template "
                 "labelled with a suffix no chord is ever named with matches nothing a "
-                "caller can look it up by",
+                "caller can look it up by"),
                 drift,
             )
         )
@@ -976,10 +975,10 @@ def _suffix_failures(scan: Scan) -> list[tuple[str, list[str]]]:
     if gaps:
         failures.append(
             (
-                "The Roman-numeral table has no arm for a quality the chord-symbol "
+                ("The Roman-numeral table has no arm for a quality the chord-symbol "
                 "tables spell. Its suffixes are a vocabulary of their own and are not "
                 "compared for spelling, but a quality it omits falls to the default and "
-                "renders as the bare scale degree -- the numeral of a plain triad",
+                "renders as the bare scale degree -- the numeral of a plain triad"),
                 gaps,
             )
         )
@@ -998,12 +997,12 @@ def _suffix_failures(scan: Scan) -> list[tuple[str, list[str]]]:
     if stale:
         failures.append(
             (
-                "These suffix exceptions excused nothing. An exception outlives its "
+                ("These suffix exceptions excused nothing. An exception outlives its "
                 "divergence as a reviewed decision about a spelling, so the next "
                 "divergence to land at that ordinal inherits it unexamined -- delete the "
                 "exception in the change that removes what it excused. An exception "
                 "whose comparison never ran is not listed here; that is reported as a "
-                "table this check could not read",
+                "table this check could not read"),
                 stale,
             )
         )
@@ -1043,10 +1042,10 @@ def evaluate(root: Path = ROOT, floor: dict | None = None) -> list[tuple[str, li
     if stale:
         failures.append(
             (
-                "These spelling exemptions name an enumerator the core no longer has. An "
+                ("These spelling exemptions name an enumerator the core no longer has. An "
                 "exemption that matches nothing still blesses a spelling, so the next "
                 "enumerator to take that name inherits it unexamined -- delete the "
-                "exemption in the change that removes its enumerator",
+                "exemption in the change that removes its enumerator"),
                 stale,
             )
         )
@@ -1059,9 +1058,9 @@ def evaluate(root: Path = ROOT, floor: dict | None = None) -> list[tuple[str, li
     if missing:
         failures.append(
             (
-                "These tables could not be located. The core enum has no name accessor on "
+                ("These tables could not be located. The core enum has no name accessor on "
                 "the C ABI, so each surface carries its own copy and a copy this check "
-                "cannot read is a copy nothing compares -- re-point the entry at the table",
+                "cannot read is a copy nothing compares -- re-point the entry at the table"),
                 missing,
             )
         )
@@ -1093,9 +1092,9 @@ def evaluate(root: Path = ROOT, floor: dict | None = None) -> list[tuple[str, li
     if drift:
         failures.append(
             (
-                "These tables disagree with the core enum at an ordinal. A table is read "
+                ("These tables disagree with the core enum at an ordinal. A table is read "
                 "by ordinal, so a wrong entry labels a detected chord as a different "
-                "chord rather than failing -- restore the mapping, or renumber nothing",
+                "chord rather than failing -- restore the mapping, or renumber nothing"),
                 drift,
             )
         )
@@ -1113,9 +1112,9 @@ def evaluate(root: Path = ROOT, floor: dict | None = None) -> list[tuple[str, li
     if sets:
         failures.append(
             (
-                "These tables are keyed by name, and their key set no longer matches the "
+                ("These tables are keyed by name, and their key set no longer matches the "
                 "core enum. A quality the set omits is one the facade silently renders as "
-                "something else",
+                "something else"),
                 sets,
             )
         )

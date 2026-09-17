@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Print a compact JSON analysis of an audio file."""
 
 from __future__ import annotations

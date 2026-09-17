@@ -36,9 +36,8 @@ entirely (but counted).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 import re
+from dataclasses import dataclass, field
 
 from allowlist import AGREED, DIVERGED, Allowlist
 from core_defaults import CoreConfig
@@ -162,11 +161,8 @@ def _is_lifecycle_key(key: str) -> bool:
     """
     return (
         key.startswith("free_")
-        or key.endswith("_free")
+        or key.endswith(("_free", "_create", "_create_json", "_destroy"))
         or "_free_" in key
-        or key.endswith("_create")
-        or key.endswith("_create_json")
-        or key.endswith("_destroy")
     )
 
 
@@ -539,7 +535,7 @@ def build_report(
             present_free = key in indexed.get(s, {})
             present_method = key in candidate_methods
             covered = present_free or present_method
-            if not covered:
+            if not covered:  # noqa: SIM102 -- one chain of attempts with its twin below
                 # Handle-instance C key (``mixer_add_bus``): the facade exposes
                 # the same op as a bare class method (``Mixer.add_bus`` -> key
                 # ``add_bus``), so the handle prefix is stripped there. The tail

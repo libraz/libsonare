@@ -5,9 +5,7 @@ from __future__ import annotations
 import sys
 
 import numpy as np
-
 from metrics import ladder_present
-
 
 # Past this much delay between a note-on and the strike, the host scheduled the
 # note rather than the instrument being slow to speak. Well above any real
@@ -116,7 +114,7 @@ def print_percussion_summary(summary: dict) -> None:
             continue
         print("  note   centroid(Hz)   attack(ms)   decay(ms)   crest(dB)", file=sys.stderr)
         for n in notes:
-            def loudest(table):
+            def loudest(table, n=n):
                 by_vel = table.get(n) or {}
                 return by_vel[max(by_vel, key=int)] if by_vel else float("nan")
             print(f"  {int(n):4d}   {loudest(s['centroid_hz']):12.0f}   "

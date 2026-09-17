@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Accept the mixing assistant's scene suggestion across the language surfaces.
 
 The C ABI is the oracle.  Python drives
@@ -30,7 +29,6 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 import numpy as np
-
 
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON_SRC = ROOT / "bindings" / "python" / "src"
@@ -707,7 +705,7 @@ def main() -> int:
         print(f"mix assistant cross-surface: FAIL: {exc}", file=sys.stderr)
         return 1
     except (
-        Exception
+        Exception  # noqa: BLE001 -- last resort of a CLI: report, never re-raise
     ) as exc:  # pragma: no cover - preserve actionable CLI failure context.
         print(
             f"mix assistant cross-surface: FAIL: unexpected {type(exc).__name__}: {exc}",

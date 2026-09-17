@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Check that every C-ABI pointer declaration states its lifecycle contract.
 
 Three different obligations travel under the same ``*`` in a public header, and

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Regression tests for the lint-scope agreement check.
 
 The failure it exists for is quiet: widening a gate in the Makefile alone leaves
@@ -20,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import check_lint_scope as mod  # noqa: E402
+import check_lint_scope as mod
 
 MAKEFILE = """
 format:
@@ -132,7 +131,7 @@ def _run_all() -> int:
         try:
             t()
             print(f"ok   {t.__name__}")
-        except AssertionError as e:  # noqa: PERF203
+        except AssertionError as e:
             failed += 1
             print(f"FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")

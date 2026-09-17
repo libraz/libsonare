@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import check_binding_warning_flags as checker  # noqa: E402
+import check_binding_warning_flags as checker
 
 
 def _database(tmp: Path, layer: checker.Layer, entries: list[tuple[str, str]]) -> Path:

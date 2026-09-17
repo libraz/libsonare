@@ -64,11 +64,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import bank  # noqa: E402
-import catalogue as catalogue_mod  # noqa: E402
-import signoff  # noqa: E402
-from _repo import REPO_ROOT  # noqa: E402
-from toneclass import canonical_dimensions  # noqa: E402
+import bank
+import catalogue as catalogue_mod
+import signoff
+from _repo import REPO_ROOT
+from toneclass import canonical_dimensions
 
 HERE = Path(__file__).resolve().parent
 REFERENCE_DIR = HERE / "reference"
@@ -374,7 +374,7 @@ def build(catalogue) -> list[dict]:
     voices = bank.voices(catalogue=catalogue, kits=kits)
     cands = open_candidates()
     claims = signoff.load()
-    generation, unit_versions = signoff.bank_versions(BANK_VERSIONS)
+    _generation, unit_versions = signoff.bank_versions(BANK_VERSIONS)
     shared_gen = signoff.moved_generation(BANK_VERSIONS, {"shared"})
     drum_gen = signoff.moved_generation(BANK_VERSIONS, {"drum"})
     rows = []
@@ -471,7 +471,7 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
     if unwritten:
         print(f"  {unwritten} recorded calibration setting(s) not written back")
     for g in goals:
-        step = STAGES[int(round(g["stage"] * 5))]
+        step = STAGES[round(g["stage"] * 5)]
         print(f"  goal {g['name']}: {g['met']}/{g['total']} at {step} ({g['stage']:.1f})")
         if g["short"] and goal is not None:
             print("    short: " + ", ".join(r["slug"] for r in g["short"]))

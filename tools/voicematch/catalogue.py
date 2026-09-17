@@ -150,8 +150,9 @@ def dump_catalogue(
         env.pop("SONARE_TUNING_OVERRIDES", None)
         if lib_path:
             env["SONARE_LIB_PATH"] = lib_path
+        # The template is Python source; its braces belong to the generated code.
         child = (
-            "import sys; sys.path.insert(0, %r)\n"
+            "import sys; sys.path.insert(0, %r)\n"  # noqa: UP031
             "from patterns import build_pattern, pattern_length\n"
             "from smf import write_smf\n"
             "import render_model\n"
@@ -166,7 +167,7 @@ def dump_catalogue(
             notes, pattern, program, program, bank, sr,
         )
         proc = subprocess.run([sys.executable, "-c", child], env=env,
-                              capture_output=True, text=True)
+                              capture_output=True, check=False, text=True)
         if proc.returncode != 0:
             raise RuntimeError(f"knob dump render failed:\n{proc.stderr[-2000:]}")
         if not dump.exists():

@@ -12,7 +12,6 @@ import math
 import re
 from typing import Any
 
-
 _TOP_LEVEL_KEYS = {
     "schema_version",
     "contract",
@@ -400,18 +399,22 @@ def _validate_object_schema(
             )
 
     for key in field_schemas:
-        if isinstance(required, list) and key not in required:
-            if not isinstance(optional, list) or key not in optional:
-                errors.append(
-                    f"{label}: property {key!r} is neither required nor optional"
-                )
+        if (
+            isinstance(required, list)
+            and key not in required
+            and (not isinstance(optional, list) or key not in optional)
+        ):
+            errors.append(f"{label}: property {key!r} is neither required nor optional")
 
     for key in ("additional_properties", "additionalProperties"):
         if key in value and not _is_bool(value[key]):
             errors.append(f"{label}.{key}: expected a boolean")
-    if "additional_properties" in value and "additionalProperties" in value:
-        if value["additional_properties"] != value["additionalProperties"]:
-            errors.append(f"{label}: additional property flags disagree")
+    if (
+        "additional_properties" in value
+        and "additionalProperties" in value
+        and value["additional_properties"] != value["additionalProperties"]
+    ):
+        errors.append(f"{label}: additional property flags disagree")
 
 
 def _validate_payload_schema(value: Any, label: str, errors: list[str]) -> None:

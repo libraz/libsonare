@@ -215,8 +215,8 @@ def _compare_active_inventory_options(
             report.append(
                 (
                     "fail",
-                    f"inventory.shared.{path}: native/Python active option schemas differ\n"
+                    (f"inventory.shared.{path}: native/Python active option schemas differ\n"
                     f"  native: {left!r}\n"
-                    f"  python: {right!r}",
+                    f"  python: {right!r}"),
                 )
             )
