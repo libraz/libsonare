@@ -17,7 +17,7 @@ import type {
   NoiseDetection,
   ReverbDetection,
   TrimRange,
-} from './public_types_mastering';
+} from './public_types_repair';
 
 function requireModule() {
   return getSonareModule();

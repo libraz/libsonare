@@ -3,6 +3,7 @@ export * from './public_types_mastering';
 export * from './public_types_mixing';
 export * from './public_types_music';
 export * from './public_types_realtime';
+export * from './public_types_repair';
 export * from './public_types_spectral';
 
 /** Runtime capabilities reported by the loaded libsonare build. */
