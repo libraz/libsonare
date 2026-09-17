@@ -150,9 +150,10 @@ def _exit_code_for(exc: BaseException) -> int:
     return EXIT_ERROR
 
 
-# NOTE: Some C++ CLI commands (melody, boundaries, cqt variants, and low-level
-# math/unit converters) are not mirrored here yet. Several already have Python
-# library backing; this note tracks CLI parity, not Python API availability.
+# Which commands this CLI carries and which it deliberately does not is recorded
+# per command in tests/conformance/cli_contract_v2.json, where a one-sided one
+# states its reason and a checker compares the two front-ends. A hand-kept list
+# here would be a second answer to the same question, and the one nothing reads.
 
 
 def _load_audio(path: str) -> tuple[list[float], int]:
