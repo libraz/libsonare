@@ -227,16 +227,23 @@ describe('feature entry points share one nFft rule', () => {
     expect(() => featureEntryPoints[name]({})).not.toThrow();
   });
 
-  it.each(entryPointNames)('%s reports a fractional nFft as a TypeError, as Node does', (name) => {
-    expect(() => featureEntryPoints[name]({ nFft: 2048.9 })).toThrow(TypeError);
+  it.each(entryPointNames)('%s reports a fractional nFft as a RangeError, as Node does', (name) => {
+    // The same class the odd-nFft case below gets: both are numbers outside the
+    // domain, and reporting one as a TypeError said the value had the wrong kind.
+    expect(() => featureEntryPoints[name]({ nFft: 2048.9 })).toThrow(RangeError);
     expect(() => featureEntryPoints[name]({ nFft: 2048.9 })).toThrow(/nFft must be an integer/);
   });
 
-  it.each(entryPointNames)('%s reports a fractional hopLength as a TypeError', (name) => {
-    expect(() => featureEntryPoints[name]({ hopLength: 512.5 })).toThrow(TypeError);
+  it.each(entryPointNames)('%s reports a fractional hopLength as a RangeError', (name) => {
+    expect(() => featureEntryPoints[name]({ hopLength: 512.5 })).toThrow(RangeError);
     expect(() => featureEntryPoints[name]({ hopLength: 512.5 })).toThrow(
       /hopLength must be an integer/,
     );
+  });
+
+  it.each(entryPointNames)('%s still reports a non-number nFft as a TypeError', (name) => {
+    // The half the single check could not name: wrong kind, not wrong value.
+    expect(() => featureEntryPoints[name]({ nFft: '2048' as unknown as number })).toThrow(TypeError);
   });
 
   it.each(entryPointNames)('%s rejects an odd nFft the same way', (name) => {

@@ -22,7 +22,7 @@ import {
   assertHpssKernels,
   assertInt32,
   assertInt64,
-  assertIntegerType,
+  assertIntegerValue,
   assertSampleRate,
 } from './validation.js';
 
@@ -372,8 +372,8 @@ function assertNoteSetEntries(fnName: string, notes: readonly NoteSetEntry[]): v
     if (!Number.isFinite(note?.frameStart) || !Number.isFinite(note?.frameEnd)) {
       throw new TypeError(`${fnName}: notes[${index}] must carry a finite frameStart and frameEnd`);
     }
-    assertIntegerType(fnName, note.frameStart, `notes[${index}].frameStart`);
-    assertIntegerType(fnName, note.frameEnd, `notes[${index}].frameEnd`);
+    assertIntegerValue(fnName, note.frameStart, `notes[${index}].frameStart`);
+    assertIntegerValue(fnName, note.frameEnd, `notes[${index}].frameEnd`);
   }
 }
 

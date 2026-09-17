@@ -1,6 +1,6 @@
 import {
   assertEvenIntegerAtLeast,
-  assertIntegerType,
+  assertIntegerValue,
   assertPositiveInteger,
 } from './validation.js';
 
@@ -31,9 +31,9 @@ export function resolveFftOptions(
 ): { nFft: number; hopLength: number } {
   const resolvedNFft = nFft === undefined ? 2048 : nFft;
   const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
-  assertIntegerType(fnName, resolvedNFft, 'nFft');
+  assertIntegerValue(fnName, resolvedNFft, 'nFft');
   assertEvenIntegerAtLeast(fnName, resolvedNFft, 'nFft', 2, 2 ** 30);
-  assertIntegerType(fnName, resolvedHopLength, 'hopLength');
+  assertIntegerValue(fnName, resolvedHopLength, 'hopLength');
   assertPositiveInteger(fnName, resolvedHopLength, 'hopLength');
   return { nFft: resolvedNFft, hopLength: resolvedHopLength };
 }

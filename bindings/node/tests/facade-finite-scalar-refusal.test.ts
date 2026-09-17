@@ -200,9 +200,11 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     // argument the entry point had stopped reading.
     expect(withBound(10)[1]?.frameEnd).not.toBe(withBound(11)[1]?.frameEnd);
 
-    // The addon narrows this field by truncation, so 10.7 arrived as frame 10.
-    expect(() => withBound(10.7)).toThrow(TypeError);
+    // A number outside the integer domain, so RangeError -- the class a wrong
+    // TYPE would get is reserved for a wrong type.
+    expect(() => withBound(10.7)).toThrow(RangeError);
     expect(() => withBound(10.7)).toThrow(/notes\[0\]\.frameEnd must be an integer/);
+    expect(() => withBound('10' as unknown as number)).toThrow(TypeError);
 
     // A missing or non-finite bound keeps the message that names that instead.
     expect(() => withBound(Number.NaN)).toThrow(/notes\[0\] must carry a finite/);

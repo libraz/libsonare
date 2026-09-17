@@ -174,28 +174,15 @@ export function assertNibble(fnName: string, value: number, argName: string): nu
 }
 
 /**
- * Reject anything `Number.isInteger` refuses, wrong type included.
+ * Split "not an integer" into the two mistakes it can be: `TypeError` when the
+ * value is not a `number` at all, `RangeError` when it is a number but not
+ * integral -- the right-type, wrong-domain half of the same message.
  *
- * `Number.isInteger` already returns `false` for a value that is not a
- * `number` at all, so a separate `typeof` guard ahead of it would be dead
- * code: the two collapse to one class (`TypeError`) and one message here.
- */
-export function assertIntegerType(
-  fnName: string,
-  value: unknown,
-  argName: string,
-): asserts value is number {
-  if (!Number.isInteger(value)) {
-    throw new TypeError(`${fnName}: ${argName} must be an integer`);
-  }
-}
-
-/**
- * Split "not an integer" the way some option resolvers report it: `TypeError`
- * when the value is not a `number` at all, `RangeError` when it is a number
- * but not integral -- the right-type, wrong-domain half of the same message.
- * Unlike {@link assertIntegerType}, the two halves are distinguishable, so
- * both checks are needed.
+ * `Number.isInteger` alone answers both, which is why a single check reads as
+ * sufficient; what it cannot do is say which one happened, and a caller can act
+ * only on the mistake they made. The classes are the contract on this surface,
+ * so a sibling argument in the same call must not report a fraction differently
+ * from this one.
  */
 export function assertIntegerValue(
   fnName: string,
