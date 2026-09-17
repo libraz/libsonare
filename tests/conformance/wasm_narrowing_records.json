@@ -75,6 +75,16 @@
       "file": "bindings/project/project_edit.cpp",
       "symbol": "automationTargetKindFromVal",
       "reason": "The sibling enum resolver for the automation target kind. Like automationCurveFromVal it exists to accept both spellings of one enum, and its numeric path requires a finite, integral ordinal inside the enum's bounds before the cast, so a saturated, negative or fractional one is refused rather than landing on a member."
+    },
+    {
+      "file": "bindings/project/project_transcribe.cpp",
+      "symbol": "signedField",
+      "reason": "Not a conversion: the narrowing is delegated whole to the shared floatProperty, and what is local is the field's own sign domain, asked only when the key is present. Presence has to be what decides it -- 0 is the C ABI's 'use the library default' on all six of these fields, and an omitted key still has to arrive as 0, so a value check would either refuse omission or accept a written zero and answer with a default under a number the caller did not choose. Both directions measured: with each key omitted and again explicitly undefined or null, the note list is identical to the baseline, while a written 0 on referenceHz, minNoteMs or segmentationThresholdCents and a non-negative velocityFloorDb are refused with InvalidParameter."
+    },
+    {
+      "file": "bindings/project/project_transcribe.cpp",
+      "symbol": "velocityField",
+      "reason": "signedField's standing, over the shared intProperty, for the one transcription field whose domain is a range rather than a sign. The same presence gate applies for the same reason, and 0 is additionally not a MIDI velocity. Measured: 0 and 128 are refused with InvalidParameter, omission reproduces the baseline exactly, and a fixedVelocity of 77 is observed on every emitted note-on, so the field is read rather than merely accepted. The message wording is the Node facade's verbatim, so one domain reports one way on both surfaces."
     }
   ],
   "positional": {
