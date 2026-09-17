@@ -15,6 +15,7 @@
 
 BUILD_DIR ?= build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
+GOLDEN_BUILD_DIR := build-golden
 ACCURACY_REPORT_JSON ?= $(CURDIR)/build-optional-fixtures/accuracy-report.json
 INSTALL_PREFIX_DIR := $(CURDIR)/build-install-prefix
 RYE ?= rye
@@ -115,8 +116,16 @@ test-slow: build fixtures
 
 # Golden regressions are hidden from the default Catch2 run so they can be
 # invoked explicitly in local development and CI.
-test-golden: build fixtures
-	./$(BUILD_DIR)/bin/sonare_tests "[golden]"
+#
+# Release, in its own directory, for two independent reasons. The recorded
+# digests come from a Release build, and comparing them against a Debug one asks
+# whether two optimization levels agree rather than whether the code changed.
+# And $(BUILD_DIR) is shared: depending on `build` would reconfigure whatever
+# another session has in it, mid-run, as a side effect of running a test.
+test-golden: fixtures
+	$(CMAKE) -B $(GOLDEN_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
+	$(CMAKE) --build $(GOLDEN_BUILD_DIR) $(BUILD_PARALLEL) --target sonare_tests
+	./$(GOLDEN_BUILD_DIR)/bin/sonare_tests "[golden]"
 
 test-optional-fixtures:
 	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
