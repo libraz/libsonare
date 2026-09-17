@@ -1628,9 +1628,10 @@ def _build_parser() -> _ContractArgumentParser:
         parents=[common],
         help="Load a mixer scene (JSON file or preset) and optionally render inputs",
         description=(
-            "Input WAVs are loaded as mono (stereo files are downmixed) and each "
-            "mono input is duplicated across both output channels. Inputs at a "
-            "different sample rate are resampled to --sample-rate before mixing."
+            "A stereo input keeps its own two channels and a mono one is carried "
+            "on both; an input with more channels than a strip has is downmixed, "
+            "with a warning. Inputs at a different sample rate are resampled to "
+            "--sample-rate before mixing."
         ),
     )
     mix_group = mix_p.add_mutually_exclusive_group(required=True)
@@ -1642,11 +1643,11 @@ def _build_parser() -> _ContractArgumentParser:
         default=[],
         metavar="[ID=]WAV",
         help=(
-            "Input WAV for one strip (repeat once per fed strip); loaded as mono "
-            "and resampled to --sample-rate; requires --output to render. ID names "
-            "the strip and defaults to the file's base name, and a strip no entry "
-            "names is fed silence. Entries that name no strip at all are taken "
-            "positionally instead, one per strip in scene order"
+            "Input WAV for one strip (repeat once per fed strip); resampled to "
+            "--sample-rate; requires --output to render. ID names the strip and "
+            "defaults to the file's base name, and a strip no entry names is fed "
+            "silence. Entries that name no strip at all are taken positionally "
+            "instead, one per strip in scene order"
         ),
     )
     mix_p.add_argument(

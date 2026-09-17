@@ -156,19 +156,72 @@ def _exit_code_for(exc: BaseException) -> int:
 # here would be a second answer to the same question, and the one nothing reads.
 
 
-def _load_audio(path: str) -> tuple[list[float], int]:
-    """Load audio from file via the Audio class.
+def _source_channel_count(path: str) -> int:
+    """Probe a file's source channel count, or 0 when it cannot be read.
 
-    ``Audio.from_file`` always returns a mono signal: stereo (and higher
-    channel-count) inputs are downmixed to a single channel on load. Callers
-    that render stereo output (for example ``mix``) therefore start from a mono
-    source and duplicate it across channels rather than preserving the original
-    channels.
+    Advisory, exactly as the native CLI treats it: the successful decoder stays
+    authoritative, so a probe failure on a container an optional external
+    decoder handles must not fail a command that decodes it perfectly well.
     """
     from .audio import Audio
 
+    try:
+        return int(Audio.file_channel_count(path))
+    except Exception:
+        return 0
+
+
+def _load_audio(path: str) -> tuple[list[float], int]:
+    """Load audio from file via the Audio class, downmixed to one channel.
+
+    ``Audio.from_file`` always returns a mono signal: stereo (and higher
+    channel-count) inputs are downmixed to a single channel on load. A caller
+    that must preserve the source channels uses :func:`_load_audio_channels`
+    instead; this one warns when it drops any, so a command that is mono by
+    nature still says what it did to the input.
+
+    The warning is the native CLI's, in its wording: both front-ends downmix on
+    the same commands, and a warning on only one of them is a difference a user
+    would read as a difference in what was processed.
+    """
+    from .audio import Audio
+
+    channels = _source_channel_count(path)
+    if channels > 1:
+        print(
+            f"warning: {channels}-channel input is downmixed to mono by this CLI command; "
+            "use the stereo library API for channel-preserving processing",
+            file=sys.stderr,
+        )
     with Audio.from_file(path) as audio:
         return audio.data, audio.sample_rate
+
+
+def _load_audio_channels(path: str) -> tuple[list[list[float]], int]:
+    """Load every source channel of a file, in source order.
+
+    Returns one buffer per channel rather than a downmix, for the commands that
+    write audio back out and would otherwise deliver a mono file for a stereo
+    input. A mono source takes the single-decode path, so nothing pays for this
+    that does not have channels to keep.
+
+    Raises:
+        SonareError: As :meth:`Audio.from_file` does.
+    """
+    from .audio import Audio
+
+    channels = _source_channel_count(path)
+    if channels <= 1:
+        samples, sample_rate = _load_audio(path)
+        return [samples], sample_rate
+
+    planes: list[list[float]] = []
+    sample_rate = 0
+    for index in range(channels):
+        with Audio.from_file_channel(path, index) as audio:
+            planes.append(audio.data)
+            sample_rate = audio.sample_rate
+    return planes, sample_rate
 
 
 def _load_audio_from_facade(path: str) -> tuple[list[float], int]:

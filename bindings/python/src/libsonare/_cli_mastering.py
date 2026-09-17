@@ -12,12 +12,15 @@ from ._cli_common import (
     _atomic_wav_writer,
     _atomic_write_bytes,
     _float_sequence,
+    _load_audio_channels,
     _parse_json_config,
     _parse_json_list,
     _parse_kv_params,
     _resample,
+    _source_channel_count,
     _strict_json_dumps,
     _write_wav,
+    _write_wav_stereo,
     _write_wav_stereo_frames,
 )
 from ._cli_common import (
@@ -682,17 +685,22 @@ def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
 
 
 def cmd_mastering_chain(args: argparse.Namespace) -> int:
-    from . import mastering_chain
+    from . import mastering_chain, mastering_chain_stereo
 
-    samples, sr = _load_audio(args.file)
+    planes, sr = _load_for_stereo_chain(args.file)
     config = _parse_json_config(args.config, args.config_file)
     if args.params:
         config.update(_parse_kv_params(args.params))
-    result = mastering_chain(samples, sample_rate=sr, config=config)
+    if len(planes) == 2:
+        result = mastering_chain_stereo(planes[0], planes[1], sample_rate=sr, config=config)
+        rendered = [result.left, result.right]
+    else:
+        result = mastering_chain(planes[0], sample_rate=sr, config=config)
+        rendered = [result.samples]
     report_path = getattr(args, "report", "")
 
     if args.output:
-        _write_wav(args.output, result.samples, result.sample_rate)
+        _write_chain_output(args.output, rendered, result.sample_rate)
     if report_path:
         _write_mastering_report(report_path, result.report)
 
@@ -717,18 +725,50 @@ def cmd_mastering_chain(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_master(args: argparse.Namespace) -> int:
-    from . import master_audio
+def _load_for_stereo_chain(path: str) -> tuple[list[list[float]], int]:
+    """Load a file as a stereo pair where it is one, and as mono otherwise.
 
-    samples, sr = _load_audio(args.file)
+    The mastering chain has a mono and a stereo entry point and nothing wider,
+    so a two-channel source is the only one that can be carried through whole.
+    Anything else goes through the downmixing loader, which says so: silently
+    keeping channel 0 of a surround file would deliver a quarter of the record
+    under the name of a master.
+    """
+    if _source_channel_count(path) == 2:
+        return _load_audio_channels(path)
+    samples, sample_rate = _load_audio(path)
+    return [samples], sample_rate
+
+
+def _write_chain_output(path: str, channels: list[list[float]], sample_rate: int) -> None:
+    """Write however many channels the chain produced."""
+    if len(channels) == 2:
+        _write_wav_stereo(path, channels[0], channels[1], sample_rate)
+    else:
+        _write_wav(path, channels[0], sample_rate)
+
+
+def cmd_master(args: argparse.Namespace) -> int:
+    from . import master_audio, master_audio_stereo
+
+    planes, sr = _load_for_stereo_chain(args.file)
     overrides = _parse_json_config(args.config, args.config_file)
     if args.params:
         overrides.update(_parse_kv_params(args.params))
-    result = master_audio(samples, sample_rate=sr, preset_name=args.preset, overrides=overrides)
+    if len(planes) == 2:
+        result = master_audio_stereo(
+            planes[0], planes[1], sample_rate=sr, preset_name=args.preset, overrides=overrides
+        )
+        rendered = [result.left, result.right]
+    else:
+        result = master_audio(
+            planes[0], sample_rate=sr, preset_name=args.preset, overrides=overrides
+        )
+        rendered = [result.samples]
     report_path = getattr(args, "report", "")
 
     if args.output:
-        _write_wav(args.output, result.samples, result.sample_rate)
+        _write_chain_output(args.output, rendered, result.sample_rate)
     if report_path:
         _write_mastering_report(report_path, result.report)
 
@@ -1252,9 +1292,31 @@ def cmd_mixing_preset(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_strip_pair(path: str, sample_rate: int) -> tuple[list[float], list[float]]:
+    """Load one file as the stereo pair a mixer strip processes.
+
+    A strip is stereo, so a mono file is carried on both sides and a stereo one
+    keeps its own two channels instead of being folded and duplicated, which
+    threw away the image of every stereo stem fed to the mixer. A source with
+    more channels than a strip has goes through the downmixing loader, which
+    says so.
+    """
+    if _source_channel_count(path) == 2:
+        planes, in_sr = _load_audio_channels(path)
+        left, right = list(planes[0]), list(planes[1])
+    else:
+        samples, in_sr = _load_audio(path)
+        left = list(samples)
+        right = list(left)
+    if in_sr != sample_rate:
+        left = list(_resample(left, in_sr, sample_rate))
+        right = list(_resample(right, in_sr, sample_rate))
+    return left, right
+
+
 def _mix_strip_channels(
     entries: list[str], strip_ids: list[str], sample_rate: int
-) -> tuple[list[list[float]], int]:
+) -> tuple[list[list[float]], list[list[float]], int]:
     """Resolve ``--input`` entries onto the scene's strips, in strip order.
 
     Two spellings normalize here so the rest of the command sees one shape.
@@ -1270,12 +1332,12 @@ def _mix_strip_channels(
     A strip no entry names is fed silence rather than dropped: it may still
     carry an insert whose tail belongs in the mix.
 
-    Returns the per-strip buffers and their shared length. Inputs shorter than
-    the longest are padded rather than the set being truncated to the shortest,
-    which would delete a part that only enters late in the song.
+    Returns the per-strip left and right buffers and their shared length. Inputs
+    shorter than the longest are padded rather than the set being truncated to
+    the shortest, which would delete a part that only enters late in the song.
     """
-    resolved: dict[int, list[float]] = {}
-    positional: list[list[float]] = []
+    resolved: dict[int, tuple[list[float], list[float]]] = {}
+    positional: list[tuple[list[float], list[float]]] = []
     addressed = False
     index_of = {strip_id: index for index, strip_id in enumerate(strip_ids)}
 
@@ -1289,10 +1351,7 @@ def _mix_strip_channels(
         if not path:
             raise ValueError(f"--input requires a file path: {entry}")
 
-        samples, in_sr = _load_audio(path)
-        if in_sr != sample_rate:
-            samples = _resample(samples, in_sr, sample_rate)
-        buffer = list(samples)
+        pair = _load_strip_pair(path, sample_rate)
 
         target = index_of.get(track_id)
         if target is None:
@@ -1303,12 +1362,12 @@ def _mix_strip_channels(
                     f"--input names strip {track_id!r}, which the scene does not have "
                     f"(strips: {', '.join(strip_ids)})"
                 )
-            positional.append(buffer)
+            positional.append(pair)
             continue
         if target in resolved:
             raise ValueError(f"--input names strip {track_id!r} more than once")
         addressed = True
-        resolved[target] = buffer
+        resolved[target] = pair
 
     if addressed and positional:
         raise ValueError(
@@ -1320,12 +1379,19 @@ def _mix_strip_channels(
             f"scene has {len(strip_ids)} strips but {len(positional)} inputs were given; "
             "name them as --input ID=WAV to feed only some of them"
         )
-    for index, buffer in enumerate(positional):
-        resolved[index] = buffer
+    for index, pair in enumerate(positional):
+        resolved[index] = pair
 
-    length = max((len(buffer) for buffer in resolved.values()), default=0)
-    channels = [resolved.get(index, []) for index in range(len(strip_ids))]
-    return [buffer + [0.0] * (length - len(buffer)) for buffer in channels], length
+    length = max((len(pair[0]) for pair in resolved.values()), default=0)
+
+    def _padded(side: int) -> list[list[float]]:
+        out: list[list[float]] = []
+        for index in range(len(strip_ids)):
+            buffer = resolved[index][side] if index in resolved else []
+            out.append(buffer + [0.0] * (length - len(buffer)))
+        return out
+
+    return _padded(0), _padded(1), length
 
 
 def cmd_mix(args: argparse.Namespace) -> int:
@@ -1368,15 +1434,19 @@ def cmd_mix(args: argparse.Namespace) -> int:
                     f"scene text declares {len(strip_ids)} strips but the mixer compiled "
                     f"{strip_count}"
                 )
-            channels, length = _mix_strip_channels(args.input, strip_ids, args.sample_rate)
+            left_channels, right_channels, length = _mix_strip_channels(
+                args.input, strip_ids, args.sample_rate
+            )
             mixer.compile()
             # The mixer reports its graph latency separately. Output begins at
             # sample zero without trimming so routing alignment is preserved.
             with _atomic_wav_writer(args.output, 2, args.sample_rate) as wav:
                 for offset in range(0, length or 0, args.block_size):
                     end = min(offset + args.block_size, length or 0)
-                    block = [channel[offset:end] for channel in channels]
-                    result = mixer.process_stereo(block, block)
+                    result = mixer.process_stereo(
+                        [channel[offset:end] for channel in left_channels],
+                        [channel[offset:end] for channel in right_channels],
+                    )
                     _write_wav_stereo_frames(wav, result.left, result.right)
                     rendered_samples += len(result.left)
 

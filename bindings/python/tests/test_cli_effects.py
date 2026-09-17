@@ -797,6 +797,151 @@ def test_mix_cli_refuses_an_input_it_cannot_place(tmp_path, inputs, message) -> 
     assert not output.exists()
 
 
+def _write_stereo_wav(path: str, left: list[float], right: list[float], sample_rate: int) -> None:
+    """Write stereo 16-bit PCM using only the standard library."""
+    frames = bytearray()
+    for l_value, r_value in zip(left, right, strict=True):
+        frames += struct.pack("<h", int(round(max(-1.0, min(1.0, l_value)) * 32767.0)))
+        frames += struct.pack("<h", int(round(max(-1.0, min(1.0, r_value)) * 32767.0)))
+    with wave.open(path, "wb") as wav:
+        wav.setnchannels(2)
+        wav.setsampwidth(2)
+        wav.setframerate(int(sample_rate))
+        wav.writeframes(bytes(frames))
+
+
+def _side_energy(path: str) -> float:
+    """Sum of |L-R| over a stereo file; zero exactly when the channels are equal."""
+    with wave.open(path, "rb") as wav:
+        assert wav.getnchannels() == 2
+        frames = wav.readframes(wav.getnframes())
+    values = struct.unpack(f"<{len(frames) // 2}h", frames)
+    return sum(abs(values[index] - values[index + 1]) for index in range(0, len(values), 2))
+
+
+def test_master_cli_keeps_a_stereo_input_stereo(tmp_path) -> None:
+    """A stereo file is mastered as a pair, not folded to mono and written back.
+
+    The channel count alone would pass on a mono result duplicated across two
+    channels, so the side energy is read too: it must survive, and the stage
+    list must carry a stage the mono chain has no way to run.
+    """
+    source = tmp_path / "mix.wav"
+    output = tmp_path / "master.wav"
+    length = 48000
+    left = [0.2 * math.sin(2.0 * math.pi * 220.0 * i / 48000) for i in range(length)]
+    right = [0.2 * math.sin(2.0 * math.pi * 330.0 * i / 48000) for i in range(length)]
+    _write_stereo_wav(str(source), left, right, 48000)
+
+    result = _run_cli(["master", str(source), "-o", str(output), "--preset", "pop", "--json"])
+
+    assert result.returncode == 0, result.stderr
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnchannels() == 2
+    assert _side_energy(str(output)) > 0
+    assert any(stage.startswith("stereo.") for stage in json.loads(result.stdout)["stages"])
+    # Nothing was dropped, so the downmix warning must not be printed.
+    assert "downmixed to mono" not in result.stderr
+
+
+def test_master_cli_keeps_a_mono_input_mono(tmp_path) -> None:
+    """The stereo path is taken from the source, not applied to everything."""
+    source = tmp_path / "take.wav"
+    output = tmp_path / "master.wav"
+    _write_test_wav(str(source), _generate_sine(220, 48000, 1.0), 48000)
+
+    result = _run_cli(["master", str(source), "-o", str(output), "--preset", "pop", "--json"])
+
+    assert result.returncode == 0, result.stderr
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnchannels() == 1
+
+
+def test_mix_cli_keeps_a_stereo_stem_stereo(tmp_path) -> None:
+    """A stereo stem reaches the strip as its own two channels.
+
+    Compared against the same stem folded to mono and written back out as two
+    identical channels: that render has no side content at all, which is what
+    the mixer used to receive for every stereo input.
+
+    The scene is one strip straight to master rather than a built-in preset,
+    because every preset carrying an effect return generates side content of its
+    own -- a plate reverb decorrelates a mono input -- and the control would then
+    measure the reverb rather than the stem.
+    """
+    scene = tmp_path / "direct.json"
+    scene.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "strips": [{"id": "vocal"}],
+                "buses": [{"id": "master", "role": "master"}],
+                "connections": [{"source": "vocal", "destination": "master"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    scene = str(scene)
+    stereo_source = tmp_path / "vocal.wav"
+    folded_source = tmp_path / "folded.wav"
+    length = 24000
+    left = [0.2 * math.sin(2.0 * math.pi * 220.0 * i / 48000) for i in range(length)]
+    right = [0.2 * math.sin(2.0 * math.pi * 330.0 * i / 48000) for i in range(length)]
+    _write_stereo_wav(str(stereo_source), left, right, 48000)
+    mono = [0.5 * (a + b) for a, b in zip(left, right, strict=True)]
+    _write_stereo_wav(str(folded_source), mono, mono, 48000)
+
+    renders = {}
+    for name, source in (("stereo", stereo_source), ("folded", folded_source)):
+        output = tmp_path / f"{name}.wav"
+        assert (
+            _run_cli(
+                # fmt: off
+                [
+                    "mix",
+                    "--scene",
+                    scene,
+                    "--input",
+                    f"vocal={source}",
+                    "--sample-rate",
+                    "48000",
+                    "--output",
+                    str(output),
+                    "--json",
+                ],
+                # fmt: on
+            ).returncode
+            == 0
+        )
+        renders[name] = _side_energy(str(output))
+
+    assert renders["folded"] == 0
+    assert renders["stereo"] > 0
+
+
+def test_cli_warns_once_when_it_downmixes_a_stereo_input(tmp_path) -> None:
+    """A command that is mono by nature says what it did to the channels.
+
+    The native CLI prints this warning and the Python CLI printed nothing, so a
+    user comparing the two front-ends saw a difference in what was processed
+    where there was none.
+    """
+    stereo = tmp_path / "stereo.wav"
+    mono = tmp_path / "mono.wav"
+    length = 4800
+    values = [0.2 * math.sin(2.0 * math.pi * 220.0 * i / 48000) for i in range(length)]
+    _write_stereo_wav(str(stereo), values, [-v for v in values], 48000)
+    _write_test_wav(str(mono), values, 48000)
+
+    noisy = _run_cli(["normalize", str(stereo), "-o", str(tmp_path / "a.wav"), "--json"])
+    quiet = _run_cli(["normalize", str(mono), "-o", str(tmp_path / "b.wav"), "--json"])
+
+    assert noisy.returncode == 0, noisy.stderr
+    assert quiet.returncode == 0, quiet.stderr
+    assert "2-channel input is downmixed to mono" in noisy.stderr
+    assert "downmixed to mono" not in quiet.stderr
+
+
 def test_mix_cli_rejects_output_without_inputs(tmp_path) -> None:
     """An explicit output never succeeds without producing an artifact."""
     output = tmp_path / "missing.wav"
