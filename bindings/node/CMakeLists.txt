@@ -73,11 +73,15 @@ set(ADDON_SOURCES
   src/addon/analysis/progress.cpp
   src/addon/sonare_wrap_effects.cpp
   src/addon/sonare_wrap_polyphony.cpp
-  src/addon/effects/dynamics_repair.cpp
+  src/addon/effects/dynamics.cpp
   src/addon/effects/extra.cpp
   src/addon/effects/mastering.cpp
   src/addon/effects/mixing.cpp
   src/addon/effects/mixing_assistant.cpp
+  src/addon/effects/repair_dereverb.cpp
+  src/addon/effects/repair_impulsive.cpp
+  src/addon/effects/repair_noise.cpp
+  src/addon/effects/repair_trim.cpp
   src/addon/sonare_wrap_features.cpp
   src/addon/features/advanced.cpp
   src/addon/features/rhythm.cpp

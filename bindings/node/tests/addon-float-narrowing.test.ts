@@ -553,7 +553,7 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
   },
   {
     name: 'trim thresholdDb',
-    site: 'effects/dynamics_repair.cpp Trim thresholdDb',
+    site: 'sonare_wrap_effects.cpp Trim thresholdDb',
     control: [-60, -20],
     call: (v) => native.trim(GATED, SAMPLE_RATE, v).length,
   },

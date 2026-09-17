@@ -1073,6 +1073,61 @@ Napi::Value SonareWrap::VoiceChangeRealtime(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, ...)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const float* data = typed.Data();
+  size_t length = typed.ElementLength();
+  int sr = node_narrow_int(env, info[1], "sr");
+  float threshold_db = node_arg_finite_float(info, 2, -60.0f);
+  auto parse_frame_option = [&](size_t index, const char* name, int fallback, int* output) {
+    if (info.Length() <= index || info[index].IsUndefined()) {
+      *output = fallback;
+      return true;
+    }
+    if (!info[index].IsNumber()) {
+      Napi::TypeError::New(env, std::string("trim: ") + name + " must be an integer")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    const double value = info[index].As<Napi::Number>().DoubleValue();
+    if (!std::isfinite(value) || std::floor(value) != value) {
+      Napi::RangeError::New(env, std::string("trim: ") + name + " must be an integer")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    if (value <= 0 || value > std::numeric_limits<int>::max()) {
+      Napi::RangeError::New(env, std::string("trim: ") + name + " must be a positive integer")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    *output = static_cast<int>(value);
+    return true;
+  };
+  int frame_length = sonare::constants::kDefaultNFft;
+  int hop_length = sonare::constants::kDefaultHopLength;
+  if (!parse_frame_option(3, "frameLength", sonare::constants::kDefaultNFft, &frame_length) ||
+      !parse_frame_option(4, "hopLength", sonare::constants::kDefaultHopLength, &hop_length)) {
+    return env.Undefined();
+  }
+
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(data, length, sr);
+  sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
+  sonare::Audio result = sonare::trim_absolute(audio, threshold_db, frame_length, hop_length);
+  std::vector<float> out_vec(result.data(), result.data() + result.size());
+  return VecToFloat32(env, out_vec);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
