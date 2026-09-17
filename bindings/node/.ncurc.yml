@@ -1,0 +1,19 @@
+# Packages `ncu -u` must not raise, and why. Drop an entry once its blocker is
+# gone so the next run picks the package up again.
+#
+# A reject only stops ncu from rewriting the range; it does not stop semver
+# resolution. Anything held below a published minor is pinned exactly in
+# package.json.
+
+# Yarn refuses to install versions younger than npmMinimalAgeGate (24h by
+# default, and .yarnrc.yml leaves it at the default), so proposing them here
+# would only produce an uninstallable package.json.
+cooldown: 1d
+
+reject:
+  # typescript: v7 is the native port and its npm package ships only tsc.js,
+  # getExePath and version — the compiler API is gone, so `import * as ts from
+  # 'typescript'` in tests/type-exports.test.ts resolves to lib/version and
+  # every ts.Symbol / ts.Type / ts.TypeFlags reference fails with TS2694/TS2339.
+  - typescript
+

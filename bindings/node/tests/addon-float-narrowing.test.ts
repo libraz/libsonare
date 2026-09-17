@@ -606,17 +606,18 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
 ];
 
 describe('an optional float argument is refused rather than saturated', () => {
-  it.each(
-    FINITE_ARGUMENTS.map((argument) => [argument.name, argument] as const),
-  )('%s', (_name, argument) => {
-    const [low, high] = argument.control;
-    // Positive control: the argument is consumed, so an entry point that
-    // ignored it could not reach the refusals below looking like this one.
-    expect(argument.call(low)).not.toBe(argument.call(high));
-    for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
-      expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
-    }
-  });
+  it.each(FINITE_ARGUMENTS.map((argument) => [argument.name, argument] as const))(
+    '%s',
+    (_name, argument) => {
+      const [low, high] = argument.control;
+      // Positive control: the argument is consumed, so an entry point that
+      // ignored it could not reach the refusals below looking like this one.
+      expect(argument.call(low)).not.toBe(argument.call(high));
+      for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
+        expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
+      }
+    },
+  );
 });
 
 /**
@@ -646,23 +647,24 @@ const PASSTHRU_ARGUMENTS: FloatArgument[] = [
 ];
 
 describe('a gamma keeps its NaN, which selects the automatic ERB value', () => {
-  it.each(
-    PASSTHRU_ARGUMENTS.map((argument) => [argument.name, argument] as const),
-  )('%s', (_name, argument) => {
-    const [automatic, standardCqt] = argument.control;
-    expect(argument.call(automatic)).not.toBe(argument.call(standardCqt));
-    // NaN resolves to the same automatic value a negative gamma selects, which
-    // is what a finite refusal here would have taken away.
-    expect(argument.call(Number.NaN)).toBe(argument.call(automatic));
-    for (const value of PAST_FLOAT_RANGE) {
-      expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
-    }
-    // An infinity is refused by the core's own finiteness check rather than by
-    // the reader, so it is NOT a RangeError. This is why the discriminating
-    // value above has to be a finite 1e39.
-    expect(() => argument.call(Number.POSITIVE_INFINITY)).toThrow();
-    expect(() => argument.call(Number.POSITIVE_INFINITY)).not.toThrow(RangeError);
-  });
+  it.each(PASSTHRU_ARGUMENTS.map((argument) => [argument.name, argument] as const))(
+    '%s',
+    (_name, argument) => {
+      const [automatic, standardCqt] = argument.control;
+      expect(argument.call(automatic)).not.toBe(argument.call(standardCqt));
+      // NaN resolves to the same automatic value a negative gamma selects, which
+      // is what a finite refusal here would have taken away.
+      expect(argument.call(Number.NaN)).toBe(argument.call(automatic));
+      for (const value of PAST_FLOAT_RANGE) {
+        expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
+      }
+      // An infinity is refused by the core's own finiteness check rather than by
+      // the reader, so it is NOT a RangeError. This is why the discriminating
+      // value above has to be a finite 1e39.
+      expect(() => argument.call(Number.POSITIVE_INFINITY)).toThrow();
+      expect(() => argument.call(Number.POSITIVE_INFINITY)).not.toThrow(RangeError);
+    },
+  );
 });
 
 describe('the table covers the whole reader population', () => {
@@ -837,15 +839,16 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
 ];
 
 describe('a required float argument is refused rather than saturated', () => {
-  it.each(
-    REQUIRED_FLOAT_ARGUMENTS.map((argument) => [argument.name, argument] as const),
-  )('%s', (_name, argument) => {
-    const [low, high] = argument.control;
-    expect(argument.call(low)).not.toBe(argument.call(high));
-    for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
-      expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
-    }
-  });
+  it.each(REQUIRED_FLOAT_ARGUMENTS.map((argument) => [argument.name, argument] as const))(
+    '%s',
+    (_name, argument) => {
+      const [low, high] = argument.control;
+      expect(argument.call(low)).not.toBe(argument.call(high));
+      for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
+        expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
+      }
+    },
+  );
 });
 
 /** The block the automation rows mix. */
@@ -1165,15 +1168,16 @@ const REQUIRED_FLOAT_STATE_ARGUMENTS: FloatArgument[] = [
 ];
 
 describe('a required float state setter is refused rather than saturated', () => {
-  it.each(
-    REQUIRED_FLOAT_STATE_ARGUMENTS.map((argument) => [argument.name, argument] as const),
-  )('%s', (_name, argument) => {
-    const [low, high] = argument.control;
-    expect(argument.call(low)).not.toBe(argument.call(high));
-    for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
-      expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
-    }
-  });
+  it.each(REQUIRED_FLOAT_STATE_ARGUMENTS.map((argument) => [argument.name, argument] as const))(
+    '%s',
+    (_name, argument) => {
+      const [low, high] = argument.control;
+      expect(argument.call(low)).not.toBe(argument.call(high));
+      for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
+        expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
+      }
+    },
+  );
 });
 
 /**
@@ -1251,15 +1255,16 @@ const KEY_AND_ELEMENT_ARGUMENTS: FloatArgument[] = [
 ];
 
 describe('an object key and an array element are refused rather than saturated', () => {
-  it.each(
-    KEY_AND_ELEMENT_ARGUMENTS.map((argument) => [argument.name, argument] as const),
-  )('%s', (_name, argument) => {
-    const [low, high] = argument.control;
-    expect(argument.call(low)).not.toBe(argument.call(high));
-    for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
-      expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
-    }
-  });
+  it.each(KEY_AND_ELEMENT_ARGUMENTS.map((argument) => [argument.name, argument] as const))(
+    '%s',
+    (_name, argument) => {
+      const [low, high] = argument.control;
+      expect(argument.call(low)).not.toBe(argument.call(high));
+      for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
+        expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
+      }
+    },
+  );
 
   it('refuses a non-numeric array entry by index instead of substituting a legal one', () => {
     expect(() => native.tempogramRatio(TEMPOGRAM, 32, SAMPLE_RATE, 512, ['2'])).toThrow(
@@ -1403,18 +1408,19 @@ const C_ABI_FLOAT_ARGUMENTS: CAbiFloatArgument[] = [
 ];
 
 describe('a unit conversion keeps the C ABI conversion rather than refusing', () => {
-  it.each(
-    C_ABI_FLOAT_ARGUMENTS.map((argument) => [argument.name, argument] as const),
-  )('%s', (_name, argument) => {
-    const [low, high] = argument.control;
-    expect(argument.call(low)).not.toBe(argument.call(high));
-    for (const [input, expected] of argument.propagates) {
-      expect(argument.call(input), `${argument.name} ${input}`).toBe(expected);
-    }
-    // Permissive about the VALUE, not about the type: the entry point's own
-    // gate still refuses a non-number by name.
-    expect(() => argument.call('440' as unknown as number)).toThrow(TypeError);
-  });
+  it.each(C_ABI_FLOAT_ARGUMENTS.map((argument) => [argument.name, argument] as const))(
+    '%s',
+    (_name, argument) => {
+      const [low, high] = argument.control;
+      expect(argument.call(low)).not.toBe(argument.call(high));
+      for (const [input, expected] of argument.propagates) {
+        expect(argument.call(input), `${argument.name} ${input}`).toBe(expected);
+      }
+      // Permissive about the VALUE, not about the type: the entry point's own
+      // gate still refuses a non-number by name.
+      expect(() => argument.call('440' as unknown as number)).toThrow(TypeError);
+    },
+  );
 });
 
 /**

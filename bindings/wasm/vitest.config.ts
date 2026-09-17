@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     alias: {
-      './sonare.js': path.resolve(__dirname, 'dist/sonare.js'),
+      './sonare.js': path.resolve(import.meta.dirname, 'dist/sonare.js'),
     },
   },
   test: {

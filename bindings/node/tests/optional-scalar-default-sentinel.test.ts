@@ -57,11 +57,12 @@ describe('mastering releaseMs', () => {
         : { samples, sampleRate: SR, targetLufs: -6, releaseMs },
     ).samples;
 
-  it.each(
-    NON_SENTINEL_REFUSED,
-  )('refuses %s instead of using the default', (_label, value, refusal) => {
-    expect(() => master(value)).toThrow(refusal);
-  });
+  it.each(NON_SENTINEL_REFUSED)(
+    'refuses %s instead of using the default',
+    (_label, value, refusal) => {
+      expect(() => master(value)).toThrow(refusal);
+    },
+  );
 
   it('treats 0 as the library default rather than a release of zero', () => {
     const omitted = master();
@@ -84,28 +85,24 @@ describe('meteringSpectrum optional scalars', () => {
   const spectrum = (options: Record<string, number> = {}) =>
     meteringSpectrum(samples, SR, options as never).db;
 
-  it.each([
-    'nFft',
-    'octaveFraction',
-    'dbRef',
-    'dbAmin',
-  ])('refuses a negative %s instead of using the default', (field) => {
-    expect(() => spectrum({ [field]: -5 })).toThrow();
-  });
+  it.each(['nFft', 'octaveFraction', 'dbRef', 'dbAmin'])(
+    'refuses a negative %s instead of using the default',
+    (field) => {
+      expect(() => spectrum({ [field]: -5 })).toThrow();
+    },
+  );
 
   it.each(['nFft', 'octaveFraction'])('refuses a non-finite %s', (field) => {
     expect(() => spectrum({ [field]: Number.NaN })).toThrow();
     expect(() => spectrum({ [field]: Number.POSITIVE_INFINITY })).toThrow();
   });
 
-  it.each([
-    'nFft',
-    'octaveFraction',
-    'dbRef',
-    'dbAmin',
-  ])('treats 0 for %s as the library default', (field) => {
-    expect(Array.from(spectrum({ [field]: 0 }))).toEqual(Array.from(spectrum()));
-  });
+  it.each(['nFft', 'octaveFraction', 'dbRef', 'dbAmin'])(
+    'treats 0 for %s as the library default',
+    (field) => {
+      expect(Array.from(spectrum({ [field]: 0 }))).toEqual(Array.from(spectrum()));
+    },
+  );
 
   it('applies a non-sentinel dbRef and nFft', () => {
     // The controls for the equalities above: both fields really reach the core.

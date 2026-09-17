@@ -94,11 +94,12 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.16",
-    "@types/node": "^22.0.0",
-    "ajv": "^8.17.1",
+    "@biomejs/biome": "^2.5.13",
+    "@types/node": "^22.20.3",
+    "ajv": "^8.20.0",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   }
 }

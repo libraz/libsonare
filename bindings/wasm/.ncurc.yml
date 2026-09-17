@@ -1,0 +1,20 @@
+# Packages `ncu -u` must not raise, and why. Drop an entry once its blocker is
+# gone so the next run picks the package up again.
+#
+# A reject only stops ncu from rewriting the range; it does not stop semver
+# resolution. Anything held below a published minor is pinned exactly in
+# package.json.
+
+# Yarn refuses to install versions younger than npmMinimalAgeGate (24h by
+# default, and .yarnrc.yml leaves it at the default), so proposing them here
+# would only produce an uninstallable package.json.
+cooldown: 1d
+
+reject:
+  # typescript: this package's own typing gate passes under v7, but the node
+  # binding cannot leave v6 (its type-export test uses the compiler API, which
+  # the v7 package no longer ships). Two bindings emitting their .d.ts from
+  # different compiler majors is the drift the lockstep rule exists to prevent,
+  # so v7 is taken for both surfaces at once or neither.
+  - typescript
+

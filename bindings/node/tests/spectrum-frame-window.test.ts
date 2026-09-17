@@ -49,29 +49,28 @@ function expectSameSpectrum(
 }
 
 describe('meteringSpectrumFrame validates only the analysis frame', () => {
-  it.each([
-    Number.NaN,
-    Number.POSITIVE_INFINITY,
-    Number.NEGATIVE_INFINITY,
-  ])('accepts %p outside the frame and returns the clean spectrum', (bad) => {
-    const expected = meteringSpectrumFrame(tone(), SR, FRAME_OFFSET, { nFft: N_FFT });
-    const actual = meteringSpectrumFrame(toneWith(4000, bad), SR, FRAME_OFFSET, { nFft: N_FFT });
-    expectSameSpectrum(actual, expected);
-    expect(Math.max(...actual.magnitude)).toBeGreaterThan(0);
-  });
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'accepts %p outside the frame and returns the clean spectrum',
+    (bad) => {
+      const expected = meteringSpectrumFrame(tone(), SR, FRAME_OFFSET, { nFft: N_FFT });
+      const actual = meteringSpectrumFrame(toneWith(4000, bad), SR, FRAME_OFFSET, { nFft: N_FFT });
+      expectSameSpectrum(actual, expected);
+      expect(Math.max(...actual.magnitude)).toBeGreaterThan(0);
+    },
+  );
 
-  it.each([
-    Number.NaN,
-    Number.POSITIVE_INFINITY,
-  ])('refuses %p inside the frame by absolute buffer index', (bad) => {
-    // The offending sample sits 176 samples into a frame that starts at 1024,
-    // so the exact index separates an absolute report from a frame-relative
-    // one -- and this is the assertion a deleted scan cannot survive.
-    const badIndex = FRAME_OFFSET + 176;
-    expect(() =>
-      meteringSpectrumFrame(toneWith(badIndex, bad), SR, FRAME_OFFSET, { nFft: N_FFT }),
-    ).toThrow(`meteringSpectrumFrame: samples contains NaN or Inf at index ${badIndex}`);
-  });
+  it.each([Number.NaN, Number.POSITIVE_INFINITY])(
+    'refuses %p inside the frame by absolute buffer index',
+    (bad) => {
+      // The offending sample sits 176 samples into a frame that starts at 1024,
+      // so the exact index separates an absolute report from a frame-relative
+      // one -- and this is the assertion a deleted scan cannot survive.
+      const badIndex = FRAME_OFFSET + 176;
+      expect(() =>
+        meteringSpectrumFrame(toneWith(badIndex, bad), SR, FRAME_OFFSET, { nFft: N_FFT }),
+      ).toThrow(`meteringSpectrumFrame: samples contains NaN or Inf at index ${badIndex}`);
+    },
+  );
 
   it('treats the frame as half-open at both edges', () => {
     // The inside cases fail if the scan is deleted; the outside cases fail if it
