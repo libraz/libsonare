@@ -15,10 +15,13 @@ SURFACES = {
     "node": ROOT / "bindings/node/src",
     "wasm": ROOT / "bindings/wasm/src",
 }
+# A leading underscore marks a module as internal: no `index.ts` re-exports one,
+# so everything it exports is a helper shared between facades rather than a
+# one-shot API a consumer can call. That is structural, so it is a prefix rule
+# rather than a manifest -- splitting a facade creates such a module routinely,
+# and a hand-listed name would turn every split into a coverage failure.
+INTERNAL_PREFIX = "_"
 EXCLUDED = {
-    "_chain_config.ts",
-    "_feature_options.ts",
-    "_fft_options.ts",
     "errors.ts",
     "native.ts",
     "validation.ts",
@@ -238,7 +241,7 @@ def main() -> int:
     exempt: list[str] = []
     for surface, directory in SURFACES.items():
         for path in sorted(directory.glob("*.ts")):
-            if path.name in EXCLUDED:
+            if path.name.startswith(INTERNAL_PREFIX) or path.name in EXCLUDED:
                 continue
             text = path.read_text()
             for name in functions(path):
