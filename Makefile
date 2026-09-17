@@ -366,6 +366,15 @@ test-hardening: test-hardening-asan test-hardening-tsan test-hardening-host test
 # options off together is invisible to a matrix that only turns one off at a
 # time. Tests are excluded so a failure points at the shipped library and the
 # CLI rather than at test code that assumes a full-feature build.
+#
+# Each row checks that its option actually went off before spending a build on
+# it. A dependency rule in CMakeLists.txt may force an option back ON -- which
+# is a legitimate thing for it to do -- and the row then configures, compiles
+# and passes while being a byte-for-byte duplicate of the default build. Green,
+# expensive, and evidence of nothing. Reading the resolved value back out of the
+# cache is what separates the two, and it costs one `cmake -L` rather than a
+# full core build: a forced row is reported and skipped, and the target exits
+# non-zero at the end naming every option that is not currently switchable.
 FEATURE_MATRIX_OPTIONS := BUILD_MASTERING BUILD_MIXING BUILD_MIXING_ASSISTANT BUILD_GRAPH \
        BUILD_FX BUILD_ACOUSTIC_SIM BUILD_PITCH_EDITOR BUILD_VOICE_CHANGER BUILD_ARRANGEMENT \
        BUILD_ASSIST
@@ -373,15 +382,33 @@ FEATURE_MATRIX_ALL_OFF := $(foreach opt,$(FEATURE_MATRIX_OPTIONS),-D$(opt)=OFF)
 
 build-feature-matrix:
 	@set -e; \
+	forced=""; \
 	for opt in $(FEATURE_MATRIX_OPTIONS); do \
 	  dir="build-feature-$$(echo $$opt | tr 'A-Z_' 'a-z-')-off"; \
 	  echo "=== $$opt=OFF ($$dir) ==="; \
 	  $(CMAKE) -B "$$dir" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DSONARE_WITH_FFMPEG=OFF -D$$opt=OFF > "$$dir.log" 2>&1 || { cat "$$dir.log"; exit 1; }; \
+	  resolved=$$($(CMAKE) -L -N "$$dir" 2>/dev/null | sed -n "s/^$$opt:BOOL=//p"); \
+	  case "$$resolved" in \
+	    OFF|0|FALSE|NO|N|IGNORE|NOTFOUND|"") ;; \
+	    *) echo "    SKIPPED: a dependency rule forced $$opt back to $$resolved, so this row would rebuild the default configuration"; \
+	       grep -i "enabling $$opt" "$$dir.log" | sed 's/^/    /' || true; \
+	       forced="$$forced $$opt"; \
+	       continue;; \
+	  esac; \
 	  $(CMAKE) --build "$$dir" --parallel $(HARDENING_JOBS) >> "$$dir.log" 2>&1 || { cat "$$dir.log"; exit 1; }; \
 	done; \
 	echo "=== all features OFF (build-feature-all-off) ==="; \
 	$(CMAKE) -B build-feature-all-off -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DSONARE_WITH_FFMPEG=OFF $(FEATURE_MATRIX_ALL_OFF) > build-feature-all-off.log 2>&1 || { cat build-feature-all-off.log; exit 1; }; \
-	$(CMAKE) --build build-feature-all-off --parallel $(HARDENING_JOBS) >> build-feature-all-off.log 2>&1 || { cat build-feature-all-off.log; exit 1; }
+	$(CMAKE) --build build-feature-all-off --parallel $(HARDENING_JOBS) >> build-feature-all-off.log 2>&1 || { cat build-feature-all-off.log; exit 1; }; \
+	if test -n "$$forced"; then \
+	  echo; \
+	  echo "not switchable, so the matrix cannot cover them:$$forced"; \
+	  echo "Either gate the subsystem that forces each one (the NOT_SUPPORTED stub"; \
+	  echo "pattern in src/c_api/sonare_c_daw.cpp is how the tree already does it),"; \
+	  echo "or drop the option and make the subsystem unconditional. Leaving it in"; \
+	  echo "FEATURE_MATRIX_OPTIONS buys a row that can never differ from default."; \
+	  exit 1; \
+	fi
 
 # Cross-binding parity gate (C API is canonical). Stdlib-only, no build needed:
 # it reads the binding sources directly and exits non-zero on active drift.
