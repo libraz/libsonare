@@ -2,12 +2,12 @@
   "meta": {
     "schema": 1,
     "contract": "tools/mastering-eval/docs/objective.md",
-    "head": "faa51c5ef46b0f234c82267bc856b61dc933b48f",
-    "library": "build-python-shared/lib/libsonare.dylib (Release, BUILD_SHARED=ON)",
+    "head": "5cce8e00446fcfae1bf9861e714f69f63f229e93",
+    "library": "",
     "corpus_seed": 20250915,
-    "corpus_digest": "52efff6dc7e3c3792f8d309aa79d963446c589de451f9b2ee2d5d63b5840d4f0",
+    "corpus_digest": "d43f5b4809547e45cf75b37c4436e61b2d5b46f2a2552b7f111aef02f0e38ce7",
     "corpus_digest_paths": 59,
-    "corpus_tree_digest": "5bb75f6ba6b3616f0c9df05887028a7a074dbe482e0d11b090fa869a5557f707",
+    "corpus_tree_digest": "6f3cc832249ec7f6186f1491a62bb4bfb994b0832bec9a4852524549b7cad58c",
     "preset": "pop",
     "downmix": "mid_mean",
     "unavailable_metrics": {},
@@ -18,45 +18,34 @@
       "mastering": {}
     },
     "numbers_provenance": {
-      "recorded": false,
-      "head": null,
-      "head_committed": null,
-      "status_src": null,
-      "status_all": null,
-      "package": null,
-      "sonare_lib_path": null,
-      "sonare_lib_mtime": null,
-      "why": "the ledger this was read from carries no provenance block, so the tree and the binary these numbers were measured on were not recorded. Unknown, not clean, and not fillable later: that tree state is not in the repository's history"
-    },
-    "non_vacuity_run": "../../tools/mastering-eval/runs/nonvacuity.json",
-    "non_vacuity_corpus_digest": "52efff6dc7e3c3792f8d309aa79d963446c589de451f9b2ee2d5d63b5840d4f0",
-    "non_vacuity_corpus_digest_paths": 59,
-    "non_vacuity_corpus_tree_digest": "5bb75f6ba6b3616f0c9df05887028a7a074dbe482e0d11b090fa869a5557f707",
-    "gate_provenance": {
-      "head": "19f607387a105bb496d824fd850562614a243f92",
-      "head_committed": "2026-09-15T10:42:05+09:00",
+      "recorded": true,
+      "head": "5cce8e00446fcfae1bf9861e714f69f63f229e93",
+      "head_committed": "2026-09-17T14:10:05+09:00",
       "status_src": [],
       "status_all": [
-        "M tools/mastering-eval/README.md",
-        " M tools/mastering-eval/baseline.json",
-        " M tools/mastering-eval/corpus.py",
-        " M tools/mastering-eval/docs/objective.md",
-        " M tools/mastering-eval/metrics_chain.py",
-        " M tools/mastering-eval/nonvacuity.py",
-        " M tools/mastering-eval/run.py",
-        " M tools/mastering-eval/write_baseline.py",
-        " M tools/parity/README.md",
-        " M tools/parity/allowlist.py",
-        " M tools/parity/allowlist.toml",
-        " M tools/parity/check_parity.py",
-        " M tools/parity/compare.py",
-        " M tools/parity/report.py",
-        " M tools/parity/test_allowlist_audit.py"
+        "M bindings/node/src/addon/sonare_wrap_options.h",
+        " M tools/mastering-eval/baseline.json"
       ],
       "package": "/Users/libraz/Projects/libsonare/bindings/python/src/libsonare/__init__.py",
       "sonare_lib_path": "/Users/libraz/Projects/libsonare/build-python-shared/lib/libsonare.dylib",
-      "sonare_lib_mtime": "2026-09-15T09:47:07",
-      "recorded": true
+      "sonare_lib_mtime": "2026-09-17T14:08:00"
+    },
+    "non_vacuity_run": "../../tools/mastering-eval/runs/nonvacuity.json",
+    "non_vacuity_corpus_digest": "d43f5b4809547e45cf75b37c4436e61b2d5b46f2a2552b7f111aef02f0e38ce7",
+    "non_vacuity_corpus_digest_paths": 59,
+    "non_vacuity_corpus_tree_digest": "6f3cc832249ec7f6186f1491a62bb4bfb994b0832bec9a4852524549b7cad58c",
+    "gate_provenance": {
+      "recorded": true,
+      "head": "5cce8e00446fcfae1bf9861e714f69f63f229e93",
+      "head_committed": "2026-09-17T14:10:05+09:00",
+      "status_src": [],
+      "status_all": [
+        "M bindings/node/src/addon/sonare_wrap_options.h",
+        " M tools/mastering-eval/baseline.json"
+      ],
+      "package": "/Users/libraz/Projects/libsonare/bindings/python/src/libsonare/__init__.py",
+      "sonare_lib_path": "/Users/libraz/Projects/libsonare/build-python-shared/lib/libsonare.dylib",
+      "sonare_lib_mtime": "2026-09-17T14:08:00"
     },
     "thresholds": {
       "regression": {
@@ -73,7 +62,7 @@
           "level_matching": "required_for_improvement",
           "improvement_read_from": "delta_level_matched",
           "regression_read_from": "delta",
-          "why": "redraw floor 0.937 dB. Scaling an output by 0.5 with the processing untouched moved it 6.108 dB while every level-independent metric stayed at exactly 0, and the gain_floor degradation's raw +2.623 dB is +0.0199 dB once the level is taken out -- a factor of 132. An improvement on the raw delta can therefore be a gain change",
+          "why": "redraw floor 0.937 dB. Scaling an output by 0.5 with the processing untouched moved it 6.108 dB while every level-independent metric stayed at exactly 0, and the suppression-depth degradation's raw +2.623 dB is +0.0199 dB once the level is taken out -- a factor of 132. An improvement on the raw delta can therefore be a gain change",
           "skip_when": "saturation.seg_snr_db.ceiling_fraction >= 0.9",
           "skip_why": "the clip has taken the row's room to move upward, so it cannot evidence an improvement. It still detects a regression -- a fully saturated row (ceiling_fraction 1.000, saturated true) moved 35.000 -> 30.694 dB for a degraded declick -- which is why stopping only one direction is sound"
         },
@@ -142,14 +131,14 @@
       "resolution": {
         "stoi": {
           "no_resolution_for": [
-            "repair.denoiseClassical.gain_floor",
+            "repair.denoiseClassical.reduction_db",
             "repair.denoiseClassical.over_subtraction",
             "repair.denoiseClassical.spectral_floor",
             "repair.denoiseClassical.noise_estimation_quantile"
           ],
           "measured": {
             "degradation_scale_response_over_floor": {
-              "gain_floor 0.05 -> 0.30": 0.5247,
+              "reduction_db 26 -> 10.46": 0.5247,
               "over_subtraction 2.0 -> 6.0": 1.4943,
               "gain_smoothing on -> off": 0.1564
             },
@@ -188,56 +177,56 @@
           },
           "material": "speech_pink_noise",
           "floor_source": {
-            "gain_floor": "ensembles[D3s]",
+            "reduction_db": "ensembles[D3s]",
             "noise_estimation_quantile": "ensembles[D3s]",
             "over_subtraction": "ensembles[D2s]",
             "spectral_floor": "ensembles[D2s]"
           },
           "knobs": [
-            "gain_floor",
             "noise_estimation_quantile",
             "over_subtraction",
+            "reduction_db",
             "spectral_floor"
           ],
           "ratio_over_floor": {
             "seg_snr_db": {
-              "gain_floor": 0.005,
+              "reduction_db": 0.0229,
               "noise_estimation_quantile": 0.2168,
               "over_subtraction": 0.3373,
               "spectral_floor": 0.025
             },
             "log_kurtosis_ratio": {
-              "gain_floor": 2.8193,
-              "noise_estimation_quantile": 1.1797,
+              "reduction_db": 8.0352,
+              "noise_estimation_quantile": 1.181,
               "over_subtraction": 7.4149,
               "spectral_floor": 1.9455
             },
             "stoi": {
-              "gain_floor": 0.0064,
+              "reduction_db": 0.0289,
               "noise_estimation_quantile": 0.0265,
               "over_subtraction": 0.1038,
               "spectral_floor": 0.0132
             },
             "log_spectral_distance": {
-              "gain_floor": 0.2721,
+              "reduction_db": 1.422,
               "noise_estimation_quantile": 0.0466,
               "over_subtraction": 1.1022,
               "spectral_floor": 0.5123
             },
             "integrated_lufs": {
-              "gain_floor": 0.0534,
+              "reduction_db": 0.1797,
               "noise_estimation_quantile": 0.167,
               "over_subtraction": 1.511,
               "spectral_floor": 0.139
             },
             "true_peak_dbtp": {
-              "gain_floor": 0.01,
+              "reduction_db": 0.0278,
               "noise_estimation_quantile": 0.0854,
               "over_subtraction": 0.1332,
               "spectral_floor": 0.0014
             },
             "band_energy_delta": {
-              "gain_floor": 0.0616,
+              "reduction_db": 0.3005,
               "noise_estimation_quantile": 0.1535,
               "over_subtraction": 0.7738,
               "spectral_floor": 0.1829
@@ -248,16 +237,17 @@
           ],
           "clears_with_room_to_spare": {
             "log_kurtosis_ratio": [
-              "gain_floor",
-              "over_subtraction"
+              "over_subtraction",
+              "reduction_db"
             ]
           },
           "marginal": {
             "log_kurtosis_ratio": {
-              "noise_estimation_quantile": 1.1797,
+              "noise_estimation_quantile": 1.181,
               "spectral_floor": 1.9455
             },
             "log_spectral_distance": {
+              "reduction_db": 1.422,
               "over_subtraction": 1.1022
             },
             "integrated_lufs": {
@@ -280,14 +270,14 @@
     "restoration/sine_click/click/mastering_repair_declick/downmix": {
       "metrics": {
         "seg_snr_db": 33.556789610599374,
-        "log_kurtosis_ratio": 3.3485068527626454,
-        "log_spectral_distance": 5.329350003084897
+        "log_kurtosis_ratio": 3.4885728650870758,
+        "log_spectral_distance": 4.124250060234812
       },
       "metrics_sd": null,
       "delta": {
         "seg_snr_db": 4.763004573438781,
-        "log_kurtosis_ratio": 2.3485068527626454,
-        "log_spectral_distance": -10.035126437606422
+        "log_kurtosis_ratio": 2.4885728650870758,
+        "log_spectral_distance": -11.240226380456505
       },
       "delta_sd": null,
       "realizations": 1,
@@ -315,14 +305,14 @@
     "restoration/sine_click/click/mastering_repair_declick/left": {
       "metrics": {
         "seg_snr_db": 33.05837807869104,
-        "log_kurtosis_ratio": 2.7468847821184537,
-        "log_spectral_distance": 6.474511492202152
+        "log_kurtosis_ratio": 2.8353963681340484,
+        "log_spectral_distance": 5.425488668284399
       },
       "metrics_sd": null,
       "delta": {
         "seg_snr_db": 4.228574633683614,
-        "log_kurtosis_ratio": 1.7468847821184537,
-        "log_spectral_distance": -8.88725246971169
+        "log_kurtosis_ratio": 1.8353963681340484,
+        "log_spectral_distance": -9.936275293629443
       },
       "delta_sd": null,
       "realizations": 1,
@@ -350,14 +340,14 @@
     "restoration/sine_click/click/mastering_repair_declick/right": {
       "metrics": {
         "seg_snr_db": 33.56578603335204,
-        "log_kurtosis_ratio": 3.3557800268112734,
-        "log_spectral_distance": 5.279325119056639
+        "log_kurtosis_ratio": 3.485702475559442,
+        "log_spectral_distance": 4.12444737560087
       },
       "metrics_sd": null,
       "delta": {
         "seg_snr_db": 4.735443802569417,
-        "log_kurtosis_ratio": 2.3557800268112734,
-        "log_spectral_distance": -10.082026430084571
+        "log_kurtosis_ratio": 2.485702475559442,
+        "log_spectral_distance": -11.236904173540339
       },
       "delta_sd": null,
       "realizations": 1,
@@ -384,26 +374,26 @@
     },
     "restoration/chord_click/click/mastering_repair_declick/downmix": {
       "metrics": {
-        "seg_snr_db": 34.40605798785505,
-        "log_kurtosis_ratio": 4.057447679163482,
-        "log_spectral_distance": 14.456841760405279
+        "seg_snr_db": 35.0,
+        "log_kurtosis_ratio": 22.009113970859296,
+        "log_spectral_distance": 0.0001313763510689808
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 23.07157535109965,
-        "log_kurtosis_ratio": 3.0574476791634817,
-        "log_spectral_distance": -34.78303865293951
+        "seg_snr_db": 23.6655173632446,
+        "log_kurtosis_ratio": 21.009113970859296,
+        "log_spectral_distance": -49.239749036993715
       },
       "delta_sd": null,
       "realizations": 1,
       "saturation": {
         "seg_snr_db": {
           "active_frames": 92,
-          "ceiling_frames": 90,
+          "ceiling_frames": 92,
           "floor_frames": 0,
-          "ceiling_fraction": 0.978261,
+          "ceiling_fraction": 1.0,
           "floor_fraction": 0.0,
-          "saturated": false
+          "saturated": true
         }
       },
       "inapplicable_metrics": {
@@ -419,26 +409,26 @@
     },
     "restoration/chord_click/click/mastering_repair_declick/left": {
       "metrics": {
-        "seg_snr_db": 34.41093920858636,
-        "log_kurtosis_ratio": 3.986205882610928,
-        "log_spectral_distance": 14.125676754896997
+        "seg_snr_db": 35.0,
+        "log_kurtosis_ratio": 22.032995818029764,
+        "log_spectral_distance": 0.00020875086736946911
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 22.954526773449395,
-        "log_kurtosis_ratio": 2.986205882610928,
-        "log_spectral_distance": -35.13364109110162
+        "seg_snr_db": 23.54358756486303,
+        "log_kurtosis_ratio": 21.032995818029764,
+        "log_spectral_distance": -49.25910909513125
       },
       "delta_sd": null,
       "realizations": 1,
       "saturation": {
         "seg_snr_db": {
           "active_frames": 92,
-          "ceiling_frames": 90,
+          "ceiling_frames": 92,
           "floor_frames": 0,
-          "ceiling_fraction": 0.978261,
+          "ceiling_fraction": 1.0,
           "floor_fraction": 0.0,
-          "saturated": false
+          "saturated": true
         }
       },
       "inapplicable_metrics": {
@@ -455,14 +445,14 @@
     "restoration/chord_click/click/mastering_repair_declick/right": {
       "metrics": {
         "seg_snr_db": 35.0,
-        "log_kurtosis_ratio": 4.64746488875184,
-        "log_spectral_distance": 13.680294656116162
+        "log_kurtosis_ratio": 22.00119430826432,
+        "log_spectral_distance": 0.00019966272928458644
       },
       "metrics_sd": null,
       "delta": {
         "seg_snr_db": 23.541067913383202,
-        "log_kurtosis_ratio": 3.6474648887518404,
-        "log_spectral_distance": -35.58846216079932
+        "log_kurtosis_ratio": 21.00119430826432,
+        "log_spectral_distance": -49.26855715418619
       },
       "delta_sd": null,
       "realizations": 1,
@@ -489,15 +479,15 @@
     },
     "restoration/sine_hum50/hum/mastering_repair_dehum/downmix": {
       "metrics": {
-        "seg_snr_db": 23.198849552196066,
-        "log_kurtosis_ratio": 1.0221148920021554,
-        "log_spectral_distance": 1.088868422582845
+        "seg_snr_db": 23.627433128377987,
+        "log_kurtosis_ratio": 1.0370880584122235,
+        "log_spectral_distance": 0.34546856279084937
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 4.585027998823961,
-        "log_kurtosis_ratio": 0.02211489200215544,
-        "log_spectral_distance": -1.9394556979757767
+        "seg_snr_db": 5.013611575005882,
+        "log_kurtosis_ratio": 0.03708805841222351,
+        "log_spectral_distance": -2.6828555577677724
       },
       "delta_sd": null,
       "realizations": 1,
@@ -524,15 +514,15 @@
     },
     "restoration/sine_hum50/hum/mastering_repair_dehum/left": {
       "metrics": {
-        "seg_snr_db": 23.210395399330686,
-        "log_kurtosis_ratio": 1.0220784363941489,
-        "log_spectral_distance": 1.0813004911405784
+        "seg_snr_db": 23.627228201770144,
+        "log_kurtosis_ratio": 1.0367713370894758,
+        "log_spectral_distance": 0.3426646487543281
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 4.46288818034137,
-        "log_kurtosis_ratio": 0.02207843639414886,
-        "log_spectral_distance": -1.9355822614870088
+        "seg_snr_db": 4.879720982780828,
+        "log_kurtosis_ratio": 0.036771337089475775,
+        "log_spectral_distance": -2.674218103873259
       },
       "delta_sd": null,
       "realizations": 1,
@@ -559,15 +549,15 @@
     },
     "restoration/sine_hum50/hum/mastering_repair_dehum/right": {
       "metrics": {
-        "seg_snr_db": 23.2093912264133,
-        "log_kurtosis_ratio": 1.0230942576554898,
-        "log_spectral_distance": 1.068543465503202
+        "seg_snr_db": 23.628591936784797,
+        "log_kurtosis_ratio": 1.03657687134933,
+        "log_spectral_distance": 0.32970574963661864
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 4.46194647601661,
-        "log_kurtosis_ratio": 0.02309425765548978,
-        "log_spectral_distance": -1.9490874535459504
+        "seg_snr_db": 4.881147186388109,
+        "log_kurtosis_ratio": 0.036576871349329965,
+        "log_spectral_distance": -2.6879251694125337
       },
       "delta_sd": null,
       "realizations": 1,
@@ -594,15 +584,15 @@
     },
     "restoration/chord_hum60/hum/mastering_repair_dehum/downmix": {
       "metrics": {
-        "seg_snr_db": 17.833539248911073,
-        "log_kurtosis_ratio": 1.0043097501785467,
-        "log_spectral_distance": 0.655281362193562
+        "seg_snr_db": 18.09939920093468,
+        "log_kurtosis_ratio": 1.0104418360666194,
+        "log_spectral_distance": 0.3468676913837647
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 2.469977648828939,
-        "log_kurtosis_ratio": 0.004309750178546734,
-        "log_spectral_distance": -1.174136256126085
+        "seg_snr_db": 2.7358376008525465,
+        "log_kurtosis_ratio": 0.010441836066619414,
+        "log_spectral_distance": -1.4825499269358824
       },
       "delta_sd": null,
       "realizations": 1,
@@ -629,15 +619,15 @@
     },
     "restoration/chord_hum60/hum/mastering_repair_dehum/left": {
       "metrics": {
-        "seg_snr_db": 17.936287176846523,
-        "log_kurtosis_ratio": 1.006359762679018,
-        "log_spectral_distance": 0.6661874655482418
+        "seg_snr_db": 18.200540900401023,
+        "log_kurtosis_ratio": 1.0128905279255775,
+        "log_spectral_distance": 0.35848215725557997
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 2.411320866141418,
-        "log_kurtosis_ratio": 0.006359762679017944,
-        "log_spectral_distance": -1.1679082242321892
+        "seg_snr_db": 2.675574589695918,
+        "log_kurtosis_ratio": 0.012890527925577544,
+        "log_spectral_distance": -1.475613532524851
       },
       "delta_sd": null,
       "realizations": 1,
@@ -664,15 +654,15 @@
     },
     "restoration/chord_hum60/hum/mastering_repair_dehum/right": {
       "metrics": {
-        "seg_snr_db": 17.94395805778361,
-        "log_kurtosis_ratio": 1.0039906654553694,
-        "log_spectral_distance": 0.6578782531418286
+        "seg_snr_db": 18.203606884958297,
+        "log_kurtosis_ratio": 1.0102173443768816,
+        "log_spectral_distance": 0.3477688271861318
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 2.4172223788457536,
-        "log_kurtosis_ratio": 0.003990665455369413,
-        "log_spectral_distance": -1.1588677828570948
+        "seg_snr_db": 2.67687120602044,
+        "log_kurtosis_ratio": 0.010217344376881599,
+        "log_spectral_distance": -1.4689772088127917
       },
       "delta_sd": null,
       "realizations": 1,
@@ -903,24 +893,24 @@
     },
     "restoration/sine_white_noise/noise/mastering_repair_denoise_classical/downmix": {
       "metrics": {
-        "seg_snr_db": 0.44478849413798816,
-        "log_kurtosis_ratio": 0.6078623292246763,
-        "log_spectral_distance": 80.0889776231832
+        "seg_snr_db": 0.4458623793404305,
+        "log_kurtosis_ratio": 0.6099469545894691,
+        "log_spectral_distance": 80.07601579118129
       },
       "metrics_sd": {
-        "seg_snr_db": 0.00011175512130945864,
-        "log_kurtosis_ratio": 0.01184557448966533,
-        "log_spectral_distance": 0.09373656633530052
+        "seg_snr_db": 0.0001075782598384164,
+        "log_kurtosis_ratio": 0.014306963639763323,
+        "log_spectral_distance": 0.09373827356924526
       },
       "delta": {
-        "seg_snr_db": -14.438327873525333,
-        "log_kurtosis_ratio": -0.3921376707753237,
-        "log_spectral_distance": 4.216776120194249
+        "seg_snr_db": -14.43725398832289,
+        "log_kurtosis_ratio": -0.3900530454105309,
+        "log_spectral_distance": 4.203814288192348
       },
       "delta_sd": {
-        "seg_snr_db": 0.0078729638700313,
-        "log_kurtosis_ratio": 0.01184557448966533,
-        "log_spectral_distance": 0.10197007310411164
+        "seg_snr_db": 0.007873184588840749,
+        "log_kurtosis_ratio": 0.014306963639763323,
+        "log_spectral_distance": 0.10196743077691658
       },
       "realizations": 5,
       "saturation": {
@@ -943,24 +933,24 @@
     },
     "restoration/sine_white_noise/noise/mastering_repair_denoise_classical/left": {
       "metrics": {
-        "seg_snr_db": 0.44528112396339115,
-        "log_kurtosis_ratio": 0.6121885479203767,
-        "log_spectral_distance": 82.65944928246165
+        "seg_snr_db": 0.4462406020067191,
+        "log_kurtosis_ratio": 0.6134011815635809,
+        "log_spectral_distance": 82.64949801818298
       },
       "metrics_sd": {
-        "seg_snr_db": 0.0011022685583728753,
-        "log_kurtosis_ratio": 0.008250106474299537,
-        "log_spectral_distance": 0.04494640191776886
+        "seg_snr_db": 0.0010433417757356226,
+        "log_kurtosis_ratio": 0.008315471946756591,
+        "log_spectral_distance": 0.045391527642006387
       },
       "delta": {
-        "seg_snr_db": -11.560716266778812,
-        "log_kurtosis_ratio": -0.3878114520796233,
-        "log_spectral_distance": 3.9746299844325166
+        "seg_snr_db": -11.559756788735484,
+        "log_kurtosis_ratio": -0.38659881843641913,
+        "log_spectral_distance": 3.96467872015385
       },
       "delta_sd": {
-        "seg_snr_db": 0.004531269191436119,
-        "log_kurtosis_ratio": 0.008250106474299537,
-        "log_spectral_distance": 0.034862180325837204
+        "seg_snr_db": 0.004477335818605985,
+        "log_kurtosis_ratio": 0.008315471946756593,
+        "log_spectral_distance": 0.03497687018235616
       },
       "realizations": 5,
       "saturation": {
@@ -983,24 +973,24 @@
     },
     "restoration/sine_white_noise/noise/mastering_repair_denoise_classical/right": {
       "metrics": {
-        "seg_snr_db": 0.44456082497966704,
-        "log_kurtosis_ratio": 0.607363547165383,
-        "log_spectral_distance": 82.67015625817767
+        "seg_snr_db": 0.445562819685953,
+        "log_kurtosis_ratio": 0.6079606680518077,
+        "log_spectral_distance": 82.65962283968832
       },
       "metrics_sd": {
-        "seg_snr_db": 0.0006215127924332911,
-        "log_kurtosis_ratio": 0.011764327803644037,
-        "log_spectral_distance": 0.03568831986139222
+        "seg_snr_db": 0.000590257881222839,
+        "log_kurtosis_ratio": 0.011657197667637571,
+        "log_spectral_distance": 0.03603887985332773
       },
       "delta": {
-        "seg_snr_db": -11.560872986700746,
-        "log_kurtosis_ratio": -0.392636452834617,
-        "log_spectral_distance": 3.9830113739703306
+        "seg_snr_db": -11.55987099199446,
+        "log_kurtosis_ratio": -0.39203933194819235,
+        "log_spectral_distance": 3.9724779554809855
       },
       "delta_sd": {
-        "seg_snr_db": 0.0014624173392089866,
-        "log_kurtosis_ratio": 0.011764327803644037,
-        "log_spectral_distance": 0.03723697256818743
+        "seg_snr_db": 0.0014329786363466125,
+        "log_kurtosis_ratio": 0.011657197667637571,
+        "log_spectral_distance": 0.03769990431909679
       },
       "realizations": 5,
       "saturation": {
@@ -1023,24 +1013,24 @@
     },
     "restoration/chord_pink_noise/noise/mastering_repair_denoise_classical/downmix": {
       "metrics": {
-        "seg_snr_db": 1.923244987602225,
-        "log_kurtosis_ratio": 1.1250403638768964,
-        "log_spectral_distance": 58.2233602130711
+        "seg_snr_db": 1.9240376871730749,
+        "log_kurtosis_ratio": 1.125538091043839,
+        "log_spectral_distance": 58.225584388691786
       },
       "metrics_sd": {
-        "seg_snr_db": 0.06599917569867525,
-        "log_kurtosis_ratio": 0.01186433549754814,
-        "log_spectral_distance": 0.2756557241971933
+        "seg_snr_db": 0.06600864927783145,
+        "log_kurtosis_ratio": 0.011856528846698187,
+        "log_spectral_distance": 0.2756073508169784
       },
       "delta": {
-        "seg_snr_db": -13.3349911149771,
-        "log_kurtosis_ratio": 0.12504036387689635,
-        "log_spectral_distance": -8.306531780192723
+        "seg_snr_db": -13.334198415406252,
+        "log_kurtosis_ratio": 0.1255380910438389,
+        "log_spectral_distance": -8.30430760457203
       },
       "delta_sd": {
-        "seg_snr_db": 0.2852925376068395,
-        "log_kurtosis_ratio": 0.01186433549754814,
-        "log_spectral_distance": 0.24423085589097307
+        "seg_snr_db": 0.2853000411221817,
+        "log_kurtosis_ratio": 0.011856528846698185,
+        "log_spectral_distance": 0.2441807468757932
       },
       "realizations": 5,
       "saturation": {
@@ -1063,24 +1053,24 @@
     },
     "restoration/chord_pink_noise/noise/mastering_repair_denoise_classical/left": {
       "metrics": {
-        "seg_snr_db": 1.6324698142763765,
-        "log_kurtosis_ratio": 1.0986187654553112,
-        "log_spectral_distance": 62.54415677383739
+        "seg_snr_db": 1.6331043206250904,
+        "log_kurtosis_ratio": 1.099228902965891,
+        "log_spectral_distance": 62.54660755334114
       },
       "metrics_sd": {
-        "seg_snr_db": 0.17715514601445473,
-        "log_kurtosis_ratio": 0.028242760377732115,
-        "log_spectral_distance": 0.6428746685872013
+        "seg_snr_db": 0.17724157248372147,
+        "log_kurtosis_ratio": 0.028339794735778343,
+        "log_spectral_distance": 0.643089877885822
       },
       "delta": {
-        "seg_snr_db": -10.65637096471282,
-        "log_kurtosis_ratio": 0.09861876545531105,
-        "log_spectral_distance": -7.151952422492265
+        "seg_snr_db": -10.655736458364109,
+        "log_kurtosis_ratio": 0.09922890296589096,
+        "log_spectral_distance": -7.149501642988509
       },
       "delta_sd": {
-        "seg_snr_db": 0.22828779591876047,
-        "log_kurtosis_ratio": 0.028242760377732115,
-        "log_spectral_distance": 0.7248801553575749
+        "seg_snr_db": 0.22836849577089496,
+        "log_kurtosis_ratio": 0.028339794735778343,
+        "log_spectral_distance": 0.7250853183599518
       },
       "realizations": 5,
       "saturation": {
@@ -1103,24 +1093,24 @@
     },
     "restoration/chord_pink_noise/noise/mastering_repair_denoise_classical/right": {
       "metrics": {
-        "seg_snr_db": 1.886619957631083,
-        "log_kurtosis_ratio": 1.1306291716843644,
-        "log_spectral_distance": 60.71504178452007
+        "seg_snr_db": 1.8873593949686942,
+        "log_kurtosis_ratio": 1.1310930420546337,
+        "log_spectral_distance": 60.71745863625233
       },
       "metrics_sd": {
-        "seg_snr_db": 0.18149924338931647,
-        "log_kurtosis_ratio": 0.02841802767927812,
-        "log_spectral_distance": 0.7822915685605705
+        "seg_snr_db": 0.18155126177901917,
+        "log_kurtosis_ratio": 0.028404445295933247,
+        "log_spectral_distance": 0.7820794707006201
       },
       "delta": {
-        "seg_snr_db": -10.51012299190014,
-        "log_kurtosis_ratio": 0.13062917168436433,
-        "log_spectral_distance": -8.280778167667703
+        "seg_snr_db": -10.509383554562527,
+        "log_kurtosis_ratio": 0.1310930420546334,
+        "log_spectral_distance": -8.278361315935433
       },
       "delta_sd": {
-        "seg_snr_db": 0.25962811355159315,
-        "log_kurtosis_ratio": 0.02841802767927812,
-        "log_spectral_distance": 0.6319414284492362
+        "seg_snr_db": 0.2596816713268045,
+        "log_kurtosis_ratio": 0.02840444529593325,
+        "log_spectral_distance": 0.6318492675305236
       },
       "realizations": 5,
       "saturation": {
@@ -1143,15 +1133,15 @@
     },
     "restoration/chord_noise_hum_click/noise/mastering_repair_denoise_classical/downmix": {
       "metrics": {
-        "seg_snr_db": 4.983224173621982,
-        "log_kurtosis_ratio": 0.7694758817916117,
-        "log_spectral_distance": 46.276591124454534
+        "seg_snr_db": 4.984331382162971,
+        "log_kurtosis_ratio": 0.7700194069799471,
+        "log_spectral_distance": 46.28275638585998
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": -2.6403726533833805,
-        "log_kurtosis_ratio": -0.23052411820838825,
-        "log_spectral_distance": -14.557579057849999
+        "seg_snr_db": -2.6392654448423913,
+        "log_kurtosis_ratio": -0.22998059302005291,
+        "log_spectral_distance": -14.55141379644455
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1175,15 +1165,15 @@
     },
     "restoration/chord_noise_hum_click/noise/mastering_repair_denoise_classical/left": {
       "metrics": {
-        "seg_snr_db": 5.101995590199065,
-        "log_kurtosis_ratio": 0.9615987540541635,
-        "log_spectral_distance": 48.35513668517031
+        "seg_snr_db": 5.103052454994884,
+        "log_kurtosis_ratio": 0.9622328065318733,
+        "log_spectral_distance": 48.36039176768104
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": -2.4351546413501373,
-        "log_kurtosis_ratio": -0.03840124594583649,
-        "log_spectral_distance": -15.11183981489517
+        "seg_snr_db": -2.434097776554318,
+        "log_kurtosis_ratio": -0.037767193468126736,
+        "log_spectral_distance": -15.10658473238444
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1207,15 +1197,15 @@
     },
     "restoration/chord_noise_hum_click/noise/mastering_repair_denoise_classical/right": {
       "metrics": {
-        "seg_snr_db": 4.941486132977658,
-        "log_kurtosis_ratio": 0.9462598610902485,
-        "log_spectral_distance": 48.567071617749406
+        "seg_snr_db": 4.942558597811908,
+        "log_kurtosis_ratio": 0.9468786305810654,
+        "log_spectral_distance": 48.57217989999418
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": -2.6035221025602464,
-        "log_kurtosis_ratio": -0.05374013890975149,
-        "log_spectral_distance": -14.912303212768741
+        "seg_snr_db": -2.6024496377259956,
+        "log_kurtosis_ratio": -0.05312136941893464,
+        "log_spectral_distance": -14.907194930523964
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1239,15 +1229,15 @@
     },
     "restoration/chord_noise_hum_click/hum/mastering_repair_dehum/downmix": {
       "metrics": {
-        "seg_snr_db": 17.47338065218155,
-        "log_kurtosis_ratio": 0.9927543100305186,
-        "log_spectral_distance": 61.28616430690522
+        "seg_snr_db": 17.99751032933721,
+        "log_kurtosis_ratio": 0.9971976349476617,
+        "log_spectral_distance": 61.2993273939375
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 9.849783825176189,
-        "log_kurtosis_ratio": -0.007245689969481384,
-        "log_spectral_distance": 0.451994124600688
+        "seg_snr_db": 10.373913502331849,
+        "log_kurtosis_ratio": -0.0028023650523383292,
+        "log_spectral_distance": 0.4651572116329703
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1274,15 +1264,15 @@
     },
     "restoration/chord_noise_hum_click/hum/mastering_repair_dehum/left": {
       "metrics": {
-        "seg_snr_db": 15.438894677685,
-        "log_kurtosis_ratio": 0.9989392591199296,
-        "log_spectral_distance": 63.90239147440518
+        "seg_snr_db": 15.806447798125959,
+        "log_kurtosis_ratio": 1.003241017223352,
+        "log_spectral_distance": 63.91492394156022
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 7.901744446135797,
-        "log_kurtosis_ratio": -0.0010607408800703544,
-        "log_spectral_distance": 0.4354149743397002
+        "seg_snr_db": 8.269297566576757,
+        "log_kurtosis_ratio": 0.0032410172233519052,
+        "log_spectral_distance": 0.4479474414947404
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1309,15 +1299,15 @@
     },
     "restoration/chord_noise_hum_click/hum/mastering_repair_dehum/right": {
       "metrics": {
-        "seg_snr_db": 15.428128825851976,
-        "log_kurtosis_ratio": 0.9998629628530297,
-        "log_spectral_distance": 63.91278367292541
+        "seg_snr_db": 15.786672496827192,
+        "log_kurtosis_ratio": 1.0043511960058384,
+        "log_spectral_distance": 63.92547319491586
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 7.883120590314072,
-        "log_kurtosis_ratio": -0.00013703714697033131,
-        "log_spectral_distance": 0.4334088424072604
+        "seg_snr_db": 8.241664261289287,
+        "log_kurtosis_ratio": 0.0043511960058384425,
+        "log_spectral_distance": 0.446098364397713
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1344,15 +1334,15 @@
     },
     "restoration/chord_noise_hum_click/click/mastering_repair_declick/downmix": {
       "metrics": {
-        "seg_snr_db": 7.855967212264067,
-        "log_kurtosis_ratio": 1.3651572048669325,
-        "log_spectral_distance": 59.88888141868057
+        "seg_snr_db": 7.871399991758613,
+        "log_kurtosis_ratio": 1.38933768399923,
+        "log_spectral_distance": 59.82529467937126
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 0.23237038525870535,
-        "log_kurtosis_ratio": 0.3651572048669325,
-        "log_spectral_distance": -0.9452887636239637
+        "seg_snr_db": 0.24780316475325126,
+        "log_kurtosis_ratio": 0.38933768399922997,
+        "log_spectral_distance": -1.0088755029332717
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1379,15 +1369,15 @@
     },
     "restoration/chord_noise_hum_click/click/mastering_repair_declick/left": {
       "metrics": {
-        "seg_snr_db": 7.758046625693376,
-        "log_kurtosis_ratio": 1.2261973536830832,
-        "log_spectral_distance": 62.752856508660756
+        "seg_snr_db": 7.7579093456873185,
+        "log_kurtosis_ratio": 1.2262806258012406,
+        "log_spectral_distance": 62.752519796983734
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 0.22089639414417395,
-        "log_kurtosis_ratio": 0.22619735368308325,
-        "log_spectral_distance": -0.714119991404722
+        "seg_snr_db": 0.220759114138116,
+        "log_kurtosis_ratio": 0.22628062580124064,
+        "log_spectral_distance": -0.7144567030817441
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1414,15 +1404,15 @@
     },
     "restoration/chord_noise_hum_click/click/mastering_repair_declick/right": {
       "metrics": {
-        "seg_snr_db": 7.78158849938301,
-        "log_kurtosis_ratio": 1.2486021133831007,
-        "log_spectral_distance": 62.72570411134751
+        "seg_snr_db": 7.781434352424789,
+        "log_kurtosis_ratio": 1.2464254374850068,
+        "log_spectral_distance": 62.725476251191864
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 0.23658026384510578,
-        "log_kurtosis_ratio": 0.24860211338310068,
-        "log_spectral_distance": -0.7536707191706356
+        "seg_snr_db": 0.23642611688688486,
+        "log_kurtosis_ratio": 0.24642543748500678,
+        "log_spectral_distance": -0.7538985793262825
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1450,16 +1440,16 @@
     "restoration/speech_click/click/mastering_repair_declick/downmix": {
       "metrics": {
         "seg_snr_db": 35.0,
-        "log_kurtosis_ratio": 1.2002845642624964,
-        "stoi": 0.9999998029073118,
-        "log_spectral_distance": 0.02615495889968622
+        "log_kurtosis_ratio": 1.2004082410110428,
+        "stoi": 0.9999999999823391,
+        "log_spectral_distance": 7.35880230650131e-05
       },
       "metrics_sd": null,
       "delta": {
         "seg_snr_db": 4.305549226987747,
-        "log_kurtosis_ratio": 0.2002845642624964,
-        "stoi": 0.11414889251021565,
-        "log_spectral_distance": -5.724749712511753
+        "log_kurtosis_ratio": 0.20040824101104282,
+        "stoi": 0.11414908958524295,
+        "log_spectral_distance": -5.750831083388373
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1485,16 +1475,16 @@
     "restoration/speech_click/click/mastering_repair_declick/left": {
       "metrics": {
         "seg_snr_db": 35.0,
-        "log_kurtosis_ratio": 1.1995250795215158,
-        "stoi": 0.9999997727768538,
-        "log_spectral_distance": 0.026214657689272582
+        "log_kurtosis_ratio": 1.1996489289844363,
+        "stoi": 0.9999999999826332,
+        "log_spectral_distance": 7.728411081489808e-05
       },
       "metrics_sd": null,
       "delta": {
         "seg_snr_db": 4.250944839366078,
-        "log_kurtosis_ratio": 0.19952507952151577,
-        "stoi": 0.11145071652850125,
-        "log_spectral_distance": -5.68456857968339
+        "log_kurtosis_ratio": 0.1996489289844363,
+        "stoi": 0.11145094373428066,
+        "log_spectral_distance": -5.710705953261847
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1520,16 +1510,16 @@
     "restoration/speech_click/click/mastering_repair_declick/right": {
       "metrics": {
         "seg_snr_db": 35.0,
-        "log_kurtosis_ratio": 1.2009522176784624,
-        "stoi": 0.9999998315499119,
-        "log_spectral_distance": 0.026064375334719614
+        "log_kurtosis_ratio": 1.2010753411462551,
+        "stoi": 0.9999999999821038,
+        "log_spectral_distance": 7.582328038188914e-05
       },
       "metrics_sd": null,
       "delta": {
         "seg_snr_db": 4.328603540753225,
-        "log_kurtosis_ratio": 0.20095221767846239,
-        "stoi": 0.11695548038477144,
-        "log_spectral_distance": -5.76736461645625
+        "log_kurtosis_ratio": 0.20107534114625514,
+        "stoi": 0.1169556488169633,
+        "log_spectral_distance": -5.793353168510588
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1656,17 +1646,17 @@
     },
     "restoration/speech_hum50/hum/mastering_repair_dehum/downmix": {
       "metrics": {
-        "seg_snr_db": 20.751073048167555,
-        "log_kurtosis_ratio": 0.9450668810767014,
-        "stoi": 0.9952190807617644,
-        "log_spectral_distance": 1.1582796235331676
+        "seg_snr_db": 23.858470205094655,
+        "log_kurtosis_ratio": 0.9451091885968703,
+        "stoi": 0.9953830737798205,
+        "log_spectral_distance": 0.5038329173278826
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 19.462704365362033,
-        "log_kurtosis_ratio": -0.05493311892329855,
-        "stoi": 0.05397641719521351,
-        "log_spectral_distance": -2.4792586676102
+        "seg_snr_db": 22.570101522289132,
+        "log_kurtosis_ratio": -0.05489081140312968,
+        "stoi": 0.05414041021326965,
+        "log_spectral_distance": -3.133705373815485
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1691,17 +1681,17 @@
     },
     "restoration/speech_hum50/hum/mastering_repair_dehum/left": {
       "metrics": {
-        "seg_snr_db": 20.82633104009873,
-        "log_kurtosis_ratio": 0.9472010418002905,
-        "stoi": 0.9952296828723376,
-        "log_spectral_distance": 1.149622734030074
+        "seg_snr_db": 23.85951396535687,
+        "log_kurtosis_ratio": 0.9472971982030945,
+        "stoi": 0.9953831107831359,
+        "log_spectral_distance": 0.5049536881087797
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 19.334105179657247,
-        "log_kurtosis_ratio": -0.05279895819970948,
-        "stoi": 0.05257105951393093,
-        "log_spectral_distance": -2.440065262790144
+        "seg_snr_db": 22.36728810491539,
+        "log_kurtosis_ratio": -0.05270280179690545,
+        "stoi": 0.05272448742472924,
+        "log_spectral_distance": -3.0847343087114383
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1726,17 +1716,17 @@
     },
     "restoration/speech_hum50/hum/mastering_repair_dehum/right": {
       "metrics": {
-        "seg_snr_db": 20.682301041391977,
-        "log_kurtosis_ratio": 0.9427932019875293,
-        "stoi": 0.9952088367425624,
-        "log_spectral_distance": 1.1632769833339458
+        "seg_snr_db": 23.857350502050366,
+        "log_kurtosis_ratio": 0.9427895346164548,
+        "stoi": 0.9953830254571391,
+        "log_spectral_distance": 0.5027804727626952
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 19.60286753234308,
-        "log_kurtosis_ratio": -0.05720679801247075,
-        "stoi": 0.05541935451856428,
-        "log_spectral_distance": -2.5232779131607357
+        "seg_snr_db": 22.77791699300147,
+        "log_kurtosis_ratio": -0.05721046538354524,
+        "stoi": 0.05559354323314092,
+        "log_spectral_distance": -3.1837744237319865
       },
       "delta_sd": null,
       "realizations": 1,
@@ -1761,28 +1751,28 @@
     },
     "restoration/speech_white_noise/noise/mastering_repair_denoise_classical/downmix": {
       "metrics": {
-        "seg_snr_db": 10.285031305350547,
-        "log_kurtosis_ratio": 1.665786900906312,
-        "stoi": 0.8890593317134169,
-        "log_spectral_distance": 28.91030603077001
+        "seg_snr_db": 10.284810586168101,
+        "log_kurtosis_ratio": 1.6664080842767504,
+        "stoi": 0.8890626851877915,
+        "log_spectral_distance": 28.913390835664295
       },
       "metrics_sd": {
-        "seg_snr_db": 0.053208830620921514,
-        "log_kurtosis_ratio": 0.016757141694766046,
-        "stoi": 0.007320862494679568,
-        "log_spectral_distance": 0.014087155725517272
+        "seg_snr_db": 0.053212148405141727,
+        "log_kurtosis_ratio": 0.01674830945424794,
+        "stoi": 0.007320906981105903,
+        "log_spectral_distance": 0.014089373402779411
       },
       "delta": {
-        "seg_snr_db": 9.65155840213241,
-        "log_kurtosis_ratio": 0.6657869009063118,
-        "stoi": -0.0012631123796075893,
-        "log_spectral_distance": -16.50344133621176
+        "seg_snr_db": 9.651337682949968,
+        "log_kurtosis_ratio": 0.6664080842767504,
+        "stoi": -0.001259758905232844,
+        "log_spectral_distance": -16.500356531317482
       },
       "delta_sd": {
-        "seg_snr_db": 0.05600355934148279,
-        "log_kurtosis_ratio": 0.01675714169476605,
-        "stoi": 0.004774630266763832,
-        "log_spectral_distance": 0.011541298175500985
+        "seg_snr_db": 0.056004373777735185,
+        "log_kurtosis_ratio": 0.01674830945424794,
+        "stoi": 0.00477468789519268,
+        "log_spectral_distance": 0.011515537894378959
       },
       "realizations": 5,
       "saturation": {
@@ -1803,28 +1793,28 @@
     },
     "restoration/speech_white_noise/noise/mastering_repair_denoise_classical/left": {
       "metrics": {
-        "seg_snr_db": 8.302306992706015,
-        "log_kurtosis_ratio": 1.632998225282913,
-        "stoi": 0.859720214908544,
-        "log_spectral_distance": 31.24936904159697
+        "seg_snr_db": 8.3019785864531,
+        "log_kurtosis_ratio": 1.6336532743103547,
+        "stoi": 0.8597277352084536,
+        "log_spectral_distance": 31.25268062227487
       },
       "metrics_sd": {
-        "seg_snr_db": 0.05682574830594229,
-        "log_kurtosis_ratio": 0.02506294763945709,
-        "stoi": 0.00943768733683756,
-        "log_spectral_distance": 0.03181844727827787
+        "seg_snr_db": 0.0568176110217505,
+        "log_kurtosis_ratio": 0.02505315874885591,
+        "stoi": 0.009438742175911253,
+        "log_spectral_distance": 0.0318095980899763
       },
       "delta": {
-        "seg_snr_db": 9.841311391425204,
-        "log_kurtosis_ratio": 0.6329982252829132,
-        "stoi": 0.00028625933634773837,
-        "log_spectral_distance": -15.742462953730552
+        "seg_snr_db": 9.84098298517229,
+        "log_kurtosis_ratio": 0.6336532743103549,
+        "stoi": 0.00029377963625742964,
+        "log_spectral_distance": -15.739151373052655
       },
       "delta_sd": {
-        "seg_snr_db": 0.0542978923078949,
-        "log_kurtosis_ratio": 0.02506294763945709,
-        "stoi": 0.005844744726720675,
-        "log_spectral_distance": 0.02549128360378016
+        "seg_snr_db": 0.0542877992501504,
+        "log_kurtosis_ratio": 0.02505315874885591,
+        "stoi": 0.005845635945684038,
+        "log_spectral_distance": 0.02547502936028747
       },
       "realizations": 5,
       "saturation": {
@@ -1845,28 +1835,28 @@
     },
     "restoration/speech_white_noise/noise/mastering_repair_denoise_classical/right": {
       "metrics": {
-        "seg_snr_db": 7.9383997081501265,
-        "log_kurtosis_ratio": 1.6194829195301732,
-        "stoi": 0.8458950587422785,
-        "log_spectral_distance": 31.58896591337257
+        "seg_snr_db": 7.938060212315899,
+        "log_kurtosis_ratio": 1.6200084077221697,
+        "stoi": 0.8459030714193988,
+        "log_spectral_distance": 31.592307200026262
       },
       "metrics_sd": {
-        "seg_snr_db": 0.07776981500262996,
-        "log_kurtosis_ratio": 0.04521471576152972,
-        "stoi": 0.009031596115651689,
-        "log_spectral_distance": 0.03423923866575348
+        "seg_snr_db": 0.07776012448823914,
+        "log_kurtosis_ratio": 0.04518045240804423,
+        "stoi": 0.009031378087161257,
+        "log_spectral_distance": 0.034206385920660054
       },
       "delta": {
-        "seg_snr_db": 9.844676175406208,
-        "log_kurtosis_ratio": 0.6194829195301734,
-        "stoi": -0.003640189411063388,
-        "log_spectral_distance": -15.535761252580647
+        "seg_snr_db": 9.844336679571985,
+        "log_kurtosis_ratio": 0.6200084077221695,
+        "stoi": -0.0036321767339432044,
+        "log_spectral_distance": -15.532419965926954
       },
       "delta_sd": {
-        "seg_snr_db": 0.0775645468496638,
-        "log_kurtosis_ratio": 0.04521471576152972,
-        "stoi": 0.008497476975591443,
-        "log_spectral_distance": 0.03351143604376382
+        "seg_snr_db": 0.07755442767640956,
+        "log_kurtosis_ratio": 0.04518045240804423,
+        "stoi": 0.00849748711198383,
+        "log_spectral_distance": 0.03348023230954969
       },
       "realizations": 5,
       "saturation": {
@@ -1887,28 +1877,28 @@
     },
     "restoration/speech_pink_noise/noise/mastering_repair_denoise_classical/downmix": {
       "metrics": {
-        "seg_snr_db": 4.339470986292623,
-        "log_kurtosis_ratio": 1.7077770263301972,
-        "stoi": 0.8351354077353612,
-        "log_spectral_distance": 23.149651434492633
+        "seg_snr_db": 4.339417410522316,
+        "log_kurtosis_ratio": 1.7082484171641859,
+        "stoi": 0.8351407631766159,
+        "log_spectral_distance": 23.151529628645715
       },
       "metrics_sd": {
-        "seg_snr_db": 0.31234633683204427,
-        "log_kurtosis_ratio": 0.0056261454163779616,
-        "stoi": 0.013565029200703805,
-        "log_spectral_distance": 0.25205837086066246
+        "seg_snr_db": 0.31235312665557796,
+        "log_kurtosis_ratio": 0.0056380830523171084,
+        "stoi": 0.013564468940038907,
+        "log_spectral_distance": 0.2521055369615524
       },
       "delta": {
-        "seg_snr_db": 3.354446307907158,
-        "log_kurtosis_ratio": 0.7077770263301972,
-        "stoi": 0.012251220123958295,
-        "log_spectral_distance": -15.283890646481646
+        "seg_snr_db": 3.3543927321368505,
+        "log_kurtosis_ratio": 0.7082484171641859,
+        "stoi": 0.012256575565213045,
+        "log_spectral_distance": -15.282012452328559
       },
       "delta_sd": {
-        "seg_snr_db": 0.22963672183002476,
-        "log_kurtosis_ratio": 0.0056261454163779616,
-        "stoi": 0.01411573787864364,
-        "log_spectral_distance": 0.0858397599124059
+        "seg_snr_db": 0.22963803687875972,
+        "log_kurtosis_ratio": 0.0056380830523171084,
+        "stoi": 0.014116285718868676,
+        "log_spectral_distance": 0.08581016709415612
       },
       "realizations": 5,
       "saturation": {
@@ -1929,28 +1919,28 @@
     },
     "restoration/speech_pink_noise/noise/mastering_repair_denoise_classical/left": {
       "metrics": {
-        "seg_snr_db": 2.57966488551005,
-        "log_kurtosis_ratio": 1.6874596571172424,
-        "stoi": 0.7567114280574645,
-        "log_spectral_distance": 24.768721654514216
+        "seg_snr_db": 2.579549739962867,
+        "log_kurtosis_ratio": 1.687957894044554,
+        "stoi": 0.7567205793721679,
+        "log_spectral_distance": 24.77108111747625
       },
       "metrics_sd": {
-        "seg_snr_db": 0.26581768221218144,
-        "log_kurtosis_ratio": 0.03164366251537949,
-        "stoi": 0.01685065784713344,
-        "log_spectral_distance": 0.5153385555268031
+        "seg_snr_db": 0.2658023087067973,
+        "log_kurtosis_ratio": 0.0316358493406889,
+        "stoi": 0.016849840426555726,
+        "log_spectral_distance": 0.5154944970344846
       },
       "delta": {
-        "seg_snr_db": 3.6820162709510127,
-        "log_kurtosis_ratio": 0.6874596571172426,
-        "stoi": 0.006204517818748046,
-        "log_spectral_distance": -15.305289944862817
+        "seg_snr_db": 3.6819011254038303,
+        "log_kurtosis_ratio": 0.6879578940445541,
+        "stoi": 0.006213669133451494,
+        "log_spectral_distance": -15.302930481900791
       },
       "delta_sd": {
-        "seg_snr_db": 0.30583933353880965,
-        "log_kurtosis_ratio": 0.03164366251537949,
-        "stoi": 0.010950124477634488,
-        "log_spectral_distance": 0.037314964089307755
+        "seg_snr_db": 0.3057968868227293,
+        "log_kurtosis_ratio": 0.0316358493406889,
+        "stoi": 0.010949980195422317,
+        "log_spectral_distance": 0.037357336350547464
       },
       "realizations": 5,
       "saturation": {
@@ -1971,28 +1961,28 @@
     },
     "restoration/speech_pink_noise/noise/mastering_repair_denoise_classical/right": {
       "metrics": {
-        "seg_snr_db": 2.005768275448761,
-        "log_kurtosis_ratio": 1.6904793346145808,
-        "stoi": 0.7709820672133243,
-        "log_spectral_distance": 24.76293993694996
+        "seg_snr_db": 2.0056745823687594,
+        "log_kurtosis_ratio": 1.6910118082047965,
+        "stoi": 0.7709891228371413,
+        "log_spectral_distance": 24.7653668465481
       },
       "metrics_sd": {
-        "seg_snr_db": 0.4700647109774222,
-        "log_kurtosis_ratio": 0.01744719816120417,
-        "stoi": 0.02094886292693612,
-        "log_spectral_distance": 0.2918919557820085
+        "seg_snr_db": 0.47009346022912424,
+        "log_kurtosis_ratio": 0.01745495386848643,
+        "stoi": 0.020948587726704947,
+        "log_spectral_distance": 0.29197269889386607
       },
       "delta": {
-        "seg_snr_db": 3.5543342695156768,
-        "log_kurtosis_ratio": 0.690479334614581,
-        "stoi": 0.014425166637394104,
-        "log_spectral_distance": -15.329553609620849
+        "seg_snr_db": 3.5542405764356766,
+        "log_kurtosis_ratio": 0.6910118082047965,
+        "stoi": 0.014432222261211037,
+        "log_spectral_distance": -15.327126700022706
       },
       "delta_sd": {
-        "seg_snr_db": 0.34921567599107856,
-        "log_kurtosis_ratio": 0.01744719816120417,
-        "stoi": 0.01185092140832383,
-        "log_spectral_distance": 0.0838298677081271
+        "seg_snr_db": 0.34923836953332116,
+        "log_kurtosis_ratio": 0.01745495386848643,
+        "stoi": 0.01185151927561332,
+        "log_spectral_distance": 0.08382875326248485
       },
       "realizations": 5,
       "saturation": {
@@ -2013,17 +2003,17 @@
     },
     "restoration/speech_dynamic_hum50/hum/mastering_repair_dehum/downmix": {
       "metrics": {
-        "seg_snr_db": 22.963792523700743,
-        "log_kurtosis_ratio": 0.9321986816953866,
-        "stoi": 0.9932330272556912,
-        "log_spectral_distance": 1.1905485557579507
+        "seg_snr_db": 23.834746023170652,
+        "log_kurtosis_ratio": 0.9357424579295855,
+        "stoi": 0.9932404695461681,
+        "log_spectral_distance": 0.5778517146171495
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 21.486603989824722,
-        "log_kurtosis_ratio": -0.06780131830461344,
-        "stoi": 0.07627322827741101,
-        "log_spectral_distance": -2.44967738691862
+        "seg_snr_db": 22.357557489294635,
+        "log_kurtosis_ratio": -0.06425754207041445,
+        "stoi": 0.0762806705678879,
+        "log_spectral_distance": -3.0623742280594217
       },
       "delta_sd": null,
       "realizations": 1,
@@ -2048,17 +2038,17 @@
     },
     "restoration/speech_dynamic_hum50/hum/mastering_repair_dehum/left": {
       "metrics": {
-        "seg_snr_db": 22.983784281472133,
-        "log_kurtosis_ratio": 0.9346475532426929,
-        "stoi": 0.9932278561483264,
-        "log_spectral_distance": 1.1850494961032738
+        "seg_snr_db": 23.841356704047694,
+        "log_kurtosis_ratio": 0.9381318256742202,
+        "stoi": 0.993240469050993,
+        "log_spectral_distance": 0.580508189142662
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 21.363313391002595,
-        "log_kurtosis_ratio": -0.06535244675730711,
-        "stoi": 0.07506560225712089,
-        "log_spectral_distance": -2.4285627911133196
+        "seg_snr_db": 22.220885813578157,
+        "log_kurtosis_ratio": -0.061868174325779846,
+        "stoi": 0.07507821515978741,
+        "log_spectral_distance": -3.0331040980739314
       },
       "delta_sd": null,
       "realizations": 1,
@@ -2083,17 +2073,17 @@
     },
     "restoration/speech_dynamic_hum50/hum/mastering_repair_dehum/right": {
       "metrics": {
-        "seg_snr_db": 22.950408014383235,
-        "log_kurtosis_ratio": 0.9296097620823663,
-        "stoi": 0.993231252685129,
-        "log_spectral_distance": 1.1947404197309166
+        "seg_snr_db": 23.84395450653774,
+        "log_kurtosis_ratio": 0.9331992931421378,
+        "stoi": 0.9932404775376819,
+        "log_spectral_distance": 0.5757032502028643
       },
       "metrics_sd": null,
       "delta": {
-        "seg_snr_db": 21.622561052531122,
-        "log_kurtosis_ratio": -0.07039023791763366,
-        "stoi": 0.07751122470416916,
-        "log_spectral_distance": -2.4737262191078875
+        "seg_snr_db": 22.516107544685628,
+        "log_kurtosis_ratio": -0.06680070685786221,
+        "stoi": 0.077520449556722,
+        "log_spectral_distance": -3.09276338863594
       },
       "delta_sd": null,
       "realizations": 1,
@@ -4851,50 +4841,50 @@
     "mastering/program_build/-/master_audio_stereo/stereo": {
       "metrics": {
         "integrated_lufs": {
-          "input": -14.970315933227539,
-          "output": -14.740604400634766
+          "input": -16.6685848236084,
+          "output": -14.355262756347656
         },
         "true_peak_dbtp": {
-          "input": -0.5641813278198242,
-          "output": -0.9976968169212341
+          "input": -0.8847475647926331,
+          "output": -0.9998219609260559
         },
         "short_term_spread": {
-          "input": 5.098612639926181,
-          "output": 3.852681264757303
+          "input": 5.156112002857069,
+          "output": 4.160226026787278
         },
         "band_energy_delta": [
-          0.1096139443776778,
-          0.14487375030939376,
-          0.19952035979626714,
-          0.26769655457992414,
-          0.28433237171729075,
-          0.26498886412191425,
-          0.25120519235913363,
-          -0.11673252360198916,
-          -0.7577148031997254,
-          -1.1096081885523148,
-          -1.2791877408072025,
-          -1.3281521933209532,
-          0.6405810908052594,
-          -1.3306515042930869,
-          -1.5776643078450192,
-          -1.6504936508600565,
-          -1.5523368347502497,
-          -1.451211054516783,
-          -1.3917607902029232,
-          -1.2997064597951606,
-          -1.025852905809856,
-          -0.7727342123351093,
-          -0.8034936863569015,
-          -0.9329392179528782,
-          -1.114897396427864,
-          -1.439809152704541,
-          -1.4691890440323263,
-          -1.1121557711355265,
-          -0.7533492414741971,
-          0.20359932933317992,
-          -0.7020089849613029,
-          -4.294082013571497
+          -0.5767276033590321,
+          -0.5289999128651388,
+          -0.45207383982086924,
+          -0.35605706237112145,
+          -0.20259341187620095,
+          0.008625459747904074,
+          -0.12867415406998362,
+          -0.7844132845342209,
+          -1.303507073574142,
+          -0.9737074420173215,
+          -0.3709232124253248,
+          -0.09258831988749705,
+          0.6303866563635729,
+          0.9230073727885681,
+          3.171365549669403,
+          6.714207984441984,
+          4.813292348683518,
+          4.585954950206428,
+          5.419901266833605,
+          6.366501721120159,
+          5.760831861698861,
+          5.643965613219265,
+          5.533105241287032,
+          5.465833014705709,
+          4.979886896951243,
+          5.234827812486415,
+          2.1365118966955094,
+          1.4789552804466837,
+          2.911518231815819,
+          7.157457407075469,
+          10.387759460456493,
+          0.5046002735995501
         ]
       },
       "metrics_sd": null,
@@ -4913,50 +4903,50 @@
     "mastering/program_build/-/master_audio/downmix": {
       "metrics": {
         "integrated_lufs": {
-          "input": -18.319189071655273,
-          "output": -15.520707130432129
+          "input": -20.295499801635742,
+          "output": -14.605034828186035
         },
         "true_peak_dbtp": {
-          "input": -1.3087319135665894,
-          "output": -0.9981073141098022
+          "input": -2.7837815284729004,
+          "output": -1.0008658170700073
         },
         "short_term_spread": {
-          "input": 5.095231658983599,
-          "output": 3.621866889387647
+          "input": 5.155807665855328,
+          "output": 4.124638212812865
         },
         "band_energy_delta": [
-          0.3794165436427406,
-          0.41948142941880917,
-          0.47842393963306407,
-          0.5519858571539409,
-          0.5674347995209352,
-          0.5419607063768517,
-          0.5276615886464384,
-          0.17996234335504724,
-          -0.486376964601952,
-          -0.8992246291613313,
-          -1.1220548889224133,
-          -1.209974001571112,
-          0.425786184901888,
-          -1.2877394546837024,
-          -1.4785488893070706,
-          -1.5899698673985725,
-          -1.511512815886249,
-          -1.422992610167583,
-          -1.4209805262125244,
-          -1.389029036046928,
-          -1.1386926425341812,
-          -0.9213800068380777,
-          -1.044901976983141,
-          -1.252111339955185,
-          -1.5079375612541526,
-          -2.0054310308852763,
-          -2.355056349285306,
-          -2.4593804683183578,
-          -1.726391668775861,
-          -0.41733477020270726,
-          -1.2481899294437113,
-          -4.956844329833984
+          -0.7207117781693313,
+          -0.5298209782674022,
+          -0.39491842781846387,
+          -0.2265562346677612,
+          -0.02741862736044709,
+          0.21467333312140013,
+          -0.00775741129458396,
+          -1.2413634424410809,
+          -2.458946052177776,
+          -2.4092982254867295,
+          -1.780288620679812,
+          -1.37455372227204,
+          0.4322551763086153,
+          0.049889812516170196,
+          2.4995615802655493,
+          5.282137016337316,
+          1.7304868333111187,
+          1.77825476949495,
+          3.9419515182268583,
+          3.8248417582044283,
+          3.1835647409787384,
+          2.94963788579868,
+          3.8207850310820533,
+          3.6313853270088714,
+          3.1458446281704937,
+          2.5918662815196,
+          2.5402601777897758,
+          2.0678747572219436,
+          0.0,
+          0.0,
+          0.0,
+          0.0
         ]
       },
       "metrics_sd": null,
@@ -4975,50 +4965,50 @@
     "mastering/transients_dry/-/master_audio_stereo/stereo": {
       "metrics": {
         "integrated_lufs": {
-          "input": -9.743043899536133,
-          "output": -15.057794570922852
+          "input": -14.523181915283203,
+          "output": -16.960172653198242
         },
         "true_peak_dbtp": {
-          "input": -0.9094684720039368,
-          "output": -0.9972560405731201
+          "input": -0.9307151436805725,
+          "output": -1.0021556615829468
         },
         "short_term_spread": {
-          "input": 0.35161907888223115,
-          "output": 0.3336080582548221
+          "input": 0.00011132419083812585,
+          "output": 0.004545043728439523
         },
         "band_energy_delta": [
-          -0.02660424871287148,
-          -0.06827237215965098,
-          -0.11675518103917071,
-          -0.17726309494911163,
-          -0.3074262170288229,
-          -0.5019032110842403,
-          -0.989113419572476,
-          -1.4729463555361662,
-          -1.8445381808862678,
-          -2.133607102041779,
-          -2.2934938588550366,
-          -2.395658069668748,
-          -2.6043551812471613,
-          -2.841705727917308,
-          -2.950414167212948,
-          -2.9190584833526074,
-          -2.6089253078413677,
-          -1.8357079120297897,
-          -0.3090465426272857,
-          -1.7240730101017618,
-          -2.028192479105961,
-          -0.5772516524678721,
-          0.2975039740003709,
-          -0.17119296629263658,
-          0.6058632227077254,
-          1.6995336725218095,
-          2.5097991185526283,
-          4.183744497460317,
-          5.733981232910274,
-          20.124550092208892,
-          27.906901617992133,
-          22.959056707034563
+          2.588507748373342,
+          2.2680958278719032,
+          1.8596088189449915,
+          1.349805494555035,
+          0.5833773716934534,
+          -0.44944654162613595,
+          -1.1014861051088616,
+          -0.9712617439050462,
+          0.149835113509166,
+          1.7283576587272265,
+          2.827420154767111,
+          3.008268484412028,
+          2.898922819715274,
+          3.353649652225947,
+          3.7848510842988645,
+          6.88289191555981,
+          5.2455957745074215,
+          2.198975678355751,
+          2.2418686130478562,
+          4.975773818327781,
+          3.57857170146346,
+          5.100233334713408,
+          4.4472475162131815,
+          5.249893167159684,
+          4.842818998621794,
+          5.936048613430984,
+          6.859773624996379,
+          6.979240297527596,
+          6.556355166926366,
+          5.649701797992236,
+          6.463835823317595,
+          0.0
         ]
       },
       "metrics_sd": null,
@@ -5037,50 +5027,50 @@
     "mastering/transients_dry/-/master_audio/downmix": {
       "metrics": {
         "integrated_lufs": {
-          "input": -12.80087661743164,
-          "output": -17.158432006835938
+          "input": -16.696086883544922,
+          "output": -19.309085845947266
         },
         "true_peak_dbtp": {
-          "input": -1.1038763523101807,
-          "output": -0.9974081516265869
+          "input": -1.1251212358474731,
+          "output": -1.0021295547485352
         },
         "short_term_spread": {
-          "input": 0.35659209374526335,
-          "output": 0.3519778257980747
+          "input": 0.00011525821202132332,
+          "output": 0.005679741413305335
         },
         "band_energy_delta": [
-          1.4787604833450025,
-          1.4180243588873083,
-          1.3422787614817224,
-          1.247746116559334,
-          1.004799500681166,
-          0.6283501072144446,
-          0.062157969491781984,
-          -0.33446074214906574,
-          -0.5680557016809473,
-          -0.8552736178452847,
-          -1.0405125216333957,
-          -1.1844088971820455,
-          -1.4914940428731178,
-          -1.8385041824257655,
-          -2.0046994714815014,
-          -2.0941136231289974,
-          -2.064916771629896,
-          -1.6600429467852678,
-          -0.5969842616848098,
-          -1.4941112296454833,
-          -1.7239436709761478,
-          -0.8657369637573638,
-          -0.18189681968764404,
-          -0.6299080034276443,
-          -0.0912076858329911,
-          0.7921200173528433,
-          1.4753396929570783,
-          2.9367461126440446,
-          4.657651799757161,
-          19.503271094616608,
-          27.458164410265994,
-          21.881607055664062
+          3.1934142764448055,
+          2.974829186240637,
+          2.6011926685881193,
+          2.1348837415602375,
+          1.2956892426256275,
+          0.09758573755448197,
+          -1.1382460187614623,
+          -1.6192018606507013,
+          -0.9301562552952447,
+          0.44958383602405405,
+          1.5703700656100992,
+          1.7616060155881428,
+          1.5088070044213282,
+          2.149569837125206,
+          2.592063857878152,
+          5.886967403364352,
+          3.957258250856839,
+          0.8569450800644205,
+          1.0051740161380849,
+          3.828009150201879,
+          2.1792497198333933,
+          3.70092925783905,
+          3.294360538035548,
+          3.763408800519869,
+          2.9054921498405264,
+          2.5454087171595603,
+          2.809628259553989,
+          2.3553674496445467,
+          2.1562627605623703,
+          2.186253372192425,
+          0.947886284008078,
+          0.0
         ]
       },
       "metrics_sd": null,
