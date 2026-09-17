@@ -70,6 +70,26 @@ def _melody() -> list[float]:
     return samples
 
 
+def _voice_like(duration: float = 1.0) -> list[float]:
+    """A signal the source classifier reads as a vocal.
+
+    A bare sine is classified as something with no effect send, so a scene built
+    from one carries no delay return and every test about how the delay is
+    voiced passes over an empty scene. The partial weights are what put the
+    centroid and rolloff where a voice's are; this is not an attempt to sound
+    like one.
+    """
+    weights = [0.30, 0.70, 0.90, 0.85, 0.80, 0.70, 0.60, 0.55, 0.50, 0.45, 0.40, 0.35]
+    count = int(SR * duration)
+    samples = []
+    for index in range(count):
+        value = 0.0
+        for partial, weight in enumerate(weights):
+            value += weight * math.sin(2.0 * math.pi * 180.0 * (partial + 1) * index / SR)
+        samples.append(0.045 * value)
+    return samples
+
+
 def _write_wav(path: str, samples: list[float], sample_rate: int = SR) -> None:
     frames = bytearray()
     for sample in samples:
@@ -338,6 +358,103 @@ def test_suggest_mix_names_an_unknown_param() -> None:
     assert result.returncode == 3
     assert "loudness" in result.stderr
     assert result.stdout == ""
+
+
+def test_suggest_mix_scene_out_is_what_the_mixer_reads() -> None:
+    """--scene-out writes the scene in the form `mix --scene` loads.
+
+    The file is written from the document already in hand rather than through a
+    second analysis, so the check that matters is that the two agree: the scene
+    on disk must equal what the core's scene-only entry point serializes for the
+    same tracks, and `mix` must then render it.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lead = os.path.join(tmpdir, "leadVox.wav")
+        scene_path = os.path.join(tmpdir, "scene.json")
+        rendered = os.path.join(tmpdir, "mix.wav")
+        _write_wav(lead, _voice_like())
+
+        result = _run_cli(
+            # fmt: off
+            ["suggest-mix", "--input", lead, "--sample-rate", str(SR), "--scene-out", scene_path],
+            # fmt: on
+        )
+        assert result.returncode == 0, result.stderr
+
+        with open(scene_path, encoding="utf-8") as handle:
+            written = json.load(handle)
+        assert written == json.loads(result.stdout)["scene"]
+
+        from libsonare import MixTrackInput, suggest_mix_scene_json
+        from libsonare.audio import Audio
+
+        # Loaded through the same decoder the CLI uses. Reconstructing the
+        # samples here instead compares two different inputs -- a scale factor
+        # one count apart moves the measured loudness and with it the staging,
+        # so the scenes differ for a reason that has nothing to do with the
+        # serializer under test.
+        with Audio.from_file(lead) as audio:
+            samples = audio.data
+        # The core's own serializer is the referent: a scene this file rendered
+        # itself would only be checked against this file.
+        # The id is also the name hint, which is what the CLI passes: leaving it
+        # out here changes the classification confidence and with it the balance.
+        assert written == json.loads(
+            suggest_mix_scene_json(
+                [MixTrackInput("leadVox", samples, name="leadVox")], sample_rate=SR
+            )
+        )
+
+        rendering = _run_cli(
+            # fmt: off
+            [
+                "mix",
+                "--scene",
+                scene_path,
+                "--input",
+                f"leadVox={lead}",
+                "--sample-rate",
+                str(SR),
+                "--output",
+                rendered,
+                "--json",
+            ],
+            # fmt: on
+        )
+        assert rendering.returncode == 0, rendering.stderr
+
+
+def test_suggest_mix_tempo_option_and_param_are_one_value() -> None:
+    """--tempo-bpm reaches the same field as --params tempoBpm=, so naming both is refused."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lead = os.path.join(tmpdir, "leadVox.wav")
+        _write_wav(lead, _voice_like())
+
+        def _scene(*extra: str) -> dict:
+            result = _run_cli(["suggest-mix", "--input", lead, "--sample-rate", str(SR), *extra])
+            assert result.returncode == 0, result.stderr
+            return json.loads(result.stdout)["scene"]
+
+        assert _scene("--tempo-bpm", "90") == _scene("--params", "tempoBpm=90")
+        assert _scene("--tempo-bpm", "90") != _scene()
+
+        clash = _run_cli(
+            # fmt: off
+            [
+                "suggest-mix",
+                "--input",
+                lead,
+                "--sample-rate",
+                str(SR),
+                "--tempo-bpm",
+                "90",
+                "--params",
+                "tempoBpm=100",
+            ],
+            # fmt: on
+        )
+    assert clash.returncode == 3
+    assert "same value" in clash.stderr
 
 
 def test_suggest_mix_requires_an_input() -> None:

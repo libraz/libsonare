@@ -1193,14 +1193,44 @@ def _mix_assistant_tracks(entries: list[str], sample_rate: int) -> list[Any]:
     return tracks
 
 
+def _resolve_tempo_bpm(raw: str, entries: list[str]) -> float:
+    """Read ``--tempo-bpm``, detecting it from the first track when asked to.
+
+    ``auto`` measures the first ``--input`` rather than the whole set: a tempo is
+    a property of the song, so every track shares one, and detecting it once on
+    the track the caller listed first keeps which file was measured visible in
+    the command instead of hidden in an averaging rule.
+    """
+    from . import detect_bpm
+
+    if raw.strip().lower() != "auto":
+        return float(raw)
+    _, _, path = entries[0].partition("=")
+    samples, sample_rate = _load_audio(path or entries[0])
+    return float(detect_bpm(samples, sample_rate=sample_rate))
+
+
 def cmd_suggest_mix(args: argparse.Namespace) -> int:
     from . import suggest_mix_scene
 
     if not args.input:
         raise ValueError("suggest-mix requires at least one --input")
     options = _mix_assistant_options(_parse_kv_params(args.params) if args.params else {})
+    if args.tempo_bpm:
+        # The dedicated option and `--params tempoBpm=` reach the same field, so
+        # naming both is a contradiction rather than a precedence question.
+        if "tempo_bpm" in options:
+            raise ValueError("--tempo-bpm and --params tempoBpm= set the same value")
+        options["tempo_bpm"] = _resolve_tempo_bpm(args.tempo_bpm, args.input)
     tracks = _mix_assistant_tracks(args.input, args.sample_rate)
     document = suggest_mix_scene(tracks, sample_rate=args.sample_rate, **options)
+    if args.scene_out:
+        # Written from the document already in hand rather than through
+        # suggest_mix_scene_json, which would re-run an STFT per track and every
+        # pairwise pass to reach the same scene. That the two agree is pinned by
+        # a test rather than assumed here.
+        with open(args.scene_out, "w", encoding="utf-8") as fh:
+            fh.write(_strict_json_dumps(document.get("scene", {})) + "\n")
     print(_strict_json_dumps(document))
     return 0
 
@@ -1220,6 +1250,82 @@ def cmd_mixing_preset(args: argparse.Namespace) -> int:
     # would be a value the published contract does not name.
     print(mixing_scene_preset_json(args.preset))
     return 0
+
+
+def _mix_strip_channels(
+    entries: list[str], strip_ids: list[str], sample_rate: int
+) -> tuple[list[list[float]], int]:
+    """Resolve ``--input`` entries onto the scene's strips, in strip order.
+
+    Two spellings normalize here so the rest of the command sees one shape.
+    Addressed by id — either an explicit ``ID=WAV`` or a bare path whose base
+    name names a strip — a scene may carry strips no input feeds, which is what
+    an assistant-suggested scene always looks like: its effect returns are fed
+    by sends rather than by a file, and requiring a silent WAV for each of them
+    made the suggestion unrenderable without one. Addressed positionally, the
+    historical form, every strip takes the input at its own index; it is kept
+    because a built-in preset's strip ids are fixed vocabulary that a file on
+    disk has no reason to match.
+
+    A strip no entry names is fed silence rather than dropped: it may still
+    carry an insert whose tail belongs in the mix.
+
+    Returns the per-strip buffers and their shared length. Inputs shorter than
+    the longest are padded rather than the set being truncated to the shortest,
+    which would delete a part that only enters late in the song.
+    """
+    resolved: dict[int, list[float]] = {}
+    positional: list[list[float]] = []
+    addressed = False
+    index_of = {strip_id: index for index, strip_id in enumerate(strip_ids)}
+
+    for entry in entries:
+        track_id, separator, path = entry.partition("=")
+        if not separator:
+            path = entry
+            track_id = os.path.splitext(os.path.basename(path))[0]
+        elif not track_id:
+            raise ValueError(f"--input strip id must not be empty: {entry}")
+        if not path:
+            raise ValueError(f"--input requires a file path: {entry}")
+
+        samples, in_sr = _load_audio(path)
+        if in_sr != sample_rate:
+            samples = _resample(samples, in_sr, sample_rate)
+        buffer = list(samples)
+
+        target = index_of.get(track_id)
+        if target is None:
+            if separator:
+                # An explicit id is an assertion about the scene, so a miss is
+                # the caller's mistake rather than a reason to fall back.
+                raise ValueError(
+                    f"--input names strip {track_id!r}, which the scene does not have "
+                    f"(strips: {', '.join(strip_ids)})"
+                )
+            positional.append(buffer)
+            continue
+        if target in resolved:
+            raise ValueError(f"--input names strip {track_id!r} more than once")
+        addressed = True
+        resolved[target] = buffer
+
+    if addressed and positional:
+        raise ValueError(
+            "--input entries must either all name a strip or all be positional; "
+            f"{', '.join(sorted(strip_ids))} are the scene's strips"
+        )
+    if positional and len(positional) != len(strip_ids):
+        raise ValueError(
+            f"scene has {len(strip_ids)} strips but {len(positional)} inputs were given; "
+            "name them as --input ID=WAV to feed only some of them"
+        )
+    for index, buffer in enumerate(positional):
+        resolved[index] = buffer
+
+    length = max((len(buffer) for buffer in resolved.values()), default=0)
+    channels = [resolved.get(index, []) for index in range(len(strip_ids))]
+    return [buffer + [0.0] * (length - len(buffer)) for buffer in channels], length
 
 
 def cmd_mix(args: argparse.Namespace) -> int:
@@ -1247,26 +1353,22 @@ def cmd_mix(args: argparse.Namespace) -> int:
 
         rendered_samples = 0
         if args.input:
-            # Process each input WAV as one strip (mono inputs are duplicated to
-            # both channels). Inputs that were captured at a different sample
-            # rate are resampled to the mixer rate so a 44.1 kHz stem is not
-            # played back fast at the 48 kHz default. All inputs must share a
-            # length after resampling.
-            channels: list[list[float]] = []
-            length: int | None = None
-            for path in args.input:
-                samples, in_sr = _load_audio(path)
-                if in_sr != args.sample_rate:
-                    samples = _resample(samples, in_sr, args.sample_rate)
-                if length is None:
-                    length = len(samples)
-                elif len(samples) != length:
-                    raise ValueError("all --input files must have the same length")
-                channels.append(list(samples))
-            if len(channels) != strip_count:
+            # Each input WAV feeds one strip (mono inputs are duplicated to both
+            # channels). Inputs that were captured at a different sample rate are
+            # resampled to the mixer rate so a 44.1 kHz stem is not played back
+            # fast at the 48 kHz default.
+            strip_ids = [
+                str(strip.get("id", "")) for strip in json.loads(scene_json).get("strips", [])
+            ]
+            # The ids are read from the scene text while the buffers are handed
+            # to the compiled mixer, so a disagreement between the two would
+            # misalign every strip silently rather than fail.
+            if len(strip_ids) != strip_count:
                 raise ValueError(
-                    f"scene has {strip_count} strips but {len(channels)} inputs were given"
+                    f"scene text declares {len(strip_ids)} strips but the mixer compiled "
+                    f"{strip_count}"
                 )
+            channels, length = _mix_strip_channels(args.input, strip_ids, args.sample_rate)
             mixer.compile()
             # The mixer reports its graph latency separately. Output begins at
             # sample zero without trimming so routing alignment is preserved.

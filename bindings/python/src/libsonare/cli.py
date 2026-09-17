@@ -1576,6 +1576,21 @@ def _build_parser() -> _ContractArgumentParser:
     suggest_mix_p.add_argument(
         "--params", default="", help="Assistant params as k=v,k=v (default: the library's own)"
     )
+    suggest_mix_p.add_argument(
+        "--tempo-bpm",
+        default="",
+        metavar="BPM|auto",
+        help=(
+            "Tempo the suggested delay times are voiced against; 'auto' detects it "
+            "from the first --input (omitted: the transport's fallback tempo)"
+        ),
+    )
+    suggest_mix_p.add_argument(
+        "--scene-out",
+        default="",
+        metavar="FILE",
+        help="Also write just the suggested scene, in the form 'mix --scene' reads",
+    )
 
     mix_p = sub.add_parser(
         "mix",
@@ -1594,10 +1609,13 @@ def _build_parser() -> _ContractArgumentParser:
         "--input",
         action="append",
         default=[],
-        metavar="WAV",
+        metavar="[ID=]WAV",
         help=(
-            "Per-strip input WAV (repeat once per strip); loaded as mono and "
-            "resampled to --sample-rate; requires --output to render"
+            "Input WAV for one strip (repeat once per fed strip); loaded as mono "
+            "and resampled to --sample-rate; requires --output to render. ID names "
+            "the strip and defaults to the file's base name, and a strip no entry "
+            "names is fed silence. Entries that name no strip at all are taken "
+            "positionally instead, one per strip in scene order"
         ),
     )
     mix_p.add_argument(
