@@ -267,7 +267,10 @@ if(NOT Eigen3_FOUND)
   FetchContent_Declare(
     Eigen3
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-    GIT_TAG 3.4.0
+    # Stays on 3.4.x: find_package above prefers a system Eigen, so raising this
+    # to 5.x would put hosts with one and hosts without on different majors.
+    # Moving both together is a size decision for the WASM artifact, not a bump.
+    GIT_TAG 3.4.1
     GIT_SHALLOW TRUE
   )
   # Populate Eigen's headers only; do NOT run its CMake project. Eigen is
