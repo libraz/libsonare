@@ -62,6 +62,19 @@ float rms(const std::vector<float>& buf, size_t from, size_t to) {
   return n > 0 ? static_cast<float>(std::sqrt(acc / static_cast<double>(n))) : 0.0f;
 }
 
+/// Brightness proxy: the first difference scales each partial by
+/// |2 sin(pi f / fs)|, which rises monotonically with frequency, so the
+/// differenced-to-plain RMS ratio orders two renders by where their energy sits
+/// without an FFT.
+double high_frequency_ratio(const std::vector<float>& buf, size_t from) {
+  std::vector<float> diff;
+  diff.reserve(buf.size());
+  for (size_t i = from + 1; i < buf.size(); ++i) diff.push_back(buf[i] - buf[i - 1]);
+  const float plain = rms(buf, from, buf.size());
+  if (plain <= 0.0f) return 0.0;
+  return static_cast<double>(rms(diff, 0, diff.size())) / plain;
+}
+
 /// Dominant frequency from rising zero crossings in [from, to).
 double estimate_frequency(const std::vector<float>& buf, size_t from, size_t to) {
   double first = -1.0;
@@ -549,6 +562,22 @@ NativeSynthPatch brass_excitation_patch() {
   return p;
 }
 
+/// A drawbar-organ patch carrying two registrations far enough apart to order
+/// by brightness: the 16'/5-1/3'/8' base against the 1' alone. Their
+/// unnormalized sums differ (three stops against one), which is what lets a
+/// crossfade normalized against only the first end read as a level error.
+NativeSynthPatch additive_morph_patch() {
+  NativeSynthPatch p;
+  p.mode = sonare::midi::synth::SynthEngineMode::kAdditive;
+  p.cutoff_hz = 20000.0f;
+  p.amp_env.attack_ms = 5.0f;
+  p.amp_env.sustain = 1.0f;
+  p.additive.drawbars = {8.0f, 8.0f, 8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  p.additive.drawbars_b = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 8.0f};
+  p.additive.key_click = 0.0f;  // a note-on transient is not on this axis
+  return p;
+}
+
 /// Renders one held note, optionally sending CC @p cc at @p cc_value first.
 std::vector<float> render_note(const NativeSynthPatch& patch, int num_samples, int cc = -1,
                                uint8_t cc_value = 0) {
@@ -598,26 +627,32 @@ TEST_CASE("the excitation axes accumulate and clamp to one axis span", "[midi][s
   REQUIRE(evaluate_mod_matrix(negative, full).excitation_brightness == -1.0f);
 }
 
-TEST_CASE("has_excitation_route answers for the live routes only", "[midi][synth]") {
-  REQUIRE_FALSE(ModMatrix{}.has_excitation_route());
+TEST_CASE("has_engine_control_route answers for the live routes only", "[midi][synth]") {
+  REQUIRE_FALSE(ModMatrix{}.has_engine_control_route());
 
   ModMatrix pitch_only;
   pitch_only.routes[0] = {ModSource::kLfo1, ModDestination::kPitchCents, 50.0f};
-  REQUIRE_FALSE(pitch_only.has_excitation_route());
+  REQUIRE_FALSE(pitch_only.has_engine_control_route());
   REQUIRE_FALSE(pitch_only.empty());
 
   ModMatrix dead_depth;
   dead_depth.routes[0] = {ModSource::kLfo1, ModDestination::kExcitationForce, 0.0f};
-  REQUIRE_FALSE(dead_depth.has_excitation_route());
+  REQUIRE_FALSE(dead_depth.has_engine_control_route());
 
   ModMatrix no_source;
   no_source.routes[0] = {ModSource::kNone, ModDestination::kExcitationForce, 0.5f};
-  REQUIRE_FALSE(no_source.has_excitation_route());
+  REQUIRE_FALSE(no_source.has_engine_control_route());
 
   ModMatrix live;
   live.routes[0] = {ModSource::kLfo1, ModDestination::kPitchCents, 50.0f};
   live.routes[3] = {ModSource::kVelocity, ModDestination::kExcitationPosition, 0.5f};
-  REQUIRE(live.has_excitation_route());
+  REQUIRE(live.has_engine_control_route());
+
+  // The morph is an engine-owned axis too, so a matrix carrying only that one
+  // must still reach the dispatch.
+  ModMatrix morph_only;
+  morph_only.routes[0] = {ModSource::kVelocity, ModDestination::kSpectrumMorph, 0.5f};
+  REQUIRE(morph_only.has_engine_control_route());
 }
 
 TEST_CASE("an excitation force route drives the breath axis it names", "[midi][synth]") {
@@ -720,12 +755,14 @@ TEST_CASE("an excitation route whose source stays at zero changes nothing", "[mi
 }
 
 TEST_CASE("an engine with no exciter to reach declines the axes", "[midi][synth]") {
-  // A subtractive voice has no continuous exciter, so the routes fall through
-  // the dispatch rather than landing somewhere approximate.
+  // A subtractive voice has no continuous exciter and no second spectral table,
+  // so the routes fall through the dispatch rather than landing somewhere
+  // approximate.
   NativeSynthPatch routed = sine_patch();
   routed.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationForce, 1.0f};
   routed.mod_matrix.routes[1] = {ModSource::kVelocity, ModDestination::kExcitationBrightness,
                                  -1.0f};
+  routed.mod_matrix.routes[2] = {ModSource::kVelocity, ModDestination::kSpectrumMorph, 1.0f};
   REQUIRE(render_note(routed, 8000) == render_note(sine_patch(), 8000));
 }
 
@@ -799,4 +836,110 @@ TEST_CASE("every engine the dispatch names is actually reached", "[midi][synth]"
     placed.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationPosition, 1.0f};
     REQUIRE(render_note(placed, 24000) == plain);
   }
+}
+
+TEST_CASE("the spectrum morph accumulates and clamps on the same span", "[midi][synth]") {
+  ModMatrix matrix;
+  matrix.routes[0] = {ModSource::kVelocity, ModDestination::kSpectrumMorph, 0.4f};
+  ModSourceValues values;
+  values.velocity = 0.5f;
+  REQUIRE(evaluate_mod_matrix(matrix, values).spectrum_morph == 0.2f);
+
+  // Load-bearing rather than declared, in both directions: the morph position
+  // spans [0,1], so an offset of more than one span cannot mean anything.
+  ModMatrix piled;
+  piled.routes[0] = {ModSource::kVelocity, ModDestination::kSpectrumMorph, 2.0f};
+  piled.routes[1] = {ModSource::kModWheel, ModDestination::kSpectrumMorph, 1.0f};
+  ModSourceValues full;
+  full.velocity = 1.0f;
+  full.mod_wheel = 1.0f;
+  REQUIRE(evaluate_mod_matrix(piled, full).spectrum_morph == 1.0f);
+
+  ModMatrix negative;
+  negative.routes[0] = {ModSource::kVelocity, ModDestination::kSpectrumMorph, -4.0f};
+  REQUIRE(evaluate_mod_matrix(negative, full).spectrum_morph == -1.0f);
+}
+
+TEST_CASE("a spectrum morph route travels toward the registration it names", "[midi][synth]") {
+  // Unlike the bell, this axis has a direction, and it is the patch's own two
+  // tables that supply it: the base is the bottom three drawbars and the second
+  // registration is the 1' alone, four octaves up.
+  const NativeSynthPatch base = additive_morph_patch();
+  const std::vector<float> at_base = render_note(base, 24000);
+  REQUIRE(rms(at_base, 12000, 24000) > 0.001f);  // the note sounds at all
+
+  NativeSynthPatch swept = base;
+  swept.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kSpectrumMorph, 2.0f};
+  const std::vector<float> at_second = render_note(swept, 24000);
+  REQUIRE(high_frequency_ratio(at_second, 12000) > 4.0 * high_frequency_ratio(at_base, 12000));
+
+  // And back the other way from the far end, so a route wired backwards fails
+  // rather than passing on "the two buffers differ".
+  NativeSynthPatch from_second = base;
+  from_second.additive.morph = 1.0f;
+  const std::vector<float> held_at_second = render_note(from_second, 24000);
+  NativeSynthPatch pulled = from_second;
+  pulled.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kSpectrumMorph, -2.0f};
+  REQUIRE(high_frequency_ratio(render_note(pulled, 24000), 12000) <
+          0.5 * high_frequency_ratio(held_at_second, 12000));
+}
+
+TEST_CASE("each registration is normalized against its own sum", "[midi][synth]") {
+  // The far end of the crossfade must render as the second registration would
+  // on its own. Normalizing the whole sweep against the first end's sum would
+  // leave this one three stops' worth of level out, and nothing about the
+  // spectrum would look wrong.
+  NativeSynthPatch at_far_end = additive_morph_patch();
+  at_far_end.additive.morph = 1.0f;
+
+  NativeSynthPatch only_second = additive_morph_patch();
+  only_second.additive.drawbars = only_second.additive.drawbars_b;
+
+  REQUIRE(render_note(at_far_end, 16000) == render_note(only_second, 16000));
+  // Positive control: the two ends are not the same render to begin with.
+  REQUIRE(render_note(at_far_end, 16000) != render_note(additive_morph_patch(), 16000));
+}
+
+TEST_CASE("a patch naming no second registration is not swept anywhere", "[midi][synth]") {
+  // The axis is declined by the data rather than by a branch: a patch that has
+  // not said where it is going stays where it is, however hard it is driven.
+  // Both ways of saying nothing are covered, and the first is the one every
+  // organ patch in the bank takes — it sets its own registration and leaves the
+  // second at the default, which is all stops in.
+  NativeSynthPatch undeclared = additive_morph_patch();
+  undeclared.additive.drawbars_b = {};
+  NativeSynthPatch spelled_out = additive_morph_patch();
+  spelled_out.additive.drawbars_b = spelled_out.additive.drawbars;
+
+  for (const NativeSynthPatch& one_table : {undeclared, spelled_out}) {
+    NativeSynthPatch driven = one_table;
+    driven.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kSpectrumMorph, 2.0f};
+    REQUIRE(render_note(driven, 16000) == render_note(one_table, 16000));
+  }
+  // The two spellings are also the same render as each other, so the sentinel
+  // reads as "the first registration" rather than as silence.
+  REQUIRE(render_note(undeclared, 16000) == render_note(spelled_out, 16000));
+
+  // Positive control: the identical route on a patch that does name a second
+  // registration moves the render, so the equalities above are a result.
+  NativeSynthPatch two_tables = additive_morph_patch();
+  two_tables.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kSpectrumMorph, 2.0f};
+  REQUIRE(render_note(two_tables, 16000) != render_note(additive_morph_patch(), 16000));
+}
+
+TEST_CASE("a morph route whose source stays at zero changes nothing", "[midi][synth]") {
+  // Same regression as the excitation axes: the plumbing runs every sample on a
+  // voice that has the route. If composing an offset of zero were not exactly
+  // the identity, every organ patch that gained a route would shift under it
+  // before the source ever moved.
+  NativeSynthPatch routed = additive_morph_patch();
+  routed.mod_matrix.routes[0] = {ModSource::kModWheel, ModDestination::kSpectrumMorph, 1.0f};
+
+  // CC1 is never sent, so the mod wheel reads 0 for the whole note.
+  const std::vector<float> without = render_note(additive_morph_patch(), 16000);
+  REQUIRE(render_note(routed, 16000) == without);
+
+  NativeSynthPatch driven = routed;
+  driven.mod_matrix.routes[0].source = ModSource::kVelocity;
+  REQUIRE(render_note(driven, 16000) != without);
 }

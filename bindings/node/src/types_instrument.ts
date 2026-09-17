@@ -164,6 +164,7 @@ export const SYNTH_MOD_DESTINATIONS = [
   'excitation-force',
   'excitation-position',
   'excitation-brightness',
+  'spectrum-morph',
 ] as const;
 
 export interface SynthEnumTables {
@@ -299,14 +300,16 @@ export interface SynthModRouting {
   /**
    * Destination units at full source deflection.
    *
-   * For the three `excitation-*` destinations this is an offset in the
-   * engine's own normalized `[0, 1]` axis units — the same scale the
-   * live-control CCs drive — summed onto whatever the patch or a CC set and
-   * clamped by the engine. They reach the physical model's exciter (bow force
-   * and contact point, breath pressure, bore brightness), so only the
-   * continuously-excited engines act on them: `bowed-string`, `brass`, `reed`
-   * and `flute`. An engine whose exciter is finished at note-on has nothing
-   * per sample to reach and ignores them.
+   * For the three `excitation-*` destinations and `spectrum-morph` this is an
+   * offset in the engine's own normalized `[0, 1]` axis units — the same scale
+   * the live-control CCs drive — summed onto whatever the patch or a CC set and
+   * clamped by the engine. The `excitation-*` ones reach the physical model's
+   * exciter (bow force and contact point, breath pressure, bore brightness), so
+   * only the continuously-excited engines act on them: `bowed-string`, `brass`,
+   * `reed` and `flute`. An engine whose exciter is finished at note-on has
+   * nothing per sample to reach and ignores them. `spectrum-morph` travels
+   * between the two spectral tables a patch carries — today the drawbar organ's
+   * second registration — and a patch carrying one table declines it.
    */
   depth: number;
 }

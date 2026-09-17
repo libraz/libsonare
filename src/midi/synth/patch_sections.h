@@ -105,6 +105,8 @@ constexpr ModalPatchParams blank_modal() noexcept {
 constexpr AdditivePatchParams blank_additive() noexcept {
   AdditivePatchParams z{};
   for (float& v : z.drawbars) v = 0.0f;
+  for (float& v : z.drawbars_b) v = 0.0f;
+  z.morph = 0.0f;
   z.key_click = 0.0f;
   z.click_decay_ms = 0.0f;
   z.percussion_harmonic = 0;

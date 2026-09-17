@@ -41,7 +41,7 @@
           }
         },
         "structure": {
-          "state": "unverified",
+          "state": "stale",
           "date": "2026-09-03",
           "unreachable": [],
           "accepted": [],
@@ -1371,7 +1371,7 @@
           }
         },
         "structure": {
-          "state": "unverified",
+          "state": "stale",
           "date": "2026-09-03",
           "unreachable": [],
           "accepted": [],
@@ -2596,7 +2596,7 @@
           ]
         },
         "structure": {
-          "state": "unverified",
+          "state": "stale",
           "date": "2026-09-03",
           "unreachable": [
             "cents"
@@ -3240,7 +3240,7 @@
           }
         },
         "structure": {
-          "state": "unverified",
+          "state": "stale",
           "date": "2026-09-03",
           "unreachable": [],
           "accepted": [],
@@ -4241,7 +4241,7 @@
           ]
         },
         "structure": {
-          "state": "unverified",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -4776,7 +4776,7 @@
           ]
         },
         "structure": {
-          "state": "unverified",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5356,7 +5356,7 @@
           ]
         },
         "structure": {
-          "state": "unverified",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -5465,7 +5465,7 @@
           ]
         },
         "structure": {
-          "state": "unverified",
+          "state": "stale",
           "date": "2026-09-05",
           "unreachable": [],
           "accepted": [],
@@ -9542,7 +9542,7 @@
           }
         },
         "structure": {
-          "state": "unverified",
+          "state": "stale",
           "date": "2026-09-06",
           "unreachable": [],
           "accepted": [],

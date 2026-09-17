@@ -328,9 +328,9 @@ struct NativeSynthVoice : VoiceState {
   float drift_depth_cents = 0.0f;
   // Mod-matrix source constants (precomputed at start).
   bool has_matrix = false;
-  /// At least one live route lands on an excitation axis, so the engine's
-  /// control setters are worth calling each sample.
-  bool has_excitation_routes = false;
+  /// At least one live route lands on an axis the engine owns rather than the
+  /// wrapper, so its control setters are worth calling each sample.
+  bool has_engine_control_routes = false;
   float velocity01 = 0.0f;
   float key_track_octaves = 0.0f;
   float random_value = 0.0f;
@@ -854,6 +854,9 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.modal.release_damp_s, 0.15f), 0.01f, 10.0f);
   for (float& level : p.additive.drawbars)
     level = std::clamp(patch_clamp_detail::sanitize(level, 0.0f), 0.0f, 8.0f);
+  for (float& level : p.additive.drawbars_b)
+    level = std::clamp(patch_clamp_detail::sanitize(level, 0.0f), 0.0f, 8.0f);
+  p.additive.morph = std::clamp(patch_clamp_detail::sanitize(p.additive.morph, 0.0f), 0.0f, 1.0f);
   p.additive.key_click =
       std::clamp(patch_clamp_detail::sanitize(p.additive.key_click, 0.4f), 0.0f, 1.0f);
   p.additive.click_decay_ms =

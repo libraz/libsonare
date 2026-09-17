@@ -49,7 +49,8 @@ inline constexpr const char* kModDestinations[] = {"none",
                                                    "lfo1-rate-scale",
                                                    "excitation-force",
                                                    "excitation-position",
-                                                   "excitation-brightness"};
+                                                   "excitation-brightness",
+                                                   "spectrum-morph"};
 
 static_assert(std::size(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "WASM SynthEngineMode table drifted from C");

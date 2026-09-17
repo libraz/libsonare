@@ -442,9 +442,16 @@ void apply_additive(NativeSynthPatch& p, const Fields& f) {
   I(additive.percussion_harmonic);
   F(additive.percussion_decay_ms);
   F(additive.percussion_level);
+  // The morph comes first because it decides whether the second registration
+  // does anything: sweeping `drawbars_b` at morph 0 reads as "the second
+  // registration cannot reach this measurement" and means it is not drawn on.
+  F(additive.morph);
   for (int i = 0; i < kAdditivePartials; ++i) {
     float& d = p.additive.drawbars[static_cast<size_t>(i)];
     d = f(("additive.drawbars" + std::to_string(i)).c_str(), d);
+    // `drawbars_b<i>`, not `drawbars2` — that key is already drawbars[2].
+    float& b = p.additive.drawbars_b[static_cast<size_t>(i)];
+    b = f(("additive.drawbars_b" + std::to_string(i)).c_str(), b);
   }
 }
 

@@ -40,6 +40,18 @@ struct AdditivePatchParams {
   /// default 88 8000 000 is the classic gospel/jazz base registration.
   std::array<float, kAdditivePartials> drawbars = {8.0f, 8.0f, 8.0f, 0.0f, 0.0f,
                                                    0.0f, 0.0f, 0.0f, 0.0f};
+  /// The registration `morph` travels toward, same units. All stops in means
+  /// no second registration, and the engine then reads it as a copy of
+  /// `drawbars` — so a patch that has not said where it is going cannot be
+  /// swept anywhere, and the axis is declined by the data rather than by a
+  /// branch. All stops in is not a registration a patch could want anyway:
+  /// a morph toward silence is what an amplitude route is for.
+  std::array<float, kAdditivePartials> drawbars_b = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                                     0.0f, 0.0f, 0.0f, 0.0f};
+  /// Position between the two registrations in [0, 1]; 0 is `drawbars`. The
+  /// crossfade is in linear gain rather than in stop digits, because a stop of
+  /// 0 is silence rather than -24 dB and a sweep through it would step.
+  float morph = 0.0f;
   /// Key-click transient level in [0, 1].
   float key_click = 0.4f;
   /// Key-click decay time constant (ms).
@@ -66,6 +78,10 @@ class AdditiveVoiceCore {
              uint64_t seed, bool percussion = false) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor.
   float render(float pitch_ratio) noexcept;
+  /// Mod-matrix offset on the morph position, in the same normalized units as
+  /// the patch field. Composed with the patch base and clamped; the ramp below
+  /// owns the approach, so this sets a target rather than a value.
+  void set_spectrum_mod(float morph_offset) noexcept;
   /// Immediate silence (note-off is the wrapper amp envelope's job — the
   /// tonewheels themselves do not decay).
   void kill() noexcept;
@@ -77,7 +93,25 @@ class AdditiveVoiceCore {
     float gain = 0.0f;
   };
 
+  /// Writes each partial's gain for the current morph position.
+  void apply_morph() noexcept;
+
   std::array<Partial, kAdditivePartials> partials_{};
+  // The two registrations as linear gains, plus each one's unnormalized sum.
+  // Both are held so the crossfade is nine lerps and one divide per sample
+  // rather than eighteen pow() calls.
+  std::array<float, kAdditivePartials> gain_a_{};
+  std::array<float, kAdditivePartials> gain_b_{};
+  float sum_a_ = 0.0f;
+  float sum_b_ = 0.0f;
+  float morph_base_ = 0.0f;
+  float morph_ = 0.0f;
+  float morph_target_ = 0.0f;
+  float morph_coeff_ = 0.0f;
+  // False until a route moves the position, and the gains are then left where
+  // start() put them — so a patch with no morph route renders bit-identically
+  // to one built before this axis existed.
+  bool morph_live_ = false;
   // Key click: seeded noise burst with a one-pole exponential level decay.
   VoiceRandomSequence noise_;
   float click_level_ = 0.0f;

@@ -138,6 +138,7 @@ _SYNTH_MOD_DESTINATIONS = {
     "excitation-force": 9,
     "excitation-position": 10,
     "excitation-brightness": 11,
+    "spectrum-morph": 12,
 }
 SYNTH_ENUM_TABLES = {
     "engine_modes": tuple(_SYNTH_ENGINE_MODES),

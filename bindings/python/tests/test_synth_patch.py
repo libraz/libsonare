@@ -68,6 +68,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "excitation-force",
         "excitation-position",
         "excitation-brightness",
+        "spectrum-morph",
     ),
 }
 

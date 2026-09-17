@@ -126,7 +126,7 @@ TEST_CASE("synth patch enum counts match the public C ordinals", "[project][synt
   REQUIRE(SONARE_SYNTH_BODY_DEFAULT == 0);
   REQUIRE(SONARE_SYNTH_BODY_VOCAL + 1 == SONARE_SYNTH_BODY_TYPE_COUNT);
   REQUIRE(SONARE_SYNTH_MOD_SOURCE_COUNT == 9);
-  REQUIRE(SONARE_SYNTH_MOD_DESTINATION_COUNT == 12);
+  REQUIRE(SONARE_SYNTH_MOD_DESTINATION_COUNT == 13);
 }
 
 TEST_CASE("synth patch conversion rejects out-of-range enum fields", "[project][synth_patch]") {

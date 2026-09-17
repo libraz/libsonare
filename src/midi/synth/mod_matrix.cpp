@@ -76,6 +76,9 @@ ModOffsets evaluate_mod_matrix(const ModMatrix& matrix, const ModSourceValues& v
       case ModDestination::kExcitationBrightness:
         out.excitation_brightness += amount;
         break;
+      case ModDestination::kSpectrumMorph:
+        out.spectrum_morph += amount;
+        break;
     }
   }
   out.amp_gain = std::clamp(out.amp_gain, 0.0f, 4.0f);
@@ -89,6 +92,7 @@ ModOffsets evaluate_mod_matrix(const ModMatrix& matrix, const ModSourceValues& v
   out.excitation_force = std::clamp(out.excitation_force, -1.0f, 1.0f);
   out.excitation_position = std::clamp(out.excitation_position, -1.0f, 1.0f);
   out.excitation_brightness = std::clamp(out.excitation_brightness, -1.0f, 1.0f);
+  out.spectrum_morph = std::clamp(out.spectrum_morph, -1.0f, 1.0f);
   return out;
 }
 

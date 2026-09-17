@@ -64,6 +64,11 @@ enum class ModDestination : int {
   /// Same normalized units. Distinct from kCutoffCents, which moves the
   /// wrapper filter downstream of the engine rather than the engine itself.
   kExcitationBrightness = 11,
+  /// Position along the two spectral tables a patch carries — the drawbar
+  /// organ's second registration today. Not an excitation axis: a tonewheel
+  /// has no exciter to move, and what this scans is the resonator's own
+  /// spectrum. Same normalized units; an engine carrying one table declines.
+  kSpectrumMorph = 12,
 };
 
 struct ModRoute {
@@ -89,15 +94,16 @@ struct ModMatrix {
     return true;
   }
 
-  /// True when at least one live route lands on an excitation axis. The voice
-  /// precomputes this so a matrix that only moves pitch or cutoff never reaches
-  /// an engine's control setters at all.
-  bool has_excitation_route() const noexcept {
+  /// True when at least one live route lands on an axis an engine owns rather
+  /// than the wrapper. The voice precomputes this so a matrix that only moves
+  /// pitch or cutoff never reaches an engine's control setters at all.
+  bool has_engine_control_route() const noexcept {
     for (const ModRoute& r : routes) {
       if (r.source == ModSource::kNone || r.depth == 0.0f) continue;
       if (r.destination == ModDestination::kExcitationForce ||
           r.destination == ModDestination::kExcitationPosition ||
-          r.destination == ModDestination::kExcitationBrightness) {
+          r.destination == ModDestination::kExcitationBrightness ||
+          r.destination == ModDestination::kSpectrumMorph) {
         return true;
       }
     }
@@ -127,13 +133,15 @@ struct ModOffsets {
   float vibrato_depth_cents = 0.0f;
   float filter_env_depth = 1.0f;  // multiplicative, clamped to [0, 4]
   float lfo1_rate_scale = 1.0f;   // multiplicative, clamped to [1/16, 16]
-  // Excitation axes: additive offsets on a [0,1] engine axis, so a full-span
+  // Engine-owned axes: additive offsets on a [0,1] engine axis, so a full-span
   // offset either way is the most that can mean anything. Additive rather than
   // multiplicative because several of these axes rest at 0 (polarization, mute,
-  // half-valve), where a 1 + depth * source scale could never move them.
+  // half-valve, the morph position), where a 1 + depth * source scale could
+  // never move them.
   float excitation_force = 0.0f;       // additive, clamped to [-1, 1]
   float excitation_position = 0.0f;    // additive, clamped to [-1, 1]
   float excitation_brightness = 0.0f;  // additive, clamped to [-1, 1]
+  float spectrum_morph = 0.0f;         // additive, clamped to [-1, 1]
 };
 
 /// Evaluates every active route. Allocation-free.

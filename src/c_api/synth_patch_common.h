@@ -91,7 +91,7 @@ static_assert(static_cast<int>(sonare::midi::synth::BodyType::kVocal) + 1 ==
 
 static_assert(static_cast<int>(sonare::midi::synth::ModSource::kRandom) + 1 ==
               SONARE_SYNTH_MOD_SOURCE_COUNT);
-static_assert(static_cast<int>(sonare::midi::synth::ModDestination::kExcitationBrightness) + 1 ==
+static_assert(static_cast<int>(sonare::midi::synth::ModDestination::kSpectrumMorph) + 1 ==
               SONARE_SYNTH_MOD_DESTINATION_COUNT);
 
 inline sonare::midi::synth::ModSource mod_source_from_c(int value) noexcept {
@@ -105,7 +105,7 @@ inline sonare::midi::synth::ModSource mod_source_from_c(int value) noexcept {
 inline sonare::midi::synth::ModDestination mod_destination_from_c(int value) noexcept {
   using sonare::midi::synth::ModDestination;
   if (value < static_cast<int>(ModDestination::kNone) ||
-      value > static_cast<int>(ModDestination::kExcitationBrightness)) {
+      value > static_cast<int>(ModDestination::kSpectrumMorph)) {
     return ModDestination::kNone;
   }
   return static_cast<ModDestination>(value);

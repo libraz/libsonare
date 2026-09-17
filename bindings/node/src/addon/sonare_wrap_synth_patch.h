@@ -40,7 +40,8 @@ inline constexpr const char* kSynthModDestinations[] = {"none",
                                                         "lfo1-rate-scale",
                                                         "excitation-force",
                                                         "excitation-position",
-                                                        "excitation-brightness"};
+                                                        "excitation-brightness",
+                                                        "spectrum-morph"};
 
 static_assert(std::size(kSynthEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "Node SynthEngineMode table drifted from C");

@@ -45,7 +45,7 @@ const char* sonare_synth_enum_names(int kind) {
   static const std::string kModDestinations =
       "none\npitch-cents\ncutoff-cents\namp-gain\npan-units\nresonance-q\n"
       "vibrato-depth-cents\nfilter-env-depth\nlfo1-rate-scale\n"
-      "excitation-force\nexcitation-position\nexcitation-brightness";
+      "excitation-force\nexcitation-position\nexcitation-brightness\nspectrum-morph";
 
   switch (kind) {
     case SONARE_SYNTH_ENUM_ENGINE_MODE:

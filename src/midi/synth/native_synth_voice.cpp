@@ -274,7 +274,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
 
   // Mod-matrix source constants.
   has_matrix = !p.mod_matrix.empty();
-  has_excitation_routes = has_matrix && p.mod_matrix.has_excitation_route();
+  has_engine_control_routes = has_matrix && p.mod_matrix.has_engine_control_route();
   // A reused slot must not inherit the previous note's LFO rate.
   matrix_lfo1_rate_scale = 1.0f;
   velocity01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
@@ -331,13 +331,18 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     values.random = random_value;
     offsets = evaluate_mod_matrix(patch->mod_matrix, values);
     matrix_lfo1_rate_scale = offsets.lfo1_rate_scale;
-    // Excitation axes: the offset is handed to the engine's own control setter,
-    // which composes it with the patch/CC base and clamps to its axis. Only the
-    // continuously-excited engines take them — a struck or plucked exciter is
-    // finished by the time the second sample renders, so there is nothing per
-    // sample to reach; every other engine declines by falling through.
-    if (has_excitation_routes) {
+    // Engine-owned axes: the offset is handed to the engine's own control
+    // setter, which composes it with the patch/CC base and clamps to its axis.
+    // Only the continuously-excited engines take the excitation ones — a struck
+    // or plucked exciter is finished by the time the second sample renders, so
+    // there is nothing per sample to reach; every other engine declines by
+    // falling through. The additive engine takes the morph instead: it has no
+    // exciter, and what a route moves there is the registration.
+    if (has_engine_control_routes) {
       switch (patch->mode) {
+        case SynthEngineMode::kAdditive:
+          additive.set_spectrum_mod(offsets.spectrum_morph);
+          break;
         case SynthEngineMode::kBowedString:
           bowed_string.set_excitation_mod(offsets.excitation_force, offsets.excitation_position);
           break;

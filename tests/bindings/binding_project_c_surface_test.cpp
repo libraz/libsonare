@@ -295,7 +295,7 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
         std::vector<std::string>{"none", "pitch-cents", "cutoff-cents", "amp-gain", "pan-units",
                                  "resonance-q", "vibrato-depth-cents", "filter-env-depth",
                                  "lfo1-rate-scale", "excitation-force", "excitation-position",
-                                 "excitation-brightness"});
+                                 "excitation-brightness", "spectrum-morph"});
   CHECK(sonare_synth_builtin_waveform_from_name("sine") == SONARE_SYNTH_WAVEFORM_SINE);
   CHECK(sonare_synth_builtin_waveform_from_name("saw") == SONARE_SYNTH_WAVEFORM_SAW);
   CHECK(sonare_synth_builtin_waveform_from_name("sawtooth") == SONARE_SYNTH_WAVEFORM_SAW);
