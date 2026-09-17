@@ -407,6 +407,20 @@ def hpss_with_residual(
 ) -> dict[str, object]:
     """HPSS into harmonic / percussive / residual signals.
 
+    The three outputs always add back up to the input. ``residual`` is silent
+    under the default soft mask, whose two masks sum to one, so ``harmonic`` and
+    ``percussive`` already carry everything; it is returned anyway so the result
+    shape does not change with the mask. Pass ``hard_mask=True`` for a residual
+    that holds signal -- its thresholded masks leave the band where neither
+    component dominates, measured at 3% of the input energy on a voice-plus-kick
+    signal.
+
+    Example:
+        >>> soft = hpss_with_residual(samples, sample_rate)
+        >>> # soft["residual"] is silence
+        >>> hard = hpss_with_residual(samples, sample_rate, hard_mask=True)
+        >>> # hard["residual"] carries what neither component claimed
+
     Args:
         samples: Input audio.
         sample_rate: Sample rate in Hz (default 22050).
