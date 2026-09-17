@@ -805,6 +805,81 @@ class CliContractSelfTest(unittest.TestCase):
         }
         self.assertEqual(pending, set())
 
+    def test_every_one_sided_command_states_why(self) -> None:
+        """A command on one front-end only carries its own justification.
+
+        Without it the ledger records a classification and not a decision, so
+        "deliberately one-sided" and "nobody has ported it yet" are spelled the
+        same and the difference has to be re-derived from commit messages.
+        """
+        for path, record in self.manifest["commands"].items():
+            if record["classification"] == "shared":
+                self.assertNotIn("reason", record, path)
+                continue
+            self.assertIn(record["reason_kind"], {"by_design", "unported"}, path)
+            self.assertGreaterEqual(len(record["reason"].strip()), 24, path)
+
+    def test_unported_commands_are_enumerated(self) -> None:
+        """The open CLI gaps are a closed list, so closing one is a diff here.
+
+        Asserted as a set rather than a count: a port that lands without its
+        ledger row, and a row retitled by_design without the port, both fail
+        naming the command.
+        """
+        unported = {
+            path
+            for path, record in self.manifest["commands"].items()
+            if record.get("reason_kind") == "unported"
+        }
+        self.assertEqual(
+            unported,
+            {
+                "boundaries",
+                "mastering-pair-processor",
+                "mastering-stereo-analyze",
+                "mastering-suggest",
+                "midi-render",
+                "mix-strip",
+                "note-move",
+                "pitch-correct-timevarying",
+                "scale-quantize",
+            },
+        )
+
+    def test_a_missing_reason_is_rejected(self) -> None:
+        candidate = copy.deepcopy(self.manifest)
+        candidate["commands"]["cqt"].pop("reason")
+        errors = CHECKER.validate_manifest(candidate)
+        self.assertTrue(
+            any("commands.cqt: missing keys reason" in error for error in errors),
+            errors,
+        )
+
+    def test_a_shared_command_may_not_carry_a_reason(self) -> None:
+        candidate = copy.deepcopy(self.manifest)
+        candidate["commands"]["version"]["reason_kind"] = "by_design"
+        candidate["commands"]["version"]["reason"] = "x" * 30
+        errors = CHECKER.validate_manifest(candidate)
+        self.assertTrue(
+            any(
+                "commands.version: unknown keys reason, reason_kind" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_an_intentional_variant_may_not_be_unported(self) -> None:
+        candidate = copy.deepcopy(self.manifest)
+        candidate["commands"]["mix"]["reason_kind"] = "unported"
+        errors = CHECKER.validate_manifest(candidate)
+        self.assertTrue(any("not an unclosed gap" in error for error in errors), errors)
+
+    def test_a_reason_too_short_to_say_anything_is_rejected(self) -> None:
+        candidate = copy.deepcopy(self.manifest)
+        candidate["commands"]["cqt"]["reason"] = "TODO"
+        errors = CHECKER.validate_manifest(candidate)
+        self.assertTrue(any("commands.cqt.reason" in error for error in errors), errors)
+
     def test_all_shared_paths_have_active_canonical_option_contracts(self) -> None:
         shared = {
             path

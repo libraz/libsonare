@@ -27,6 +27,11 @@ _TOP_LEVEL_KEYS = {
 }
 _CLASSIFICATIONS = {"shared", "native_only", "python_only", "intentional_variant"}
 _STATUSES = {"active", "pending", "native_only", "python_only", "intentional_variant"}
+# Why a command is not on both front-ends. ``by_design`` is a decision the
+# project stands behind; ``unported`` is a gap nobody has closed yet and
+# expires with the port, the way an allowlist entry expires with its drift.
+_REASON_KINDS = {"by_design", "unported"}
+_MIN_REASON_LENGTH = 24
 _OPTION_TYPES = {"boolean", "integer", "number", "string", "path"}
 _POSITIONAL_TYPES = {"boolean", "integer", "number", "string", "path"}
 _EXIT_CODES = {0, 2, 3, 4, 5, 9}
@@ -166,6 +171,25 @@ def _is_number(value: Any) -> bool:
     return (isinstance(value, int) and not isinstance(value, bool)) or (
         isinstance(value, float) and math.isfinite(value)
     )
+
+
+def _validate_command_reason(
+    record: dict[str, Any], classification: Any, label: str, errors: list[str]
+) -> None:
+    """Check the ``reason_kind`` / ``reason`` pair a one-sided command carries."""
+    kind = record["reason_kind"]
+    reason = record["reason"]
+    if kind not in _REASON_KINDS:
+        errors.append(f"{label}.reason_kind: unknown reason kind {kind!r}")
+    elif kind == "unported" and classification == "intentional_variant":
+        errors.append(
+            f"{label}.reason_kind: an intentional variant is a decision, not an unclosed gap"
+        )
+    if not isinstance(reason, str) or len(reason.strip()) < _MIN_REASON_LENGTH:
+        errors.append(
+            f"{label}.reason: expected a sentence of at least "
+            f"{_MIN_REASON_LENGTH} characters saying why"
+        )
 
 
 def _exact(value: Any, keys: set[str], label: str, errors: list[str]) -> bool:
@@ -1015,13 +1039,23 @@ def validate_manifest(manifest: Any) -> list[str]:
                 )
                 continue
             command_paths.add(path)
-            if not _exact(
-                record, {"classification", "status", "option_status"}, label, errors
-            ):
+            base_keys = {"classification", "status", "option_status"}
+            # A command both front-ends carry needs no excuse, so it may not
+            # write one; anything else states why in the ledger rather than
+            # leaving the divergence to be re-derived by the next reader.
+            one_sided = (
+                not isinstance(record, dict) or record.get("classification") != "shared"
+            )
+            expected_keys = (
+                base_keys | {"reason_kind", "reason"} if one_sided else base_keys
+            )
+            if not _exact(record, expected_keys, label, errors):
                 continue
             classification = record["classification"]
             status = record["status"]
             option_status = record["option_status"]
+            if one_sided:
+                _validate_command_reason(record, classification, label, errors)
             if classification not in _CLASSIFICATIONS:
                 errors.append(
                     f"{label}.classification: unknown classification {classification!r}"

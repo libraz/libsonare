@@ -3411,42 +3411,58 @@
     "sections": {
       "classification": "intentional_variant",
       "status": "intentional_variant",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "both front-ends carry the name over different option sets, and neither shape is the one the other should take"
     },
     "melody": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the measurement is already a Python entry point, libsonare.analyze_melody(), so the CLI would only add a JSON round trip"
     },
     "boundaries": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "unported",
+      "reason": "the nearest Python route, analyze_sections(), returns labelled sections rather than the raw boundary times this reports"
     },
     "meter": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a convenience bundle over metering_peak_db(), metering_rms_db() and metering_crest_factor_db(), each already a Python entry point"
     },
     "clipping": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the measurement is already a Python entry point, libsonare.metering_detect_clipping(), so the CLI would only add a JSON round trip"
     },
     "dynamic-range": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the measurement is already a Python entry point, libsonare.metering_dynamic_range(), so the CLI would only add a JSON round trip"
     },
     "stereo": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the two figures are Python entry points already, libsonare.metering_stereo_correlation() and metering_stereo_width()"
     },
     "phase": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the measurement is already a Python entry point, libsonare.metering_phase_scope(), so the CLI would only add a JSON round trip"
     },
     "polyphonic-notes": {
       "classification": "shared",
@@ -3461,202 +3477,282 @@
     "preemphasis": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.preemphasis() over the array it already holds, where it composes"
     },
     "deemphasis": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.deemphasis() over the array it already holds, where it composes"
     },
     "split-silence": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the measurement is already a Python entry point, libsonare.split_silence(), so the CLI would only add a JSON round trip"
     },
     "gain": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a whole-file sample transform; the native binary is the surface that ships without a Python runtime, and a Python caller scales the array itself"
     },
     "fade": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a whole-file sample transform; the native binary is the surface that ships without a Python runtime, and a Python caller shapes the array itself"
     },
     "filter": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a whole-file sample transform of the native binary; the biquad behind it has no Python entry point, so mirroring the command would mean binding the capability first, which is a bindings question rather than a CLI one"
     },
     "tone": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.tone() over the array it already holds, where it composes"
     },
     "chirp": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.chirp() over the array it already holds, where it composes"
     },
     "clicks": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the measurement is already a Python entry point, libsonare.clicks(), so the CLI would only add a JSON round trip"
     },
     "mastering-pair-processor": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "unported",
+      "reason": "a task-level command over an entry point Python already has as mastering_pair_process()"
     },
     "mastering-stereo-analyze": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "unported",
+      "reason": "a task-level command over an entry point Python already has as mastering_stereo_analyze()"
     },
     "mastering-stereo-analyses": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the measurement is already a Python entry point, libsonare.mastering_stereo_analysis_names(), so the CLI would only add a JSON round trip"
     },
     "onset-env": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.onset_envelope() over the array it already holds, where it composes"
     },
     "fourier-tempogram": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.fourier_tempogram() over the array it already holds, where it composes"
     },
     "tempogram-ratio": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.tempogram_ratio() over the array it already holds, where it composes"
     },
     "tonnetz": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.tonnetz() over the array it already holds, where it composes"
     },
     "cqt": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.cqt() over the array it already holds, where it composes"
     },
     "vqt": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.vqt() over the array it already holds, where it composes"
     },
     "mel-to-audio": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.mel_to_audio() over the array it already holds, where it composes"
     },
     "mfcc-to-audio": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.mfcc_to_audio() over the array it already holds, where it composes"
     },
     "frames-to-samples": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.frames_to_samples() over the array it already holds, where it composes"
     },
     "samples-to-frames": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.samples_to_frames() over the array it already holds, where it composes"
     },
     "power-to-db": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.power_to_db() over the array it already holds, where it composes"
     },
     "amplitude-to-db": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.amplitude_to_db() over the array it already holds, where it composes"
     },
     "db-to-power": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.db_to_power() over the array it already holds, where it composes"
     },
     "db-to-amplitude": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.db_to_amplitude() over the array it already holds, where it composes"
     },
     "frame-signal": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.frame_signal() over the array it already holds, where it composes"
     },
     "pad-center": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.pad_center() over the array it already holds, where it composes"
     },
     "fix-length": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.fix_length() over the array it already holds, where it composes"
     },
     "fix-frames": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.fix_frames() over the array it already holds, where it composes"
     },
     "peak-pick": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.peak_pick() over the array it already holds, where it composes"
     },
     "vector-normalize": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.vector_normalize() over the array it already holds, where it composes"
     },
     "pcen": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.pcen() over the array it already holds, where it composes"
     },
     "system-info": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "reports the configuration of the binary it is run from, so the same command on the other front-end would describe a different process"
     },
     "mix-strip": {
       "classification": "native_only",
       "status": "native_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "unported",
+      "reason": "a task-level command whose sibling mix is carried by both front-ends; one of the pair being one-sided is an inconsistency rather than a decision"
     },
     "pitch-correct-timevarying": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "unported",
+      "reason": "the native CLI carries only the fixed-target pitch correction"
     },
     "note-move": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "unported",
+      "reason": "the note editing family is split across the front-ends, with note-stretch native-only and this one Python-only"
     },
     "scale-quantize": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "unported",
+      "reason": "no native route to scale quantisation"
     },
     "mastering-chain": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the native CLI spells this mastering --config; the capability is on both front-ends under the name each already had"
     },
     "master": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the native CLI spells this mastering --preset; the capability is on both front-ends under the name each already had"
     },
     "mastering-streaming": {
       "classification": "shared",
@@ -3666,7 +3762,9 @@
     "declip": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the native CLI spells the repair stages as one repair command selecting stages through --params, rather than one command per stage"
     },
     "mastering-presets": {
       "classification": "shared",
@@ -3676,7 +3774,9 @@
     "mastering-suggest": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "unported",
+      "reason": "the native CLI can only reach the assistant through mastering --assistant, which applies the chain; there is no native route to the suggestion alone"
     },
     "mastering-profile": {
       "classification": "shared",
@@ -3686,12 +3786,16 @@
     "midi-render": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "unported",
+      "reason": "no native route to rendering a MIDI file to audio"
     },
     "mix": {
       "classification": "intentional_variant",
       "status": "intentional_variant",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "both front-ends carry the name over different option sets, and neither shape is the one the other should take"
     },
     "repair": {
       "classification": "shared",
@@ -3701,17 +3805,23 @@
     "decompose-stems": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the native CLI is a curated subset of the library and this is not part of it"
     },
     "transcribe": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the native CLI is a curated subset of the library and this is not part of it"
     },
     "suggest-mix": {
       "classification": "python_only",
       "status": "python_only",
-      "option_status": "pending"
+      "option_status": "pending",
+      "reason_kind": "by_design",
+      "reason": "the native CLI is a curated subset of the library and this is not part of it"
     }
   },
   "active_paths": [

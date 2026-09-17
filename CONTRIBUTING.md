@@ -91,6 +91,13 @@ These are the rules a reviewer will check a change against, and most of them are
 - **Python uses keyword arguments; the high-level JS/TS entry points take a request object.** These are deliberate per-surface idioms, not drift. Keep field names and defaults matching across surfaces without making the call shapes identical.
 - **Fixing a parity divergence means deleting its allowlist entry in the same change.** An entry that excuses nothing fails the audit, and a stale one keeps blessing the name for whatever symbol inherits it next.
 
+### The command-line front-ends
+
+- **A new subcommand is unfinished until `tests/conformance/cli_contract_v2.json` classifies it.** The manifest is the ledger for both front-ends — the native `sonare-cli` and the Python `sonare` — and `shared` is the expensive classification, because it also pins an option contract in `inventory.expected_options` and is compared against both binaries. Implementation and ledger rows move together.
+- **A command on one front-end only states why, in the ledger.** `reason_kind` is `by_design` for a decision the project stands behind and `unported` for a gap nobody has closed, with a sentence saying which. A `by_design` reason names the route the other side already has, so it can be checked; an `unported` one expires with the port, the way an allowlist entry expires with its divergence. Without the field a classification and a decision are spelled the same and the difference has to be re-derived from commit messages.
+- **CLI stdout is snake_case throughout.** The core's JSON producers emit camelCase for the object surfaces, so a command that passes such a document through re-keys it — `analysis_json_for_cli()` on the native side, `_json_keys_to_snake_case()` on the Python side. The exception is a document fed back to the library verbatim, whose names belong to the schema that will read it rather than to the CLI.
+- **The live comparison is skipped when either binary is missing, and says so rather than failing.** A ledger row is only checked against reality on a run that has both `build/bin/sonare-cli` and the Python virtualenv, so build both before trusting a green `make conformance` on a manifest change.
+
 ### The C ABI
 
 - **Never bump an ABI version as part of a change.** The versions live in several mirrors that must agree, and `make check-abi-version` verifies the hand-written ones against the C source of truth. A bump belongs to a release that changes a distributed binary's layout.
