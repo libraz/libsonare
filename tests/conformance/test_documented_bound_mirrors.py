@@ -30,13 +30,37 @@ _SPEC.loader.exec_module(check)
 
 CLAIMS = {claim.key: claim for claim in check.CLAIMS}
 
+
+def documents_for(*claims) -> tuple[str, ...]:
+    """Every document the shipping tree's own scan reaches for @p claims.
+
+    Derived rather than listed, because a hand-written path list is exactly
+    what goes stale here. A facade's doc comments were split into new files;
+    the check followed them, since it walks the tree, and only this fixture did
+    not — so every case below failed on a copy that was missing a document
+    rather than on anything the check had got wrong, and eighteen failures said
+    nothing about where the documents had gone.
+
+    One named list survives it, `SPECTRAL_DOCS_EXPECTED`, so a move still has
+    to be confirmed deliberate. That is one failure that says a document moved,
+    which is the report this drift should have produced.
+    """
+    sites = check.collect(check.ROOT, check.doc_blocks(check.ROOT))
+    return tuple(sorted({site.path for claim in claims for site in sites[claim.key]}))
+
+
 SPECTRAL = CLAIMS["spectral edit n_fft ceiling"]
 SPECTRAL_CORE = "src/effects/spectral_edit.h"
-SPECTRAL_DOCS = (
-    "include/sonare/sonare_c_effects.h",
-    "bindings/node/src/types_mastering.ts",
-    "bindings/wasm/src/public_types_spectral.ts",
+SPECTRAL_DOCS = documents_for(SPECTRAL)
+
+#: The four documents that state the spectral edit ceiling, by name — the one
+#: hand-written path list left, and the only thing that notices a document
+#: moving between files.
+SPECTRAL_DOCS_EXPECTED = (
+    "bindings/node/src/types_features.ts",
     "bindings/python/src/libsonare/_effects_spectral.py",
+    "bindings/wasm/src/public_types_spectral.ts",
+    "include/sonare/sonare_c_effects.h",
 )
 
 # The offset case: one constant, one document, two claims that read it -- the
@@ -66,12 +90,8 @@ VOICES_CORE = "src/editing/polyphony/multi_f0.h"
 POLYPHONY_CORES = (SALIENCE_CORE, MASK_CORE, VOICES_CORE)
 
 POLYPHONY_C_HEADER = "include/sonare/sonare_c_polyphony.h"
-POLYPHONY_FACADE_DOCS = (
-    "bindings/node/src/types_mastering.ts",
-    "bindings/wasm/src/public_types_spectral.ts",
-    "bindings/python/src/libsonare/_effects_polyphony.py",
-)
-POLYPHONY_DOCS = (POLYPHONY_C_HEADER, *POLYPHONY_FACADE_DOCS)
+POLYPHONY_DOCS = documents_for(*POLYPHONY_CLAIMS)
+POLYPHONY_FACADE_DOCS = tuple(p for p in POLYPHONY_DOCS if p != POLYPHONY_C_HEADER)
 
 
 class _CopiedTree(unittest.TestCase):
@@ -128,10 +148,20 @@ class ShippingTreeTest(unittest.TestCase):
                     self.assertIn(key, check.CONSTANTS)
 
     def test_the_known_four_surface_mirror_is_covered(self) -> None:
-        """The four documents that carry the spectral edit ceiling, by name."""
+        """The four documents that carry the spectral edit ceiling, by name.
+
+        The only place a path is written out. Everything else derives its file
+        list from the scan, so this is what goes red when a document is split
+        into a new file — one failure naming where it went, instead of every
+        fixture in this module quietly copying a tree with a document missing.
+        """
         sites = check.collect(check.ROOT, check.doc_blocks(check.ROOT))
         found = {site.path for site in sites[SPECTRAL.key]}
-        self.assertEqual(found, set(SPECTRAL_DOCS))
+        self.assertEqual(
+            found, set(SPECTRAL_DOCS_EXPECTED),
+            "a document stating this ceiling has moved between files; confirm the move was "
+            "deliberate and re-record it here",
+        )
 
 
 class PerturbationTest(_CopiedTree):
@@ -227,10 +257,11 @@ class UnreachedClaimTest(_CopiedTree):
     """A claim that stops matching measures less than it reports."""
 
     def test_a_reworded_document_drops_below_the_floor(self) -> None:
+        node_document = next(p for p in SPECTRAL_DOCS if p.startswith("bindings/node/"))
         self.only(
             self.spectral(
                 {
-                    "bindings/node/src/types_mastering.ts": (
+                    node_document: (
                         "a power of two in `[2, 262144]`",
                         "a power of two, no larger than 262144",
                     )
