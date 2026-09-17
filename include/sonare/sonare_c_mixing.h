@@ -440,9 +440,13 @@ void sonare_mixer_destroy(SonareMixer* mixer);
 // @param sample_rate  Shared sample rate for every track.
 // @param params       Flat configuration; accepts targetTrackLufs,
 //                     suggestionStrength, eqMaxCutDb, mixBusHeadroomDbtp,
-//                     enableStructure,
+//                     tempoBpm, enableStructure,
 //                     enableGain, enableBalance, enableEq, enableDynamics,
 //                     enableImage, enableHighPass, nFft and hopLength.
+//                     tempoBpm is the tempo the suggested delay times are voiced
+//                     against; 0 (the default) selects the transport's own
+//                     fallback tempo, and a positive value outside 20..400 BPM
+//                     is refused rather than clamped.
 // @param param_count  Number of entries in @c params.
 // @param json_out     Receives the result JSON. Release with sonare_free_string().
 //

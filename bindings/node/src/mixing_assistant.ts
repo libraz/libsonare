@@ -17,6 +17,7 @@ const OPTION_KEYS = [
   'suggestionStrength',
   'eqMaxCutDb',
   'mixBusHeadroomDbtp',
+  'tempoBpm',
   'enableStructure',
   'enableGain',
   'enableBalance',

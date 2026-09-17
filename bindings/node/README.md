@@ -173,6 +173,7 @@ being sent as an explicit value.
 | `suggestionStrength` | `1`     | Overall strength in `[0, 1]`, scaling every level-like decision; `0` sets them all to zero but keeps routing and the physical image corrections |
 | `eqMaxCutDb`         | `4`     | Largest cut a single suggested EQ band may apply, in dB          |
 | `mixBusHeadroomDbtp` | `-6`    | Headroom the summed mix is left with on the master bus, in dBTP  |
+| `tempoBpm`           | `0`     | Tempo the suggested delay times are voiced against, in BPM; `0` uses the transport fallback |
 | `enableStructure`    | `true`  | Evaluate bus structure, routing and sends                        |
 | `enableGain`         | `true`  | Evaluate per-track gain staging                                  |
 | `enableBalance`      | `true`  | Evaluate fader balance between tracks                            |

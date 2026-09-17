@@ -41,6 +41,7 @@ _PARAM_KEYS = {
     "suggestion_strength": "suggestionStrength",
     "eq_max_cut_db": "eqMaxCutDb",
     "mix_bus_headroom_dbtp": "mixBusHeadroomDbtp",
+    "tempo_bpm": "tempoBpm",
     "enable_structure": "enableStructure",
     "enable_gain": "enableGain",
     "enable_balance": "enableBalance",
@@ -252,6 +253,7 @@ def suggest_mix_scene(
     suggestion_strength: float | None = None,
     eq_max_cut_db: float | None = None,
     mix_bus_headroom_dbtp: float | None = None,
+    tempo_bpm: float | None = None,
     enable_structure: bool | None = None,
     enable_gain: bool | None = None,
     enable_balance: bool | None = None,
@@ -289,6 +291,12 @@ def suggest_mix_scene(
         eq_max_cut_db: Largest cut a single suggested EQ band may apply, in dB.
         mix_bus_headroom_dbtp: Headroom the summed mix is left with on the
             master bus, in dBTP.
+        tempo_bpm: Tempo the suggested delay times are voiced against, in BPM.
+            ``0`` (the default) selects the transport's own fallback tempo: the
+            assistant is handed bare stems and cannot measure a tempo the set as
+            a whole agrees on. Pass the song's tempo and the delay lands on the
+            beat. A positive value outside 20-400 BPM is rejected rather than
+            clamped.
         enable_structure: Suggest bus structure and routing.
         enable_gain: Suggest per-track gain staging.
         enable_balance: Suggest fader balance between tracks.
@@ -328,6 +336,7 @@ def suggest_mix_scene(
             "suggestion_strength": suggestion_strength,
             "eq_max_cut_db": eq_max_cut_db,
             "mix_bus_headroom_dbtp": mix_bus_headroom_dbtp,
+            "tempo_bpm": tempo_bpm,
             "enable_structure": enable_structure,
             "enable_gain": enable_gain,
             "enable_balance": enable_balance,
@@ -350,6 +359,7 @@ def suggest_mix_scene_json(
     suggestion_strength: float | None = None,
     eq_max_cut_db: float | None = None,
     mix_bus_headroom_dbtp: float | None = None,
+    tempo_bpm: float | None = None,
     enable_structure: bool | None = None,
     enable_gain: bool | None = None,
     enable_balance: bool | None = None,
@@ -378,6 +388,7 @@ def suggest_mix_scene_json(
             "suggestion_strength": suggestion_strength,
             "eq_max_cut_db": eq_max_cut_db,
             "mix_bus_headroom_dbtp": mix_bus_headroom_dbtp,
+            "tempo_bpm": tempo_bpm,
             "enable_structure": enable_structure,
             "enable_gain": enable_gain,
             "enable_balance": enable_balance,

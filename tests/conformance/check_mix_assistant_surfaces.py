@@ -48,6 +48,7 @@ OPTION_KEYS = {
     "suggestionStrength": "suggestion_strength",
     "eqMaxCutDb": "eq_max_cut_db",
     "mixBusHeadroomDbtp": "mix_bus_headroom_dbtp",
+    "tempoBpm": "tempo_bpm",
     "enableStructure": "enable_structure",
     "enableGain": "enable_gain",
     "enableBalance": "enable_balance",
@@ -80,6 +81,10 @@ CASES: dict[str, dict[str, float | bool]] = {
     "suggestionStrength=0.5": {"suggestionStrength": 0.5},
     "eqMaxCutDb=0.5": {"eqMaxCutDb": 0.5},
     "mixBusHeadroomDbtp=-14": {"mixBusHeadroomDbtp": -14.0},
+    # Away from the transport fallback of 120, so both delay times move; the
+    # option reaches nothing else, so the delay return is the whole of its
+    # effect and a surface that drops it agrees with the defaults instead.
+    "tempoBpm=90": {"tempoBpm": 90.0},
     "enableStructure=false": {"enableStructure": False},
     "enableGain=false": {"enableGain": False},
     "enableBalance=false": {"enableBalance": False},

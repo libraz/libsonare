@@ -445,6 +445,44 @@ def test_non_finite_option_is_rejected():
         )
 
 
+@pytest.mark.parametrize("tempo", [5.0, 1000.0])
+def test_tempo_outside_the_musical_range_is_rejected(tempo):
+    """A mistyped tempo comes back named rather than as a musical-looking delay.
+
+    The range is the core's and is deliberately not mirrored here, so the
+    refusal arrives as the plain core error the sibling options raise for a
+    value they cannot use (``n_fft=-4`` is the same shape). Asserting that it is
+    *not* a :class:`SonareValueError` is what pins that: the binding's own
+    argument validation would raise one, and a second copy of the bounds on this
+    side is exactly what must not appear.
+    """
+    from libsonare import MixTrackInput, SonareError, SonareValueError, suggest_mix_scene
+
+    with pytest.raises(SonareError, match="tempoBpm") as caught:
+        suggest_mix_scene(
+            [MixTrackInput("bass", _tone(110.0))],
+            sample_rate=SAMPLE_RATE,
+            tempo_bpm=tempo,
+        )
+    assert not isinstance(caught.value, SonareValueError)
+
+
+def test_zero_tempo_selects_the_transport_fallback():
+    """Zero is the documented sentinel, not a tempo, so it is accepted.
+
+    Asserted against the scene the option-free call produces rather than against
+    a delay time spelled here: what a caller gets for zero is defined as "what
+    the assistant did before a tempo could be stated", and comparing the two
+    documents is the only thing that says so.
+    """
+    from libsonare import MixTrackInput, suggest_mix_scene_json
+
+    tracks = [MixTrackInput("leadVox", _tone(220.0), name="vocal")]
+    assert suggest_mix_scene_json(
+        tracks, sample_rate=SAMPLE_RATE, tempo_bpm=0.0
+    ) == suggest_mix_scene_json(tracks, sample_rate=SAMPLE_RATE)
+
+
 def test_scene_json_rejects_bad_input_the_same_way():
     from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene_json
 

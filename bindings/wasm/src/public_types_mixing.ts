@@ -191,6 +191,16 @@ export interface MixAssistantOptions {
   eqMaxCutDb?: number;
   /** Headroom the summed mix is left with on the master bus, in dBTP. Defaults to -6. */
   mixBusHeadroomDbtp?: number;
+  /**
+   * Tempo the suggested delay times are voiced against, in BPM.
+   *
+   * Defaults to 0, which selects the transport's own fallback tempo: the
+   * assistant is handed bare stems and cannot measure a tempo the set as a
+   * whole agrees on. Pass the song's tempo and the delay lands on the beat.
+   *
+   * A positive value outside 20–400 BPM is rejected rather than clamped.
+   */
+  tempoBpm?: number;
   /** Evaluate the structure domain. Defaults to true. */
   enableStructure?: boolean;
   /** Evaluate the gain-staging domain. Defaults to true. */

@@ -78,6 +78,20 @@ struct MixAssistantConfig {
   ///          where the unmodelled part goes.
   float mix_bus_headroom_dbtp = -6.0f;
 
+  /// @brief Tempo the suggested delay times are voiced against, in BPM.
+  /// @details Zero selects the transport's own fallback tempo, which is what the
+  ///          assistant used before a caller could state one: it is handed bare
+  ///          stems and cannot measure a tempo the set as a whole agrees on. A
+  ///          host that already knows the song's tempo passes it here and the
+  ///          delay lands on the beat instead of near it.
+  ///
+  ///          A positive value outside
+  ///          `[kMinAssistantTempoBpm, kMaxAssistantTempoBpm]` is refused at the
+  ///          flat-param boundary rather than clamped, so a mistyped tempo comes
+  ///          back named instead of arriving as a musical-looking delay nothing
+  ///          downstream can tell from a deliberate one.
+  float tempo_bpm = 0.0f;
+
   /// @name Per-domain switches
   /// @brief A disabled domain is not evaluated at all.
   /// @details Skipping the work rather than discarding the result matters: the
@@ -127,6 +141,17 @@ struct MixAssistantConfig {
   int n_fft = 2048;
   int hop_length = 512;
 };
+
+/// @name Range a stated tempo must fall in
+/// @brief Bounds on @ref MixAssistantConfig::tempo_bpm, either side of every
+///        tempo a piece of music is counted in. They exist to catch a value that
+///        is not a tempo at all — a sample rate, a millisecond figure, a beat
+///        period — not to express a house style, which is why they sit well
+///        outside the range any genre uses.
+/// @{
+inline constexpr float kMinAssistantTempoBpm = 20.0f;
+inline constexpr float kMaxAssistantTempoBpm = 400.0f;
+/// @}
 
 /// @brief What the assistant produces.
 struct MixAssistantResult {

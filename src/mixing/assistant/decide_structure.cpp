@@ -380,15 +380,18 @@ constexpr float kReverbPreDelayMs = 45.0f;
 
 // Milliseconds in a minute: the conversion from a tempo in BPM to a beat.
 constexpr float kMillisecondsPerMinute = 60000.0f;
-// The assistant is handed bare stems with no tempo map, so the delay is voiced
-// against the tempo the transport itself falls back to rather than against a
-// number invented here.
-constexpr float kQuarterNoteMs = kMillisecondsPerMinute / static_cast<float>(kDefaultBpm);
 // Three quarters of a beat is a dotted eighth. Setting the two sides of a
 // stereo delay to a quarter and a dotted eighth is the customary pairing: the
 // repeats interleave instead of landing on top of each other.
 constexpr float kDottedEighthPerQuarter = 0.75f;
-constexpr float kDottedEighthNoteMs = kQuarterNoteMs * kDottedEighthPerQuarter;
+
+// A caller that knows the song's tempo states it; the assistant is otherwise
+// handed bare stems with no tempo map and voices the delay against the tempo
+// the transport itself falls back to rather than against a number invented here.
+float quarter_note_ms(const MixAssistantConfig& config) noexcept {
+  const double bpm = config.tempo_bpm > 0.0f ? static_cast<double>(config.tempo_bpm) : kDefaultBpm;
+  return static_cast<float>(kMillisecondsPerMinute / bpm);
+}
 // Few enough repeats to read as an echo rather than as a wash.
 constexpr float kDelayFeedback = 0.3f;
 // Full ping-pong, which is what puts the repeats either side of the part
@@ -427,10 +430,11 @@ json::Object reverb_params() {
   return params;
 }
 
-json::Object delay_params() {
+json::Object delay_params(const MixAssistantConfig& config) {
+  const float quarter_ms = quarter_note_ms(config);
   json::Object params;
-  params["delayTimeLMs"] = json::Value(kDottedEighthNoteMs);
-  params["delayTimeRMs"] = json::Value(kQuarterNoteMs);
+  params["delayTimeLMs"] = json::Value(quarter_ms * kDottedEighthPerQuarter);
+  params["delayTimeRMs"] = json::Value(quarter_ms);
   params["feedback"] = json::Value(kDelayFeedback);
   params["pingPong"] = json::Value(kDelayPingPong);
   params["dryWet"] = json::Value(kReturnDryWet);
@@ -530,7 +534,7 @@ void append_effect_buses(const std::vector<TrackProfile>& profiles, const std::s
   delay.processor_name = kDelayProcessor;
   delay.label = kDelayLabel;
   delay.send_field = &EffectSendRow::delay_db;
-  delay.params = delay_params();
+  delay.params = delay_params(config);
   append_effect_bus(profiles, master_id, delay, strength, ids, deltas);
 }
 

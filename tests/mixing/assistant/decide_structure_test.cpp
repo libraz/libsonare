@@ -7,11 +7,13 @@
 
 #include <algorithm>
 #include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cctype>
 #include <cstddef>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
@@ -397,6 +399,50 @@ TEST_CASE("suggestion strength scales the effect sends", "[mixing][assistant]") 
       INFO("strip " << strip.id << " -> " << send.destination_bus_id);
       REQUIRE(send.send_db < match->send_db);
     }
+  }
+}
+
+TEST_CASE("a stated tempo voices the delay return", "[mixing][assistant]") {
+  // Reads the delay return's two times out of whichever scene carries one. The
+  // effect buses exist only where the optional FX suite is compiled in, so this
+  // is a lookup rather than an assumption, and the caller states what an absent
+  // return means for it.
+  const auto delay_times = [](const Scene& scene) -> std::vector<std::pair<double, double>> {
+    std::vector<std::pair<double, double>> found;
+    for (const auto& strip : scene.strips) {
+      for (const auto& insert : strip.inserts) {
+        if (insert.processor_name != std::string("effects.delay.stereo")) continue;
+        const auto params = sonare::util::json::parse(insert.params_json);
+        REQUIRE(params.is_object());
+        const auto& object = params.as_object();
+        REQUIRE(object.count("delayTimeLMs") == 1);
+        REQUIRE(object.count("delayTimeRMs") == 1);
+        found.emplace_back(object.at("delayTimeLMs").as_number(),
+                           object.at("delayTimeRMs").as_number());
+      }
+    }
+    return found;
+  };
+
+  const std::vector<TrackProfile> profiles = full_band_session();
+
+  MixAssistantConfig stated;
+  stated.tempo_bpm = 90.0f;
+  const auto fallback = delay_times(realise(profiles));
+  const auto voiced = delay_times(realise(profiles, stated));
+
+  // Whether a delay return is proposed at all is the FX build's answer, not the
+  // tempo's: the two configurations must agree on how many there are, or the
+  // tempo has moved something it has no business moving.
+  REQUIRE(fallback.size() == voiced.size());
+  for (std::size_t index = 0; index < fallback.size(); ++index) {
+    INFO("delay return " << index);
+    // The right side is a quarter note and the left a dotted eighth, so the
+    // stated tempo is recoverable from either and both must have moved.
+    REQUIRE(fallback[index].second * 120.0 == Catch::Approx(60000.0).epsilon(1e-4));
+    REQUIRE(voiced[index].second * 90.0 == Catch::Approx(60000.0).epsilon(1e-4));
+    REQUIRE(voiced[index].first == Catch::Approx(voiced[index].second * 0.75).epsilon(1e-4));
+    REQUIRE(voiced[index].second > fallback[index].second);
   }
 }
 
