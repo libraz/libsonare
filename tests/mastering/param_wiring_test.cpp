@@ -1,18 +1,13 @@
-// Regression coverage for three parameter-wiring bugs where a user-specified
-// parameter was silently ignored and the processor ran with the factory
-// default (no error raised):
+// A parameter the caller spells must reach the processor. The failure this file
+// guards against is silent: the value is dropped, the factory default runs, and
+// nothing is raised, so only an assertion on the built config can see it. Three
+// shapes have occurred and each has a case below — a field the named-processor
+// branch never read, a per-band group populated only down to the crossover, and
+// fields absent from the flat and JSON mappings alike, so no binding could
+// reach them and a round-trip lost them.
 //
-//   H4 repair.declip.lpcBlend was dropped by the named-processor branch, so the
-//      declipper always used DeclipConfig::lpc_blend == 0.65f.
-//   H5 multiband.{compressor,expander,limiter,saturation} only set the
-//      crossover and never populated per-band parameters, so band0.thresholdDb
-//      etc. were never read (every band kept its factory default).
-//   H6 the chain compressor mapping (flat Param[] and JSON round-trip) did not
-//      carry detector / sidechainHpf* / pdr* fields, so they were unreachable
-//      from any binding and lost on a JSON round-trip.
-//
-// These assert at the config-building level (the resulting config struct) for
-// determinism rather than comparing audio output.
+// These assert on the resulting config struct rather than on audio, so a
+// failure names the field instead of a spectrum.
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -137,7 +132,7 @@ TEST_CASE("mastering integer parameters refuse a fractional value instead of rou
   CHECK(enum_selector.find("whole number") != std::string::npos);
 }
 
-// --- H4 -------------------------------------------------------------------
+// --- a field the named-processor branch never read -------------------------
 
 TEST_CASE("repair.declip lpcBlend is wired through the named-processor path",
           "[mastering][repair][declip][param_wiring]") {
@@ -156,7 +151,7 @@ TEST_CASE("repair.declip lpcBlend is wired through the named-processor path",
   REQUIRE(config.lpc_blend != 0.65f);
 }
 
-// --- H5 -------------------------------------------------------------------
+// --- per-band groups populated only down to the crossover -------------------
 
 TEST_CASE("multiband per-band params populate via the shared helper",
           "[mastering][multiband][param_wiring]") {
@@ -231,7 +226,7 @@ TEST_CASE("multiband inserts reflect per-band thresholdDb via insert_factory",
   }
 }
 
-// --- H6 -------------------------------------------------------------------
+// --- fields missing from both the flat and the JSON mapping -----------------
 
 TEST_CASE("chain compressor advanced fields survive flat-param apply",
           "[mastering][chain][compressor][param_wiring]") {
@@ -275,7 +270,7 @@ TEST_CASE("chain compressor advanced fields round-trip through JSON",
   REQUIRE(c.pdr_release_scale == 2.25f);
 }
 
-// --- M5: stereo dither decorrelation --------------------------------------
+// --- stereo dither decorrelation --------------------------------------------
 
 TEST_CASE("final.dither decorrelates stereo channels", "[mastering][final][param_wiring]") {
   // Both channels start identical (silent). With correlated dither the two
@@ -342,7 +337,7 @@ TEST_CASE("final.outputChain rejects an out-of-range dither type",
                     sonare::SonareException);
 }
 
-// --- M6: custom crossover band count --------------------------------------
+// --- custom crossover band count ---------------------------------------------
 
 TEST_CASE("multiband custom cutoff count builds and processes",
           "[mastering][multiband][param_wiring]") {
