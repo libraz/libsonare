@@ -453,6 +453,7 @@ def _restore_parser_compat_defaults(args: argparse.Namespace) -> None:
 _OUTPUT_CAPABLE_COMMANDS = frozenset(
     {
         "hpss",
+        "decompose-stems",
         "pitch-correct",
         "pitch-correct-timevarying",
         "note-move",
@@ -476,6 +477,7 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
         "midi-render",
         "mix",
         "project",
+        "transcribe",
     }
 )
 
@@ -660,6 +662,15 @@ def _build_parser() -> _ContractArgumentParser:
     chords_p.add_argument(
         "--detect-inversions", action="store_true", help="Report chord inversions (bass note)"
     )
+    sections_p = sub.add_parser(
+        "sections", parents=[fft_stdout_options], help="Detect song structure"
+    )
+    sections_p.add_argument(
+        "--min-duration",
+        type=_finite_float,
+        default=4.0,
+        help="Minimum section duration in seconds (default: 4.0)",
+    )
     analyze_p = sub.add_parser("analyze", parents=[stdout_options], help="Full music analysis")
     analyze_p.add_argument(
         "--with-seventh", action="store_true", help="Include seventh chords in the analysis"
@@ -755,6 +766,39 @@ def _build_parser() -> _ContractArgumentParser:
         "--hard-mask",
         action="store_true",
         help="Assign each cell to whichever component dominates instead of blending them",
+    )
+
+    stems_p = sub.add_parser(
+        "decompose-stems",
+        parents=[fft_options],
+        help="Separate into NMF components that keep the original phase",
+    )
+    stems_p.add_argument(
+        "--n-components", type=int, default=4, help="Number of NMF components (default: 4)"
+    )
+    stems_p.add_argument(
+        "--n-iter", type=int, default=100, help="NMF update iterations (default: 100)"
+    )
+    stems_p.add_argument(
+        "--beta",
+        type=_finite_float,
+        default=2.0,
+        help="Beta divergence: 2 Frobenius, 1 Kullback-Leibler (default: 2.0)",
+    )
+    _cli_domain(
+        stems_p.add_argument(
+            "--init",
+            default="random",
+            help="NMF initialisation: random or nndsvd (default: random)",
+        ),
+        choices=("random", "nndsvd"),
+        reject_exit="invalid_parameter",
+    )
+    stems_p.add_argument(
+        "--mask-power",
+        type=_finite_float,
+        default=1.0,
+        help="Soft-mask exponent, >= 1; 2 is the Wiener-style power ratio (default: 1.0)",
     )
 
     # Editing commands
@@ -1390,6 +1434,70 @@ def _build_parser() -> _ContractArgumentParser:
         ),
     )
 
+    transcribe_p = sub.add_parser(
+        "transcribe", parents=[common], help="Transcribe audio to a Standard MIDI File"
+    )
+    transcribe_p.add_argument(
+        "--tempo-bpm",
+        type=_finite_float,
+        default=None,
+        help="Tempo the PPQ grid is built on (default: detected from the audio)",
+    )
+    transcribe_p.add_argument(
+        "--polyphonic",
+        action="store_true",
+        help="Read the multi-F0 chain, which finds overlapping notes",
+    )
+    transcribe_p.add_argument(
+        "--reference-hz",
+        type=_finite_float,
+        default=None,
+        help="Tuning reference the MIDI note numbers are measured against (default: 440)",
+    )
+    transcribe_p.add_argument(
+        "--fmin",
+        type=_finite_float,
+        default=None,
+        help="Lowest pitch the monophonic tracker looks for, in Hz (default: 65)",
+    )
+    transcribe_p.add_argument(
+        "--fmax",
+        type=_finite_float,
+        default=None,
+        help="Highest pitch the monophonic tracker looks for, in Hz (default: 2093)",
+    )
+    transcribe_p.add_argument(
+        "--min-note-ms",
+        type=_finite_float,
+        default=None,
+        help="Shortest span kept as a note, in ms (default: 30)",
+    )
+    transcribe_p.add_argument(
+        "--segmentation-threshold-cents",
+        type=_finite_float,
+        default=None,
+        help="Pitch movement that ends one note and starts the next (default: 50)",
+    )
+    transcribe_p.add_argument(
+        "--velocity-floor-db",
+        type=_finite_float,
+        default=None,
+        help="Level mapped to velocity 1; must be negative (default: -48)",
+    )
+    transcribe_p.add_argument(
+        "--fixed-velocity",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Give every note velocity N (1-127) and skip the level measurement",
+    )
+    transcribe_p.add_argument(
+        "--group", type=int, default=0, help="UMP group the events are emitted on (default: 0)"
+    )
+    transcribe_p.add_argument(
+        "--channel", type=int, default=0, help="MIDI channel the events are emitted on (default: 0)"
+    )
+
     # Mixing commands
     sub.add_parser(
         "mixing-presets", parents=[stdout_options], help="List built-in mixer scene presets"
@@ -1399,6 +1507,34 @@ def _build_parser() -> _ContractArgumentParser:
     )
     mixing_preset_p.add_argument(
         "--preset", default="vocalReverbSend", help="Built-in scene preset name"
+    )
+
+    suggest_mix_p = sub.add_parser(
+        "suggest-mix",
+        parents=[stdout_options],
+        help="Suggest a mixer scene from several tracks as JSON",
+    )
+    # One assignment per occurrence, as --set and --edit do: an id written with
+    # the path keeps the pairing in one token, so no second repeatable option has
+    # to be kept in step with this one.
+    suggest_mix_p.add_argument(
+        "--input",
+        action="append",
+        default=[],
+        metavar="[ID=]WAV",
+        help=(
+            "Per-track input WAV (repeat once per track); loaded as mono and "
+            "resampled to --sample-rate; ID defaults to the file's base name"
+        ),
+    )
+    suggest_mix_p.add_argument(
+        "--sample-rate",
+        type=int,
+        default=48000,
+        help="Shared analysis sample rate (default: 48000)",
+    )
+    suggest_mix_p.add_argument(
+        "--params", default="", help="Assistant params as k=v,k=v (default: the library's own)"
     )
 
     mix_p = sub.add_parser(
@@ -1440,12 +1576,14 @@ def _build_parser() -> _ContractArgumentParser:
         "downbeats",
         "onsets",
         "chords",
+        "sections",
         "analyze",
         "mel",
         "chroma",
         "spectral",
         "pitch",
         "hpss",
+        "decompose-stems",
         "pitch-correct",
         "pitch-correct-timevarying",
         "note-move",
@@ -1480,6 +1618,7 @@ def _build_parser() -> _ContractArgumentParser:
         "repair",
         "mastering-suggest",
         "mastering-profile",
+        "transcribe",
     ]:
         sub.choices[name].add_argument("file", help="Audio file path")
 
@@ -1532,12 +1671,14 @@ def _dispatch() -> None:
         "downbeats": cmd_downbeats,
         "onsets": cmd_onsets,
         "chords": cmd_chords,
+        "sections": cmd_sections,
         "analyze": cmd_analyze,
         "mel": cmd_mel,
         "chroma": cmd_chroma,
         "spectral": cmd_spectral,
         "pitch": cmd_pitch,
         "hpss": cmd_hpss,
+        "decompose-stems": cmd_decompose_stems,
         "pitch-correct": cmd_pitch_correct,
         "pitch-correct-timevarying": cmd_pitch_correct_timevarying,
         "note-move": cmd_note_move,
@@ -1583,6 +1724,8 @@ def _dispatch() -> None:
         "mastering-profile": cmd_mastering_profile,
         "project": cmd_project,
         "midi-render": cmd_midi_render,
+        "transcribe": cmd_transcribe,
+        "suggest-mix": cmd_suggest_mix,
         "mixing-presets": cmd_mixing_presets,
         "mixing-preset": cmd_mixing_preset,
         "mix": cmd_mix,

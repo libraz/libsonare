@@ -15,6 +15,9 @@ from ._cli_common import (
     _strict_json_dumps,
     _write_project_bounce_wav,
 )
+from ._cli_common import (
+    _load_audio_from_facade as _load_audio,
+)
 from ._runtime import ErrorCode, SonareError
 
 _MAX_PROJECT_OR_MIDI_BYTES = 64 * 1024 * 1024
@@ -305,3 +308,63 @@ def cmd_project(args: argparse.Namespace) -> int:
 
 def cmd_midi_render(args: argparse.Namespace) -> int:
     return _project_bounce(args, force_synth=True, command_name="midi-render")
+
+
+def cmd_transcribe(args: argparse.Namespace) -> int:
+    from . import Project
+
+    if not args.output:
+        raise ValueError("transcribe requires --output")
+    if args.tempo_bpm is not None and args.tempo_bpm <= 0.0:
+        raise ValueError("--tempo-bpm must be greater than 0")
+
+    samples, sr = _load_audio(args.file)
+    project = Project()
+    try:
+        # The clip's grid is the PROJECT's tempo map, which is why an explicit
+        # tempo is installed rather than passed: `Project.transcribe_to_clip`
+        # takes none. Leaving it out detects one, as `transcribe` does.
+        if args.tempo_bpm is None:
+            tempo_bpm = float(cast(Any, project).auto_tempo(samples, sr))
+        else:
+            tempo_bpm = float(args.tempo_bpm)
+            cast(Any, project).set_tempo_segments([{"start_ppq": 0.0, "bpm": tempo_bpm}])
+        # PPQ coordinates are beats, so the take's length in beats is what the
+        # clip has to span for its last note-off to fall inside it.
+        duration = len(samples) / sr if sr > 0 else 0.0
+        length_ppq = max(1.0, float(math.ceil(duration * tempo_bpm / 60.0)))
+        _track_id, clip_id = cast(Any, project).add_midi_clip(0.0, length_ppq)
+        note_count = cast(Any, project).transcribe_to_clip(
+            clip_id,
+            samples,
+            sr,
+            polyphonic=args.polyphonic,
+            reference_hz=args.reference_hz,
+            fmin=args.fmin,
+            fmax=args.fmax,
+            min_note_ms=args.min_note_ms,
+            segmentation_threshold_cents=args.segmentation_threshold_cents,
+            velocity_floor_db=args.velocity_floor_db,
+            fixed_velocity=args.fixed_velocity,
+            group=args.group,
+            channel=args.channel,
+        )
+        data = cast(Any, project).export_smf()
+    finally:
+        cast(Any, project).close()
+    _atomic_write_bytes(args.output, data)
+    if args.json:
+        print(
+            _strict_json_dumps(
+                {
+                    "output": args.output,
+                    "note_count": note_count,
+                    "tempo_bpm": tempo_bpm,
+                    "bytes": len(data),
+                }
+            )
+        )
+    else:
+        print(f"  Transcribed {note_count} notes at {tempo_bpm:.2f} BPM")
+        print(f"    Wrote: {args.output}")
+    return 0

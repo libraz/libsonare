@@ -10,7 +10,7 @@ A gap here is a statement about reach, not about quality: the CLI is a curated s
 |---|---:|---:|---:|---:|---:|
 | assist | 3 | 0/3 | 0/3 | 0/3 | 0/3 |
 | core (analysis, IO, conversion) | 56 | 46/56 | 46/56 | 44/56 | 16/56 |
-| creative effects | 39 | 38/39 | 38/39 | 38/39 | 15/39 |
+| creative effects | 39 | 38/39 | 38/39 | 38/39 | 16/39 |
 | feature extraction | 135 | 119/135 | 119/135 | 119/135 | 48/135 |
 | mastering | 100 | 90/100 | 90/100 | 92/100 | 8/100 |
 | metering | 40 | 40/40 | 38/40 | 40/40 | 7/40 |
@@ -21,6 +21,6 @@ A gap here is a statement about reach, not about quality: the CLI is a curated s
 | room acoustics | 5 | 5/5 | 5/5 | 5/5 | 5/5 |
 | sample bank | 5 | 5/5 | 5/5 | 5/5 | 1/5 |
 | streaming | 33 | 31/33 | 31/33 | 31/33 | 7/33 |
-| transcription | 3 | 3/3 | 3/3 | 3/3 | 1/3 |
+| transcription | 3 | 3/3 | 3/3 | 3/3 | 2/3 |
 | voice changer | 20 | 20/20 | 20/20 | 19/20 | 3/20 |
-| **all domains** | **769** | **718/769** | **715/769** | **716/769** | **131/769** |
+| **all domains** | **769** | **718/769** | **715/769** | **716/769** | **133/769** |

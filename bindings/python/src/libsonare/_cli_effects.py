@@ -139,6 +139,67 @@ def cmd_hpss(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_decompose_stems(args: argparse.Namespace) -> int:
+    from . import decompose_stems
+
+    if not args.output:
+        print("Error: decompose-stems requires an output file (-o/--output)", file=sys.stderr)
+        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+    # The C side reads any other name as its own default rather than refusing it,
+    # so an unrecognised initialiser is caught here or not at all.
+    if args.init not in {"random", "nndsvd"}:
+        raise ValueError("--init must be 'random' or 'nndsvd'")
+
+    samples, sr = _load_audio(args.file)
+    result = decompose_stems(
+        samples,
+        sample_rate=sr,
+        n_components=args.n_components,
+        n_fft=args.n_fft,
+        hop_length=args.hop_length,
+        n_iter=args.n_iter,
+        beta=args.beta,
+        init=args.init,
+        mask_power=args.mask_power,
+    )
+    components = [
+        [float(value) for value in component]
+        for component in cast(Iterable[Iterable[float]], result["components"])
+    ]
+    output_sr = int(cast(int, result["sample_rate"]))
+
+    # One file per component, numbered from 1, in the base-name shape `hpss`
+    # uses for its two: the destination names the set, not a single file.
+    base = args.output[:-4] if args.output.lower().endswith(".wav") else args.output
+    paths = [f"{base}_component{index}.wav" for index in range(1, len(components) + 1)]
+    for path, component in zip(paths, components, strict=True):
+        _write_wav(path, component, output_sr)
+
+    def _mean_abs(values: list[float]) -> float:
+        return sum(abs(value) for value in values) / len(values) if values else 0.0
+
+    energies = [round(_mean_abs(component), 6) for component in components]
+    if args.json:
+        print(
+            _strict_json_dumps(
+                {
+                    "count": len(components),
+                    "length": len(components[0]) if components else 0,
+                    "sample_rate": output_sr,
+                    "energies": energies,
+                    "components": paths,
+                }
+            )
+        )
+    else:
+        print(f"  Stems: {len(components)} components")
+        for index, (path, energy) in enumerate(zip(paths, energies, strict=True), start=1):
+            print(f"    {index:2d}. energy {energy:.6f}  {path}")
+        if paths:
+            print(f"  Wrote: {', '.join(paths)}")
+    return 0
+
+
 def cmd_pitch_correct(args: argparse.Namespace) -> int:
     from . import pitch_correct_to_midi
 

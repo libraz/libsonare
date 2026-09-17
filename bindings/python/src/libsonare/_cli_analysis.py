@@ -282,6 +282,51 @@ def cmd_chords(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sections(args: argparse.Namespace) -> int:
+    from . import analyze_sections
+
+    samples, sr = _load_audio(args.file)
+    result = analyze_sections(
+        samples,
+        sample_rate=sr,
+        n_fft=args.n_fft,
+        hop_length=args.hop_length,
+        min_section_sec=args.min_duration,
+    )
+    sections = result.sections
+    if args.json:
+        print(
+            _strict_json_dumps(
+                {
+                    "count": len(sections),
+                    "sections": [
+                        {
+                            # The spelling `analyze` serializes, so a consumer
+                            # matching on `type == "chorus"` need not know which
+                            # command produced the document.
+                            "type": section.type.name.casefold().replace("_", "-"),
+                            "start": section.start,
+                            "end": section.end,
+                            "energy": section.energy_level,
+                            "confidence": section.confidence,
+                        }
+                        for section in sections
+                    ],
+                }
+            )
+        )
+    else:
+        print(f"  Sections ({len(sections)}):")
+        for index, section in enumerate(sections, start=1):
+            print(
+                f"    {index:2d}. {section.type.name.casefold().replace('_', '-'):<12s} "
+                f"({section.start:.2f}s - {section.end:.2f}s, "
+                f"energy: {section.energy_level:.2f}, "
+                f"confidence: {section.confidence:.0%})"
+            )
+    return 0
+
+
 def cmd_analyze(args: argparse.Namespace) -> int:
     from . import analyze
 
