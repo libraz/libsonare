@@ -184,6 +184,16 @@ CliOptionDomain above_zero_up_to(double maximum, CliOptionDomainStage stage) {
   return domain;
 }
 
+// An inclusive numeric range. Expressing one as a choices list is exact for a
+// dozen enumerators and absurd for a twelve-bit mask, so a range that is a
+// range says so.
+CliOptionDomain between(double minimum, double maximum, CliOptionDomainStage stage) {
+  CliOptionDomain domain = at_least(minimum, stage);
+  domain.has_maximum = true;
+  domain.maximum = maximum;
+  return domain;
+}
+
 CliOptionDomain choices_of(std::vector<std::string> values, CliOptionDomainStage stage) {
   CliOptionDomain domain;
   domain.choices = std::move(values);
@@ -427,6 +437,19 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(
         commands, "pitch-correct", true,
         {number_value("current-midi", 69.0), number_value("target-midi", 69.0), required_output()});
+    // The MIDI value is the positional, and the three narrowed options carry
+    // the ranges the scale quantizer refuses outside of -- the pitch class, the
+    // twelve-bit mode mask, and the grid anchor. Each is a value the caller
+    // spelled correctly and the library will not act on, so all three take the
+    // invalid-parameter class the Python CLI already reports for them.
+    add_command(
+        commands, "scale-quantize", false,
+        {with_domain(int_value("root", 0), between(0.0, 11.0, CliOptionDomainStage::Parameter)),
+         with_domain(int_value("mode-mask", 0xAB5),
+                     between(1.0, 4095.0, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("reference-midi", 69.0),
+                     between(0.0, 127.0, CliOptionDomainStage::Parameter))},
+        {}, nullptr, 1);
     add_command(commands, "note-stretch", true,
                 {int_value("onset", 0), int_value("offset", 0), number_value("ratio", 1.0),
                  required_output()});

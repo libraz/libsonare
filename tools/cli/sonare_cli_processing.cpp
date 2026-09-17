@@ -117,6 +117,61 @@ int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+namespace {
+
+// The MIDI value this command reads is a positional, not an option, so the
+// registry's option domains cannot refuse it. An absent or unreadable one is
+// the usage failure the Python parser reports for the same argument, which is
+// why it travels as CliUsageError rather than as a handler status.
+double required_positional_number(const CliArgs& args, const char* name) {
+  if (args.positionals.empty()) {
+    throw CliUsageError(std::string("Missing required argument '") + name + "'");
+  }
+  const std::string& text = args.positionals.front();
+  const CliUsageError rejected(std::string("argument ") + name + ": must be a finite number");
+  size_t consumed = 0;
+  double value = 0.0;
+  try {
+    value = std::stod(text, &consumed);
+  } catch (const std::exception&) {
+    throw rejected;
+  }
+  // stod stops at the first character it cannot read, so a trailing tail is a
+  // value the caller misspelled rather than one this accepts a prefix of.
+  if (consumed != text.size() || !std::isfinite(value)) throw rejected;
+  return value;
+}
+
+}  // namespace
+
+int cmd_scale_quantize(const CliArgs& args, const Audio&) {
+  const double midi = required_positional_number(args, "midi");
+  editing::pitch_editor::ScaleQuantizerConfig config;
+  config.root = args.get_int("root", 0);
+  config.mode_mask = static_cast<uint16_t>(args.get_int("mode-mask", 0xAB5));
+  // Zero is the sentinel for "use the library default", which is the anchor the
+  // config already carries. The C ABI applies it and the Python CLI inherits it
+  // from there, so a `--reference-midi 0` that anchored the grid at MIDI 0 here
+  // would answer a different pitch for the same command line.
+  const float reference_midi = args.get_float("reference-midi", 69.0f);
+  if (reference_midi != 0.0f) config.reference_midi = reference_midi;
+
+  const editing::pitch_editor::ScaleQuantizer quantizer(config);
+  const float quantized = quantizer.quantize_midi(static_cast<float>(midi));
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("input_midi", midi)
+        .kv("quantized_midi", quantized)
+        .end_object()
+        .print();
+  } else {
+    std::cout << std::fixed << std::setprecision(6) << quantized << "\n";
+  }
+  return 0;
+}
+
 int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
   editing::pitch_editor::NoteRegion region;
   region.onset_sample = args.get_int("onset", 0);

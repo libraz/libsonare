@@ -841,7 +841,6 @@ class CliContractSelfTest(unittest.TestCase):
                 "mix-strip",
                 "note-move",
                 "pitch-correct-timevarying",
-                "scale-quantize",
                 "suggest-mix",
                 "transcribe",
             },
@@ -887,7 +886,7 @@ class CliContractSelfTest(unittest.TestCase):
             for path, record in self.manifest["commands"].items()
             if record["classification"] == "shared"
         }
-        self.assertEqual(len(shared), 65)
+        self.assertEqual(len(shared), 66)
         self.assertEqual(set(self.manifest["inventory"]["expected_options"]), shared)
         for path in shared:
             self.assertEqual(

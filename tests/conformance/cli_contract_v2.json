@@ -3225,6 +3225,65 @@
           "required": true,
           "domain": null
         }
+      ],
+      "scale-quantize": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "mode-mask",
+          "type": "integer",
+          "default": 2741,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusiveMinimum": false,
+            "maximum": 4095,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "reference-midi",
+          "type": "number",
+          "default": 69,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 127,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "root",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 11,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        }
       ]
     }
   },
@@ -3836,11 +3895,9 @@
       "reason": "the note editing family is split across the front-ends, with note-stretch native-only and this one Python-only"
     },
     "scale-quantize": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "no native route to scale quantisation"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "mastering-chain": {
       "classification": "python_only",
@@ -10843,6 +10900,147 @@
           "payload": "mono_compat_check_log_bands",
           "artifact": "none",
           "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "scale-quantize",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "mode-mask",
+          "type": "integer",
+          "default": 2741,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusiveMinimum": false,
+            "maximum": 4095,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "reference-midi",
+          "type": "number",
+          "default": 69,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 127,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "root",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 11,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "midi",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "input_midi": "number",
+            "quantized_midi": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "root_out_of_range",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--root",
+            "12",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "zero_mode_mask",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--mode-mask",
+            "0",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "reference_midi_out_of_range",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--reference-midi",
+            "200",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}

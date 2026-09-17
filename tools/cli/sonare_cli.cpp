@@ -41,6 +41,7 @@ const std::vector<CommandInfo>& get_commands() {
       {"pitch-shift", "Shift pitch by semitones", cmd_pitch_shift, true},
       {"time-stretch", "Time stretch audio", cmd_time_stretch, true},
       {"pitch-correct", "Correct pitch to target MIDI note", cmd_pitch_correct, true},
+      {"scale-quantize", "Quantize one MIDI value to a scale", cmd_scale_quantize, false},
       {"note-stretch", "Stretch a note region", cmd_note_stretch, true},
       {"polyphonic-notes", "List the notes and per-frame voice count of a polyphonic analysis",
        cmd_polyphonic_notes, true},

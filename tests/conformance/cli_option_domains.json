@@ -283,6 +283,36 @@
       "exclusiveMinimum": false,
       "maximum": null,
       "exclusiveMaximum": false
+    },
+    {
+      "command": "scale-quantize",
+      "option": "root",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": 11.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "scale-quantize",
+      "option": "mode-mask",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 1.0,
+      "exclusiveMinimum": false,
+      "maximum": 4095.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "scale-quantize",
+      "option": "reference-midi",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": 127.0,
+      "exclusiveMaximum": false
     }
   ],
   "requiredInvalidParameter": [

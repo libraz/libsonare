@@ -834,9 +834,31 @@ def _build_parser() -> _ContractArgumentParser:
         "scale-quantize", parents=[stdout_options], help="Quantize one MIDI value to a scale"
     )
     scale_quantize_p.add_argument("midi", type=_finite_float)
-    scale_quantize_p.add_argument("--root", type=int, default=0)
-    scale_quantize_p.add_argument("--mode-mask", type=lambda value: int(value, 0), default=0xAB5)
-    scale_quantize_p.add_argument("--reference-midi", type=_finite_float, default=69.0)
+    # The parser accepts all three and the library refuses them after parsing,
+    # so their accepted sets are declared here rather than left for a reader to
+    # infer from where the refusal happens to live. ``--reference-midi`` takes 0
+    # as the sentinel for the library default, which is why the range is closed
+    # at the bottom instead of starting above it.
+    _cli_domain(
+        scale_quantize_p.add_argument("--root", type=int, default=0),
+        minimum=0,
+        maximum=11,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        scale_quantize_p.add_argument(
+            "--mode-mask", type=lambda value: int(value, 0), default=0xAB5
+        ),
+        minimum=1,
+        maximum=4095,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        scale_quantize_p.add_argument("--reference-midi", type=_finite_float, default=69.0),
+        minimum=0,
+        maximum=127,
+        reject_exit="invalid_parameter",
+    )
     note_stretch_p = sub.add_parser(
         "note-stretch", parents=[common], help="Time-stretch a single note region"
     )
