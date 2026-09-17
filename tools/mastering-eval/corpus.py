@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate the mastering/restoration evaluation corpus and its manifest.
 
 One corpus serves both families (see ``docs/objective.md``). It has three
@@ -48,8 +47,8 @@ sys.path.insert(0, str(_TOOLS / "voicematch"))
 sys.path.insert(0, str(_TOOLS))
 sys.path.insert(0, str(_HERE))
 
-from _repo import REPO_ROOT  # noqa: E402
-from wavio import read_wav, write_wav  # noqa: E402
+from _repo import REPO_ROOT
+from wavio import read_wav, write_wav
 
 SAMPLE_RATE = 48_000
 BIT_DEPTH = 24
@@ -113,7 +112,7 @@ def quantize(audio: np.ndarray) -> np.ndarray:
 
 
 def _time_axis(seconds: float) -> np.ndarray:
-    return np.arange(int(round(SAMPLE_RATE * seconds)), dtype=np.float64) / SAMPLE_RATE
+    return np.arange(round(SAMPLE_RATE * seconds), dtype=np.float64) / SAMPLE_RATE
 
 
 def sine_bed(seconds: float, freq: float = 440.0, amp: float = 0.5) -> np.ndarray:
@@ -168,7 +167,7 @@ def _section_gain(seconds: float, section_seconds: float, levels_db: list[float]
         gain[inside] = 10.0 ** (level_db / 20.0)
     if len(levels_db) * section_seconds < seconds:
         gain[t >= len(levels_db) * section_seconds] = 10.0 ** (levels_db[-1] / 20.0)
-    smoothing = max(1, int(round(fade * SAMPLE_RATE)))
+    smoothing = max(1, round(fade * SAMPLE_RATE))
     window = np.ones(smoothing) / smoothing
     return np.convolve(gain, window, mode="same")
 
@@ -261,7 +260,7 @@ def speech_bed(seconds: float, *, peak: float = 0.5) -> np.ndarray:
     The synthesis is cached: every speech item shares one bed, and the loop in
     :func:`_speech_like` is the slowest thing in this file.
     """
-    frames = int(round(SAMPLE_RATE * seconds))
+    frames = round(SAMPLE_RATE * seconds)
     if frames not in _SPEECH_CACHE:
         _SPEECH_CACHE[frames] = _speech_like(frames, SAMPLE_RATE)
     mono = _SPEECH_CACHE[frames]
@@ -281,8 +280,10 @@ def program_bed(seconds: float) -> np.ndarray:
         beat = np.mod(t, period)
         return np.where(beat < attack, beat / attack, np.exp(-(beat - attack) / release))
 
+    # Integrated, not multiplied by t: a swept frequency times the global t has
+    # instantaneous frequency f + t*df/dt, which aliases once t grows.
     kick_f = 52.0 + 80.0 * np.exp(-np.mod(t, 0.5) * 40.0)
-    kick = pulse(0.5, 0.002, 0.08) * np.sin(2.0 * np.pi * kick_f * t)
+    kick = pulse(0.5, 0.002, 0.08) * np.sin(np.cumsum(2.0 * np.pi * kick_f / SAMPLE_RATE))
     hat = 0.12 * pulse(0.25, 0.001, 0.018) * np.sin(2.0 * np.pi * 8400.0 * t)
     bass = 0.3 * np.sin(2.0 * np.pi * 74.0 * t)
     pad_l = 0.16 * np.sin(2.0 * np.pi * 330.0 * t)
@@ -493,10 +494,10 @@ def _synthetic_rir(
     the planted quantity and the knob the same quantity rather than two numbers
     that share a name.
     """
-    frames = int(round(SAMPLE_RATE * t60_sec * RIR_SPAN_IN_T60))
+    frames = round(SAMPLE_RATE * t60_sec * RIR_SPAN_IN_T60)
     seconds = np.arange(frames, dtype=np.float64) / SAMPLE_RATE
     tail = rng.standard_normal(frames) * np.exp(-3.0 * np.log(10.0) * seconds / t60_sec)
-    tail[: int(round(SAMPLE_RATE * predelay_ms * 1.0e-3))] = 0.0
+    tail[: round(SAMPLE_RATE * predelay_ms * 1.0e-3)] = 0.0
     # The direct impulse carries unit energy, so the tail's total energy is the
     # direct-to-reverberant ratio outright and the ratio is set rather than read.
     tail *= np.sqrt(10.0 ** (-drr_db / 10.0) / float(np.sum(tail**2)))

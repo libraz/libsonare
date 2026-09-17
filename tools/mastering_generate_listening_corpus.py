@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate deterministic mastering listening fixtures.
 
 The files are intentionally synthetic so they can be regenerated without
@@ -13,7 +12,6 @@ import math
 import struct
 import wave
 from pathlib import Path
-
 
 SAMPLE_RATE = 48_000
 DURATION_SECONDS = 4.0
@@ -43,10 +41,14 @@ def envelope(t: float, attack: float, release: float) -> float:
 
 def transient_fixture() -> list[tuple[float, float]]:
     frames: list[tuple[float, float]] = []
+    # Integrated, not multiplied by t: a swept frequency times the global t has
+    # instantaneous frequency f + t*df/dt, which aliases once t grows.
+    kick_phase = 0.0
     for n in range(int(SAMPLE_RATE * DURATION_SECONDS)):
         t = n / SAMPLE_RATE
         beat = t % 0.5
-        kick = envelope(beat, 0.002, 0.08) * math.sin(2.0 * math.pi * (52.0 + 80.0 * math.exp(-beat * 40.0)) * t)
+        kick_phase += 2.0 * math.pi * (52.0 + 80.0 * math.exp(-beat * 40.0)) / SAMPLE_RATE
+        kick = envelope(beat, 0.002, 0.08) * math.sin(kick_phase)
         hat = 0.12 * envelope((t + 0.125) % 0.25, 0.001, 0.018) * math.sin(2.0 * math.pi * 8400.0 * t)
         left = 0.9 * kick + hat
         right = 0.86 * kick - hat

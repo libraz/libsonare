@@ -95,11 +95,11 @@ The reverberant planter is the only one that rescales the clean side too. The we
 |---|---|---|---|
 | `dynamic_sections` | 16 s | four 4-second sections at -6, -18, -10, -22 dB | 4.62 LU |
 | `slow_swell` | 16 s | one ±9 dB swell, 8-second period | 5.27 LU |
-| `program_build` | 12 s | kick/hat transients over bass and pad, slow build | 5.10 LU |
+| `program_build` | 12 s | kick/hat transients over bass and pad, slow build | 5.16 LU |
 
 The spread column is measured, not intended: `corpus.py` calls `metrics_chain.short_term_spread` on each item's own audio and writes the result into the manifest. For reference, the chain at the `pop` preset takes `dynamic_sections` from 4.62 LU down to 3.24 LU.
 
-**`listening`** — the four 4-second fixtures `tools/mastering_generate_listening_corpus.py` produces, imported rather than re-derived so there is one generator for them. They carry no clean reference and no recorded defect quantity, so they serve chain measurement and listening only. `run.py` records them in `skipped` for the restoration family rather than measuring them. Their measured spread runs from 0.00 to 0.35 LU — they reach the window but are close enough to steady that the dynamics metric has no range on them either, which is what the `dynamics` items are for.
+**`listening`** — the four 4-second fixtures `tools/mastering_generate_listening_corpus.py` produces, imported rather than re-derived so there is one generator for them. They carry no clean reference and no recorded defect quantity, so they serve chain measurement and listening only. `run.py` records them in `skipped` for the restoration family rather than measuring them. Their measured spread runs from 0.00 to 0.07 LU — they reach the window but are close enough to steady that the dynamics metric has no range on them either, which is what the `dynamics` items are for.
 
 **`recorded`** — real captures, for what synthesis does not reach. Empty in a clean checkout.
 
