@@ -456,17 +456,28 @@ def _write_wav(
                 _write_wav_mono_frames(wav, chunk, bits_per_sample)
 
 
-def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_rate: int) -> None:
-    """Write a stereo 16-bit PCM WAV using only the Python standard library.
+def _write_wav_stereo(
+    path: str,
+    left: list[float],
+    right: list[float],
+    sample_rate: int,
+    bits_per_sample: int = 16,
+) -> None:
+    """Write a stereo 16- or 24-bit PCM WAV using only the Python standard library.
 
-    Floats are clamped to ``[-1.0, 1.0]`` and scaled by 32767; a non-finite
-    sample becomes digital silence.
+    Floats are clamped to ``[-1.0, 1.0]`` and scaled to the selected PCM range;
+    a non-finite sample becomes digital silence.
     """
     count = min(len(left), len(right))
-    with _atomic_wav_writer(path, 2, sample_rate) as wav:
+    with _atomic_wav_writer(path, 2, sample_rate, bits_per_sample) as wav:
         for offset in range(0, count, _WAV_CHUNK_FRAMES):
             end = min(offset + _WAV_CHUNK_FRAMES, count)
-            _write_wav_stereo_frames(wav, left[offset:end], right[offset:end])
+            if bits_per_sample == 16:
+                # Keep the historical three-argument call shape for callers that
+                # instrument this helper; 24-bit output opts into the width.
+                _write_wav_stereo_frames(wav, left[offset:end], right[offset:end])
+            else:
+                _write_wav_stereo_frames(wav, left[offset:end], right[offset:end], bits_per_sample)
 
 
 def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:

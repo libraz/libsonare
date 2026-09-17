@@ -243,7 +243,49 @@ void write_mastering_report(const std::string& path,
   }
 }
 
-void print_chain_result_json(const mastering::api::MonoChainResult& result, const std::string& mode,
+namespace {
+
+/// The de-interleaved channels of a stereo input.
+struct StereoPlanes {
+  std::vector<float> left;
+  std::vector<float> right;
+};
+
+/// Re-reads `args.input_file` as stereo. A handler is handed the mono downmix
+/// main() decoded, so carrying both channels costs a second decode; the mono
+/// decode stays authoritative on the sample rate, which is what this checks.
+StereoPlanes load_stereo_planes(const CliArgs& args, const Audio& audio) {
+  auto [interleaved, sample_rate, channels] = load_audio_interleaved(args.input_file);
+  SONARE_CHECK(sample_rate == audio.sample_rate() && channels == 2, ErrorCode::DecodeFailed);
+  StereoPlanes planes;
+  planes.left.resize(interleaved.size() / 2);
+  planes.right.resize(interleaved.size() / 2);
+  for (size_t frame = 0; frame < planes.left.size(); ++frame) {
+    planes.left[frame] = interleaved[2 * frame];
+    planes.right[frame] = interleaved[2 * frame + 1];
+  }
+  return planes;
+}
+
+/// Writes a processed pair as an interleaved stereo WAV.
+void save_stereo_wav(const std::string& path, const std::vector<float>& left,
+                     const std::vector<float>& right, int sample_rate, int bits) {
+  std::vector<float> interleaved(2 * left.size());
+  for (size_t frame = 0; frame < left.size(); ++frame) {
+    interleaved[2 * frame] = left[frame];
+    interleaved[2 * frame + 1] = frame < right.size() ? right[frame] : 0.0f;
+  }
+  save_wav_multichannel(path, interleaved.data(), left.size(), 2, ChannelLayout::Stereo,
+                        sample_rate, bits);
+}
+
+}  // namespace
+
+// Templated on the result rather than taking MonoChainResult: the stereo result
+// carries the same ChainMetrics and the same three loudness scalars, so one
+// writer keeps the two payloads identical by construction.
+template <typename ChainResult>
+void print_chain_result_json(const ChainResult& result, const std::string& mode,
                              const std::string& output, const std::string& preset,
                              const std::vector<std::string>& explanation = {},
                              bool include_report_latency = false) {
@@ -265,6 +307,44 @@ void print_chain_result_json(const mastering::api::MonoChainResult& result, cons
   }
   if (include_report_latency) json.kv("latency_samples", 0);
   json.end_object().print();
+}
+
+// The loudness payload, written from either the standalone facade result or the
+// loudness-only chain's. `latency_samples` comes from the result on both: the
+// facade documents it as always 0 and the chain never moves it off 0.
+template <typename LoudnessResult>
+void print_loudness_result_json(const LoudnessResult& result,
+                                const mastering::maximizer::LoudnessOptimizeConfig& config,
+                                int sample_rate, const std::string& output) {
+  JsonBuilder()
+      .begin_object()
+      .kv("input_lufs", result.input_lufs)
+      .kv("output_lufs", result.output_lufs)
+      .kv("applied_gain_db", result.applied_gain_db)
+      .kv("target_lufs", config.target_lufs)
+      .kv("ceiling_db", config.ceiling_db)
+      .kv("true_peak_oversample", config.true_peak_oversample)
+      .kv("latency_samples", result.latency_samples)
+      .kv("loudness_target_limited", result.loudness_target_limited)
+      .kv("sample_rate", sample_rate)
+      .kv("output", output)
+      .end_object()
+      .print();
+}
+
+/// The same values as text. `report` is empty when no report was written.
+template <typename LoudnessResult>
+void print_loudness_result_text(const LoudnessResult& result, const std::string& report,
+                                const std::string& output) {
+  std::cout << "\n"
+            << color::cyan << color::bold << "Mastering" << color::reset << "\n"
+            << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
+            << "\n"
+            << "  Output LUFS:     " << result.output_lufs << "\n"
+            << "  Applied Gain:    " << result.applied_gain_db << " dB\n";
+  if (!report.empty()) std::cout << "  Report:          " << report << "\n";
+  if (!output.empty()) std::cout << "  Output:          " << output << "\n";
+  std::cout << "\n";
 }
 
 int cmd_mastering(const CliArgs& args, const Audio& audio) {
@@ -290,6 +370,12 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       throw std::invalid_argument(std::string("--") + assistant_option + " requires --assistant");
     }
   }
+
+  // main() probed the channel count for this invocation; a two-channel input is
+  // mastered as a stereo pair rather than through the mono downmix it was also
+  // handed. Anything else keeps the mono path, including a surround input, which
+  // main() has already warned is downmixed.
+  const bool stereo_input = args.source_channels == 2;
 
   const bool use_chain = selector_count != 0;
   if (use_chain) {
@@ -355,35 +441,53 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
     }
 
     mastering::api::MasteringChain chain(std::move(chain_config));
-    const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
-    if (!args.output_file.empty()) {
-      save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
-               args.get_int("bits", 16));
-    }
-    if (args.has("report")) {
-      write_mastering_report(args.get_string("report"), result.report);
-    }
-
-    if (args.json_output) {
-      print_chain_result_json(result, mode, args.output_file, preset_name,
-                              args.has("explain") ? explanation : std::vector<std::string>{},
-                              args.has("report"));
-    } else {
-      std::cout << "\n"
-                << color::cyan << color::bold << "Mastering Chain" << color::reset << "\n"
-                << "  Mode:            " << mode << "\n";
-      if (!preset_name.empty()) std::cout << "  Preset:          " << preset_name << "\n";
-      std::cout << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
-                << "\n"
-                << "  Output LUFS:     " << result.output_lufs << "\n"
-                << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
-                << "  Stages:          " << result.stages.size() << "\n";
-      if (args.has("explain") && !explanation.empty()) {
-        std::cout << "  Explanation:\n";
-        for (const auto& item : explanation) std::cout << "    - " << item << "\n";
+    // One reporter for both channel counts, so the payload cannot drift between
+    // them: the two results differ only in which buffers were just written.
+    const auto report_chain_result = [&](const auto& result) {
+      if (args.has("report")) {
+        write_mastering_report(args.get_string("report"), result.report);
       }
-      if (!args.output_file.empty()) std::cout << "  Output:          " << args.output_file << "\n";
-      std::cout << "\n";
+      if (args.json_output) {
+        print_chain_result_json(result, mode, args.output_file, preset_name,
+                                args.has("explain") ? explanation : std::vector<std::string>{},
+                                args.has("report"));
+      } else {
+        std::cout << "\n"
+                  << color::cyan << color::bold << "Mastering Chain" << color::reset << "\n"
+                  << "  Mode:            " << mode << "\n";
+        if (!preset_name.empty()) std::cout << "  Preset:          " << preset_name << "\n";
+        std::cout << "  Input LUFS:      " << std::fixed << std::setprecision(2)
+                  << result.input_lufs << "\n"
+                  << "  Output LUFS:     " << result.output_lufs << "\n"
+                  << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
+                  << "  Stages:          " << result.stages.size() << "\n";
+        if (args.has("explain") && !explanation.empty()) {
+          std::cout << "  Explanation:\n";
+          for (const auto& item : explanation) std::cout << "    - " << item << "\n";
+        }
+        if (!args.output_file.empty()) {
+          std::cout << "  Output:          " << args.output_file << "\n";
+        }
+        std::cout << "\n";
+      }
+    };
+
+    if (stereo_input) {
+      const auto planes = load_stereo_planes(args, audio);
+      const auto result = chain.process_stereo(planes.left.data(), planes.right.data(),
+                                               planes.left.size(), audio.sample_rate());
+      if (!args.output_file.empty()) {
+        save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate,
+                        args.get_int("bits", 16));
+      }
+      report_chain_result(result);
+    } else {
+      const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
+      if (!args.output_file.empty()) {
+        save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
+                 args.get_int("bits", 16));
+      }
+      report_chain_result(result);
     }
     return 0;
   }
@@ -393,47 +497,46 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
   config.ceiling_db = args.get_float("ceiling-db", -1.0f);
   config.true_peak_oversample = args.get_int("true-peak-oversample", 4);
 
-  // The standalone loudness facade predates the chain report. Preserve its
-  // output path by default; only the explicit --report request uses the chain
-  // composition that owns the before/after report payload.
-  if (args.has("report")) {
+  // The standalone loudness facade predates the chain report and has no stereo
+  // overload, so two requests route to the loudness-only chain instead: an
+  // explicit --report, which needs the before/after payload only the chain
+  // composes, and a stereo input. That is a route change rather than an
+  // algorithm change -- on the same mono input the loudness-only chain and the
+  // facade return bit-identical samples and the same input/output LUFS and
+  // applied gain.
+  if (args.has("report") || stereo_input) {
     mastering::api::MasteringChainConfig chain_config;
     chain_config.loudness.enabled = true;
     chain_config.loudness.target_lufs = config.target_lufs;
     chain_config.loudness.ceiling_db = config.ceiling_db;
     chain_config.loudness.true_peak_oversample = config.true_peak_oversample;
     mastering::api::MasteringChain chain(std::move(chain_config));
-    const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
-    if (!args.output_file.empty()) {
-      save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
-               args.get_int("bits", 16));
-    }
-    write_mastering_report(args.get_string("report"), result.report);
-    if (args.json_output) {
-      JsonBuilder()
-          .begin_object()
-          .kv("input_lufs", result.input_lufs)
-          .kv("output_lufs", result.output_lufs)
-          .kv("applied_gain_db", result.applied_gain_db)
-          .kv("target_lufs", config.target_lufs)
-          .kv("ceiling_db", config.ceiling_db)
-          .kv("true_peak_oversample", config.true_peak_oversample)
-          .kv("latency_samples", 0)
-          .kv("loudness_target_limited", result.loudness_target_limited)
-          .kv("sample_rate", result.sample_rate)
-          .kv("output", args.output_file)
-          .end_object()
-          .print();
+    const std::string report_path = args.has("report") ? args.get_string("report") : std::string{};
+    const auto report_loudness_result = [&](const auto& result) {
+      if (!report_path.empty()) write_mastering_report(report_path, result.report);
+      if (args.json_output) {
+        print_loudness_result_json(result, config, result.sample_rate, args.output_file);
+      } else {
+        print_loudness_result_text(result, report_path, args.output_file);
+      }
+    };
+
+    if (stereo_input) {
+      const auto planes = load_stereo_planes(args, audio);
+      const auto result = chain.process_stereo(planes.left.data(), planes.right.data(),
+                                               planes.left.size(), audio.sample_rate());
+      if (!args.output_file.empty()) {
+        save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate,
+                        args.get_int("bits", 16));
+      }
+      report_loudness_result(result);
     } else {
-      std::cout << "\n"
-                << color::cyan << color::bold << "Mastering" << color::reset << "\n"
-                << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
-                << "\n"
-                << "  Output LUFS:     " << result.output_lufs << "\n"
-                << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
-                << "  Report:          " << args.get_string("report") << "\n";
-      if (!args.output_file.empty()) std::cout << "  Output:          " << args.output_file << "\n";
-      std::cout << "\n";
+      const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
+      if (!args.output_file.empty()) {
+        save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
+                 args.get_int("bits", 16));
+      }
+      report_loudness_result(result);
     }
     return 0;
   }
@@ -445,31 +548,9 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
   }
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
-        .kv("input_lufs", result.input_lufs)
-        .kv("output_lufs", result.output_lufs)
-        .kv("applied_gain_db", result.applied_gain_db)
-        .kv("target_lufs", config.target_lufs)
-        .kv("ceiling_db", config.ceiling_db)
-        .kv("true_peak_oversample", config.true_peak_oversample)
-        .kv("latency_samples", result.latency_samples)
-        .kv("loudness_target_limited", result.loudness_target_limited)
-        .kv("sample_rate", result.audio.sample_rate())
-        .kv("output", args.output_file)
-        .end_object()
-        .print();
+    print_loudness_result_json(result, config, result.audio.sample_rate(), args.output_file);
   } else {
-    std::cout << "\n"
-              << color::cyan << color::bold << "Mastering" << color::reset << "\n"
-              << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
-              << "\n"
-              << "  Output LUFS:     " << result.output_lufs << "\n"
-              << "  Applied Gain:    " << result.applied_gain_db << " dB\n";
-    if (!args.output_file.empty()) {
-      std::cout << "  Output:          " << args.output_file << "\n";
-    }
-    std::cout << "\n";
+    print_loudness_result_text(result, std::string{}, args.output_file);
   }
   return 0;
 }

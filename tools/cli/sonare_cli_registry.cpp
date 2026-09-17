@@ -364,11 +364,14 @@ std::vector<CliOptionSpec> with_json(std::vector<CliOptionSpec> options) {
 
 // `positionals` names the arity of a leaf that takes a positional which is not
 // an audio file; an audio leaf already takes exactly one and ignores it.
+// `preserves_stereo_input` is the leaf's own answer to what a two-channel input
+// produces.
 void add_command(std::vector<CliCommandSpec>& registry, const char* path, bool requires_audio,
                  std::vector<CliOptionSpec> options, std::vector<std::string> aliases = {},
-                 CliCommandValidator validate = nullptr, size_t positionals = 0) {
+                 CliCommandValidator validate = nullptr, size_t positionals = 0,
+                 bool preserves_stereo_input = false) {
   registry.push_back({path, std::move(aliases), with_json(std::move(options)), requires_audio,
-                      requires_audio ? 1u : positionals, true, validate});
+                      requires_audio ? 1u : positionals, preserves_stereo_input, true, validate});
 }
 
 const std::vector<CliCommandSpec>& build_cli_registry() {
@@ -542,7 +545,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  // domain because the suggester clamps it to [0, 1] rather than
                  // refusing an outside value.
                  target_platform_value(), flag("no-streaming-safe"),
-                 number_value("speech-mono-amount", 1.0)});
+                 number_value("speech-mono-amount", 1.0)},
+                {}, nullptr, 0, true);
     add_command(commands, "mastering-processor", true,
                 {required_string("processor"), string_value("params"), bits_value(), output_value(),
                  flag("stereo")});
@@ -603,7 +607,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
                  number_value("pan", 0.0), string_value("pan-mode", "balance"),
                  number_value("width", 1.0), output_value()},
-                {"mix"});
+                {"mix"}, nullptr, 0, true);
     add_command(commands, "mixing-presets", false, {});
     // The advertised default has to be one the command can actually run: an
     // empty string reaches the preset lookup and fails, and the handler's own

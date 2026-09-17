@@ -844,6 +844,44 @@ def test_master_cli_keeps_a_stereo_input_stereo(tmp_path) -> None:
     assert "downmixed to mono" not in result.stderr
 
 
+@pytest.mark.parametrize(
+    "selector",
+    [
+        pytest.param([], id="loudness"),
+        pytest.param(["--preset", "pop"], id="preset"),
+        pytest.param(["--assistant"], id="assistant"),
+        pytest.param(["--report"], id="report"),
+    ],
+)
+def test_mastering_cli_keeps_a_stereo_input_stereo(tmp_path, selector) -> None:
+    """Every route through `mastering` carries a stereo source as a pair.
+
+    Parametrized over the selectors rather than tested once, because the four
+    reach the chain by different calls -- a preset, a suggested config, an
+    explicit config and the standalone loudness path -- and the last one has no
+    stereo entry of its own to inherit, so it is the one most likely to fall
+    back to a fold without anything noticing.
+    """
+    source = tmp_path / "mix.wav"
+    output = tmp_path / "master.wav"
+    length = 48000
+    left = [0.2 * math.sin(2.0 * math.pi * 220.0 * i / 48000) for i in range(length)]
+    right = [0.2 * math.sin(2.0 * math.pi * 330.0 * i / 48000) for i in range(length)]
+    _write_stereo_wav(str(source), left, right, 48000)
+
+    argv = ["mastering", str(source), "-o", str(output), "--json", *selector]
+    if selector == ["--report"]:
+        argv += [str(tmp_path / "report.json")]
+    result = _run_cli(argv)
+
+    assert result.returncode == 0, result.stderr
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnchannels() == 2
+    # A mono result duplicated across two channels would satisfy the count.
+    assert _side_energy(str(output)) > 0
+    assert "downmixed to mono" not in result.stderr
+
+
 def test_master_cli_keeps_a_mono_input_mono(tmp_path) -> None:
     """The stereo path is taken from the source, not applied to everything."""
     source = tmp_path / "take.wav"

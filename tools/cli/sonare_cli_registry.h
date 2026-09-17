@@ -103,6 +103,11 @@ struct CliCommandSpec {
   /// derived, and a leaf whose positional is something else (the `project`
   /// subcommand, a preset document, a MIDI value) says so on its own record.
   size_t positional_count = 0;
+  /// True when the handler carries a two-channel input through as a stereo
+  /// pair. Every audio leaf is handed the mono downmix main() decodes, so a
+  /// leaf that re-reads the file to keep both channels says so here rather than
+  /// being recognized by name wherever that difference matters.
+  bool preserves_stereo_input = false;
   bool inventory = true;
   /// Cross-option constraint, run after every per-option check passes.
   CliCommandValidator validate = nullptr;

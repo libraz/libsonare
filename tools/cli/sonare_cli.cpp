@@ -466,9 +466,13 @@ int main(int argc, char* argv[]) {
     // Every requires_audio command loads through the mono downmix in
     // load_audio, so any multi-channel input silently loses its channels
     // (metering skews, and an audio-producing command like `eq` writes a mono
-    // file). Warn uniformly instead of only for a hand-picked few commands.
-    if (source_channels > 1 &&
-        ((args.command != "mix" && args.command != "mix-strip") || source_channels != 2)) {
+    // file). Warn uniformly instead of only for a hand-picked few commands: the
+    // exception is the leaf's own declared behaviour, read from the registry,
+    // and only for the two channels such a leaf carries.
+    const CliCommandSpec* command_spec = cli_command_spec_for_path(command_path_for_args(args));
+    const bool carried_as_stereo =
+        source_channels == 2 && command_spec != nullptr && command_spec->preserves_stereo_input;
+    if (source_channels > 1 && !carried_as_stereo) {
       std::cerr << "warning: " << source_channels
                 << "-channel input is downmixed to mono by this CLI command; use the stereo "
                    "library API for channel-preserving processing\n";

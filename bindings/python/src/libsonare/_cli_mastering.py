@@ -249,7 +249,9 @@ def _check_eq_enum_options(args: argparse.Namespace) -> None:
 
 
 def cmd_mastering(args: argparse.Namespace) -> int:
-    samples, sr = _load_audio(args.file)
+    planes, sr = _load_for_stereo_chain(args.file)
+    samples = planes[0]
+    stereo = len(planes) == 2
     report_path = getattr(args, "report", "") or ""
     preset = getattr(args, "preset", None) or ""
     config_raw = getattr(args, "config", None) or ""
@@ -302,28 +304,44 @@ def cmd_mastering(args: argparse.Namespace) -> int:
             raise ValueError(f"{joined} cannot be combined with --{selectors[0]}")
 
     params = _parse_kv_params(params_raw) if params_raw else {}
+
+    def _run_chain(config: dict[str, Any]) -> Any:
+        """Run one chain config over however many channels the source has."""
+        from . import mastering_chain, mastering_chain_stereo
+
+        if stereo:
+            return mastering_chain_stereo(planes[0], planes[1], sample_rate=sr, config=config)
+        return mastering_chain(samples, sample_rate=sr, config=config)
+
     result: Any
     mode = "loudness"
     explanation: list[str] = []
     if preset:
-        from . import master_audio
+        from . import master_audio, master_audio_stereo
 
-        result = master_audio(
-            samples,
-            sample_rate=sr,
-            preset_name=cast("MasteringPreset", preset),
-            overrides=params or None,
-        )
+        if stereo:
+            result = master_audio_stereo(
+                planes[0],
+                planes[1],
+                sample_rate=sr,
+                preset_name=cast("MasteringPreset", preset),
+                overrides=params or None,
+            )
+        else:
+            result = master_audio(
+                samples,
+                sample_rate=sr,
+                preset_name=cast("MasteringPreset", preset),
+                overrides=params or None,
+            )
         mode = "preset"
     elif config_raw:
-        from . import mastering_chain
-
         config = _chain_params_config(_mastering_config(config_raw))
         config.update(params)
-        result = mastering_chain(samples, sample_rate=sr, config=config)
+        result = _run_chain(config)
         mode = "config"
     elif assistant:
-        from . import mastering_assistant_suggest, mastering_chain
+        from . import mastering_assistant_suggest, mastering_assistant_suggest_stereo
 
         suggestion_params: dict[str, float | int | bool | str] = {
             "enableRepair": enable_repair,
@@ -341,8 +359,14 @@ def cmd_mastering(args: argparse.Namespace) -> int:
             suggestion_params["targetLufs"] = float(getattr(args, "target_lufs", -14.0))
         if _option_supplied(args, "ceiling-db"):
             suggestion_params["ceilingDb"] = float(getattr(args, "ceiling_db", -1.0))
+        # The assistant reads the material to decide the chain, so it is handed
+        # the same channels the chain will run over rather than a fold of them.
         suggestion = json.loads(
-            mastering_assistant_suggest(samples, sample_rate=sr, params=suggestion_params)
+            mastering_assistant_suggest_stereo(
+                planes[0], planes[1], sample_rate=sr, params=suggestion_params
+            )
+            if stereo
+            else mastering_assistant_suggest(samples, sample_rate=sr, params=suggestion_params)
         )
         if not isinstance(suggestion, dict) or not isinstance(suggestion.get("chainConfig"), dict):
             raise ValueError("mastering assistant returned an invalid chain config")
@@ -353,7 +377,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         # assistant's suggested/default chain value intact.
         if _option_supplied(args, "true-peak-oversample"):
             config["loudness.truePeakOversample"] = float(getattr(args, "true_peak_oversample", 4))
-        result = mastering_chain(samples, sample_rate=sr, config=config)
+        result = _run_chain(config)
         explanation_value = suggestion.get("explanation", [])
         if not isinstance(explanation_value, list) or not all(
             isinstance(item, str) for item in explanation_value
@@ -361,20 +385,21 @@ def cmd_mastering(args: argparse.Namespace) -> int:
             raise ValueError("mastering assistant returned invalid explanation data")
         explanation = list(explanation_value)
         mode = "assistant"
-    elif report_path:
-        from . import mastering_chain
-
-        result = mastering_chain(
-            samples,
-            sample_rate=sr,
-            config={
+    elif report_path or stereo:
+        # The standalone loudness facade has no stereo form, so a stereo source
+        # takes the loudness-only chain the report path already uses. That is
+        # the same operation rather than a substitute: over one mono input the
+        # two produce bit-identical samples and identical input/output LUFS and
+        # applied gain.
+        result = _run_chain(
+            {
                 "loudness": {
                     "enabled": True,
                     "targetLufs": getattr(args, "target_lufs", -14.0),
                     "ceilingDb": getattr(args, "ceiling_db", -1.0),
                     "truePeakOversample": getattr(args, "true_peak_oversample", 4),
                 }
-            },
+            }
         )
     else:
         from .audio import Audio
@@ -385,9 +410,10 @@ def cmd_mastering(args: argparse.Namespace) -> int:
             true_peak_oversample=getattr(args, "true_peak_oversample", 4),
         )
 
+    rendered = [result.left, result.right] if stereo else [result.samples]
     output = getattr(args, "output", "") or ""
     if output:
-        _write_wav(output, result.samples, result.sample_rate, bits)
+        _write_chain_output(output, rendered, result.sample_rate, bits)
     if report_path:
         _write_mastering_report(report_path, result.report)
 
@@ -740,12 +766,14 @@ def _load_for_stereo_chain(path: str) -> tuple[list[list[float]], int]:
     return [samples], sample_rate
 
 
-def _write_chain_output(path: str, channels: list[list[float]], sample_rate: int) -> None:
+def _write_chain_output(
+    path: str, channels: list[list[float]], sample_rate: int, bits_per_sample: int = 16
+) -> None:
     """Write however many channels the chain produced."""
     if len(channels) == 2:
-        _write_wav_stereo(path, channels[0], channels[1], sample_rate)
+        _write_wav_stereo(path, channels[0], channels[1], sample_rate, bits_per_sample)
     else:
-        _write_wav(path, channels[0], sample_rate)
+        _write_wav(path, channels[0], sample_rate, bits_per_sample)
 
 
 def cmd_master(args: argparse.Namespace) -> int:

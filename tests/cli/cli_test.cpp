@@ -3335,6 +3335,112 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   }
 }
 
+TEST_CASE("CLI mastering carries a stereo input through as a stereo pair", "[cli][mastering]") {
+  // A mono master written to two channels also reports two channels, so the
+  // side signal is what separates a stereo output from a duplicated mono one.
+  const std::string input = unique_temp_path("_stereo_master.wav");
+  constexpr size_t kFrames = 22050;
+  constexpr int kRate = 22050;
+  std::vector<float> interleaved(2 * kFrames);
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  for (size_t frame = 0; frame < kFrames; ++frame) {
+    const float t = static_cast<float>(frame) / kRate;
+    interleaved[2 * frame] = 0.5f * std::sin(two_pi * 440.0f * t);
+    interleaved[2 * frame + 1] = 0.3f * std::sin(two_pi * 220.0f * t);
+  }
+  save_wav_multichannel(input, interleaved.data(), kFrames, 2, ChannelLayout::Stereo, kRate);
+
+  struct StereoContent {
+    int channels = 0;
+    double side_rms = 0.0;
+    bool channels_identical = true;
+  };
+  const auto measure = [](const std::string& path) {
+    auto [samples, rate, channels] = load_audio_interleaved(path);
+    StereoContent content;
+    content.channels = channels;
+    if (channels != 2 || samples.empty()) return content;
+    const size_t frames = samples.size() / 2;
+    double energy = 0.0;
+    for (size_t frame = 0; frame < frames; ++frame) {
+      const double side = 0.5 * (samples[2 * frame] - samples[2 * frame + 1]);
+      energy += side * side;
+      if (samples[2 * frame] != samples[2 * frame + 1]) content.channels_identical = false;
+    }
+    content.side_rms = std::sqrt(energy / static_cast<double>(frames));
+    return content;
+  };
+
+  // Every selector, because each drives a different path through the handler:
+  // the loudness-only chain, the preset/config chain, the assistant chain, and
+  // the loudness chain the --report request composes.
+  const std::string report_path = unique_temp_path("_stereo_master_report.json");
+  const std::vector<std::pair<std::string, std::string>> runs = {
+      {"loudness", " --target-lufs -18"},
+      {"preset", " --preset pop"},
+      {"assistant", " --assistant"},
+      {"report", " --report " + report_path},
+  };
+  for (const auto& [label, selector] : runs) {
+    CAPTURE(label);
+    const std::string out = unique_temp_path("_stereo_mastered.wav");
+    auto [code, output] =
+        exec_command(CLI + " mastering " + input + " -o " + out + selector + " --json -q");
+    REQUIRE(code == 0);
+    // The downmix warning is main()'s answer to the same question, so a stereo
+    // run that still announced a downmix would contradict its own output.
+    REQUIRE_THAT(output, !ContainsSubstring("downmixed to mono"));
+
+    const StereoContent content = measure(out);
+    CHECK(content.channels == 2);
+    CHECK_FALSE(content.channels_identical);
+    CHECK(content.side_rms > 0.01);
+    std::remove(out.c_str());
+  }
+
+  // A mono input keeps the mono writer, and a command that does downmix keeps
+  // the warning -- the exception is the mastering leaf's own declared
+  // behaviour, not a blanket silence on two-channel input.
+  const std::string mono_input = unique_temp_path("_mono_master.wav");
+  create_test_wav(mono_input, 1.0f, 440.0f, kRate);
+  const std::string mono_out = unique_temp_path("_mono_mastered.wav");
+  auto [mono_code, mono_output] = exec_command(CLI + " mastering " + mono_input + " -o " +
+                                               mono_out + " --target-lufs -18 --json -q");
+  REQUIRE(mono_code == 0);
+  auto [mono_samples, mono_rate, mono_channels] = load_audio_interleaved(mono_out);
+  CHECK(mono_channels == 1);
+
+  const std::string downmixed_out = unique_temp_path("_downmixed.wav");
+  auto [normalize_code, normalize_output] =
+      exec_command(CLI + " normalize " + input + " -o " + downmixed_out + " --json -q");
+  REQUIRE(normalize_code == 0);
+  REQUIRE_THAT(normalize_output, ContainsSubstring("downmixed to mono"));
+
+  // Shape, not just channel count: the stereo run publishes the keys its mono
+  // counterpart publishes. Both come from one writer, which is what keeps their
+  // order identical too -- parsing sorts the keys, so only the set is compared
+  // here.
+  auto [stereo_json_code, stereo_json] =
+      exec_command(CLI + " mastering " + input + " --preset pop --json -q");
+  auto [mono_json_code, mono_json] =
+      exec_command(CLI + " mastering " + mono_input + " --preset pop --json -q");
+  REQUIRE(stereo_json_code == 0);
+  REQUIRE(mono_json_code == 0);
+  const auto stereo_payload = sonare::util::json::parse_strict(stereo_json);
+  const auto mono_payload = sonare::util::json::parse_strict(mono_json);
+  REQUIRE(stereo_payload.size() == mono_payload.size());
+  for (const auto& [key, value] : mono_payload.as_object()) {
+    CAPTURE(key);
+    REQUIRE(stereo_payload.contains(key));
+  }
+
+  std::remove(input.c_str());
+  std::remove(mono_input.c_str());
+  std::remove(mono_out.c_str());
+  std::remove(downmixed_out.c_str());
+  std::remove(report_path.c_str());
+}
+
 TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
   create_noisy_wav(TEST_WAV);
 
