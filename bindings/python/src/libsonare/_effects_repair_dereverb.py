@@ -13,7 +13,6 @@ from ._effects_repair_common import (
     _linked_output_planes,
     _run_detection,
     _run_repair,
-    _unsupported_effect_symbol,
 )
 from ._ffi import (
     SonareDereverbClassicalConfig,
@@ -35,6 +34,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _unsupported_effect_symbol,
 )
 from .types import (
     DereverbClassicalConfig,

@@ -7,9 +7,6 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ._effects_repair_common import (
-    _unsupported_effect_symbol,
-)
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -24,14 +21,15 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _unsupported_effect_symbol,
     _validate_samples,
     _validate_scalar,
 )
 
-_DEFAULT_EFFECT_FRAME_LENGTH = 2048
-
-
-_DEFAULT_EFFECT_HOP_LENGTH = 512
+# Trim's own RMS framing, which is not the STFT framing the spectral effects
+# share -- the two happen to agree on 2048/512 and mean different things.
+_DEFAULT_TRIM_FRAME_LENGTH = 2048
+_DEFAULT_TRIM_HOP_LENGTH = 512
 
 
 def _trim_length(value: int, arg_name: str) -> int:
@@ -139,8 +137,8 @@ def trim(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     threshold_db: float = -60.0,
-    frame_length: int = _DEFAULT_EFFECT_FRAME_LENGTH,
-    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
+    frame_length: int = _DEFAULT_TRIM_FRAME_LENGTH,
+    hop_length: int = _DEFAULT_TRIM_HOP_LENGTH,
     *,
     validate: bool = True,
 ) -> list[float]:
@@ -161,7 +159,7 @@ def trim(
     frame_length, hop_length = _validate_trim_options(frame_length, hop_length)
     lib = _get_lib()
     if not hasattr(lib, "sonare_trim_ex"):
-        if frame_length != _DEFAULT_EFFECT_FRAME_LENGTH or hop_length != _DEFAULT_EFFECT_HOP_LENGTH:
+        if frame_length != _DEFAULT_TRIM_FRAME_LENGTH or hop_length != _DEFAULT_TRIM_HOP_LENGTH:
             raise _unsupported_effect_symbol("sonare_trim_ex")
         if not hasattr(lib, "sonare_trim"):
             raise _unsupported_effect_symbol("sonare_trim")

@@ -9,8 +9,6 @@ from typing import Any
 import numpy as np
 
 from ._runtime import (
-    ErrorCode,
-    SonareError,
     SonareValueError,
     _as_float32_buffer,
     _check,
@@ -22,13 +20,6 @@ from ._runtime import (
     _to_c_size_t,
     _validate_samples,
 )
-
-
-def _unsupported_effect_symbol(symbol: str) -> SonareError:
-    return SonareError(
-        int(ErrorCode.NOT_SUPPORTED),
-        f"libsonare does not export {symbol}; install a matching native library",
-    )
 
 
 def _run_detection(

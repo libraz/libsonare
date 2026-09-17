@@ -9,8 +9,8 @@ import numpy as np
 
 from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
 from ._runtime import (
-    ErrorCode,
-    SonareError,
+    _DEFAULT_EFFECT_HOP_LENGTH,
+    _DEFAULT_EFFECT_N_FFT,
     SonareValueError,
     _check,
     _from_c_float_array,
@@ -24,22 +24,12 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _unsupported_effect_symbol,
     _validate_c_int_field,
     _validate_effect_fft_options,
     _validate_hpss_kernel,
     _validate_samples,
 )
-
-_DEFAULT_EFFECT_N_FFT = 2048
-_DEFAULT_EFFECT_HOP_LENGTH = 512
-
-
-def _unsupported_effect_symbol(symbol: str) -> SonareError:
-    return SonareError(
-        int(ErrorCode.NOT_SUPPORTED),
-        f"libsonare does not export {symbol}; install a matching native library",
-    )
-
 
 # ============================================================================
 # Effects - decomposition / separation
