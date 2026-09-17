@@ -100,16 +100,16 @@ describe('meteringSpectrum optional scalars', () => {
   const spectrum = (options: Record<string, number> = {}) =>
     meteringSpectrum({ samples, sampleRate: SR, ...options } as never).db;
 
-  it.each([
-    'nFft',
-    'octaveFraction',
-    'dbRef',
-    'dbAmin',
-  ])('refuses a negative %s instead of using the default', (field) => {
-    // The integer and float halves of this bag word the refusal differently --
-    // the floats state the sentinel as well -- so the shared part is matched.
-    expect(() => spectrum({ [field]: -5 })).toThrow(new RegExp(`${field} must be .*non-negative`));
-  });
+  it.each(['nFft', 'octaveFraction', 'dbRef', 'dbAmin'])(
+    'refuses a negative %s instead of using the default',
+    (field) => {
+      // The integer and float halves of this bag word the refusal differently --
+      // the floats state the sentinel as well -- so the shared part is matched.
+      expect(() => spectrum({ [field]: -5 })).toThrow(
+        new RegExp(`${field} must be .*non-negative`),
+      );
+    },
+  );
 
   it.each(['nFft', 'octaveFraction'])('refuses a non-finite %s', (field) => {
     expect(() => spectrum({ [field]: Number.NaN })).toThrow(/finite number/);
@@ -124,14 +124,12 @@ describe('meteringSpectrum optional scalars', () => {
     expect(() => spectrum({ [field]: Number.POSITIVE_INFINITY })).toThrow(/finite non-negative/);
   });
 
-  it.each([
-    'nFft',
-    'octaveFraction',
-    'dbRef',
-    'dbAmin',
-  ])('treats 0 for %s as the library default', (field) => {
-    expect(Array.from(spectrum({ [field]: 0 }))).toEqual(Array.from(spectrum()));
-  });
+  it.each(['nFft', 'octaveFraction', 'dbRef', 'dbAmin'])(
+    'treats 0 for %s as the library default',
+    (field) => {
+      expect(Array.from(spectrum({ [field]: 0 }))).toEqual(Array.from(spectrum()));
+    },
+  );
 
   it('applies a non-sentinel dbRef and nFft', () => {
     // The controls for the equalities above: both fields really reach the core.

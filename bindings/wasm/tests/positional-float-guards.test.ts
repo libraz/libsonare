@@ -223,35 +223,34 @@ describe('every positional float parameter refuses a value the float type cannot
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it.each(FLOAT_FIELDS)('$entry names $key rather than accepting an infinity', ({
-    key,
-    run,
-    nonFiniteRefusedInJs,
-  }) => {
-    // This is the case that matters: a value that only saturates onto an
-    // infinity inside embind's glue, which a TS-side finiteness assertion
-    // cannot see because it inspects the number the caller sent.
-    for (const value of SATURATES_ONTO_A_FLOAT) {
-      expectRangeRefusal(
-        capture(() => run(value)),
-        key,
-        `${key} = ${value}`,
-      );
-    }
-    for (const value of NON_FINITE) {
-      const caught = capture(() => run(value));
-      if (nonFiniteRefusedInJs) {
-        // Caught by the facade's own `assertFiniteScalar` before the WASM
-        // call, so it is a RangeError rather than the WASM range refusal.
-        expect(caught, `${key} = ${value}`).toBeInstanceOf(RangeError);
-        expect((caught as RangeError).message, `${key} = ${value}`).toContain(
-          `${key} must be a finite number`,
+  it.each(FLOAT_FIELDS)(
+    '$entry names $key rather than accepting an infinity',
+    ({ key, run, nonFiniteRefusedInJs }) => {
+      // This is the case that matters: a value that only saturates onto an
+      // infinity inside embind's glue, which a TS-side finiteness assertion
+      // cannot see because it inspects the number the caller sent.
+      for (const value of SATURATES_ONTO_A_FLOAT) {
+        expectRangeRefusal(
+          capture(() => run(value)),
+          key,
+          `${key} = ${value}`,
         );
-      } else {
-        expectRangeRefusal(caught, key, `${key} = ${value}`);
       }
-    }
-  });
+      for (const value of NON_FINITE) {
+        const caught = capture(() => run(value));
+        if (nonFiniteRefusedInJs) {
+          // Caught by the facade's own `assertFiniteScalar` before the WASM
+          // call, so it is a RangeError rather than the WASM range refusal.
+          expect(caught, `${key} = ${value}`).toBeInstanceOf(RangeError);
+          expect((caught as RangeError).message, `${key} = ${value}`).toContain(
+            `${key} must be a finite number`,
+          );
+        } else {
+          expectRangeRefusal(caught, key, `${key} = ${value}`);
+        }
+      }
+    },
+  );
 });
 
 describe('vectorNormalize consumes the threshold it accepts', () => {
