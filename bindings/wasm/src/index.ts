@@ -203,27 +203,27 @@ export {
 export type {
   DecomposeNotePitchRequest,
   ExtractNotesRequest,
-  ExtractPercussiveEventsRequest,
-  HarmonicRequest,
-  HpssRequest,
   MergeNotesRequest,
-  NormalizeMode,
-  NormalizeRequest,
   NoteMoveRequest,
   NoteSetRequest,
   NoteStretchRequest,
-  PercussiveRequest,
+  RenderNotesRequest,
+  SplitNoteRequest,
+} from './effects_note_ops';
+export type {
+  ExtractPercussiveEventsRequest,
   PercussiveSeparationOptions,
+  RenderPercussiveEventsRequest,
+} from './effects_percussive';
+export type { HarmonicRequest, HpssRequest, PercussiveRequest } from './effects_separation';
+export type { SpectralEditRequest } from './effects_spectral';
+export type {
   PitchCorrectTimevaryingRequest,
   PitchCorrectToMidiRequest,
   PitchCorrectToMidiTimevaryingRequest,
   PitchShiftRequest,
-  RenderNotesRequest,
-  RenderPercussiveEventsRequest,
-  SpectralEditRequest,
-  SplitNoteRequest,
   TimeStretchRequest,
-} from './effects_transform';
+} from './effects_timepitch';
 export { ErrorCode, isSonareError, SonareError } from './errors';
 export type {
   ChirpRequest,
@@ -419,6 +419,8 @@ export type {
   MasterAudioStereoRequest,
   MasteringChainRequest,
   MasteringChainStereoRequest,
+  NormalizeMode,
+  NormalizeRequest,
 } from './mastering_chain';
 export type { MasteringRequest } from './mastering_core';
 export type {

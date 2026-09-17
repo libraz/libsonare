@@ -1,7 +1,13 @@
-// The repair families are re-exported one by one, so the geometry check they
-// share stays private to _repair_common rather than reaching the public surface.
+// The effect and repair families are re-exported one by one, so the checks they
+// share stay private to their _common modules rather than reaching the public
+// surface.
+export type { EffectSamplesRequest } from './_effects_common.js';
 export type { MasteringRepairSamplesRequest } from './_repair_common.js';
-export * from './effects_transform.js';
+export * from './effects_note_ops.js';
+export * from './effects_percussive.js';
+export * from './effects_separation.js';
+export * from './effects_spectral.js';
+export * from './effects_timepitch.js';
 export * from './mastering_chain.js';
 export * from './mastering_dynamics.js';
 export * from './mastering_streaming.js';

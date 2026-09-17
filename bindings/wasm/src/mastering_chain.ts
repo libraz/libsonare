@@ -7,9 +7,92 @@ import type {
   MasteringPreset,
 } from './public_types';
 import type { ProgressCallback } from './sonare.js';
+import type { ValidateOptions } from './validation';
+import { assertSamples } from './validation';
 
 function requireModule() {
   return getSonareModule();
+}
+
+export type NormalizeMode = 'peak' | 'rms';
+
+function resolveNormalizeMode(value: unknown): NormalizeMode {
+  if (value === undefined) {
+    return 'peak';
+  }
+  if (typeof value !== 'string') {
+    throw new TypeError("normalize: mode must be the string 'peak' or 'rms'");
+  }
+  if (value !== 'peak' && value !== 'rms') {
+    throw new RangeError("normalize: mode must be the string 'peak' or 'rms'");
+  }
+  return value;
+}
+
+export interface NormalizeRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+  targetDb?: number;
+  mode?: NormalizeMode;
+}
+
+/**
+ * Normalize audio to a target peak or RMS level.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @param targetDb - Finite target at or below 0 dBFS (default: 0 dB = full scale).
+ *   For `mode: 'peak'`, this is the peak target; for `mode: 'rms'`, this is the RMS target.
+ * @param mode - Normalization mode: `'peak'` (default) or `'rms'`.
+ * @returns Normalized audio
+ */
+export function normalize(request: NormalizeRequest): Float32Array;
+export function normalize(
+  samples: Float32Array,
+  sampleRate: number,
+  targetDb?: number,
+  options?: ValidateOptions,
+): Float32Array;
+export function normalize(
+  samples: Float32Array,
+  sampleRate: number,
+  targetDb?: number,
+  mode?: NormalizeMode,
+  options?: ValidateOptions,
+): Float32Array;
+export function normalize(
+  samples: Float32Array | NormalizeRequest,
+  sampleRate?: number,
+  targetDb = 0.0,
+  modeOrOptions: NormalizeMode | ValidateOptions = 'peak',
+  options: ValidateOptions = {},
+): Float32Array {
+  if (
+    modeOrOptions !== undefined &&
+    modeOrOptions !== null &&
+    typeof modeOrOptions !== 'string' &&
+    typeof modeOrOptions !== 'object'
+  ) {
+    throw new TypeError("normalize: mode must be the string 'peak' or 'rms'");
+  }
+  if (modeOrOptions === null) {
+    throw new TypeError("normalize: mode must be the string 'peak' or 'rms'");
+  }
+  const positionalOptions =
+    typeof modeOrOptions === 'object' && modeOrOptions !== null ? modeOrOptions : options;
+  const positionalMode = typeof modeOrOptions === 'string' ? modeOrOptions : undefined;
+  const request: NormalizeRequest =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, targetDb, mode: positionalMode, ...positionalOptions }
+      : samples;
+  assertSamples('normalize', request.samples, request.validate !== false);
+  const mode = resolveNormalizeMode(request.mode);
+  return requireModule().normalizeEx(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.targetDb ?? 0.0,
+    mode,
+  );
 }
 
 /** Internal envelope selecting the core dotted-param parser in the embind layer. */

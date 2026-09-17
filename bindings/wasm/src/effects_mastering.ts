@@ -1,24 +1,22 @@
 export {
   decomposeNotePitch,
   extractNotes,
-  extractPercussiveEvents,
-  harmonic,
-  hpss,
   mergeNotes,
-  normalize,
   noteMove,
   noteStretch,
-  percussive,
+  renderNotes,
+  splitNote,
+} from './effects_note_ops';
+export { extractPercussiveEvents, renderPercussiveEvents } from './effects_percussive';
+export { harmonic, hpss, percussive } from './effects_separation';
+export { spectralEdit } from './effects_spectral';
+export {
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchCorrectToMidiTimevarying,
   pitchShift,
-  renderNotes,
-  renderPercussiveEvents,
-  spectralEdit,
-  splitNote,
   timeStretch,
-} from './effects_transform';
+} from './effects_timepitch';
 export type {
   VoiceChangeOptions,
   VoiceChangeRealtimeOptions,
@@ -37,6 +35,7 @@ export {
   masteringChainWithProgress,
   masteringPlatformNames,
   masteringPresetNames,
+  normalize,
 } from './mastering_chain';
 export type {
   MasteringAbMatchLoudnessRequest,
