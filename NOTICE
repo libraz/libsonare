@@ -2,8 +2,8 @@ libsonare
 Copyright 2024 libsonare contributors
 
 This product includes software developed by third parties. Below is the
-attribution for each bundled dependency and the project from which algorithms
-were ported.
+attribution for each third-party component whose code reaches a distributed
+binary, and for the project from which algorithms were ported.
 
 ================================================================================
 librosa
@@ -106,3 +106,22 @@ minimp3
   https://github.com/lieff/minimp3
 
   Vendored in: third_party/minimp3/
+
+================================================================================
+Eigen
+================================================================================
+
+  Copyright (c) Benoit Jacob, Gael Guennebaud and the other Eigen contributors
+
+  Licensed under the Mozilla Public License 2.0 (SPDX: MPL-2.0). Some files in
+  the upstream distribution carry BSD or LGPL terms instead; libsonare compiles
+  with EIGEN_MPL2_ONLY, which upstream defines as a guarantee that no LGPL file
+  is included and makes including one a compilation error.
+
+  Eigen is header-only and is not vendored: the build uses a system Eigen 3.3 or
+  newer where one is installed and otherwise fetches 3.4.1 at configure time.
+  Either way its code is compiled into the distributed binaries, which is why it
+  is listed here. Source for the version a binary was built against is available
+  from the URL below.
+
+  https://gitlab.com/libeigen/eigen

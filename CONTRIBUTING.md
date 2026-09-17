@@ -107,6 +107,7 @@ These are the rules a reviewer will check a change against, and most of them are
 
 - **Feature-gate breakage appears only in a build, never in a test.** `make build-feature-matrix` compiles each option off on its own plus one all-off row. The all-off row is not redundant: a gated symbol can stay reachable through a second enabled feature. No CI job configures a feature-off build, so run this after touching a source list or adding a translation unit outside a gate.
 - **A new library target must be named in the export list at the foot of `src/CMakeLists.txt`**, or it builds and links in tree and is silently missing from `find_package`.
+- **Eigen is compiled with `EIGEN_MPL2_ONLY`.** A handful of headers under `unsupported/` are LGPL rather than MPL-2.0, and libsonare ships Apache-2.0 with no copyleft in any distributed artifact, so including one fails the build with `Including non-MPL2 code in EIGEN_MPL2_ONLY mode`. That error means the header has to go, not the definition.
 
 ### Tests
 

@@ -189,7 +189,7 @@ if(BUILD_WASM AND NOT SONARE_WITH_FFMPEG STREQUAL "OFF")
   set(SONARE_WITH_FFMPEG "OFF" CACHE STRING "" FORCE)
 endif()
 
-# 出力ディレクトリ
+# Output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -230,7 +230,7 @@ if(NOT CMAKE_VERSION VERSION_LESS 3.31)
   endif()
 endif()
 
-# 警告設定 (サードパーティに波及させないためターゲット単位で適用)
+# Warning flags, kept per target so they never reach third-party sources.
 # MSVC /W4 suppressions, applied so MSVC matches the warning bar the primary
 # GCC/Clang build enforces (-Wall -Wextra, which intentionally does NOT include
 # -Wconversion): /wd4244 /wd4267 /wd4305 silence double->float / size_t->int /
@@ -295,7 +295,15 @@ if(NOT Eigen3_FOUND)
   target_include_directories(Eigen3::Eigen SYSTEM INTERFACE ${eigen3_SOURCE_DIR})
 endif()
 
-# サブディレクトリ
+# Eigen is MPL-2.0 except for a few headers under unsupported/ that are LGPL, and
+# libsonare ships Apache-2.0 with no copyleft in any distributed artifact. This
+# turns including one of them into a compile error instead of a licence-audit
+# finding. Set on both branches above, and build-only: sonare_core exports Eigen
+# under BUILD_INTERFACE and sonare_core_objects is not an exported target, so the
+# definition never reaches a consumer, whose own Eigen policy is its own.
+target_compile_definitions(Eigen3::Eigen INTERFACE EIGEN_MPL2_ONLY)
+
+# Subdirectories
 add_subdirectory(src)
 
 # Host backends depend on sonare_engine/midi (defined under src) and on system
