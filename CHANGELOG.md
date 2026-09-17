@@ -107,6 +107,18 @@ Two behaviours are the point of it. A dimension with no observations is reported
 
 The datasets themselves are licensed for research use and are not redistributable, so the manifests still ship empty and the measurement runs against a corpus the user holds.
 
+### Component decomposition
+
+**Behaviour change on every runtime.** `decompose` and `decomposeStems` return different factors for the same input. The NNDSVD seeding step — the starting point the multiplicative updates are given when `init` is `"nndsvd"`, which is the default — now solves its singular value decomposition in double precision rather than single. The `"random"` seeding path is unchanged.
+
+The reason is reproducibility across targets, not accuracy. A magnitude spectrogram's trailing singular vectors sit at single precision's noise floor, so the seed a float decomposition produces depends on the order the target happens to sum in: one input seeds differently on wasm32 and on arm64, and the two runtimes then answer with different components. Solved in double, the seed is bit-identical on both. Components past the input's effective rank are degenerate at any precision and reproduce on neither, so what this guarantees is agreement on the components a signal actually supports.
+
+It is deliberately not described as an accuracy improvement, because it is not one. A more accurate seed does not give a better factorisation: the multiplicative updates are not convex, so a different starting point reaches a different local optimum rather than a nearer one. Measured over two dozen spectrograms at sixteen components, the reconstruction error moved down about as often as it moved up, and by a few percent in either direction.
+
+A caller who has stored factors, or who compares a stem render against one from an earlier release, will see them differ. Shapes, non-negativity and reconstruction quality are unaffected.
+
+The WebAssembly module is 40 kB smaller as a side effect, 15 kB of it compressed: this was the only single-precision matrix decomposition in the library, and the code for it is no longer linked.
+
 ### Distribution
 
 **The C++ library installs.** `cmake --install` now places the archives, both header trees, the CMake package files and the native CLI under the install prefix, and a consumer picks them up with `find_package(sonare)`. Until now the only way to use the core from C++ was `add_subdirectory()` on a checkout — the one runtime of the four the README lists that had no distribution path at all.
