@@ -294,29 +294,41 @@ TEST_CASE("Declick detection recovers the corpus click count", "[repair][stereo]
   // float32 ulp at 12, below which the division cannot land.
   REQUIRE_THAT(detected.per_second, WithinAbs(12.0f, 1.0e-6f));
 
-  // The defaults are too tight for a 0.15 bed: they act on two of the twelve and
-  // say so rather than reporting clean material. A detector that had stalled
+  // The defaults are still tight for a 0.15 bed: they act on eight of the twelve
+  // and say so rather than reporting clean material. A detector that had stalled
   // would report zero on both halves; the sum is the planted quantity at every
   // setting, while the split moves with the knobs.
   const ClickDetection defaults = detect_clicks(samples.data(), samples.size(), kSampleRate);
-  REQUIRE(defaults.count == 2);
-  REQUIRE(defaults.rejected == 10);
+  REQUIRE(defaults.count == 8);
+  REQUIRE(defaults.rejected == 4);
 
+  // Only neighbor_ratio is swept. threshold reaches the output -- suppress the
+  // residual branch and it moves the count from eight to two -- but on this bed
+  // the residual branch already seeds every click, so sweeping it separates
+  // nothing and a row carrying it would assert a constant.
   struct Row {
-    float threshold;
     float neighbor_ratio;
     size_t count;
   };
-  for (const Row& row : {Row{0.8f, 4.0f, 2}, Row{0.5f, 4.0f, 8}, Row{0.4f, 3.0f, 10},
-                         Row{0.4f, 2.0f, 11}, Row{0.35f, 2.0f, 12}}) {
+  for (const Row& row : {Row{6.0f, 4}, Row{5.0f, 6}, Row{4.0f, 8}, Row{3.0f, 10}, Row{2.0f, 12}}) {
     DeclickConfig config = kCorpusDeclick;
-    config.threshold = row.threshold;
     config.neighbor_ratio = row.neighbor_ratio;
     const ClickDetection swept = detect_clicks(samples.data(), samples.size(), kSampleRate, config);
-    CAPTURE(row.threshold, row.neighbor_ratio);
+    CAPTURE(row.neighbor_ratio);
     REQUIRE(swept.count == row.count);
     REQUIRE(swept.count + swept.rejected == kPlantedClicks);
   }
+
+  // The claim the sweep above cannot make for itself: the knob it leaves out is
+  // live, not dead. With the residual branch suppressed the threshold mask is
+  // the only seed and the count follows it.
+  DeclickConfig threshold_only = kCorpusDeclick;
+  threshold_only.neighbor_ratio = 4.0f;
+  threshold_only.residual_ratio = 1.0e9f;
+  threshold_only.threshold = 0.8f;
+  REQUIRE(detect_clicks(samples.data(), samples.size(), kSampleRate, threshold_only).count == 2);
+  threshold_only.threshold = 0.6f;
+  REQUIRE(detect_clicks(samples.data(), samples.size(), kSampleRate, threshold_only).count == 8);
 }
 
 TEST_CASE("Declip detection recovers the corpus clipped-sample count",
