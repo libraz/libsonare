@@ -66,7 +66,7 @@ const POSITIONAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
     'Copies an array of Float32Array planes into a ChannelBlock; not a scalar read, and shared by the engine TUs from one header.',
   ],
   [
-    'effects/mastering.cpp:AssistantConfigFromParams',
+    'effects/mastering_pair.cpp:AssistantConfigFromParams',
     'Not a positional scalar reader: the index names an options OBJECT it flattens into mastering params. Matched only because the shape check is deliberately loose about what follows the index.',
   ],
 ]);

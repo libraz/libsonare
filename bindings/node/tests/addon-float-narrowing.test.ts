@@ -1100,21 +1100,21 @@ const REQUIRED_FLOAT_STATE_ARGUMENTS: FloatArgument[] = [
   },
   {
     name: 'masteringStreamingPreview targetLufs',
-    site: 'effects/mastering.cpp MasteringStreamingPreview targetLufs',
+    site: 'effects/mastering_pair.cpp MasteringStreamingPreview targetLufs',
     control: [-14, -20],
     call: (v) =>
       native.masteringStreamingPreview(SHORT, SAMPLE_RATE, [{ ...PLATFORM, targetLufs: v }]),
   },
   {
     name: 'masteringStreamingPreview ceilingDb',
-    site: 'effects/mastering.cpp MasteringStreamingPreview ceilingDb',
+    site: 'effects/mastering_pair.cpp MasteringStreamingPreview ceilingDb',
     control: [-1, -12],
     call: (v) =>
       native.masteringStreamingPreview(SHORT, SAMPLE_RATE, [{ ...PLATFORM, ceilingDb: v }]),
   },
   {
     name: 'masteringStreamingPreviewStereo targetLufs',
-    site: 'effects/mastering.cpp MasteringStreamingPreviewStereo targetLufs',
+    site: 'effects/mastering_pair.cpp MasteringStreamingPreviewStereo targetLufs',
     control: [-14, -20],
     call: (v) =>
       native.masteringStreamingPreviewStereo(SHORT, SHORT, SAMPLE_RATE, [
@@ -1123,7 +1123,7 @@ const REQUIRED_FLOAT_STATE_ARGUMENTS: FloatArgument[] = [
   },
   {
     name: 'masteringStreamingPreviewStereo ceilingDb',
-    site: 'effects/mastering.cpp MasteringStreamingPreviewStereo ceilingDb',
+    site: 'effects/mastering_pair.cpp MasteringStreamingPreviewStereo ceilingDb',
     control: [-1, -20],
     call: (v) =>
       native.masteringStreamingPreviewStereo(SHORT, SHORT, SAMPLE_RATE, [

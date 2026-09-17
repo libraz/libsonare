@@ -76,6 +76,8 @@ set(ADDON_SOURCES
   src/addon/effects/dynamics.cpp
   src/addon/effects/extra.cpp
   src/addon/effects/mastering.cpp
+  src/addon/effects/mastering_catalog.cpp
+  src/addon/effects/mastering_pair.cpp
   src/addon/effects/mixing.cpp
   src/addon/effects/mixing_assistant.cpp
   src/addon/effects/repair_dereverb.cpp
