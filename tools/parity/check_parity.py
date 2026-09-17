@@ -65,12 +65,18 @@ def run(
     allowlist_path: Path | None = None,
     core_map_path: Path | None = None,
     selected: list[str] | None = None,
+    extractors: dict | None = None,
 ):
     """Build and return the parity :class:`compare.Report` for ``root``.
 
     The reusable core of :func:`main` (no argv parsing / no printing), so callers
     and tests can inspect findings directly. C is always included; surface order
     is canonicalized.
+
+    ``extractors`` overrides individual surface extractors. It exists so a
+    caller can narrow one surface -- the capability matrix runs the CLI surface
+    once per front-end -- and still get the checker's own reachability verdict
+    rather than a second implementation of it.
     """
     root = root or _repo_root()
     allow = allowlist_mod.load(allowlist_path or (_HERE / "allowlist.toml"))
@@ -81,7 +87,8 @@ def run(
         selected = ["c", *selected]
     selected = [s for s in SURFACES if s in selected]
 
-    extractions = {s: _EXTRACTORS[s](root) for s in selected}
+    resolved = {**_EXTRACTORS, **(extractors or {})}
+    extractions = {s: resolved[s](root) for s in selected}
     wasm_int = wasm_internal.extract(root) if "wasm" in selected else None
     return compare.build_report(extractions, allow, selected, core_configs, wasm_int)
 

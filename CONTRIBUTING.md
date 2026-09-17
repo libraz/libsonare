@@ -92,6 +92,8 @@ These are the rules a reviewer will check a change against, and most of them are
 - **Find every caller before a rename, in two passes.** A language server resolves the C++ callers; in the bindings the symbol survives only as a ctypes string or an N-API registration name, which nothing follows, so grep the whole tree. `benchmarks/` and `tools/` are caller trees too and neither is compiled by default.
 - **Python uses keyword arguments; the high-level JS/TS entry points take a request object.** These are deliberate per-surface idioms, not drift. Keep field names and defaults matching across surfaces without making the call shapes identical.
 - **Fixing a parity divergence means deleting its allowlist entry in the same change.** An entry that excuses nothing fails the audit, and a stale one keeps blessing the name for whatever symbol inherits it next.
+- **Read a category's finding count beside its `compared` column.** Zero findings out of zero comparisons renders exactly like zero out of five thousand, and the difference is the whole meaning: `default` reaches a verdict on about one candidate in twenty-five, because a default spelled inside a request-object normalizer is not in the signature the extractor reads. A category that reaches no verdict at all fails the run — an extractor that stops feeding a check produces what a clean tree produces.
+- **A helper is on the surface only if a value re-export reaches it.** `export type { T } from './_helpers'` publishes `T` and nothing else, so the module's functions stay sibling-only and are not compared. Re-export one for real and it becomes a coverage gap, which is the case the check exists for.
 
 ### The command-line front-ends
 

@@ -255,9 +255,22 @@ def _is_attr_call(node: ast.Call, attr: str) -> bool:
     return isinstance(node.func, ast.Attribute) and node.func.attr == attr
 
 
-def extract(root: Path) -> Extraction:
+def extract(root: Path, front_end: str = "both") -> Extraction:
+    """The CLI surface, optionally narrowed to one of the two front-ends.
+
+    ``both`` is the surface the parity checker compares against the C ABI, and
+    it answers "reachable from a command line". ``python`` and ``native`` answer
+    "reachable from THIS binary", which the merged surface cannot: a capability
+    one front-end ships and the other does not reads as present either way. The
+    narrowed forms exist so the published capability matrix can carry a column
+    per binary rather than one column standing for two.
+    """
+    if front_end not in ("both", "python", "native"):
+        raise ValueError(f"unknown CLI front end: {front_end}")
     ex = Extraction(surface="cli")
-    _extract_python_cli(root, ex)
-    _extract_cpp_cli(root, ex)
+    if front_end in ("both", "python"):
+        _extract_python_cli(root, ex)
+    if front_end in ("both", "native"):
+        _extract_cpp_cli(root, ex)
     _note_cross_cli_spellings(ex)
     return ex

@@ -45,6 +45,10 @@ are committed instead, so they can be reviewed in a diff and gated in CI:
   Lifecycle helpers count as reached (the facades answer them with a
   constructor, GC or RAII); an **allowlisted gap still counts as a gap**,
   because an entry records that an absence was reviewed, not that it was filled.
+  The two CLI front-ends get a column each, from a run of this tool with the
+  `cli` extractor narrowed to one of them: the `cli` surface the checker itself
+  compares is their union, and a union cannot show a command only one binary
+  ships. That is the table's one departure from the checker's surface list.
 - The **allowlist audit** (`--audit-allowlist`), which names every
   `allowlist.toml` entry a full-surface run found nothing left to suppress.
   Such an entry is not inert: it keeps asserting a reviewed decision about a

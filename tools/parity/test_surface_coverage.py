@@ -79,7 +79,7 @@ def test_an_allowlisted_gap_still_counts_as_a_gap() -> None:
     c = _c(("mastering_apply_named_processor", "include/sonare/sonare_c_mastering.h"))
     rep = _report(c, {"python": _facade("python")}, allow)
     assert not rep.active(), [f.message for f in rep.active()]
-    missing = surface_coverage.unreachable_keys(rep)
+    missing = surface_coverage.unreachable_keys(rep, ("python",))
     assert "mastering_apply_named_processor" in missing["python"], missing
 
 
@@ -87,7 +87,7 @@ def test_a_lifecycle_helper_is_not_a_gap() -> None:
     """Destructors are answered by the facade object model, not by a function."""
     c = _c(("audio_free", "include/sonare/sonare_c_types_functions.h"))
     rep = _report(c, {"python": _facade("python")})
-    assert "audio_free" not in surface_coverage.unreachable_keys(rep)["python"]
+    assert "audio_free" not in surface_coverage.unreachable_keys(rep, ("python",))["python"]
 
 
 def test_row_counts_and_totals_agree_with_the_findings() -> None:
@@ -100,15 +100,38 @@ def test_row_counts_and_totals_agree_with_the_findings() -> None:
         "python": _facade("python", "mastering_apply", "mixing_add_bus"),
         "node": _facade("node", "mastering_apply", "mastering_analyze", "mixing_add_bus"),
         "wasm": _facade("wasm", "mastering_apply", "mastering_analyze", "mixing_add_bus"),
-        "cli": _facade("cli"),
     }
-    rows = surface_coverage.build_rows(_report(c, facades), _headers(c))
+    rep = _report(c, facades)
+    missing = surface_coverage.unreachable_keys(rep, surface_coverage.COLUMNS)
+    missing["cli_python"] = {"mixing_add_bus"}
+    missing["cli_native"] = set()
+    rows = surface_coverage.build_rows(missing, _headers(c))
     by_domain = {domain: (total, counts) for domain, total, counts in rows}
     assert by_domain["mastering"][0] == 2
     assert by_domain["mastering"][1]["python"] == 1
     assert by_domain["mastering"][1]["node"] == 2
     assert by_domain["mixing & routing"][1]["python"] == 1
-    assert by_domain["mixing & routing"][1]["cli"] == 0
+    # The two front-ends are counted apart, which is the whole point of the
+    # split: one column reads 0 and the other 1 for the same C entry point.
+    assert by_domain["mixing & routing"][1]["cli_python"] == 0
+    assert by_domain["mixing & routing"][1]["cli_native"] == 1
+
+
+def test_a_command_only_the_native_cli_ships_shows_as_a_python_gap() -> None:
+    """The asymmetry the merged column could not express, on the real tree.
+
+    `cqt` is a native `sonare-cli` command with no Python CLI counterpart. The
+    parity checker's `cli` surface is the union of the two front-ends, so it
+    sees no gap at all; the per-front-end columns are where it appears.
+    """
+    root = _HERE.parent.parent
+    import check_parity
+
+    merged = check_parity.run(root=root)
+    assert "cqt" not in surface_coverage.unreachable_keys(merged, ("cli",))["cli"]
+    split = surface_coverage.unreachable_by_column(root, merged)
+    assert "cqt" in split["cli_python"], "python CLI gained a cqt command?"
+    assert "cqt" not in split["cli_native"]
 
 
 def test_the_tracked_table_matches_the_current_surfaces() -> None:
@@ -119,7 +142,8 @@ def test_the_tracked_table_matches_the_current_surfaces() -> None:
     import check_parity
 
     rendered = surface_coverage.render(
-        check_parity.run(root=root), surface_coverage.c_declaration_headers(root)
+        surface_coverage.unreachable_by_column(root, check_parity.run(root=root)),
+        surface_coverage.c_declaration_headers(root),
     )
     assert tracked.read_text(encoding="utf-8") == rendered, (
         "run make surface-coverage"
