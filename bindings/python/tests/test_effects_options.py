@@ -8,7 +8,9 @@ import numpy as np
 import pytest
 
 import libsonare._effects_editing as editing
-import libsonare._effects_mastering as mastering
+import libsonare._effects_level as level
+import libsonare._effects_repair_dereverb as repair_dereverb
+import libsonare._effects_repair_noise as repair_noise
 import libsonare._effects_separation as separation
 from libsonare import ErrorCode, SonareError
 from libsonare._runtime import _get_lib
@@ -132,14 +134,14 @@ def test_hpss_with_residual_options_and_legacy_fallback(monkeypatch: pytest.Monk
 def test_trim_and_rms_normalization_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
     trim_call = _Call()
     trim_lib = SimpleNamespace(sonare_trim_ex=trim_call)
-    monkeypatch.setattr(mastering, "_get_lib", lambda: trim_lib)
-    assert mastering.trim(_samples(), frame_length=64, hop_length=16) == []
+    monkeypatch.setattr(level, "_get_lib", lambda: trim_lib)
+    assert level.trim(_samples(), frame_length=64, hop_length=16) == []
     assert [int(trim_call.calls[0][index].value) for index in (4, 5)] == [64, 16]
 
     rms_call = _Call()
     rms_lib = SimpleNamespace(sonare_normalize_rms=rms_call)
-    monkeypatch.setattr(mastering, "_get_lib", lambda: rms_lib)
-    assert mastering.normalize_rms(_samples(), target_db=-12.0) == []
+    monkeypatch.setattr(level, "_get_lib", lambda: rms_lib)
+    assert level.normalize_rms(_samples(), target_db=-12.0) == []
     assert float(rms_call.calls[0][3].value) == pytest.approx(-12.0)
 
 
@@ -148,14 +150,14 @@ def test_legacy_trim_fallback_and_rms_normalization_is_explicitly_unsupported(
 ) -> None:
     trim_call = _Call()
     legacy = SimpleNamespace(sonare_trim=trim_call)
-    monkeypatch.setattr(mastering, "_get_lib", lambda: legacy)
-    assert mastering.trim(_samples()) == []
+    monkeypatch.setattr(level, "_get_lib", lambda: legacy)
+    assert level.trim(_samples()) == []
     assert len(trim_call.calls) == 1
     with pytest.raises(SonareError, match="sonare_trim_ex"):
-        mastering.trim(_samples(), frame_length=64)
+        level.trim(_samples(), frame_length=64)
 
     with pytest.raises(SonareError, match="sonare_normalize_rms") as error:
-        mastering.normalize_rms(_samples())
+        level.normalize_rms(_samples())
     assert error.value.code == ErrorCode.NOT_SUPPORTED
 
 
@@ -177,13 +179,13 @@ def test_invalid_options_are_rejected_before_library_lookup(
     with pytest.raises(ValueError, match="hop_length"):
         separation.hpss_with_residual(_samples(), hop_length=2**32)
 
-    monkeypatch.setattr(mastering, "_get_lib", fail_lookup)
+    monkeypatch.setattr(level, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="frame_length"):
-        mastering.trim(_samples(), frame_length=0)
+        level.trim(_samples(), frame_length=0)
     with pytest.raises(ValueError, match="hop_length"):
-        mastering.trim(_samples(), hop_length=2**32)
+        level.trim(_samples(), hop_length=2**32)
     with pytest.raises(ValueError, match="float32"):
-        mastering.normalize_rms(_samples(), target_db=-1e100)
+        level.normalize_rms(_samples(), target_db=-1e100)
 
 
 def _has_extended_effects() -> bool:
@@ -212,8 +214,8 @@ def test_extended_effects_work_with_fresh_library() -> None:
     separated_residual = separation.hpss_with_residual(
         samples, n_fft=1024, hop_length=256, hard_mask=True
     )
-    normalized = mastering.normalize_rms(samples, target_db=-12.0)
-    trimmed = mastering.trim(samples, threshold_db=-40.0, frame_length=1024, hop_length=256)
+    normalized = level.normalize_rms(samples, target_db=-12.0)
+    trimmed = level.trim(samples, threshold_db=-40.0, frame_length=1024, hop_length=256)
 
     assert len(stretched) > 0
     assert len(shifted) > 0
@@ -273,9 +275,11 @@ def test_the_n_fft_verdict_matches_the_core_for_both_families() -> None:
     with pytest.raises(ValueError, match="power of two"):
         editing.spectral_edit(samples, 22050, [], n_fft=1500, hop_length=250)
     with pytest.raises(ValueError, match="power of two"):
-        mastering.mastering_repair_denoise_classical(samples, 22050, n_fft=1500, hop_length=250)
+        repair_noise.mastering_repair_denoise_classical(samples, 22050, n_fft=1500, hop_length=250)
     with pytest.raises(ValueError, match="power of two"):
-        mastering.mastering_repair_dereverb_classical(samples, 22050, n_fft=1500, hop_length=250)
+        repair_dereverb.mastering_repair_dereverb_classical(
+            samples, 22050, n_fft=1500, hop_length=250
+        )
 
     # The same three accept a power of two, so the rejection above is the rule
     # and not the entry point refusing everything.
@@ -283,13 +287,13 @@ def test_the_n_fft_verdict_matches_the_core_for_both_families() -> None:
         samples
     )
     assert (
-        mastering.mastering_repair_denoise_classical(
+        repair_noise.mastering_repair_denoise_classical(
             samples, 22050, n_fft=1024, hop_length=256
         ).shape
         == samples.shape
     )
     assert (
-        mastering.mastering_repair_dereverb_classical(
+        repair_dereverb.mastering_repair_dereverb_classical(
             samples, 22050, n_fft=1024, hop_length=256
         ).shape
         == samples.shape
