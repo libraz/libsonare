@@ -35,6 +35,16 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_void_p),
     ]
 
+    # sonare_audio_from_file_channel
+    # Optional for the same reason as the channel-count probe below.
+    if hasattr(lib, "sonare_audio_from_file_channel"):
+        lib.sonare_audio_from_file_channel.restype = ctypes.c_int32
+        lib.sonare_audio_from_file_channel.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+
     # sonare_audio_file_channel_count
     # This is additive to the audio-file ABI. Keep the signature optional so
     # callers that deliberately load an older feature-gated library still get

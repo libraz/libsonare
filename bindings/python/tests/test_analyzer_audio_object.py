@@ -423,3 +423,40 @@ def test_analysis_result_types(analyze_sine_result) -> None:
     assert isinstance(result.beat_times, list)
     for t in result.beat_times:
         assert isinstance(t, float)
+
+
+def test_audio_from_file_channel_keeps_the_channels_apart(tmp_path) -> None:
+    """Each channel arrives as itself; from_file folds them into neither."""
+    import wave
+
+    from libsonare import SonareError
+    from libsonare.audio import Audio
+
+    # Two constant channels sharing no sample, so the fold shows up as a value
+    # neither carries rather than as a difference the test has to bound.
+    path = str(tmp_path / "stereo.wav")
+    frames = 512
+    pcm = bytearray()
+    for _ in range(frames):
+        pcm += int(0.5 * 32767).to_bytes(2, "little", signed=True)
+        pcm += int(-0.25 * 32767).to_bytes(2, "little", signed=True)
+    with wave.open(path, "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(22050)
+        handle.writeframes(bytes(pcm))
+
+    assert Audio.file_channel_count(path) == 2
+    with (
+        Audio.from_file_channel(path, 0) as left,
+        Audio.from_file_channel(path, 1) as right,
+        Audio.from_file(path) as folded,
+    ):
+        assert len(left.data) == frames
+        assert np.allclose(left.data, 0.5, atol=1e-4)
+        assert np.allclose(right.data, -0.25, atol=1e-4)
+        assert np.allclose(folded.data, 0.125, atol=1e-4)
+
+    for index in (2, -1):
+        with pytest.raises(SonareError):
+            Audio.from_file_channel(path, index)

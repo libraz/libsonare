@@ -107,6 +107,34 @@ export class Audio {
     return new Audio(addon.Audio.fromFile(path));
   }
 
+  /**
+   * Load one channel of a file, leaving the others out of it.
+   *
+   * An {@link Audio} carries a single channel, so {@link fromFile} downmixes a
+   * multi-channel source into it. This loads the requested channel instead,
+   * which is what rendering a stereo result needs: pair it with
+   * {@link fileChannelCount} and load each channel in turn.
+   *
+   * The file is decoded once per call, so a stereo load costs two decodes. The
+   * format set and the decoded-buffer contract are {@link fromFile}'s.
+   *
+   * @param path - Source file path.
+   * @param channelIndex - Zero-based channel to load.
+   * @throws SonareError with `codeName: 'InvalidParameter'` when
+   *   `channelIndex` is negative or names no channel the file has, and the same
+   *   load errors {@link fromFile} raises.
+   *
+   * @example
+   * ```ts
+   * const planes = Array.from({ length: Audio.fileChannelCount(path) }, (_, i) =>
+   *   Audio.fromFileChannel(path, i),
+   * );
+   * ```
+   */
+  static fromFileChannel(path: string, channelIndex: number): Audio {
+    return new Audio(addon.Audio.fromFileChannel(path, channelIndex));
+  }
+
   static fileChannelCount(path: string): number {
     return addon.Audio.fileChannelCount(path);
   }

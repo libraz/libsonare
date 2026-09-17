@@ -1473,6 +1473,29 @@ const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'Audio.fromFileChannel',
+    missingRequired: [],
+    // The channel index is read before the file is opened, so these are refused
+    // without a fixture on disk. 2^32 + 1 is the wrap that matters: ToInt32
+    // lands it on 1, a legal channel of a stereo file, so it would decode the
+    // right channel of the wrong caller's request.
+    rejectsArgument: [
+      {
+        argument: 'channelIndex',
+        call: () => addon.Audio.fromFileChannel('/nonexistent.wav', '0'),
+      },
+      {
+        argument: 'omitted channelIndex',
+        call: () => addon.Audio.fromFileChannel('/nonexistent.wav'),
+      },
+      {
+        argument: 'channelIndex past the signed range',
+        call: () => addon.Audio.fromFileChannel('/nonexistent.wav', 2 ** 32 + 1),
+        error: RangeError,
+      },
+    ],
+  },
+  {
     name: 'SonareWrap.peakPick',
     missingRequired: [],
     // Six numeric arguments in a row. Under the inline form the first bad one

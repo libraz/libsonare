@@ -108,6 +108,23 @@ Audio Audio::from_file(const std::string& path) {
   return validated_decoded_audio(std::move(samples), sample_rate);
 }
 
+Audio Audio::from_file_channel(const std::string& path, int channel_index) {
+  auto [interleaved, sample_rate, channels] = load_audio_interleaved(path);
+  SONARE_CHECK_MSG(channels > 0, ErrorCode::DecodeFailed, "decoded audio reports no channels");
+  SONARE_CHECK_MSG(channel_index >= 0 && channel_index < channels, ErrorCode::InvalidParameter,
+                   "Audio::from_file_channel: channel index is outside the file's channels");
+  const std::size_t frames = interleaved.size() / static_cast<std::size_t>(channels);
+  std::vector<float> plane(frames);
+  for (std::size_t frame = 0; frame < frames; ++frame) {
+    plane[frame] = interleaved[frame * static_cast<std::size_t>(channels) +
+                               static_cast<std::size_t>(channel_index)];
+  }
+  // The same policy from_file applies: one plane of a stereo file is decoded
+  // audio like any other, and accepting a NaN here because it arrived beside a
+  // finite channel is the gap this whole entry point exists to close.
+  return validated_decoded_audio(std::move(plane), sample_rate);
+}
+
 Audio Audio::from_memory(const uint8_t* data, size_t size) {
   // load_buffer / detect_format dereference `data` when size is large enough;
   // reject the obviously-invalid (null, size>0) and (anything, size==0) cases up front.

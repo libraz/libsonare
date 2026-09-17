@@ -49,6 +49,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
 
   // Static factory/query methods
   static Napi::Value FromFile(const Napi::CallbackInfo& info);
+  static Napi::Value FromFileChannel(const Napi::CallbackInfo& info);
   static Napi::Value FileChannelCount(const Napi::CallbackInfo& info);
   static Napi::Value FromBuffer(const Napi::CallbackInfo& info);
   static Napi::Value FromMemory(const Napi::CallbackInfo& info);

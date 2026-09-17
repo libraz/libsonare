@@ -40,6 +40,20 @@ SonareError sonare_audio_from_file(const char* path, SonareAudio** out) {
   SONARE_C_CATCH
 }
 
+SonareError sonare_audio_from_file_channel(const char* path, int channel_index, SonareAudio** out) {
+  SONARE_C_API_ENTRY;
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  if (path == nullptr || channel_index < 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  *out = new SonareAudio{Audio::from_file_channel(path, channel_index)};
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_audio_file_channel_count(const char* path, int* out_channels) {
   SONARE_C_API_ENTRY;
   if (out_channels != nullptr) *out_channels = 0;

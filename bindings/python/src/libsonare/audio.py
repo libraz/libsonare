@@ -213,6 +213,41 @@ class Audio:
         return cls(handle, lib)
 
     @classmethod
+    def from_file_channel(cls, path: str, channel_index: int) -> Audio:
+        """Load one channel of a file, leaving the others out of it.
+
+        An :class:`Audio` carries a single channel, so :meth:`from_file`
+        downmixes a multi-channel source into it. This loads the requested
+        channel instead, which is what rendering a stereo result needs: pair it
+        with :meth:`file_channel_count` and load each channel in turn.
+
+        The file is decoded once per call, so a stereo load costs two decodes.
+        The format set and the decoded-buffer contract are :meth:`from_file`'s.
+
+        Raises:
+            RuntimeError: If the loaded native library predates this additive
+                entry point.
+            SonareError: If the file cannot be loaded, or if ``channel_index``
+                names no channel the file has.
+        """
+        lib = _get_lib()
+        load = getattr(lib, "sonare_audio_from_file_channel", None)
+        if load is None:
+            raise RuntimeError(
+                "loaded libsonare does not expose sonare_audio_from_file_channel; "
+                "rebuild or install a newer native library"
+            )
+        handle = ctypes.c_void_p()
+        _check(
+            load(
+                path.encode("utf-8"),
+                _to_c_int(channel_index, "channel_index"),
+                ctypes.byref(handle),
+            )
+        )
+        return cls(handle, lib)
+
+    @classmethod
     def file_channel_count(cls, path: str) -> int:
         """Return the source channel count encoded in an audio file.
 

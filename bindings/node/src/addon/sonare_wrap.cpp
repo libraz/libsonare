@@ -77,6 +77,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&SonareWrap::Ebur128LoudnessRangeInstance>("ebur128LoudnessRange"),
           InstanceMethod<&SonareWrap::Destroy>("destroy"),
           StaticMethod<&SonareWrap::FromFile>("fromFile"),
+          StaticMethod<&SonareWrap::FromFileChannel>("fromFileChannel"),
           StaticMethod<&SonareWrap::FileChannelCount>("fileChannelCount"),
           StaticMethod<&SonareWrap::FromBuffer>("fromBuffer"),
           StaticMethod<&SonareWrap::FromMemory>("fromMemory"),
@@ -617,6 +618,36 @@ Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
 
   SonareAudio* audio_raw = nullptr;
   SonareError err = sonare_audio_from_file(path.c_str(), &audio_raw);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  std::unique_ptr<SonareAudio, decltype(&sonare_audio_free)> audio_guard(audio_raw,
+                                                                         sonare_audio_free);
+
+  Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio_raw);
+  auto result = info.This().As<Napi::Function>().New({external});
+  audio_guard.release();
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::FromFileChannel(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected string path argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  int channel_index = 0;
+  if (!RequiredIntArg(env, info, 1, "channelIndex", &channel_index)) return env.Undefined();
+
+  std::string path = info[0].As<Napi::String>().Utf8Value();
+
+  SonareAudio* audio_raw = nullptr;
+  SonareError err = sonare_audio_from_file_channel(path.c_str(), channel_index, &audio_raw);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

@@ -53,6 +53,19 @@ class Audio {
   ///         [kMinAudioSampleRate, kMaxAudioSampleRate].
   static Audio from_file(const std::string& path);
 
+  /// @brief Loads one channel of a file without downmixing the others into it.
+  /// @details Same format set and same decoded-buffer contract as
+  ///          @ref from_file; what differs is only which samples reach the
+  ///          handle. An Audio models one channel, so a caller that wants a
+  ///          stereo file's two channels loads it twice and holds the pair — the
+  ///          shape the mastering chain's stereo entry points already take.
+  /// @param path Path to audio file
+  /// @param channel_index Zero-based source channel.
+  /// @return Audio holding that channel alone.
+  /// @throws SonareException as @ref from_file does, plus InvalidParameter when
+  ///         @p channel_index names no channel the file has.
+  static Audio from_file_channel(const std::string& path, int channel_index);
+
   /// @brief Loads Audio from memory buffer.
   /// @details Accepts the same build-dependent format set as from_file.
   /// @param data Pointer to audio data

@@ -5,11 +5,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cstdio>
 #include <cstring>
 #include <iterator>
 #include <limits>
+#include <string>
 #include <vector>
 
+#include "core/audio_io.h"
 #include "support/audio_fixtures.h"
 #include "util/exception.h"
 #include "util/types.h"
@@ -300,4 +303,47 @@ TEST_CASE("Audio iterator", "[audio]") {
     sum += s;
   }
   REQUIRE_THAT(sum, WithinAbs(15.0f, 1e-6f));
+}
+
+TEST_CASE("Audio from_file_channel keeps the channels apart", "[audio]") {
+  // Two channels that share no sample, so folding them is visible as a value
+  // neither carries rather than as a difference the test has to bound.
+  constexpr int kSampleRate = 22050;
+  constexpr std::size_t kFrames = 512;
+  std::vector<float> interleaved(kFrames * 2);
+  for (std::size_t frame = 0; frame < kFrames; ++frame) {
+    interleaved[2 * frame] = 0.5f;
+    interleaved[2 * frame + 1] = -0.25f;
+  }
+
+  const std::string path = "test_audio_from_file_channel.wav";
+  save_wav_multichannel(path, interleaved.data(), kFrames, 2, ChannelLayout::Stereo, kSampleRate);
+
+  const Audio left = Audio::from_file_channel(path, 0);
+  const Audio right = Audio::from_file_channel(path, 1);
+  const Audio folded = Audio::from_file(path);
+
+  REQUIRE(left.size() == kFrames);
+  REQUIRE(right.size() == kFrames);
+  REQUIRE(folded.size() == kFrames);
+  REQUIRE(left.sample_rate() == kSampleRate);
+  for (std::size_t frame = 0; frame < kFrames; ++frame) {
+    REQUIRE_THAT(left[frame], WithinAbs(0.5f, 1e-4f));
+    REQUIRE_THAT(right[frame], WithinAbs(-0.25f, 1e-4f));
+    // What from_file does instead, stated positively: the mean of the pair,
+    // which is a value neither channel holds.
+    REQUIRE_THAT(folded[frame], WithinAbs(0.125f, 1e-4f));
+  }
+
+  // A channel the file does not have is refused rather than clamped onto the
+  // last one, and so is the second channel of a mono file.
+  REQUIRE_THROWS_AS(Audio::from_file_channel(path, 2), SonareException);
+  REQUIRE_THROWS_AS(Audio::from_file_channel(path, -1), SonareException);
+  std::remove(path.c_str());
+
+  const std::string mono_path = "test_audio_from_file_channel_mono.wav";
+  save_wav(mono_path, interleaved.data(), kFrames, kSampleRate);
+  REQUIRE(Audio::from_file_channel(mono_path, 0).size() == kFrames);
+  REQUIRE_THROWS_AS(Audio::from_file_channel(mono_path, 1), SonareException);
+  std::remove(mono_path.c_str());
 }

@@ -345,6 +345,10 @@ wasm = [
   # Source-file channel probing also requires host filesystem access and the
   # native decoder stack; WASM intentionally has no Audio.fileChannelCount.
   "audio_file_channel_count",
+  # Loading one channel of a file is the same host-filesystem and decoder
+  # dependency as audio_from_file above; a WASM caller already holds the samples
+  # and builds each channel through Audio.fromBuffer.
+  "audio_from_file_channel",
   # External-instrument bounce is Python-only by design (see node note); WASM is
   # additionally single-threaded and cannot host a synchronous render callback.
   "project_bounce_with_instruments",
