@@ -16,6 +16,7 @@ lets a staged fit score those two against different evidence.
 from __future__ import annotations
 
 import math
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 import numpy as np
@@ -311,7 +312,7 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
 
 
 def probe_rows(mono: np.ndarray, pattern, sr: int, raw: np.ndarray | None = None,
-               max_band_hz: float | None = None) -> list[dict]:
+               max_band_hz: float | None = None, threads: int = 1) -> list[dict]:
     """Measure every analysis note of `pattern` with the metric set it calls for.
 
     A drum hit and a bowed note are both "one note of the probe", but nothing
@@ -334,14 +335,22 @@ def probe_rows(mono: np.ndarray, pattern, sr: int, raw: np.ndarray | None = None
     the percussion set only. It has to be the SAME value on both sides — see
     `analyze_hit` — so it is resolved once from the oracle and handed to every
     model render of the run rather than re-derived per render.
+
+    `threads` measures that many notes at once. Every note reads its own window
+    of a signal nothing here writes to, so the rows are the same rows in the
+    same order whatever this is set to — the only thing it changes is the wall
+    clock. It is worth having because the partial refinement `skeleton_note`
+    runs is the harness's hot spot and numpy drops the interpreter lock for
+    most of it. The caller decides the number: a render already running
+    alongside its siblings wants 1, since the concurrency is being spent a
+    level up.
     """
-    rows = []
     if pattern.percussive:
-        for note in pattern.analysis_notes:
-            rows.append(analyze_hit(mono, sr, note, analysis_window_end(pattern, note),
-                                    max_band_hz=max_band_hz).to_dict())
+        def measure(note) -> dict:
+            return analyze_hit(mono, sr, note, analysis_window_end(pattern, note),
+                               max_band_hz=max_band_hz).to_dict()
     else:
-        for note in pattern.analysis_notes:
+        def measure(note) -> dict:
             end = analysis_window_end(pattern, note)
             # Found once and shared, so nothing that reads the attack can
             # disagree about where the note began.
@@ -358,7 +367,14 @@ def probe_rows(mono: np.ndarray, pattern, sr: int, raw: np.ndarray | None = None
             # Attribution for what the two above price. Not a term and not read
             # by `loss_terms` — see `attack_peaks` and `fixed_resonances`.
             row["attack_peaks"] = attack_peaks(mono, sr, note, onset)
-            rows.append(row)
+            return row
+
+    notes = list(pattern.analysis_notes)
+    if threads > 1 and len(notes) > 1:
+        with ThreadPoolExecutor(max_workers=min(threads, len(notes))) as pool:
+            rows = list(pool.map(measure, notes))
+    else:
+        rows = [measure(note) for note in notes]
     if raw is not None:
         for row, note in zip(rows, pattern.analysis_notes):
             row.update(level_of(raw, sr, note, analysis_window_end(pattern, note)))

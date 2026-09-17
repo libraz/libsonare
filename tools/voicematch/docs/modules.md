@@ -38,6 +38,7 @@
 - `knobs.py` — what a fit may move and over what range: the spec forms, the clamp-derived search ranges, `--spec auto`, and the one rule for what counts as sitting on a bound
 - `loss.py` — from a render to the number being minimised: `probe_rows`, `skeleton_note`, the harmonic and percussion term sets, the level terms, and the start-point normalisation
 - `optimizers.py` — coordinate descent with a golden-section line search, and CMA-ES with IPOP restarts
+- `eval_cache.py` — raw loss terms kept across runs, keyed on the library's bytes, the harness source, the probe and the oracle, so a re-run pays for the setup and not the renders
 - `staging.py` — cutting the problem down: knob screening and the excitation/decay/all staged fit
 - `diagnose.py` — the same probe read per term instead of per loss: what the residual is made of, and which of it no knob reaches
 - `dataset.py` — the corpus of (knob vector → measurement) pairs an amortized inverse would train on

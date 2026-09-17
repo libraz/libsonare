@@ -149,12 +149,24 @@ The clamp bounds in the catalogue are measured rather than mirrored: `patch_tuni
 
 ## Optimiser
 
-- `--optimizer coord` (default) — coordinate descent, golden-section per knob (`--per-knob-evals`, default 6). Readable, and fine when a knob has an obvious optimum, but it stalls on knobs that trade against each other: a level and the taper that undoes it send it back and forth without either step being wrong on its own. Inherently serial — each probe is chosen from the previous one's result — so `--workers` does not help it.
+- `--optimizer coord` (default) — coordinate descent, golden-section per knob (`--per-knob-evals`, default 6). Readable, and fine when a knob has an obvious optimum, but it stalls on knobs that trade against each other: a level and the taper that undoes it send it back and forth without either step being wrong on its own. Inherently serial — each probe is chosen from the previous one's result — so `--workers` does not help it, and `--metric-threads` is the only concurrency it can spend.
 - `--optimizer cmaes` — covariance-matrix adaptation. It learns that correlation and steps along it. Tune with `--population`, `--sigma0`, `--seed`; samples are clipped into each knob's range rather than penalised, so an optimum pinned to a bound is reported as such (widen the range, or accept that the model cannot go further in that direction). `--restarts N` restarts from a fresh random point with a doubled population when a run stalls, sharing `--max-evals` rather than multiplying it.
 
 Use `cmaes` once the spec is runtime knobs only — that is the case where the evaluation budget is large enough for it to pay off.
 
 **`--workers N`** renders a CMA-ES generation's whole population concurrently. The candidates are independent subprocesses, so the only thing serialising them was the loop that launched them; scoring stays on the main thread in submission order, so the trajectory and the log are byte-identical to a serial run at the same `--seed`. Measured on this machine, a 120-evaluation organ fit: **71 s at `--workers 1`, 30 s at `--workers 8`**, with identical losses. The speedup is well under 8× because a fixed ~12 s of build, catalogue dump and oracle resolution is not parallelised and the render itself is not single-threaded.
+
+## What an evaluation costs, and the two things that make it cost less
+
+Measured on this machine, one evaluation of a fifteen-note sustain probe: **0.19 s of process start, 0.49 s of render, 0.35 s of measurement** — the last of which is around two thirds the partial refinement inside `skeleton_note`, which is the harness's hot spot and already about as fast as this family of methods gets (batching its zoomed DFT into one matmul was measured nine times slower than the stepped recurrence it replaced).
+
+**`--metric-threads N`** measures N of the probe's notes at once inside one render. The notes are independent and read a signal nothing writes to, so the rows come back the same rows in the same order — the flag changes the wall clock and nothing else. It is also the only concurrency `--optimizer coord` can use, since its line search picks each probe from the previous result. Measured over a fifteen-note render: **0.97 s at 1, 0.79 s at 3**, byte-identical rows; past three the interpreter lock is what is left and the curve flattens. It defaults to three, and to **one** whenever `--workers` is above one — the two levels of concurrency are alternatives rather than a product, since a batch already has whole candidates in flight and threads under it would compete for the same lock.
+
+**The store.** Raw loss terms are kept under the scratch root and read back by any later run whose signature matches, so a fit re-run after a listen costs the setup and nothing else. The signature is the library's own bytes, the whole harness source, the probe's layout and the oracle — deliberately over-broad, because a key that covers too much costs a cold start nobody notices and one that covers too little hands back a number from a scorer that no longer exists. A rebuilding spec keeps no store at all: its library is different for every candidate, so no key could ever repeat. `--no-cache` turns it off.
+
+Measured on a twenty-evaluation violin fit over fifteen notes: **28.2 s today, 26.1 s with the threads, 7.6 s re-run against the store**, each reaching the same 0.9358 and the same winner.
+
+**`--max-evals` budgets evaluations, not renders**, and the report says both (`over 19 evaluations, 0 rendered`). That distinction is load-bearing rather than cosmetic: both loops stop when a round turns up no candidate they had not already scored, so counting renders would read a warm run's first pass as convergence and hand back whatever that pass liked — a worse answer, reached faster, with nothing in the output saying so.
 
 ## Cutting the problem down
 

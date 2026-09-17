@@ -167,6 +167,33 @@ better choice once runtime knobs make evaluations cheap, and renders its whole
 population concurrently under `--workers N`. `--restarts N` spends a bigger
 budget on escaping a local optimum rather than on refining one.
 
+`--max-evals` counts candidates the search looked at, not renders it paid for.
+The two are the same number until a store is warm, and after that the budget has
+to stay on the first: a search is defined by where it went, and making it stop
+early because the going was cheap would answer a different question than the
+same command answered yesterday.
+
+What an evaluation costs
+------------------------
+Three parts, on a fifteen-note sustain probe: about 0.2 s of process start, half
+a second of render, and a third of a second measuring the render — the last of
+which is mostly the partial refinement inside `skeleton_note`.
+
+    --metric-threads N  measure N of the probe's notes at once inside one
+                    render. The notes are independent, so this is exact; it is
+                    also the only concurrency `--optimizer coord` can use, since
+                    its line search picks each probe from the previous result.
+                    Defaults to three, and to one whenever `--workers` is already
+                    spending the machine a level up — the two are alternatives
+                    rather than a product.
+    --no-cache      re-render candidates an earlier run already measured.
+                    Otherwise the raw terms are kept under the scratch root,
+                    keyed on the library's bytes, the whole harness source, the
+                    probe and the oracle, so a change to any of them starts cold
+                    rather than answering from a scorer that no longer exists. A
+                    rebuilding spec keeps no store at all: its library is
+                    different for every candidate.
+
 Cutting the problem down
 ------------------------
 `--spec auto` offers every knob the program's patch and engine expose, which for
@@ -245,7 +272,7 @@ from autofit_resolve import (
     resolve_probe,
 )
 from build_lib import build_shared, configure_build, dylib_path
-from capture import ROOM_NONE, model_rig
+from capture import CORPUS_ROOT, ROOM_NONE, model_rig
 from catalogue import Catalogue, drum_patch_key, dump_catalogue
 from corpus import (
     PERCUSSION_CHANNEL as CORPUS_PERCUSSION_CHANNEL,
@@ -259,6 +286,7 @@ from corpus import (
     load_corpus,
 )
 from diagnose import run_diagnosis
+from eval_cache import digest, file_digest, open_cache, source_digest
 from knobs import (
     at_bound,
     auto_spec,
@@ -411,25 +439,67 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
               f"takes one channel and has no sum in it.", file=sys.stderr)
     raw = to_mono(audio, mode)
     mono = normalize_rms(raw)
-    rows = probe_rows(mono, pattern, SR, raw=raw)
+    threads = resolve_metric_threads(args)
+    rows = probe_rows(mono, pattern, SR, raw=raw, threads=threads)
     edge = measure_band_edge(rows) if pattern.percussive else None
     if edge is not None:
         # Re-measured rather than patched. The band profile is normalised to the
         # loudest band inside the edge, and that is not a scaling that can be
         # applied to an already-floored profile without inventing the values the
         # floor took away.
-        rows = probe_rows(mono, pattern, SR, raw=raw, max_band_hz=edge)
+        rows = probe_rows(mono, pattern, SR, raw=raw, max_band_hz=edge, threads=threads)
         print(f"reference bandwidth: {edge / 1000.0:.1f} kHz — bands above it are "
               f"the capture chain rather than the kit, and are excluded from the "
               f"band profile on BOTH sides", file=sys.stderr)
     return rows, mono, room, edge
 
 
+#: What `--metric-threads auto` resolves to. Measuring a note is mostly the
+#: partial refinement in `skeleton_note`, which spends its time inside numpy
+#: with the interpreter lock dropped; past three the lock is what is left and
+#: the curve flattens (measured 1.6x at two, 2.1x at three, 2.1x at four). It is
+#: also the ceiling this machine is meant to keep concurrent work under.
+AUTO_METRIC_THREADS = 3
+
+
+def _corpus_identity(corpus: Corpus | None) -> list:
+    """What a corpus contributes to a model render, as a comparable value.
+
+    The timeline and nothing else — the notes played, their velocities, the
+    window each slot gets, and the three classifications that decide how the
+    render is treated. The captured audio is absent on purpose: the model is
+    rendered against the manifest and the reference it is compared with is
+    hashed separately, as the oracle rows it was already reduced to.
+    """
+    if corpus is None:
+        return []
+    return [
+        corpus.timbre, corpus.sample_rate, corpus.gate_s, corpus.preroll_s,
+        corpus.slot_s, corpus.channel, corpus.dry, corpus.room, corpus.rig,
+        list(corpus.notes), list(corpus.velocities),
+        sorted((list(k), v) for k, v in corpus.slots.items()),
+        sorted(corpus.note_map.items()),
+    ]
+
+
+def resolve_metric_threads(args) -> int:
+    """How many of a probe's notes one render may measure at once.
+
+    Zero means auto. A run that already renders candidates concurrently is
+    handled by the caller, not here: this answers what one render may use, and
+    `Evaluator` is what knows whether that render has siblings.
+    """
+    asked = getattr(args, "metric_threads", 0)
+    if asked and asked > 0:
+        return asked
+    return AUTO_METRIC_THREADS
+
+
 def render_model_rows_subprocess(
     build_dir: Path, program: int, pattern_name: str, notes_csv: str,
     *, velocities_csv: str = "", overrides: str = "", want_audio: bool = False,
     room_ir: Path | None = None, corpus: Corpus | None = None, gate_ms: int = 0,
-    bank: int = 0, band_edge_hz: float | None = None,
+    bank: int = 0, band_edge_hz: float | None = None, metric_threads: int = 1,
 ) -> tuple[list[dict], np.ndarray | None]:
     """Render the model in a fresh subprocess; return per-note metrics (+ audio).
 
@@ -457,6 +527,8 @@ def render_model_rows_subprocess(
            "--velocities", velocities_csv]
     if bank:
         cmd += ["--bank", str(bank)]
+    if metric_threads > 1:
+        cmd += ["--metric-threads", str(metric_threads)]
     if gate_ms:
         cmd += ["--drum-gate-ms", str(gate_ms)]
     if band_edge_hz:
@@ -531,6 +603,9 @@ class Evaluator:
         self.written: dict[Path, str] = {}
         self.cache: dict[tuple[str, ...], dict[str, float] | None] = {}
         self.n_builds = 0
+        # Renders, as against evaluations: `trajectory` counts the candidates the
+        # search looked at and this counts the ones it had to pay for.
+        self.n_renders = 0
         self.stage = "fit"
         # (best_so_far, this_loss, stage). The stage matters because a staged
         # fit changes the weights between stages, so two losses are only
@@ -548,8 +623,24 @@ class Evaluator:
         # A rebuild rewrites the shared tree, so its evaluations can only ever
         # run one at a time however many workers were asked for.
         self.workers = 1 if self.needs_rebuild else max(1, args.workers)
+        # Concurrency inside a render, which is only free while there is none
+        # around it: a batch already has every core busy on whole candidates,
+        # and threads under that compete for the same interpreter lock without
+        # anything left to win. So the two are alternatives rather than a
+        # product, which also keeps the run's total thread count off the number
+        # of notes the probe happens to have.
+        self.metric_threads = 1 if self.workers > 1 else resolve_metric_threads(args)
         self.quiet = False
         self._offset_reported = False
+        # Which candidates already have a `trajectory` entry, so that a repeat —
+        # a stage re-reading the point it inherited — is scored again without
+        # being counted again.
+        self.seen: set[tuple[str, ...]] = set()
+        # Opened on the first evaluation rather than here, because the signature
+        # is taken from the library's own bytes and the build that produces them
+        # is itself deferred to the first evaluation.
+        self.disk = open_cache(CORPUS_ROOT, "", enabled=False)
+        self._cache_opened = False
 
     def key(self, values: list[float]) -> tuple[str, ...]:
         return tuple(format_value(v) for v in values)
@@ -571,11 +662,70 @@ class Evaluator:
         self.best_loss = math.inf
         self.best_values = None
 
+    def cache_signature(self) -> str:
+        """Everything a stored term value depends on, folded into one name.
+
+        The library's bytes, the harness's own source, the probe's layout, and
+        the oracle the terms are a mismatch against. A run whose signature
+        matches another's may read its values; anything else starts cold. The
+        knob LABELS are in it and their values are not — the values are the key
+        within the file, and two specs over different knobs must not share one.
+        """
+        dylib = dylib_path(self.build_dir)
+        oracle = json.dumps(self.oracle, sort_keys=True, default=str).encode()
+        audio = (self.oracle_audio.tobytes() if self.oracle_audio is not None else b"")
+        spec = json.dumps({
+            "lib": file_digest(dylib) if dylib is not None else "absent",
+            "code": source_digest(Path(__file__).resolve().parent),
+            "program": getattr(self.args, "program", 0),
+            "bank": getattr(self.args, "bank", 0),
+            "pattern": self.args.pattern,
+            "notes": self.args.notes,
+            "velocities": self.args.velocities,
+            "gate_ms": getattr(self.args, "drum_gate_ms", 0),
+            "band_edge_hz": self.band_edge_hz,
+            "room_ir": file_digest(self.room_ir) if self.room_ir else "",
+            # The corpus by what it lays out rather than by where it lives: the
+            # model render never touches the captured audio, it plays the
+            # timeline the manifest describes, and that manifest is an editable
+            # file at a path that does not change when its grid or its gate
+            # does. Keying on the path alone would answer an edited capture with
+            # the old capture's measurements.
+            "corpus": _corpus_identity(self.corpus),
+            "n_harm": getattr(self.args, "n_harm", 0),
+            "percussive": self.percussive,
+            "flat": bool(getattr(self.args, "flat_partial_weighting", False)),
+            "want_audio": self.want_audio,
+            "groups": sorted((k, sorted(v)) for k, v in self.groups.items()),
+            "knobs": [k.label for k in self.knobs],
+        }, sort_keys=True).encode()
+        return digest(spec, oracle, audio)
+
+    def _ensure_cache(self) -> None:
+        """Open the store for this run's signature and adopt what it holds."""
+        if self._cache_opened:
+            return
+        self._cache_opened = True
+        if self.needs_rebuild or getattr(self.args, "no_cache", False):
+            # A rebuilding fit compiles a different library for every candidate,
+            # so its signature changes underneath each one and no key it could
+            # write would ever be read back.
+            return
+        self.disk = open_cache(CORPUS_ROOT, self.cache_signature())
+        self.cache.update(self.disk.entries)
+        if self.disk.dropped:
+            print(f"cache: {self.disk.path.name} had grown past its size limit and "
+                  f"was started over", file=sys.stderr)
+        if self.disk.loaded:
+            print(f"cache: {self.disk.loaded} candidates already measured "
+                  f"({self.disk.path})", file=sys.stderr)
+
     def _ensure_built(self) -> None:
         if not self.built and not self.needs_rebuild:
             build_shared(self.build_dir, self.args.cmake, self.args.jobs)
             self.n_builds += 1
             self.built = True
+        self._ensure_cache()
 
     def check_overrides_reach(self, knobs: list) -> None:
         """Prove the runtime overrides actually reach the library, before fitting.
@@ -657,7 +807,7 @@ class Evaluator:
             overrides=tunable_overrides(self.knobs, values),
             want_audio=want_audio, room_ir=self.room_ir, corpus=self.corpus,
             gate_ms=getattr(self.args, "drum_gate_ms", 0), bank=getattr(self.args, "bank", 0),
-            band_edge_hz=self.band_edge_hz,
+            band_edge_hz=self.band_edge_hz, metric_threads=self.metric_threads,
         )
         mss = 0.0
         if want_audio and model_audio is not None:
@@ -667,23 +817,16 @@ class Evaluator:
                            audibility=not getattr(self.args, "flat_partial_weighting", False))
 
     def _score_cached(self, values: list[float], terms: dict[str, float] | None) -> float:
-        """Score an already-rendered candidate under the current weights.
+        """Score a candidate whose measurement was already in hand.
 
         A cache hit still decides things. Every stage begins by re-scoring the
-        point it inherited, which is by construction already rendered, so a
+        point it inherited, which is by construction already measured, so a
         stage whose samples never beat its own start point would otherwise end
         with `best_loss` still at infinity and hand back the first finite loss
         it happened to see — a candidate worse than the one it was given, on its
         way into the source.
         """
-        loss = self.loss.combine(terms) + self._level_drift_penalty(terms)
-        if loss < self.best_loss:
-            self.best_loss = loss
-            self.best_values = list(values)
-            self.best_level_offset_db = (
-                None if terms is None else terms.get("level_offset_db")
-            )
-        return loss
+        return self._record(values, terms, rendered=False)
 
     def _level_drift_penalty(self, terms: dict[str, float] | None) -> float:
         """What a candidate pays for moving the voice's whole-grid level.
@@ -733,14 +876,40 @@ class Evaluator:
                   f"across the whole grid. The level term scores the spread around that "
                   f"offset, not the offset itself.", file=sys.stderr)
 
-    def _record(self, values: list[float], terms: dict[str, float] | None) -> float:
-        """Score a rendered candidate, update the best, and log it."""
+    def _calibrate_once(self, terms: dict[str, float] | None) -> None:
+        """Make the first point scored this run the one every loss is relative to.
+
+        Whether that point was rendered or read back from the store. Every term
+        is divided by its value here so that a weight means the same thing across
+        terms whose raw units differ by orders of magnitude — so a run that skips
+        this is not a faster run, it is a run minimising a different quantity.
+        Both scoring paths therefore pass through it, and the search calls the
+        start point first in either optimiser.
+        """
         if terms is not None:
             self._report_level_offset(terms)
         if self.normalize and self.loss.scales is None and terms is not None:
             self.baseline_terms = dict(terms)
             self.loss.calibrate(terms)
             self.start_level_offset_db = terms.get("level_offset_db")
+
+    def _record(self, values: list[float], terms: dict[str, float] | None,
+                *, rendered: bool = True) -> float:
+        """Score a candidate, update the best, and log it if it is a new one.
+
+        `trajectory` gets one entry per DISTINCT candidate scored, which is what
+        `--max-evals` budgets and what the report counts — not one per render.
+        The two are the same number until a store is warm, and the search has to
+        be the one defined by where it went rather than by what it had to pay.
+        A repeat is silent: a stage re-scoring the point it inherited is not a
+        thirteenth evaluation, it is the twelfth read under new weights.
+        """
+        key = self.key(values)
+        fresh = key not in self.seen
+        self.seen.add(key)
+        if rendered:
+            self.n_renders += 1
+        self._calibrate_once(terms)
         loss = self.loss.combine(terms) + self._level_drift_penalty(terms)
         if loss < self.best_loss:
             self.best_loss = loss
@@ -753,6 +922,8 @@ class Evaluator:
             self.best_level_offset_db = (
                 None if terms is None else terms.get("level_offset_db")
             )
+        if not fresh:
+            return loss
         self.trajectory.append((self.best_loss, loss, self.stage))
         if not self.quiet:
             # float() before the format: a numpy scalar's repr would drown the
@@ -763,7 +934,8 @@ class Evaluator:
             else:
                 shown = self._term_summary(terms)
             print(
-                f"  eval #{len(self.trajectory)} builds={self.n_builds} "
+                f"  eval #{len(self.trajectory)} "
+                f"{'builds=' + str(self.n_builds) if rendered else 'stored'} "
                 f"{shown}loss={loss:.4f} (best {self.best_loss:.4f})",
                 file=sys.stderr,
             )
@@ -796,9 +968,15 @@ class Evaluator:
             build_shared(self.build_dir, self.args.cmake, self.args.jobs)
             self.n_builds += 1
         else:
+            # The store is named after the library's bytes, so it cannot be
+            # opened until the build that produces them has run — which makes
+            # the first evaluation of a warm run miss here and hit below.
             self._ensure_built()
+            if key in self.cache:
+                return self._score_cached(values, self.cache[key])
         terms = self._render_terms(values)
         self.cache[key] = terms
+        self.disk.put(key, terms)
         return self._record(values, terms)
 
     def evaluate_batch(self, batch: list[list[float]]) -> list[float]:
@@ -829,6 +1007,7 @@ class Evaluator:
                 key = self.key(values)
                 if key in pending:
                     self.cache[key] = pending.pop(key).result()
+                    self.disk.put(key, self.cache[key])
                     results.append(self._record(values, self.cache[key]))
                 else:
                     results.append(self._score_cached(values, self.cache[key]))
@@ -885,7 +1064,7 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
             overrides=tunable_overrides(knobs, values),
             want_audio=want_audio, room_ir=room_ir, corpus=corpus,
             gate_ms=getattr(holdout, "drum_gate_ms", 0), bank=getattr(args, "bank", 0),
-            band_edge_hz=band_edge,
+            band_edge_hz=band_edge, metric_threads=resolve_metric_threads(args),
         )
         mss = mss_distance(audio, oracle_audio) if want_audio and audio is not None else 0.0
         terms = score_terms(rows, oracle_rows, n_harm=args.n_harm, mss=mss,
@@ -1009,6 +1188,8 @@ def render_metrics_main(argv: list[str]) -> int:
     p.add_argument("--band-edge-hz", type=float, default=0.0, dest="band_edge_hz",
                    help="the reference's own measurable ceiling; bands above it "
                         "are excluded from the profile and from its normalisation")
+    p.add_argument("--metric-threads", type=int, default=1, dest="metric_threads",
+                   help="measure this many of the probe's notes at once")
     a = p.parse_args(argv)
 
     corpus = load_corpus(a.corpus, a.corpus_timbre) if a.corpus else None
@@ -1030,7 +1211,7 @@ def render_metrics_main(argv: list[str]) -> int:
     raw = to_mono(audio, a.mono_mode)
     mono = normalize_rms(raw)
     rows = probe_rows(mono, pattern, SR, raw=raw,
-                      max_band_hz=a.band_edge_hz or None)
+                      max_band_hz=a.band_edge_hz or None, threads=a.metric_threads)
     if a.dump_audio:
         np.save(a.dump_audio, mono.astype(np.float32))
     print(json.dumps(rows))
@@ -1334,6 +1515,19 @@ def main() -> int:
                         help="model renders to run concurrently (default: 1). Only helps "
                              "--optimizer cmaes, whose population is independent; a "
                              "rebuilding spec is forced back to 1")
+    parser.add_argument("--metric-threads", type=int, default=0, dest="metric_threads",
+                        help=f"notes of the probe to measure at once WITHIN one render "
+                             f"(default: {AUTO_METRIC_THREADS}, and 1 whenever --workers "
+                             f"is spending the concurrency a level up). Measuring a note "
+                             f"is around a third of an evaluation and the notes are "
+                             f"independent, so this is the only concurrency a serial "
+                             f"optimiser like --optimizer coord can use")
+    parser.add_argument("--no-cache", action="store_true", dest="no_cache",
+                        help="re-render every candidate instead of reading the ones an "
+                             "earlier run already measured. The store is keyed on the "
+                             "library's bytes, the harness source, the probe and the "
+                             "oracle, so a hit stands for the render it replaces; this "
+                             "is for proving that rather than assuming it")
     parser.add_argument("--diagnose", action="store_true",
                         help="instead of fitting, report what the residual is made of and "
                              "which parts of it no knob reaches — the difference between "

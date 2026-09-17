@@ -29,9 +29,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import itertools
 import json
 import profile as profile_module
+from dataclasses import replace
 
 import autofit
 import build_lib
+import eval_cache
 import loss as loss_module
 import metrics as metrics_module
 import report as report_module
@@ -55,6 +57,7 @@ from capture import (
 )
 from catalogue import Catalogue
 from corpus import corpus_oracle, corpus_pattern, load_corpus
+from eval_cache import open_cache
 from knobs import (
     Knob,
     _auto_range,
@@ -1230,8 +1233,12 @@ def test_a_file_whose_knob_is_back_at_its_default_is_still_written(tmp_path):
 
 
 def _fit_args(**kwargs) -> argparse.Namespace:
+    # `no_cache` by default: the store lives under the scratch root a real run
+    # shares, and a test that writes into it would seed a fit with terms no
+    # library ever produced. The tests that DO exercise it point the root
+    # somewhere of their own and turn it back on.
     base = {"raw_loss": False, "workers": 1, "cmake": "cmake", "jobs": 1, "n_harm": 10,
-                "percussive": False}
+                "percussive": False, "no_cache": True}
     base.update(kwargs)
     return _probe_args(**base)
 
@@ -1355,7 +1362,8 @@ def test_two_write_backs_into_one_file_both_survive(tmp_path, monkeypatch, capsy
 
     monkeypatch.setattr(report_module, "write_patch_fields", fake_write)
     monkeypatch.setattr(report_module, "REPO_ROOT", tmp_path)  # the knob file lives here
-    evaluator = argparse.Namespace(trajectory=[], best_loss=0.5, normalize=True)
+    evaluator = argparse.Namespace(trajectory=[], n_renders=0, best_loss=0.5,
+                                   normalize=True)
     args = _probe_args(out="", dry_run=True)
     report_result([knob, patch_knob], {path: path.read_text()}, [7.0, 0.9],
                   evaluator, args)
@@ -1369,8 +1377,14 @@ def test_two_write_backs_into_one_file_both_survive(tmp_path, monkeypatch, capsy
 class _CacheOnlyEvaluator:
     """Every point it is asked about has already been rendered.
 
-    Which is a state a converged search reaches: the budget counts renders, so
-    a generation of cache hits advances nothing the loop can terminate on.
+    Which is two different states, and the search has to end in both: a
+    converged run whose samples have collapsed onto points it already scored,
+    and a run started against a store an earlier one filled, where nothing is
+    rendered at all and yet every candidate is new to this search.
+
+    `trajectory` gets one entry per distinct candidate the way `Evaluator` does
+    — keyed through `format_value`, so two samples that round together are one
+    point — while nothing here renders.
     """
 
     def __init__(self, start: list[float], limit: int = 400):
@@ -1381,14 +1395,19 @@ class _CacheOnlyEvaluator:
         self.quiet = False
         self.calls = 0
         self.limit = limit
+        self.seen: set[tuple[str, ...]] = set()
 
     def __call__(self, values) -> float:
         self.calls += 1
         if self.calls > self.limit:
             raise AssertionError(
-                f"the search did not terminate: {self.calls} evaluations, all cached, "
-                f"trajectory still empty"
+                f"the search did not terminate after {self.calls} evaluations, "
+                f"none of which rendered anything"
             )
+        key = tuple(format_value(v) for v in values)
+        if key not in self.seen:
+            self.seen.add(key)
+            self.trajectory.append((1.0, 1.0, "fit"))
         return 1.0
 
     def evaluate_batch(self, batch) -> list[float]:
@@ -1412,6 +1431,72 @@ def test_coordinate_descent_terminates_when_every_candidate_is_a_cache_hit():
     knobs = [_knob("a.b"), _knob("c.d")]
     evaluator = _CacheOnlyEvaluator([k.start_value for k in knobs])
     assert optimize(evaluator, knobs, _optimizer_args()) == [0.5, 0.5]
+
+
+class _CountingEvaluator:
+    """Scores a fixed objective, counting what it rendered apart from what it saw.
+
+    `warm` names the candidates an earlier run already measured, which this one
+    therefore answers without rendering — the shape a store on disk gives the
+    real `Evaluator`. Everything else about the search is identical, which is the
+    point: the two runs below differ in nothing but how much they had to render.
+    """
+
+    def __init__(self, objective, warm: set[tuple[str, ...]] | None = None):
+        self.objective = objective
+        self.warm = set(warm or ())
+        self.trajectory: list[tuple[float, float, str]] = []
+        self.seen: set[tuple[str, ...]] = set()
+        self.order: list[tuple[str, ...]] = []
+        self.renders: list[tuple[str, ...]] = []
+        self.best_loss = float("inf")
+        self.best_values: list[float] | None = None
+        self.workers = 1
+        self.quiet = False
+
+    def __call__(self, values) -> float:
+        key = tuple(format_value(v) for v in values)
+        if key not in self.seen:
+            self.seen.add(key)
+            self.order.append(key)
+            self.trajectory.append((self.best_loss, 0.0, "fit"))
+            if key not in self.warm:
+                self.renders.append(key)
+        loss = self.objective(values)
+        if loss < self.best_loss:
+            self.best_loss, self.best_values = loss, list(values)
+        return loss
+
+    def evaluate_batch(self, batch) -> list[float]:
+        return [self(values) for values in batch]
+
+
+def _bowl(values) -> float:
+    return sum((v - 0.31) ** 2 for v in values)
+
+
+@pytest.mark.parametrize("optimizer", [optimize, cma_es])
+def test_a_run_that_renders_nothing_searches_exactly_as_far_as_one_that_renders(
+    optimizer,
+):
+    """The store may make a search cheap. It may not make it shorter.
+
+    Both loops used to stop when a round rendered nothing, and to spend
+    `--max-evals` on renders. Against a store an earlier run filled that reads as
+    "converged" on the first pass, so the second run of the same fit would hand
+    back whichever point pass one liked and never look at the rest — a worse
+    answer, arrived at faster, with nothing in the output saying so.
+    """
+    knobs = [_knob("a.b"), _knob("c.d")]
+    cold = _CountingEvaluator(_bowl)
+    optimizer(cold, knobs, _optimizer_args())
+    assert cold.renders, "the cold run rendered nothing, so it proves nothing"
+
+    warm = _CountingEvaluator(_bowl, warm=set(cold.order))
+    optimizer(warm, knobs, _optimizer_args())
+    assert warm.renders == []
+    assert warm.order == cold.order
+    assert warm.best_values == cold.best_values
 
 
 # --------------------------------------------------------------------------- #
@@ -2716,6 +2801,27 @@ def test_probe_rows_carries_the_attack_peaks_it_measured():
     assert any(r["attack_peaks"] for r in rows), "the ring is in every note's attack"
 
 
+@pytest.mark.parametrize("percussive", [False, True])
+def test_measuring_the_notes_at_once_measures_the_same_notes(percussive):
+    """Threads are allowed to change the wall clock and nothing else.
+
+    Both metric sets, because they are two separate loops over the probe and a
+    change that threads one of them reads as covered by a test of the other.
+    """
+    sr = 48000
+    pattern = build_pattern("drum" if percussive else "sustain", 0)
+    y = np.zeros(int(pattern_length(pattern) * sr))
+    for note in pattern.analysis_notes:
+        seg = _rung_note(sr, 440.0 * 2 ** ((note.note - 69) / 12.0), ring_hz=9700.0)
+        a = int(note.start * sr)
+        n = min(len(seg), len(y) - a)
+        y[a : a + n] += seg[:n]
+    serial = probe_rows(y, pattern, sr, raw=y)
+    threaded = probe_rows(y, pattern, sr, raw=y, threads=4)
+    assert len(serial) > 1, "one note cannot tell an ordering mistake from a correct one"
+    assert threaded == serial
+
+
 def test_a_zero_noise_term_says_whether_it_measured_anything():
     """`tnr` is one-sided, so its zero has two opposite meanings.
 
@@ -2968,3 +3074,200 @@ def test_a_run_that_never_named_a_weight_still_knows_whether_it_needs_audio():
 
     ev = Evaluator([], {}, [], None, args, Path("build-none"))
     assert ev.want_audio is (resolved.get("mss", 0.0) > 0.0)
+
+
+# --------------------------------------------------------------------------- #
+# Measurements kept across runs
+# --------------------------------------------------------------------------- #
+def _refuse_to_render(values):
+    raise AssertionError(f"rendered {values}, which the store already held")
+
+
+def _stub_build(tmp_path: Path, contents: bytes = b"lib") -> Path:
+    build = tmp_path / "build"
+    (build / "lib").mkdir(parents=True, exist_ok=True)
+    (build / "lib" / "libsonare.dylib").write_bytes(contents)
+    return build
+
+
+def _cached_evaluator(tmp_path, monkeypatch, *, corpus=None, **kwargs):
+    """An `Evaluator` whose store is under `tmp_path` and whose build is a stub."""
+    monkeypatch.setattr(autofit, "CORPUS_ROOT", tmp_path / "scratch")
+    monkeypatch.setattr(autofit, "build_shared", lambda *a, **k: None)
+    knob = Knob(label="x.k", lo=0.0, hi=1.0, log=False, start_value=0.5, tunable="x.k")
+    args = _fit_args(no_cache=False, **kwargs)
+    return Evaluator([knob], {}, [{"note": 60}], None, args, _stub_build(tmp_path),
+                     corpus=corpus)
+
+
+def test_the_store_hands_back_what_it_was_given(tmp_path):
+    store = open_cache(tmp_path, "sig")
+    store.put(("1.0",), {"harm": 2.0})
+    store.put(("2.0",), None)   # a render that produced nothing scorable
+    reopened = open_cache(tmp_path, "sig")
+    assert reopened.entries == {("1.0",): {"harm": 2.0}, ("2.0",): None}
+    assert reopened.loaded == 2
+
+
+def test_a_later_line_wins_over_an_earlier_one_for_the_same_candidate(tmp_path):
+    """The file is appended to and never rewritten, so a re-measure is a new line."""
+    store = open_cache(tmp_path, "sig")
+    store.put(("1.0",), {"harm": 2.0})
+    store.put(("1.0",), {"harm": 9.0})
+    assert open_cache(tmp_path, "sig").entries == {("1.0",): {"harm": 9.0}}
+
+
+def test_a_half_written_line_does_not_cost_the_rest_of_the_store(tmp_path):
+    """A run killed mid-append is the expected damage, not a reason to start cold."""
+    store = open_cache(tmp_path, "sig")
+    store.put(("1.0",), {"harm": 2.0})
+    store.put(("2.0",), {"harm": 3.0})
+    text = store.path.read_text()
+    store.path.write_text(text[: len(text) - 12])
+    assert open_cache(tmp_path, "sig").entries == {("1.0",): {"harm": 2.0}}
+
+
+def test_an_off_store_writes_nothing_anywhere(tmp_path):
+    store = open_cache(tmp_path, "sig", enabled=False)
+    store.put(("1.0",), {"harm": 2.0})
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "change", ["library", "harness", "oracle", "probe", "knobs", "corpus"],
+)
+def test_the_signature_moves_with_everything_a_stored_value_depends_on(
+    tmp_path, monkeypatch, change,
+):
+    """A stored term is a number some particular code produced from some
+    particular inputs. Anything the key leaves out is something the store will
+    happily answer with after it has changed."""
+    ev = _cached_evaluator(
+        tmp_path, monkeypatch,
+        corpus=load_corpus(_write_corpus(tmp_path / "corpus", notes=(60, 72))),
+    )
+    before = ev.cache_signature()
+    if change == "library":
+        (ev.build_dir / "lib" / "libsonare.dylib").write_bytes(b"rebuilt")
+    elif change == "harness":
+        monkeypatch.setattr(autofit, "source_digest", lambda d: "edited")
+    elif change == "oracle":
+        ev.oracle = [{"note": 61}]
+    elif change == "probe":
+        ev.args.notes = "48,60"
+    elif change == "knobs":
+        ev.knobs = [replace(ev.knobs[0], label="y.k", tunable="y.k")]
+    elif change == "corpus":
+        # By what it lays out, not by where it lives: a capture manifest is an
+        # editable file and its path does not move when its gate does.
+        ev.corpus = replace(ev.corpus, gate_s=ev.corpus.gate_s + 1.0)
+    assert ev.cache_signature() != before
+
+
+def test_a_second_run_reads_what_the_first_one_measured(tmp_path, monkeypatch):
+    first = _cached_evaluator(tmp_path, monkeypatch)
+    first._render_terms = lambda values: _terms(harm=float(values[0]))
+    first([0.25])
+    first([0.75])
+    assert len(first.trajectory) == 2
+
+    second = _cached_evaluator(tmp_path, monkeypatch)
+    second._render_terms = _refuse_to_render
+    second([0.25])
+    second([0.75])
+    assert second.n_renders == 0
+    assert len(second.trajectory) == 2, (
+        "a candidate answered from the store is still an evaluation: the budget "
+        "counts them, the report prints them, and the search is the poorer for "
+        "either one losing sight of it"
+    )
+
+
+def test_a_run_that_starts_from_the_store_still_normalises_against_its_start(
+    tmp_path, monkeypatch,
+):
+    """Every loss is a ratio of what the START point scored, and that division
+    used to live on the rendering path alone. A run whose first candidate came
+    back from the store therefore left the scales unset and minimised the raw
+    sum instead — the same search, over a different quantity, silently.
+    """
+    first = _cached_evaluator(tmp_path, monkeypatch)
+    first._render_terms = lambda values: _terms(harm=float(values[0]))
+    start, other = first([0.25]), first([0.75])
+
+    second = _cached_evaluator(tmp_path, monkeypatch)
+    second._render_terms = _refuse_to_render
+    assert (second([0.25]), second([0.75])) == (start, other)
+    assert start == 1.0, "the start point is what every other loss is relative to"
+
+
+def test_a_run_whose_library_was_rebuilt_measures_again(tmp_path, monkeypatch):
+    """The C++ moved, so every stored number describes a voice that is gone."""
+    first = _cached_evaluator(tmp_path, monkeypatch)
+    first._render_terms = lambda values: _terms(harm=float(values[0]))
+    first([0.25])
+
+    second = _cached_evaluator(tmp_path, monkeypatch)
+    (second.build_dir / "lib" / "libsonare.dylib").write_bytes(b"rebuilt")
+    second._render_terms = lambda values: _terms(harm=float(values[0]))
+    second([0.25])
+    assert len(second.trajectory) == 1
+
+
+def test_a_rebuilding_fit_keeps_no_store(tmp_path, monkeypatch):
+    """Its library is different for every candidate, so no key could repeat."""
+    monkeypatch.setattr(autofit, "CORPUS_ROOT", tmp_path / "scratch")
+    monkeypatch.setattr(autofit, "build_shared", lambda *a, **k: None)
+    path, knob = _source_knob(tmp_path, "a.cpp", "1.0")
+    ev = Evaluator([knob], {path: path.read_text()}, [], None,
+                   _fit_args(no_cache=False), _stub_build(tmp_path))
+    ev._render_terms = lambda values: _terms(harm=1.0)
+    ev([2.0])
+    assert ev.disk.path is None
+    assert not (tmp_path / "scratch").exists()
+
+
+def test_the_notes_of_a_render_are_measured_at_once_only_when_nothing_else_is(
+    tmp_path, monkeypatch,
+):
+    """Threads inside a render and renders beside each other are alternatives.
+
+    Multiplied they would put `--workers` times the probe's note count of
+    threads on a machine that is running other things, for no gain: the second
+    level of concurrency is competing for the same interpreter lock as the first.
+    """
+    alone = _cached_evaluator(tmp_path, monkeypatch, workers=1)
+    crowded = _cached_evaluator(tmp_path, monkeypatch, workers=4)
+    assert alone.metric_threads == autofit.AUTO_METRIC_THREADS
+    assert crowded.metric_threads == 1
+
+
+def test_the_thread_count_reaches_the_process_that_does_the_measuring(
+    tmp_path, monkeypatch,
+):
+    """It is resolved in the parent and spent in the child, and nothing in
+    between would notice the flag being dropped: the rows come back correct
+    either way, only slower."""
+    monkeypatch.setattr(autofit, "CORPUS_ROOT", tmp_path / "scratch")
+    monkeypatch.setattr(autofit, "build_shared", lambda *a, **k: None)
+    knob = Knob(label="x.k", lo=0.0, hi=1.0, log=False, start_value=0.5, tunable="x.k")
+    ev = Evaluator([knob], {}, [], None, _fit_args(), _stub_build(tmp_path))
+    seen: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        seen.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
+
+    monkeypatch.setattr(autofit.subprocess, "run", fake_run)
+    ev._render_terms([0.5])
+    assert "--metric-threads" in seen[0]
+    assert seen[0][seen[0].index("--metric-threads") + 1] == str(ev.metric_threads)
+
+
+def test_a_store_past_its_size_limit_says_so_rather_than_just_shrinking(tmp_path):
+    """Measurements disappearing is worth a line even when it is intended."""
+    store = open_cache(tmp_path, "sig")
+    store.put(("1.0",), {"harm": 2.0})
+    store.path.write_text("x" * (eval_cache.MAX_BYTES + 1))
+    reopened = open_cache(tmp_path, "sig")
+    assert reopened.dropped and reopened.entries == {}

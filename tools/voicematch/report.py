@@ -77,8 +77,14 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
                 previous = best
         for stage, steps in stages:
             print(f"  [{stage}] " + "  ->  ".join(steps))
+        # What the run measured is worth saying when it is not what it looked
+        # at: a fit resumed against a store did the same search as the one that
+        # filled it, and a report that only counted evaluations would read as if
+        # it had rendered them again.
+        paid = ("" if evaluator.n_renders == len(evaluator.trajectory)
+                else f", {evaluator.n_renders} rendered")
         print(f"  initial {evaluator.trajectory[0][1]:.4f}  ->  best {evaluator.best_loss:.4f}"
-              f"  over {len(evaluator.trajectory)} evaluations")
+              f"  over {len(evaluator.trajectory)} evaluations{paid}")
         if evaluator.normalize:
             print("  (a ratio against the start point, which scores 1.0)")
     else:
@@ -169,6 +175,7 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
                      "best": evaluator.best_loss,
                      "normalized": evaluator.normalize},
             "evaluations": len(evaluator.trajectory),
+            "renders": evaluator.n_renders,
             "knobs": [
                 {"key": k.label, "start": k.start_value, "best": b,
                  "min": k.lo, "max": k.hi, "scale": "log" if k.log else "linear"}

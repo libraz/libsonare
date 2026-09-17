@@ -11,6 +11,14 @@ The `evaluator` argument is duck-typed on purpose, because both an `Evaluator`
 and a stage's `SubEvaluator` view of one are passed here. What is required:
 callable on a value vector, `evaluate_batch(list_of_vectors)`, and the
 `trajectory` / `best_loss` / `best_values` attributes.
+
+`trajectory` carries one entry per distinct candidate the run has SCORED, which
+is what `--max-evals` is a budget of and what both loops terminate on. It is not
+a count of renders: a candidate an earlier run measured is scored without one.
+Budgeting renders instead would let a warm run replay the same search for free
+and never stop, and ending a round on "nothing rendered" would stop it after one
+pass with a worse answer than the same search made cold. A search is defined by
+where it went; what that cost is the evaluator's business.
 """
 
 from __future__ import annotations
@@ -170,13 +178,13 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
             [[_unit_to_value(k, xi) for k, xi in zip(knobs, x)] for x in xs]
         )
         if len(evaluator.trajectory) == before:
-            # Every candidate was already in the cache, so the budget — which
-            # counts renders — did not move and the loop has nothing to
-            # terminate on. It happens where the distribution has collapsed onto
-            # points already visited: the samples round to visited keys, the
-            # mean is the weighted mean of those same points and does not move,
-            # and sigma shrinks from here rather than recovering. That is
-            # convergence, so the run ends and hands what is left to a restart.
+            # Every candidate had already been scored, so the budget did not
+            # move and the loop has nothing to terminate on. It happens where the
+            # distribution has collapsed onto points already visited: the samples
+            # round to visited keys, the mean is the weighted mean of those same
+            # points and does not move, and sigma shrinks from here rather than
+            # recovering. That is convergence, so the run ends and hands what is
+            # left to a restart.
             print(f"  gen {generation + 1}: every candidate already evaluated — "
                   f"the search has converged", file=sys.stderr)
             return
@@ -263,9 +271,9 @@ def optimize(evaluator, knobs: list[Knob], args) -> list[float]:
                     improved = True
                 current[i] = best_val
         current = list(evaluator.best_values or current)
-        # A pass that rendered nothing probed only points already in the cache,
-        # so it cannot have learned anything the next pass would not repeat —
-        # and it did not consume the budget the loop terminates on.
+        # A pass that scored nothing it had not already scored cannot have
+        # learned anything the next pass would not repeat — and it did not
+        # consume the budget the loop terminates on.
         if not improved or len(evaluator.trajectory) == before:
             break
     return list(evaluator.best_values or current)
