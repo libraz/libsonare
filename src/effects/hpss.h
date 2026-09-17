@@ -140,7 +140,18 @@ Audio percussive(const Audio& audio, const HpssConfig& config = HpssConfig(),
 /// @param spec Input spectrogram
 /// @param config HPSS configuration
 /// @return Harmonic, percussive, and residual spectrograms
-/// @details Residual = Original - Harmonic - Percussive
+/// @details Residual = Original - Harmonic - Percussive, and the three always
+///   reconstruct the input: the masks are renormalized by their own sum, so an
+///   empty residual means the other two took every share rather than that energy
+///   was lost.
+///
+///   **A soft mask at the default margins leaves no residual at all.** Both
+///   margins at 1.0 make the two masks sum to 1 up to the guard epsilon, so the
+///   residual is that epsilon -- measured at 2.6e-15 of the input energy on a
+///   voice-plus-kick signal. Raising a margin is what creates one (1.1e-3 of the
+///   input at 1.1, 2.0e-2 at 1.5, 5.6e-2 at 2.0); so does @ref
+///   HpssConfig::use_soft_mask set false, whose thresholded masks leave the band
+///   where neither component dominates (3.2e-2 on the same signal).
 HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
                                                      const HpssConfig& config = HpssConfig());
 
@@ -149,6 +160,8 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
 /// @param config HPSS configuration
 /// @param stft_config STFT configuration
 /// @return Harmonic, percussive, and residual audio signals
+/// @details Under the spectrogram overload's contract, including that a soft
+///   mask at the default margins returns an empty residual.
 HpssAudioResultWithResidual hpss_with_residual(const Audio& audio,
                                                const HpssConfig& config = HpssConfig(),
                                                const StftConfig& stft_config = StftConfig());
@@ -157,7 +170,8 @@ HpssAudioResultWithResidual hpss_with_residual(const Audio& audio,
 /// @param audio Input audio
 /// @param config HPSS configuration
 /// @param stft_config STFT configuration
-/// @return Residual audio
+/// @return Residual audio, which is silent under the default config -- see
+///   @ref hpss_with_residual for what leaves a residual and what it measures.
 Audio residual(const Audio& audio, const HpssConfig& config = HpssConfig(),
                const StftConfig& stft_config = StftConfig());
 

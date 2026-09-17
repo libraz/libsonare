@@ -63,8 +63,9 @@ Audio create_percussive_audio(int sr = 22050, float duration = 0.5f, int n_click
 ///
 /// The reversed cymbal is the part that matters here: a rising broadband swell
 /// is neither horizontally smooth like a sustained tone nor vertically sparse
-/// like an impulse, so a three-way split has to put it somewhere other than the
-/// harmonic and percussive components.
+/// like an impulse, so it is the content a third component would be for. Note
+/// that the soft mask divides it between the other two anyway -- its two masks
+/// sum to one, leaving no share unassigned whatever the cell holds.
 Audio create_mixed_audio(int sr = 22050, float duration = 1.0f) {
   const int n_samples = static_cast<int>(static_cast<float>(sr) * duration);
   std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
@@ -555,38 +556,56 @@ TEST_CASE("hpss separates impulses into mostly percussive", "[hpss][separation]"
 // h + p + r == original by construction even when r is identically zero. A
 // component named in the API therefore had no test that could tell a working
 // output from a silent buffer. These two are that test.
-// EXPECTED TO FAIL under the default (soft-mask, margin 1.0) configuration, and
-// tagged so that the day it starts passing is reported as a failure rather than
-// passing unnoticed.
-//
-// With both margins at 1.0 the soft masks are h^p/(h^p + p^p + eps) and its
-// mirror, so their sum is 1 - eps/(h^p + p^p) and the residual mask is whatever
-// is left: about 1e-10 before renormalization. Measured on the mixed signal
-// below, the residual carries 2.2e-15 of the input energy -- six orders of
-// magnitude short of "audible" and thirteen short of the 0.01 asserted here.
-// Whether that is a defect in the split or the documented consequence of the
-// default margins is a DSP question this test deliberately does not answer; it
-// exists so the answer cannot keep being nobody's.
-TEST_CASE("hpss_with_residual carries audible residual energy (soft mask)", "[hpss][!shouldfail]") {
-  Audio audio = create_mixed_audio();
+// What the residual holds is decided by the margins, and at their defaults it
+// holds nothing: the soft masks are h^p/(h^p + p^p + eps) and its mirror, which
+// sum to 1 up to the guard epsilon, leaving no share to be residual. That is the
+// masks partitioning the signal completely rather than energy going missing --
+// the reconstruction error is 1e-14 at every margin, including the ones that do
+// produce a residual. Measured on this signal: 2.6e-15 of the input energy at
+// margin 1.0, 1.1e-3 at 1.1, 2.0e-2 at 1.5, 5.6e-2 at 2.0.
+TEST_CASE("Soft-mask residual is empty at the default margin and grows with it", "[hpss]") {
+  const Audio audio = create_mixed_audio();
 
   StftConfig stft_config;
   stft_config.n_fft = 1024;
   stft_config.hop_length = 256;
 
-  HpssConfig config;  // defaults: soft mask, margin 1.0
-
-  HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
-
   const double signal_energy = buffer_energy(audio);
-  // Non-vacuity: a silent input would make every ratio below meaningless, and
-  // the harmonic / percussive ratios prove the split itself works on this
-  // signal, so the residual assertion is not failing for want of content.
   REQUIRE(signal_energy > 0.0);
-  REQUIRE(buffer_energy(result.harmonic) / signal_energy > 0.01);
-  REQUIRE(buffer_energy(result.percussive) / signal_energy > 0.01);
 
-  REQUIRE(buffer_energy(result.residual) / signal_energy > 0.01);
+  auto residual_share = [&](float margin) {
+    HpssConfig config;
+    config.margin_harmonic = margin;
+    config.margin_percussive = margin;
+    const HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
+    // An empty residual is only correct if the other two carried everything, so
+    // the reconstruction is what separates "partitioned" from "lost".
+    double reconstruction = 0.0;
+    for (size_t i = 0; i < audio.size(); ++i) {
+      const double difference =
+          static_cast<double>(audio[i]) -
+          (static_cast<double>(result.harmonic[i]) + static_cast<double>(result.percussive[i]) +
+           static_cast<double>(result.residual[i]));
+      reconstruction += difference * difference;
+    }
+    CHECK(reconstruction / signal_energy < 1.0e-9);
+    CHECK(buffer_energy(result.harmonic) / signal_energy > 0.01);
+    CHECK(buffer_energy(result.percussive) / signal_energy > 0.01);
+    return buffer_energy(result.residual) / signal_energy;
+  };
+
+  const double at_default = residual_share(1.0f);
+  const double at_1_1 = residual_share(1.1f);
+  const double at_1_5 = residual_share(1.5f);
+  const double at_2_0 = residual_share(2.0f);
+
+  CHECK(at_default < 1.0e-9);
+  CHECK(at_2_0 > 0.01);
+  // Strictly increasing, so a build that stopped reading the margins fails here
+  // rather than passing on either bound alone.
+  CHECK(at_default < at_1_1);
+  CHECK(at_1_1 < at_1_5);
+  CHECK(at_1_5 < at_2_0);
 }
 
 TEST_CASE("hpss_with_residual carries audible residual energy (hard mask)", "[hpss]") {

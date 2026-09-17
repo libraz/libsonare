@@ -745,8 +745,17 @@ def _build_parser() -> _ContractArgumentParser:
     )
     hpss_p.add_argument("--harmonic-only", action="store_true")
     hpss_p.add_argument("--percussive-only", action="store_true")
-    hpss_p.add_argument("--with-residual", action="store_true")
-    hpss_p.add_argument("--hard-mask", action="store_true")
+    hpss_p.add_argument(
+        "--with-residual",
+        action="store_true",
+        help="Also write what neither component claimed. Silent without --hard-mask, "
+        "whose masks are the ones that leave anything over",
+    )
+    hpss_p.add_argument(
+        "--hard-mask",
+        action="store_true",
+        help="Assign each cell to whichever component dominates instead of blending them",
+    )
 
     # Editing commands
     pitch_correct_p = sub.add_parser(

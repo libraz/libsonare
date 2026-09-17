@@ -27,6 +27,12 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 ///          @p with_residual is non-zero, @p out_residual is required and
 ///          receives the third signal; otherwise it is optional and remains
 ///          NULL. All output fields are reset before input/config validation.
+///
+///          The third signal is silent whenever @p use_soft_mask is non-zero:
+///          the soft masks sum to one, so harmonic and percussive already carry
+///          the whole input and nothing is left over. Pass zero for a residual
+///          that holds signal -- the thresholded masks leave the band where
+///          neither component dominates.
 /// @param kernel_harmonic Horizontal median filter size, in STFT frames: a
 ///                   positive odd integer at most 524287. The ceiling is 524288
 ///                   and an even kernel is refused, so 524287 is the largest
@@ -900,6 +906,14 @@ SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, 
 ///          heap-allocated and MUST be released with @ref sonare_free_floats.
 ///          Three-signal shape: emitted as three flat buffers because
 ///          sonare_c_types.h has no with-residual HPSS result struct.
+///
+///          This entry runs the soft mask, whose two masks sum to one, so the
+///          residual it returns is silence -- the harmonic and percussive
+///          buffers already carry the whole input. It is emitted anyway so the
+///          three-buffer shape does not change with the mask. For a residual
+///          that holds signal, call @ref sonare_hpss_ex with @c use_soft_mask
+///          zero, whose thresholded masks leave the band where neither
+///          component dominates.
 /// @param samples Input audio.
 /// @param length Number of samples.
 /// @param sample_rate Sample rate.
