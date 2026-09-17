@@ -340,6 +340,42 @@ def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str,
     return 0
 
 
+#: Bound keys a re-record ratchets. `rows` sits beside them and is a population
+#: count, so taking the smaller of two would quietly narrow what the gate claims
+#: to have measured rather than tighten what it holds.
+RATCHETED_BOUND_KEYS = ("median", "abs_median", "p90")
+
+
+def _keep_the_tighter(bounds: dict[str, dict], gate_path: Path) -> list[str]:
+    """Hold each bound to the tighter of the recorded one and the new one.
+
+    A re-record may correct a bound and may never loosen one, and until this
+    existed that was a rule kept by hand — which is the kind that holds until
+    the run where the number moves for a reason that sounds good. It moves for
+    reasons that sound good routinely: sharpening the measurement shrinks the
+    reference spread under a bound, the floor stops winning, and the bound
+    silently becomes the voice's own error times the margin. Nothing regressed
+    and the gate got weaker anyway.
+
+    Mutates `bounds` and returns one line per bound it refused to loosen, for
+    the caller to print — a ratchet that acts silently is a second way to lose
+    track of what the gate is holding.
+    """
+    if not gate_path.exists():
+        return []
+    recorded = json.loads(gate_path.read_text()).get("bounds", {})
+    declined = []
+    for dimension, row in bounds.items():
+        was = recorded.get(dimension)
+        if not was:
+            continue
+        for key in RATCHETED_BOUND_KEYS:
+            if key in was and was[key] < row[key]:
+                declined.append(f"{dimension}.{key} {row[key]:g} -> {was[key]:g}")
+                row[key] = was[key]
+    return declined
+
+
 def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
                     margin: float, measured_utc: str = "",
                     spread: dict[str, float] | None = None) -> int:
@@ -380,6 +416,7 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
             # run compares against it as though the whole grid had spoken.
             "rows": int(row.get("n", 0)),
         }
+    declined = _keep_the_tighter(bounds, gate_path)
     gate_path.parent.mkdir(parents=True, exist_ok=True)
     gate_path.write_text(json.dumps({
         "_": "Bounds the compare table is held to. All three are absolute limits: 'median' "
@@ -407,4 +444,6 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
         "bounds": bounds,
     }, indent=2) + "\n")
     print(f"\nwrote {gate_path} — {len(bounds)} bounds at {margin:g}x the measured values")
+    for line in declined:
+        print(f"  kept the recorded bound: {line}")
     return 0

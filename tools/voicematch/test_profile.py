@@ -1117,6 +1117,53 @@ def test_the_written_gate_records_what_each_bound_was_measured_from(tmp_path):
     assert bounds["tnr"]["rows"] == 50
 
 
+def _one_bound(tmp_path, error: float, name: str = "gate.json") -> dict:
+    """Write a gate whose single dimension carries `error`, and read it back."""
+    gate = tmp_path / name
+    summary = {"centroid_pct": {"median": error, "abs_median": error,
+                                "p90": error, "n": 12}}
+    profile_module.write_gate_file(summary, gate, "ref", 1.25)
+    return json.loads(gate.read_text())["bounds"]["centroid_pct"]
+
+
+def test_a_re_record_may_tighten_a_bound(tmp_path):
+    assert _one_bound(tmp_path, 80.0)["p90"] == pytest.approx(100.0)
+    assert _one_bound(tmp_path, 40.0)["p90"] == pytest.approx(50.0)
+
+
+def test_a_re_record_may_not_loosen_one(tmp_path):
+    """The rule was kept by hand, and by hand it survives until the run where
+    the number rises for a reason that sounds good — a sharpened measurement
+    shrinking the spread under a bound until the floor stops winning."""
+    assert _one_bound(tmp_path, 40.0)["p90"] == pytest.approx(50.0)
+    assert _one_bound(tmp_path, 80.0)["p90"] == pytest.approx(50.0)
+
+
+def test_declining_to_loosen_a_bound_is_announced(tmp_path, capsys):
+    """A ratchet that acts silently is a second way to lose track of the gate."""
+    _one_bound(tmp_path, 40.0)
+    capsys.readouterr()
+    _one_bound(tmp_path, 80.0)
+    assert "centroid_pct.p90" in capsys.readouterr().out
+
+
+def test_the_ratchet_does_not_reach_a_gate_that_is_not_there_yet(tmp_path):
+    """A fresh path records what was measured — there is nothing to ratchet against."""
+    assert _one_bound(tmp_path, 80.0, "a.json")["p90"] == pytest.approx(100.0)
+    assert _one_bound(tmp_path, 40.0, "b.json")["p90"] == pytest.approx(50.0)
+
+
+def test_the_row_count_is_not_ratcheted(tmp_path):
+    """It is a population, so the smaller of two narrows what the gate claims to
+    have measured instead of tightening what it holds."""
+    gate = tmp_path / "gate.json"
+    for rows in (50, 18):
+        profile_module.write_gate_file(
+            {"decay": {"median": 1.0, "abs_median": 1.0, "p90": 1.0, "n": rows}},
+            gate, "ref", 1.25)
+    assert json.loads(gate.read_text())["bounds"]["decay"]["rows"] == 18
+
+
 # --------------------------------------------------------------------------- #
 # The captured layout, and the model's
 # --------------------------------------------------------------------------- #
