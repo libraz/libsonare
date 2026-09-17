@@ -1306,15 +1306,6 @@
           "repeatable": false,
           "required": true,
           "domain": null
-        },
-        {
-          "name": "stereo",
-          "type": "boolean",
-          "default": false,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
         }
       ],
       "mastering-processors": [
@@ -6923,15 +6914,6 @@
           "aliases": [],
           "repeatable": false,
           "required": true,
-          "domain": null
-        },
-        {
-          "name": "stereo",
-          "type": "boolean",
-          "default": false,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
           "domain": null
         }
       ],

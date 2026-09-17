@@ -3337,6 +3337,78 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   }
 }
 
+TEST_CASE("CLI mastering-processor acts on the image a stereo file carries", "[cli][mastering]") {
+  // Two files that are mirror images of each other: A = (L, R), B = (R, L).
+  // Their mono downmixes are bit-identical, because 0.5*(L+R) is symmetric, so a
+  // handler that processes the downmix cannot produce different output for them.
+  // That is the discriminator this needs, and a pair differing only in R is not:
+  // changing R changes the downmix too, so the downmixing handler would also
+  // answer differently and pass.
+  constexpr size_t kFrames = 11025;
+  constexpr int kRate = 22050;
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  std::vector<float> left(kFrames);
+  std::vector<float> right(kFrames);
+  for (size_t frame = 0; frame < kFrames; ++frame) {
+    const float t = static_cast<float>(frame) / kRate;
+    left[frame] = 0.6f * std::sin(two_pi * 440.0f * t);
+    right[frame] = 0.45f * std::sin(two_pi * 277.0f * t) + 0.2f * std::sin(two_pi * 93.0f * t);
+  }
+  const auto write_pair = [&](const std::string& path, const std::vector<float>& a,
+                              const std::vector<float>& b) {
+    std::vector<float> interleaved(2 * kFrames);
+    for (size_t frame = 0; frame < kFrames; ++frame) {
+      interleaved[2 * frame] = a[frame];
+      interleaved[2 * frame + 1] = b[frame];
+    }
+    save_wav_multichannel(path, interleaved.data(), kFrames, 2, ChannelLayout::Stereo, kRate);
+  };
+  const std::string input_a = unique_temp_path("_image_a.wav");
+  const std::string input_b = unique_temp_path("_image_b.wav");
+  write_pair(input_a, left, right);
+  write_pair(input_b, right, left);
+
+  const auto read_all = [](const std::string& path) {
+    auto [samples, rate, channels] = load_audio_interleaved(path);
+    return std::make_pair(samples, channels);
+  };
+
+  // The premise, checked rather than assumed: if the two downmixes differed, a
+  // difference downstream would prove nothing about the image.
+  const std::string mix_a = unique_temp_path("_image_a_mix.wav");
+  const std::string mix_b = unique_temp_path("_image_b_mix.wav");
+  for (const auto& [in, out] : {std::make_pair(input_a, mix_a), std::make_pair(input_b, mix_b)}) {
+    auto [code, ignored] = exec_command(CLI + " gain " + in + " --gain-db 0 -o " + out + " -q");
+    REQUIRE(code == 0);
+  }
+  REQUIRE(read_all(mix_a).first == read_all(mix_b).first);
+  std::remove(mix_a.c_str());
+  std::remove(mix_b.c_str());
+
+  // One stereo-only processor and one the mono entry point also implements, so
+  // this covers both reasons the stereo path is taken.
+  for (const std::string processor : {"stereo.imager", "dynamics.compressor"}) {
+    CAPTURE(processor);
+    const std::string out_a = unique_temp_path("_image_a_out.wav");
+    const std::string out_b = unique_temp_path("_image_b_out.wav");
+    for (const auto& [in, out] : {std::make_pair(input_a, out_a), std::make_pair(input_b, out_b)}) {
+      auto [code, output] = exec_command(CLI + " mastering-processor " + in + " --processor " +
+                                         processor + " -o " + out + " --json -q");
+      REQUIRE(code == 0);
+      REQUIRE_THAT(output, !ContainsSubstring("downmixed to mono"));
+    }
+    const auto [samples_a, channels_a] = read_all(out_a);
+    const auto [samples_b, channels_b] = read_all(out_b);
+    CHECK(channels_a == 2);
+    CHECK(channels_b == 2);
+    CHECK(samples_a != samples_b);
+    std::remove(out_a.c_str());
+    std::remove(out_b.c_str());
+  }
+  std::remove(input_a.c_str());
+  std::remove(input_b.c_str());
+}
+
 TEST_CASE("CLI normalize carries a stereo input through on one gain", "[cli][effects]") {
   // Two channels of one signal a known distance apart. Channel count alone does
   // not separate a stereo normalize from a per-channel one -- both write two

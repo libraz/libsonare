@@ -125,7 +125,10 @@ def test_inventory_exposes_canonical_aliases_and_handler_options() -> None:
     assert _option(commands["mastering-processor"], "processor")["required"] is True
     assert _option(commands["mastering-processor"], "processor")["default"] is None
     assert _option(commands["mastering-processor"], "bits")["default"] == 16
-    assert _option(commands["mastering-processor"], "stereo")["default"] is False
+    # The command routes on the file's channel count and the library's stereo-only
+    # set, so there is no flag to publish.
+    with pytest.raises(StopIteration):
+        _option(commands["mastering-processor"], "stereo")
     for option_name in ("analysis", "reference"):
         assert _option(commands["mastering-pair-analyze"], option_name)["required"] is True
         assert _option(commands["mastering-pair-analyze"], option_name)["default"] is None

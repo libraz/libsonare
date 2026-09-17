@@ -509,13 +509,21 @@ def test_master_cli_applies_preset_and_override_params(monkeypatch, tmp_path, ca
     assert payload["stages"] == ["preset", "loudness"]
 
 
-def test_mastering_processor_warns_for_mono_preview_of_stereo_processors(
-    monkeypatch, capsys
-) -> None:
-    """stereo-only processor previews duplicate mono input and warn on stderr."""
-    import libsonare
-    from libsonare import cli
+def test_mastering_processor_feeds_a_mono_source_to_both_channels(monkeypatch, capsys) -> None:
+    """A mono source reaches a stereo-only processor as both channels, unannounced.
 
+    Duplicating is right here and is the only way these processors are reachable
+    from a mono file at all. It used to carry a warning calling the result a
+    preview and pointing at the Python API, which was honest about a defect that
+    is now fixed: the command folded the processed pair back to mono, so the
+    widening it had just performed never reached the file. It writes the pair, so
+    there is nothing left to caveat -- asserted negatively below, because a
+    warning that outlives its reason reads as a live caution.
+    """
+    import libsonare
+    from libsonare import _cli_common, cli
+
+    monkeypatch.setattr(_cli_common, "_source_channel_count", lambda path: 1)
     monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.1, -0.1], 44100))
 
     def fake_mastering_process_stereo(
@@ -553,8 +561,13 @@ def test_mastering_processor_warns_for_mono_preview_of_stereo_processors(
 
     assert cli.cmd_mastering_processor(args) == 0
     captured = capsys.readouterr()
-    assert "duplicates the mono input" in captured.err
-    assert json.loads(captured.out)["processor"] == "stereo.imager"
+    assert "duplicates the mono input" not in captured.err
+    assert "preview" not in captured.err
+    payload = json.loads(captured.out)
+    assert payload["processor"] == "stereo.imager"
+    # The stereo path ran without anyone spelling a flag: the processor's own
+    # stereo-only status is what routed it.
+    assert payload["stereo"] is True
 
 
 def test_mastering_streaming_cli_passes_platform_targets(monkeypatch, capsys) -> None:

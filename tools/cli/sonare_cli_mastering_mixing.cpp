@@ -766,25 +766,31 @@ bool is_stereo_only_processor(const std::string& name) {
   return std::find(names.begin(), names.end(), name) != names.end();
 }
 
-// Stereo path for cmd_mastering_processor: the CLI carries a single mono buffer,
-// so we feed it to BOTH channels, run the true-stereo processor, and downmix the
-// processed L/R back to mono for the (mono-centric) CLI WAV writer. This makes
-// stereo-only processors (stereo.imager, eq.midSide, multiband.*) reachable as a
-// standalone CLI effect. Engaged by --stereo or auto-engaged for a stereo-only
-// processor.
+// Stereo path for cmd_mastering_processor. A two-channel source is re-read as a
+// pair, so the processor acts on the image the file carries; a mono source is
+// fed to both channels, which is what makes stereo-only processors
+// (stereo.imager, eq.midSide, multiband.*) reachable as a standalone CLI effect
+// at all. Either way the result is written as a stereo file: these processors
+// exist to act on or create a difference between the channels, and folding the
+// pair back to mono discards exactly what they produced.
 int run_mastering_processor_stereo(const CliArgs& args, const Audio& audio,
                                    const std::string& processor,
                                    const std::vector<mastering::api::Param>& params) {
-  const std::vector<float> channel(audio.begin(), audio.end());
+  std::vector<float> left;
+  std::vector<float> right;
+  if (args.source_channels == 2) {
+    StereoPlanes planes = load_stereo_planes(args, audio);
+    left = std::move(planes.left);
+    right = std::move(planes.right);
+  } else {
+    left.assign(audio.begin(), audio.end());
+    right = left;
+  }
   const auto result = mastering::api::apply_named_processor_stereo(
-      processor, channel.data(), channel.data(), audio.size(), audio.sample_rate(), params);
+      processor, left.data(), right.data(), left.size(), audio.sample_rate(), params);
   if (!args.output_file.empty()) {
-    std::vector<float> mono(result.left.size(), 0.0f);
-    for (size_t i = 0; i < mono.size(); ++i) {
-      const float r = i < result.right.size() ? result.right[i] : 0.0f;
-      mono[i] = 0.5f * (result.left[i] + r);
-    }
-    save_wav(args.output_file, mono, result.sample_rate, args.get_int("bits", 16));
+    save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate,
+                    args.get_int("bits", 16));
   }
 
   if (args.json_output) {
@@ -824,10 +830,14 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
   }
   const auto params = parse_mastering_params(args.get_string("params"));
   reject_unknown_processor_params(processor, params);
-  // Route stereo-only processors (and an explicit --stereo request) through the
-  // true-stereo entry point; otherwise they would fail with an opaque mono
-  // INVALID_PARAMETER. The mono path stays the default for everything else.
-  if (args.has("stereo") || is_stereo_only_processor(processor)) {
+  // The file's own channel count and the library's own stereo-only set decide
+  // this, with nothing in between. A two-channel source takes the stereo entry
+  // point, which accepts every processor: whether a given one links its decision
+  // across the pair or runs per channel is already settled per processor inside
+  // the library, and downmixing first would take that choice away. A stereo-only
+  // processor routes there from any source because the mono entry rejects it with
+  // an opaque INVALID_PARAMETER. Everything else stays mono.
+  if (args.source_channels == 2 || is_stereo_only_processor(processor)) {
     return run_mastering_processor_stereo(args, audio, processor, params);
   }
   const auto result = mastering::api::apply_named_processor(processor, audio.data(), audio.size(),

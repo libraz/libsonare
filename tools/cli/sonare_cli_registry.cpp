@@ -568,9 +568,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  target_platform_value(), flag("no-streaming-safe"),
                  number_value("speech-mono-amount", 1.0)},
                 {}, nullptr, 0, /*preserves_stereo_input=*/true);
-    add_command(commands, "mastering-processor", true,
-                {required_string("processor"), string_value("params"), bits_value(), output_value(),
-                 flag("stereo")});
+    add_command(
+        commands, "mastering-processor", true,
+        {required_string("processor"), string_value("params"), bits_value(), output_value()}, {},
+        nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(
         commands, "eq", true,
         {string_value("params"),

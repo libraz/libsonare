@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
@@ -459,7 +458,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
 def cmd_mastering_processor(args: argparse.Namespace) -> int:
     from . import mastering_process, mastering_process_stereo, mastering_processor_catalog
 
-    samples, sr = _load_audio(args.file)
+    planes, sr = _load_channels_or_downmix(args.file)
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
     bits = _wav_bits(args)
@@ -469,23 +468,25 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
     stereo_only = {
         entry["id"] for entry in mastering_processor_catalog() if entry.get("stereoOnly", False)
     }
-    explicit_stereo = bool(getattr(args, "stereo", False))
-    use_stereo = explicit_stereo or processor in stereo_only
+    # The file's own channel count and the library's own stereo-only set decide
+    # this, with nothing in between. A two-channel source takes the stereo entry
+    # point, which accepts every processor: whether a given one links its decision
+    # across the pair or runs per channel is already settled per processor inside
+    # the library, and downmixing first would take that choice away. A stereo-only
+    # processor routes there from any source because the mono entry rejects it.
+    use_stereo = len(planes) == 2 or processor in stereo_only
     result: Any
+    channels: list[list[float]]
     if use_stereo:
-        if processor in stereo_only and not explicit_stereo:
-            print(
-                "warning: stereo-only processor preview duplicates the mono input on left/right; "
-                "inspect stereo results through the Python API for production decisions",
-                file=sys.stderr,
-            )
+        left, right = (planes[0], planes[1]) if len(planes) == 2 else (planes[0], planes[0])
         stereo = mastering_process_stereo(
-            processor_name, samples, samples, sample_rate=sr, params=params
+            processor_name, left, right, sample_rate=sr, params=params
         )
+        # Written as a pair rather than folded back: these processors exist to act
+        # on or create a difference between the channels, and a downmix discards
+        # exactly what they produced.
+        channels = [list(stereo.left), list(stereo.right)]
         result = argparse.Namespace(
-            samples=[
-                0.5 * (left + right) for left, right in zip(stereo.left, stereo.right, strict=True)
-            ],
             sample_rate=stereo.sample_rate,
             input_lufs=stereo.input_lufs,
             output_lufs=stereo.output_lufs,
@@ -493,11 +494,12 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
             latency_samples=stereo.latency_samples,
         )
     else:
-        result = mastering_process(processor_name, samples, sample_rate=sr, params=params)
+        result = mastering_process(processor_name, planes[0], sample_rate=sr, params=params)
+        channels = [list(result.samples)]
 
     output = getattr(args, "output", "") or ""
     if output:
-        _write_wav(output, result.samples, result.sample_rate, bits)
+        _write_channel_output(output, channels, result.sample_rate, bits)
 
     if getattr(args, "json", False):
         payload = {

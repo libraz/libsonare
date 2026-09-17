@@ -187,14 +187,26 @@ def test_mastering_semantic_selector_conflicts_are_invalid_parameters(monkeypatc
         _cli_mastering.cmd_mastering(args)
 
 
-def test_mastering_processor_explicit_stereo_routes_facade_and_reports_mode(
+def test_mastering_processor_hands_a_stereo_source_to_the_facade_unmixed(
     monkeypatch, capsys, tmp_path
 ) -> None:
+    """A two-channel source reaches the stereo facade as its own two channels.
+
+    The channels here are deliberately distinct and asserted by value, because
+    the shape this guards against passed every structural check it had: the
+    command used to hand the mono downmix in as BOTH channels, so the facade saw
+    a fabricated image, and a test that only asserted "the stereo facade was
+    called" was green throughout. There is no ``--stereo`` to spell -- the file's
+    channel count is the whole decision.
+    """
     import libsonare
-    from libsonare import _cli_mastering, cli
+    from libsonare import _cli_common, _cli_mastering, cli
 
     calls: dict[str, object] = {}
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 44_100))
+    monkeypatch.setattr(_cli_common, "_source_channel_count", lambda path: 2)
+    monkeypatch.setattr(
+        _cli_common, "_load_audio_channels", lambda path: ([[0.5], [-0.25]], 44_100)
+    )
     monkeypatch.setattr(libsonare, "mastering_processor_catalog", lambda: [])
 
     def stereo(*args, **kwargs):
@@ -210,13 +222,12 @@ def test_mastering_processor_explicit_stereo_routes_facade_and_reports_mode(
         )
 
     monkeypatch.setattr(libsonare, "mastering_process_stereo", stereo)
-    # mastering-processor writes through its own module-local `_write_wav`, not
-    # through the shared channel writer the chain commands use, so this patch
-    # stays on `_cli_mastering`.
     monkeypatch.setattr(
-        _cli_mastering,
-        "_write_wav",
-        lambda path, samples, sample_rate, bits: calls.update(writer=(sample_rate, bits)),
+        _cli_common,
+        "_write_wav_stereo",
+        lambda path, left, right, sample_rate, bits: calls.update(
+            writer=(left, right, sample_rate, bits)
+        ),
     )
     output = tmp_path / "processor.wav"
     args = cli._build_parser().parse_args(
@@ -224,7 +235,6 @@ def test_mastering_processor_explicit_stereo_routes_facade_and_reports_mode(
             "mastering-processor",
             "--processor",
             "dynamics.compressor",
-            "--stereo",
             "--bits",
             "24",
             "--output",
@@ -236,8 +246,27 @@ def test_mastering_processor_explicit_stereo_routes_facade_and_reports_mode(
 
     assert _cli_mastering.cmd_mastering_processor(args) == 0
     assert calls["stereo"][0][0] == "dynamics.compressor"
-    assert calls["writer"] == (44_100, 24)
+    # The two channels the file carries, not one of them twice.
+    assert calls["stereo"][0][1] == [0.5]
+    assert calls["stereo"][0][2] == [-0.25]
+    # And the processed pair is written as a pair rather than folded back.
+    assert calls["writer"] == ([0.1], [0.2], 44_100, 24)
     assert json.loads(capsys.readouterr().out)["stereo"] is True
+
+
+def test_mastering_processor_rejects_the_removed_stereo_flag() -> None:
+    """``--stereo`` is gone from both front-ends, so the parser must refuse it.
+
+    Asserted rather than left to the option inventory: the contract compares the
+    two front-ends' declared options against each other, so a flag surviving in
+    both would agree with itself and be reported as parity.
+    """
+    from libsonare import cli
+
+    with pytest.raises(SystemExit):
+        cli._build_parser().parse_args(
+            ["mastering-processor", "--processor", "eq.equalizer", "--stereo", "input.wav"]
+        )
 
 
 def test_mastering_processor_stereo_only_catalog_auto_routes(monkeypatch, capsys) -> None:
@@ -391,7 +420,11 @@ def test_native_handler_source_consumes_bits_and_rejects_eq_conflicts() -> None:
     text = source.read_text(encoding="utf-8")
     assert 'args.get_int("bits", 16)' in text
     assert '" cannot be combined with --params"' in text
-    assert 'args.has("stereo") || is_stereo_only_processor(processor)' in text
+    assert "args.source_channels == 2 || is_stereo_only_processor(processor)" in text
+    # Negatively too, because the positive assertion above is satisfied by a
+    # substring: a surviving `args.has("stereo")` would sit beside it happily and
+    # keep routing on a flag that no longer exists on either front-end.
+    assert 'args.has("stereo")' not in text
 
 
 def test_mastering_cli_reports_a_blocked_loudness_target(capsys, monkeypatch) -> None:

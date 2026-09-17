@@ -1201,7 +1201,6 @@ def _build_parser() -> _ContractArgumentParser:
     mproc_p.add_argument("--processor", required=True, help="Processor name")
     mproc_p.add_argument("--params", default="", help="Params as k=v,k=v (floats)")
     _add_wav_bits_argument(mproc_p)
-    mproc_p.add_argument("--stereo", action="store_true")
     eq_p = sub.add_parser("eq", parents=[common], help="Apply the unified equalizer")
     eq_p.add_argument("--params", default="", help="Params as k=v,k=v (overrides band shortcuts)")
     # Each of these selects an enumerator by index. cmd_eq refuses an index
