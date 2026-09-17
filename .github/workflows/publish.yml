@@ -138,6 +138,7 @@ jobs:
           mkdir -p "release-assets/${asset}"
           cp build-cli/bin/sonare-cli "release-assets/${asset}/"
           cp tools/cli/release-README.txt "release-assets/${asset}/README.txt"
+          cp LICENSE NOTICE "release-assets/${asset}/"
           tar -czf "release-assets/${asset}.tar.gz" -C release-assets "${asset}"
           (
             cd release-assets
@@ -229,6 +230,14 @@ jobs:
         if: runner.os == 'macOS'
         run: install_name_tool -id @loader_path/libsonare.dylib bindings/python/src/libsonare/libsonare.dylib
 
+      # Apache-2.0 section 4(d) requires NOTICE to travel with a redistribution,
+      # and the wheel carries Eigen's MPL-2.0 code, whose section 3.2 requires
+      # the same. Both are gitignored under bindings/python; pyproject names them
+      # in license-files, so a missing copy fails the build below rather than
+      # producing a wheel without them.
+      - name: Stage licence files for the wheel
+        run: cp LICENSE NOTICE bindings/python/
+
       - name: Build wheel (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -247,6 +256,33 @@ jobs:
           python -m pip install wheel hatchling
           python -m pip wheel . --no-deps -w dist/
           python -m wheel tags --platform-tag macosx_11_0_arm64 --remove dist/*.whl
+
+      # pyproject's license-files entry is silently skipped when the files are
+      # absent: measured on hatchling 1.32.0, a build with neither present
+      # succeeds and emits a wheel carrying no License-File metadata at all. So
+      # the artifact is checked here rather than the configuration that was
+      # meant to produce it.
+      - name: Verify the wheel carries LICENSE and NOTICE
+        shell: bash
+        env:
+          PYBIN: ${{ runner.os == 'Linux' && '/opt/python/cp313-cp313/bin/python' || 'python' }}
+        run: |
+          "$PYBIN" - <<'PY'
+          import glob, sys, zipfile
+
+          wheels = glob.glob("bindings/python/dist/*.whl")
+          if not wheels:
+              sys.exit("no wheel under bindings/python/dist/")
+          for wheel in wheels:
+              names = zipfile.ZipFile(wheel).namelist()
+              missing = [
+                  f for f in ("LICENSE", "NOTICE")
+                  if not any(n.endswith(f"dist-info/licenses/{f}") for n in names)
+              ]
+              if missing:
+                  sys.exit(f"{wheel} is missing {missing} under dist-info/licenses/")
+              print(f"{wheel}: LICENSE and NOTICE present")
+          PY
 
       - name: Test wheel (Linux)
         if: runner.os == 'Linux'

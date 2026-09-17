@@ -1,4 +1,6 @@
 dist/
+LICENSE
+NOTICE
 *.egg-info/
 __pycache__/
 src/libsonare/*.dylib

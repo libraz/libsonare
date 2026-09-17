@@ -3,6 +3,7 @@ dist/
 build-wasm/
 build-wasm-bench/
 LICENSE
+NOTICE
 .yarn/*
 !.yarn/patches
 !.yarn/plugins

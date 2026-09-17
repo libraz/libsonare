@@ -31,6 +31,7 @@
   "files": [
     "dist",
     "src",
+    "NOTICE",
     "!dist/*.sources.json"
   ],
   "sideEffects": false,
@@ -56,7 +57,7 @@
     "test:browser:worker": "node scripts/offline-worker-smoke.mjs",
     "test:browser:boundary": "node scripts/boundary-smoke.mjs",
     "test:watch": "vitest",
-    "prepublishOnly": "yarn clean && cp ../../LICENSE LICENSE && yarn build && yarn lint && yarn test && yarn test:types"
+    "prepublishOnly": "yarn clean && cp ../../LICENSE LICENSE && cp ../../NOTICE NOTICE && yarn build && yarn lint && yarn test && yarn test:types"
   },
   "keywords": [
     "audio",
