@@ -579,6 +579,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {required_string("analysis"), required_path("reference"), string_value("params")});
     add_command(commands, "mastering-stereo-analyze", true,
                 {required_string("analysis"), required_path("reference"), string_value("params")});
+    add_command(commands, "mastering-suggest", true, {string_value("params")});
     add_command(commands, "mastering-processors", false, {});
     add_command(commands, "mastering-pair-processors", false, {});
     add_command(commands, "mastering-pair-analyses", false, {});

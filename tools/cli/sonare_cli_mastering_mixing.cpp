@@ -6,6 +6,8 @@
 #include "util/json.h"
 
 #ifdef SONARE_WITH_MASTERING
+#include "mastering/assistant/config_from_params.h"
+
 namespace {
 
 /// Rewrite one camelCase JSON key as snake_case ("gainToMatchDb" ->
@@ -54,6 +56,27 @@ sonare::util::json::Value json_keys_to_snake_case(const sonare::util::json::Valu
 std::string analysis_json_for_cli(const std::string& core_json) {
   namespace json = sonare::util::json;
   return json::dump(json_keys_to_snake_case(json::parse(core_json)));
+}
+
+/// The assistant's document, re-keyed except for the chain it suggests.
+///
+/// The chain is fed back to the library verbatim (`mastering --config`), so the
+/// names under it belong to the chain param schema rather than to CLI stdout:
+/// re-keying them would produce a document the library then rejects. Only the
+/// key naming it is renamed; everything beside it is measurement output and
+/// follows the snake_case rule.
+std::string suggestion_json_for_cli(const std::string& core_json) {
+  namespace json = sonare::util::json;
+  json::Value document = json::parse(core_json);
+  json::Object out;
+  for (const auto& [key, child] : document.as_object()) {
+    if (key == "chainConfig") {
+      out.emplace("chain_config", child);
+    } else {
+      out.emplace(json_key_to_snake_case(key), json_keys_to_snake_case(child));
+    }
+  }
+  return json::dump(json::Value(std::move(out)));
 }
 
 }  // namespace
@@ -1064,6 +1087,20 @@ int cmd_mastering_stereo_analyze(const CliArgs& args, const Audio& audio) {
   const auto params = parse_mastering_params(args.get_string("params"));
   std::cout << analysis_json_for_cli(mastering::api::analyze_named_stereo(
                    analysis, audio.data(), right.data(), audio.size(), audio.sample_rate(), params))
+            << "\n";
+  return 0;
+}
+
+int cmd_mastering_suggest(const CliArgs& args, const Audio& audio) {
+  // Through the shared flat-param builder rather than the per-option reads
+  // `mastering --assistant` uses: this command states its whole configuration
+  // in one --params list, and that builder is what sets the explicit-target
+  // flags a delivery platform needs to distinguish a stated LUFS from a default.
+  const auto params = parse_mastering_params(args.get_string("params"));
+  const auto config =
+      mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  const auto suggestion = mastering::assistant::suggest_chain(audio, config);
+  std::cout << suggestion_json_for_cli(mastering::assistant::assistant_result_to_json(suggestion))
             << "\n";
   return 0;
 }

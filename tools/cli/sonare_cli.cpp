@@ -80,6 +80,7 @@ const std::vector<CommandInfo>& get_commands() {
        true},
       {"mastering-stereo-analyze", "Run a stereo mastering analysis", cmd_mastering_stereo_analyze,
        true},
+      {"mastering-suggest", "Suggest a mastering chain as JSON", cmd_mastering_suggest, true},
       {"mastering-processors", "List named mastering processors", cmd_mastering_processors, false},
       {"mastering-pair-processors", "List two-input mastering processors",
        cmd_mastering_pair_processors, false},

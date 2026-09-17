@@ -3447,6 +3447,26 @@
           "required": false,
           "domain": null
         }
+      ],
+      "mastering-suggest": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
       ]
     }
   },
@@ -4090,11 +4110,9 @@
       "option_status": "active"
     },
     "mastering-suggest": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "the native CLI can only reach the assistant through mastering --assistant, which applies the chain; there is no native route to the suggestion alone"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "mastering-profile": {
       "classification": "shared",
@@ -11581,6 +11599,136 @@
             "1000",
             "--target-onset",
             "5000",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-suggest",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "required": true,
+          "type": "path"
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "explanation": "array:string",
+            "genre_candidates": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "name": "string",
+                  "score": "number"
+                }
+              }
+            },
+            "profile": {
+              "keys": {
+                "attack_density": "number",
+                "bpm": "number",
+                "bpm_confidence": "number",
+                "crest_factor_db": "number",
+                "duration_sec": "number",
+                "integrated_lufs": "number",
+                "lra_lu": "number",
+                "spectral_centroid_hz": "number",
+                "spectral_flatness": "number",
+                "sustain_ratio": "number",
+                "true_peak_db": "number"
+              }
+            },
+            "chain_config": {
+              "keys": {
+                "version": "integer",
+                "params": "any"
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mastering-suggest",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "target_lufs",
+          "argv": [
+            "mastering-suggest",
+            "{audio}",
+            "--params",
+            "targetLufs=-10",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "malformed_params",
+          "argv": [
+            "mastering-suggest",
+            "{audio}",
+            "--params",
+            "malformed",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "non_numeric_param",
+          "argv": [
+            "mastering-suggest",
+            "{audio}",
+            "--params",
+            "targetLufs=abc",
             "--json"
           ],
           "exit": 3,
