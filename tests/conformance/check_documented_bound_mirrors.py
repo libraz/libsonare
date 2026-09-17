@@ -73,6 +73,8 @@ CONSTANTS: dict[str, Constant] = {
     "min_sample_rate": Constant("src/core/audio.h", "kMinAudioSampleRate"),
     "max_sample_rate": Constant("src/core/audio.h", "kMaxAudioSampleRate"),
     "max_public_tempo_bpm": Constant("src/transport/tempo_map.h", "kMaxPublicTempoBpm"),
+    "min_assistant_tempo_bpm": Constant("src/mixing/assistant/suggester.h", "kMinAssistantTempoBpm"),
+    "max_assistant_tempo_bpm": Constant("src/mixing/assistant/suggester.h", "kMaxAssistantTempoBpm"),
     "min_tuning_ref_hz": Constant("src/streaming/stream_config.h", "kMinTuningRefHz"),
     "max_tuning_ref_hz": Constant("src/streaming/stream_config.h", "kMaxTuningRefHz"),
     "max_command_capacity": Constant(
@@ -162,8 +164,18 @@ CLAIMS: tuple[Claim, ...] = (
         floor=7,
     ),
     Claim(
+        key="mixing assistant tempo range",
+        pattern=r"outside\s+(?P<lo>\d+)\s*(?:\.\.|[-–—])\s*(?P<hi>\d+)\s*BPM",
+        groups={"lo": ("min_assistant_tempo_bpm", 0), "hi": ("max_assistant_tempo_bpm", 0)},
+        floor=4,
+    ),
+    Claim(
         key="A4 tuning reference range",
-        pattern=r"(?:within|outside|range)\s+(?P<lo>\d+)\.\.(?P<hi>\d+)",
+        # The trailing guard is the unit: a bare `lo..hi` is this claim, and so
+        # is one voiced in Hz, but a range carrying any other unit states a
+        # different bound. Without it the assistant's `20..400 BPM` read as a
+        # tuning range and reported the tempo constants as stale Hz.
+        pattern=r"(?:within|outside|range)\s+(?P<lo>\d+)\.\.(?P<hi>\d+)(?!\d|\s+(?!Hz\b)\w)",
         groups={"lo": ("min_tuning_ref_hz", 0), "hi": ("max_tuning_ref_hz", 0)},
         floor=10,
     ),
