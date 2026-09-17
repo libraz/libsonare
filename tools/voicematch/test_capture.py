@@ -396,6 +396,30 @@ def test_a_lead_longer_than_the_preroll_is_refused():
         AuSource(plugin="x:y:z", preroll_ms=200, keyswitch=92, keyswitch_lead_ms=200)
 
 
+def test_no_key_switch_fits_inside_a_zero_preroll(tmp_path):
+    """A lead of zero is no switch at all, so there is nothing to fit anywhere.
+
+    The bound is `lead >= preroll`, which reads a zero lead against a zero
+    preroll as an overrun and refuses a capture that has no key switch and no
+    lead-in — which is every corpus imported from a SoundFont, where the
+    recording begins at its own first frame.
+    """
+    assert AuSource(plugin="x:y:z", preroll_ms=0).au_preroll_ms == 0
+    path = tmp_path / "zero.json"
+    path.write_text(json.dumps({"id": "zero", "preroll_ms": 0, "timbres": []}))
+    assert capture.load_config(path)["preroll_ms"] == 0
+
+
+def test_a_lead_still_has_to_fit_a_preroll_that_exists(tmp_path):
+    """The relaxation above must not have retired the bound it sits next to."""
+    path = tmp_path / "over.json"
+    path.write_text(json.dumps({
+        "id": "over", "preroll_ms": 100, "keyswitch_lead_ms": 100, "timbres": [],
+    }))
+    with pytest.raises(ValueError, match="does not fit"):
+        capture.load_config(path)
+
+
 def test_a_switched_timbre_moves_the_digest_and_an_unswitched_one_does_not(monkeypatch):
     """A different string is a different recording; a capture without one is not.
 

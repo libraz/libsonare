@@ -217,7 +217,8 @@ class AuSource:
                 "a key switch needs a lead and a lead needs a key switch: a switch "
                 "struck on the note's own tick has no defined order against it"
             )
-        if self.keyswitch_lead_ms >= self.preroll_ms:
+        # Zero is no key switch, which fits inside any preroll including none.
+        if self.keyswitch_lead_ms and self.keyswitch_lead_ms >= self.preroll_ms:
             raise ValueError(
                 f"key switch lead {self.keyswitch_lead_ms} ms does not fit inside a "
                 f"{self.preroll_ms} ms preroll: raise the capture's preroll"

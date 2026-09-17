@@ -213,7 +213,10 @@ def load_config(path: Path) -> dict:
     # timbre is switched or not and every timbre of the corpus shares one
     # timeline — which is what lets a switched timbre sit beside an unswitched one.
     cfg.setdefault("keyswitch_lead_ms", 0)
-    if cfg["keyswitch_lead_ms"] >= cfg["preroll_ms"]:
+    # A lead of zero is no key switch at all, so it fits inside any preroll —
+    # including the zero preroll an extracted corpus has, where the recording
+    # begins at its own first frame and there is no lead-in to take a lead out of.
+    if cfg["keyswitch_lead_ms"] and cfg["keyswitch_lead_ms"] >= cfg["preroll_ms"]:
         raise ValueError(
             f"{cfg.get('id', path.name)}: a key switch lead of "
             f"{cfg['keyswitch_lead_ms']} ms does not fit inside a {cfg['preroll_ms']} ms "
