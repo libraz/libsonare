@@ -1660,7 +1660,12 @@ def main() -> int:
                              "0 disables). A fence rather than a term: inside it the score is "
                              "unchanged. Every other term is level-normalised, so without it a "
                              "candidate can buy a better spectrum by quietening the voice - "
-                             "measured at 31 dB down with a bit-identical band profile")
+                             "measured at 31 dB down with a bit-identical band profile. It is "
+                             "anchored on the START point, so it also holds a voice AT a level "
+                             "an earlier round left it at: a knob that moves the level as well "
+                             "as the shape - a filter corner does - has to be fitted with the "
+                             "gain beside it, or the fence charges the move by more than the "
+                             "corrected shape is worth and the search walks the other way")
     parser.add_argument("--w-crest", type=float, default=None, dest="w_crest",
                         help="weight on peak-minus-held-RMS per note. Gain-invariant, and the "
                              "one term that sees a note whose envelope never falls after its "
