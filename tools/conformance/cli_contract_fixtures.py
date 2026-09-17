@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import struct
 import wave
 from pathlib import Path
@@ -84,10 +85,17 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     return paths
 
 
+_PLACEHOLDER = re.compile(r"\{([a-z0-9_]+)\}")
+
+
 def _resolve_argv(argv: list[str], paths: dict[str, str]) -> list[str]:
-    return [
-        paths.get(token[1:-1], token)
-        if token.startswith("{") and token.endswith("}")
-        else token
-        for token in argv
-    ]
+    """Substitute every ``{name}`` a token contains, not only a whole token.
+
+    Substituting whole tokens only made the contract unable to express any
+    spelling that pairs a placeholder with something else in one argument --
+    ``--input ID=path`` is the CLI's own documented form for a multi-track
+    command, and it was passed through literally, so the case read as covered
+    while the file was never found. An unknown name is left as written, so a
+    literal brace in an argument still reaches the CLI unchanged.
+    """
+    return [_PLACEHOLDER.sub(lambda m: paths.get(m.group(1), m.group(0)), token) for token in argv]

@@ -12809,6 +12809,21 @@
           "stdout": "json"
         },
         {
+          "id": "two_tracks",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--input",
+            "other={audio}"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
           "id": "explicit_tempo",
           "argv": [
             "suggest-mix",
