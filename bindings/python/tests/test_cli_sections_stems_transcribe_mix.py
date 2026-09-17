@@ -90,6 +90,19 @@ def _voice_like(duration: float = 1.0) -> list[float]:
     return samples
 
 
+def _write_stereo_wav(path: str, left: list[float], right: list[float]) -> None:
+    """Write a stereo take, so a track can reach the assistant as a pair."""
+    frames = bytearray()
+    for l_value, r_value in zip(left, right, strict=True):
+        frames += struct.pack("<h", int(round(max(-1.0, min(1.0, l_value)) * 32767.0)))
+        frames += struct.pack("<h", int(round(max(-1.0, min(1.0, r_value)) * 32767.0)))
+    with wave.open(path, "wb") as wav:
+        wav.setnchannels(2)
+        wav.setsampwidth(2)
+        wav.setframerate(SR)
+        wav.writeframes(bytes(frames))
+
+
 def _write_wav(path: str, samples: list[float], sample_rate: int = SR) -> None:
     frames = bytearray()
     for sample in samples:
@@ -455,6 +468,40 @@ def test_suggest_mix_tempo_option_and_param_are_one_value() -> None:
         )
     assert clash.returncode == 3
     assert "same value" in clash.stderr
+
+
+def test_suggest_mix_measures_a_stereo_track_as_a_pair() -> None:
+    """A stereo stem is profiled as itself, not as its own downmix.
+
+    The assistant stages every track towards an absolute loudness target, so a
+    track measured on a fold that cancels content is staged against a loudness
+    the caller never has. The control is the same file rendered as its own mono
+    downmix: both runs see the same signal by construction, and the only thing
+    that differs is whether the channels reached the assistant apart.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        stereo = os.path.join(tmpdir, "inst.wav")
+        folded = os.path.join(tmpdir, "inst_mono.wav")
+        left = _voice_like()
+        right = [0.045 * math.sin(2.0 * math.pi * 300.0 * index / SR) for index in range(len(left))]
+        _write_stereo_wav(stereo, left, right)
+        _write_wav(folded, [0.5 * (a + b) for a, b in zip(left, right, strict=True)])
+
+        def _track(path: str) -> dict:
+            result = _run_cli(["suggest-mix", "--input", f"inst={path}", "--sample-rate", str(SR)])
+            assert result.returncode == 0, result.stderr
+            tracks = json.loads(result.stdout)["tracks"]
+            assert len(tracks) == 1
+            return tracks[0]
+
+        as_pair = _track(stereo)
+        as_fold = _track(folded)
+
+    assert as_pair["channelCount"] == 2
+    assert as_fold["channelCount"] == 1
+    # The fold is not the pair, and the difference is in the figure every gain
+    # decision is made from.
+    assert as_pair["integratedLufs"] != as_fold["integratedLufs"]
 
 
 def test_suggest_mix_requires_an_input() -> None:

@@ -942,6 +942,70 @@ def test_cli_warns_once_when_it_downmixes_a_stereo_input(tmp_path) -> None:
     assert "downmixed to mono" not in quiet.stderr
 
 
+def test_declip_cli_repairs_a_stereo_pair_as_a_pair(tmp_path) -> None:
+    """declip runs the stereo entry, not the mono one twice.
+
+    The stereo entry repairs the union of both channels' clipped runs, so the
+    shallower channel's reconstruction is constrained by the deeper one's
+    extent. That is what separates it from a per-channel loop, and it is what
+    this reads: the right channel of the pair must differ from the same channel
+    declipped on its own. The fixture clips the left hard and the right barely,
+    which is the configuration the entry documents as the one that links.
+
+    The threshold is below the written plateau on purpose: a level written as
+    0.98 comes back from 16-bit as 0.97999, so a detector asked for 0.98 finds
+    no clipping at all and every assertion below would pass over an untouched
+    file.
+    """
+    from libsonare import mastering_repair_declip
+    from libsonare.audio import Audio
+
+    sample_rate = 22050
+    length = 4410
+    threshold = 0.98
+    detect_at = 0.95
+    left = [
+        max(-threshold, min(threshold, 1.6 * math.sin(2.0 * math.pi * 220.0 * i / sample_rate)))
+        for i in range(length)
+    ]
+    right = [
+        max(
+            -threshold,
+            min(threshold, 1.02 * threshold * math.sin(2.0 * math.pi * 220.0 * i / sample_rate)),
+        )
+        for i in range(length)
+    ]
+    source = tmp_path / "clipped.wav"
+    output = tmp_path / "declipped.wav"
+    _write_stereo_wav(str(source), left, right, sample_rate)
+
+    result = _run_cli(
+        # fmt: off
+        ["declip", str(source), "-o", str(output), "--clip-threshold", str(detect_at), "--json"],
+        # fmt: on
+    )
+    assert result.returncode == 0, result.stderr
+
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnchannels() == 2
+    assert _side_energy(str(output)) > 0
+
+    # The control is this file's own right channel, declipped alone through the
+    # mono entry: same samples in, so the only thing that can differ is whether
+    # the other channel was in the call.
+    with Audio.from_file_channel(str(source), 1) as channel:
+        alone = list(
+            mastering_repair_declip(channel.data, sample_rate=sample_rate, clip_threshold=detect_at)
+        )
+    with wave.open(str(output), "rb") as wav:
+        frames = wav.readframes(wav.getnframes())
+    rendered_right = [
+        struct.unpack_from("<h", frames, offset)[0] / 32767.0 for offset in range(2, len(frames), 4)
+    ]
+    worst = max(abs(a - b) for a, b in zip(rendered_right, alone, strict=True))
+    assert worst > 0.05
+
+
 def test_mix_cli_rejects_output_without_inputs(tmp_path) -> None:
     """An explicit output never succeeds without producing an artifact."""
     output = tmp_path / "missing.wav"

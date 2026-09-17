@@ -805,22 +805,28 @@ def cmd_mastering_streaming(args: argparse.Namespace) -> int:
 
 
 def cmd_declip(args: argparse.Namespace) -> int:
-    from . import mastering_repair_declip
+    from . import mastering_repair_declip, mastering_repair_declip_stereo
 
-    samples, sr = _load_audio(args.file)
-    repaired = _float_sequence(
-        mastering_repair_declip(
-            samples,
-            sample_rate=sr,
-            clip_threshold=args.clip_threshold,
-            lpc_order=args.lpc_order,
-            iterations=args.iterations,
-            lpc_blend=args.lpc_blend,
-        )
-    )
+    planes, sr = _load_for_stereo_chain(args.file)
+    knobs = {
+        "clip_threshold": args.clip_threshold,
+        "lpc_order": args.lpc_order,
+        "iterations": args.iterations,
+        "lpc_blend": args.lpc_blend,
+    }
+    if len(planes) == 2:
+        # The stereo entry repairs the union of both channels' clipped runs, so
+        # a plateau one channel alone reaches is still reconstructed against the
+        # other's unclipped extent. Declipping the channels separately cannot
+        # see that and is what the mono loader used to force.
+        stereo = mastering_repair_declip_stereo(planes[0], planes[1], sample_rate=sr, **knobs)
+        rendered = [_float_sequence(stereo.left), _float_sequence(stereo.right)]
+    else:
+        rendered = [_float_sequence(mastering_repair_declip(planes[0], sample_rate=sr, **knobs))]
+    repaired = rendered[0]
 
     if args.output:
-        _write_wav(args.output, repaired, sr)
+        _write_chain_output(args.output, rendered, sr)
 
     if args.json:
         payload: dict[str, object] = {
@@ -1212,7 +1218,16 @@ def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
 
 
 def _mix_assistant_tracks(entries: list[str], sample_rate: int) -> list[Any]:
-    """Load each ``[ID=]WAV`` entry as one mono track at ``sample_rate``."""
+    """Load each ``[ID=]WAV`` entry as one track at ``sample_rate``.
+
+    A two-channel file is handed over as a stereo track rather than a downmix,
+    because the assistant's image domain is the one thing that reads a track's
+    two channels: it measures interchannel cancellation, width and mono risk, and
+    on a folded copy of a stereo stem every one of those measurements describes a
+    signal the caller never has. A mono file stays mono rather than being
+    duplicated across both sides, which would present it to the same domain as a
+    stereo track of zero width.
+    """
     from .mixing_assistant import MixTrackInput
 
     tracks: list[Any] = []
@@ -1226,10 +1241,17 @@ def _mix_assistant_tracks(entries: list[str], sample_rate: int) -> list[Any]:
             raise ValueError(f"--input track id must not be empty: {entry}")
         if not path:
             raise ValueError(f"--input requires a file path: {entry}")
-        samples, track_rate = _load_audio(path)
+        if _source_channel_count(path) == 2:
+            planes, track_rate = _load_audio_channels(path)
+            left, right = planes[0], planes[1]
+        else:
+            left, track_rate = _load_audio(path)
+            right = None
         if track_rate != sample_rate:
-            samples = _resample(samples, track_rate, sample_rate)
-        tracks.append(MixTrackInput(track_id=track_id, left=samples, name=track_id))
+            left = _resample(left, track_rate, sample_rate)
+            if right is not None:
+                right = _resample(right, track_rate, sample_rate)
+        tracks.append(MixTrackInput(track_id=track_id, left=left, right=right, name=track_id))
     return tracks
 
 
