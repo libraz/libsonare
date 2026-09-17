@@ -470,6 +470,7 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
         "mastering",
         "eq",
         "mastering-processor",
+        "mastering-pair-processor",
         "mastering-chain",
         "master",
         "declip",
@@ -1250,6 +1251,23 @@ def _build_parser() -> _ContractArgumentParser:
     mpa_p.add_argument("--reference", required=True, help="Reference audio file")
     mpa_p.add_argument("--analysis", required=True, help="Analysis name")
     mpa_p.add_argument("--params", default="")
+    mpp_p = sub.add_parser(
+        "mastering-pair-processor",
+        parents=[common],
+        help="Apply a two-input mastering processor",
+    )
+    mpp_p.add_argument("--processor", required=True, help="Pair processor name")
+    mpp_p.add_argument("--reference", required=True, help="Reference audio file")
+    mpp_p.add_argument("--params", default="")
+    _add_wav_bits_argument(mpp_p)
+    msa_p = sub.add_parser(
+        "mastering-stereo-analyze",
+        parents=[stdout_options],
+        help="Run a stereo mastering analysis (always JSON output)",
+    )
+    msa_p.add_argument("--reference", required=True, help="Right-channel audio file")
+    msa_p.add_argument("--analysis", required=True, help="Analysis name")
+    msa_p.add_argument("--params", default="")
     mchain_p = sub.add_parser(
         "mastering-chain", parents=[common], help="Run a configurable mastering chain"
     )
@@ -1611,6 +1629,8 @@ def _build_parser() -> _ContractArgumentParser:
         "eq",
         "mastering-processor",
         "mastering-pair-analyze",
+        "mastering-pair-processor",
+        "mastering-stereo-analyze",
         "mastering-chain",
         "master",
         "mastering-streaming",
@@ -1714,6 +1734,8 @@ def _dispatch() -> None:
         "mastering-pair-processors": cmd_mastering_pair_processors,
         "mastering-pair-analyses": cmd_mastering_pair_analyses,
         "mastering-pair-analyze": cmd_mastering_pair_analyze,
+        "mastering-pair-processor": cmd_mastering_pair_processor,
+        "mastering-stereo-analyze": cmd_mastering_stereo_analyze,
         "mastering-chain": cmd_mastering_chain,
         "master": cmd_master,
         "mastering-streaming": cmd_mastering_streaming,

@@ -622,6 +622,65 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mastering_pair_processor(args: argparse.Namespace) -> int:
+    from . import mastering_pair_process
+
+    source, sr = _load_audio(args.file)
+    reference, ref_sr = _load_audio(args.reference)
+    if ref_sr != sr:
+        raise ValueError("reference sample rate must match input sample rate")
+    params_raw = getattr(args, "params", "") or ""
+    params = _parse_kv_params(params_raw) if params_raw else {}
+    result = mastering_pair_process(
+        args.processor, source, reference, sample_rate=sr, params=params or None
+    )
+    output = getattr(args, "output", "") or ""
+    if output:
+        _write_wav(output, result.samples, result.sample_rate, _wav_bits(args))
+    if args.json:
+        print(
+            _strict_json_dumps(
+                {
+                    "processor": args.processor,
+                    "input_lufs": result.input_lufs,
+                    "output_lufs": result.output_lufs,
+                    "applied_gain_db": result.applied_gain_db,
+                    "latency_samples": result.latency_samples,
+                    "output": output,
+                }
+            )
+        )
+    else:
+        print(f"  Mastering pair processor: {args.processor}")
+        print(f"    Input LUFS:   {result.input_lufs:.2f}")
+        print(f"    Output LUFS:  {result.output_lufs:.2f}")
+        print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
+        print(f"    Latency:      {result.latency_samples} samples")
+        if output:
+            print(f"    Wrote: {output}")
+    return 0
+
+
+def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
+    from . import mastering_stereo_analyze
+
+    left, sr = _load_audio(args.file)
+    right, ref_sr = _load_audio(args.reference)
+    if ref_sr != sr:
+        raise ValueError("reference sample rate must match input sample rate")
+    if len(right) != len(left):
+        raise ValueError("reference length must match input length")
+    params_raw = getattr(args, "params", "") or ""
+    params = _parse_kv_params(params_raw) if params_raw else {}
+    result_json = mastering_stereo_analyze(
+        args.analysis, left, right, sample_rate=sr, params=params or None
+    )
+    # Same core JSON producer as mastering-pair-analyze above, so the same
+    # re-keying: the document arrives in camelCase and CLI stdout is snake_case.
+    print(_strict_json_dumps(_json_keys_to_snake_case(json.loads(result_json))))
+    return 0
+
+
 def cmd_mastering_chain(args: argparse.Namespace) -> int:
     from . import mastering_chain
 

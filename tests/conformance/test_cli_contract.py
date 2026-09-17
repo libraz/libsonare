@@ -835,8 +835,6 @@ class CliContractSelfTest(unittest.TestCase):
             unported,
             {
                 "boundaries",
-                "mastering-pair-processor",
-                "mastering-stereo-analyze",
                 "mastering-suggest",
                 "midi-render",
                 "mix-strip",
@@ -886,7 +884,7 @@ class CliContractSelfTest(unittest.TestCase):
             for path, record in self.manifest["commands"].items()
             if record["classification"] == "shared"
         }
-        self.assertEqual(len(shared), 63)
+        self.assertEqual(len(shared), 65)
         self.assertEqual(set(self.manifest["inventory"]["expected_options"]), shared)
         for path in shared:
             self.assertEqual(

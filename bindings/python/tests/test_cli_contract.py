@@ -104,6 +104,8 @@ TOP_LEVEL_ROUTES = (
     "mastering-pair-processors",
     "mastering-pair-analyses",
     "mastering-pair-analyze",
+    "mastering-pair-processor",
+    "mastering-stereo-analyze",
     "mastering-chain",
     "master",
     "mastering-streaming",

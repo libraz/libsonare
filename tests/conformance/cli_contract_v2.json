@@ -3119,6 +3119,112 @@
           "required": false,
           "domain": null
         }
+      ],
+      "mastering-pair-processor": [
+        {
+          "name": "bits",
+          "type": "integer",
+          "default": 16,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "16",
+              "24"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "processor",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "reference",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "mastering-stereo-analyze": [
+        {
+          "name": "analysis",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
       ]
     }
   },
@@ -3538,18 +3644,14 @@
       "reason": "the measurement is already a Python entry point, libsonare.clicks(), so the CLI would only add a JSON round trip"
     },
     "mastering-pair-processor": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "a task-level command over an entry point Python already has as mastering_pair_process()"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "mastering-stereo-analyze": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "a task-level command over an entry point Python already has as mastering_stereo_analyze()"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "mastering-stereo-analyses": {
       "classification": "native_only",
@@ -3717,7 +3819,7 @@
       "status": "native_only",
       "option_status": "pending",
       "reason_kind": "unported",
-      "reason": "a task-level command whose sibling mix is carried by both front-ends; one of the pair being one-sided is an inconsistency rather than a decision"
+      "reason": "the channel strip has no Python route at all, as a command or as an entry point; the native CLI's mix is this command's deprecated alias while the Python mix is a scene mixer, so the shared name points at two capabilities"
     },
     "pitch-correct-timevarying": {
       "classification": "python_only",
@@ -3795,7 +3897,7 @@
       "status": "intentional_variant",
       "option_status": "pending",
       "reason_kind": "by_design",
-      "reason": "both front-ends carry the name over different option sets, and neither shape is the one the other should take"
+      "reason": "one name over two capabilities: natively the deprecated spelling of the mix-strip channel strip, and on the Python side a scene mixer taking a preset or a scene document"
     },
     "repair": {
       "classification": "shared",
@@ -10499,6 +10601,246 @@
           "exit": 0,
           "legacy_exit": 0,
           "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-pair-processor",
+      "options": [
+        {
+          "name": "bits",
+          "type": "integer",
+          "default": 16,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "16",
+              "24"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "processor",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "reference",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "processor": "string",
+            "input_lufs": "number",
+            "output_lufs": "number",
+            "applied_gain_db": "number",
+            "latency_samples": "integer",
+            "output": "path"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "ab_switch",
+          "argv": [
+            "mastering-pair-processor",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--processor",
+            "match.abSwitch",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "align_reference",
+          "argv": [
+            "mastering-pair-processor",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--processor",
+            "match.alignReferenceToSource",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-stereo-analyze",
+      "options": [
+        {
+          "name": "analysis",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "mono_compat_check": {
+          "keys": {
+            "correlation": "number",
+            "width": "number",
+            "mono_peak": "number",
+            "side_rms": "number",
+            "likely_mono_compatible": "boolean"
+          }
+        },
+        "mono_compat_check_log_bands": {
+          "keys": {
+            "bands": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "low_hz": "number",
+                  "high_hz": "number",
+                  "correlation": "number",
+                  "side_rms": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "mono_compat_check",
+          "argv": [
+            "mastering-stereo-analyze",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--analysis",
+            "stereo.monoCompatCheck",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "mono_compat_check",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "mono_compat_check_log_bands",
+          "argv": [
+            "mastering-stereo-analyze",
+            "{audio}",
+            "--reference",
+            "{audio}",
+            "--analysis",
+            "stereo.monoCompatCheckLogBands",
+            "--params",
+            "highHz=8000",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "mono_compat_check_log_bands",
           "artifact": "none",
           "stdout": "json"
         }
