@@ -93,7 +93,7 @@ _ROUTE_FLOORS = {
 _INTERNAL_BUFFERS = {
     # The shared envelope pool the note array indexes into. Each note's curve is
     # rank-checked under its own index before it enters the pool.
-    ("_effects_editing.py", "np.concatenate(curves)"),
+    ("_effects_note_model.py", "np.concatenate(curves)"),
 }
 
 

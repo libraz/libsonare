@@ -70,3 +70,10 @@ class SonareValueError(SonareError, ValueError):
     def __init__(self, message: str, code: int = int(ErrorCode.INVALID_PARAMETER)) -> None:
         self.code = int(code)
         ValueError.__init__(self, message)
+
+
+def _unsupported_effect_symbol(symbol: str) -> SonareError:
+    return SonareError(
+        int(ErrorCode.NOT_SUPPORTED),
+        f"libsonare does not export {symbol}; install a matching native library",
+    )

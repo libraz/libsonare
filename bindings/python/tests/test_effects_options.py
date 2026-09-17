@@ -7,11 +7,13 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-import libsonare._effects_editing as editing
+import libsonare._effects_hpss as hpss_mod
 import libsonare._effects_level as level
 import libsonare._effects_repair_dereverb as repair_dereverb
 import libsonare._effects_repair_noise as repair_noise
 import libsonare._effects_separation as separation
+import libsonare._effects_spectral as spectral
+import libsonare._effects_timepitch as timepitch
 from libsonare import ErrorCode, SonareError
 from libsonare._runtime import _get_lib
 
@@ -38,12 +40,12 @@ def test_transform_options_use_new_symbols(monkeypatch: pytest.MonkeyPatch) -> N
 
     stretch = SimpleNamespace(sonare_time_stretch_ex=object())
     shift = SimpleNamespace(sonare_pitch_shift_ex=object())
-    monkeypatch.setattr(editing, "_call_float_transform", fake_transform)
+    monkeypatch.setattr(timepitch, "_call_float_transform", fake_transform)
 
-    monkeypatch.setattr(editing, "_get_lib", lambda: stretch)
-    assert editing.time_stretch(_samples(), n_fft=1024, hop_length=256) == [0.0]
-    monkeypatch.setattr(editing, "_get_lib", lambda: shift)
-    assert editing.pitch_shift(_samples(), n_fft=1024, hop_length=256) == [0.0]
+    monkeypatch.setattr(timepitch, "_get_lib", lambda: stretch)
+    assert timepitch.time_stretch(_samples(), n_fft=1024, hop_length=256) == [0.0]
+    monkeypatch.setattr(timepitch, "_get_lib", lambda: shift)
+    assert timepitch.pitch_shift(_samples(), n_fft=1024, hop_length=256) == [0.0]
 
     assert calls[0][0] == "sonare_time_stretch_ex"
     assert [int(value.value) for value in calls[0][1][3:]] == [1024, 256]
@@ -64,18 +66,18 @@ def test_legacy_transform_defaults_fallback_but_custom_options_are_not_ignored(
         sonare_time_stretch=object(),
         sonare_pitch_shift=object(),
     )
-    monkeypatch.setattr(editing, "_call_float_transform", fake_transform)
-    monkeypatch.setattr(editing, "_get_lib", lambda: legacy)
+    monkeypatch.setattr(timepitch, "_call_float_transform", fake_transform)
+    monkeypatch.setattr(timepitch, "_get_lib", lambda: legacy)
 
-    editing.time_stretch(_samples())
-    editing.pitch_shift(_samples())
+    timepitch.time_stretch(_samples())
+    timepitch.pitch_shift(_samples())
     assert calls == ["sonare_time_stretch", "sonare_pitch_shift"]
 
     with pytest.raises(SonareError, match="sonare_time_stretch_ex") as stretch_error:
-        editing.time_stretch(_samples(), n_fft=1024)
+        timepitch.time_stretch(_samples(), n_fft=1024)
     assert stretch_error.value.code == ErrorCode.NOT_SUPPORTED
     with pytest.raises(SonareError, match="sonare_pitch_shift_ex") as shift_error:
-        editing.pitch_shift(_samples(), hop_length=256)
+        timepitch.pitch_shift(_samples(), hop_length=256)
     assert shift_error.value.code == ErrorCode.NOT_SUPPORTED
 
 
@@ -85,8 +87,8 @@ def test_hpss_options_and_legacy_fallback(monkeypatch: pytest.MonkeyPatch) -> No
         sonare_hpss_ex=new_call,
         sonare_free_hpss_result=lambda *_args: None,
     )
-    monkeypatch.setattr(editing, "_get_lib", lambda: new)
-    result = editing.hpss(_samples(), n_fft=1024, hop_length=256, hard_mask=True)
+    monkeypatch.setattr(hpss_mod, "_get_lib", lambda: new)
+    result = hpss_mod.hpss(_samples(), n_fft=1024, hop_length=256, hard_mask=True)
     assert result.length == 0
     assert len(new_call.calls) == 1
     assert [int(new_call.calls[0][index].value) for index in (5, 6, 7, 8)] == [1024, 256, 0, 0]
@@ -98,12 +100,12 @@ def test_hpss_options_and_legacy_fallback(monkeypatch: pytest.MonkeyPatch) -> No
         fallback.append(args)
         return "legacy-result"
 
-    monkeypatch.setattr(editing, "_get_lib", lambda: legacy)
-    monkeypatch.setattr(editing, "_hpss_legacy", fake_legacy)
-    assert editing.hpss(_samples()) == "legacy-result"
+    monkeypatch.setattr(hpss_mod, "_get_lib", lambda: legacy)
+    monkeypatch.setattr(hpss_mod, "_hpss_legacy", fake_legacy)
+    assert hpss_mod.hpss(_samples()) == "legacy-result"
     assert len(fallback) == 1
     with pytest.raises(SonareError, match="sonare_hpss_ex"):
-        editing.hpss(_samples(), hard_mask=True)
+        hpss_mod.hpss(_samples(), hard_mask=True)
 
 
 def test_hpss_with_residual_options_and_legacy_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,13 +169,18 @@ def test_invalid_options_are_rejected_before_library_lookup(
     def fail_lookup() -> object:
         raise AssertionError("native library lookup must not happen")
 
-    monkeypatch.setattr(editing, "_get_lib", fail_lookup)
+    # Each entry point resolves _get_lib through its own module, so the guard
+    # has to be installed on every module whose refusal is asserted below --
+    # one left unpatched would still raise, from a path the guard never saw.
+    monkeypatch.setattr(timepitch, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="n_fft"):
-        editing.time_stretch(_samples(), n_fft=1001)
+        timepitch.time_stretch(_samples(), n_fft=1001)
     with pytest.raises(ValueError, match="n_fft"):
-        editing.time_stretch(_samples(), n_fft=2**32)
+        timepitch.time_stretch(_samples(), n_fft=2**32)
+
+    monkeypatch.setattr(hpss_mod, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="kernel_harmonic"):
-        editing.hpss(_samples(), kernel_harmonic=2**32 + 1)
+        hpss_mod.hpss(_samples(), kernel_harmonic=2**32 + 1)
 
     monkeypatch.setattr(separation, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="hop_length"):
@@ -208,9 +215,9 @@ def _has_extended_effects() -> bool:
 @pytest.mark.skipif(not _has_extended_effects(), reason="extended effects symbols unavailable")
 def test_extended_effects_work_with_fresh_library() -> None:
     samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 4096, dtype=np.float32)) * 0.25
-    stretched = editing.time_stretch(samples, rate=1.1, n_fft=1024, hop_length=256)
-    shifted = editing.pitch_shift(samples, semitones=2.0, n_fft=1024, hop_length=256)
-    separated = editing.hpss(samples, n_fft=1024, hop_length=256, hard_mask=True)
+    stretched = timepitch.time_stretch(samples, rate=1.1, n_fft=1024, hop_length=256)
+    shifted = timepitch.pitch_shift(samples, semitones=2.0, n_fft=1024, hop_length=256)
+    separated = hpss_mod.hpss(samples, n_fft=1024, hop_length=256, hard_mask=True)
     separated_residual = separation.hpss_with_residual(
         samples, n_fft=1024, hop_length=256, hard_mask=True
     )
@@ -230,10 +237,10 @@ def test_effects_reject_a_hop_below_the_half_window_overlap_contract() -> None:
     samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 4096, dtype=np.float32)) * 0.25
 
     for call in (
-        lambda: editing.hpss(samples, n_fft=1024, hop_length=1024),
+        lambda: hpss_mod.hpss(samples, n_fft=1024, hop_length=1024),
         lambda: separation.hpss_with_residual(samples, n_fft=1024, hop_length=1024),
-        lambda: editing.time_stretch(samples, rate=1.2, n_fft=512, hop_length=2048),
-        lambda: editing.pitch_shift(samples, semitones=3.0, n_fft=1024, hop_length=1024),
+        lambda: timepitch.time_stretch(samples, rate=1.2, n_fft=512, hop_length=2048),
+        lambda: timepitch.pitch_shift(samples, semitones=3.0, n_fft=1024, hop_length=1024),
         lambda: separation.phase_vocoder(samples, rate=1.2, n_fft=1024, hop_length=1024),
     ):
         with pytest.raises(SonareError) as error:
@@ -247,10 +254,10 @@ def test_effects_accept_an_even_n_fft_that_is_not_a_power_of_two() -> None:
     # which made the same call succeed on the C ABI and fail here.
     samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 4096, dtype=np.float32)) * 0.25
 
-    separated = editing.hpss(samples, n_fft=1500, hop_length=250)
+    separated = hpss_mod.hpss(samples, n_fft=1500, hop_length=250)
     assert separated.length == len(samples)
-    assert len(editing.time_stretch(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
-    assert len(editing.pitch_shift(samples, semitones=3.0, n_fft=1500, hop_length=250)) > 0
+    assert len(timepitch.time_stretch(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
+    assert len(timepitch.pitch_shift(samples, semitones=3.0, n_fft=1500, hop_length=250)) > 0
     assert len(separation.phase_vocoder(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
 
 
@@ -267,13 +274,13 @@ def test_the_n_fft_verdict_matches_the_core_for_both_families() -> None:
     samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 8192, dtype=np.float32)) * 0.25
 
     # Mixed-radix family: accepted.
-    assert editing.hpss(samples, n_fft=1500, hop_length=250).length == len(samples)
+    assert hpss_mod.hpss(samples, n_fft=1500, hop_length=250).length == len(samples)
     assert len(separation.phase_vocoder(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
 
     # Power-of-two family: rejected, by the facade rather than by the core, so
     # the message names the rule.
     with pytest.raises(ValueError, match="power of two"):
-        editing.spectral_edit(samples, 22050, [], n_fft=1500, hop_length=250)
+        spectral.spectral_edit(samples, 22050, [], n_fft=1500, hop_length=250)
     with pytest.raises(ValueError, match="power of two"):
         repair_noise.mastering_repair_denoise_classical(samples, 22050, n_fft=1500, hop_length=250)
     with pytest.raises(ValueError, match="power of two"):
@@ -283,7 +290,7 @@ def test_the_n_fft_verdict_matches_the_core_for_both_families() -> None:
 
     # The same three accept a power of two, so the rejection above is the rule
     # and not the entry point refusing everything.
-    assert len(editing.spectral_edit(samples, 22050, [], n_fft=1024, hop_length=256)) == len(
+    assert len(spectral.spectral_edit(samples, 22050, [], n_fft=1024, hop_length=256)) == len(
         samples
     )
     assert (

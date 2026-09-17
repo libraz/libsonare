@@ -18,11 +18,11 @@ from typing import TYPE_CHECKING, Self
 
 import numpy as np
 
-from ._effects_editing import (
+from ._effects_note_model import (
     _NOTE_STRUCT_VERSION,
     _note_set_index,
-    _unsupported_effect_symbol,
 )
+from ._runtime import _unsupported_effect_symbol
 
 if TYPE_CHECKING:
     # analyzer.pyi declares the two note dataclasses itself rather than
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     # two names are the same objects at runtime.
     from .analyzer import NoteEdit, NoteObject
 else:
-    from ._effects_editing import NoteEdit, NoteObject
+    from ._effects_note_model import NoteEdit, NoteObject
 from ._ffi import (
     SonareNoteEdit,
     SonareNoteObject,

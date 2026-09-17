@@ -15,20 +15,11 @@ from ._effects_dynamics import (
 from ._effects_dynamics import (
     _run_dynamics as _run_dynamics,
 )
-from ._effects_editing import *  # noqa: F403
-from ._effects_editing import (
-    _SPECTRAL_EDIT_MODE_NAMES as _SPECTRAL_EDIT_MODE_NAMES,
-)
-from ._effects_editing import (
-    _SPECTRAL_EDIT_WINDOW_NAMES as _SPECTRAL_EDIT_WINDOW_NAMES,
-)
-from ._effects_editing import (
-    _coerce_spectral_edit_mode as _coerce_spectral_edit_mode,
-)
-from ._effects_editing import (
-    _coerce_spectral_edit_window as _coerce_spectral_edit_window,
-)
+from ._effects_hpss import *  # noqa: F403
 from ._effects_level import *  # noqa: F403
+from ._effects_note_model import *  # noqa: F403
+from ._effects_note_ops import *  # noqa: F403
+from ._effects_percussive import *  # noqa: F403
 from ._effects_repair_common import (
     _run_repair as _run_repair,
 )
@@ -61,6 +52,20 @@ from ._effects_repair_trim import (
     _coerce_trim_silence_mode as _coerce_trim_silence_mode,
 )
 from ._effects_separation import *  # noqa: F403
+from ._effects_spectral import *  # noqa: F403
+from ._effects_spectral import (
+    _SPECTRAL_EDIT_MODE_NAMES as _SPECTRAL_EDIT_MODE_NAMES,
+)
+from ._effects_spectral import (
+    _SPECTRAL_EDIT_WINDOW_NAMES as _SPECTRAL_EDIT_WINDOW_NAMES,
+)
+from ._effects_spectral import (
+    _coerce_spectral_edit_mode as _coerce_spectral_edit_mode,
+)
+from ._effects_spectral import (
+    _coerce_spectral_edit_window as _coerce_spectral_edit_window,
+)
+from ._effects_timepitch import *  # noqa: F403
 from ._effects_voice import *  # noqa: F403
 from ._effects_voice import _VC_PRESET_NAME_TO_ORDINAL as _VC_PRESET_NAME_TO_ORDINAL
 from ._effects_voice import (

@@ -21,6 +21,7 @@ import numpy as np
 from ._errors import ErrorCode as ErrorCode
 from ._errors import SonareError as SonareError
 from ._errors import SonareValueError as SonareValueError
+from ._errors import _unsupported_effect_symbol as _unsupported_effect_symbol
 from ._ffi import *  # noqa: F403
 from ._narrowing import _FLOAT32_MAX as _FLOAT32_MAX
 from ._narrowing import _float_narrowing_error as _float_narrowing_error
@@ -870,6 +871,12 @@ def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
     if size < 2 or size % 2 != 0:
         raise SonareValueError(f"{fn_name}: n_fft {domain}")
     return size
+
+
+# The framing every spectral effect entry point defaults to, beside the
+# validator they all route those two arguments through.
+_DEFAULT_EFFECT_N_FFT = 2048
+_DEFAULT_EFFECT_HOP_LENGTH = 512
 
 
 def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> tuple[int, int]:

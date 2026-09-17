@@ -36,7 +36,7 @@ SPECTRAL_DOCS = (
     "include/sonare/sonare_c_effects.h",
     "bindings/node/src/types_mastering.ts",
     "bindings/wasm/src/public_types_spectral.ts",
-    "bindings/python/src/libsonare/_effects_editing.py",
+    "bindings/python/src/libsonare/_effects_spectral.py",
 )
 
 # The offset case: one constant, one document, two claims that read it -- the
@@ -148,7 +148,7 @@ class PerturbationTest(_CopiedTree):
             self.assertIn(document, failure)
 
     def test_moving_one_document_alone_is_reported(self) -> None:
-        stale = "bindings/python/src/libsonare/_effects_editing.py"
+        stale = "bindings/python/src/libsonare/_effects_spectral.py"
         self.only(
             self.spectral({stale: ("a power of two in ``[2, 262144]``", "a power of two in ``[2, 65536]``")}),
             stale,
