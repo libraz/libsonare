@@ -436,6 +436,16 @@ jobs:
           python3 tests/conformance/check_wasm_exception_scope.py \
             --build-dir bindings/wasm/build-wasm \
             --build-dir bindings/wasm/build-wasm-analysis
+      # A feature flag is read as a promise about the shipped binary, and until
+      # this ran nothing held it to one: the analysis module links three units
+      # from subsystems it turned off, each deliberate and each now named. Same
+      # two build directories, for the same reason -- a residue only appears in
+      # the configuration whose gate is off.
+      - name: Check WASM feature gate scope
+        run: |
+          python3 tests/conformance/check_wasm_feature_gate_scope.py \
+            --build-dir bindings/wasm/build-wasm \
+            --build-dir bindings/wasm/build-wasm-analysis
       # `yarn check:wasm-size` is deliberately not run as a gate. Its budget is
       # measured against a baseline that only moves when it is rebased by hand,
       # so any release that adds features trips it while saying nothing about
