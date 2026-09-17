@@ -98,6 +98,11 @@ struct CliCommandSpec {
   std::vector<std::string> aliases;
   std::vector<CliOptionSpec> options;
   bool requires_audio = false;
+  /// How many positional arguments this leaf accepts. `requires_audio` is one
+  /// of them -- the audio file -- so the count is carried here rather than
+  /// derived, and a leaf whose positional is something else (the `project`
+  /// subcommand, a preset document, a MIDI value) says so on its own record.
+  size_t positional_count = 0;
   bool inventory = true;
   /// Cross-option constraint, run after every per-option check passes.
   CliCommandValidator validate = nullptr;

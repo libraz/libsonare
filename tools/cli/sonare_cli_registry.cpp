@@ -352,11 +352,13 @@ std::vector<CliOptionSpec> with_json(std::vector<CliOptionSpec> options) {
   return options;
 }
 
+// `positionals` names the arity of a leaf that takes a positional which is not
+// an audio file; an audio leaf already takes exactly one and ignores it.
 void add_command(std::vector<CliCommandSpec>& registry, const char* path, bool requires_audio,
                  std::vector<CliOptionSpec> options, std::vector<std::string> aliases = {},
-                 CliCommandValidator validate = nullptr) {
-  registry.push_back(
-      {path, std::move(aliases), with_json(std::move(options)), requires_audio, true, validate});
+                 CliCommandValidator validate = nullptr, size_t positionals = 0) {
+  registry.push_back({path, std::move(aliases), with_json(std::move(options)), requires_audio,
+                      requires_audio ? 1u : positionals, true, validate});
 }
 
 const std::vector<CliCommandSpec>& build_cli_registry() {
@@ -440,9 +442,12 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  number_value("formant-factor"), required_output()});
     add_command(commands, "voice-presets", false, {});
     add_command(commands, "voice-preset", false, {string_value("preset", "neutral-monitor")});
+    // The preset document arrives as the positional rather than through an
+    // option, which is the arity the trailing argument declares.
     add_command(
         commands, "voice-preset-validate", false,
-        {path_value("preset-json"), string_value("preset"), string_value("set", "", false, true)});
+        {path_value("preset-json"), string_value("preset"), string_value("set", "", false, true)},
+        {}, nullptr, 1);
     add_command(
         commands, "hpss", true,
         {int_value("kernel-harmonic", 31), int_value("kernel-percussive", 31), required_output(),
@@ -704,23 +709,28 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
 
 #ifdef SONARE_WITH_ARRANGEMENT
     // Exactly ten project leaves; there is deliberately no broad `project`
-    // option row.
-    add_command(commands, "project.abi", false, {});
-    add_command(commands, "project.synth-presets", false, {});
-    add_command(commands, "project.new", false, {int_value("sample-rate", 0), required_output()});
-    add_command(commands, "project.validate", false,
-                {flag("strict"), required_path("in"), output_value()});
-    add_command(commands, "project.compile", false, {required_path("in")});
-    add_command(commands, "project.bounce", false,
-                {required_path("in"), required_output(), int_value("sample-rate"),
-                 int_value("frames", 0), int_value("block-size", 0), int_value("channels", 2),
-                 int_value("instrument-latency", 0), optional_string("synth")},
-                {}, &validate_project_bounce_channels);
-    add_command(commands, "project.export-smf", false, {required_path("in"), required_output()});
-    add_command(commands, "project.import-smf", false, {required_path("smf"), required_output()});
-    add_command(commands, "project.export-midi2", false, {required_path("in"), required_output()});
-    add_command(commands, "project.import-midi2", false,
-                {required_path("midi2"), required_output()});
+    // option row. Each takes its subcommand as the one positional, so they are
+    // registered through a helper rather than each restating that arity.
+    const auto add_project_command = [&commands](const char* path,
+                                                 std::vector<CliOptionSpec> options,
+                                                 CliCommandValidator validate = nullptr) {
+      add_command(commands, path, false, std::move(options), {}, validate, 1);
+    };
+    add_project_command("project.abi", {});
+    add_project_command("project.synth-presets", {});
+    add_project_command("project.new", {int_value("sample-rate", 0), required_output()});
+    add_project_command("project.validate", {flag("strict"), required_path("in"), output_value()});
+    add_project_command("project.compile", {required_path("in")});
+    add_project_command(
+        "project.bounce",
+        {required_path("in"), required_output(), int_value("sample-rate"), int_value("frames", 0),
+         int_value("block-size", 0), int_value("channels", 2), int_value("instrument-latency", 0),
+         optional_string("synth")},
+        &validate_project_bounce_channels);
+    add_project_command("project.export-smf", {required_path("in"), required_output()});
+    add_project_command("project.import-smf", {required_path("smf"), required_output()});
+    add_project_command("project.export-midi2", {required_path("in"), required_output()});
+    add_project_command("project.import-midi2", {required_path("midi2"), required_output()});
 #endif
     return commands;
   }();
@@ -918,6 +928,17 @@ std::vector<std::string> cli_options_for_command(const std::string& command) {
   return result;
 }
 
+namespace {
+/// Whether any leaf hangs below @p command as `<command>.<subcommand>`.
+bool command_group_exists(const std::string& command) {
+  const std::string prefix = command + ".";
+  const auto& registry = cli_command_registry();
+  return std::any_of(registry.begin(), registry.end(), [&prefix](const CliCommandSpec& spec) {
+    return spec.path.rfind(prefix, 0) == 0;
+  });
+}
+}  // namespace
+
 CliValidationError validate_cli_arguments(const CliArgs& args, bool requires_audio) {
   const CliCommandSpec* command = cli_command_spec_for_path(command_path_for_args(args));
   const auto accepts_option = [&](const std::string& name) {
@@ -967,8 +988,18 @@ CliValidationError validate_cli_arguments(const CliArgs& args, bool requires_aud
     }
   }
 
+  // The leaf's own arity, so a command that takes a positional of some kind
+  // other than an audio file declares it on its registry record instead of
+  // being named in a list here that every later such command has to join. An
+  // unresolved path still has to admit the subcommand a group reads from its
+  // first positional, or `project help` is rejected as an unexpected argument
+  // instead of reported as a subcommand that does not exist.
   size_t max_positionals = requires_audio ? 1u : 0u;
-  if (args.command == "project" || args.command == "voice-preset-validate") max_positionals = 1u;
+  if (command != nullptr) {
+    max_positionals = command->positional_count;
+  } else if (command_group_exists(args.command)) {
+    max_positionals = 1u;
+  }
   if (args.positionals.size() > max_positionals) {
     return {"Unexpected positional argument '" + args.positionals[max_positionals] +
                 "' for command '" + args.command + "'",
