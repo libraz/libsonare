@@ -283,6 +283,15 @@ Linux・macOS・WebAssembly または WSL2 を利用してください。オー�
 バックエンドです）。この線引きが、依存ゼロと Apache-2.0 の純度を保ちます。背景は
 [Non-goals](https://libsonare.libraz.net/ja/docs/architecture)を参照してください。
 
+ノート単位の作曲（ラインのハーモナイズ、ベースパートの生成、コード進行のリハーモナイズ）も
+エンジンの外です。その層は別ライブラリの
+[`@libraz/libcantus`](https://github.com/libraz/libcantus)（純 TypeScript）が担い、
+両者はコードを共有せず、どちらも相手を必要としません。両者が出会うのはプロジェクトの
+MIDI イベントで、ハーモニーの読み取りに対して生成したノートを、どのランタイムからも
+届く MIDI イベント設定 API でクリップにマージします。libsonare も C ABI の背後に小さな
+ルールベースの assist seam を持ちますが、モジュールは組み込みで、C++ の外から登録する
+手段はありません。統合点は seam ではなくイベント API のほうです。
+
 ## ライセンス
 
 [Apache-2.0](LICENSE)

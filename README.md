@@ -300,6 +300,16 @@ own the audio callback and the UI; the experimental macOS backends are the only
 dependency-free and Apache-2.0 pure. See
 [Non-goals](https://libsonare.libraz.net/docs/architecture) for the rationale.
 
+Note-level composition is outside it too — harmonizing a line, writing a bass
+part, reharmonizing a progression. That layer is
+[`@libraz/libcantus`](https://github.com/libraz/libcantus), a separate
+pure-TypeScript library; the two share no code and neither depends on the other.
+The two meet at a project's MIDI events: generate notes against a reading of the
+harmony, then merge them into a clip through the set-MIDI-events call every
+runtime already reaches. libsonare does carry a small rule-based assist seam
+behind its C ABI, but its modules are built in and nothing can register one from
+outside C++, so the event API is the integration point rather than the seam.
+
 ## License
 
 [Apache-2.0](LICENSE)
