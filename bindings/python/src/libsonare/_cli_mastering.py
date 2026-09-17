@@ -838,6 +838,10 @@ def _repair_detection_report(defects: dict[str, Any]) -> dict[str, object]:
         "clip_run_count": int(defects.get("clipRunCount", 0)),
         "clip_longest_run_samples": int(defects.get("clipLongestRunSamples", 0)),
         "clip_sample_fraction": float(defects.get("clipSampleFraction", 0.0)),
+        "clip_flat_run_count": int(defects.get("clipFlatRunCount", 0)),
+        "clip_flat_sample_count": int(defects.get("clipFlatSampleCount", 0)),
+        "clip_longest_flat_run_samples": int(defects.get("clipLongestFlatRunSamples", 0)),
+        "clip_flat_level": float(defects.get("clipFlatLevel", 0.0)),
         "noise_floor_dbfs": float(defects.get("noiseFloorDbfs", 0.0)),
         "noise_band_measured": band_index >= 0,
         "noise_band_peak_dbfs": float(defects.get("noiseBandPeakDbfs", 0.0)),
@@ -881,6 +885,19 @@ def _print_repair_detection_report(report: dict[str, object]) -> None:
         f"({cast('float', report['clip_sample_fraction']) * 100:.3f}% of input), "
         f"longest run {report['clip_longest_run_samples']} samples"
     )
+    if cast("int", report["clip_flat_run_count"]) > 0:
+        print(
+            f"    Flat tops:    {report['clip_flat_run_count']} run(s) pinned at "
+            f"{cast('float', report['clip_flat_level']):.3f} "
+            f"({report['clip_flat_sample_count']} samples, longest "
+            f"{report['clip_longest_flat_run_samples']}) -- these survive a later gain "
+            "change, so they are clipping rather than a peak that reaches the ceiling"
+        )
+    else:
+        print(
+            "    Flat tops:    none (an unclipped peak reaches the ceiling too; resampling "
+            "or a lossy codec erases a real one, so this is not proof of no clipping)"
+        )
     band_text = (
         f"band {report['noise_band_peak_index']}"
         if report["noise_band_measured"]

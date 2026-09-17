@@ -448,6 +448,10 @@ void append_defect_profile_json(JsonBuilder& json,
         .kv("clip_run_count", defects.clip_run_count)
         .kv("clip_longest_run_samples", defects.clip_longest_run_samples)
         .kv("clip_sample_fraction", defects.clip_sample_fraction)
+        .kv("clip_flat_run_count", defects.clip_flat_run_count)
+        .kv("clip_flat_sample_count", defects.clip_flat_sample_count)
+        .kv("clip_longest_flat_run_samples", defects.clip_longest_flat_run_samples)
+        .kv("clip_flat_level", defects.clip_flat_level)
         .kv("noise_floor_dbfs", defects.noise_floor_dbfs)
         .kv("noise_band_measured", defects.noise_band_peak_index >= 0)
         .kv("noise_band_peak_dbfs", defects.noise_band_peak_dbfs)
@@ -483,6 +487,17 @@ void print_defect_profile_text(const mastering::assistant::DefectProfile& defect
   std::cout << "  Clipping:        " << defects.clip_sample_count << " samples in "
             << defects.clip_run_count << " runs (" << (defects.clip_sample_fraction * 100.0f)
             << "% of signal, longest " << defects.clip_longest_run_samples << " samples)\n";
+  if (defects.clip_flat_run_count > 0) {
+    std::cout << "  Flat tops:       " << defects.clip_flat_run_count << " runs pinned at "
+              << defects.clip_flat_level << " (" << defects.clip_flat_sample_count
+              << " samples, longest " << defects.clip_longest_flat_run_samples
+              << ") -- these survive a later gain change, so they are clipping rather than a "
+                 "peak that merely reaches the ceiling\n";
+  } else {
+    std::cout << "  Flat tops:       none (an unclipped peak reaches the ceiling too; "
+                 "resampling or a lossy codec erases a real one, so this is not proof of no "
+                 "clipping)\n";
+  }
   std::cout << "  Noise floor:     " << defects.noise_floor_dbfs << " dBFS";
   if (defects.noise_band_peak_index >= 0) {
     std::cout << ", loudest band " << defects.noise_band_peak_dbfs << " dBFS (band "
