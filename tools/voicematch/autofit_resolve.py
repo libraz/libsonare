@@ -6,6 +6,7 @@ outright, and the term weights the spec carries.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -21,8 +22,11 @@ from corpus import (
 )
 from knobs import load_spec_weights
 from loss import KIT_MIN_MEMBERS, LOSS_TERMS, cli_weights
+from metrics import measure_band_edge
 from patterns import build_pattern, pattern_length
 from render_oracle import check_oracle_rig
+
+HERE = Path(__file__).resolve().parent
 
 
 def _score(program: int, pattern_name: str, notes_csv: str, velocities_csv: str = "",
@@ -48,6 +52,50 @@ def resolve_corpus(args) -> Corpus | None:
     if not path:
         return None
     return load_corpus(path, getattr(args, "corpus_timbre", ""))
+
+
+def _committed_band_edge(corpus: Corpus | None) -> float | None:
+    """What the capture's measured profile settled its ceiling at, if it has one."""
+    if corpus is None or not corpus.capture_id:
+        return None
+    path = HERE / "reference" / f"{corpus.capture_id}.json"
+    if not path.exists():
+        return None
+    profile = json.loads(path.read_text())
+    return (profile.get("capture") or {}).get("band_edge_hz")
+
+
+def reference_band_edge(corpus: Corpus | None, rows: list[dict]) -> float | None:
+    """The highest 1/3-octave band this fit may be scored over, in Hz.
+
+    A fit run scores one oracle, so the only ceiling it can measure for itself is
+    `measure_band_edge` — whether that reference still tells its instruments
+    apart up there. The gate scores the same voice against `shared_band_edge`,
+    which also asks whether the capture's references AGREE about where the
+    instruments are, and needs two recordings to ask it. The drum capture answers
+    8 kHz to the first question and 5 kHz to the second, so a fit left on its own
+    measurement optimises three bands the gate does not read, and closes the
+    voice's filter to match a roll-off nothing holds it to.
+
+    So the committed profile's ceiling is taken as well, and the lower wins. Not
+    the profile's alone: a corpus re-captured since it was measured can be the
+    narrower of the two, and a ceiling that rises because a file on disk is older
+    than the audio is the failure this is here to prevent, arriving the other way
+    round.
+    """
+    own = measure_band_edge(rows)
+    committed = _committed_band_edge(corpus)
+    known = [e for e in (own, committed) if e is not None]
+    if not known:
+        return None
+    edge = min(known)
+    if committed is not None and edge == committed and edge != own:
+        print(f"oracle bandwidth: "
+              f"{'no measurable ceiling' if own is None else f'{own / 1000.0:.1f} kHz'} "
+              f"on its own, held to {edge / 1000.0:.1f} kHz — the ceiling "
+              f"{corpus.capture_id} measured across its references, which is the "
+              f"one the gate scores against", file=sys.stderr)
+    return edge
 
 
 def catalogue_pattern(args) -> str:

@@ -64,7 +64,9 @@ The old estimator was dominated by which frame the peak landed in, and the refer
 
 ### A capture has a bandwidth, and it is not the analysis range
 
-`shared_band_edge` finds it and `profile.py measure` records it as `band_edge_hz` in the reference; a fit resolves it from its own oracle and hands it to every model render (`--band-edge-hz`), so both sides are measured against the same set of bands.
+`shared_band_edge` finds it and `profile.py measure` records it as `band_edge_hz` in the reference; a fit resolves it once (`reference_band_edge`) and hands it to every model render of the run (`--band-edge-hz`), so both sides are measured against the same set of bands.
+
+A fit scores one oracle, so the only ceiling it can measure for itself is the discrimination one. The gate scores the same voice against the agreement one as well, which takes two recordings to ask about — so a fit left on its own measurement optimises bands the gate does not read, and on the drum capture that is 5 to 8 kHz. It therefore also reads the ceiling the capture's own profile settled at, and holds to the lower of the two: the profile is the wider view, and the oracle on disk is the fresher one.
 
 Two things end a band's usefulness, they are measured separately, and the narrower wins.
 

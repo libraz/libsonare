@@ -268,6 +268,7 @@ from autofit_resolve import (
     apply_spec_weights,
     catalogue_pattern,
     check_holdout_oracle,
+    reference_band_edge,
     resolve_corpus,
     resolve_probe,
 )
@@ -309,7 +310,6 @@ from loss import (
 from metrics import (
     MONO_MODES,
     channel_correlation,
-    measure_band_edge,
     normalize_rms,
     to_mono,
 )
@@ -360,12 +360,12 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     reproducing the building instead of the instrument.
 
     The fourth value is the highest 1/3-octave band this reference can actually
-    measure, for a percussion probe (`measure_band_edge`), or None when it
-    carries the whole analysis range. It is resolved HERE, from the oracle, and
-    then handed to every model render of the run: a bandwidth is a property of
-    the reference, and if the two sides derived it separately the model would
-    normalise its band profile against a different set of bands than the
-    reference did and every band reading would move.
+    measure, for a percussion probe (`reference_band_edge`), or None when it
+    carries the whole analysis range. It is resolved HERE and then handed to
+    every model render of the run: a bandwidth is a property of the reference,
+    and if the two sides derived it separately the model would normalise its
+    band profile against a different set of bands than the reference did and
+    every band reading would move.
     """
     corpus = resolve_corpus(args)
     pattern, total, _ = _score(
@@ -441,7 +441,7 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     mono = normalize_rms(raw)
     threads = resolve_metric_threads(args)
     rows = probe_rows(mono, pattern, SR, raw=raw, threads=threads)
-    edge = measure_band_edge(rows) if pattern.percussive else None
+    edge = reference_band_edge(corpus, rows) if pattern.percussive else None
     if edge is not None:
         # Re-measured rather than patched. The band profile is normalised to the
         # loudest band inside the edge, and that is not a scaling that can be

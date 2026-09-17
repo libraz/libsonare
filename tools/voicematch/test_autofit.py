@@ -32,6 +32,7 @@ import profile as profile_module
 from dataclasses import replace
 
 import autofit
+import autofit_resolve
 import build_lib
 import eval_cache
 import loss as loss_module
@@ -42,6 +43,7 @@ from _repo import REPO_ROOT
 from autofit import (
     Evaluator,
     check_holdout_oracle,
+    reference_band_edge,
     resolve_probe,
     validate,
     winner_or_defaults,
@@ -83,10 +85,12 @@ from loss import (
     skeleton_note,
 )
 from metrics import (
+    THIRD_OCTAVE_CENTERS,
     analyze_note,
     attack_bands,
     attack_low_bands,
     level_of,
+    measure_band_edge,
     note_onset,
 )
 from optimizers import cma_es, optimize
@@ -3271,3 +3275,94 @@ def test_a_store_past_its_size_limit_says_so_rather_than_just_shrinking(tmp_path
     store.path.write_text("x" * (eval_cache.MAX_BYTES + 1))
     reopened = open_cache(tmp_path, "sig")
     assert reopened.dropped and reopened.entries == {}
+
+
+# --------------------------------------------------------------------------- #
+# which ceiling a fit is scored under
+# --------------------------------------------------------------------------- #
+def _rows_discriminating_to(index: int, count: int = 12) -> list[dict]:
+    """Profiles that tell their instruments apart up to `index` and not above it."""
+    rng = np.random.default_rng(7)
+    rows = []
+    for _ in range(count):
+        profile = rng.normal(-20.0, 9.0, len(THIRD_OCTAVE_CENTERS))
+        # One shared value above the index: no scatter is what a band that has
+        # stopped separating the kit looks like.
+        profile[index + 1:] = -30.0
+        rows.append({"bands_db": [float(v) for v in profile]})
+    return rows
+
+
+def _committed_profile(tmp_path: Path, monkeypatch, ident: str, edge) -> None:
+    """Stand `reference/<ident>.json` up with one measured ceiling in it."""
+    reference = tmp_path / "reference"
+    reference.mkdir(parents=True, exist_ok=True)
+    (reference / f"{ident}.json").write_text(
+        json.dumps({"id": ident, "capture": {"band_edge_hz": edge}, "rows": []}))
+    monkeypatch.setattr(autofit_resolve, "HERE", tmp_path)
+
+
+def test_the_rows_alone_measure_the_wider_of_the_two_ceilings():
+    """The premise of the rest: a single oracle answers 8 kHz here."""
+    assert measure_band_edge(_rows_discriminating_to(22)) == 8000.0
+
+
+def test_a_fit_is_held_to_the_ceiling_the_gate_scores_against(tmp_path, monkeypatch, capsys):
+    """One oracle can measure whether IT discriminates and nothing else. The
+    capture's own profile is measured across every reference it has, so it also
+    knows where they stop AGREEING — and that is the range the gate reads. Left
+    on its own measurement the fit optimises bands the gate does not score."""
+    corpus = load_corpus(_write_corpus(tmp_path / "c"))
+    _committed_profile(tmp_path, monkeypatch, corpus.capture_id, 5000.0)
+    assert reference_band_edge(corpus, _rows_discriminating_to(22)) == 5000.0
+    assert "held to 5.0 kHz" in capsys.readouterr().err
+
+
+def test_an_oracle_that_shows_no_ceiling_of_its_own_still_takes_the_measured_one(
+    tmp_path, monkeypatch,
+):
+    """A reference discriminating all the way up is the case the announcement
+    formats differently, and it is the one where the committed ceiling matters
+    most: nothing about the oracle alone would have cut anything."""
+    corpus = load_corpus(_write_corpus(tmp_path / "c"))
+    _committed_profile(tmp_path, monkeypatch, corpus.capture_id, 5000.0)
+    wide = _rows_discriminating_to(len(THIRD_OCTAVE_CENTERS) - 1)
+    assert measure_band_edge(wide) is None
+    assert reference_band_edge(corpus, wide) == 5000.0
+
+
+def test_a_narrower_oracle_is_not_widened_by_the_committed_profile(
+    tmp_path, monkeypatch, capsys,
+):
+    """The lower of the two wins in both directions. A corpus re-captured since
+    the profile was measured can be the narrower one, and a ceiling that rises
+    because a file on disk is older than the audio is this guard running
+    backwards."""
+    corpus = load_corpus(_write_corpus(tmp_path / "c"))
+    _committed_profile(tmp_path, monkeypatch, corpus.capture_id, 5000.0)
+    assert reference_band_edge(corpus, _rows_discriminating_to(19)) == 4000.0
+    assert "held to" not in capsys.readouterr().err
+
+
+def test_a_capture_with_no_measured_profile_keeps_its_own_ceiling(tmp_path, monkeypatch):
+    """Nothing to read is not a reason to refuse to fit. It is a reason the fit
+    is weaker, which is what the single-reference edge already says."""
+    corpus = load_corpus(_write_corpus(tmp_path / "c"))
+    monkeypatch.setattr(autofit_resolve, "HERE", tmp_path)
+    assert reference_band_edge(corpus, _rows_discriminating_to(22)) == 8000.0
+
+
+def test_a_run_with_no_corpus_reads_no_profile(tmp_path, monkeypatch):
+    """An oracle from a plugin or a WAV has no capture id, so there is no
+    profile it could be matched against without guessing one."""
+    monkeypatch.setattr(autofit_resolve, "HERE", tmp_path)
+    assert reference_band_edge(None, _rows_discriminating_to(22)) == 8000.0
+
+
+def test_a_profile_that_recorded_no_ceiling_does_not_invent_one(tmp_path, monkeypatch):
+    """`band_edge_hz` is null for every capture that carries its whole range,
+    and null has to stay distinguishable from zero — which would cut every
+    band."""
+    corpus = load_corpus(_write_corpus(tmp_path / "c"))
+    _committed_profile(tmp_path, monkeypatch, corpus.capture_id, None)
+    assert reference_band_edge(corpus, _rows_discriminating_to(22)) == 8000.0

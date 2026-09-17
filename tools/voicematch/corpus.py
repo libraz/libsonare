@@ -106,6 +106,12 @@ class Corpus:
     #: not lay its instruments out the way the model does. Empty for every
     #: capture whose numbering the model already agrees with. See `_note_map`.
     note_map: dict[int, int] = field(default_factory=dict)
+    #: The capture definition this corpus was rendered from, as the manifest
+    #: recorded it. What names `reference/<id>.json`, and it is read rather than
+    #: inferred from the directory: `--out` puts a corpus anywhere, so a path
+    #: component is the id only by convention and would silently name the wrong
+    #: profile once it is not.
+    capture_id: str = ""
 
     def slot_count(self) -> int:
         return len(self.notes) * len(self.velocities)
@@ -210,6 +216,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         groups=_groups(manifest),
         slots=slots,
         note_map=_note_map(manifest),
+        capture_id=str(manifest.get("id", "")),
     )
 
 
