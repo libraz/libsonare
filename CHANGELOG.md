@@ -34,6 +34,12 @@ Two test-side defects are fixed alongside: the mel filterbank cache tests compar
 
 The built-in mastering preset golden hashes are refreshed for the six presets that enable the air band. Those hashes still described the output from before the air band's dry and harmonic paths were time-aligned and before the offline loudness stage was measured from its own input; both of those shipped in earlier releases without the fixture being regenerated. No mastering behaviour changes in this release.
 
+### CLI
+
+**The native CLI no longer accepts `mix`, which is a breaking change for anyone who scripted that spelling.** Use `mix-strip`. The name had been a deprecated alias for the channel strip on the native CLI while naming a different capability on the Python CLI — a scene mixer that renders one or more inputs through a scene document — so one command line meant two things depending on which front-end ran it, and the deprecation was visible only in `--help`: running it warned about nothing. A removed name is refused as an unknown command rather than as a bad option, so a script that used it fails immediately and says which half of the problem it hit. `sonare mix` on the Python CLI is unaffected and remains the scene mixer.
+
+**Three commands that existed only on the Python CLI now exist natively as well.** `transcribe` writes a Standard MIDI File from audio, `midi-render` renders a MIDI project through the synthesizer, and `decompose-stems` separates a signal into listenable components. All three take the same options and report the same exit codes as their Python counterparts, and the artifacts they write are byte-identical to them — the component stems, the bounced audio on each preset, and the MIDI file across the options that change it.
+
 ### New surfaces
 
 - Hosted instrument parameters are continuously automatable. `sonare_engine_resolve_instrument_automation_id` returns a reserved parameter id for a named instrument parameter, in the same shape as the existing track, master and bus insert resolvers, so a host can drive a synth's cutoff or vibrato depth from an automation lane at audio-block precision instead of stepping it from the control thread. The resolved lane is smoothed on the audio thread, so live and offline rendering agree. Builds without the arrangement subsystem report `instrumentParamAutomation: false` in the capability JSON, which is how a host detects that the resolver will not answer.

@@ -4426,11 +4426,11 @@
       "option_status": "active"
     },
     "mix": {
-      "classification": "intentional_variant",
-      "status": "intentional_variant",
+      "classification": "python_only",
+      "status": "python_only",
       "option_status": "pending",
       "reason_kind": "by_design",
-      "reason": "one name over two capabilities: natively the deprecated spelling of the mix-strip channel strip, and on the Python side a scene mixer taking a preset or a scene document"
+      "reason": "a scene mixer: it renders one or more inputs through a mixer scene given as a preset or a document, which the native CLI has no equivalent of. The name previously also spelled the native channel strip, so one command line meant two capabilities; that alias is gone and mix-strip is the only spelling for the strip"
     },
     "repair": {
       "classification": "shared",

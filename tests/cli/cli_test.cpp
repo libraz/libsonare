@@ -1201,7 +1201,7 @@ TEST_CASE("CLI rejects option typos and terminal required options before dispatc
        "mastering-pair-processors", "mastering-pair-analyses", "mastering-stereo-analyses"});
 #endif
 #ifdef SONARE_WITH_MIXING
-  commands.insert(commands.end(), {"mix", "mix-strip", "mixing-presets", "mixing-preset"});
+  commands.insert(commands.end(), {"mix-strip", "mixing-presets", "mixing-preset"});
 #endif
 #ifdef SONARE_WITH_ARRANGEMENT
   commands.push_back("project");
@@ -1683,17 +1683,19 @@ TEST_CASE("CLI checks --fmin against the effective --fmax, not only a supplied o
 }
 
 #ifdef SONARE_WITH_MIXING
-TEST_CASE("CLI resolves the deprecated mix spelling through the alias path",
+TEST_CASE("CLI answers the channel strip under one spelling only",
           "[cli][registry][argument-contract]") {
-  // One registry row, reached under both names. Two rows that each named the
-  // other as an alias never used the alias path -- path lookup wins -- so each
-  // name was validated against its own copy of the option list and an option
-  // added to one became an unknown option under the other.
+  // `mix` was this command's deprecated alias and named a different capability
+  // on the Python CLI -- a scene mixer -- so one command line meant two things
+  // depending on which front-end ran it. The spelling is gone rather than
+  // documented, which is only true while nothing reintroduces it: a second row
+  // naming the other as an alias never uses the alias path (path lookup wins),
+  // so each name would again be validated against its own copy of the option
+  // list and an option added to one would become unknown under the other.
   const CliCommandSpec* canonical = cli_command_spec_for_path("mix-strip");
-  const CliCommandSpec* alias = cli_command_spec_for_path("mix");
   REQUIRE(canonical != nullptr);
-  REQUIRE(alias == canonical);
-  REQUIRE(std::find(canonical->aliases.begin(), canonical->aliases.end(), "mix") !=
+  REQUIRE(cli_command_spec_for_path("mix") == nullptr);
+  REQUIRE(std::find(canonical->aliases.begin(), canonical->aliases.end(), "mix") ==
           canonical->aliases.end());
 
   size_t rows = 0;
@@ -1702,17 +1704,20 @@ TEST_CASE("CLI resolves the deprecated mix spelling through the alias path",
   }
   REQUIRE(rows == 1);
 
-  // Both spellings therefore accept the same options and reject the same ones.
-  for (const std::string name : {"mix", "mix-strip"}) {
-    CAPTURE(name);
-    auto [code, output] = exec_command(CLI + " " + name + " --definitely-unknown-option");
-    REQUIRE(code != 0);
-    REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
+  // The removed spelling is refused as a command rather than as a bad option,
+  // which is what tells a caller the name is gone instead of mistyped.
+  auto [removed_code, removed_output] = exec_command(CLI + " mix --width 1.5");
+  REQUIRE(removed_code != 0);
+  REQUIRE_THAT(removed_output, !ContainsSubstring("Unknown option"));
 
-    auto [width_code, width_output] = exec_command(CLI + " " + name + " --width 1.5");
-    REQUIRE_THAT(width_output, !ContainsSubstring("Unknown option"));
-    (void)width_code;
-  }
+  // The surviving spelling still accepts its own options and rejects others.
+  auto [code, output] = exec_command(CLI + " mix-strip --definitely-unknown-option");
+  REQUIRE(code != 0);
+  REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
+
+  auto [width_code, width_output] = exec_command(CLI + " mix-strip --width 1.5");
+  REQUIRE_THAT(width_output, !ContainsSubstring("Unknown option"));
+  (void)width_code;
 }
 #endif  // SONARE_WITH_MIXING
 
@@ -2379,7 +2384,7 @@ TEST_CASE("CLI rejects non-finite gain and RMS normalization targets", "[cli]") 
   REQUIRE_FALSE(std::ifstream(normalize_output).good());
 }
 
-TEST_CASE("CLI mix preserves stereo input so --width changes the output", "[cli]") {
+TEST_CASE("CLI mix-strip preserves stereo input so --width changes the output", "[cli]") {
   const std::string input = unique_temp_path("_stereo.wav");
   const std::string narrow = unique_temp_path("_narrow.wav");
   const std::string wide = unique_temp_path("_wide.wav");
@@ -2393,11 +2398,8 @@ TEST_CASE("CLI mix preserves stereo input so --width changes the output", "[cli]
   auto [narrow_code, narrow_message] =
       exec_command(CLI + " mix-strip " + input + " -o " + narrow + " --width 0 -q");
   REQUIRE(narrow_code == 0);
-  auto [compatibility_code, compatibility_message] =
-      exec_command(CLI + " mix " + input + " -o " + narrow + " --width 0 -q");
-  REQUIRE(compatibility_code == 0);
   auto [wide_code, wide_message] =
-      exec_command(CLI + " mix " + input + " -o " + wide + " --width 2 -q");
+      exec_command(CLI + " mix-strip " + input + " -o " + wide + " --width 2 -q");
   REQUIRE(wide_code == 0);
 
   auto [narrow_samples, narrow_rate, narrow_channels] = load_audio_interleaved(narrow);
@@ -2412,7 +2414,7 @@ TEST_CASE("CLI mix preserves stereo input so --width changes the output", "[cli]
   const std::string rejected = unique_temp_path("_rejected.wav");
   create_test_wav(mono);
   auto [mono_code, mono_message] =
-      exec_command(CLI + " mix " + mono + " -o " + rejected + " --width 0.5 -q");
+      exec_command(CLI + " mix-strip " + mono + " -o " + rejected + " --width 0.5 -q");
   REQUIRE(mono_code == 3);
   REQUIRE_THAT(mono_message, ContainsSubstring("requires a stereo input"));
   REQUIRE_FALSE(std::ifstream(rejected).good());
@@ -3578,7 +3580,7 @@ TEST_CASE("CLI mixing command", "[cli][mixing]") {
   SECTION("processes mixer strip") {
     const std::string out = unique_temp_path("_mixed.wav");
     std::remove(out.c_str());
-    auto [code, output] = exec_command(CLI + " mix " + TEST_WAV + " -o " + out +
+    auto [code, output] = exec_command(CLI + " mix-strip " + TEST_WAV + " -o " + out +
                                        " --input-trim-db 1 --fader-db -3 --pan 0.25 --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"meter\""));

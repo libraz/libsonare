@@ -864,7 +864,7 @@ class CliContractSelfTest(unittest.TestCase):
 
     def test_an_intentional_variant_may_not_be_unported(self) -> None:
         candidate = copy.deepcopy(self.manifest)
-        candidate["commands"]["mix"]["reason_kind"] = "unported"
+        candidate["commands"]["sections"]["reason_kind"] = "unported"
         errors = CHECKER.validate_manifest(candidate)
         self.assertTrue(any("not an unclosed gap" in error for error in errors), errors)
 

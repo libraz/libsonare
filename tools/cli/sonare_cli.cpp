@@ -102,7 +102,6 @@ const std::vector<CommandInfo>& get_commands() {
 #endif
 #ifdef SONARE_WITH_MIXING
       {"mix-strip", "Apply a single-input channel strip", cmd_mix, true},
-      {"mix", "Deprecated alias for mix-strip", cmd_mix, true},
       {"mixing-presets", "List built-in mixer scene presets", cmd_mixing_presets, false},
       {"mixing-preset", "Print a built-in mixer scene preset JSON", cmd_mixing_preset, false},
 #endif

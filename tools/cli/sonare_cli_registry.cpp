@@ -617,7 +617,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
                  number_value("pan", 0.0), string_value("pan-mode", "balance"),
                  number_value("width", 1.0), output_value()},
-                {"mix"}, nullptr, 0, true);
+                {}, nullptr, 0, true);
     add_command(commands, "mixing-presets", false, {});
     // The advertised default has to be one the command can actually run: an
     // empty string reaches the preset lookup and fails, and the handler's own
