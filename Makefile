@@ -445,6 +445,8 @@ conformance:
 	python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py
 	python3 tests/conformance/check_python_narrowing_scope.py
 	python3 -m unittest tests/conformance/test_python_narrowing_scope.py
+	python3 tests/conformance/check_public_integer_domains.py
+	python3 -m unittest tests/conformance/test_public_integer_domains.py
 	python3 tests/conformance/check_zero_sentinel_filter.py
 	python3 -m unittest tests/conformance/test_zero_sentinel_filter.py
 	python3 tests/conformance/check_goniometer_capacity_mirrors.py
