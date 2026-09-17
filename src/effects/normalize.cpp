@@ -5,6 +5,7 @@
 #include <limits>
 #include <vector>
 
+#include "core/stereo_pair.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -45,6 +46,48 @@ float audio_rms_db(const Audio& audio) {
   const float r = rms(audio.data(), audio.size());
   if (r < constants::kEpsilon) return -std::numeric_limits<float>::infinity();
   return linear_to_db(r);
+}
+
+/// @brief Peak of a channel pair in dB, on the same scale as @ref audio_peak_db.
+/// @details peak_abs cannot return NaN (it folds with the running peak as the
+///          first argument, which a comparison against NaN leaves in place), so
+///          the two sides may be compared without the fold being sensitive to
+///          which channel is which.
+float pair_peak_db(const Audio& left, const Audio& right) {
+  const float peak =
+      std::max(peak_abs(left.data(), left.size()), peak_abs(right.data(), right.size()));
+  if (peak < constants::kEpsilon) return -std::numeric_limits<float>::infinity();
+  return linear_to_db(peak);
+}
+
+/// @brief RMS of a channel pair in dB, on the same scale as @ref audio_rms_db.
+/// @details The root mean square over the two channels' samples together, which
+///          is the quadratic mean of the per-channel figures rather than their
+///          arithmetic mean.
+float pair_rms_db(const Audio& left, const Audio& right) {
+  const double l = rms(left.data(), left.size());
+  const double r = rms(right.data(), right.size());
+  const float joint = static_cast<float>(std::sqrt((l * l + r * r) / 2.0));
+  if (joint < constants::kEpsilon) return -std::numeric_limits<float>::infinity();
+  return linear_to_db(joint);
+}
+
+/// @brief The argument refusals the two stereo entries share with their mono
+///        counterparts, before either channel is measured.
+void check_normalize_target(float target_db, bool clip) {
+  SONARE_CHECK_MSG(std::isfinite(target_db), ErrorCode::InvalidParameter,
+                   "target_db must be finite, got " + util::to_text(target_db));
+  SONARE_CHECK_MSG(!clip || target_db <= 0.0f, ErrorCode::InvalidParameter,
+                   "target_db must be <= 0 when clip is set, got " + util::to_text(target_db));
+}
+
+/// @brief Moves a validated pair by one gain, given the level it sits at now.
+NormalizeStereoResult gain_pair_to(const Audio& left, const Audio& right, float current_db,
+                                   float target_db, bool clip) {
+  if (std::isinf(current_db)) return {left, right, 0.0f};  ///< Silent pair, nothing to normalize
+
+  const float gain = target_db - current_db;
+  return {apply_gain(left, gain, clip), apply_gain(right, gain, clip), gain};
 }
 
 }  // namespace
@@ -108,6 +151,20 @@ Audio normalize_rms(const Audio& audio, float target_db, bool clip) {
 
   float gain = target_db - current_rms;
   return apply_gain(audio, gain, clip);
+}
+
+NormalizeStereoResult normalize_stereo(const Audio& left, const Audio& right, float target_db,
+                                       bool clip) {
+  check_normalize_target(target_db, clip);
+  require_stereo_pair(left, right);
+  return gain_pair_to(left, right, pair_peak_db(left, right), target_db, clip);
+}
+
+NormalizeStereoResult normalize_rms_stereo(const Audio& left, const Audio& right, float target_db,
+                                           bool clip) {
+  check_normalize_target(target_db, clip);
+  require_stereo_pair(left, right);
+  return gain_pair_to(left, right, pair_rms_db(left, right), target_db, clip);
 }
 
 std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float threshold_db,

@@ -32,6 +32,37 @@ Audio normalize(const Audio& audio, float target_db = 0.0f, bool clip = true);
 /// @return Normalized audio
 Audio normalize_rms(const Audio& audio, float target_db = -20.0f, bool clip = true);
 
+/// @brief A normalized channel pair and the gain that produced it.
+struct NormalizeStereoResult {
+  Audio left;
+  Audio right;
+  /// One figure rather than one per channel: the level is measured across both
+  /// channels and the gain is applied to both, so a per-channel pair would be
+  /// two copies of one decision and would read as though the two could differ.
+  /// Silence leaves the pair untouched and reports 0.
+  float applied_gain_db;
+};
+
+/// @brief Two-channel @ref normalize.
+/// @details The peak is taken across both channels and the resulting gain goes
+///   to both, because a per-channel gain is a balance change: it would move the
+///   quieter side up until the two peaks matched, which is not what normalizing
+///   a stereo recording means. The louder channel therefore reaches @p target_db
+///   and the other keeps its level relative to it.
+/// @throws SonareException with ErrorCode::InvalidParameter for a pair that is
+///   not processable together (see @ref require_stereo_pair), and for the
+///   arguments @ref normalize rejects.
+NormalizeStereoResult normalize_stereo(const Audio& left, const Audio& right,
+                                       float target_db = 0.0f, bool clip = true);
+
+/// @brief Two-channel @ref normalize_rms.
+/// @details The RMS is taken over both channels together — the root mean square
+///   of the pair, not the mean of two separate figures — and the resulting gain
+///   goes to both, for the same reason @ref normalize_stereo shares its gain.
+/// @throws SonareException as @ref normalize_stereo does.
+NormalizeStereoResult normalize_rms_stereo(const Audio& left, const Audio& right,
+                                           float target_db = -20.0f, bool clip = true);
+
 /// @brief Trims silence from the beginning and end of audio using an ABSOLUTE
 ///        RMS threshold.
 /// @details Frames whose RMS is below @p threshold_db (an absolute dBFS level)

@@ -323,3 +323,77 @@ TEST_CASE("apply_gain clipping does not launder a non-finite sample", "[normaliz
   REQUIRE(unclipped.data()[3] == inf);
   REQUIRE(std::isnan(unclipped.data()[1]));
 }
+
+TEST_CASE("normalize_stereo moves both channels by a single gain", "[effects][normalize]") {
+  // 12 dB apart, so a gain applied per channel and a gain shared by the pair put
+  // the quiet side in two places far outside any tolerance.
+  const Audio left = create_audio_with_amplitude(0.5f);
+  const Audio right = create_audio_with_amplitude(0.125f);
+  const float before = peak_db(left) - peak_db(right);
+  REQUIRE_THAT(before, WithinAbs(12.0f, 0.1f));
+
+  const auto result = normalize_stereo(left, right, -1.0f);
+
+  // The louder channel reaches the target and the other keeps its distance.
+  REQUIRE_THAT(peak_db(result.left), WithinAbs(-1.0f, 0.05f));
+  REQUIRE_THAT(peak_db(result.left) - peak_db(result.right), WithinAbs(before, 0.01f));
+  REQUIRE_THAT(result.applied_gain_db, WithinAbs(-1.0f - peak_db(left), 0.05f));
+
+  // Control: this is where a per-channel gain would have put the quiet side. The
+  // assertions above can only hold for one of the two, so they are not merely
+  // observing that normalization happened.
+  const Audio per_channel_right = normalize(right, -1.0f);
+  REQUIRE_THAT(peak_db(per_channel_right), WithinAbs(-1.0f, 0.05f));
+  REQUIRE(peak_db(result.right) < peak_db(per_channel_right) - 10.0f);
+}
+
+TEST_CASE("normalize_rms_stereo measures the two channels together", "[effects][normalize]") {
+  const Audio left = create_audio_with_amplitude(0.5f);
+  const Audio right = create_audio_with_amplitude(0.125f);
+
+  const auto result = normalize_rms_stereo(left, right, -20.0f);
+
+  // The quantity driven to the target is the RMS over both channels' samples,
+  // which is the quadratic mean of the two per-channel figures.
+  const double l_lin = std::pow(10.0, rms_db(result.left) / 20.0);
+  const double r_lin = std::pow(10.0, rms_db(result.right) / 20.0);
+  const double joint_db = 20.0 * std::log10(std::sqrt((l_lin * l_lin + r_lin * r_lin) / 2.0));
+  REQUIRE_THAT(static_cast<float>(joint_db), WithinAbs(-20.0f, 0.05f));
+
+  // Control: neither channel lands on the target by itself, so the assertion
+  // above is about the joint figure rather than about either channel.
+  REQUIRE(std::abs(rms_db(result.left) + 20.0f) > 1.0f);
+  REQUIRE(std::abs(rms_db(result.right) + 20.0f) > 1.0f);
+}
+
+TEST_CASE("the stereo normalizers refuse a pair they cannot process", "[effects][normalize]") {
+  const Audio left = create_audio_with_amplitude(0.5f);
+  const Audio shorter = left.slice_samples(0, left.size() / 2);
+  const Audio other_rate = create_audio_with_amplitude(0.5f, 44100);
+  const Audio empty = Audio::from_vector({}, 22050);
+
+  REQUIRE_THROWS_AS(normalize_stereo(left, shorter), SonareException);
+  REQUIRE_THROWS_AS(normalize_stereo(left, other_rate), SonareException);
+  REQUIRE_THROWS_AS(normalize_stereo(left, empty), SonareException);
+  REQUIRE_THROWS_AS(normalize_rms_stereo(left, shorter), SonareException);
+
+  // Control: the same pair with none of those faults is accepted, so the
+  // refusals above are about the pair rather than about the entry point.
+  REQUIRE_NOTHROW(normalize_stereo(left, left));
+}
+
+TEST_CASE("a silent stereo pair is left alone", "[effects][normalize]") {
+  const Audio silence = Audio::from_vector(std::vector<float>(1024, 0.0f), 22050);
+
+  const auto result = normalize_stereo(silence, silence);
+
+  REQUIRE(result.applied_gain_db == 0.0f);
+  REQUIRE(result.left.data()[0] == 0.0f);
+  REQUIRE(result.right.data()[512] == 0.0f);
+
+  // Control: a pair that is not silent does move, so the assertions above are
+  // about the silence short-circuit rather than about normalize_stereo being a
+  // no-op.
+  const Audio quiet = create_audio_with_amplitude(0.01f);
+  REQUIRE(normalize_stereo(quiet, quiet).applied_gain_db > 10.0f);
+}
