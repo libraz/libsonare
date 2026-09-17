@@ -96,6 +96,16 @@ describe('remix validates its input like the C ABI run_offline path', () => {
       /intervals\[1\] must be an integer in \[-2147483648, 2147483647\]/,
     );
   });
+
+  // A non-number entry is the wrong type rather than the wrong domain, and the
+  // class is the only thing carrying that difference — the message is the same
+  // one a fraction gets. The fractional case repeats here as the discriminator:
+  // without it, `toThrow(TypeError)` would also pass if everything threw one.
+  it('reports a non-number boundary as a type error, not a range error', () => {
+    expect(remix(sine(), [0, 1024], SR).length).toBe(1024);
+    expect(() => remix(sine(), [0, '1024'] as unknown as number[], SR)).toThrow(TypeError);
+    expect(() => remix(sine(), [0, 1024.7], SR)).toThrow(RangeError);
+  });
 });
 
 describe('masteringChain validates input on every entry (mono + stereo)', () => {

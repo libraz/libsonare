@@ -349,7 +349,12 @@ export function toInt32Array(
   const out = new Int32Array(values.length);
   for (let i = 0; i < values.length; i++) {
     const element = values[i];
-    // Two refusals, so each names the property that element actually lacks.
+    // The element shape of `assertIntegerValue`, and it splits the same way: the
+    // class says whether the entry was the wrong type or the wrong domain, and a
+    // sibling element in the same array must not report a fraction differently.
+    if (typeof element !== 'number') {
+      throw new TypeError(`${fnName}: ${argName}[${i}] must be an integer`);
+    }
     if (!Number.isInteger(element)) {
       throw new RangeError(`${fnName}: ${argName}[${i}] must be an integer`);
     }
