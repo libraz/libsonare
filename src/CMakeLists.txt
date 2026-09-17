@@ -85,6 +85,7 @@ set(SONARE_SOURCES
   core/fft.cpp
   core/audio_io.cpp
   core/audio.cpp
+  core/stereo_pair.cpp
   core/db_convert.cpp
   core/iirt.cpp
   core/pcen.cpp

@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/stereo_pair.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/validated.h"
@@ -169,18 +170,6 @@ CrackleDetection to_detection(size_t count, size_t size, int sample_rate) {
   detection.per_second =
       static_cast<float>(count) * static_cast<float>(sample_rate) / static_cast<float>(size);
   return detection;
-}
-
-void require_stereo_pair(const Audio& left, const Audio& right) {
-  if (left.empty() || right.empty()) {
-    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
-  }
-  if (left.size() != right.size()) {
-    throw SonareException(ErrorCode::InvalidParameter, "stereo channels must have the same length");
-  }
-  if (left.sample_rate() != right.sample_rate()) {
-    throw SonareException(ErrorCode::InvalidParameter, "stereo channels must share a sample rate");
-  }
 }
 
 std::vector<float> run_decrackle(const std::vector<float>& samples, int sample_rate,

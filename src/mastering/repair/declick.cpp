@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/stereo_pair.h"
 #include "util/exception.h"
 #include "util/lpc.h"
 #include "util/validated.h"
@@ -237,18 +238,6 @@ DeclickReport to_report(const ChannelAnalysis& analysis, const std::vector<Click
   report.linked_runs = count_linked_runs(applied, analysis.selected);
   report.lpc_model_used = lpc_model_used;
   return report;
-}
-
-void require_stereo_pair(const Audio& left, const Audio& right) {
-  if (left.empty() || right.empty()) {
-    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
-  }
-  if (left.size() != right.size()) {
-    throw SonareException(ErrorCode::InvalidParameter, "stereo channels must have the same length");
-  }
-  if (left.sample_rate() != right.sample_rate()) {
-    throw SonareException(ErrorCode::InvalidParameter, "stereo channels must share a sample rate");
-  }
 }
 
 }  // namespace

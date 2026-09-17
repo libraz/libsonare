@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 
+#include "core/stereo_pair.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -29,18 +30,6 @@ bool is_active_sample(const float* samples, size_t size, size_t index,
 }
 
 bool is_empty_range(const TrimRange& range) { return range.first >= range.last_exclusive; }
-
-void require_stereo_pair(const Audio& left, const Audio& right) {
-  if (left.empty() || right.empty()) {
-    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
-  }
-  if (left.size() != right.size()) {
-    throw SonareException(ErrorCode::InvalidParameter, "stereo channels must have the same length");
-  }
-  if (left.sample_rate() != right.sample_rate()) {
-    throw SonareException(ErrorCode::InvalidParameter, "stereo channels must share a sample rate");
-  }
-}
 
 TrimReport to_report(const TrimRange& range, size_t size) {
   TrimReport report;
