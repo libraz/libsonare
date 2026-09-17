@@ -35,19 +35,24 @@ void init_random(std::vector<float>& W, std::vector<float>& H, int n_features, i
 
 /// @brief NNDSVD initialisation (Boutsidis & Gallopoulos 2008).
 /// @details Uses the leading singular vectors of S and splits each into its
-///          positive and negative parts to seed (W, H). Deterministic.
+///          positive and negative parts to seed (W, H). No RNG, and solved in double
+///          so the seed does not depend on the target's summation order: in single
+///          precision the trailing vectors sit at the noise floor and one input seeds
+///          differently on wasm32 and arm64. Only the seed is double; (W, H) and the
+///          multiplicative updates stay float. Components past the input's effective
+///          rank are degenerate at any precision and reproduce on neither.
 void init_nndsvd(const float* S, std::vector<float>& W, std::vector<float>& H, int n_features,
                  int n_components, int n_frames) {
-  Eigen::MatrixXf X(n_features, n_frames);
+  Eigen::MatrixXd X(n_features, n_frames);
   for (int f = 0; f < n_features; ++f) {
     for (int t = 0; t < n_frames; ++t) {
       X(f, t) = S[f * n_frames + t];
     }
   }
-  Eigen::JacobiSVD<Eigen::MatrixXf> svd(X, Eigen::ComputeThinU | Eigen::ComputeThinV);
-  const Eigen::MatrixXf& U = svd.matrixU();
-  const Eigen::MatrixXf& V = svd.matrixV();
-  const Eigen::VectorXf sv = svd.singularValues();
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd(X, Eigen::ComputeThinU | Eigen::ComputeThinV);
+  const Eigen::MatrixXd& U = svd.matrixU();
+  const Eigen::MatrixXd& V = svd.matrixV();
+  const Eigen::VectorXd sv = svd.singularValues();
 
   const int rank = std::min({n_components, static_cast<int>(sv.size())});
   W.assign(static_cast<size_t>(n_features) * n_components, 0.0f);
@@ -56,37 +61,45 @@ void init_nndsvd(const float* S, std::vector<float>& W, std::vector<float>& H, i
   if (rank == 0) return;
 
   // Component 0: leading singular vector (take absolute values).
-  const float s0 = std::sqrt(std::max(sv[0], 0.0f));
-  for (int f = 0; f < n_features; ++f) W[f * n_components + 0] = s0 * std::abs(U(f, 0));
-  for (int t = 0; t < n_frames; ++t) H[0 * n_frames + t] = s0 * std::abs(V(t, 0));
+  const double s0 = std::sqrt(std::max(sv[0], 0.0));
+  for (int f = 0; f < n_features; ++f) {
+    W[f * n_components + 0] = static_cast<float>(s0 * std::abs(U(f, 0)));
+  }
+  for (int t = 0; t < n_frames; ++t) {
+    H[0 * n_frames + t] = static_cast<float>(s0 * std::abs(V(t, 0)));
+  }
 
   for (int k = 1; k < rank; ++k) {
-    Eigen::VectorXf x = U.col(k);
-    Eigen::VectorXf y = V.col(k);
-    Eigen::VectorXf xp = x.cwiseMax(0.0f);
-    Eigen::VectorXf xn = (-x).cwiseMax(0.0f);
-    Eigen::VectorXf yp = y.cwiseMax(0.0f);
-    Eigen::VectorXf yn = (-y).cwiseMax(0.0f);
-    const float xp_n = xp.norm();
-    const float xn_n = xn.norm();
-    const float yp_n = yp.norm();
-    const float yn_n = yn.norm();
-    const float mp = xp_n * yp_n;
-    const float mn = xn_n * yn_n;
-    Eigen::VectorXf u, v;
-    float sigma;
+    Eigen::VectorXd x = U.col(k);
+    Eigen::VectorXd y = V.col(k);
+    Eigen::VectorXd xp = x.cwiseMax(0.0);
+    Eigen::VectorXd xn = (-x).cwiseMax(0.0);
+    Eigen::VectorXd yp = y.cwiseMax(0.0);
+    Eigen::VectorXd yn = (-y).cwiseMax(0.0);
+    const double xp_n = xp.norm();
+    const double xn_n = xn.norm();
+    const double yp_n = yp.norm();
+    const double yn_n = yn.norm();
+    const double mp = xp_n * yp_n;
+    const double mn = xn_n * yn_n;
+    Eigen::VectorXd u, v;
+    double sigma;
     if (mp >= mn) {
       sigma = mp;
-      u = (xp_n > 0.0f) ? Eigen::VectorXf(xp / xp_n) : Eigen::VectorXf::Zero(n_features);
-      v = (yp_n > 0.0f) ? Eigen::VectorXf(yp / yp_n) : Eigen::VectorXf::Zero(n_frames);
+      u = (xp_n > 0.0) ? Eigen::VectorXd(xp / xp_n) : Eigen::VectorXd::Zero(n_features);
+      v = (yp_n > 0.0) ? Eigen::VectorXd(yp / yp_n) : Eigen::VectorXd::Zero(n_frames);
     } else {
       sigma = mn;
-      u = (xn_n > 0.0f) ? Eigen::VectorXf(xn / xn_n) : Eigen::VectorXf::Zero(n_features);
-      v = (yn_n > 0.0f) ? Eigen::VectorXf(yn / yn_n) : Eigen::VectorXf::Zero(n_frames);
+      u = (xn_n > 0.0) ? Eigen::VectorXd(xn / xn_n) : Eigen::VectorXd::Zero(n_features);
+      v = (yn_n > 0.0) ? Eigen::VectorXd(yn / yn_n) : Eigen::VectorXd::Zero(n_frames);
     }
-    const float scale = std::sqrt(std::max(sv[k] * sigma, 0.0f));
-    for (int f = 0; f < n_features; ++f) W[f * n_components + k] = scale * u[f];
-    for (int t = 0; t < n_frames; ++t) H[k * n_frames + t] = scale * v[t];
+    const double scale = std::sqrt(std::max(sv[k] * sigma, 0.0));
+    for (int f = 0; f < n_features; ++f) {
+      W[f * n_components + k] = static_cast<float>(scale * u[f]);
+    }
+    for (int t = 0; t < n_frames; ++t) {
+      H[k * n_frames + t] = static_cast<float>(scale * v[t]);
+    }
   }
 
   // Avoid hard zeros (which the MU updates cannot escape from).
