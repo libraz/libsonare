@@ -4,7 +4,7 @@
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        build-bank-shared bank-versions bank-versions-check \
        surface-coverage surface-coverage-check \
-       gs-census gs-census-header gs-census-check gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
+       gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
@@ -375,13 +375,25 @@ surface-coverage-check:
 # tools/gs/docs/census.md), so `gs-census` needs one fetched first and
 # `gs-census-header` rerenders the committed test input from the committed JSON.
 # The coverage gate itself is a C++ case, gs_address_census_test.cpp.
-GS_CORPUS ?= .cache/gs-corpus/mid
+# The whole corpus root, not the loose `mid/` half: the committed census was
+# taken over both that and the unpacked archives, and pointing this at one of
+# them regenerates a census a third smaller — which reads as coverage
+# regressing and lowers the gate's ceilings, the one direction a refresh must
+# not be able to move them by accident.
+GS_CORPUS ?= .cache/gs-corpus
 GS_CENSUS_SOURCE ?= regenerated locally
 
 gs-census:
 	python3 tools/gs/extract_addresses.py --corpus $(GS_CORPUS) \
 	    --out tools/gs/address-census.json --source "$(GS_CENSUS_SOURCE)"
 	$(MAKE) gs-census-header
+
+# Which programs and which variation banks real files select, as a sibling
+# histogram. Nothing gates on it: it is evidence for the bank's working order
+# (tools/voicematch/policy.json), which was a reasonable guess until it ran.
+gs-program-census:
+	python3 tools/gs/extract_programs.py --corpus $(GS_CORPUS) \
+	    --out tools/gs/program-census.json --source "$(GS_CENSUS_SOURCE)" --top 20
 
 gs-census-header:
 	python3 tools/gs/gen_census_header.py --census tools/gs/address-census.json \
@@ -461,6 +473,9 @@ conformance:
 	python3 tests/conformance/check_result_schema_surfaces.py
 	python3 -m unittest tests/conformance/test_result_schema_surfaces.py
 	python3 -m unittest tests/conformance/test_bank_versions.py
+	python3 tests/conformance/check_bank_policy.py
+	python3 -m unittest tests/conformance/test_bank_policy.py
+	python3 -m unittest tests/conformance/test_gs_program_census.py
 	python3 -m unittest tests/conformance/test_c_api_out_param_init.py
 	python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py
 	python3 -m unittest tests/conformance/test_c_api_header_self_contained.py
