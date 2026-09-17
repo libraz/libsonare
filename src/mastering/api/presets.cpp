@@ -547,15 +547,82 @@ MasteringChainConfig make_game_ost() {
   return cfg;
 }
 
+MasteringChainConfig make_vinyl() {
+  MasteringChainConfig cfg;
+  // Repair only: groove damage gives clicks and pops, the surface gives
+  // crackle, and the noise floor sits under everything. Defaults are general
+  // enough that none of the three carries a vinyl-specific deviation.
+  cfg.repair.declick.enabled = true;
+  cfg.repair.decrackle.enabled = true;
+  cfg.repair.denoise.enabled = true;
+  return cfg;
+}
+
+MasteringChainConfig make_tape_hiss() {
+  MasteringChainConfig cfg;
+  // Broadband hiss is the whole defect; machine hum is not universal enough
+  // across tape sources to turn dehum on by default.
+  cfg.repair.denoise.enabled = true;
+  return cfg;
+}
+
+MasteringChainConfig make_field_recording() {
+  MasteringChainConfig cfg;
+  cfg.repair.denoise.enabled = true;
+
+  cfg.repair.dehum.enabled = true;
+  // Field gear runs off whatever mains circuit it finds, and grid frequency
+  // drifts within tolerance rather than sitting exactly on the configured
+  // 50 Hz; adaptive tracking follows the true fundamental instead of assuming
+  // it.
+  cfg.repair.dehum.config.adaptive = true;
+
+  cfg.repair.dereverb.enabled = true;
+  return cfg;
+}
+
+MasteringChainConfig make_voice_memo() {
+  MasteringChainConfig cfg;
+  // Phone and laptop capture clips against its own AGC, carries a high mic
+  // floor, and is recorded in whatever room the speaker happened to be in.
+  cfg.repair.declip.enabled = true;
+  cfg.repair.denoise.enabled = true;
+  cfg.repair.dereverb.enabled = true;
+  return cfg;
+}
+
+MasteringChainConfig make_shellac78() {
+  MasteringChainConfig cfg;
+
+  cfg.repair.declick.enabled = true;
+  // Shellac's coarser groove wears into wider pops than a vinyl LP's finer
+  // groove; widen the eligible run length so a 78rpm-length click still
+  // reaches the LPC reconstruction instead of the interpolation fallback.
+  cfg.repair.declick.config.max_click_samples = 16;
+
+  cfg.repair.decrackle.enabled = true;
+  // Shellac's surface noise is denser and more continuous than vinyl's;
+  // lower the median-deviation threshold so more of it counts as crackle.
+  cfg.repair.decrackle.config.threshold = 0.25f;
+
+  cfg.repair.denoise.enabled = true;
+  // Shellac's noise floor sits higher than vinyl's; leave the residual floor
+  // deeper than the default so it does not dominate the repaired signal.
+  cfg.repair.denoise.config.reduction_db = 32.0f;
+
+  return cfg;
+}
+
 }  // namespace
 
 std::vector<std::string> preset_names() {
   // Note: "streaming" is an intentional alias of "pop" (see make_streaming).
   // It is listed as its own discoverable name, not as an independent voicing.
-  return {"pop",     "edm",       "acoustic",    "hipHop",    "aiMusic", "speech", "streaming",
-          "youtube", "broadcast", "podcast",     "audiobook", "cinema",  "jpop",   "ambient",
-          "lofi",    "classical", "drumAndBass", "techno",    "metal",   "trap",   "rnb",
-          "jazz",    "kpop",      "trance",      "gameOst"};
+  return {"pop",       "edm",     "acoustic",  "hipHop",         "aiMusic",     "speech",
+          "streaming", "youtube", "broadcast", "podcast",        "audiobook",   "cinema",
+          "jpop",      "ambient", "lofi",      "classical",      "drumAndBass", "techno",
+          "metal",     "trap",    "rnb",       "jazz",           "kpop",        "trance",
+          "gameOst",   "vinyl",   "tapeHiss",  "fieldRecording", "voiceMemo",   "shellac78"};
 }
 
 Preset preset_from_string(const std::string& name) {
@@ -584,6 +651,11 @@ Preset preset_from_string(const std::string& name) {
   if (name == "kpop") return Preset::KPop;
   if (name == "trance") return Preset::Trance;
   if (name == "gameOst") return Preset::GameOst;
+  if (name == "vinyl") return Preset::Vinyl;
+  if (name == "tapeHiss") return Preset::TapeHiss;
+  if (name == "fieldRecording") return Preset::FieldRecording;
+  if (name == "voiceMemo") return Preset::VoiceMemo;
+  if (name == "shellac78") return Preset::Shellac78;
   throw SonareException(ErrorCode::InvalidParameter, "unknown mastering preset: " + name);
 }
 
@@ -639,6 +711,16 @@ const char* preset_to_string(Preset preset) noexcept {
       return "trance";
     case Preset::GameOst:
       return "gameOst";
+    case Preset::Vinyl:
+      return "vinyl";
+    case Preset::TapeHiss:
+      return "tapeHiss";
+    case Preset::FieldRecording:
+      return "fieldRecording";
+    case Preset::VoiceMemo:
+      return "voiceMemo";
+    case Preset::Shellac78:
+      return "shellac78";
   }
   return "unknown";
 }
@@ -695,6 +777,16 @@ MasteringChainConfig preset_config(Preset preset) {
       return make_trance();
     case Preset::GameOst:
       return make_game_ost();
+    case Preset::Vinyl:
+      return make_vinyl();
+    case Preset::TapeHiss:
+      return make_tape_hiss();
+    case Preset::FieldRecording:
+      return make_field_recording();
+    case Preset::VoiceMemo:
+      return make_voice_memo();
+    case Preset::Shellac78:
+      return make_shellac78();
   }
   // Unreachable for well-formed Preset values; defensive default.
   return MasteringChainConfig{};

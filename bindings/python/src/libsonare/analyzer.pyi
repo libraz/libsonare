@@ -130,6 +130,11 @@ MasteringPreset: TypeAlias = Literal[
     "kpop",
     "trance",
     "gameOst",
+    "vinyl",
+    "tapeHiss",
+    "fieldRecording",
+    "voiceMemo",
+    "shellac78",
 ]
 # BEGIN GENERATED SoloProcessor (make processor-types)
 # Every processor name mastering_processor_names() can return, and therefore

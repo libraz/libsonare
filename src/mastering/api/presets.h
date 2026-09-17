@@ -14,8 +14,10 @@ namespace sonare::mastering::api {
 
 /// @brief Built-in preset identifiers.
 ///
-/// Every preset carries an integrated-loudness target and a true-peak ceiling.
-/// The two are not equally binding: the ceiling always holds, while the loudness
+/// The restoration presets -- vinyl, tapeHiss, fieldRecording, voiceMemo and
+/// shellac78 -- enable repair stages only and leave level alone. Every other
+/// preset carries an integrated-loudness target and a true-peak ceiling, and the
+/// two are not equally binding: the ceiling always holds, while the loudness
 /// target is what one normalization pass aims at.
 ///
 /// Reaching a target above the input's loudness costs gain the input's peak
@@ -54,6 +56,11 @@ enum class Preset {
   KPop,
   Trance,
   GameOst,
+  Vinyl,
+  TapeHiss,
+  FieldRecording,
+  VoiceMemo,
+  Shellac78,
 };
 
 /// @brief Returns string identifiers of all built-in presets, in display order.

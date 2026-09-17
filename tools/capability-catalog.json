@@ -29,7 +29,12 @@
       "jazz",
       "kpop",
       "trance",
-      "gameOst"
+      "gameOst",
+      "vinyl",
+      "tapeHiss",
+      "fieldRecording",
+      "voiceMemo",
+      "shellac78"
     ],
     "mixingScene": [
       "vocalReverbSend",

@@ -1,7 +1,9 @@
 /**
- * Built-in mastering presets. Each carries an integrated-loudness target and a
- * true-peak ceiling, which are not equally binding: the ceiling always holds,
- * while the loudness target is what one normalization pass aims at.
+ * Built-in mastering presets. The restoration presets — `vinyl`, `tapeHiss`,
+ * `fieldRecording`, `voiceMemo` and `shellac78` — enable repair stages only and
+ * leave level alone. Every other preset carries an integrated-loudness target
+ * and a true-peak ceiling, which are not equally binding: the ceiling always
+ * holds, while the loudness target is what one normalization pass aims at.
  *
  * Reaching a target above the input's loudness costs gain the input's peak
  * headroom may not have, so the stage drives its true-peak limiter up to
@@ -38,7 +40,12 @@ export type MasteringPreset =
   | 'jazz'
   | 'kpop'
   | 'trance'
-  | 'gameOst';
+  | 'gameOst'
+  | 'vinyl'
+  | 'tapeHiss'
+  | 'fieldRecording'
+  | 'voiceMemo'
+  | 'shellac78';
 
 export interface StreamingPlatform {
   name: string;

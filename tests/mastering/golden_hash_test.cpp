@@ -1,12 +1,12 @@
 /// @file golden_hash_test.cpp
 /// @brief Built-in mastering presets hashed per preset and signal.
 ///
-/// The four presets enabling denoise or dereverb run through the STFT, so their
+/// The nine presets enabling denoise or dereverb run through the STFT, so their
 /// hashes are the ones an FFT rounding change moves. PFFFT renders differently
 /// depending on the optimization level it was compiled at, which would let a
 /// Debug and a Release build disagree here with neither being wrong; the pin in
 /// src/CMakeLists.txt is what keeps them together, and removing it fails these
-/// twelve alone.
+/// twenty-seven alone.
 
 #include "support/golden_hash.h"
 
@@ -142,7 +142,7 @@ TEST_CASE("built-in mastering preset golden hashes stay stable", "[.][mastering]
 
   const auto expected = load_manifest(manifest);
   const auto rows = compute_rows();
-  REQUIRE(rows.size() == 78);
+  REQUIRE(rows.size() == 93);
   REQUIRE(expected.size() == rows.size());
 
   // CHECK, not REQUIRE: a REQUIRE aborts the case on the first drifted row, so

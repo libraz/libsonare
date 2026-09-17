@@ -87,14 +87,15 @@ void replace_once(std::string& text, const std::string& from, const std::string&
 
 }  // namespace
 
-TEST_CASE("preset_names returns all 25 presets", "[mastering][preset]") {
+TEST_CASE("preset_names returns all 30 presets", "[mastering][preset]") {
   auto names = preset_names();
-  REQUIRE(names.size() == 25);
+  REQUIRE(names.size() == 30);
   const std::vector<std::string> expected = {
-      "pop",     "edm",       "acoustic",    "hipHop",    "aiMusic", "speech", "streaming",
-      "youtube", "broadcast", "podcast",     "audiobook", "cinema",  "jpop",   "ambient",
-      "lofi",    "classical", "drumAndBass", "techno",    "metal",   "trap",   "rnb",
-      "jazz",    "kpop",      "trance",      "gameOst"};
+      "pop",       "edm",     "acoustic",  "hipHop",         "aiMusic",     "speech",
+      "streaming", "youtube", "broadcast", "podcast",        "audiobook",   "cinema",
+      "jpop",      "ambient", "lofi",      "classical",      "drumAndBass", "techno",
+      "metal",     "trap",    "rnb",       "jazz",           "kpop",        "trance",
+      "gameOst",   "vinyl",   "tapeHiss",  "fieldRecording", "voiceMemo",   "shellac78"};
   for (const auto& name : expected) {
     REQUIRE(std::find(names.begin(), names.end(), name) != names.end());
   }
@@ -126,6 +127,11 @@ TEST_CASE("preset_from_string maps known names", "[mastering][preset]") {
   REQUIRE(preset_from_string("kpop") == Preset::KPop);
   REQUIRE(preset_from_string("trance") == Preset::Trance);
   REQUIRE(preset_from_string("gameOst") == Preset::GameOst);
+  REQUIRE(preset_from_string("vinyl") == Preset::Vinyl);
+  REQUIRE(preset_from_string("tapeHiss") == Preset::TapeHiss);
+  REQUIRE(preset_from_string("fieldRecording") == Preset::FieldRecording);
+  REQUIRE(preset_from_string("voiceMemo") == Preset::VoiceMemo);
+  REQUIRE(preset_from_string("shellac78") == Preset::Shellac78);
   REQUIRE_THROWS_AS(preset_from_string("invalid"), sonare::SonareException);
 }
 
@@ -444,13 +450,84 @@ TEST_CASE("new presets enable characteristic stages", "[mastering][preset]") {
   REQUIRE(preset_config(Preset::GameOst).stereo.imager.enabled);
 }
 
-TEST_CASE("all 25 presets process a deterministic fixture with valid output",
+TEST_CASE("repair-oriented presets enable only their named repair stages", "[mastering][preset]") {
+  auto assert_repair_only = [](const MasteringChainConfig& config) {
+    REQUIRE_FALSE(config.eq.tilt.enabled);
+    REQUIRE_FALSE(config.dynamics.deesser.enabled);
+    REQUIRE_FALSE(config.dynamics.transient_shaper.enabled);
+    REQUIRE_FALSE(config.dynamics.compressor.enabled);
+    REQUIRE_FALSE(config.dynamics.multiband_comp.enabled);
+    REQUIRE_FALSE(config.saturation.tape.enabled);
+    REQUIRE_FALSE(config.saturation.exciter.enabled);
+    REQUIRE_FALSE(config.spectral.air_band.enabled);
+    REQUIRE_FALSE(config.stereo.imager.enabled);
+    REQUIRE_FALSE(config.stereo.mono_maker.enabled);
+    REQUIRE_FALSE(config.maximizer.true_peak_limiter.enabled);
+    REQUIRE_FALSE(config.loudness.enabled);
+  };
+
+  const auto vinyl = preset_config(Preset::Vinyl);
+  REQUIRE(vinyl.repair.declick.enabled);
+  REQUIRE(vinyl.repair.decrackle.enabled);
+  REQUIRE(vinyl.repair.denoise.enabled);
+  REQUIRE_FALSE(vinyl.repair.declip.enabled);
+  REQUIRE_FALSE(vinyl.repair.dehum.enabled);
+  REQUIRE_FALSE(vinyl.repair.dereverb.enabled);
+  assert_repair_only(vinyl);
+
+  const auto tape_hiss = preset_config(Preset::TapeHiss);
+  REQUIRE(tape_hiss.repair.denoise.enabled);
+  REQUIRE_FALSE(tape_hiss.repair.declick.enabled);
+  REQUIRE_FALSE(tape_hiss.repair.declip.enabled);
+  REQUIRE_FALSE(tape_hiss.repair.decrackle.enabled);
+  REQUIRE_FALSE(tape_hiss.repair.dehum.enabled);
+  REQUIRE_FALSE(tape_hiss.repair.dereverb.enabled);
+  assert_repair_only(tape_hiss);
+
+  const auto field_recording = preset_config(Preset::FieldRecording);
+  REQUIRE(field_recording.repair.denoise.enabled);
+  REQUIRE(field_recording.repair.dehum.enabled);
+  REQUIRE(field_recording.repair.dehum.config.adaptive);
+  REQUIRE(field_recording.repair.dereverb.enabled);
+  REQUIRE_FALSE(field_recording.repair.declick.enabled);
+  REQUIRE_FALSE(field_recording.repair.declip.enabled);
+  REQUIRE_FALSE(field_recording.repair.decrackle.enabled);
+  assert_repair_only(field_recording);
+
+  const auto voice_memo = preset_config(Preset::VoiceMemo);
+  REQUIRE(voice_memo.repair.declip.enabled);
+  REQUIRE(voice_memo.repair.denoise.enabled);
+  REQUIRE(voice_memo.repair.dereverb.enabled);
+  REQUIRE_FALSE(voice_memo.repair.declick.enabled);
+  REQUIRE_FALSE(voice_memo.repair.decrackle.enabled);
+  REQUIRE_FALSE(voice_memo.repair.dehum.enabled);
+  assert_repair_only(voice_memo);
+
+  const auto shellac78 = preset_config(Preset::Shellac78);
+  REQUIRE(shellac78.repair.declick.enabled);
+  REQUIRE(shellac78.repair.decrackle.enabled);
+  REQUIRE(shellac78.repair.denoise.enabled);
+  REQUIRE_FALSE(shellac78.repair.declip.enabled);
+  REQUIRE_FALSE(shellac78.repair.dehum.enabled);
+  REQUIRE_FALSE(shellac78.repair.dereverb.enabled);
+  assert_repair_only(shellac78);
+
+  // shellac78 deviates from its defaults where vinyl does not: heavier damage
+  // needs a wider click cap, a more sensitive crackle threshold, and a deeper
+  // noise floor.
+  REQUIRE(shellac78.repair.declick.config.max_click_samples >
+          vinyl.repair.declick.config.max_click_samples);
+  REQUIRE(shellac78.repair.decrackle.config.threshold < vinyl.repair.decrackle.config.threshold);
+  REQUIRE(shellac78.repair.denoise.config.reduction_db > vinyl.repair.denoise.config.reduction_db);
+}
+
+TEST_CASE("all 30 presets process a deterministic fixture with valid output",
           "[.][slow][mastering][preset]") {
   constexpr int sample_rate = 44100;
   const auto fixture = create_preset_fixture(sample_rate, 1.25f);
 
   const auto names = preset_names();
-  REQUIRE(names.size() == 25);
+  REQUIRE(names.size() == 30);
   for (const auto& name : names) {
     CAPTURE(name);
     auto result =
@@ -488,7 +565,7 @@ TEST_CASE("all presets master a three-minute stereo fixture with bounded memory"
   for (size_t index = 0; index < right.size(); ++index) right[index] *= 0.83f;
 
   const auto names = preset_names();
-  REQUIRE(names.size() == 25);
+  REQUIRE(names.size() == 30);
   for (const auto& name : names) {
     CAPTURE(name);
     const auto result = master_audio_stereo(preset_from_string(name), left.data(), right.data(),
