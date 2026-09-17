@@ -1,3 +1,4 @@
+/** Options for the high-level {@link mastering} one-shot. All fields are optional. */
 export interface MasteringOptions {
   /**
    * Integrated-loudness target in LUFS. Default -14. Must be finite; a
@@ -248,8 +249,7 @@ export interface MasteringStereoResult {
   nonFiniteSubstitutionCount: number;
 }
 
-/** One channel's click detection, from {@link masteringRepairDeclickStereo}. Counts runs, not samples. */
-
+/** What gain-matching one take to another's loudness took, and produced. */
 export interface LoudnessMatchResult {
   /** The source, gain-matched to the reference's integrated loudness. */
   samples: Float32Array;

@@ -94,5 +94,3 @@ export interface RealtimeVoiceChangerConfig {
   /** Inter-sample-peak limiter ceiling in dBTP (default -1.0). */
   limiterIspCeilingDbtp: number;
 }
-
-/** Options for the high-level {@link mastering} one-shot. All fields are optional. */

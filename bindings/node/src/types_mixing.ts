@@ -102,7 +102,6 @@ export interface MixResult {
 }
 
 /** Mixed stereo master returned by {@link Mixer.processStereo}. */
-
 export interface MixerProcessResult {
   left: Float32Array;
   right: Float32Array;
@@ -141,7 +140,6 @@ export type PanLawName =
   | '0db';
 
 /** Pan-law name or raw C ABI ordinal. */
-
 export type PanLawInput = PanLawName | number;
 
 /**
@@ -151,7 +149,6 @@ export type PanLawInput = PanLawName | number;
 export type MeterTap = 'preFader' | 'postFader';
 
 /** Pre/post-fader send timing (see {@link Mixer.addSend}). */
-
 export type SendTiming = 'preFader' | 'postFader';
 
 /**
@@ -161,7 +158,6 @@ export type SendTiming = 'preFader' | 'postFader';
 export type StripRef = number | string;
 
 /** Single goniometer sample from {@link Mixer.readGoniometerLatest}. */
-
 export interface GoniometerPoint {
   left: number;
   right: number;

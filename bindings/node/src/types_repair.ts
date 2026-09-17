@@ -3,6 +3,7 @@
  * denoise, dehum, dereverb and silence trim.
  */
 
+/** One channel's click detection, from {@link masteringRepairDeclickStereo}. Counts runs, not samples. */
 export interface ClickDetection {
   /** Runs meeting the repair criteria. */
   count: number;
@@ -460,5 +461,3 @@ export interface TrimSilenceStereoResult {
   leftRange: TrimRange;
   rightRange: TrimRange;
 }
-
-/** What gain-matching one take to another's loudness took, and produced. */

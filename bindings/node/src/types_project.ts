@@ -363,8 +363,7 @@ export interface ProjectBounceOptions {
   instrumentLatencySamples?: number;
 }
 
-/** Names accepted by the minimal built-in oscillator synth. */
-
+/** Clip fade-curve ordinals/names (mirror SonareProjectFadeCurve). */
 export type ProjectFadeCurve =
   | 0
   | 1

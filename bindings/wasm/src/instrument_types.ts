@@ -5,10 +5,10 @@
 
 import type { SampleBank } from './sample_bank';
 
+/** Names accepted by the minimal built-in oscillator synth. */
 export const BUILTIN_SYNTH_WAVEFORMS = ['sine', 'saw', 'sawtooth', 'square', 'triangle'] as const;
 
 /** Oscillator waveform for the built-in synth. */
-
 export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number] | 0 | 1 | 2 | 3;
 
 /**
@@ -74,7 +74,6 @@ export interface Sf2InstrumentConfig {
 }
 
 /** Source backend a resolved MIDI program renders through. */
-
 export type SourceBackend = 'sf2' | 'synth';
 
 /**
@@ -184,7 +183,6 @@ export interface SynthEnumTables {
 }
 
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
-
 export type SynthEngineMode = (typeof SYNTH_ENGINE_MODES)[number];
 
 /**
@@ -197,7 +195,6 @@ export type SynthEngineMode = (typeof SYNTH_ENGINE_MODES)[number];
 export type SampleLoopMode = (typeof SAMPLE_LOOP_MODES)[number];
 
 /** Whether a sample follows the played key (`'default'` keeps the base patch's). */
-
 export type SampleKeyTrack = (typeof SAMPLE_KEY_TRACKS)[number];
 
 /**
@@ -273,31 +270,24 @@ export interface SampleZoneDesc {
 }
 
 /** NativeSynth oscillator waveform (`'default'` keeps the base patch's). */
-
 export type SynthOscWaveform = (typeof SYNTH_OSC_WAVEFORMS)[number];
 
 /** NativeSynth filter model — the character core (`'default'` keeps the base patch's). */
-
 export type SynthFilterModel = (typeof SYNTH_FILTER_MODELS)[number];
 
 /** NativeSynth filter output (SVF only; `'default'` keeps the base patch's). */
-
 export type SynthFilterOutput = (typeof SYNTH_FILTER_OUTPUTS)[number];
 
 /** NativeSynth body/formant resonance voicing (`'default'` keeps the base patch's). */
-
 export type SynthBodyType = (typeof SYNTH_BODY_TYPES)[number];
 
 /** {@link SynthPatch} mod-matrix source. */
-
 export type SynthModSource = (typeof SYNTH_MOD_SOURCES)[number];
 
 /** {@link SynthPatch} mod-matrix destination. */
-
 export type SynthModDestination = (typeof SYNTH_MOD_DESTINATIONS)[number];
 
 /** One {@link SynthPatch} mod-matrix routing (name or C ordinal per field). */
-
 export interface SynthModRouting {
   source: SynthModSource | number;
   destination: SynthModDestination | number;
@@ -414,5 +404,3 @@ export interface SynthPatch {
   sampleStartOffset?: number;
   sampleKeyTrack?: SampleKeyTrack | number;
 }
-
-/** Clip fade-curve for {@link Project.setClipFade}. */

@@ -396,7 +396,6 @@ export interface MasteringRepairDereverbClassicalLinkedResult {
 }
 
 /** One half-open sample range, in INPUT-buffer coordinates. */
-
 export interface TrimRange {
   /** First kept sample. */
   first: number;

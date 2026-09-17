@@ -118,8 +118,7 @@ export interface ProjectSource {
   externalStemRole: string;
 }
 
-/** Names accepted by the minimal built-in oscillator synth. */
-
+/** Clip fade-curve for {@link Project.setClipFade}. */
 export type ProjectFadeCurve =
   | 'linear'
   | 'equal-power'

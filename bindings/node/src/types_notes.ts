@@ -18,7 +18,6 @@ export type VoicedFlags =
   | readonly boolean[];
 
 /** Options for {@link pitchCorrectTimevarying}. All fields are optional. */
-
 export interface PitchCorrectOptions {
   /** `'midi'` retunes toward {@link targetMidi}; `'scale'` snaps to the key. Default `'midi'`. */
   mode?: 'midi' | 'scale';
@@ -45,7 +44,6 @@ export interface PitchCorrectOptions {
 }
 
 /** Options for {@link noteStretch}. All fields are optional. */
-
 export interface NoteStretchOptions {
   /** First sample of the note to stretch. Default 0. */
   onsetSample?: number;
@@ -56,7 +54,6 @@ export interface NoteStretchOptions {
 }
 
 /** Segmentation tuning for {@link extractNotes}. All fields are optional. */
-
 export interface NoteExtractorOptions {
   /** Cents of pitch change that start a new note. Default 50. */
   segmentationThresholdCents?: number;
@@ -358,7 +355,6 @@ export interface PolyphonicAnalysisOptions {
 }
 
 /** Options for {@link PolyphonicAnalysis.render}. All fields are optional. */
-
 export interface PolyphonicRenderOptions {
   /**
    * Equal-power cross-fade at each edited note's edges. Default 5 ms; a hard cut
@@ -483,7 +479,6 @@ export interface PitchDecompositionResult {
 }
 
 /** Options for {@link noteMove}. */
-
 export interface NoteMoveOptions {
   onsetSample?: number;
   /** Defaults to the input length. */
