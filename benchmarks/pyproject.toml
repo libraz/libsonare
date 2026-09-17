@@ -5,7 +5,12 @@ description = "Reproducible benchmarks comparing libsonare vs librosa."
 requires-python = ">=3.11"
 dependencies = [
   "libsonare",
+  # librosa is pinned exactly so a published benchmark number stays comparable
+  # across runs; it tracks the version tests/librosa generates its reference
+  # fixtures from, and moves with that one rather than on its own.
   "librosa==0.11.0",
+  # numpy and scipy resolve a minor behind their latest because 2.5 / 1.18
+  # require Python >= 3.12 and this project targets >= 3.11.
   "numpy>=2.0",
   "scipy>=1.14",
   "soundfile>=0.12",

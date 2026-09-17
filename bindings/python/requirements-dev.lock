@@ -10,26 +10,26 @@
 #   universal: false
 
 -e file:.
-ast-serialize==0.5.0
+ast-serialize==0.11.2
     # via mypy
 iniconfig==2.3.0
     # via pytest
-librt==0.11.0
+librt==0.15.0
     # via mypy
-mypy==2.1.0
+mypy==2.3.1
 mypy-extensions==1.1.0
     # via mypy
 numpy==2.4.6
     # via libsonare
-packaging==26.0
+packaging==26.3
     # via pytest
 pathspec==1.1.1
     # via mypy
 pluggy==1.6.0
     # via pytest
-pygments==2.19.2
+pygments==2.21.0
     # via pytest
-pytest==9.0.2
-ruff==0.15.14
-typing-extensions==4.15.0
+pytest==9.1.1
+ruff==0.16.8
+typing-extensions==4.16.0
     # via mypy

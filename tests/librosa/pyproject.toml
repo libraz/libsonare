@@ -3,7 +3,13 @@ name = "libsonare-librosa-reference"
 version = "0.0.0"
 requires-python = ">=3.11"
 dependencies = [
+  # librosa is pinned exactly because reference/ holds fixtures generated from
+  # this release and the C++ conformance suite compares against them. Raising
+  # it means regenerating every fixture and re-reading every tolerance, so it
+  # is its own task rather than part of a dependency pass.
   "librosa==0.11.0",
+  # numpy and scipy resolve a minor behind their latest because 2.5 / 1.18
+  # require Python >= 3.12 and this project targets >= 3.11.
   "numpy>=2.0",
   "scipy>=1.14",
   "wheel>=0.40",

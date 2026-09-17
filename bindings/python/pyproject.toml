@@ -57,6 +57,7 @@ dependencies = [
     # blocker (128-sample / 2.9 ms blocks could not meet deadline at 44.1 kHz).
     # The floor is the version the test suite and the lock files exercise, so a
     # declared minimum is one that has been run rather than one merely allowed.
+    # The lock stays on 2.4.x because numpy 2.5 requires Python >= 3.12.
     "numpy>=2.4.6",
 ]
 
