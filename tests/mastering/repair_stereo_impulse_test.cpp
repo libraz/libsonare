@@ -14,10 +14,10 @@
 /// across two discontinuous branches, so its own RMSE is only good to about four
 /// significant figures from one build to the next.
 ///
-/// The golden digests are the exception and their job is narrow. They came from
-/// the build that preceded the detector extraction and they say one thing: the
-/// extraction changed no sample. A digest mismatch under a different optimizer
-/// or a different Eigen path is not a defect in the repair.
+/// The golden freezes are the exception and their job is narrow: they say the
+/// detector extraction changed no sample. Declip digests the whole buffer, while
+/// declick names its 24 repaired samples at a tolerance, because a hash cannot
+/// express one. A mismatch under a different optimizer is not a repair defect.
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -96,6 +96,32 @@ std::vector<float> click_fixture(double phase) {
 /// The config the planted count is recovered at. The defaults still turn four of
 /// the twelve down on this bed, which is what ClickDetection::rejected is for.
 const DeclickConfig kCorpusDeclick{0.35f, 2.0f, 8, 20, 8.0f};
+
+/// The samples that config rewrites on that bed, and the tolerance they are read
+/// at: the fill's last bits follow the optimization level of `src/util/lpc.cpp`,
+/// which moves them by at most 3e-8 -- inside the 1e-6 the fill is claimed to.
+constexpr float kDeclickFillTolerance = 1.0e-6f;
+
+struct DeclickFill {
+  size_t index;
+  float left;
+  float right;
+};
+
+constexpr DeclickFill kDeclickFills[] = {
+    {1036, 0.00314137456f, -0.0484724678f},    {1037, -0.00549651403f, -0.0565634221f},
+    {5053, 0.136056602f, 0.106151998f},        {5054, 0.132195532f, 0.0998753682f},
+    {9669, -0.110944651f, -0.138834521f},      {9670, -0.116571873f, -0.1418733f},
+    {12799, 0.134005696f, 0.102770716f},       {12800, 0.129903808f, 0.0963107273f},
+    {14866, 0.148612171f, 0.132621735f},       {14867, 0.147193909f, 0.128367618f},
+    {18103, -0.0515489317f, -0.000121685211f}, {18104, -0.0433547534f, 0.00851314142f},
+    {21899, -0.149751335f, -0.143633008f},     {21900, -0.149999976f, -0.140905887f},
+    {24475, 0.119003005f, 0.080476746f},       {24476, 0.11354924f, 0.0730565861f},
+    {26817, -0.134704098f, -0.103909224f},     {26818, -0.130681992f, -0.0975096524f},
+    {30462, 0.149334282f, 0.145120978f},       {30463, 0.149899229f, 0.142696008f},
+    {39336, -0.0722630322f, -0.112954497f},    {39337, -0.0797098055f, -0.11844866f},
+    {45273, 0.00235610153f, 0.0536415502f},    {45274, 0.0109856948f, 0.0616162345f},
+};
 
 /// The corpus "sine_clip" item: half a second peak-normalized to 0.95 and hard
 /// clipped at 0.945.
@@ -421,17 +447,16 @@ TEST_CASE("Declip mono output survives the detector extraction unchanged",
   REQUIRE(report.linked_runs == 0);
 }
 
-// The recorded halves of the two cases above, `[.]`-hidden like every other hash
-// freeze in this tree: the digest folds raw float samples, which is finer than
-// the reproducibility of an LPC solve across architectures and libm
-// implementations, so a value recorded on one host cannot match another. It
-// stays a same-environment refactor tripwire, run through `make test-golden`.
-// The declip pair predates the detector extraction and has survived it; the
-// declick pair is re-recorded whenever the fill's arithmetic changes, which a
-// bit-identity claim about declick can then be read against.
+// The recorded halves of the two cases above, `[.]`-hidden like every other value
+// freeze in this tree: they fold or name raw float samples, which is finer than the
+// reproducibility of an LPC solve across architectures and libm implementations, so
+// a value recorded on one host cannot match another. They stay same-environment
+// refactor tripwires, run through `make test-golden`. Declip repairs 1560 of 24000
+// samples, too dense to name, so it keeps a digest; declick repairs 24 and records
+// them individually, which reports a drifting sample by index instead of as a hash.
 //
-// The two halves are separate cases because they hold under different conditions,
-// which one case cannot express: a skip covers everything in it.
+// The halves are separate cases because they hold under different conditions, which
+// one case cannot express: a skip covers everything in it.
 TEST_CASE("Declip mono digests stay stable", "[.][repair][stereo][impulse][golden]") {
   const std::vector<float> clip_left = clip_fixture(0.0);
   const std::vector<float> clip_right = clip_fixture(0.35);
@@ -441,27 +466,46 @@ TEST_CASE("Declip mono digests stay stable", "[.][repair][stereo][impulse][golde
   CHECK(digest(declip(view(clip_right), config)) == 0xd76bca10u);
 }
 
-// These two are recorded twice because the fill's last bits move with the
-// optimization level, and the sensitivity belongs to `src/util/lpc.cpp` rather
-// than to declick: compiling that one unit at -O0 moves both digests while
-// declick's own level changes nothing, and the declip pair above holds at every
-// level while solving the same way 440 times. The difference is 1 ULP on 11 of
-// 48000 samples, no sample moves by more than 1e-6, and detected / rejected /
-// repaired_runs / repaired_samples are identical -- so the digest is a finer
-// instrument than the behaviour it guards. Both values are recorded rather than
-// one guarded and the other skipped: the sanctioned target builds Release, while
-// the default ctest tree is Debug, so skipping either branch would leave one of
-// the two ways this case gets invoked checking nothing.
-TEST_CASE("Declick mono digests stay stable", "[.][repair][stereo][impulse][golden]") {
+// The fill values, read at a tolerance the optimization level cannot reach: a
+// digest over the whole buffer had to be recorded twice because `src/util/lpc.cpp`
+// compiled at -O0 moves the fill by up to 3e-8 on a handful of samples, while
+// declick's own level and the declip pair above change nothing. Quantizing the
+// digest instead would not fix that -- 7% of this bed's samples sit within one
+// drift-width of a 1e-6 grid boundary, so a re-record would cross one eventually.
+TEST_CASE("Declick fill values stay stable", "[.][repair][stereo][impulse][golden]") {
   const std::vector<float> click_left = click_fixture(0.0);
   const std::vector<float> click_right = click_fixture(0.35);
-#ifdef NDEBUG
-  CHECK(digest(declick(view(click_left), kCorpusDeclick)) == 0x6861830cu);
-  CHECK(digest(declick(view(click_right), kCorpusDeclick)) == 0x4a9a870fu);
-#else
-  CHECK(digest(declick(view(click_left), kCorpusDeclick)) == 0x508faa52u);
-  CHECK(digest(declick(view(click_right), kCorpusDeclick)) == 0x65fb694eu);
-#endif
+  const std::vector<float> left = to_vector(declick(view(click_left), kCorpusDeclick));
+  const std::vector<float> right = to_vector(declick(view(click_right), kCorpusDeclick));
+  for (const DeclickFill& fill : kDeclickFills) {
+    INFO("sample " << fill.index);
+    CHECK_THAT(left[fill.index], WithinAbs(fill.left, kDeclickFillTolerance));
+    CHECK_THAT(right[fill.index], WithinAbs(fill.right, kDeclickFillTolerance));
+  }
+}
+
+// What the recorded case above cannot say for itself: that the table is the whole
+// of what declick touched. The fill values are host-sensitive while this is not,
+// so it runs by default -- declick copies its input and writes only inside the runs
+// it selected, and both directions are checked so a pass that did nothing fails.
+TEST_CASE("Declick rewrites the clicks and nothing else", "[repair][stereo][impulse]") {
+  const std::vector<float> click_left = click_fixture(0.0);
+  const std::vector<float> click_right = click_fixture(0.35);
+  const std::vector<float> left = to_vector(declick(view(click_left), kCorpusDeclick));
+  const std::vector<float> right = to_vector(declick(view(click_right), kCorpusDeclick));
+  REQUIRE(left.size() == click_left.size());
+  REQUIRE(right.size() == click_right.size());
+
+  std::vector<size_t> expected;
+  for (const DeclickFill& fill : kDeclickFills) expected.push_back(fill.index);
+  std::vector<size_t> moved_left;
+  std::vector<size_t> moved_right;
+  for (size_t i = 0; i < left.size(); ++i) {
+    if (left[i] != click_left[i]) moved_left.push_back(i);
+    if (right[i] != click_right[i]) moved_right.push_back(i);
+  }
+  CHECK(moved_left == expected);
+  CHECK(moved_right == expected);
 }
 
 TEST_CASE("Declip reports the runs that fall past the LPC gap cap", "[repair][stereo][impulse]") {
