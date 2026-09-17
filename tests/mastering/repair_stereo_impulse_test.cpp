@@ -93,8 +93,8 @@ std::vector<float> click_fixture(double phase) {
   return quantize(bed);
 }
 
-/// The config the planted count is recovered at. The defaults reject ten of the
-/// twelve on this bed, which is what ClickDetection::rejected is for.
+/// The config the planted count is recovered at. The defaults still turn four of
+/// the twelve down on this bed, which is what ClickDetection::rejected is for.
 const DeclickConfig kCorpusDeclick{0.35f, 2.0f, 8, 20, 8.0f};
 
 /// The corpus "sine_clip" item: half a second peak-normalized to 0.95 and hard
