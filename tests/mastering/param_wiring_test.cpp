@@ -57,6 +57,7 @@ using sonare::mastering::api::MasteringChainConfig;
 using sonare::mastering::api::Param;
 using sonare::mastering::api::parse_chain_config_params;
 using sonare::mastering::api::detail::f;
+using sonare::mastering::api::detail::i;
 using sonare::mastering::api::detail::make_map;
 using sonare::mastering::api::detail::populate_compressor_bands;
 
@@ -78,6 +79,62 @@ TEST_CASE("mastering flat parameters reject non-finite and unrepresentable value
   }
 
   REQUIRE_THROWS_AS(make_insert("stereo.haasEnhancer", R"({"delayMs":1e300})"), SonareException);
+}
+
+TEST_CASE("mastering integer parameters refuse a fractional value instead of rounding it",
+          "[mastering][params][numeric]") {
+  using sonare::SonareException;
+
+  // Returns what a call refused with, or "" when it did not refuse — which is
+  // the case this guards against: 512.7 used to arrive as 513, in range and
+  // indistinguishable downstream from a value the caller actually wrote.
+  const auto refusal = [](auto&& call) -> std::string {
+    try {
+      call();
+    } catch (const SonareException& error) {
+      return error.what();
+    }
+    return {};
+  };
+
+  const std::string named_key = refusal([] {
+    parse_chain_config_params(std::vector<Param>{{"repair.denoise.hopLength", 512.7}}.data(), 1);
+  });
+  CAPTURE(named_key);
+  CHECK(named_key.find("repair.denoise.hopLength") != std::string::npos);
+  CHECK(named_key.find("whole number") != std::string::npos);
+
+  // The table dispatch holds no key, so it names the parameter class instead.
+  const std::string table_field = refusal([] {
+    parse_chain_config_params(std::vector<Param>{{"saturation.tape.oversampleFactor", 2.5}}.data(),
+                              1);
+  });
+  CAPTURE(table_field);
+  CHECK(table_field.find("integer parameter") != std::string::npos);
+  CHECK(table_field.find("whole number") != std::string::npos);
+
+  // Fractional and out-of-range stay separable: a caller can only act on the
+  // one they made, and one message for both sent them after the wrong mistake.
+  const std::string too_large = refusal([] {
+    parse_chain_config_params(std::vector<Param>{{"repair.denoise.hopLength", 1.0e18}}.data(), 1);
+  });
+  CAPTURE(too_large);
+  CHECK(too_large.find("out of range") != std::string::npos);
+  CHECK(too_large.find("whole number") == std::string::npos);
+
+  // The per-processor path spells its own keys and carries them too.
+  const std::string processor_key =
+      refusal([] { i(make_map(std::vector<Param>{{"lpcOrder", 24.5}}), "lpcOrder", 16); });
+  CAPTURE(processor_key);
+  CHECK(processor_key.find("lpcOrder") != std::string::npos);
+  CHECK(processor_key.find("whole number") != std::string::npos);
+
+  // An enum selector indexes a closed set, so a fractional one names no
+  // enumerator; rounding it used to pick a neighbour the caller never asked for.
+  const std::string enum_selector =
+      refusal([] { make_insert("saturation.hardClipper", R"({"aliasing":1.5})"); });
+  CAPTURE(enum_selector);
+  CHECK(enum_selector.find("whole number") != std::string::npos);
 }
 
 // --- H4 -------------------------------------------------------------------

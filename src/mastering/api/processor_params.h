@@ -238,10 +238,10 @@ inline int i(const ParamMap& params, const char* key, int default_value) {
   auto it = params.find(key);
   if (it == params.end()) return default_value;
   int converted = 0;
-  if (!numeric::checked_round_cast(it->second, &converted)) {
-    throw SonareException(ErrorCode::InvalidParameter, "mastering integer parameter is invalid");
-  }
-  return converted;
+  if (numeric::checked_integral_cast(it->second, &converted)) return converted;
+  // Named, because the key is in hand: a caller who wrote 512.7 needs to know
+  // which field refused it and that a whole number is what it wants.
+  detail::reject_integer_param(key, it->second);
 }
 
 inline bool b(const ParamMap& params, const char* key, bool default_value) {

@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -93,11 +94,26 @@ inline bool enum_value_declared(sonare::rt::AliasingControl value) {
   return false;
 }
 
+/// @brief Refuses a flat param value that no integral field can hold, naming
+///        @p subject and which of the two ways it failed.
+/// @details Fractional and out-of-range are different mistakes and a caller can
+///   only act on the one they made. One message for both told whoever wrote
+///   512.7 that their value was out of range, which it is not. Callers holding
+///   the dotted key pass it as @p subject; the table dispatch, which does not,
+///   names the parameter class instead.
+[[noreturn]] inline void reject_integer_param(const std::string& subject, double value) {
+  if (numeric::finite(value) && std::trunc(value) != value) {
+    throw SonareException(ErrorCode::InvalidParameter, subject + " must be a whole number");
+  }
+  throw SonareException(ErrorCode::InvalidParameter, subject + " is out of range");
+}
+
 /// @brief Assigns a flat double param value to a typed config member.
 /// @details One overload per storage kind so a table entry needs no type tag.
-/// Integral and enum members round to the nearest integer (the flat param API
-/// carries every value as a double); bool follows the "non-zero is true"
-/// convention used throughout the chain param surface.
+/// Integral and enum members take the value exactly (the flat param API carries
+/// every value as a double) and refuse a fractional one rather than rounding it
+/// onto a legal neighbour; bool follows the "non-zero is true" convention used
+/// throughout the chain param surface.
 inline void assign_field(float& dst, double value) {
   if (!numeric::finite(value) ||
       std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
@@ -121,17 +137,18 @@ inline void assign_field(bool& dst, double value) {
 template <typename Int,
           std::enable_if_t<std::is_integral_v<Int> && !std::is_same_v<Int, bool>, int> = 0>
 inline void assign_field(Int& dst, double value) {
-  if (!numeric::checked_round_cast(value, &dst)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "mastering integer parameter is out of range");
+  if (!numeric::checked_integral_cast(value, &dst)) {
+    reject_integer_param("mastering integer parameter", value);
   }
 }
 
 template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
 inline void assign_field(Enum& dst, double value) {
   int converted = 0;
-  if (!numeric::checked_round_cast(value, &converted)) {
-    throw SonareException(ErrorCode::InvalidParameter, "mastering enum parameter is out of range");
+  // An enum selector is an index into a closed set, so a fractional one names no
+  // enumerator at all; rounding it would silently select a neighbour.
+  if (!numeric::checked_integral_cast(value, &converted)) {
+    reject_integer_param("mastering enum parameter", value);
   }
   const Enum candidate = static_cast<Enum>(converted);
   if (!enum_value_declared(candidate)) {
