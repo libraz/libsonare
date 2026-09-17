@@ -1416,7 +1416,7 @@ export class SonareEngine {
   private ensureTrackLane(target: string | number): number {
     const trackId = this.resolveTargetId(target);
     if (!Number.isInteger(trackId) || trackId <= 0) {
-      throw new Error(`Invalid track id for mixer lane: ${String(target)}`);
+      throw new RangeError(`Invalid track id for mixer lane: ${String(target)}`);
     }
     const existing = this.trackLaneIds.indexOf(trackId);
     if (existing >= 0) {
@@ -1428,15 +1428,16 @@ export class SonareEngine {
   }
 
   private ensureBus(busId: number): number {
-    const resolved = Math.trunc(busId);
-    if (!Number.isInteger(resolved) || resolved <= 0) {
-      throw new Error(`Invalid bus id for mixer bus: ${String(busId)}`);
+    // Tested on the raw id: truncating first leaves the integrality check
+    // unreachable, and registers a bus under an id the caller never named.
+    if (!Number.isInteger(busId) || busId <= 0) {
+      throw new RangeError(`Invalid bus id for mixer bus: ${String(busId)}`);
     }
-    const existing = this.buses.findIndex((bus) => bus.busId === resolved);
+    const existing = this.buses.findIndex((bus) => bus.busId === busId);
     if (existing >= 0) {
       return existing;
     }
-    this.buses.push({ busId: resolved });
+    this.buses.push({ busId });
     this.syncMixer();
     return this.buses.length - 1;
   }

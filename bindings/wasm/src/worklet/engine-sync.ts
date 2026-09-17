@@ -54,15 +54,23 @@ export function buildTempoSync(
 }
 
 /**
- * Resolves a target id from a string or number; non-numeric strings resolve to
- * 0, mirroring the engine's integer-id namespace.
+ * Resolves a target id given as a number, or as a string naming one.
+ *
+ * Both spellings reach one refusal. Reading the string with `Number.parseInt`
+ * stops at the first non-digit, so `"3.5"` resolves to `3` and `"5abc"` to `5`,
+ * and an unparseable name resolves to `0` -- all ids the caller never named.
+ * `0` is a legal destination, so the native check these feed cannot tell the
+ * substitution from a deliberate choice and never reports one.
  */
 export function resolveTargetId(target: string | number): number {
-  if (typeof target === 'number') {
-    return target;
+  // An empty or blank string is not a spelling of zero, which is what Number
+  // reads it as.
+  const value =
+    typeof target === 'number' ? target : target.trim() === '' ? Number.NaN : Number(target);
+  if (!Number.isInteger(value)) {
+    throw new RangeError(`target id must be an integer, got ${JSON.stringify(target)}`);
   }
-  const parsed = Number.parseInt(target, 10);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return value;
 }
 
 /** Resolves a registered parameter name or passes through a numeric id. */

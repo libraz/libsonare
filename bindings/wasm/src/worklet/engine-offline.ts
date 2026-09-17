@@ -111,7 +111,7 @@ export function normalizeTrackLanes(
   const ids: number[] = [];
   for (const entry of entries) {
     if (!Number.isInteger(entry.trackId) || entry.trackId <= 0) {
-      throw new Error(`Invalid track id for mixer lane: ${String(entry.trackId)}`);
+      throw new RangeError(`Invalid track id for mixer lane: ${String(entry.trackId)}`);
     }
     ids.push(entry.trackId);
   }
@@ -145,12 +145,15 @@ export function resolveMarkerSet(
   const seen = new Set<number>();
   let counter = nextMarkerId;
   for (const marker of markers) {
-    if (!Number.isFinite(marker.ppq)) {
-      throw new Error(`Invalid marker ppq: ${String(marker.ppq)}`);
+    // Non-negative as well as finite, which is the domain the native setter
+    // enforces; checking only finiteness here hands a negative ppq on to be
+    // refused a layer down, under that layer's name for the argument.
+    if (!Number.isFinite(marker.ppq) || marker.ppq < 0) {
+      throw new RangeError(`Invalid marker ppq: ${String(marker.ppq)}`);
     }
     if (marker.id !== undefined) {
       if (!Number.isInteger(marker.id) || marker.id <= 0) {
-        throw new Error(`Invalid marker id: ${String(marker.id)}`);
+        throw new RangeError(`Invalid marker id: ${String(marker.id)}`);
       }
       if (seen.has(marker.id)) {
         throw new Error(`Duplicate marker id: ${marker.id}`);

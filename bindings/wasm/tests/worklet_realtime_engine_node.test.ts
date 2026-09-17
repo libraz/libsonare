@@ -1024,6 +1024,13 @@ describe('SonareRealtimeEngineNode', () => {
         );
         engine.setBusStripInsertBypassed(100, 0, true, true);
         engine.setBusStripInsertBypassed(100, 0, false);
+        // A fractional bus id used to be truncated before the check that would
+        // have refused it, so 200.7 registered a bus 200 nobody asked for and
+        // synced it -- a record left behind by a call that went on to throw.
+        // An id no earlier line registered is what makes the leftover visible.
+        const before = posted.length;
+        expect(() => engine.setBusStripInsertBypassed(200.7, 0, true)).toThrow(RangeError);
+        expect(posted.length).toBe(before);
         expect(posted).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
