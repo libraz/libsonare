@@ -775,8 +775,20 @@ class ClipDetection:
     sample_fraction: float
     run_count: int
     longest_run_samples: int
+    flat_run_count: int
+    longest_flat_run_samples: int
+    flat_sample_count: int
+    flat_level: float
     def __init__(
-        self, sample_count: int, sample_fraction: float, run_count: int, longest_run_samples: int
+        self,
+        sample_count: int,
+        sample_fraction: float,
+        run_count: int,
+        longest_run_samples: int,
+        flat_run_count: int,
+        longest_flat_run_samples: int,
+        flat_sample_count: int,
+        flat_level: float,
     ) -> None: ...
 
 class ClippingRegion:

@@ -401,6 +401,10 @@ export interface WasmClipDetection {
   sampleFraction: number;
   runCount: number;
   longestRunSamples: number;
+  flatRunCount: number;
+  longestFlatRunSamples: number;
+  flatSampleCount: number;
+  flatLevel: number;
 }
 
 /** What a declip pass found in one channel of a stereo declip and what it did to it. */

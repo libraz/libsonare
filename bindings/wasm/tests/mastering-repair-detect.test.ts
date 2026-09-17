@@ -100,6 +100,39 @@ function clippedSignal(): Float32Array {
 }
 
 // ---------------------------------------------------------------------------
+// Flat-top fixture: a tone clipped hard against +/-1, then turned down so
+// nothing reaches clipThreshold anymore. sampleCount alone would read this as
+// clean; only the flat runs are still evidence of the clipping. The paired
+// full-scale sine below never clips against a fixed threshold in the time
+// domain -- it only reads that way at clipThreshold -- and its apex never
+// repeats a sample, so no flat run forms there.
+// ---------------------------------------------------------------------------
+const FLAT_RATE = 48000;
+const FLAT_FRAMES = 48000;
+const FLAT_FREQ = 220;
+
+function clippedTone(): Float32Array {
+  const out = new Float32Array(FLAT_FRAMES);
+  for (let i = 0; i < FLAT_FRAMES; i++) {
+    const t = i / FLAT_RATE;
+    out[i] = Math.min(1, Math.max(-1, 1.8 * Math.sin(2 * Math.PI * FLAT_FREQ * t)));
+  }
+  return out;
+}
+
+function attenuatedTone(): Float32Array {
+  const out = clippedTone();
+  for (let i = 0; i < out.length; i++) {
+    out[i] = (out[i] ?? 0) * 0.25;
+  }
+  return out;
+}
+
+function fullScaleSine(): Float32Array {
+  return sine(FLAT_FREQ, FLAT_FRAMES, 1, 0, FLAT_RATE);
+}
+
+// ---------------------------------------------------------------------------
 // Crackle fixture: isolated spikes over a quiet tone. A spike's window median
 // is its larger neighbour, so its deviation is SPIKE_VALUE - BED_AMP = 0.45 --
 // above LOW_THRESHOLD and below HIGH_THRESHOLD.
@@ -311,6 +344,34 @@ describe('repair detection (WASM)', () => {
       const detected = masteringRepairDetectClipping({ samples: clippedSignal(), sampleRate: SR });
       expect(detected.sampleCount).toBe(0);
       expect(detected.sampleFraction).toBe(0);
+    });
+
+    it('reads a flat top that survived a gain change hiding it from sampleCount', () => {
+      // Both directions on real signals, so neither reading is free: a tone
+      // clipped hard, and turned down enough that nothing reaches
+      // clipThreshold anymore, reports zero the old way and non-zero the
+      // flat-top way -- the reverse of the full-scale sine below.
+      const quiet = masteringRepairDetectClipping(attenuatedTone(), FLAT_RATE);
+
+      expect(quiet.sampleCount).toBe(0);
+      expect(quiet.runCount).toBe(0);
+      expect(quiet.flatRunCount).toBeGreaterThan(0);
+      expect(quiet.flatSampleCount).toBeGreaterThan(0);
+      expect(quiet.longestFlatRunSamples).toBeGreaterThan(0);
+      expect(quiet.flatLevel).toBeCloseTo(0.25, 4);
+    });
+
+    it('does not read an unclipped sine peak as a flat top', () => {
+      // A full-scale sine reaches the default threshold every cycle without
+      // ever having been clipped -- sampleCount alone reads it as clipped.
+      // The apex of a sine never repeats a sample, so no flat run forms.
+      const detected = masteringRepairDetectClipping(fullScaleSine(), FLAT_RATE);
+
+      expect(detected.sampleCount).toBeGreaterThan(0);
+      expect(detected.flatRunCount).toBe(0);
+      expect(detected.flatSampleCount).toBe(0);
+      expect(detected.longestFlatRunSamples).toBe(0);
+      expect(detected.flatLevel).toBe(0);
     });
   });
 

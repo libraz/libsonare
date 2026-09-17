@@ -675,6 +675,12 @@ Napi::Object EmitClipDetection(Napi::Env env, const SonareClipDetection& detecti
   out.Set("runCount", Napi::Number::New(env, static_cast<double>(detection.run_count)));
   out.Set("longestRunSamples",
           Napi::Number::New(env, static_cast<double>(detection.longest_run_samples)));
+  out.Set("flatRunCount", Napi::Number::New(env, static_cast<double>(detection.flat_run_count)));
+  out.Set("longestFlatRunSamples",
+          Napi::Number::New(env, static_cast<double>(detection.longest_flat_run_samples)));
+  out.Set("flatSampleCount",
+          Napi::Number::New(env, static_cast<double>(detection.flat_sample_count)));
+  out.Set("flatLevel", Napi::Number::New(env, detection.flat_level));
   return out;
 }
 

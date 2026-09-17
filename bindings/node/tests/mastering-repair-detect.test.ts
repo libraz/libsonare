@@ -94,6 +94,19 @@ function clipped(): Float32Array {
   return out;
 }
 
+/**
+ * A clip run's plateau, surviving a gain change that has taken every sample
+ * under `clipThreshold`. The scaling is uniform, so the flat top -- still bit-
+ * identical runs at the signal's new peak -- is untouched by it.
+ */
+function clippedThenAttenuated(): Float32Array {
+  const out = clipped();
+  for (let i = 0; i < out.length; i += 1) {
+    out[i] *= 0.25;
+  }
+  return out;
+}
+
 describe('masteringRepairDetectClicks', () => {
   it('counts the clicks it was given, and none in the same material without them', () => {
     const detected = masteringRepairDetectClicks({ samples: clicky(), sampleRate: SR });
@@ -176,6 +189,33 @@ describe('masteringRepairDetectClipping', () => {
         lpcBlend: 0.1,
       }),
     ).toEqual(base);
+  });
+
+  it('finds a flat top a gain change has carried under clipThreshold, where the threshold count misses it', () => {
+    const detected = masteringRepairDetectClipping({
+      samples: clippedThenAttenuated(),
+      sampleRate: SR,
+    });
+    expect(detected.sampleCount).toBe(0);
+    expect(detected.flatRunCount).toBeGreaterThan(0);
+    expect(detected.flatSampleCount).toBeGreaterThan(0);
+    expect(detected.longestFlatRunSamples).toBeGreaterThan(0);
+    expect(detected.flatLevel).toBeCloseTo(0.25, 2);
+  });
+
+  it('counts an unclipped full-scale sine at the threshold, where the flat-top count does not', () => {
+    // The peak of an unclamped sine is a single smooth curve rather than a
+    // plateau, so nothing here was ever clipped -- yet enough samples sit at
+    // or past the default clipThreshold near each peak to count as "clipped"
+    // by the threshold criterion alone.
+    const detected = masteringRepairDetectClipping({
+      samples: tone(LENGTH, 440, 1.0),
+      sampleRate: SR,
+    });
+    expect(detected.sampleCount).toBeGreaterThan(0);
+    expect(detected.flatRunCount).toBe(0);
+    expect(detected.flatSampleCount).toBe(0);
+    expect(detected.flatLevel).toBe(0);
   });
 });
 

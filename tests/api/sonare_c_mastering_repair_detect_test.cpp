@@ -214,6 +214,41 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
     REQUIRE(detection.longest_run_samples == kLength);
   }
 
+  SECTION("reports the plateaus as flat tops without reading clip_threshold") {
+    // The DC background is a longer bit-identical run than any plateau and sits
+    // 6 dB under the peak, so it is the negative side of the peak window.
+    SonareDeclipConfig config = default_declip_config();
+    config.clip_threshold = 0.4f;
+    SonareClipDetection at_default{};
+    SonareClipDetection at_low{};
+    REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, nullptr,
+                                                    &at_default) == SONARE_OK);
+    REQUIRE(sonare_mastering_repair_detect_clipping(samples.data(), samples.size(), kSr, &config,
+                                                    &at_low) == SONARE_OK);
+    REQUIRE(at_default.flat_run_count == starts.size());
+    REQUIRE(at_default.longest_flat_run_samples == kPlateau);
+    REQUIRE(at_default.flat_sample_count == starts.size() * kPlateau);
+    REQUIRE(at_default.flat_level == 1.0f);
+    REQUIRE(at_low.flat_run_count == at_default.flat_run_count);
+    REQUIRE(at_low.flat_sample_count == at_default.flat_sample_count);
+    REQUIRE(at_low.flat_level == at_default.flat_level);
+  }
+
+  SECTION("still reports the plateaus once a gain change carries them under the threshold") {
+    std::vector<float> attenuated(samples.size());
+    for (size_t i = 0; i < samples.size(); ++i) attenuated[i] = samples[i] * 0.25f;
+
+    SonareClipDetection detection{};
+    REQUIRE(sonare_mastering_repair_detect_clipping(attenuated.data(), attenuated.size(), kSr,
+                                                    nullptr, &detection) == SONARE_OK);
+    REQUIRE(detection.sample_count == 0);
+    REQUIRE(detection.run_count == 0);
+    REQUIRE(detection.flat_run_count == starts.size());
+    REQUIRE(detection.longest_flat_run_samples == kPlateau);
+    REQUIRE(detection.flat_sample_count == starts.size() * kPlateau);
+    REQUIRE(detection.flat_level == 0.25f);
+  }
+
   SECTION("does not read the sample rate, which it still validates") {
     SonareClipDetection at_44100{};
     SonareClipDetection at_48000{};
@@ -233,9 +268,13 @@ TEST_CASE("sonare_mastering_repair_detect_clipping", "[c_api][mastering]") {
                                                     nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     SonareClipDetection detection{};
     detection.run_count = 5;
+    detection.flat_run_count = 7;
+    detection.flat_level = 0.9f;
     REQUIRE(sonare_mastering_repair_detect_clipping(nullptr, 0, kSr, nullptr, &detection) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(detection.run_count == 0);
+    REQUIRE(detection.flat_run_count == 0);
+    REQUIRE(detection.flat_level == 0.0f);
   }
 }
 

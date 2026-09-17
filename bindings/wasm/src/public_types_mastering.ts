@@ -323,6 +323,20 @@ export interface ClipDetection {
   runCount: number;
   /** A run past the 512-sample cap takes the interpolation fallback instead of the solver. */
   longestRunSamples: number;
+  /**
+   * Runs of at least 3 bit-identical samples sitting within 1 dB of the signal's peak. Reads
+   * clipping that survived a later gain change and so no longer reaches `clipThreshold` — the
+   * fields above see none of it. A genuinely flat-topped waveform (a square or pulse train, a
+   * fully limited master) counts here too and cannot be told apart from clipping in the time
+   * domain.
+   */
+  flatRunCount: number;
+  /** Over the counted flat-top runs. */
+  longestFlatRunSamples: number;
+  /** Samples belonging to a counted flat-top run. */
+  flatSampleCount: number;
+  /** The magnitude the counted runs sit at; 0 when there are none. */
+  flatLevel: number;
 }
 
 /**

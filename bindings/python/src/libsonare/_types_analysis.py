@@ -1397,12 +1397,35 @@ class ClipDetection:
     ``sample_fraction`` is ``sample_count`` divided by the input length.
     ``longest_run_samples`` past the 512-sample cap takes the interpolation
     fallback instead of the LPC solver.
+
+    The flat-top fields answer a different question: ``sample_count`` and
+    ``longest_run_samples`` are read against ``clip_threshold``, so they count
+    the apex of any waveform that reaches it and miss material clipped before
+    it was attenuated. The flat-top fields instead count runs of at least
+    three consecutive bit-identical samples within 1 dB of the signal's peak,
+    wherever that peak sits, so they still fire on a clipped tone that was
+    attenuated afterward. A genuinely flat-topped waveform -- a square or
+    pulse train, or a fully limited master -- counts as clipped here too and
+    cannot be told apart from it in the time domain. ``flat_level`` is the
+    magnitude the counted runs sit at, 0 when there are none.
+
+    The reverse also holds, and matters more: anything that moves samples
+    independently erases a real flat top, so a zero here is not proof the
+    material was never clipped. Resampling, lossy coding, and a stereo
+    downmix all do this -- a downmix in particular, since the two channels
+    are rarely bit-identical, so averaging them moves each sample by a
+    different amount and a plateau stops being exactly level. Detect each
+    channel before mixing them down, not after.
     """
 
     sample_count: int
     sample_fraction: float
     run_count: int
     longest_run_samples: int
+    flat_run_count: int
+    longest_flat_run_samples: int
+    flat_sample_count: int
+    flat_level: float
 
 
 @dataclass(frozen=True, slots=True)

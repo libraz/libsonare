@@ -1207,6 +1207,10 @@ def _extract_clip_detection(raw: Any) -> ClipDetection:
         sample_fraction=float(raw.sample_fraction),
         run_count=int(raw.run_count),
         longest_run_samples=int(raw.longest_run_samples),
+        flat_run_count=int(raw.flat_run_count),
+        longest_flat_run_samples=int(raw.longest_flat_run_samples),
+        flat_sample_count=int(raw.flat_sample_count),
+        flat_level=float(raw.flat_level),
     )
 
 
@@ -1235,6 +1239,25 @@ def mastering_repair_detect_clipping(
     ``longest_run_samples`` past 512 is the one field that predicts the repair's
     method rather than its extent: a longer run takes the interpolation fallback
     instead of the LPC solver, for which the three solver arguments do nothing.
+
+    The flat-top fields (``flat_run_count``, ``longest_flat_run_samples``,
+    ``flat_sample_count``, ``flat_level``) answer a different question: they
+    count runs of at least three consecutive bit-identical samples within 1 dB
+    of the signal's peak, wherever that peak sits, rather than samples at or
+    past ``clip_threshold``. That lets them fire on material clipped in one
+    tool and attenuated in another, which leaves nothing at the threshold and
+    so reads as clean on the four fields above. They do NOT read
+    ``clip_threshold`` at all, and a genuinely flat-topped waveform -- a
+    square or pulse train, or a fully limited master -- counts as clipped
+    here too and cannot be told apart from it in the time domain.
+
+    The reverse also holds, and matters more: anything that moves samples
+    independently erases a real flat top, so a zero here is not proof the
+    material was never clipped. Resampling, lossy coding, and a stereo
+    downmix all do this -- a downmix in particular, since the two channels
+    are rarely bit-identical, so averaging them moves each sample by a
+    different amount and a plateau stops being exactly level. Detect each
+    channel before mixing them down, not after.
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).

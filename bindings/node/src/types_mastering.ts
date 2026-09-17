@@ -900,7 +900,20 @@ export interface DeclickStereoResult {
   rightReport: DeclickReport;
 }
 
-/** One channel's clip detection, from {@link masteringRepairDeclipStereo}. Counts runs, not samples. */
+/**
+ * One channel's clip detection, from {@link masteringRepairDeclipStereo}.
+ *
+ * The first four fields count runs and samples at or past `clipThreshold`, so
+ * they count the apex of any waveform that reaches it (a full-scale sine
+ * reports thousands of "clipped" samples having never been clipped) and they
+ * miss material clipped in one tool and attenuated in the next, which leaves
+ * nothing at the threshold. The `flat*` fields answer a different question --
+ * they find runs of at least 3 consecutive bit-identical samples within 1 dB
+ * of the signal's peak, so they survive a gain change and do not fire on a
+ * sine, but a genuinely flat-topped waveform (a square or pulse train, a
+ * fully limited master) counts as clipped here too and cannot be told apart
+ * from real clipping in the time domain.
+ */
 export interface ClipDetection {
   /** Samples at or past the clip threshold. */
   sampleCount: number;
@@ -910,6 +923,14 @@ export interface ClipDetection {
   runCount: number;
   /** A run past the 512-sample cap takes the interpolation fallback instead of the solver. */
   longestRunSamples: number;
+  /** Flat-top runs found: at least 3 consecutive bit-identical samples within 1 dB of the peak. */
+  flatRunCount: number;
+  /** Longest flat-top run, in samples. */
+  longestFlatRunSamples: number;
+  /** Samples belonging to any counted flat-top run. */
+  flatSampleCount: number;
+  /** Magnitude the counted flat-top runs sit at; 0 when there are none. */
+  flatLevel: number;
 }
 
 /**

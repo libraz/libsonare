@@ -1186,12 +1186,29 @@ typedef struct {
   size_t run_count;            // runs of consecutive clipped samples
   size_t longest_run_samples;  // a run past the 512-sample cap takes the
                                // interpolation fallback instead of the solver
+  // Flat tops: runs of bit-identical samples at the signal's peak. These answer
+  // a different question from the four fields above, which are read against
+  // clip_threshold and therefore both count the apex of any waveform that
+  // reaches it and miss material clipped before it was attenuated.
+  size_t flat_run_count;
+  size_t longest_flat_run_samples;
+  size_t flat_sample_count;
+  float flat_level;  // magnitude the counted runs sit at; 0 when there are none
 } SonareClipDetection;
 
 /// @brief Measures clipping without repairing.
 /// @details Counts samples at or past @c config.clip_threshold; no other config
 ///   field reaches the result, and @p sample_rate is validated without being read,
-///   since no field here is a rate.
+///   since no field here is a rate. The flat-top fields do not read
+///   @c clip_threshold at all, so they report clipping that a later gain change
+///   has carried below it -- and, in the other direction, do not fire on an
+///   unclipped waveform whose peak merely reaches the threshold. A genuinely
+///   flat-topped waveform, such as a square or pulse train, counts as clipped
+///   here and cannot be told apart from it in the time domain. The reverse error
+///   matters more: anything that moves samples independently erases a real flat
+///   top, so zero is not proof the material was never clipped. Resampling and
+///   lossy coding do it, and so does a stereo downmix -- detect each channel
+///   before mixing them, not after.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t length,
                                                     int sample_rate,

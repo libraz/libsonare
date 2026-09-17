@@ -944,6 +944,29 @@ export interface MasteringRepairDetectClippingRequest
  * `longestRunSamples` past 512 is the run {@link masteringRepairDeclip} would
  * fill by interpolation rather than with the LPC solver.
  *
+ * `flatRunCount`, `longestFlatRunSamples`, `flatSampleCount` and `flatLevel`
+ * answer a different question from the four fields above: those are read
+ * against `clipThreshold`, so they count the apex of any waveform that
+ * reaches it -- a full-scale sine reports thousands of "clipped" samples
+ * having never been clipped -- and they miss material that was clipped in one
+ * tool and attenuated in the next, which leaves nothing at the threshold. The
+ * flat fields instead find runs of at least 3 consecutive bit-identical
+ * samples within 1 dB of the signal's peak, so they survive a gain change and
+ * do not fire on a sine: measured, a clipped tone attenuated to 0.25 reports
+ * `sampleCount: 0` alongside `flatRunCount: 440` and `flatLevel: 0.25`, while
+ * an unclipped full-scale sine reports `sampleCount: 2820` alongside
+ * `flatRunCount: 0`. A genuinely flat-topped waveform -- a square or pulse
+ * train, a fully limited master -- counts as clipped here too and cannot be
+ * told apart from real clipping in the time domain: the false positive.
+ *
+ * The reverse error is the one to plan around: anything that moves samples
+ * independently erases a real flat top, so `flatRunCount: 0` is not proof the
+ * material was never clipped. Resampling and lossy coding both do this, and so
+ * does averaging a stereo pair into mono before calling this entry -- the two
+ * channels are not bit-identical, so a plateau that is level in each channel
+ * stops being level once they are summed. Detect each channel on its own and
+ * combine the reports; do not detect on a downmix.
+ *
  * @example
  * ```ts
  * const detected = masteringRepairDetectClipping({ samples, sampleRate: 48000 });

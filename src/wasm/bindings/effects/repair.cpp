@@ -445,6 +445,10 @@ val declipDetectionToVal(const mastering::repair::ClipDetection& detected) {
   out.set("sampleFraction", detected.sample_fraction);
   out.set("runCount", detected.run_count);
   out.set("longestRunSamples", detected.longest_run_samples);
+  out.set("flatRunCount", detected.flat_run_count);
+  out.set("longestFlatRunSamples", detected.longest_flat_run_samples);
+  out.set("flatSampleCount", detected.flat_sample_count);
+  out.set("flatLevel", detected.flat_level);
   return out;
 }
 

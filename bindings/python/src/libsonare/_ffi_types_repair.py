@@ -199,6 +199,10 @@ class SonareClipDetection(CStruct):
         ("sample_fraction", ctypes.c_float),
         ("run_count", ctypes.c_size_t),
         ("longest_run_samples", ctypes.c_size_t),
+        ("flat_run_count", ctypes.c_size_t),
+        ("longest_flat_run_samples", ctypes.c_size_t),
+        ("flat_sample_count", ctypes.c_size_t),
+        ("flat_level", ctypes.c_float),
     ]
 
 

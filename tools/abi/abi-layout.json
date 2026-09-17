@@ -631,9 +631,33 @@
         "name": "longest_run_samples",
         "offset": 24,
         "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "flat_run_count",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "longest_flat_run_samples",
+        "offset": 40,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "flat_sample_count",
+        "offset": 48,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "flat_level",
+        "offset": 56,
+        "size": 4
       }
     ],
-    "size": 32
+    "size": 64
   },
   "SonareClipPageRequest": {
     "align": 8,
@@ -1014,34 +1038,34 @@
         "kind": "aggregate",
         "name": "detected",
         "offset": 0,
-        "size": 32
+        "size": 64
       },
       {
         "kind": "unsigned",
         "name": "lpc_reconstructed_runs",
-        "offset": 32,
+        "offset": 64,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "interpolated_runs",
-        "offset": 40,
+        "offset": 72,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "repaired_samples",
-        "offset": 48,
+        "offset": 80,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "linked_runs",
-        "offset": 56,
+        "offset": 88,
         "size": 8
       }
     ],
-    "size": 64
+    "size": 96
   },
   "SonareDeclipStereoResult": {
     "align": 8,
@@ -1068,16 +1092,16 @@
         "kind": "aggregate",
         "name": "left_report",
         "offset": 24,
-        "size": 64
+        "size": 96
       },
       {
         "kind": "aggregate",
         "name": "right_report",
-        "offset": 88,
-        "size": 64
+        "offset": 120,
+        "size": 96
       }
     ],
-    "size": 152
+    "size": 216
   },
   "SonareDecomposeStemsConfig": {
     "align": 8,

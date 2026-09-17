@@ -199,6 +199,10 @@ SonareClipDetection to_c_clip_detection(const sonare::mastering::repair::ClipDet
   c.sample_fraction = cpp.sample_fraction;
   c.run_count = cpp.run_count;
   c.longest_run_samples = cpp.longest_run_samples;
+  c.flat_run_count = cpp.flat_run_count;
+  c.longest_flat_run_samples = cpp.longest_flat_run_samples;
+  c.flat_sample_count = cpp.flat_sample_count;
+  c.flat_level = cpp.flat_level;
   return c;
 }
 

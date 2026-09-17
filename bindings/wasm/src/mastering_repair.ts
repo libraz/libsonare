@@ -1096,6 +1096,23 @@ export function masteringRepairNoiseBandBins(
  *
  * Compare `longestRunSamples` against the 512-sample LPC cap to tell in advance which runs
  * {@link masteringRepairDeclip} would fill by interpolation rather than with the solver.
+ *
+ * `flatRunCount`, `longestFlatRunSamples`, `flatSampleCount` and `flatLevel` answer a different
+ * question from the four fields above: those are read against `clipThreshold`, so they count the
+ * apex of any waveform that reaches it — a full-scale sine reports thousands of "clipped" samples
+ * having never been clipped — and they miss material clipped in one tool and attenuated in the
+ * next, which leaves nothing at the threshold. The flat-top fields instead count runs of at least
+ * 3 consecutive bit-identical samples whose level sits within 1 dB of the signal's peak, so they
+ * catch a clipped-then-attenuated waveform that `sampleCount` reports as clean.
+ *
+ * Two opposite errors follow from what a flat top actually is. A genuinely flat-topped waveform —
+ * a square or pulse train, a fully limited master — counts as clipped here too and cannot be told
+ * apart from clipping in the time domain: a false positive. In the other direction, anything that
+ * moves the two channels' samples independently before this runs erases a real flat top, so a
+ * zero reading is not proof the material was never clipped — a stereo downmix does this, and so
+ * do resampling and lossy coding, because the plateau stops being exactly level once each sample
+ * is nudged on its own. **Detect each channel of a stereo signal separately, before any downmix,
+ * never on the mixed-down result.**
  */
 export function masteringRepairDetectClipping(
   request: MasteringRepairDetectClippingRequest,

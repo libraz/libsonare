@@ -234,6 +234,38 @@ class TestDetectClipping:
         assert detected.run_count == 0
         assert detected.sample_fraction == 0.0
 
+    def test_flat_top_fires_on_clipping_attenuated_after_the_fact(self) -> None:
+        """A tone clipped then turned down leaves nothing at ``clip_threshold``.
+
+        The threshold-based fields therefore read clean, while the flat-top
+        fields still see the runs of bit-identical samples the clipping left
+        behind, wherever they now sit.
+        """
+        attenuated = _clipped() * 0.25
+        detected = libsonare.mastering_repair_detect_clipping(attenuated, SR)
+
+        assert detected.sample_count == 0
+        assert detected.run_count == 0
+        assert detected.flat_run_count > 0
+        assert detected.flat_sample_count > 0
+        assert detected.longest_flat_run_samples > 0
+        assert detected.flat_level == pytest.approx(0.25, rel=1e-5)
+
+    def test_flat_top_does_not_fire_on_an_unclipped_sine_at_full_scale(self) -> None:
+        """A sine reaching full scale trips the threshold fields at its apex.
+
+        Its value keeps changing sample to sample even there, so no run of
+        bit-identical samples forms and the flat-top fields stay at zero.
+        """
+        full_scale = _tone(amp=1.0)
+        detected = libsonare.mastering_repair_detect_clipping(full_scale, SR)
+
+        assert detected.sample_count > 0
+        assert detected.flat_run_count == 0
+        assert detected.flat_sample_count == 0
+        assert detected.longest_flat_run_samples == 0
+        assert detected.flat_level == 0.0
+
 
 class TestDetectCrackle:
     def test_counts_samples_deviating_from_the_local_median(self) -> None:
