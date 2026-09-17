@@ -4362,7 +4362,7 @@
       "status": "native_only",
       "option_status": "pending",
       "reason_kind": "unported",
-      "reason": "the channel strip has no Python route at all, as a command or as an entry point; the native CLI's mix is this command's deprecated alias while the Python mix is a scene mixer, so the shared name points at two capabilities"
+      "reason": "ChannelStrip is core C++ with no C ABI entry, so no binding reaches it and the native CLI runs it only by linking the core directly; porting is a four-surface addition rather than a CLI change. The nearest C entry, sonare_engine_set_track_strip_json, configures a strip inside a running engine graph rather than applying one to a buffer"
     },
     "pitch-correct-timevarying": {
       "classification": "shared",
