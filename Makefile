@@ -217,6 +217,19 @@ lint:
 	cd bindings/node && yarn test:types
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check .
+# The Python half of the type check that `yarn test:types` above already does for
+# Node. CI has run it all along and nothing local did, so a stub that stopped
+# describing its module -- invisible to ruff, to every test, and to the runtime
+# that answers anyway -- reached develop and was found by a push that had not
+# happened yet. Second invocation is the non-vacuity guard, as in CI: a file that
+# must NOT type-check, so a configuration that silently checks nothing fails here
+# instead of certifying everything.
+	cd bindings/python && UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject pyproject.toml \
+		mypy --strict src/libsonare ../../tests/typing/python_smoke.py
+	@cd bindings/python && if UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject pyproject.toml \
+		mypy --strict ../../tests/typing/python_catalog_invalid.py; then \
+		echo "python_catalog_invalid.py unexpectedly passed mypy" >&2; exit 1; \
+	fi
 
 format-check:
 	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 clang-format --dry-run --Werror

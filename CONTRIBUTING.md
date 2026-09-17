@@ -79,6 +79,8 @@ python3 tools/abi/gen_abi_layout.py --check      # needs a C compiler for a gene
 
 `make ci-local` runs all of these together with `make lint`, but it does need Node and rye: it reaches the layout snapshot through rye rather than calling the script directly, and the binding linters through yarn. `make format` applies formatting across every language present, and needs the same tools for the same reason.
 
+`make lint` type-checks both typed surfaces, not only the linters: `tsc` for Node and `mypy --strict` for Python, each with the non-vacuity guard CI uses. **A Python stub is the only place a type error can hide from every other gate** — ruff does not read it, no test imports it, and the module answers at runtime whatever the stub says — so a `.pyi` edited without running this target is unverified.
+
 ## Invariants
 
 These are the rules a reviewer will check a change against, and most of them are things no compiler can catch.
