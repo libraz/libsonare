@@ -238,6 +238,10 @@ _ALIAS_COVERAGE = {
     "time_stretch_ex": ("time_stretch",),
     "pitch_shift_ex": ("pitch_shift",),
     "normalize_rms": ("normalize",),
+    # Same fold one channel count up: node and wasm reach both statistics
+    # through one stereo facade with a mode argument, while python keeps the two
+    # as separate functions the way it does for the mono pair.
+    "normalize_rms_stereo": ("normalize_stereo",),
     "trim_ex": ("trim",),
     "nnls_chroma_ex2": ("nnls_chroma",),
     "analyze_impulse_response_ex": ("analyze_impulse_response",),

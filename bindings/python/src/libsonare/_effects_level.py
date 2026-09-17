@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from ._ffi import SonareNormalizeStereoResult
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -14,6 +15,7 @@ from ._runtime import (
     _check,
     _float_array_result,
     _get_lib,
+    _guard_buffer,
     _int_refusal,
     _narrow_int,
     _out_float_array,
@@ -25,6 +27,7 @@ from ._runtime import (
     _validate_samples,
     _validate_scalar,
 )
+from .types import NormalizeStereoResult
 
 # Trim's own RMS framing, which is not the STFT framing the spectral effects
 # share -- the two happen to agree on 2048/512 and mean different things.
@@ -50,6 +53,73 @@ def _trim_length(value: int, arg_name: str) -> int:
 
 def _validate_trim_options(frame_length: int, hop_length: int) -> tuple[int, int]:
     return _trim_length(frame_length, "frame_length"), _trim_length(hop_length, "hop_length")
+
+
+def _normalize_target(fn_name: str, target_db: float) -> float:
+    """Narrow one normalizer's ``target_db`` to the domain the C entry accepts.
+
+    Refusing here names the function and the argument; the same value reaching
+    the C ABI comes back as a bare ``[4] Invalid parameter``.
+    """
+    target_db = _validate_scalar(fn_name, target_db, "target_db")
+    target_db_c = ctypes.c_float(target_db).value
+    if not np.isfinite(target_db_c):
+        raise SonareValueError(f"{fn_name}: target_db must fit in a finite float32 value")
+    if target_db_c > 0.0:
+        raise SonareValueError(f"{fn_name}: target_db must be at or below 0 dBFS")
+    return target_db_c
+
+
+def _run_normalize_stereo(
+    fn_name: str,
+    symbol: str,
+    left: np.ndarray,
+    right: np.ndarray,
+    sample_rate: int,
+    target_db: float,
+) -> NormalizeStereoResult:
+    """Shared body of the two stereo normalizers, which differ only in symbol.
+
+    The C entry takes ONE length for the pair, so a length mismatch cannot reach
+    it -- it would be read as two buffers of whichever length was passed. This
+    refuses it here instead, which is also where the pair's own precondition
+    (see ``require_stereo_pair``) is expressible on this surface.
+    """
+    target_db_c = _normalize_target(fn_name, target_db)
+    lib = _get_lib()
+    if not hasattr(lib, symbol):
+        raise _unsupported_effect_symbol(symbol)
+    left_array, left_length = _to_c_float_array(left, fn_name=fn_name, arg_name="left")
+    right_array, right_length = _to_c_float_array(right, fn_name=fn_name, arg_name="right")
+    if left_length != right_length:
+        raise SonareValueError(f"{fn_name}: left and right channel lengths must match")
+    out = SonareNormalizeStereoResult()
+    rc = getattr(lib, symbol)(
+        left_array,
+        right_array,
+        _to_c_size_t(left_length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.c_float(target_db_c),
+        ctypes.byref(out),
+    )
+    try:
+        _check(rc)
+        length = int(out.length)
+        return NormalizeStereoResult(
+            left=_float_array_result(out.left, length),
+            right=_float_array_result(out.right, length),
+            length=length,
+            applied_gain_db=float(out.applied_gain_db),
+        )
+    finally:
+        # No dedicated free function for this result: each channel is released
+        # with sonare_free_floats (see SonareNormalizeStereoResult in
+        # sonare_c_effects.h). A refused call leaves `out` at the empty result
+        # the C entry writes before validating, so both pointers are NULL here.
+        if out.left:
+            lib.sonare_free_floats(out.left)
+        if out.right:
+            lib.sonare_free_floats(out.right)
 
 
 def normalize(
@@ -109,12 +179,7 @@ def normalize_rms(
             ``validate=False`` to skip the scan on hot paths.
     """
     _validate_samples("normalize_rms", samples, validate=validate)
-    target_db = _validate_scalar("normalize_rms", target_db, "target_db")
-    target_db_c = ctypes.c_float(target_db).value
-    if not np.isfinite(target_db_c):
-        raise SonareValueError("normalize_rms: target_db must fit in a finite float32 value")
-    if target_db_c > 0.0:
-        raise SonareValueError("normalize_rms: target_db must be at or below 0 dBFS")
+    target_db_c = _normalize_target("normalize_rms", target_db)
     lib = _get_lib()
     if not hasattr(lib, "sonare_normalize_rms"):
         raise _unsupported_effect_symbol("sonare_normalize_rms")
@@ -131,6 +196,110 @@ def normalize_rms(
             )
         )
         return _float_array_result(out, out_length.value)
+
+
+@_guard_buffer("left", "right")
+def normalize_stereo(
+    left: Sequence[float] | list[float] | np.ndarray,
+    right: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    target_db: float = 0.0,
+    *,
+    validate: bool = True,
+) -> NormalizeStereoResult:
+    """Peak-normalize a stereo pair on a gain measured across both channels.
+
+    This is the two-channel counterpart to :func:`normalize`. The peak is taken
+    across the pair and the resulting gain is applied to both channels, so the
+    louder channel reaches ``target_db`` and the other keeps its distance from
+    it. Normalizing each channel on its own gain instead would lift the quieter
+    side until the two peaks matched, which changes the stereo balance rather
+    than the level.
+
+    A pair that cannot be processed together is refused: either channel empty,
+    or the two lengths unequal. The C entry takes one sample rate for the pair,
+    so the two channels cannot disagree on it here. A silent pair comes back
+    untouched with ``applied_gain_db`` at 0.0.
+
+    A legacy library that lacks the native ``sonare_normalize_stereo`` entry
+    point cannot provide the operation, so it raises ``SonareError(NotSupported)``.
+
+    Args:
+        left: Left channel samples.
+        right: Right channel samples, same length as ``left``.
+        sample_rate: Sample rate in Hz, shared by both channels (default 22050).
+        target_db: Finite target peak at or below 0 dBFS (default 0.0).
+        validate: Reject empty / NaN / Inf input (default True). Pass
+            ``validate=False`` to skip the scan on hot paths.
+
+    Returns:
+        :class:`NormalizeStereoResult` with the two normalized channels, their
+        shared length, and the one gain that was applied to both.
+
+    Example:
+        >>> import libsonare
+        >>> quiet = [0.05, -0.05] * 512
+        >>> loud = [0.2, -0.2] * 512
+        >>> result = libsonare.normalize_stereo(quiet, loud, 22050, target_db=-3.0)
+        >>> round(result.applied_gain_db, 2)  # 0.2 -> -3 dBFS
+        10.98
+        >>> round(max(abs(v) for v in result.left), 3)  # the quiet side keeps its distance
+        0.177
+    """
+    return _run_normalize_stereo(
+        "normalize_stereo", "sonare_normalize_stereo", left, right, sample_rate, target_db
+    )
+
+
+@_guard_buffer("left", "right")
+def normalize_rms_stereo(
+    left: Sequence[float] | list[float] | np.ndarray,
+    right: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int = 22050,
+    target_db: float = -20.0,
+    *,
+    validate: bool = True,
+) -> NormalizeStereoResult:
+    """RMS-normalize a stereo pair on a gain measured across both channels.
+
+    This is the two-channel counterpart to :func:`normalize_rms`. The level
+    driven to ``target_db`` is the root mean square over the two channels'
+    samples together -- the quadratic mean of the per-channel figures, not their
+    average -- and the resulting gain goes to both channels, so the stereo
+    balance is preserved for the same reason :func:`normalize_stereo` shares its
+    gain. As in the mono case the result is hard-clipped to ``[-1, 1]``, which an
+    RMS target loud enough to drive peaks past full scale will reach.
+
+    Shares :func:`normalize_stereo`'s pair policy: either channel empty or the
+    two lengths unequal is refused, and a silent pair comes back untouched with
+    ``applied_gain_db`` at 0.0.
+
+    A legacy library that lacks the native ``sonare_normalize_rms_stereo`` entry
+    point cannot provide the operation, so it raises ``SonareError(NotSupported)``.
+
+    Args:
+        left: Left channel samples.
+        right: Right channel samples, same length as ``left``.
+        sample_rate: Sample rate in Hz, shared by both channels (default 22050).
+        target_db: Finite RMS target at or below 0 dBFS (default -20.0).
+        validate: Reject empty / NaN / Inf input (default True). Pass
+            ``validate=False`` to skip the scan on hot paths.
+
+    Returns:
+        :class:`NormalizeStereoResult` with the two normalized channels, their
+        shared length, and the one gain that was applied to both.
+
+    Example:
+        >>> import libsonare
+        >>> quiet = [0.05, -0.05] * 512
+        >>> loud = [0.2, -0.2] * 512
+        >>> result = libsonare.normalize_rms_stereo(quiet, loud, 22050, target_db=-20.0)
+        >>> round(result.applied_gain_db, 2)  # joint RMS 0.1458 (-16.73 dBFS) -> -20
+        -3.27
+    """
+    return _run_normalize_stereo(
+        "normalize_rms_stereo", "sonare_normalize_rms_stereo", left, right, sample_rate, target_db
+    )
 
 
 def trim(

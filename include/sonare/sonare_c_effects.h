@@ -737,6 +737,41 @@ SonareError sonare_trim(const float* samples, size_t length, int sample_rate, fl
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_normalize_rms(const float* samples, size_t length, int sample_rate,
                                  float target_db, float** out, size_t* out_length);
+
+/// @brief A normalized channel pair and the gain that produced it.
+/// @details @c left and @c right are heap-allocated; release each with
+///   @ref sonare_free_floats. @c applied_gain_db is one figure rather than a
+///   pair because the gain is one decision shared by both channels; silence
+///   leaves the pair untouched and reports 0.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+  float applied_gain_db;
+} SonareNormalizeStereoResult;
+
+/// @brief Peak-normalize a stereo pair on a gain measured across both channels.
+/// @details The peak is taken across the pair and the resulting gain goes to
+///   both channels, because a per-channel gain is a balance change: it lifts the
+///   quieter side until the two peaks match, which is not what normalizing a
+///   stereo recording means. The louder channel reaches @p target_db and the
+///   other keeps its level relative to it. Same argument policy as
+///   @ref sonare_normalize -- @p target_db must be finite and <= 0 dBFS -- plus
+///   the pair itself must be processable together: neither channel empty, one
+///   @p length, one @p sample_rate.
+SonareError sonare_normalize_stereo(const float* left, const float* right, size_t length,
+                                    int sample_rate, float target_db,
+                                    SonareNormalizeStereoResult* out);
+
+/// @brief RMS-normalize a stereo pair on a gain measured across both channels.
+/// @details The level driven to @p target_db is the root mean square over the
+///   two channels' samples together -- the quadratic mean of the per-channel
+///   figures, not their average. Hard-clips to [-1, 1] as
+///   @ref sonare_normalize_rms does, and shares @ref sonare_normalize_stereo's
+///   argument and pair policy.
+SonareError sonare_normalize_rms_stereo(const float* left, const float* right, size_t length,
+                                        int sample_rate, float target_db,
+                                        SonareNormalizeStereoResult* out);
 /// @brief Trim leading/trailing silence using an absolute RMS dBFS threshold.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,

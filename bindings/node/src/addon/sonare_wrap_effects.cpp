@@ -1161,6 +1161,51 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::NormalizeStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (!IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "Expected (Float32Array left, Float32Array right, sampleRate, ...)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto left_typed = info[0].As<Napi::Float32Array>();
+  auto right_typed = info[1].As<Napi::Float32Array>();
+  int sr = 0;
+  if (!RequiredIntArg(env, info, 2, "sampleRate", &sr)) return env.Undefined();
+  float target_db = 0.0f;
+  if (!OptionalFloatArg(env, info, 3, "targetDb", 0.0f, &target_db)) return env.Undefined();
+  std::string mode;
+  if (!OptionalStringArg(env, info, 4, "mode", "peak", &mode)) return env.Undefined();
+  if (mode != "peak" && mode != "rms") {
+    Napi::TypeError::New(env, "normalizeStereo: mode must be 'peak' or 'rms'")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  // Re-apply the C-ABI input validation these direct core calls would otherwise
+  // bypass. Per channel, because each carries its own samples.
+  sonare::validate_offline_audio_input(left_typed.Data(), left_typed.ElementLength(), sr);
+  sonare::validate_offline_audio_input(right_typed.Data(), right_typed.ElementLength(), sr);
+  sonare::Audio left =
+      sonare::Audio::from_buffer(left_typed.Data(), left_typed.ElementLength(), sr);
+  sonare::Audio right =
+      sonare::Audio::from_buffer(right_typed.Data(), right_typed.ElementLength(), sr);
+  sonare::NormalizeStereoResult result =
+      mode == "rms" ? sonare::normalize_rms_stereo(left, right, target_db, true)
+                    : sonare::normalize_stereo(left, right, target_db);
+  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
+  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", VecToFloat32(env, left_out));
+  out.Set("right", VecToFloat32(env, right_out));
+  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 namespace {
 
 /// @brief Map a lowercase window string to the SonareWindowType integer.

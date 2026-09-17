@@ -483,6 +483,12 @@ from .analyzer import (
     normalize_rms as normalize_rms,
 )
 from .analyzer import (
+    normalize_rms_stereo as normalize_rms_stereo,
+)
+from .analyzer import (
+    normalize_stereo as normalize_stereo,
+)
+from .analyzer import (
     note_move as note_move,
 )
 from .analyzer import (
@@ -960,6 +966,9 @@ from .types import (
 )
 from .types import (
     NoiseDetection as NoiseDetection,
+)
+from .types import (
+    NormalizeStereoResult as NormalizeStereoResult,
 )
 from .types import (
     NoteSegment as NoteSegment,

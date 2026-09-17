@@ -1175,6 +1175,35 @@ val js_normalize(val samples, const val& sample_rate, const val& target_db) {
   return js_normalize_ex(samples, sample_rate, target_db, "peak");
 }
 
+// Normalizing the two channels separately would lift the quieter one until the
+// peaks matched, which changes the balance rather than the level. The gain is
+// measured across the pair and applied to both. Calls the core directly rather
+// than the C ABI, matching every other wrapper in this file.
+val js_normalize_stereo(val left_samples, val right_samples, const val& sample_rate_val,
+                        const val& target_db_val, const std::string& mode) {
+  if (mode != "peak" && mode != "rms") {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "normalizeStereo: mode must be 'peak' or 'rms'");
+  }
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const float target_db = checkedFloatFromVal(target_db_val, "targetDb");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "normalizeStereo input", true);
+  Audio left = loadValidatedAudio(left_samples, sample_rate);
+  Audio right = loadValidatedAudio(right_samples, sample_rate);
+  const NormalizeStereoResult result = mode == "rms"
+                                           ? normalize_rms_stereo(left, right, target_db, true)
+                                           : normalize_stereo(left, right, target_db);
+  std::vector<float> left_out(result.left.data(), result.left.data() + result.left.size());
+  std::vector<float> right_out(result.right.data(), result.right.data() + result.right.size());
+
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(left_out));
+  out.set("right", vectorToFloat32Array(right_out));
+  out.set("appliedGainDb", result.applied_gain_db);
+  return out;
+}
+
 // Trim silence
 val js_trim_ex(val samples, const val& sample_rate, const val& threshold_db,
                const val& frame_length, const val& hop_length) {
@@ -1348,6 +1377,7 @@ void registerEffectsAudioBindings() {
   function("phaseVocoder", &js_phase_vocoder);
   function("normalize", &js_normalize);
   function("normalizeEx", &js_normalize_ex);
+  function("normalizeStereo", &js_normalize_stereo);
   function("trim", &js_trim);
   function("trimEx", &js_trim_ex);
   function("spectralEdit", &js_spectral_edit);

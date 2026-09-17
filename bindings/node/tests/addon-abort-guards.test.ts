@@ -1557,6 +1557,34 @@ const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'SonareWrap.normalizeStereo',
+    missingRequired: [],
+    // A stateless pair transform, so the C-1 half is the whole assertion. The
+    // sample rate is the argument that matters: 2^32 + 48000 wraps to 48000
+    // under ToInt32, a rate every downstream guard accepts, so the wrap would
+    // be a silent success rather than a refusal by luck.
+    rejectsArgument: [
+      {
+        argument: 'sampleRate',
+        call: () => addon.normalizeStereo(samples(4), samples(4), 'x'),
+      },
+      { argument: 'omitted sampleRate', call: () => addon.normalizeStereo(samples(4), samples(4)) },
+      {
+        argument: 'sampleRate past the signed range',
+        call: () => addon.normalizeStereo(samples(4), samples(4), 2 ** 32 + SR),
+        error: RangeError,
+      },
+      {
+        argument: 'targetDb',
+        call: () => addon.normalizeStereo(samples(4), samples(4), SR, 'x'),
+      },
+      {
+        argument: 'targetDb and mode together',
+        call: () => addon.normalizeStereo(samples(4), samples(4), SR, 'x', 7),
+      },
+    ],
+  },
+  {
     name: 'SonareWrap.segmentSubsegment',
     missingRequired: [],
     // A short argument list short-circuited ahead of every reader, so the call

@@ -55,6 +55,7 @@ from .types import (
     MixResult,
     Mode,
     NoiseDetection,
+    NormalizeStereoResult,
     NoteSegment,
     PanLaw,
     PhaseScopeReport,
@@ -961,6 +962,22 @@ def normalize_rms(
     *,
     validate: bool = True,
 ) -> list[float]: ...
+def normalize_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    target_db: float = 0.0,
+    *,
+    validate: bool = True,
+) -> NormalizeStereoResult: ...
+def normalize_rms_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    target_db: float = -20.0,
+    *,
+    validate: bool = True,
+) -> NormalizeStereoResult: ...
 def mastering(
     samples: FloatSamples,
     sample_rate: int = 22050,

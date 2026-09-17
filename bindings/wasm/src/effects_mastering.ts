@@ -36,6 +36,7 @@ export {
   masteringPlatformNames,
   masteringPresetNames,
   normalize,
+  normalizeStereo,
 } from './mastering_chain';
 export type {
   MasteringAbMatchLoudnessRequest,

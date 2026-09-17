@@ -235,6 +235,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::HpssWithResidual, "hpssWithResidual"));
   exports.Set("phaseVocoder", Napi::Function::New(env, &SonareWrap::PhaseVocoder, "phaseVocoder"));
   exports.Set("normalize", Napi::Function::New(env, &SonareWrap::Normalize, "normalize"));
+  exports.Set("normalizeStereo",
+              Napi::Function::New(env, &SonareWrap::NormalizeStereo, "normalizeStereo"));
   exports.Set("mastering", Napi::Function::New(env, &SonareWrap::Mastering, "mastering"));
   exports.Set("masteringProcess",
               Napi::Function::New(env, &SonareWrap::MasteringProcess, "masteringProcess"));

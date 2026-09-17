@@ -187,6 +187,61 @@ SonareError sonare_normalize_rms(const float* samples, size_t length, int sample
       [target_db](const Audio& a) { return normalize_rms(a, target_db, true); });
 }
 
+namespace {
+
+/// @brief Shared body of the two stereo normalize entries.
+/// @details Both differ only in which level they hand the core, so the
+///          validation, the heap hand-off and the failure shape live here once.
+template <typename Fn>
+SonareError run_normalize_stereo(const float* left, const float* right, size_t length,
+                                 int sample_rate, SonareNormalizeStereoResult* out,
+                                 Fn&& normalize_pair) {
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined before any validation return, so a rejected call hands back an empty
+  // result rather than whatever the caller's stack slot held.
+  *out = SonareNormalizeStereoResult{};
+
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  const auto result = normalize_pair(Audio::from_buffer(left, length, sample_rate),
+                                     Audio::from_buffer(right, length, sample_rate));
+  out->length = result.left.size();
+  out->applied_gain_db = result.applied_gain_db;
+  std::unique_ptr<float[]> left_out(new float[out->length]);
+  std::unique_ptr<float[]> right_out(new float[out->length]);
+  std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));
+  std::memcpy(right_out.get(), result.right.data(), out->length * sizeof(float));
+  out->left = release_array(left_out);
+  out->right = release_array(right_out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+}  // namespace
+
+SonareError sonare_normalize_stereo(const float* left, const float* right, size_t length,
+                                    int sample_rate, float target_db,
+                                    SonareNormalizeStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  return run_normalize_stereo(
+      left, right, length, sample_rate, out,
+      [target_db](const Audio& l, const Audio& r) { return normalize_stereo(l, r, target_db); });
+}
+
+SonareError sonare_normalize_rms_stereo(const float* left, const float* right, size_t length,
+                                        int sample_rate, float target_db,
+                                        SonareNormalizeStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  return run_normalize_stereo(left, right, length, sample_rate, out,
+                              [target_db](const Audio& l, const Audio& r) {
+                                return normalize_rms_stereo(l, r, target_db, true);
+                              });
+}
+
 SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,
                            int frame_length, int hop_length, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;

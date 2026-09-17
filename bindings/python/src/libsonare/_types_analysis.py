@@ -1766,6 +1766,22 @@ class TrimSilenceStereoResult:
 
 
 @dataclass(frozen=True, slots=True)
+class NormalizeStereoResult:
+    """A normalized channel pair and the one gain that produced it.
+
+    ``applied_gain_db`` is a single figure rather than one per channel: the
+    level is measured across both channels and the gain goes to both, which is
+    what keeps the stereo balance intact. A pair that is already silent comes
+    back untouched with the gain at 0.
+    """
+
+    left: list[float]
+    right: list[float]
+    length: int
+    applied_gain_db: float
+
+
+@dataclass(frozen=True, slots=True)
 class MasteringResult:
     """Mastering loudness/true-peak processing result."""
 

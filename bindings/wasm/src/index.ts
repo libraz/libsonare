@@ -185,6 +185,7 @@ export {
   mixingScenePresetNames,
   mixStereo,
   normalize,
+  normalizeStereo,
   noteMove,
   noteStretch,
   percussive,
@@ -427,6 +428,8 @@ export type {
   MasteringChainStereoRequest,
   NormalizeMode,
   NormalizeRequest,
+  NormalizeStereoRequest,
+  NormalizeStereoResult,
 } from './mastering_chain';
 export type { MasteringRequest } from './mastering_core';
 export type {

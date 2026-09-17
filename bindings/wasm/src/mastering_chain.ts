@@ -16,15 +16,18 @@ function requireModule() {
 
 export type NormalizeMode = 'peak' | 'rms';
 
-function resolveNormalizeMode(value: unknown): NormalizeMode {
+// `context` is the calling entry point's name: the refusal is about that
+// caller's argument, so naming a fixed one would send a normalizeStereo user
+// looking at normalize.
+function resolveNormalizeMode(value: unknown, context = 'normalize'): NormalizeMode {
   if (value === undefined) {
     return 'peak';
   }
   if (typeof value !== 'string') {
-    throw new TypeError("normalize: mode must be the string 'peak' or 'rms'");
+    throw new TypeError(`${context}: mode must be the string 'peak' or 'rms'`);
   }
   if (value !== 'peak' && value !== 'rms') {
-    throw new RangeError("normalize: mode must be the string 'peak' or 'rms'");
+    throw new RangeError(`${context}: mode must be the string 'peak' or 'rms'`);
   }
   return value;
 }
@@ -91,6 +94,79 @@ export function normalize(
     request.samples,
     request.sampleRate ?? 22050,
     request.targetDb ?? 0.0,
+    mode,
+  );
+}
+
+export interface NormalizeStereoRequest extends ValidateOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  targetDb?: number;
+  mode?: NormalizeMode;
+}
+
+/** A normalized channel pair and the gain both channels were moved by. */
+export interface NormalizeStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  /**
+   * One figure rather than a pair: the gain is one decision shared by both
+   * channels. Silence leaves the pair untouched and reports 0.
+   */
+  appliedGainDb: number;
+}
+
+/**
+ * Normalize a stereo pair on a gain measured across both channels.
+ *
+ * Normalizing the two channels separately lifts the quieter one until the peaks
+ * match, which changes the balance rather than the level. The level here is read
+ * from the pair and the resulting gain goes to both channels, so the image is
+ * preserved: for `mode: 'peak'` the louder channel reaches `targetDb` and the
+ * other keeps its distance from it; for `mode: 'rms'` the quantity driven to
+ * `targetDb` is the root mean square over both channels' samples together — the
+ * quadratic mean of the per-channel figures, not their average — and the output
+ * is hard-clipped to [-1, 1].
+ *
+ * @param request.left - Left channel samples (float32)
+ * @param request.right - Right channel samples, same length as `left`
+ * @param request.sampleRate - Sample rate in Hz (default: 22050)
+ * @param request.targetDb - Finite target at or below 0 dBFS. Defaults to 0 for
+ *   `mode: 'peak'` and -20 for `mode: 'rms'`, matching the library and the other
+ *   language surfaces.
+ * @param request.mode - `'peak'` (default) or `'rms'`
+ * @returns The normalized pair and the shared gain in dB
+ * @throws RangeError when the two channels differ in length
+ *
+ * @example
+ * ```ts
+ * const { left, right, appliedGainDb } = normalizeStereo({
+ *   left: leftSamples,
+ *   right: rightSamples,
+ *   sampleRate: 44100,
+ *   targetDb: -1,
+ * });
+ * ```
+ */
+export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStereoResult {
+  assertSamples('normalizeStereo', request.left, request.validate !== false);
+  assertSamples('normalizeStereo', request.right, request.validate !== false);
+  if (request.left.length !== request.right.length) {
+    throw new RangeError('Stereo channel lengths must match.');
+  }
+  const mode = resolveNormalizeMode(request.mode, 'normalizeStereo');
+  // Mode-dependent, unlike the mono `normalize` on this surface, which defaults
+  // to 0 dB in both modes. 0 dBFS RMS is not a usable default -- the peaks sit
+  // well above the RMS, so every one of them clips -- and the library and the
+  // other surfaces all default RMS to -20. A new entry point takes the shared
+  // default rather than inheriting a surface-local one.
+  const targetDb = request.targetDb ?? (mode === 'rms' ? -20.0 : 0.0);
+  return requireModule().normalizeStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    targetDb,
     mode,
   );
 }

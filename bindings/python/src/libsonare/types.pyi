@@ -1359,6 +1359,19 @@ class TrimSilenceStereoResult:
         right_range: TrimRange,
     ) -> None: ...
 
+class NormalizeStereoResult:
+    left: list[float]
+    right: list[float]
+    length: int
+    applied_gain_db: float
+    def __init__(
+        self,
+        left: list[float],
+        right: list[float],
+        length: int,
+        applied_gain_db: float,
+    ) -> None: ...
+
 class MasteringResult:
     samples: list[float]
     sample_rate: int

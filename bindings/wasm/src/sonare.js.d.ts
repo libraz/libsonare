@@ -2196,6 +2196,13 @@ export interface SonareModule {
     targetDb: number,
     mode: string,
   ) => Float32Array;
+  normalizeStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    targetDb: number,
+    mode: string,
+  ) => { left: Float32Array; right: Float32Array; appliedGainDb: number };
   mastering: (
     samples: Float32Array,
     sampleRate: number,

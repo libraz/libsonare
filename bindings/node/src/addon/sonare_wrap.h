@@ -144,6 +144,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value HpssWithResidual(const Napi::CallbackInfo& info);
   static Napi::Value PhaseVocoder(const Napi::CallbackInfo& info);
   static Napi::Value Normalize(const Napi::CallbackInfo& info);
+  static Napi::Value NormalizeStereo(const Napi::CallbackInfo& info);
   static Napi::Value Mastering(const Napi::CallbackInfo& info);
   static Napi::Value MasteringProcess(const Napi::CallbackInfo& info);
   static Napi::Value MasteringProcessStereo(const Napi::CallbackInfo& info);

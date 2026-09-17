@@ -220,6 +220,9 @@ from ._types_analysis import (
     NoiseDetection as NoiseDetection,
 )
 from ._types_analysis import (
+    NormalizeStereoResult as NormalizeStereoResult,
+)
+from ._types_analysis import (
     NoteSegment as NoteSegment,
 )
 from ._types_analysis import (

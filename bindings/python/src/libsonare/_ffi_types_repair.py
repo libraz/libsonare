@@ -456,6 +456,23 @@ class SonareTrimSilenceStereoResult(CStruct):
     ]
 
 
+class SonareNormalizeStereoResult(CStruct):
+    """Maps to SonareNormalizeStereoResult in sonare_c_effects.h.
+
+    One ``applied_gain_db`` rather than a per-channel pair: the level is measured
+    across both channels and the one gain goes to both, so the field would
+    otherwise read as though the two could differ. A silent pair comes back
+    untouched with the gain at 0.
+    """
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
+        ("applied_gain_db", ctypes.c_float),
+    ]
+
+
 # SonareSpectralRegionOp.mode values.
 SONARE_SPECTRAL_EDIT_MODE_GAIN = 0
 SONARE_SPECTRAL_EDIT_MODE_ATTENUATE = 1

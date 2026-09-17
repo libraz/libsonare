@@ -1356,6 +1356,29 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
+    # sonare_normalize_stereo -- one length and one sample rate for the pair, and
+    # both channels come back inside the result struct.
+    if hasattr(lib, "sonare_normalize_stereo"):
+        lib.sonare_normalize_stereo.restype = ctypes.c_int32
+        lib.sonare_normalize_stereo.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(SonareNormalizeStereoResult),
+        ]
+    if hasattr(lib, "sonare_normalize_rms_stereo"):
+        lib.sonare_normalize_rms_stereo.restype = ctypes.c_int32
+        lib.sonare_normalize_rms_stereo.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(SonareNormalizeStereoResult),
+        ]
+
     # sonare_trim
     lib.sonare_trim.restype = ctypes.c_int32
     lib.sonare_trim.argtypes = [

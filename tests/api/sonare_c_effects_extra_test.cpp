@@ -25,6 +25,18 @@ std::vector<float> generate_sine(float freq, int sample_rate, float duration) {
   return samples;
 }
 
+float peak_of(const float* data, size_t n) {
+  float peak = 0.0f;
+  for (size_t i = 0; i < n; ++i) peak = std::max(peak, std::abs(data[i]));
+  return peak;
+}
+
+double rms_of(const float* data, size_t n) {
+  double sum_sq = 0.0;
+  for (size_t i = 0; i < n; ++i) sum_sq += static_cast<double>(data[i]) * data[i];
+  return std::sqrt(sum_sq / static_cast<double>(n));
+}
+
 // A small non-negative spectrogram-like matrix [n_features x n_frames] row-major.
 std::vector<float> generate_spectrogram(int n_features, int n_frames) {
   std::vector<float> s(static_cast<size_t>(n_features) * n_frames);
@@ -931,3 +943,104 @@ TEST_CASE("sonare_streaming_retune_prepare rejects a non-finite sample rate",
   sonare_streaming_retune_destroy(retune);
 }
 #endif
+
+TEST_CASE("sonare_normalize_stereo shares one gain between the channels", "[c_api][effects]") {
+  constexpr int sample_rate = 22050;
+  std::vector<float> left = generate_sine(440.0f, sample_rate, 0.25f);
+  std::vector<float> right = left;
+  // 12 dB apart, so a shared gain and a per-channel gain leave the quiet side in
+  // two places that no tolerance can confuse.
+  for (float& value : left) value *= 0.5f;
+  for (float& value : right) value *= 0.125f;
+
+  SonareNormalizeStereoResult result{};
+  REQUIRE(sonare_normalize_stereo(left.data(), right.data(), left.size(), sample_rate, -1.0f,
+                                  &result) == SONARE_OK);
+  REQUIRE(result.length == left.size());
+
+  const float loud_peak = peak_of(result.left, result.length);
+  const float quiet_peak = peak_of(result.right, result.length);
+  REQUIRE(std::abs(20.0f * std::log10(loud_peak) - (-1.0f)) < 0.05f);
+  REQUIRE(std::abs(20.0f * std::log10(loud_peak / quiet_peak) - 12.0f) < 0.05f);
+  REQUIRE(std::abs(result.applied_gain_db - (-1.0f - 20.0f * std::log10(0.5f))) < 0.05f);
+
+  // Control: the mono entry on the same quiet channel lands it at the target,
+  // 12 dB from where the shared gain leaves it, so the assertions above are
+  // about the linkage rather than about normalization having happened.
+  float* alone = nullptr;
+  size_t alone_length = 0;
+  REQUIRE(sonare_normalize(right.data(), right.size(), sample_rate, -1.0f, &alone, &alone_length) ==
+          SONARE_OK);
+  REQUIRE(std::abs(20.0f * std::log10(peak_of(alone, alone_length)) - (-1.0f)) < 0.05f);
+  REQUIRE(quiet_peak < peak_of(alone, alone_length) * 0.5f);
+  sonare_free_floats(alone);
+
+  sonare_free_floats(result.left);
+  sonare_free_floats(result.right);
+}
+
+TEST_CASE("sonare_normalize_rms_stereo measures the pair together", "[c_api][effects]") {
+  constexpr int sample_rate = 22050;
+  std::vector<float> left = generate_sine(440.0f, sample_rate, 0.25f);
+  std::vector<float> right = left;
+  for (float& value : left) value *= 0.5f;
+  for (float& value : right) value *= 0.125f;
+
+  SonareNormalizeStereoResult result{};
+  REQUIRE(sonare_normalize_rms_stereo(left.data(), right.data(), left.size(), sample_rate, -20.0f,
+                                      &result) == SONARE_OK);
+
+  const double l = rms_of(result.left, result.length);
+  const double r = rms_of(result.right, result.length);
+  const double joint_db = 20.0 * std::log10(std::sqrt((l * l + r * r) / 2.0));
+  REQUIRE(std::abs(joint_db - (-20.0)) < 0.05);
+
+  // Control: neither channel sits on the target by itself, so the figure driven
+  // there is the joint one.
+  REQUIRE(std::abs(20.0 * std::log10(l) - (-20.0)) > 1.0);
+  REQUIRE(std::abs(20.0 * std::log10(r) - (-20.0)) > 1.0);
+
+  sonare_free_floats(result.left);
+  sonare_free_floats(result.right);
+}
+
+TEST_CASE("the stereo normalize outputs are cleared before validation", "[c_api][effects]") {
+  const std::vector<float> samples = {0.5f, -0.5f, 0.5f, -0.5f};
+
+  // The C entry carries one length and one sample rate for both channels, so
+  // the pair's length and rate mismatches are not expressible here; they are
+  // covered where they are reachable, on the C++ entry.
+  SonareNormalizeStereoResult result;
+  result.left = non_null_sentinel_float_ptr();
+  result.right = non_null_sentinel_float_ptr();
+  result.length = 99;
+  result.applied_gain_db = 99.0f;
+
+  REQUIRE(sonare_normalize_stereo(nullptr, samples.data(), samples.size(), 22050, -1.0f, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(result.left == nullptr);
+  REQUIRE(result.right == nullptr);
+  REQUIRE(result.length == 0);
+  REQUIRE(result.applied_gain_db == 0.0f);
+
+  REQUIRE(sonare_normalize_stereo(samples.data(), nullptr, samples.size(), 22050, -1.0f, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_normalize_stereo(samples.data(), samples.data(), 0, 22050, -1.0f, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_normalize_stereo(samples.data(), samples.data(), samples.size(), 0, -1.0f,
+                                  &result) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_normalize_stereo(samples.data(), samples.data(), samples.size(), 22050, -1.0f,
+                                  nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  // A positive target with the entry's implicit clipping is the core's refusal,
+  // reached through the boundary rather than short-circuited by it.
+  REQUIRE(sonare_normalize_stereo(samples.data(), samples.data(), samples.size(), 22050, 1.0f,
+                                  &result) != SONARE_OK);
+
+  // Control: the same call with none of those faults succeeds, so the refusals
+  // are about the arguments rather than about the entry point.
+  REQUIRE(sonare_normalize_stereo(samples.data(), samples.data(), samples.size(), 22050, -1.0f,
+                                  &result) == SONARE_OK);
+  REQUIRE(result.left != nullptr);
+  sonare_free_floats(result.left);
+  sonare_free_floats(result.right);
+}
