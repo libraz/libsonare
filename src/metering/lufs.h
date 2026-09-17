@@ -83,16 +83,15 @@ std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config =
 std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config = {});
 
 /// @brief Computes the EBU R128 Loudness Range (LRA) in LU.
-/// @param audio Input audio (mono only). Multi-channel input throws
-///              SonareException with ErrorCode::InvalidParameter; downmix the
-///              signal yourself (or use the multi-channel `lufs_interleaved`
-///              API for a proper BS.1770 loudness measurement) before calling.
+/// @param audio Input audio. `Audio` models one channel, so the buffer is read
+///              as a single channel and there is nothing to reject; for a
+///              multi-channel signal use `lufs_interleaved`, which measures it
+///              per BS.1770 rather than treating the interleave as one channel.
 /// @details Implements the standard EBU Tech 3342 algorithm: K-weighted short-term
 ///          loudness over 3 s windows with 100 ms hops, an absolute gate of -70 LUFS,
 ///          and a relative gate 20 LU below the ungated mean loudness. The LRA is the
 ///          difference between the 95th and 10th percentiles of the gated distribution.
 /// @return Loudness range in LU (0 if insufficient data).
-/// @throws SonareException (InvalidParameter) if @p audio is not mono.
 float ebur128_loudness_range(const Audio& audio);
 
 /// @brief Computes the EBU Tech 3342 Loudness Range (LRA) from short-term loudness blocks.

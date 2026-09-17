@@ -897,16 +897,6 @@ TEST_CASE("ebur128_loudness_range handles empty input", "[meter][lufs]") {
   REQUIRE_THAT(metering::ebur128_loudness_range(audio), WithinAbs(0.0f, 1e-7f));
 }
 
-TEST_CASE("ebur128_loudness_range mono contract guard", "[meter][lufs]") {
-  // The current `Audio` class is hardcoded mono (`channels() == 1`), so the
-  // guard never fires today. Make the contract explicit: if `channels()` ever
-  // returns something other than 1, the function MUST refuse rather than
-  // silently mis-interpret the buffer.
-  const Audio audio = make_sine(0.5f, 48000, 1.0f);
-  REQUIRE(audio.channels() == 1);
-  REQUIRE_NOTHROW(metering::ebur128_loudness_range(audio));
-}
-
 TEST_CASE("dynamic range reports zero for steady signal", "[meter]") {
   const Audio audio = make_sine(0.5f, 48000, 4.0f);
 

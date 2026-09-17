@@ -391,13 +391,6 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
 }
 
 float ebur128_loudness_range(const Audio& audio) {
-  // k_weighted() interprets `audio.data()` as a single mono channel. Reject
-  // multi-channel input explicitly so future Audio subclasses (or callers that
-  // smuggle interleaved buffers via a wrapper) get a clear error instead of a
-  // garbage LRA reading. Today Audio is mono-only so this branch is effectively
-  // a future-proof guard, but it documents the contract at runtime.
-  SONARE_CHECK_MSG(audio.channels() == 1, ErrorCode::InvalidParameter,
-                   "ebur128_loudness_range requires mono input");
   if (audio.empty()) return 0.0f;
 
   // EBU Tech 3342: short-term loudness, 3 s window, 100 ms hop.
