@@ -1,4 +1,4 @@
-.PHONY: all build fixtures release install test-install test test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build fixtures release install test-install test test-cxx test-voicematch test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
@@ -95,16 +95,30 @@ wasm:
 fixtures:
 	python3 tools/scripts/k_weighting_reference.py
 
-test: build fixtures
+# The C++ suite on its own: cmake, a C++17 compiler and python3, with no Node
+# and no rye. A change confined to the core can be verified with this, which is
+# what CONTRIBUTING points a contributor at.
+test-cxx: build fixtures
 	ctest --test-dir $(BUILD_DIR) --output-on-failure --parallel
-	$(MAKE) test-voicematch
 
-# The calibration harness is Python, and nothing else runs it: `tools/` is
-# outside ctest, outside the drift gates, and outside CI, so a harness left to
-# be remembered is a harness that rots. It rides on `test` rather than standing
-# alone for that reason. The cases read only the tracked capture definitions
-# and reference profiles -- no rendered corpus, no plugin, no built library --
-# so they pass on a fresh clone in about half a minute.
+# The full local run. The calibration harness rides on it because `tools/` is
+# outside ctest and outside the drift gates, so a harness left to be remembered
+# is a harness that rots -- but it needs rye, which a contributor touching only
+# C++ has no other reason to install, so its absence reports itself and does not
+# fail a green C++ run. CI covers the harness in a build-free job of its own, so
+# nothing goes unchecked when this branch is taken.
+test: test-cxx
+	@if command -v $(RYE) >/dev/null 2>&1; then \
+	  $(MAKE) test-voicematch; \
+	else \
+	  echo "note: skipping the calibration harness -- $(RYE) is not installed."; \
+	  echo "      run 'make test-voicematch' once it is, or let CI cover it."; \
+	fi
+
+# The cases read only the tracked capture definitions and reference profiles --
+# no rendered corpus, no plugin, no built library -- so they pass on a fresh
+# clone in about half a minute. Invoked directly, this reports a missing rye as
+# the error it is; `test` is the target that treats it as a skip.
 test-voicematch:
 	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest tools/voicematch -q
 
