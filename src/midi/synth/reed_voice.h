@@ -223,11 +223,20 @@ class ReedVoiceCore {
   /// Bell brightness in [0,1] (CC74): opens the bell reflection filter, the clean
   /// timbral brightness control.
   void set_brightness(float bright01) noexcept;
+  /// Mod-matrix offsets on the same two axes (ModDestination::kExcitationForce
+  /// and kExcitationBrightness), in normalized axis units. Held apart from the
+  /// base a patch or a CC set so the two compose rather than overwrite, and
+  /// applied through the same smoothing ramp: this is a control-rate
+  /// destination, not an audio-rate path into the bore.
+  void set_excitation_mod(float force_offset01, float brightness_offset01) noexcept;
   /// Jump the smoothed controls to their targets (seed a fresh note at the
   /// host's current CC positions without an audible glide).
   void snap_reed_control() noexcept;
 
  private:
+  // Recomposes the two smoothing targets from their bases and the offsets.
+  void refresh_excitation_targets() noexcept;
+
   // Bore delay line (host-owned): the travelling-wave air column.
   float* bore_ = nullptr;
   int capacity_ = 0;
@@ -279,6 +288,12 @@ class ReedVoiceCore {
   float ctrl_coeff_ = 1.0f;
   float breath_ctrl_target_ = 0.6f;
   float lp_alpha_target_ = 1.0f;
+  // The normalized bases behind those two targets, and the matrix offsets on
+  // them; the targets are always the composed pair.
+  float breath01_base_ = 0.6f;
+  float bright01_base_ = 0.5f;
+  float force_mod01_ = 0.0f;
+  float bright_mod01_ = 0.0f;
 
   // Breath turbulence (deterministic mouth-pressure noise; 0 = steady breath).
   float breath_noise_ = 0.0f;

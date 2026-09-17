@@ -396,7 +396,7 @@ typedef enum SONARE_ENUM_BASE {
 #define SONARE_SYNTH_BODY_TYPE_COUNT 7
 
 #define SONARE_SYNTH_MOD_SOURCE_COUNT 9
-#define SONARE_SYNTH_MOD_DESTINATION_COUNT 9
+#define SONARE_SYNTH_MOD_DESTINATION_COUNT 12
 
 /* One mod-matrix routing. Source/destination mirror the core ordinals
    directly; a slot with source or destination 0 (none) is disabled. */
@@ -405,10 +405,18 @@ typedef struct {
                       6=keyTrack 7=modWheel 8=random */
   int destination; /* 0=none 1=pitchCents 2=cutoffCents 3=ampGain 4=panUnits
                       5=resonanceQ 6=vibratoDepthCents 7=filterEnvDepth
-                      8=lfo1RateScale. The last four modulate how a stage
+                      8=lfo1RateScale 9=excitationForce 10=excitationPosition
+                      11=excitationBrightness. 7 and 8 modulate how a stage
                       responds rather than what it emits: 7 scales the filter
                       envelope's sweep and 8 retunes LFO1 (one sample late,
-                      LFO1 being a source too). */
+                      LFO1 being a source too). 9-11 reach the physical model's
+                      exciter — bow force / contact point, breath pressure,
+                      bore brightness — and their depth is an offset in the
+                      engine's own normalized [0,1] axis units, the same scale
+                      the live-control CCs drive. Only the continuously-excited
+                      engines (bowed string, brass, reed, flute) act on them;
+                      an engine whose exciter is finished at note-on has
+                      nothing per sample to reach and ignores them. */
   float depth;     /* destination units at full source deflection */
 } SonareSynthModRouting;
 

@@ -53,6 +53,17 @@ enum class ModDestination : int {
   /// source. Applied one sample late, LFO1 being a source as well, which is
   /// what keeps the routing acyclic.
   kLfo1RateScale = 8,
+  /// Excitation strength — bow force on a bowed string, breath pressure on a
+  /// wind bore. Offset in normalized axis units, the same [0,1] scale the
+  /// live-control CCs drive; the engine sums it onto its own value and clamps.
+  kExcitationForce = 9,
+  /// Where the exciter meets the resonator — bow contact point today. Same
+  /// normalized units; an engine whose exciter has no position declines it.
+  kExcitationPosition = 10,
+  /// Exciter-side brightness: the bore's radiating filter on a wind engine.
+  /// Same normalized units. Distinct from kCutoffCents, which moves the
+  /// wrapper filter downstream of the engine rather than the engine itself.
+  kExcitationBrightness = 11,
 };
 
 struct ModRoute {
@@ -76,6 +87,21 @@ struct ModMatrix {
       }
     }
     return true;
+  }
+
+  /// True when at least one live route lands on an excitation axis. The voice
+  /// precomputes this so a matrix that only moves pitch or cutoff never reaches
+  /// an engine's control setters at all.
+  bool has_excitation_route() const noexcept {
+    for (const ModRoute& r : routes) {
+      if (r.source == ModSource::kNone || r.depth == 0.0f) continue;
+      if (r.destination == ModDestination::kExcitationForce ||
+          r.destination == ModDestination::kExcitationPosition ||
+          r.destination == ModDestination::kExcitationBrightness) {
+        return true;
+      }
+    }
+    return false;
   }
 };
 
@@ -101,6 +127,13 @@ struct ModOffsets {
   float vibrato_depth_cents = 0.0f;
   float filter_env_depth = 1.0f;  // multiplicative, clamped to [0, 4]
   float lfo1_rate_scale = 1.0f;   // multiplicative, clamped to [1/16, 16]
+  // Excitation axes: additive offsets on a [0,1] engine axis, so a full-span
+  // offset either way is the most that can mean anything. Additive rather than
+  // multiplicative because several of these axes rest at 0 (polarization, mute,
+  // half-valve), where a 1 + depth * source scale could never move them.
+  float excitation_force = 0.0f;       // additive, clamped to [-1, 1]
+  float excitation_position = 0.0f;    // additive, clamped to [-1, 1]
+  float excitation_brightness = 0.0f;  // additive, clamped to [-1, 1]
 };
 
 /// Evaluates every active route. Allocation-free.

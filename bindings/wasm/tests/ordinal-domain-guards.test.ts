@@ -236,6 +236,9 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
       'vibrato-depth-cents',
       'filter-env-depth',
       'lfo1-rate-scale',
+      'excitation-force',
+      'excitation-position',
+      'excitation-brightness',
     ];
     for (let ordinal = 0; ordinal < destinations.length; ordinal++) {
       expect(toDestination(ordinal), `destination ordinal ${ordinal}`).toBe(
@@ -247,8 +250,12 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
   it('refuses an ordinal past the end of the table instead of rendering silence', () => {
     // 9, 10, 99 and -1 all used to be accepted and render exactly what 'none'
     // renders, so the caller got a working patch with their routing dropped.
+    // The two tables end at different ordinals: 9-11 are the excitation axes on
+    // the destination side and past the end on the source side.
     for (const value of [9, 10, 99, -1]) {
       expectRefusalNaming('mod source', () => fromSource(value));
+    }
+    for (const value of [12, 99, -1]) {
       expectRefusalNaming('mod destination', () => toDestination(value));
     }
   });

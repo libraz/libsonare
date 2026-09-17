@@ -194,6 +194,11 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
       (1.0f - vel_to_breath) * params.breath_pressure + vel_to_breath * vel01, 0.0f, 1.0f);
   breath_target_ = kBreathBase + kBreathSpan * level;
   breath_ctrl_target_ = breath_target_;
+  // A fresh note starts unmodulated; the matrix re-sets the offsets on its
+  // first render, and a voice with no excitation route never touches them.
+  breath01_base_ = level;
+  force_mod01_ = 0.0f;
+  bright_mod01_ = 0.0f;
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
 
   // Reed table from stiffness / opening.
@@ -207,7 +212,8 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   flow_gain_ = std::max(params.flow_gain, 0.0f);
 
   // Bell loop lowpass: brightness -> pole a (y += (1-a)(x - y)).
-  const float a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * kBellPoleSpan;
+  bright01_base_ = std::clamp(params.brightness, 0.0f, 1.0f);
+  const float a = (1.0f - bright01_base_) * kBellPoleSpan;
   lp_alpha_ = 1.0f - a;
   lp_alpha_target_ = lp_alpha_;
   loss_gain_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
@@ -465,14 +471,27 @@ float ReedVoiceCore::reed_resonator(float dp) noexcept {
 }
 
 void ReedVoiceCore::set_breath(float breath01) noexcept {
-  const float b = breath01 < 0.0f ? 0.0f : (breath01 > 1.0f ? 1.0f : breath01);
-  // Map across the reed's stable band only, so CC2 colours the tone toward the
-  // beating edge without ever silencing the reed.
-  breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
+  breath01_base_ = breath01 < 0.0f ? 0.0f : (breath01 > 1.0f ? 1.0f : breath01);
+  refresh_excitation_targets();
 }
 
 void ReedVoiceCore::set_brightness(float bright01) noexcept {
-  const float br = bright01 < 0.0f ? 0.0f : (bright01 > 1.0f ? 1.0f : bright01);
+  bright01_base_ = bright01 < 0.0f ? 0.0f : (bright01 > 1.0f ? 1.0f : bright01);
+  refresh_excitation_targets();
+}
+
+void ReedVoiceCore::set_excitation_mod(float force_offset01, float brightness_offset01) noexcept {
+  force_mod01_ = force_offset01;
+  bright_mod01_ = brightness_offset01;
+  refresh_excitation_targets();
+}
+
+void ReedVoiceCore::refresh_excitation_targets() noexcept {
+  // Map across the reed's stable band only, so the control colours the tone
+  // toward the beating edge without ever silencing the reed.
+  const float b = std::clamp(breath01_base_ + force_mod01_, 0.0f, 1.0f);
+  breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
+  const float br = std::clamp(bright01_base_ + bright_mod01_, 0.0f, 1.0f);
   lp_alpha_target_ = 1.0f - (1.0f - br) * kBellPoleSpan;
 }
 

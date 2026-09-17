@@ -328,6 +328,9 @@ struct NativeSynthVoice : VoiceState {
   float drift_depth_cents = 0.0f;
   // Mod-matrix source constants (precomputed at start).
   bool has_matrix = false;
+  /// At least one live route lands on an excitation axis, so the engine's
+  /// control setters are worth calling each sample.
+  bool has_excitation_routes = false;
   float velocity01 = 0.0f;
   float key_track_octaves = 0.0f;
   float random_value = 0.0f;

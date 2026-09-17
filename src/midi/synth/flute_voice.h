@@ -178,11 +178,21 @@ class FluteVoiceCore {
   /// Vibrato depth in [0,1] (CC1 modulation wheel): the voice-local pitch/level
   /// vibrato. 0 = off (the LFO is skipped).
   void set_vibrato(float depth01) noexcept;
+  /// Mod-matrix offsets on the breath and brightness axes
+  /// (ModDestination::kExcitationForce and kExcitationBrightness), in
+  /// normalized axis units. Held apart from the base a patch or a CC set so the
+  /// two compose rather than overwrite, and applied through the same smoothing
+  /// ramp: this is a control-rate destination, not an audio-rate path into the
+  /// bore.
+  void set_excitation_mod(float force_offset01, float brightness_offset01) noexcept;
   /// Jump the smoothed controls to their targets (seed a fresh note at the host's
   /// current CC positions without an audible glide).
   void snap_flute_control() noexcept;
 
  private:
+  // Recomposes the two smoothing targets from their bases and the offsets.
+  void refresh_excitation_targets() noexcept;
+
   // Bore + jet delay lines (host-owned): the travelling-wave air column and the
   // air-jet convection line.
   float* bore_ = nullptr;
@@ -244,6 +254,12 @@ class FluteVoiceCore {
   float ctrl_coeff_ = 1.0f;
   float breath_ctrl_target_ = 0.55f;
   float lp_alpha_target_ = 1.0f;
+  // The normalized bases behind those two targets, and the matrix offsets on
+  // them; the targets are always the composed pair.
+  float breath01_base_ = 0.55f;
+  float bright01_base_ = 0.5f;
+  float force_mod01_ = 0.0f;
+  float bright_mod01_ = 0.0f;
 
   // Jet turbulence (deterministic multiplicative mouth-pressure noise).
   float breath_noise_ = 0.0f;

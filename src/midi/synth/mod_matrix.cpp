@@ -67,6 +67,15 @@ ModOffsets evaluate_mod_matrix(const ModMatrix& matrix, const ModSourceValues& v
       case ModDestination::kLfo1RateScale:
         out.lfo1_rate_scale *= 1.0f + amount;
         break;
+      case ModDestination::kExcitationForce:
+        out.excitation_force += amount;
+        break;
+      case ModDestination::kExcitationPosition:
+        out.excitation_position += amount;
+        break;
+      case ModDestination::kExcitationBrightness:
+        out.excitation_brightness += amount;
+        break;
     }
   }
   out.amp_gain = std::clamp(out.amp_gain, 0.0f, 4.0f);
@@ -76,6 +85,10 @@ ModOffsets evaluate_mod_matrix(const ModMatrix& matrix, const ModSourceValues& v
   // LFO at whatever phase it stopped on, which reads as a stuck detune rather
   // than as no vibrato.
   out.lfo1_rate_scale = std::clamp(out.lfo1_rate_scale, 0.0625f, 16.0f);
+  // A full-span offset either way; the engine clamps the sum to its own axis.
+  out.excitation_force = std::clamp(out.excitation_force, -1.0f, 1.0f);
+  out.excitation_position = std::clamp(out.excitation_position, -1.0f, 1.0f);
+  out.excitation_brightness = std::clamp(out.excitation_brightness, -1.0f, 1.0f);
   return out;
 }
 

@@ -208,6 +208,11 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
       (1.0f - vel_to_breath) * params.breath_pressure + vel_to_breath * vel01, 0.0f, 1.0f);
   breath_target_ = kBreathBase + kBreathSpan * level;
   breath_ctrl_target_ = breath_target_;
+  // A fresh note starts unmodulated; the matrix re-sets the offsets on its
+  // first render, and a voice with no excitation route never touches them.
+  breath01_base_ = level;
+  force_mod01_ = 0.0f;
+  bright_mod01_ = 0.0f;
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
   mouth_scale_ = kMouthScale;
 
@@ -232,6 +237,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // reflects a touch darker. Live CC74 updates reuse the same mapping via
   // set_brightness(), so remember the bore shape.
   conical_ = params.conical;
+  bright01_base_ = params.brightness;
   lp_alpha_ = bell_alpha_for_brightness(params.brightness);
   lp_alpha_target_ = lp_alpha_;
   loss_gain_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
@@ -500,8 +506,21 @@ float BrassVoiceCore::lip_resonator2(float dp) noexcept {
 }
 
 void BrassVoiceCore::set_breath(float breath01) noexcept {
-  const float b = breath01 < 0.0f ? 0.0f : (breath01 > 1.0f ? 1.0f : breath01);
+  breath01_base_ = breath01 < 0.0f ? 0.0f : (breath01 > 1.0f ? 1.0f : breath01);
+  refresh_excitation_targets();
+}
+
+void BrassVoiceCore::set_excitation_mod(float force_offset01, float brightness_offset01) noexcept {
+  force_mod01_ = force_offset01;
+  bright_mod01_ = brightness_offset01;
+  refresh_excitation_targets();
+}
+
+void BrassVoiceCore::refresh_excitation_targets() noexcept {
+  const float b = std::clamp(breath01_base_ + force_mod01_, 0.0f, 1.0f);
   breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
+  // bell_alpha_for_brightness clamps its own argument.
+  lp_alpha_target_ = bell_alpha_for_brightness(bright01_base_ + bright_mod01_);
 }
 
 float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
@@ -511,7 +530,8 @@ float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
 }
 
 void BrassVoiceCore::set_brightness(float bright01) noexcept {
-  lp_alpha_target_ = bell_alpha_for_brightness(bright01);
+  bright01_base_ = bright01;
+  refresh_excitation_targets();
 }
 
 void BrassVoiceCore::snap_brass_control() noexcept {

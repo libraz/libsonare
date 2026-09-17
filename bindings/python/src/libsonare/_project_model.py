@@ -612,11 +612,18 @@ class SynthModRouting:
     / ``"key-track"`` / ``"mod-wheel"`` / ``"random"``; destinations:
     ``"pitch-cents"`` / ``"cutoff-cents"`` / ``"amp-gain"`` / ``"pan-units"`` /
     ``"resonance-q"`` / ``"vibrato-depth-cents"`` / ``"filter-env-depth"`` /
-    ``"lfo1-rate-scale"``). The last four modulate how a stage responds rather
-    than what it emits: ``"filter-env-depth"`` scales how far the filter
+    ``"lfo1-rate-scale"`` / ``"excitation-force"`` / ``"excitation-position"`` /
+    ``"excitation-brightness"``). Two of them modulate how a stage responds
+    rather than what it emits: ``"filter-env-depth"`` scales how far the filter
     envelope sweeps, and ``"lfo1-rate-scale"`` retunes LFO1 -- one sample late,
-    since LFO1 is also a source.
-    ``depth`` is in destination units at full source deflection.
+    since LFO1 is also a source. The three ``excitation-*`` axes reach the
+    physical model's exciter (bow force and contact point, breath pressure,
+    bore brightness) and only the continuously-excited engines -- bowed string,
+    brass, reed, flute -- act on them; an engine whose exciter is finished at
+    note-on has nothing per sample to reach and ignores them.
+    ``depth`` is in destination units at full source deflection, which for the
+    ``excitation-*`` axes is an offset in the engine's own normalized ``[0, 1]``
+    units -- the same scale the live-control CCs drive.
     """
 
     source: str | int

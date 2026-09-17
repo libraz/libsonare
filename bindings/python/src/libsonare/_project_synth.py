@@ -135,6 +135,9 @@ _SYNTH_MOD_DESTINATIONS = {
     "vibrato-depth-cents": 6,
     "filter-env-depth": 7,
     "lfo1-rate-scale": 8,
+    "excitation-force": 9,
+    "excitation-position": 10,
+    "excitation-brightness": 11,
 }
 SYNTH_ENUM_TABLES = {
     "engine_modes": tuple(_SYNTH_ENGINE_MODES),

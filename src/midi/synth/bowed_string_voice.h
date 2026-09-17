@@ -162,7 +162,8 @@ class BowedStringVoiceCore {
   /// whistly bow through firm, rich, rougher tone.
   void set_bow_force(float force01) noexcept {
     const float f = force01 < 0.0f ? 0.0f : (force01 > 1.0f ? 1.0f : force01);
-    slope_target_ = kBowSlopeMax_ - kBowSlopeSpan_ * f;
+    slope_base_ = kBowSlopeMax_ - kBowSlopeSpan_ * f;
+    refresh_bow_targets();
   }
   /// Bow contact point in [0,1]: 0 = at the bridge (bright, sul ponticello),
   /// 1 = over the fingerboard (soft, sul tasto). Maps to the delay-line split.
@@ -170,7 +171,18 @@ class BowedStringVoiceCore {
     const float p = pos01 < 0.0f ? 0.0f : (pos01 > 1.0f ? 1.0f : pos01);
     // Map across the natural playing range (bridge .. fingerboard); beta at the
     // string's centre is an unusual, non-monotone extreme, so the CC stops short.
-    beta_target_ = 0.02f + 0.23f * p;
+    beta_base_ = 0.02f + kBowPositionSpan_ * p;
+    refresh_bow_targets();
+  }
+  /// Mod-matrix offsets on the same two axes (ModDestination::kExcitationForce
+  /// and kExcitationPosition), in normalized axis units. Held apart from the
+  /// base a patch or a CC set so the two compose rather than overwrite, and
+  /// applied through the same smoothing ramp: this is a control-rate
+  /// destination, not an audio-rate path into the string.
+  void set_excitation_mod(float force_offset01, float position_offset01) noexcept {
+    force_mod01_ = force_offset01;
+    position_mod01_ = position_offset01;
+    refresh_bow_targets();
   }
   /// Jump the smoothed controls to their targets (seed a fresh note at the
   /// host's current CC positions without an audible glide).
@@ -236,6 +248,20 @@ class BowedStringVoiceCore {
   float lp_state_ = 0.0f;
   float loss_gain_ = 0.95f;
 
+  // Bow position across the playing range (bridge .. fingerboard).
+  static constexpr float kBowPositionSpan_ = 0.23f;
+
+  // Composes the patch/CC base with the matrix offset onto the smoothing
+  // targets. Higher force is a lower friction slope, hence the subtraction.
+  void refresh_bow_targets() noexcept {
+    const float slope = slope_base_ - kBowSlopeSpan_ * force_mod01_;
+    slope_target_ = slope < kBowSlopeMax_ - kBowSlopeSpan_
+                        ? kBowSlopeMax_ - kBowSlopeSpan_
+                        : (slope > kBowSlopeMax_ ? kBowSlopeMax_ : slope);
+    const float beta = beta_base_ + kBowPositionSpan_ * position_mod01_;
+    beta_target_ = beta < 0.02f ? 0.02f : (beta > 0.5f ? 0.5f : beta);
+  }
+
   // Bow table (memoryless friction curve): coeff = 1/(|slope*dv + offset|+0.75)^4
   // clamped to 1. slope is set by bow force; offset stays 0 (symmetric bow).
   float bow_slope_ = 3.0f;
@@ -255,6 +281,11 @@ class BowedStringVoiceCore {
   float bow_speed_target_ = 0.1f;
   float slope_target_ = 3.0f;
   float beta_target_ = 0.13f;
+  // The un-modulated halves of the two targets above, plus the matrix offsets.
+  float slope_base_ = 3.0f;
+  float beta_base_ = 0.13f;
+  float force_mod01_ = 0.0f;
+  float position_mod01_ = 0.0f;
   float ctrl_coeff_ = 1.0f;
 
   // Output trim bringing the raw waveguide velocity-wave (a small fraction of

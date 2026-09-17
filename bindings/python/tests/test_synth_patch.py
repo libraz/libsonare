@@ -65,6 +65,9 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "vibrato-depth-cents",
         "filter-env-depth",
         "lfo1-rate-scale",
+        "excitation-force",
+        "excitation-position",
+        "excitation-brightness",
     ),
 }
 

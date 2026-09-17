@@ -527,3 +527,276 @@ TEST_CASE("a converter left at zero renders the voice unchanged", "[midi][synth]
   const std::vector<float> unheld = render_converted(static_cast<float>(kRate), 0.0f, 4096);
   REQUIRE(unheld == plain);
 }
+
+// ---------------------------------------------------------------------------
+// Excitation axes: the matrix reaching the physical model's exciter.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// A sustained brass patch: the bore is continuously excited, so an excitation
+/// axis has something to act on for the whole note.
+NativeSynthPatch brass_excitation_patch() {
+  NativeSynthPatch p;
+  p.mode = sonare::midi::synth::SynthEngineMode::kBrass;
+  p.cutoff_hz = 20000.0f;
+  p.amp_env.attack_ms = 5.0f;
+  p.amp_env.sustain = 1.0f;
+  p.amp_env.release_ms = 100.0f;
+  p.brass.breath_pressure = 0.5f;
+  p.brass.vel_to_breath = 0.0f;  // the patch alone sets the base, not velocity
+  p.brass.brightness = 0.5f;
+  return p;
+}
+
+/// Renders one held note, optionally sending CC @p cc at @p cc_value first.
+std::vector<float> render_note(const NativeSynthPatch& patch, int num_samples, int cc = -1,
+                               uint8_t cc_value = 0) {
+  NativeSynthConfig cfg;
+  cfg.patch = patch;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  if (cc >= 0) {
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, static_cast<uint8_t>(cc),
+                                                                    cc_value)));
+  }
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 53, 100)));
+  return render(synth, num_samples).left;
+}
+
+}  // namespace
+
+TEST_CASE("the excitation axes accumulate and clamp to one axis span", "[midi][synth]") {
+  ModMatrix matrix;
+  matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationForce, 0.4f};
+  matrix.routes[1] = {ModSource::kModWheel, ModDestination::kExcitationPosition, -0.3f};
+  matrix.routes[2] = {ModSource::kLfo1, ModDestination::kExcitationBrightness, 0.5f};
+
+  ModSourceValues values;
+  values.velocity = 0.5f;
+  values.mod_wheel = 1.0f;
+  values.lfo1 = -1.0f;
+
+  const ModOffsets out = evaluate_mod_matrix(matrix, values);
+  REQUIRE(out.excitation_force == 0.2f);
+  REQUIRE(out.excitation_position == -0.3f);
+  REQUIRE(out.excitation_brightness == -0.5f);
+
+  // The clamp is load-bearing rather than declared: two routes that together
+  // ask for three axis spans arrive as one.
+  ModMatrix piled;
+  piled.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationForce, 2.0f};
+  piled.routes[1] = {ModSource::kModWheel, ModDestination::kExcitationForce, 1.0f};
+  ModSourceValues full;
+  full.velocity = 1.0f;
+  full.mod_wheel = 1.0f;
+  const ModOffsets piled_out = evaluate_mod_matrix(piled, full);
+  REQUIRE(piled_out.excitation_force == 1.0f);
+
+  ModMatrix negative;
+  negative.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationBrightness, -4.0f};
+  REQUIRE(evaluate_mod_matrix(negative, full).excitation_brightness == -1.0f);
+}
+
+TEST_CASE("has_excitation_route answers for the live routes only", "[midi][synth]") {
+  REQUIRE_FALSE(ModMatrix{}.has_excitation_route());
+
+  ModMatrix pitch_only;
+  pitch_only.routes[0] = {ModSource::kLfo1, ModDestination::kPitchCents, 50.0f};
+  REQUIRE_FALSE(pitch_only.has_excitation_route());
+  REQUIRE_FALSE(pitch_only.empty());
+
+  ModMatrix dead_depth;
+  dead_depth.routes[0] = {ModSource::kLfo1, ModDestination::kExcitationForce, 0.0f};
+  REQUIRE_FALSE(dead_depth.has_excitation_route());
+
+  ModMatrix no_source;
+  no_source.routes[0] = {ModSource::kNone, ModDestination::kExcitationForce, 0.5f};
+  REQUIRE_FALSE(no_source.has_excitation_route());
+
+  ModMatrix live;
+  live.routes[0] = {ModSource::kLfo1, ModDestination::kPitchCents, 50.0f};
+  live.routes[3] = {ModSource::kVelocity, ModDestination::kExcitationPosition, 0.5f};
+  REQUIRE(live.has_excitation_route());
+}
+
+TEST_CASE("an excitation force route drives the breath axis it names", "[midi][synth]") {
+  // Velocity is constant over the note, so this is a steady offset on the mouth
+  // pressure rather than a moving one: what is measured is the axis arriving.
+  // Loudness is the direction the breath axis has — the same one CC2 is tested
+  // for — so the assertion is on level rather than on spectrum. The bell
+  // brightness deliberately gets no direction assertion below: the linear bore
+  // has no monotone one to give, which is why the CC74 test does not make one
+  // either.
+  const std::vector<float> plain = render_note(brass_excitation_patch(), 24000);
+  REQUIRE(rms(plain, 12000, 24000) > 0.001f);  // the note sounds at all
+
+  NativeSynthPatch harder = brass_excitation_patch();
+  harder.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationForce, 0.5f};
+  NativeSynthPatch softer = brass_excitation_patch();
+  softer.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationForce, -0.4f};
+
+  const float plain_rms = rms(plain, 12000, 24000);
+  const float hard_rms = rms(render_note(harder, 24000), 12000, 24000);
+  const float soft_rms = rms(render_note(softer, 24000), 12000, 24000);
+
+  // Direction, not just difference: the sign of the depth decides which way the
+  // breath moves. A test that only asserted "the buffers differ" would pass on
+  // a routing wired to the wrong axis, or to the right axis backwards.
+  REQUIRE(hard_rms > plain_rms);
+  REQUIRE(soft_rms < plain_rms);
+}
+
+TEST_CASE("the brightness route lands on the axis CC74 drives", "[midi][synth]") {
+  // No direction is claimed for the bell, so the axis is pinned a different
+  // way: the route and the CC must saturate together. If the route landed on
+  // some other quantity, pushing past the CC's ceiling would still move it.
+  const NativeSynthPatch base = brass_excitation_patch();
+  const std::vector<float> at_ceiling = render_note(base, 16000, 74, 127);
+
+  NativeSynthPatch pushed = base;
+  pushed.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationBrightness, 0.6f};
+  REQUIRE(render_note(pushed, 16000, 74, 127) == at_ceiling);
+
+  NativeSynthPatch pulled = base;
+  pulled.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationBrightness,
+                                 -0.6f};
+  const std::vector<float> below = render_note(pulled, 16000, 74, 127);
+  REQUIRE(below != at_ceiling);
+  REQUIRE(std::isfinite(below.back()));
+}
+
+TEST_CASE("the bowed string takes force and contact point apart", "[midi][synth]") {
+  NativeSynthPatch bowed;
+  bowed.mode = sonare::midi::synth::SynthEngineMode::kBowedString;
+  bowed.cutoff_hz = 20000.0f;
+  bowed.amp_env.attack_ms = 5.0f;
+  bowed.amp_env.sustain = 1.0f;
+  bowed.bowed_string.bow_force = 0.5f;
+  bowed.bowed_string.bow_position = 0.13f;
+  bowed.bowed_string.vel_to_speed = 0.0f;
+
+  const std::vector<float> plain = render_note(bowed, 24000);
+  REQUIRE(rms(plain, 12000, 24000) > 0.001f);
+
+  // Position is the one axis with a single engine behind it, so it is asserted
+  // on its own rather than riding along with force.
+  NativeSynthPatch moved = bowed;
+  moved.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationPosition, 0.6f};
+  const std::vector<float> shifted = render_note(moved, 24000);
+  REQUIRE(shifted != plain);
+  REQUIRE(std::isfinite(shifted.back()));
+
+  NativeSynthPatch pressed = bowed;
+  pressed.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationForce, 0.5f};
+  const std::vector<float> harder = render_note(pressed, 24000);
+  REQUIRE(harder != plain);
+  REQUIRE(harder != shifted);  // the two axes are not the same wire
+  REQUIRE(std::isfinite(harder.back()));
+}
+
+TEST_CASE("an excitation route whose source stays at zero changes nothing", "[midi][synth]") {
+  // The regression this guards: the plumbing runs every sample on a voice that
+  // has the route, and never on a voice that has not. If composing an offset of
+  // zero were not exactly the identity, every patch that gained a route would
+  // shift under it before the source ever moved.
+  NativeSynthPatch routed = brass_excitation_patch();
+  routed.mod_matrix.routes[0] = {ModSource::kModWheel, ModDestination::kExcitationForce, 0.8f};
+  routed.mod_matrix.routes[1] = {ModSource::kModWheel, ModDestination::kExcitationBrightness,
+                                 -0.8f};
+
+  // CC1 is never sent, so the mod wheel reads 0 for the whole note.
+  const std::vector<float> with_route = render_note(routed, 16000);
+  const std::vector<float> without = render_note(brass_excitation_patch(), 16000);
+  REQUIRE(with_route == without);
+
+  // Positive control for the comparison above: the same route with a source
+  // that is not zero does move the render, so the equality is a result rather
+  // than a buffer nothing ever wrote to.
+  NativeSynthPatch driven = routed;
+  driven.mod_matrix.routes[0].source = ModSource::kVelocity;
+  driven.mod_matrix.routes[1].source = ModSource::kVelocity;
+  REQUIRE(render_note(driven, 16000) != without);
+}
+
+TEST_CASE("an engine with no exciter to reach declines the axes", "[midi][synth]") {
+  // A subtractive voice has no continuous exciter, so the routes fall through
+  // the dispatch rather than landing somewhere approximate.
+  NativeSynthPatch routed = sine_patch();
+  routed.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationForce, 1.0f};
+  routed.mod_matrix.routes[1] = {ModSource::kVelocity, ModDestination::kExcitationBrightness,
+                                 -1.0f};
+  REQUIRE(render_note(routed, 8000) == render_note(sine_patch(), 8000));
+}
+
+TEST_CASE("an excitation offset composes with the CC on the same axis", "[midi][synth]") {
+  const NativeSynthPatch base = brass_excitation_patch();
+
+  // CC2 puts the breath axis at its ceiling; a positive force offset on top has
+  // nowhere to go, so the engine's own clamp holds and the render is unmoved.
+  const std::vector<float> cc_only = render_note(base, 16000, 2, 127);
+  NativeSynthPatch pushed = base;
+  pushed.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationForce, 0.6f};
+  REQUIRE(render_note(pushed, 16000, 2, 127) == cc_only);
+
+  // Pulling down from the same ceiling does move, which is what says the
+  // equality above is the clamp rather than the offset being dropped.
+  NativeSynthPatch pulled = base;
+  pulled.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationForce, -0.6f};
+  REQUIRE(render_note(pulled, 16000, 2, 127) != cc_only);
+
+  // And the CC still wins over the patch where the matrix is silent: the base
+  // the offset composes with is the CC's, not the patch's.
+  REQUIRE(cc_only != render_note(base, 16000));
+}
+
+TEST_CASE("every engine the dispatch names is actually reached", "[midi][synth]") {
+  // Four engines are wired and two of them are asserted above through their own
+  // axes. This covers the other two, so a wire cannot be declared in the switch
+  // and reach nothing: each engine renders differently with the route than
+  // without, and the four are checked as one population rather than one by one.
+  struct Case {
+    const char* name;
+    sonare::midi::synth::SynthEngineMode mode;
+  };
+  const Case cases[] = {
+      {"reed", sonare::midi::synth::SynthEngineMode::kReed},
+      {"flute", sonare::midi::synth::SynthEngineMode::kFlute},
+  };
+
+  for (const Case& c : cases) {
+    NativeSynthPatch p;
+    p.mode = c.mode;
+    p.cutoff_hz = 20000.0f;
+    p.amp_env.attack_ms = 5.0f;
+    p.amp_env.sustain = 1.0f;
+    if (c.mode == sonare::midi::synth::SynthEngineMode::kReed) {
+      p.reed.vel_to_breath = 0.0f;
+    } else {
+      p.flute.vel_to_breath = 0.0f;
+    }
+
+    INFO(c.name);
+    const std::vector<float> plain = render_note(p, 24000);
+    REQUIRE(rms(plain, 12000, 24000) > 0.0005f);  // the note sounds at all
+
+    NativeSynthPatch forced = p;
+    forced.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationForce, -0.4f};
+    const std::vector<float> by_force = render_note(forced, 24000);
+    REQUIRE(by_force != plain);
+    REQUIRE(std::isfinite(by_force.back()));
+
+    NativeSynthPatch lit = p;
+    lit.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationBrightness, -0.5f};
+    const std::vector<float> by_brightness = render_note(lit, 24000);
+    REQUIRE(by_brightness != plain);
+    REQUIRE(by_brightness != by_force);  // the two axes are not the same wire
+    REQUIRE(std::isfinite(by_brightness.back()));
+
+    // The position axis has no meaning on a wind bore, so it must be declined
+    // rather than folded onto the nearest thing the engine does have.
+    NativeSynthPatch placed = p;
+    placed.mod_matrix.routes[0] = {ModSource::kVelocity, ModDestination::kExcitationPosition, 1.0f};
+    REQUIRE(render_note(placed, 24000) == plain);
+  }
+}

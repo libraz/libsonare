@@ -38,9 +38,18 @@ inline constexpr const char* kBodyTypes[] = {"default",   "none",       "guitar"
 inline constexpr const char* kModSources[] = {"none",      "amp-env",   "filter-env",
                                               "lfo1",      "lfo2",      "velocity",
                                               "key-track", "mod-wheel", "random"};
-inline constexpr const char* kModDestinations[] = {
-    "none",        "pitch-cents",         "cutoff-cents",     "amp-gain",       "pan-units",
-    "resonance-q", "vibrato-depth-cents", "filter-env-depth", "lfo1-rate-scale"};
+inline constexpr const char* kModDestinations[] = {"none",
+                                                   "pitch-cents",
+                                                   "cutoff-cents",
+                                                   "amp-gain",
+                                                   "pan-units",
+                                                   "resonance-q",
+                                                   "vibrato-depth-cents",
+                                                   "filter-env-depth",
+                                                   "lfo1-rate-scale",
+                                                   "excitation-force",
+                                                   "excitation-position",
+                                                   "excitation-brightness"};
 
 static_assert(std::size(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "WASM SynthEngineMode table drifted from C");

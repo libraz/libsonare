@@ -109,6 +109,7 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   const float f0 = note_to_hz(note);
   base_period_ = static_cast<float>(sr) / std::max(1.0f, f0);
   beta_ = std::clamp(params.bow_position, 0.02f, 0.5f);
+  beta_base_ = beta_;
   beta_target_ = beta_;
 
   const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
@@ -124,8 +125,13 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   // Bow force -> friction-curve slope (wider sticking region at higher force).
   const float force = std::clamp(params.bow_force, 0.0f, 1.0f);
   bow_slope_ = kBowSlopeMax_ - kBowSlopeSpan_ * force;
+  slope_base_ = bow_slope_;
   slope_target_ = bow_slope_;
   bow_offset_ = 0.0f;
+  // A fresh note starts unmodulated; the matrix re-sets these on its first
+  // render, and a voice whose matrix has no excitation route never touches them.
+  force_mod01_ = 0.0f;
+  position_mod01_ = 0.0f;
 
   // Live-control smoothing coefficient (per-sample one-pole toward the targets).
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
