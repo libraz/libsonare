@@ -33,6 +33,7 @@ export {
   trimSilence,
   vectorNormalize,
 } from './feature_core';
+export { griffinLim, melToAudio, melToStft, mfccToAudio, mfccToMel } from './feature_inverse';
 export {
   analyzeMelody,
   analyzeSections,
@@ -90,14 +91,9 @@ export {
   chroma,
   chromaCens,
   chromaCqt,
-  griffinLim,
   melDelta,
   melSpectrogram,
-  melToAudio,
-  melToStft,
   mfcc,
-  mfccToAudio,
-  mfccToMel,
   reassignedSpectrogram,
   stft,
   stftDb,

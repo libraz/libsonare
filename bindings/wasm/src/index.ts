@@ -246,6 +246,13 @@ export type {
   VectorNormalizeRequest,
 } from './feature_core';
 export type {
+  GriffinLimRequest,
+  MelToAudioRequest,
+  MelToStftRequest,
+  MfccToAudioRequest,
+  MfccToMelRequest,
+} from './feature_inverse';
+export type {
   AnalyzeMelodyRequest,
   AnalyzeSectionsRequest,
   CqtRequest,
@@ -298,14 +305,9 @@ export type {
 export type {
   BassChromaSpectrogramRequest,
   ChromaSpectrogramRequest,
-  GriffinLimRequest,
   MelDeltaRequest,
   MelSpectrogramRequest,
-  MelToAudioRequest,
-  MelToStftRequest,
   MfccRequest,
-  MfccToAudioRequest,
-  MfccToMelRequest,
   ReassignedSpectrogramRequest,
   SpectrogramRequest,
   TrimRequest,
