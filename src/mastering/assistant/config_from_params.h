@@ -12,6 +12,7 @@
 #include <string>
 
 #include "mastering/api/named_processor.h"
+#include "mastering/api/param_field_tables.h"
 #include "mastering/assistant/audio_profile.h"
 #include "mastering/assistant/platform_targets.h"
 #include "mastering/assistant/suggester.h"
@@ -68,11 +69,11 @@ inline AudioProfileConfig audio_profile_config_from_params(const api::Param* par
     const std::string& key = params[index].key;
     const double value = params[index].value;
     if (key == "nFft" || key == "n_fft") {
-      config.n_fft = static_cast<int>(value);
+      api::assign_int_param(key, value, config.n_fft);
     } else if (key == "hopLength" || key == "hop_length") {
-      config.hop_length = static_cast<int>(value);
+      api::assign_int_param(key, value, config.hop_length);
     } else if (key == "truePeakOversample" || key == "true_peak_oversample") {
-      config.true_peak_oversample = static_cast<int>(value);
+      api::assign_int_param(key, value, config.true_peak_oversample);
     } else if (key == "detectDefects" || key == "detect_defects") {
       config.detect_defects = value != 0.0;
     }

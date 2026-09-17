@@ -113,7 +113,7 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     if (numeric::checked_integral_cast(v, &converted)) return converted;
     // The key is in hand here, so the refusal names the field the caller wrote
     // rather than leaving them to find it among the rest of the bag.
-    detail::reject_integer_param(key, v);
+    reject_integer_param(key, v);
   };
   // ---- repair.declick ----
   if (key == "repair.declick.enabled") {

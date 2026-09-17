@@ -11,6 +11,7 @@
 #include <string>
 
 #include "mastering/api/named_processor.h"
+#include "mastering/api/param_field_tables.h"
 #include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
 
@@ -48,9 +49,9 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
     } else if (key == "enableHighPass" || key == "enable_high_pass") {
       config.enable_high_pass = value != 0.0;
     } else if (key == "nFft" || key == "n_fft") {
-      config.n_fft = static_cast<int>(value);
+      mastering::api::assign_int_param(key, value, config.n_fft);
     } else if (key == "hopLength" || key == "hop_length") {
-      config.hop_length = static_cast<int>(value);
+      mastering::api::assign_int_param(key, value, config.hop_length);
     }
   }
   return config;
@@ -65,9 +66,9 @@ inline TrackProfileConfig track_profile_config_from_params(const mastering::api:
     const std::string& key = params[index].key;
     const double value = params[index].value;
     if (key == "nFft" || key == "n_fft") {
-      config.n_fft = static_cast<int>(value);
+      mastering::api::assign_int_param(key, value, config.n_fft);
     } else if (key == "hopLength" || key == "hop_length") {
-      config.hop_length = static_cast<int>(value);
+      mastering::api::assign_int_param(key, value, config.hop_length);
     } else if (key == "minDurationSec" || key == "min_duration_sec") {
       config.min_duration_sec = static_cast<float>(value);
     }

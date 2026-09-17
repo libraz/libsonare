@@ -241,7 +241,7 @@ inline int i(const ParamMap& params, const char* key, int default_value) {
   if (numeric::checked_integral_cast(it->second, &converted)) return converted;
   // Named, because the key is in hand: a caller who wrote 512.7 needs to know
   // which field refused it and that a whole number is what it wants.
-  detail::reject_integer_param(key, it->second);
+  reject_integer_param(key, it->second);
 }
 
 inline bool b(const ParamMap& params, const char* key, bool default_value) {

@@ -94,19 +94,39 @@ inline bool enum_value_declared(sonare::rt::AliasingControl value) {
   return false;
 }
 
+}  // namespace sonare::mastering::api::detail
+
+namespace sonare::mastering::api {
+
 /// @brief Refuses a flat param value that no integral field can hold, naming
 ///        @p subject and which of the two ways it failed.
 /// @details Fractional and out-of-range are different mistakes and a caller can
 ///   only act on the one they made. One message for both told whoever wrote
 ///   512.7 that their value was out of range, which it is not. Callers holding
 ///   the dotted key pass it as @p subject; the table dispatch, which does not,
-///   names the parameter class instead.
+///   names the parameter class instead. Outside `detail` because the flat param
+///   type is shared beyond this header, and so is the contract.
 [[noreturn]] inline void reject_integer_param(const std::string& subject, double value) {
   if (numeric::finite(value) && std::trunc(value) != value) {
     throw SonareException(ErrorCode::InvalidParameter, subject + " must be a whole number");
   }
   throw SonareException(ErrorCode::InvalidParameter, subject + " is out of range");
 }
+
+/// @brief Assigns a flat param to an integral config field, naming its key.
+/// @details The flat API carries every value as a double, so a bare cast folds
+/// a fraction onto a legal count and saturates an out-of-range value, which a
+/// later bound check then reports as a number the caller never passed.
+template <typename Int>
+inline void assign_int_param(const std::string& subject, double value, Int& dst) {
+  if (!numeric::checked_integral_cast(value, &dst)) {
+    reject_integer_param(subject, value);
+  }
+}
+
+}  // namespace sonare::mastering::api
+
+namespace sonare::mastering::api::detail {
 
 /// @brief Assigns a flat double param value to a typed config member.
 /// @details One overload per storage kind so a table entry needs no type tag.
@@ -137,9 +157,7 @@ inline void assign_field(bool& dst, double value) {
 template <typename Int,
           std::enable_if_t<std::is_integral_v<Int> && !std::is_same_v<Int, bool>, int> = 0>
 inline void assign_field(Int& dst, double value) {
-  if (!numeric::checked_integral_cast(value, &dst)) {
-    reject_integer_param("mastering integer parameter", value);
-  }
+  assign_int_param("mastering integer parameter", value, dst);
 }
 
 template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
