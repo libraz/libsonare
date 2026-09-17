@@ -821,15 +821,46 @@ def _build_parser() -> _ContractArgumentParser:
         help="Track pYIN contour and correct toward a note or scale",
     )
     pitch_tv_p.add_argument("--mode", choices=["midi", "scale"], default="midi")
-    pitch_tv_p.add_argument("--target-midi", type=_finite_float, default=69.0)
-    pitch_tv_p.add_argument("--hop-length", type=int, default=512)
-    pitch_tv_p.add_argument("--scale-root", type=int, default=0)
-    pitch_tv_p.add_argument("--scale-mode-mask", type=lambda value: int(value, 0), default=0xAB5)
+    # The scale arguments are checked whichever target mode is selected, and
+    # --target-midi names a note in both, so each declares its range once rather
+    # than on the branch that happens to read it. --reference-midi stays
+    # undeclared: this path validates the anchor for finiteness only, and a
+    # range here would refuse a value the library accepts.
+    _cli_domain(
+        pitch_tv_p.add_argument("--target-midi", type=_finite_float, default=69.0),
+        minimum=0,
+        maximum=127,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        pitch_tv_p.add_argument("--hop-length", type=int, default=512),
+        minimum=0,
+        exclusive_minimum=True,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        pitch_tv_p.add_argument("--scale-root", type=int, default=0),
+        minimum=0,
+        maximum=11,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        pitch_tv_p.add_argument(
+            "--scale-mode-mask", type=lambda value: int(value, 0), default=0xAB5
+        ),
+        minimum=1,
+        maximum=4095,
+        reject_exit="invalid_parameter",
+    )
     pitch_tv_p.add_argument("--reference-midi", type=_finite_float, default=69.0)
     note_move_p = sub.add_parser("note-move", parents=[common], help="Move one note region")
     note_move_p.add_argument("--onset", type=int, default=0)
     note_move_p.add_argument("--offset", type=int, default=None)
-    note_move_p.add_argument("--target-onset", type=int, default=None)
+    # The library's own default, not None: note_move takes an int, so an absent
+    # --target-onset reached ctypes as None and the command could not run with
+    # its own defaults at all. --offset keeps None because the handler resolves
+    # it to the end of the buffer, which is not a number a default can spell.
+    note_move_p.add_argument("--target-onset", type=int, default=0)
     scale_quantize_p = sub.add_parser(
         "scale-quantize", parents=[stdout_options], help="Quantize one MIDI value to a scale"
     )

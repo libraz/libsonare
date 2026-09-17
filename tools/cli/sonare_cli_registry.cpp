@@ -450,6 +450,29 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          with_domain(number_value("reference-midi", 69.0),
                      between(0.0, 127.0, CliOptionDomainStage::Parameter))},
         {}, nullptr, 1);
+    // The scale arguments are checked whichever target mode is selected, and
+    // --target-midi names a note in both, so all three carry their range here
+    // rather than only on the branch that reads them. --reference-midi is
+    // deliberately unnarrowed: this path validates the anchor for finiteness
+    // only, and declaring a range would refuse a value the library accepts.
+    add_command(commands, "pitch-correct-timevarying", true,
+                {with_domain(string_value("mode", "midi"),
+                             choices_of({"midi", "scale"}, CliOptionDomainStage::Usage)),
+                 with_domain(number_value("target-midi", 69.0),
+                             between(0.0, 127.0, CliOptionDomainStage::Parameter)),
+                 with_domain(int_value("hop-length", 512),
+                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                 with_domain(int_value("scale-root", 0),
+                             between(0.0, 11.0, CliOptionDomainStage::Parameter)),
+                 with_domain(int_value("scale-mode-mask", 0xAB5),
+                             between(1.0, 4095.0, CliOptionDomainStage::Parameter)),
+                 number_value("reference-midi", 69.0), required_output()});
+    // --offset defaults to the end of the buffer rather than to a number, which
+    // no registry default can spell, so it is the null-default overload and the
+    // handler resolves the absent case.
+    add_command(commands, "note-move", true,
+                {int_value("onset", 0), int_value("offset"), int_value("target-onset", 0),
+                 required_output()});
     add_command(commands, "note-stretch", true,
                 {int_value("onset", 0), int_value("offset", 0), number_value("ratio", 1.0),
                  required_output()});

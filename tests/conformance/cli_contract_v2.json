@@ -3284,6 +3284,169 @@
             "rejectExit": "invalid_parameter"
           }
         }
+      ],
+      "pitch-correct-timevarying": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "default": "midi",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "midi",
+              "scale"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-midi",
+          "type": "number",
+          "default": 69,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "scale-mode-mask",
+          "type": "integer",
+          "default": 2741,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusiveMinimum": false,
+            "maximum": 4095,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "scale-root",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 11,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "target-midi",
+          "type": "number",
+          "default": 69,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 127,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        }
+      ],
+      "note-move": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "offset",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "onset",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "target-onset",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
       ]
     }
   },
@@ -3881,18 +4044,14 @@
       "reason": "the channel strip has no Python route at all, as a command or as an entry point; the native CLI's mix is this command's deprecated alias while the Python mix is a scene mixer, so the shared name points at two capabilities"
     },
     "pitch-correct-timevarying": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "the native CLI carries only the fixed-target pitch correction"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "note-move": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "the note editing family is split across the front-ends, with note-stretch native-only and this one Python-only"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "scale-quantize": {
       "classification": "shared",
@@ -11033,6 +11192,395 @@
             "60.4",
             "--reference-midi",
             "200",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "pitch-correct-timevarying",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "default": "midi",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "midi",
+              "scale"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-midi",
+          "type": "number",
+          "default": 69,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "scale-mode-mask",
+          "type": "integer",
+          "default": 2741,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusiveMinimum": false,
+            "maximum": 4095,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "scale-root",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 11,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "target-midi",
+          "type": "number",
+          "default": 69,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 127,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "required": true,
+          "type": "path"
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "length": "integer",
+            "sample_rate": "integer",
+            "duration": "number",
+            "output": "path"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "scale_mode",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--mode",
+            "scale",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "unknown_mode",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--mode",
+            "bogus",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "target_midi_out_of_range",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--target-midi",
+            "500",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "zero_hop_length",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--hop-length",
+            "0",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "scale_root_out_of_range",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--scale-root",
+            "99",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "zero_scale_mode_mask",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--scale-mode-mask",
+            "0",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "note-move",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "offset",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "onset",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "target-onset",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "required": true,
+          "type": "path"
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "length": "integer",
+            "sample_rate": "integer",
+            "duration": "number",
+            "output": "path"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "defaults",
+          "argv": [
+            "note-move",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "success",
+          "argv": [
+            "note-move",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--onset",
+            "1000",
+            "--offset",
+            "3000",
+            "--target-onset",
+            "5000",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "inverted_region",
+          "argv": [
+            "note-move",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--onset",
+            "3000",
+            "--offset",
+            "1000",
+            "--target-onset",
+            "5000",
             "--json"
           ],
           "exit": 3,

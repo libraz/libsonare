@@ -313,6 +313,59 @@
       "exclusiveMinimum": false,
       "maximum": 127.0,
       "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch-correct-timevarying",
+      "option": "mode",
+      "rejectExit": "usage",
+      "choices": [
+        "midi",
+        "scale"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch-correct-timevarying",
+      "option": "target-midi",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": 127.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch-correct-timevarying",
+      "option": "hop-length",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch-correct-timevarying",
+      "option": "scale-root",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": 11.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch-correct-timevarying",
+      "option": "scale-mode-mask",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 1.0,
+      "exclusiveMinimum": false,
+      "maximum": 4095.0,
+      "exclusiveMaximum": false
     }
   ],
   "requiredInvalidParameter": [
@@ -357,11 +410,19 @@
       "option": "output"
     },
     {
+      "command": "note-move",
+      "option": "output"
+    },
+    {
       "command": "note-stretch",
       "option": "output"
     },
     {
       "command": "pitch-correct",
+      "option": "output"
+    },
+    {
+      "command": "pitch-correct-timevarying",
       "option": "output"
     },
     {

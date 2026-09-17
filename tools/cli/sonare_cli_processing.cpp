@@ -172,6 +172,71 @@ int cmd_scale_quantize(const CliArgs& args, const Audio&) {
   return 0;
 }
 
+int cmd_pitch_correct_timevarying(const CliArgs& args, const Audio& audio) {
+  // The contour comes from pYIN at the requested hop and otherwise library
+  // defaults, which is the track the Python CLI measures for the same command.
+  PitchConfig pitch_config;
+  pitch_config.hop_length = args.get_int("hop-length", 512);
+  const editing::pitch_editor::F0Track track =
+      editing::pitch_editor::PyinF0Provider(pitch_config).detect(audio);
+
+  editing::pitch_editor::PitchCorrectionConfig config;
+  config.scale.root = args.get_int("scale-root", 0);
+  config.scale.mode_mask = static_cast<uint16_t>(args.get_int("scale-mode-mask", 0xAB5));
+  // Assigned as given, with no zero-is-default sentinel: this path validates the
+  // anchor for finiteness only, so an explicit 0 anchors the grid at MIDI 0.
+  config.scale.reference_midi = args.get_float("reference-midi", 69.0f);
+
+  const editing::pitch_editor::PitchCorrector corrector(config);
+  const bool to_scale = args.get_string("mode", "midi") == "scale";
+  const Audio result = to_scale ? corrector.correct_to_scale_timevarying(audio, track)
+                                : corrector.correct_to_midi_timevarying(
+                                      audio, track, args.get_float("target-midi", 69.0f));
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("length", result.size())
+        .kv("sample_rate", result.sample_rate())
+        .kv("duration", result.duration())
+        .kv("output", args.output_file)
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+int cmd_note_move(const CliArgs& args, const Audio& audio) {
+  editing::pitch_editor::NoteRegion region;
+  region.onset_sample = args.get_int("onset", 0);
+  // An absent --offset means the rest of the buffer. The editor reads no
+  // sentinel for it, so the resolution happens here, as it does on the other
+  // front-end, rather than arriving as a zero-length region.
+  region.offset_sample =
+      args.has("offset") ? args.get_int("offset", 0) : static_cast<int>(audio.size());
+
+  editing::pitch_editor::NoteEditor editor;
+  Audio result = editor.move_note(audio, region, args.get_int("target-onset", 0));
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("length", result.size())
+        .kv("sample_rate", result.sample_rate())
+        .kv("duration", result.duration())
+        .kv("output", args.output_file)
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
 int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
   editing::pitch_editor::NoteRegion region;
   region.onset_sample = args.get_int("onset", 0);

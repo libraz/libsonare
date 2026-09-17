@@ -170,6 +170,8 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio);
 int cmd_time_stretch(const CliArgs& args, const Audio& audio);
 int cmd_pitch_correct(const CliArgs& args, const Audio& audio);
 int cmd_scale_quantize(const CliArgs& args, const Audio& audio);
+int cmd_pitch_correct_timevarying(const CliArgs& args, const Audio& audio);
+int cmd_note_move(const CliArgs& args, const Audio& audio);
 int cmd_note_stretch(const CliArgs& args, const Audio& audio);
 int cmd_polyphonic_notes(const CliArgs& args, const Audio& audio);
 int cmd_polyphonic_render(const CliArgs& args, const Audio& audio);
