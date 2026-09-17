@@ -1,7 +1,15 @@
 import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes';
-import { getSonareModule } from './module_state';
 import type {
   BuiltinSynthBinding,
+  SampleDesc,
+  SampleZoneDesc,
+  Sf2InstrumentConfig,
+  Sf2ProgramStatus,
+  SynthEnumTables,
+  SynthPatch,
+} from './instrument_types';
+import { getSonareModule } from './module_state';
+import type {
   ProjectAssistSidecar,
   ProjectAutomationCurve,
   ProjectAutomationLaneDesc,
@@ -35,12 +43,6 @@ import type {
   ProjectTrackKind,
   ProjectWarpMapDesc,
   ProjectWarpMode,
-  SampleDesc,
-  SampleZoneDesc,
-  Sf2InstrumentConfig,
-  Sf2ProgramStatus,
-  SynthEnumTables,
-  SynthPatch,
 } from './project_types';
 // A value import, and this module's one import cycle: sample_bank.ts reaches
 // back here for projectModule(). Both directions are read inside function

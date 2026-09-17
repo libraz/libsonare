@@ -23,9 +23,9 @@ import {
   synthPresetNames,
   synthPresetPatch,
 } from '../dist/index.js';
+import type { SynthPatch } from '../src/instrument_types.js';
 import { setSonareModule } from '../src/module_state.js';
 import { synthPatchRoundTripForTest } from '../src/project.js';
-import type { SynthPatch } from '../src/project_types.js';
 
 function peak(audio: Float32Array): number {
   let p = 0;

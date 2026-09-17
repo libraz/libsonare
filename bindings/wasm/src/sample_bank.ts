@@ -1,5 +1,5 @@
+import type { SampleDesc, SampleZoneDesc } from './instrument_types';
 import { projectModule, type WasmSampleBank } from './project_internal';
-import type { SampleDesc, SampleZoneDesc } from './project_types';
 
 /**
  * Host-supplied PCM for the sample synthesis engine: a bank of float samples

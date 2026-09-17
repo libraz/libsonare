@@ -1,3 +1,9 @@
+import type {
+  BuiltinSynthBinding,
+  Sf2InstrumentConfig,
+  Sf2ProgramStatus,
+  SynthPatch,
+} from './instrument_types';
 import {
   assertProjectMidiEvents,
   normalizeSynthInstrument,
@@ -11,7 +17,6 @@ import {
   type WasmProject,
 } from './project_internal';
 import type {
-  BuiltinSynthBinding,
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
   MidiCcLearnOptions,
@@ -53,9 +58,6 @@ import type {
   ProjectTrackKind,
   ProjectWarpMapDesc,
   ProjectWarpMode,
-  Sf2InstrumentConfig,
-  Sf2ProgramStatus,
-  SynthPatch,
 } from './project_types';
 import { assertBoundedInteger } from './validation';
 
