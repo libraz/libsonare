@@ -8,9 +8,11 @@ import { ErrorCode, SonareError } from './errors';
  * `{ validate: false }` only skips this JS-side pre-scan (which raises a
  * `RangeError` naming the exact offending index). It is NOT a way to push
  * non-finite samples into the core: the native layer always re-validates the
- * buffer (see `validate_offline_audio_input` in the C++ core), matching the C
- * ABI / Node / Python surfaces, so an NaN/Inf buffer still throws — just with a
- * generic native message instead of the indexed JS one.
+ * buffer — through `validate_offline_audio_input` for the offline-analysis
+ * entry points, and through the computation's own per-sample guard where a call
+ * takes no sample rate to validate against (the waveform bucket kernels) —
+ * matching the C ABI / Node / Python surfaces, so an NaN/Inf buffer still
+ * throws, just with a generic native message instead of the indexed JS one.
  */
 export interface ValidateOptions {
   validate?: boolean;

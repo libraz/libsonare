@@ -702,7 +702,14 @@ export function meteringSpectrumFrame(
   );
 }
 
-/** Compute per-channel min/max waveform buckets from interleaved audio. */
+/**
+ * Compute per-channel min/max waveform buckets from interleaved audio.
+ *
+ * A non-finite sample is rejected rather than skipped, and `{ validate: false }`
+ * does not change that — it only skips the JS pre-scan that names the offending
+ * index. A bucket whose samples are not finite has no min/max to report, and the
+ * `0`/`0` it would otherwise carry is what a waveform display draws as silence.
+ */
 export function waveformPeaks(request: WaveformPeaksRequest): WaveformPeaksReport;
 export function waveformPeaks(
   samples: Float32Array,
@@ -729,7 +736,12 @@ export function waveformPeaks(
   return requireModule().waveformPeaks(request.samples, request.channels, samplesPerBucket);
 }
 
-/** Compute waveform peak buckets for several zoom levels. */
+/**
+ * Compute waveform peak buckets for several zoom levels.
+ *
+ * Shares {@link waveformPeaks}' bucket kernel, so a non-finite sample is
+ * rejected here on the same rule.
+ */
 export function waveformPeakPyramid(request: WaveformPeakPyramidRequest): WaveformPeaksReport[];
 export function waveformPeakPyramid(
   samples: Float32Array,

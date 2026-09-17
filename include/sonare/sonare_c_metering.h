@@ -287,6 +287,10 @@ typedef struct {
 
 /// @brief Compute per-channel min/max buckets from interleaved audio.
 /// @param samples Interleaved input buffer (may be null only when @p frames is 0).
+///        A non-finite sample is rejected with SONARE_ERROR_INVALID_PARAMETER,
+///        on the same rule every other offline entry point applies: a bucket
+///        whose samples are not finite has no min/max to report, and the 0/0 it
+///        would otherwise carry is indistinguishable from a silent bucket.
 /// @param length Number of sample frames.
 /// @param channels Channel count (must be > 0).
 /// @param samples_per_bucket Bucket width in frames (must be > 0).

@@ -24,22 +24,37 @@
 
 using Catch::Matchers::WithinAbs;
 
-TEST_CASE("waveform peaks ignore non-finite samples in trusted core input", "[meter]") {
-  const std::vector<float> samples{
-      -1.0f,  std::numeric_limits<float>::quiet_NaN(),
-      0.5f,   std::numeric_limits<float>::infinity(),
-      -0.25f, 0.75f,
+TEST_CASE("waveform peaks refuse non-finite samples", "[meter]") {
+  // The pair is the point: a silent bucket and a non-finite one used to arrive
+  // in the same shape (min == max == 0), so a NaN channel drew as silence.
+  const std::vector<float> silent(6, 0.0f);
+  const auto quiet = sonare::metering::waveform_peaks(silent.data(), 3, 2, 2);
+  REQUIRE(quiet.bucket_count == 2);
+  REQUIRE_THAT(quiet.min[0], WithinAbs(0.0f, 0.0f));
+  REQUIRE_THAT(quiet.max[0], WithinAbs(0.0f, 0.0f));
+
+  const std::vector<float> with_nan{
+      -1.0f, std::numeric_limits<float>::quiet_NaN(), 0.5f, 0.25f, -0.25f, 0.75f,
   };
-  const auto result = sonare::metering::waveform_peaks(samples.data(), 3, 2, 2);
-  REQUIRE(result.bucket_count == 2);
-  REQUIRE_THAT(result.min[0], WithinAbs(-1.0f, 0.0f));
-  REQUIRE_THAT(result.max[0], WithinAbs(0.5f, 0.0f));
-  REQUIRE_THAT(result.min[1], WithinAbs(-0.25f, 0.0f));
-  REQUIRE_THAT(result.max[1], WithinAbs(-0.25f, 0.0f));
-  REQUIRE_THAT(result.min[2], WithinAbs(0.0f, 0.0f));
-  REQUIRE_THAT(result.max[2], WithinAbs(0.0f, 0.0f));
-  REQUIRE_THAT(result.min[3], WithinAbs(0.75f, 0.0f));
-  REQUIRE_THAT(result.max[3], WithinAbs(0.75f, 0.0f));
+  REQUIRE_THROWS_AS(sonare::metering::waveform_peaks(with_nan.data(), 3, 2, 2),
+                    sonare::SonareException);
+
+  const std::vector<float> with_inf{
+      -1.0f, 0.5f, 0.25f, std::numeric_limits<float>::infinity(), -0.25f, 0.75f,
+  };
+  REQUIRE_THROWS_AS(sonare::metering::waveform_peaks(with_inf.data(), 3, 2, 2),
+                    sonare::SonareException);
+
+  const std::vector<float> with_neg_inf{
+      -1.0f, 0.5f, -std::numeric_limits<float>::infinity(), 0.25f, -0.25f, 0.75f,
+  };
+  REQUIRE_THROWS_AS(sonare::metering::waveform_peaks(with_neg_inf.data(), 3, 2, 2),
+                    sonare::SonareException);
+
+  // The pyramid shares the bucket kernel; assert it rather than assume it.
+  REQUIRE_THROWS_AS(sonare::metering::waveform_peak_pyramid(with_nan.data(), 3, 2,
+                                                            std::vector<std::size_t>{2, 4}),
+                    sonare::SonareException);
 }
 
 TEST_CASE("waveform peaks bucket count does not overflow for huge bucket sizes", "[meter]") {

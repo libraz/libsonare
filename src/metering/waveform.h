@@ -20,6 +20,12 @@ struct WaveformPeaksResult {
 /// @details `samples` holds `frames * channels` values in channel-interleaved
 ///          order. The result arrays are channel-major:
 ///          `channel * bucket_count + bucket`.
+/// @throws SonareException(InvalidParameter) for a null buffer with
+///         `frames > 0`, a non-positive `channels`, a zero `samples_per_bucket`,
+///         or any non-finite sample -- the same refusal @ref true_peak makes,
+///         and for the same reason: a bucket has no min/max to report once its
+///         samples are not finite, and the 0/0 it would otherwise carry is what
+///         a display draws as silence.
 WaveformPeaksResult waveform_peaks(const float* samples, size_t frames, int channels,
                                    size_t samples_per_bucket);
 

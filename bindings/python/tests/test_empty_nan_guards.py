@@ -222,6 +222,29 @@ class TestValidateFalseStillHasCAbiBackstop:
             mastering_dynamics_compressor(_with_nan(), SR, validate=False)
         assert exc_info.value.code == 4
 
+    def test_waveform_peaks_validate_false(self):
+        # The pair is the point: a silent buffer answers 0/0 and a non-finite
+        # one is refused, so a NaN channel can no longer render as silence.
+        quiet = waveform_peaks(
+            np.zeros(1024, dtype=np.float32), 1, samples_per_bucket=256, validate=False
+        )
+        assert quiet.min[0] == 0.0
+        assert quiet.max[0] == 0.0
+        with pytest.raises(SonareError) as exc_info:
+            waveform_peaks(_with_nan(), 1, samples_per_bucket=256, validate=False)
+        assert exc_info.value.code == 4
+        # SonareValueError subclasses SonareError, so without this the test
+        # would keep passing if the Python preflight started answering instead.
+        assert not isinstance(exc_info.value, SonareValueError)
+
+    def test_waveform_peak_pyramid_validate_false(self):
+        with pytest.raises(SonareError) as exc_info:
+            waveform_peak_pyramid(
+                _with_nan(), 1, samples_per_bucket_levels=[256, 512], validate=False
+            )
+        assert exc_info.value.code == 4
+        assert not isinstance(exc_info.value, SonareValueError)
+
 
 class TestPitchCAbiValidation:
     @pytest.mark.parametrize(

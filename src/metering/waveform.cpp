@@ -1,10 +1,10 @@
 #include "metering/waveform.h"
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::metering {
 namespace {
@@ -15,35 +15,29 @@ struct MinMax {
 };
 
 MinMax minmax_contiguous(const float* samples, size_t count) {
+  if (count == 0) return {0.0f, 0.0f};
   float mn = std::numeric_limits<float>::infinity();
   float mx = -std::numeric_limits<float>::infinity();
-  bool any = false;
   for (size_t index = 0; index < count; ++index) {
     const float v = samples[index];
-    if (!std::isfinite(v)) continue;
     mn = std::min(mn, v);
     mx = std::max(mx, v);
-    any = true;
   }
-  if (!any) return {0.0f, 0.0f};
   return {mn, mx};
 }
 
 MinMax scalar_minmax_interleaved_channel(const float* samples, size_t start, size_t end,
                                          int channels, int channel) {
+  if (start >= end) return {0.0f, 0.0f};
   float mn = std::numeric_limits<float>::infinity();
   float mx = -std::numeric_limits<float>::infinity();
-  bool any = false;
   const size_t channel_count = static_cast<size_t>(channels);
   const size_t ch = static_cast<size_t>(channel);
   for (size_t frame = start; frame < end; ++frame) {
     const float v = samples[frame * channel_count + ch];
-    if (!std::isfinite(v)) continue;
     mn = std::min(mn, v);
     mx = std::max(mx, v);
-    any = true;
   }
-  if (!any) return {0.0f, 0.0f};
   return {mn, mx};
 }
 
@@ -54,6 +48,14 @@ WaveformPeaksResult waveform_peaks(const float* samples, size_t frames, int chan
   SONARE_CHECK(samples != nullptr || frames == 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(channels > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(samples_per_bucket > 0, ErrorCode::InvalidParameter);
+  const size_t channel_count = static_cast<size_t>(channels);
+  SONARE_CHECK(frames <= std::numeric_limits<size_t>::max() / channel_count,
+               ErrorCode::InvalidParameter);
+  // A bucket whose samples are not finite has no min/max to report, and the 0/0
+  // it would otherwise carry is what a display draws as silence.
+  SONARE_CHECK_MSG(numeric::all_finite(samples, frames * channel_count),
+                   ErrorCode::InvalidParameter,
+                   "waveform_peaks: audio contains a non-finite sample");
 
   WaveformPeaksResult result;
   result.channels = channels;

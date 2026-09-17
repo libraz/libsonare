@@ -640,18 +640,27 @@ TEST_CASE("sonare waveform peaks bucket interleaved audio", "[c_api][meter]") {
   REQUIRE(sonare_waveform_peaks(samples.data(), 5, 0, 2, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
+  // A silent buffer and a non-finite one used to come back identically
+  // (min == max == 0), which is what let a NaN channel render as silence.
+  // Assert the two apart rather than only the refusal.
+  const std::vector<float> silent(6, 0.0f);
+  REQUIRE(sonare_waveform_peaks(silent.data(), 3, 2, 2, &result) == SONARE_OK);
+  REQUIRE(result.bucket_count == 2);
+  REQUIRE(result.min[0] == Catch::Approx(0.0f));
+  REQUIRE(result.max[0] == Catch::Approx(0.0f));
+  sonare_free_waveform_peaks_result(&result);
+
   const std::vector<float> non_finite_samples{
       -1.0f,  std::numeric_limits<float>::quiet_NaN(),
       0.5f,   std::numeric_limits<float>::infinity(),
       -0.25f, 0.75f,
   };
-  REQUIRE(sonare_waveform_peaks(non_finite_samples.data(), 3, 2, 2, &result) == SONARE_OK);
-  REQUIRE(result.bucket_count == 2);
-  REQUIRE(result.min[0] == Catch::Approx(-1.0f));
-  REQUIRE(result.max[0] == Catch::Approx(0.5f));
-  REQUIRE(result.min[2] == Catch::Approx(0.0f));
-  REQUIRE(result.max[2] == Catch::Approx(0.0f));
-  sonare_free_waveform_peaks_result(&result);
+  REQUIRE(sonare_waveform_peaks(non_finite_samples.data(), 3, 2, 2, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  const size_t pyramid_levels[] = {2, 4};
+  SonareWaveformPeakPyramidResult pyramid{};
+  REQUIRE(sonare_waveform_peak_pyramid(non_finite_samples.data(), 3, 2, pyramid_levels, 2,
+                                       &pyramid) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("sonare waveform peak pyramid returns requested levels", "[c_api][meter]") {

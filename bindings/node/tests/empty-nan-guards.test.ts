@@ -17,6 +17,8 @@ import {
   tempogramRatio,
   voiceChange,
   voiceChangeRealtime,
+  waveformPeakPyramid,
+  waveformPeaks,
 } from '../src/index.js';
 
 const SR = 22050;
@@ -181,6 +183,22 @@ describe('validate=false still has the C-ABI NaN backstop (Node)', () => {
   });
   it('masteringDynamicsCompressor with validate=false rejects NaN in the C-ABI', () => {
     expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false })).toThrow();
+  });
+  it('waveformPeaks with validate=false rejects NaN rather than drawing it as silence', () => {
+    // The pair is what matters: a silent buffer answers 0/0 and a non-finite
+    // one is refused, so the two cannot arrive in the same shape.
+    const quiet = waveformPeaks(new Float32Array(1024), 1, {
+      samplesPerBucket: 256,
+      validate: false,
+    });
+    expect(quiet.min[0]).toBe(0);
+    expect(quiet.max[0]).toBe(0);
+    expect(() => waveformPeaks(withNaN(), 1, { samplesPerBucket: 256, validate: false })).toThrow();
+  });
+  it('waveformPeakPyramid with validate=false rejects NaN in the C-ABI', () => {
+    expect(() =>
+      waveformPeakPyramid(withNaN(), 1, { samplesPerBucketLevels: [256, 512], validate: false }),
+    ).toThrow();
   });
 });
 

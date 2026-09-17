@@ -915,6 +915,12 @@ def waveform_peaks(
     The returned ``min`` and ``max`` arrays are channel-major:
     ``channel * bucket_count + bucket``.
 
+    A non-finite sample is rejected rather than skipped, and ``validate=False``
+    does not change that -- it only skips the Python pre-scan that names the
+    offending index. A bucket whose samples are not finite has no min/max to
+    report, and the ``0``/``0`` it would otherwise carry is what a waveform
+    display draws as silence.
+
     Args:
         samples: Interleaved input buffer of ``frames * channels`` values.
         channels: Channel count (must be > 0).
@@ -950,6 +956,9 @@ def waveform_peak_pyramid(
     validate: bool = True,
 ) -> list[WaveformPeaksReport]:
     """Compute waveform peak buckets for several zoom levels.
+
+    Shares :func:`waveform_peaks`' bucket kernel, so a non-finite sample is
+    rejected here on the same rule.
 
     Args:
         samples: Interleaved input buffer of ``frames * channels`` values.

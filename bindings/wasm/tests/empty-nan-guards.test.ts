@@ -26,6 +26,8 @@ import {
   tempogramRatio,
   voiceChange,
   voiceChangeRealtime,
+  waveformPeakPyramid,
+  waveformPeaks,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
 
@@ -191,6 +193,23 @@ describe('validate=false skips the JS index scan but the native core still rejec
       /samples contains NaN or Inf at index/,
     );
     expect(() => masteringDynamicsCompressor(withNaN(), SR, { validate: false })).toThrow();
+  });
+  it('waveformPeaks with validate=false rejects NaN rather than drawing it as silence', () => {
+    // These bindings call the C++ core directly rather than the C ABI, so the
+    // guard they inherit is the bucket kernel's own. The pair is what matters:
+    // a silent buffer answers 0/0 and a non-finite one is refused.
+    const quiet = waveformPeaks(new Float32Array(1024), 1, {
+      samplesPerBucket: 256,
+      validate: false,
+    });
+    expect(quiet.min[0]).toBe(0);
+    expect(quiet.max[0]).toBe(0);
+    expect(() => waveformPeaks(withNaN(), 1, { samplesPerBucket: 256, validate: false })).toThrow();
+  });
+  it('waveformPeakPyramid with validate=false still throws natively on NaN', () => {
+    expect(() =>
+      waveformPeakPyramid(withNaN(), 1, { samplesPerBucketLevels: [256, 512], validate: false }),
+    ).toThrow();
   });
 });
 
