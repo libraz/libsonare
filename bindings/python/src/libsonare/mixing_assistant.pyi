@@ -5,6 +5,12 @@ import numpy as np
 
 FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
 
+# The assistant's own option table, declared because the CLI reads it rather
+# than restating the accepted set: a stub that omits it makes the import an
+# attribute error under --strict while the module answers at runtime.
+_PARAM_KEYS: dict[str, str]
+_INTEGER_PARAMS: frozenset[str]
+
 class MixTrackInput(NamedTuple):
     track_id: str
     left: FloatSamples
