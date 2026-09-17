@@ -366,7 +366,7 @@ export class Audio {
     return noteStretchFn(this.data(), this.getSampleRate(), options);
   }
 
-  noteMove(options: import('./types_mastering.js').NoteMoveOptions = {}): Float32Array {
+  noteMove(options: import('./types_notes.js').NoteMoveOptions = {}): Float32Array {
     return noteMoveFn(this.data(), this.getSampleRate(), options);
   }
 

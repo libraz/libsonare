@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { EngineAutomationPointCurve, EngineTrackMonitorMode } from '../src/types_engine.js';
-import type { PanLawInput } from '../src/types_mastering.js';
+import type { PanLawInput } from '../src/types_mixing.js';
 import type { ProjectAutomationCurve } from '../src/types_project.js';
 import {
   AUTOMATION_CURVE_VALUES,

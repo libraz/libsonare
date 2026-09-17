@@ -1,5 +1,5 @@
 import type { TimeSignature } from './types_analysis.js';
-import type { SendTiming } from './types_mastering.js';
+import type { SendTiming } from './types_mixing.js';
 import type { ProjectWarpAnchor, WarpMode } from './types_project.js';
 // Type-only, so the erased import adds no runtime edge to the coercion module.
 import type { AUTOMATION_CURVE_VALUES } from './value_coercion.js';

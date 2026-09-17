@@ -1,10 +1,171 @@
 /**
- * Mixing-assistant types.
+ * Mixing types: the mixer's own pan, metering and automation vocabulary,
+ * and the assistant that suggests settings over it.
  *
  * The assistant suggests; it does not apply. Every entry point returns
  * parameters and never audio, so realising a suggestion is the caller's own
  * second step through {@link Mixer.fromSceneJson}.
  */
+
+export type PanMode =
+  | 'balance'
+  | 'pan'
+  | 'stereoPan'
+  | 'stereo-pan'
+  | 'dualPan'
+  | 'dual-pan'
+  | number;
+
+/**
+ * Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
+ * `azimuth`/`divergence`/`lfe`; `elevation`/`distance` are reserved. All fields
+ * are optional and default to a centered point source.
+ */
+export interface SurroundPan {
+  /** -180..180 deg, 0 = front-center, positive = right. */
+  azimuth?: number;
+  /** Reserved (no height beds in phase 1). */
+  elevation?: number;
+  /** 0 = point source, 1 = spread across the front. */
+  divergence?: number;
+  /** 0..1 scalar send into the LFE plane. */
+  lfe?: number;
+  /** Reserved (focus/spread), defaults to 1. */
+  distance?: number;
+}
+
+/**
+ * Per-strip options for {@link mixStereo}. Each field is either one value for
+ * every strip or an array with one entry per strip; an array shorter than the
+ * strip list leaves the remaining strips at their defaults.
+ *
+ * Every field applies independently of the others. In particular `pan` and
+ * `panMode` are separate requests: `panMode` alone selects the mode at the
+ * strip's centre position, and `pan` alone moves the position while keeping the
+ * strip's current mode, the same way `Mixer.setPan(strip, pan, panMode?)` does.
+ */
+export interface MixOptions {
+  inputTrimDb?: number | number[];
+  faderDb?: number | number[];
+  pan?: number | number[];
+  panMode?: PanMode | PanMode[];
+  width?: number | number[];
+  muted?: boolean | boolean[];
+}
+
+export interface MixMeterSnapshot {
+  peakDbL: number;
+  peakDbR: number;
+  rmsDbL: number;
+  rmsDbR: number;
+  correlation: number;
+  monoCompatWidth: number;
+  monoCompatPeak: number;
+  monoCompatSideRms: number;
+  likelyMonoCompatible: boolean;
+  momentaryLufs: number;
+  shortTermLufs: number;
+  integratedLufs: number;
+  gainReductionDb: number;
+  /**
+   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
+   * polyphase reconstruction at 4x. A streaming measurement: the centered
+   * reconstruction stencil needs a few future samples a realtime path does not
+   * have, so each block's last samples read marginally low (about 0.1 dB across
+   * 64..8192-sample blocks on a near-Nyquist tone, always under-reading). Use
+   * `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   */
+  truePeakDbL: number;
+  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
+  truePeakDbR: number;
+  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbL}. */
+  maxTruePeakDb: number;
+  seq: number;
+  /** Number of valid surround planes (5.1/7.1); 0 before the meter sees audio. */
+  channelCount: number;
+  /** Per-plane peak dB, length channelCount; [0]/[1] mirror peakDbL/peakDbR. */
+  peakDb: number[];
+  /** Per-plane RMS dB, length channelCount; [0]/[1] mirror rmsDbL/rmsDbR. */
+  rmsDb: number[];
+  /**
+   * Per-plane true-peak dB, length channelCount; [0]/[1] mirror
+   * {@link truePeakDbL}/R and carry the same streaming caveat.
+   */
+  truePeakDb: number[];
+}
+
+export interface MixResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  meters: MixMeterSnapshot[];
+}
+
+/** Mixed stereo master returned by {@link Mixer.processStereo}. */
+
+export interface MixerProcessResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+}
+
+/**
+ * Interpolation curve for scheduled automation events
+ * (see {@link Mixer.scheduleInsertAutomation}).
+ */
+export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 's-curve';
+
+/**
+ * Pan law applied by a strip's panner. On mono strips it changes the centre
+ * gain; on stereo strips in Balance mode the centre remains unity and it
+ * changes only the far-channel taper. Mapped to C enum ints
+ * `0=const3dB`, `1=const4.5dB`, `2=const6dB`, `3=linear0dB`.
+ */
+export type PanLaw = 'const3dB' | 'const4.5dB' | 'const6dB' | 'linear0dB';
+
+/**
+ * Accepted pan-law name aliases. Names are normalized case-insensitively with
+ * underscores treated as hyphens at runtime; the canonical four spellings in
+ * {@link PanLaw} remain the preferred TypeScript values.
+ */
+export type PanLawName =
+  | PanLaw
+  | 'const-3db'
+  | '-3db'
+  | 'const-4.5db'
+  | '-4.5db'
+  | 'const-6db'
+  | '-6db'
+  | 'linear-0db'
+  | 'linear'
+  | '0db';
+
+/** Pan-law name or raw C ABI ordinal. */
+
+export type PanLawInput = PanLawName | number;
+
+/**
+ * Meter tap point on a strip. Mapped to the C enum ints
+ * `0=preFader`, `1=postFader`.
+ */
+export type MeterTap = 'preFader' | 'postFader';
+
+/** Pre/post-fader send timing (see {@link Mixer.addSend}). */
+
+export type SendTiming = 'preFader' | 'postFader';
+
+/**
+ * A reference to a strip in the {@link Mixer}: either a 0-based strip index or
+ * the strip's string id.
+ */
+export type StripRef = number | string;
+
+/** Single goniometer sample from {@link Mixer.readGoniometerLatest}. */
+
+export interface GoniometerPoint {
+  left: number;
+  right: number;
+}
 
 /** One analysis band, in ascending frequency order. */
 export type MixBandName = 'sub' | 'low' | 'lowMid' | 'mid' | 'highMid' | 'high' | 'air';
