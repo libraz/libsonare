@@ -105,6 +105,9 @@ const std::vector<CommandInfo>& get_commands() {
       {"mixing-presets", "List built-in mixer scene presets", cmd_mixing_presets, false},
       {"mixing-preset", "Print a built-in mixer scene preset JSON", cmd_mixing_preset, false},
 #endif
+#ifdef SONARE_WITH_MIXING_ASSISTANT
+      {"suggest-mix", "Suggest a mixer scene from several tracks as JSON", cmd_suggest_mix, false},
+#endif
       // Features
       {"mel", "Compute mel spectrogram", cmd_mel, true},
       {"chroma", "Compute chromagram", cmd_chroma, true},

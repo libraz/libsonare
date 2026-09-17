@@ -143,6 +143,16 @@ CliOptionSpec nullable_string_value(const char* name) {
 }
 #endif
 
+#ifdef SONARE_WITH_MIXING_ASSISTANT
+// A repeatable path. `path_value` takes no repeatable flag because every other
+// path option here is single-valued, and the default has to be the empty array
+// rather than null so the two front-ends publish the same absent value.
+CliOptionSpec repeatable_path(const char* name) {
+  return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::Path,
+                     string_array_default(), {}, {}, false, true, false, true);
+}
+#endif
+
 #ifdef SONARE_WITH_ARRANGEMENT
 CliOptionSpec optional_string(const char* name, const char* implicit = "true",
                               bool repeatable = false) {
@@ -623,6 +633,15 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // empty string reaches the preset lookup and fails, and the handler's own
     // fallback never applied because the registry default wins over it.
     add_command(commands, "mixing-preset", false, {string_value("preset", "vocalReverbSend")});
+#endif
+#ifdef SONARE_WITH_MIXING_ASSISTANT
+    // `--tempo-bpm` is a string rather than a number because `auto` is one of
+    // its values: the tempo is either stated or measured from the first input,
+    // and a numeric option cannot spell the second.
+    add_command(
+        commands, "suggest-mix", false,
+        {repeatable_path("input"), int_value("sample-rate", 48000), string_value("params", ""),
+         string_value("tempo-bpm", ""), string_value("scene-out", "")});
 #endif
 
     // Feature leaves.

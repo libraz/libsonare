@@ -3768,6 +3768,62 @@
           "required": false,
           "domain": null
         }
+      ],
+      "suggest-mix": [
+        {
+          "name": "input",
+          "type": "path",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": 48000,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "scene-out",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "tempo-bpm",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
       ]
     }
   },
@@ -4448,11 +4504,9 @@
       "option_status": "active"
     },
     "suggest-mix": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "no native route to the mixing assistant's suggestions; mixing-preset only prints a built-in scene document"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     }
   },
   "active_paths": [
@@ -12657,6 +12711,188 @@
             "--channel",
             "20",
             "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "suggest-mix",
+      "options": [
+        {
+          "name": "input",
+          "type": "path",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": 48000,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "scene-out",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "tempo-bpm",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "scene": "any",
+            "tracks": "any",
+            "mix": "any",
+            "explanation": {
+              "type": "array",
+              "items": "string"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "explicit_tempo",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--tempo-bpm",
+            "120"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "duplicate_track_ids",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--input",
+            "{audio}"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "no_input",
+          "argv": [
+            "suggest-mix"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "unknown_param",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--params",
+            "notAKey=1"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "tempo_stated_twice",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--tempo-bpm",
+            "120",
+            "--params",
+            "tempoBpm=120"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "tempo_out_of_range",
+          "argv": [
+            "suggest-mix",
+            "--input",
+            "{audio}",
+            "--params",
+            "tempoBpm=5"
           ],
           "exit": 3,
           "legacy_exit": 1,

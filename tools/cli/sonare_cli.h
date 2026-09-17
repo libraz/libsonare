@@ -69,6 +69,10 @@
 #include "mixing/api/presets.h"
 #include "mixing/channel_strip.h"
 #endif
+#ifdef SONARE_WITH_MIXING_ASSISTANT
+#include "mixing/assistant/config_from_params.h"
+#include "mixing/assistant/suggester.h"
+#endif
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
@@ -209,6 +213,10 @@ int cmd_repair(const CliArgs& args, const Audio& audio);
 int cmd_mixing_presets(const CliArgs& args, const Audio& audio);
 int cmd_mixing_preset(const CliArgs& args, const Audio& audio);
 int cmd_mix(const CliArgs& args, const Audio& audio);
+#endif
+
+#ifdef SONARE_WITH_MIXING_ASSISTANT
+int cmd_suggest_mix(const CliArgs& args, const Audio& audio);
 #endif
 
 int cmd_mel(const CliArgs& args, const Audio& audio);

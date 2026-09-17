@@ -30,6 +30,16 @@ endif()
 if(BUILD_MIXING)
   target_link_libraries(sonare PRIVATE sonare_mixing)
   target_compile_definitions(sonare PRIVATE SONARE_WITH_MIXING=1)
+  # Beside the mixer rather than under the arrangement block below, because the
+  # assistant reads tracks and returns a scene and needs no project: nesting it
+  # there would drop `suggest-mix` from a -DBUILD_ARRANGEMENT=OFF build with
+  # nothing pointing at the reason. The top-level CMakeLists already forces
+  # BUILD_MIXING on whenever the assistant is enabled, so this is the block it
+  # belongs to.
+  if(BUILD_MIXING_ASSISTANT)
+    target_link_libraries(sonare PRIVATE sonare_mixing_assistant)
+    target_compile_definitions(sonare PRIVATE SONARE_WITH_MIXING_ASSISTANT=1)
+  endif()
 endif()
 if(BUILD_PITCH_EDITOR)
   target_link_libraries(sonare PRIVATE sonare_pitch_editor)
@@ -86,10 +96,6 @@ if(BUILD_ARRANGEMENT)
     )
     target_link_libraries(sonare PRIVATE sonare_graph)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_GRAPH=1)
-    if(BUILD_MIXING_ASSISTANT)
-      target_link_libraries(sonare PRIVATE sonare_mixing_assistant)
-      target_compile_definitions(sonare PRIVATE SONARE_WITH_MIXING_ASSISTANT=1)
-    endif()
   endif()
 endif()
 target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
