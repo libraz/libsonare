@@ -1424,6 +1424,13 @@ if(BUILD_WASM)
   endif()
   target_link_options(sonare PRIVATE
     -msimd128
+    # Optimize the linked module for size. The DSP objects are already compiled
+    # at -O3 by the Release flags; this only changes the level binaryen runs the
+    # whole module at, and measured against -O3 it is both smaller and no slower
+    # (full raw -115,320 / gzip -16,474; analysis raw -32,804 / gzip -8,515; the
+    # intersample-peak limiter and the streaming phase vocoder each ran ~2.5%
+    # faster, median of three, emsdk 5.0.2).
+    -Oz
     # Enable classic (JS-based) C++ exception support so a native throw
     # propagates to JS as a catchable CppException carrying the exception
     # pointer, instead of aborting. emscripten disables exception catching by
