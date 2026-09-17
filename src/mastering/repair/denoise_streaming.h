@@ -15,6 +15,11 @@
 /// for the half second the minimum window spans, over-suppressing until then.
 /// Prepending that much noise-only audio reproduces the offline result exactly.
 /// Spp tracks no minimum and is unaffected.
+///
+/// Prefer Spp past that opening too. Mcra and Imcra over-report the floor for as
+/// long as the programme stays intermittent, because the minimum never reaches
+/// the floor between bursts and the bias compensation then scales an inflated
+/// estimate; on a gated tone they leave the result below the untreated input.
 
 #include <complex>
 #include <cstddef>

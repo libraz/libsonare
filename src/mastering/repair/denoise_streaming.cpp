@@ -29,7 +29,9 @@ DenoiseClassicalConfig streaming_config(const DenoiseClassicalConfig& config) {
         ErrorCode::InvalidParameter,
         "denoise noise_estimator must not be Quantile when denoising a stream: it ranks every "
         "frame of the whole signal by energy, which a stream never reaches the end of. Set "
-        "noise_estimator to Mcra, Imcra or Spp, the three that track recursively.");
+        "noise_estimator to Spp, which tracks recursively without a minimum window. Mcra and "
+        "Imcra also track recursively and are accepted, but their minimum tracking over-reports "
+        "the floor wherever the programme is intermittent.");
   }
   return validated.get();
 }

@@ -14,6 +14,11 @@ class NoiseTracker {
   ///   biases the estimate low and needs a compensation factor. Spp
   ///   (Gerkmann-Hendriks 2012) estimates the noise periodogram from a
   ///   speech-presence probability instead: no minimum tracking, no bias factor.
+  ///   Prefer Spp on programme material: the smoothing and the compensation
+  ///   factor are calibrated together, so where the programme is intermittent the
+  ///   minimum never reaches the floor between bursts and the factor scales the
+  ///   inflated estimate. Measured on a gated tone, Mcra and Imcra leave the
+  ///   result below the untreated input.
   enum class Mode { Static, Mcra, Imcra, Spp };
 
   NoiseTracker(int n_bins, int sample_rate, Mode mode = Mode::Imcra, int hop_length = 512);

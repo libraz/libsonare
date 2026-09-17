@@ -56,7 +56,10 @@ class StreamingMasteringChain:
     (``1`` and ``2``) seed their noise floor from the first frame they see and
     hold it for the half second their minimum window spans, so a stream opened
     in the middle of the programme is over-suppressed until it turns over;
-    ``3`` tracks no minimum and is unaffected.
+    ``3`` tracks no minimum and is unaffected. Prefer ``3`` past that opening
+    too: ``1`` and ``2`` over-report the floor for as long as the programme
+    stays intermittent, and on a gated tone they leave the result below the
+    untreated input.
 
     Example::
 

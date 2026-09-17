@@ -314,6 +314,9 @@ class MasteringChain {
 // estimators seed their floor from the first frame they see and hold it for the
 // half second their minimum window spans, so a stream opened mid-programme is
 // over-suppressed until it turns over; spp tracks no minimum and is unaffected.
+// Prefer spp beyond that opening: mcra and imcra over-report the floor for as
+// long as the programme stays intermittent, and on a gated tone they leave the
+// result below the untreated input.
 // This list is pinned against prepare() and the constructor by
 // "StreamingMasteringChain supported and rejected stages match the
 // implementation" in tests/mastering/chain_test.cpp, which derives both sets by
