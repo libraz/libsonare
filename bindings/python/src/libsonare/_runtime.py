@@ -250,6 +250,31 @@ def _not_a_buffer(samples: object, fn_name: str, arg_name: str) -> SonareValueEr
     )
 
 
+def _past_float32_range(samples: object, fn_name: str, arg_name: str) -> SonareValueError:
+    """Build the rejection for an element the float32 cast turned into an infinity.
+
+    Reported through the same builder the scalar conversions use, because it is
+    the same refusal: a finite number the target type cannot hold. Letting the
+    cast stand instead named the result rather than the cause -- the caller's
+    buffer held no infinity until this conversion produced one, and the
+    finiteness check downstream then reported one at the caller's index.
+
+    Only reached once the cast has already overflowed, so locating the element
+    costs a pass on the failing path rather than on every call.
+    """
+    prefix = f"{fn_name}: " if fn_name else ""
+    element = arg_name
+    try:
+        wide = np.asarray(samples, dtype=np.float64).reshape(-1)
+    except (OverflowError, TypeError, ValueError):
+        # Too wide for a double either, so there is no index to read it at.
+        return SonareValueError(f"{prefix}{_float_narrowing_error(element)}")
+    outside = np.isfinite(wide) & (np.abs(wide) > _FLOAT32_MAX)
+    if outside.any():
+        element = f"{arg_name}[{int(np.argmax(outside))}]"
+    return SonareValueError(f"{prefix}{_float_narrowing_error(element)}")
+
+
 def _not_one_dimensional(array: np.ndarray, fn_name: str, arg_name: str) -> SonareValueError:
     """Build the rejection for a buffer of the wrong rank, naming its shape."""
     prefix = f"{fn_name}: " if fn_name else ""
@@ -311,14 +336,26 @@ def _as_float32_buffer(
         # buffer. ``np.ascontiguousarray`` returns a read-only array unchanged,
         # so force a fresh writable copy in that case; otherwise take the cheap
         # single-pass cast path.
-        buf = np.ascontiguousarray(samples, dtype=np.float32)
+        # Raised rather than warned: the cast folds a finite value past the
+        # float32 ceiling onto an infinity, which reads downstream as one the
+        # caller passed.
+        try:
+            with np.errstate(over="raise"):
+                buf = np.ascontiguousarray(samples, dtype=np.float32)
+        except FloatingPointError as exc:
+            raise _past_float32_range(samples, fn_name, arg_name) from exc
         if not buf.flags["WRITEABLE"]:
             buf = np.array(buf, dtype=np.float32, copy=True, order="C")
         return buf
     # list / tuple / array.array / range / memoryview → bulk-convert via NumPy's
     # vectorised C path (orders of magnitude faster than `(c_float*N)(*seq)`).
     try:
-        converted = np.asarray(samples, dtype=np.float32)
+        with np.errstate(over="raise"):
+            converted = np.asarray(samples, dtype=np.float32)
+    except (FloatingPointError, OverflowError) as exc:
+        # An int too wide for a double raises rather than overflowing, and it is
+        # the same refusal: a number this buffer's element type cannot hold.
+        raise _past_float32_range(samples, fn_name, arg_name) from exc
     except (TypeError, ValueError) as exc:
         raise _not_a_buffer(samples, fn_name, arg_name) from exc
     if converted.ndim == 0:

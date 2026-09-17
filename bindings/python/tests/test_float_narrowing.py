@@ -263,3 +263,67 @@ def test_a_non_finite_double_argument_is_refused_by_name() -> None:
         retune.prepare(float(SAMPLE_RATE), 256)  # positive control
         for value in NON_FINITE:
             _refuses("sample_rate", ("max_block_size",), retune.prepare, value, 256)
+
+
+def test_a_buffer_element_past_the_float32_range_is_refused_as_the_value_it_was() -> None:
+    """The buffer route, which the scalar cases above cannot reach.
+
+    A scalar reaches the library through a conversion that checks the range
+    first; a buffer is bulk-cast, and the cast turned a finite ``1e300`` into an
+    infinity before anything looked at it. The value was still refused -- by the
+    finiteness check, reporting an infinity at the caller's index. The caller's
+    buffer held no infinity, so the one property the message named was the one
+    property the input did not have.
+    """
+    clean = [0.1] * 2048
+
+    # The control: the samples select the result, so a refusal below is not an
+    # argument the entry point had stopped reading.
+    quiet = ls.rms_energy(clean, frame_length=512, hop_length=256)
+    loud = ls.rms_energy([0.5] * 2048, frame_length=512, hop_length=256)
+    assert float(np.mean(loud)) > float(np.mean(quiet))
+
+    wide_list = clean[:100] + [1e300] + clean[101:]
+    wide_array = np.array(clean, dtype=np.float64)
+    wide_array[100] = 1e300
+    for samples in (wide_list, wide_array):
+        with pytest.raises(SonareValueError, match=re.escape("samples[100] must be a finite")):
+            ls.rms_energy(samples, frame_length=512, hop_length=256)
+
+    # A value that really is non-finite keeps the message that is true of it,
+    # so the two causes stay separable rather than collapsing into one report.
+    for value in (float("inf"), float("nan")):
+        with pytest.raises(SonareValueError, match="contains NaN or Inf"):
+            ls.rms_energy(clean[:100] + [value] + clean[101:], frame_length=512, hop_length=256)
+
+
+def test_a_buffer_refusal_words_itself_like_its_scalar_sibling() -> None:
+    """One builder, so the two routes cannot drift into two vocabularies."""
+    from libsonare._narrowing import _float_narrowing_error
+
+    expected = _float_narrowing_error("samples[0]")
+    with pytest.raises(SonareValueError) as excinfo:
+        ls.rms_energy([1e300] + [0.1] * 2047, frame_length=512, hop_length=256)
+    assert str(excinfo.value).endswith(expected)
+
+
+def test_a_number_too_wide_for_a_double_is_refused_by_the_library_not_by_python() -> None:
+    """An int past the double range raised where the cast would have overflowed.
+
+    ``OverflowError`` is neither a ``SonareValueError`` nor anything this
+    binding's contract names, so a caller catching the library's own error types
+    did not catch it. It is the same refusal as the float32 case either way: a
+    number the buffer's element type cannot hold.
+    """
+    clean = [0.1] * 2048
+    assert len(ls.rms_energy(clean, frame_length=512, hop_length=256)) == 9  # positive control
+
+    with pytest.raises(SonareValueError, match="must be a finite number"):
+        ls.rms_energy(clean[:100] + [10**400] + clean[101:], frame_length=512, hop_length=256)
+    # And specifically not the Python exception it used to be.
+    try:
+        ls.rms_energy(clean[:100] + [10**400] + clean[101:], frame_length=512, hop_length=256)
+    except OverflowError:  # pragma: no cover - the repaired path
+        pytest.fail("a too-wide int leaked OverflowError")
+    except SonareValueError:
+        pass
