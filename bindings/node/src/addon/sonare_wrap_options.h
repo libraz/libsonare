@@ -713,10 +713,26 @@ inline bool Int32Value(Napi::Env env, const Napi::Value& value, const char* name
   const double number = value.As<Napi::Number>().DoubleValue();
   constexpr double kMinInt = static_cast<double>(std::numeric_limits<int>::min());
   constexpr double kMaxInt = static_cast<double>(std::numeric_limits<int>::max());
-  if (!std::isfinite(number) || std::trunc(number) != number || number < kMinInt ||
-      number > kMaxInt) {
-    Napi::RangeError::New(
-        env, std::string(name) + " must be a finite integer within the native int range")
+  // Three refusals rather than one, so each names the property the value
+  // actually lacks: a fraction and a magnitude are different mistakes, and a
+  // caller can only act on the one they made.
+  if (!std::isfinite(number)) {
+    Napi::RangeError::New(env, std::string(name) + " must be a finite integer")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  const double truncated = std::trunc(number);
+  if (truncated < kMinInt || truncated > kMaxInt) {
+    Napi::RangeError::New(env, std::string(name) + " must be an integer in [" +
+                                   std::to_string(std::numeric_limits<int>::min()) + ", " +
+                                   std::to_string(std::numeric_limits<int>::max()) + "]")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  // After the range, so an out-of-range fraction is reported by the property it
+  // is furthest outside rather than by whichever check runs first.
+  if (truncated != number) {
+    Napi::RangeError::New(env, std::string(name) + " must be an integer")
         .ThrowAsJavaScriptException();
     return false;
   }

@@ -118,4 +118,27 @@ describe('the addon refuses a number it cannot hold', () => {
     expect(() => push(2 ** 32)).toThrow(RangeError);
     expect(() => push(-(2 ** 31) - 1)).toThrow(RangeError);
   });
+
+  it('names the property a rejected element lacks instead of one message for every mistake', () => {
+    const samples = tone();
+    const remix = (intervals: unknown) => native.remix(samples, intervals, SAMPLE_RATE, false);
+    // Positive control: the interval end sets the output length, so an
+    // assertion about the message cannot pass on a path that never reads it.
+    expect(remix([0, 1000]).length).not.toBe(remix([0, 2000]).length);
+    // The `$` anchors are what make these three distinguish each other: the
+    // range message begins with the fractional one, so an unanchored match
+    // would pass against a single merged message for all three.
+    expect(() => remix([0, 1000.7])).toThrow(/intervals\[1\] must be an integer$/);
+    expect(() => remix([0, 2 ** 32])).toThrow(
+      /intervals\[1\] must be an integer in \[-2147483648, 2147483647\]$/,
+    );
+    expect(() => remix([0, Number.POSITIVE_INFINITY])).toThrow(
+      /intervals\[1\] must be a finite integer$/,
+    );
+    expect(() => remix([0, Number.NaN])).toThrow(/intervals\[1\] must be a finite integer$/);
+    // A non-number is the wrong type rather than the wrong domain, and only the
+    // class carries that difference.
+    expect(() => remix([0, '1000'])).toThrow(TypeError);
+    expect(() => remix([0, 1000.7])).toThrow(RangeError);
+  });
 });
