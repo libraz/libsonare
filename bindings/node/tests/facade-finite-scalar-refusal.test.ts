@@ -185,6 +185,29 @@ describe('a required facade scalar is consumed, then refused by name', () => {
     ).toThrow(NARROWING_REFUSAL);
   });
 
+  it('splitNote refuses a fractional note bound rather than truncating it', () => {
+    const notes = extractNotes({ ...track, frameRate: FRAME_RATE });
+    const withBound = (frameEnd: number) =>
+      splitNote({
+        ...track,
+        frameRate: FRAME_RATE,
+        notes: [{ frameStart: 0, frameEnd }, ...notes.slice(1)],
+        index: 0,
+        frame: 5,
+      });
+
+    // The control: the bound selects the split, so a refusal below is not an
+    // argument the entry point had stopped reading.
+    expect(withBound(10)[1]?.frameEnd).not.toBe(withBound(11)[1]?.frameEnd);
+
+    // The addon narrows this field by truncation, so 10.7 arrived as frame 10.
+    expect(() => withBound(10.7)).toThrow(TypeError);
+    expect(() => withBound(10.7)).toThrow(/notes\[0\]\.frameEnd must be an integer/);
+
+    // A missing or non-finite bound keeps the message that names that instead.
+    expect(() => withBound(Number.NaN)).toThrow(/notes\[0\] must carry a finite/);
+  });
+
   it('mergeNotes consumes frameRate', () => {
     const notes = extractNotes({ ...track, frameRate: FRAME_RATE });
     const merge = (frameRate: number) =>

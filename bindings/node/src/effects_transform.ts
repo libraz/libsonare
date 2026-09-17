@@ -22,6 +22,7 @@ import {
   assertHpssKernels,
   assertInt32,
   assertInt64,
+  assertIntegerType,
   assertSampleRate,
 } from './validation.js';
 
@@ -359,6 +360,11 @@ function assertPitchTrackLengths(
 /**
  * A note set is identified by its frame bounds alone, and a missing bound reads
  * as an empty span the C ABI rejects without naming what was wrong. Name it.
+ *
+ * The bounds are whole frames. The addon reads them through a narrowing that
+ * truncates, so a fractional bound arrives as the frame below it -- one the
+ * caller could have named, which leaves nothing downstream able to tell the
+ * two apart.
  */
 function assertNoteSetEntries(fnName: string, notes: readonly NoteSetEntry[]): void {
   for (let index = 0; index < notes.length; index += 1) {
@@ -366,6 +372,8 @@ function assertNoteSetEntries(fnName: string, notes: readonly NoteSetEntry[]): v
     if (!Number.isFinite(note?.frameStart) || !Number.isFinite(note?.frameEnd)) {
       throw new TypeError(`${fnName}: notes[${index}] must carry a finite frameStart and frameEnd`);
     }
+    assertIntegerType(fnName, note.frameStart, `notes[${index}].frameStart`);
+    assertIntegerType(fnName, note.frameEnd, `notes[${index}].frameEnd`);
   }
 }
 
