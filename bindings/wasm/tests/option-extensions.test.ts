@@ -243,7 +243,9 @@ describe('feature entry points share one nFft rule', () => {
 
   it.each(entryPointNames)('%s still reports a non-number nFft as a TypeError', (name) => {
     // The half the single check could not name: wrong kind, not wrong value.
-    expect(() => featureEntryPoints[name]({ nFft: '2048' as unknown as number })).toThrow(TypeError);
+    expect(() => featureEntryPoints[name]({ nFft: '2048' as unknown as number })).toThrow(
+      TypeError,
+    );
   });
 
   it.each(entryPointNames)('%s rejects an odd nFft the same way', (name) => {
