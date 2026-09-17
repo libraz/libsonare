@@ -1246,9 +1246,6 @@ def _build_parser() -> _ContractArgumentParser:
         "--explain", action="store_true", help="Say why each repair stage was chosen"
     )
     _add_wav_bits_argument(repair_p)
-    repair_p.add_argument(
-        "-q", "--quiet", action="store_true", help="Suppress the non-JSON status report"
-    )
     declip_p = sub.add_parser("declip", parents=[common], help="Repair clipped audio")
     declip_p.add_argument("--clip-threshold", type=_finite_float, default=0.98)
     declip_p.add_argument("--lpc-order", type=int, default=36)

@@ -925,7 +925,6 @@ def cmd_repair(args: argparse.Namespace) -> int:
     preset = getattr(args, "preset", "") or ""
     params_raw = getattr(args, "params", "") or ""
     explain = bool(getattr(args, "explain", False))
-    quiet = bool(getattr(args, "quiet", False))
     output = getattr(args, "output", "") or ""
 
     if detect_only:
@@ -964,7 +963,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
     if detect_only:
         if getattr(args, "json", False):
             print(_strict_json_dumps({"mode": "detect", "defects": defects}))
-        elif not quiet:
+        else:
             _print_repair_detection_report(defects)
         return 0
 
@@ -1016,7 +1015,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
         payload["output"] = output
         payload["defects"] = defects
         print(_strict_json_dumps(payload))
-    elif not quiet:
+    else:
         print(f"  Repair ({mode}):")
         if preset:
             print(f"    Preset:  {preset}")

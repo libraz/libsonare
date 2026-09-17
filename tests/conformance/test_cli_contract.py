@@ -812,7 +812,7 @@ class CliContractSelfTest(unittest.TestCase):
             for path, record in self.manifest["commands"].items()
             if record["classification"] == "shared"
         }
-        self.assertEqual(len(shared), 59)
+        self.assertEqual(len(shared), 60)
         self.assertEqual(set(self.manifest["inventory"]["expected_options"]), shared)
         for path in shared:
             self.assertEqual(
