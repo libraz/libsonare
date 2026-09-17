@@ -337,6 +337,50 @@ TEST_CASE("final.outputChain rejects an out-of-range dither type",
                     sonare::SonareException);
 }
 
+TEST_CASE("named-processor enum params reject a value past the enum's cardinality",
+          "[mastering][params][param_wiring]") {
+  // One call per checked_enum<Enum>() site in named_processor.cpp. Each site's
+  // out-of-range value is one past the enum's last member; a negative value
+  // exercises the other bound. EnumDomain<Enum> (named_processor.cpp) is what
+  // derives "out-of-range" for each enum, so this is what would go red if a
+  // specialization's kCount silently drifted from its enum.
+  using sonare::SonareException;
+
+  const auto refusal = [](auto&& call) -> std::string {
+    try {
+      call();
+    } catch (const SonareException& error) {
+      return error.what();
+    }
+    return {};
+  };
+
+  const std::vector<float> silence(256, 0.0f);
+  const auto mono = [&](const char* id, const char* field, double value) {
+    return refusal([&] {
+      sonare::mastering::api::apply_named_processor(id, silence.data(), silence.size(), 48000,
+                                                    {{field, value}});
+    });
+  };
+  const auto pair = [&](const char* id, const char* field, double value) {
+    return refusal([&] {
+      sonare::mastering::api::apply_named_pair_processor(id, silence.data(), silence.data(),
+                                                         silence.size(), 48000, {{field, value}});
+    });
+  };
+
+  CHECK(mono("repair.decrackle", "mode", 2.0) == "invalid decrackle mode");
+  CHECK(mono("repair.decrackle", "mode", -1.0) == "invalid decrackle mode");
+  CHECK(mono("repair.dehum", "mode", 2.0) == "invalid dehum mode");
+  CHECK(mono("repair.denoiseClassical", "mode", 3.0) == "invalid denoise mode");
+  CHECK(mono("repair.denoiseClassical", "noiseEstimator", 4.0) ==
+        "invalid denoise noise estimator");
+  CHECK(mono("repair.trimSilence", "mode", 2.0) == "invalid trim silence mode");
+
+  CHECK(pair("match.applyMatchEq", "phase", 2.0) == "invalid match EQ FIR phase");
+  CHECK(pair("match.abSwitch", "selection", 2.0) == "invalid A/B selection");
+}
+
 // --- custom crossover band count ---------------------------------------------
 
 TEST_CASE("multiband custom cutoff count builds and processes",

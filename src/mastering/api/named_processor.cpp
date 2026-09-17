@@ -234,13 +234,132 @@ float lufs_for(const std::vector<float>& samples, int sample_rate) {
   return common::measure_lufs(samples.data(), samples.size(), sample_rate);
 }
 
+// Compile-time cardinality for an enum checked_enum() validates. There is no
+// generic way to ask a C++ enum how many enumerators it has, so each enum
+// specializes this trait with its count and pairs it with a default-less
+// assert_enum_domain() overload that names every enumerator: adding one
+// without extending that switch is a hard -Wswitch build failure (this
+// project builds -Werror), which is what keeps kCount from silently drifting
+// behind the enum it describes.
+//
+// Lives here, in named_processor.cpp's anonymous namespace, rather than in
+// each enum's own header: checked_enum() is this TU's only consumer, the
+// eight enums it validates share no common header of their own, and adding
+// this mechanism to mastering/repair/*.h or mastering/final/dither.h would
+// pull an unrelated validation concern into headers the C ABI, bindings and
+// tests all include for the enum definitions alone. Promote it if a second
+// consumer needs it.
+template <typename Enum>
+struct EnumDomain;
+
+template <>
+struct EnumDomain<repair::DecrackleMode> {
+  static constexpr int kCount = 2;
+};
+[[maybe_unused]] void assert_enum_domain(repair::DecrackleMode value) {
+  switch (value) {
+    case repair::DecrackleMode::Median:
+    case repair::DecrackleMode::WaveletShrinkage:
+      break;
+  }
+}
+
+template <>
+struct EnumDomain<repair::DehumMode> {
+  static constexpr int kCount = 2;
+};
+[[maybe_unused]] void assert_enum_domain(repair::DehumMode value) {
+  switch (value) {
+    case repair::DehumMode::Subtract:
+    case repair::DehumMode::Notch:
+      break;
+  }
+}
+
+template <>
+struct EnumDomain<repair::DenoiseMode> {
+  static constexpr int kCount = 3;
+};
+[[maybe_unused]] void assert_enum_domain(repair::DenoiseMode value) {
+  switch (value) {
+    case repair::DenoiseMode::LogMmse:
+    case repair::DenoiseMode::MmseStsa:
+    case repair::DenoiseMode::SpectralSubtraction:
+      break;
+  }
+}
+
+template <>
+struct EnumDomain<repair::DenoiseNoiseEstimator> {
+  static constexpr int kCount = 4;
+};
+[[maybe_unused]] void assert_enum_domain(repair::DenoiseNoiseEstimator value) {
+  switch (value) {
+    case repair::DenoiseNoiseEstimator::Quantile:
+    case repair::DenoiseNoiseEstimator::Mcra:
+    case repair::DenoiseNoiseEstimator::Imcra:
+    case repair::DenoiseNoiseEstimator::Spp:
+      break;
+  }
+}
+
+template <>
+struct EnumDomain<repair::TrimSilenceMode> {
+  static constexpr int kCount = 2;
+};
+[[maybe_unused]] void assert_enum_domain(repair::TrimSilenceMode value) {
+  switch (value) {
+    case repair::TrimSilenceMode::Peak:
+    case repair::TrimSilenceMode::LufsGated:
+      break;
+  }
+}
+
+template <>
+struct EnumDomain<final::DitherType> {
+  static constexpr int kCount = 4;
+};
+[[maybe_unused]] void assert_enum_domain(final::DitherType value) {
+  switch (value) {
+    case final::DitherType::None:
+    case final::DitherType::Rpdf:
+    case final::DitherType::Tpdf:
+    case final::DitherType::NoiseShaped:
+      break;
+  }
+}
+
+template <>
+struct EnumDomain<::sonare::mastering::match::MatchEqFirPhase> {
+  static constexpr int kCount = 2;
+};
+[[maybe_unused]] void assert_enum_domain(::sonare::mastering::match::MatchEqFirPhase value) {
+  switch (value) {
+    case ::sonare::mastering::match::MatchEqFirPhase::LinearPhase:
+    case ::sonare::mastering::match::MatchEqFirPhase::MinimumPhase:
+      break;
+  }
+}
+
+template <>
+struct EnumDomain<::sonare::mastering::match::ABSelection> {
+  static constexpr int kCount = 2;
+};
+[[maybe_unused]] void assert_enum_domain(::sonare::mastering::match::ABSelection value) {
+  switch (value) {
+    case ::sonare::mastering::match::ABSelection::A:
+    case ::sonare::mastering::match::ABSelection::B:
+      break;
+  }
+}
+
 // Validate and convert an integer param to a scoped enum, throwing
 // InvalidParameter when out of range. This mirrors the dedicated C-ABI repair
 // path (sonare_c_mastering_repair.cpp), which rejects unknown enum values rather
 // than silently no-op'ing on the underlying DSP's switch fall-through.
 template <typename Enum>
-Enum checked_enum(int value, int count, const char* what) {
-  if (value < 0 || value >= count) {
+Enum checked_enum(int value, const char* what) {
+  if (value < 0 || value >= EnumDomain<Enum>::kCount) {
     throw SonareException(ErrorCode::InvalidParameter, std::string("invalid ") + what);
   }
   return static_cast<Enum>(value);
@@ -508,7 +627,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
   } else if (name == "repair.decrackle") {
     repair::DecrackleConfig config;
     config.threshold = f(params, "threshold", config.threshold);
-    config.mode = checked_enum<repair::DecrackleMode>(i(params, "mode", 0), 2, "decrackle mode");
+    config.mode = checked_enum<repair::DecrackleMode>(i(params, "mode", 0), "decrackle mode");
     config.levels = i(params, "levels", config.levels);
     apply_linked_or_per_channel(
         channels, sample_rate,
@@ -524,16 +643,16 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     config.adaptation = f(params, "adaptation", config.adaptation);
     config.frame_size = i(params, "frameSize", config.frame_size);
     config.pll_bandwidth = f(params, "pllBandwidth", config.pll_bandwidth);
-    config.mode = checked_enum<repair::DehumMode>(i(params, "mode", 0), 2, "dehum mode");
+    config.mode = checked_enum<repair::DehumMode>(i(params, "mode", 0), "dehum mode");
     apply_linked_or_per_channel(
         channels, sample_rate,
         [&](const Audio& l, const Audio& r) { return repair::dehum_stereo(l, r, config); },
         [&](const Audio& audio, int) { return repair::dehum(audio, config); });
   } else if (name == "repair.denoiseClassical" || name == "repair.denoise") {
     repair::DenoiseClassicalConfig config;
-    config.mode = checked_enum<repair::DenoiseMode>(i(params, "mode", 0), 3, "denoise mode");
+    config.mode = checked_enum<repair::DenoiseMode>(i(params, "mode", 0), "denoise mode");
     config.noise_estimator = checked_enum<repair::DenoiseNoiseEstimator>(
-        i(params, "noiseEstimator", 0), 4, "denoise noise estimator");
+        i(params, "noiseEstimator", 0), "denoise noise estimator");
     config.n_fft = i(params, "nFft", config.n_fft);
     config.hop_length = i(params, "hopLength", config.hop_length);
     config.dd_alpha = f(params, "ddAlpha", config.dd_alpha);
@@ -569,8 +688,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     config.threshold = f(params, "threshold", config.threshold);
     config.padding_samples = checked_nonnegative_size(
         i(params, "paddingSamples", static_cast<int>(config.padding_samples)), "paddingSamples");
-    config.mode =
-        checked_enum<repair::TrimSilenceMode>(i(params, "mode", 0), 2, "trim silence mode");
+    config.mode = checked_enum<repair::TrimSilenceMode>(i(params, "mode", 0), "trim silence mode");
     config.gate_lufs = f(params, "gateLufs", config.gate_lufs);
     config.window_ms = f(params, "windowMs", config.window_ms);
     repair::validate_config(config);
@@ -589,7 +707,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     });
   } else if (name == "final.dither") {
     final::DitherConfig config;
-    config.type = checked_enum<final::DitherType>(i(params, "type", 2), 4, "dither type");
+    config.type = checked_enum<final::DitherType>(i(params, "type", 2), "dither type");
     config.target_bits = i(params, "targetBits", config.target_bits);
     config.seed = static_cast<uint32_t>(i(params, "seed", config.seed));
     const uint32_t base_seed = config.seed;
@@ -606,8 +724,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
   } else if (name == "final.outputChain") {
     final::DitherConfig dither_config;
     dither_config.target_bits = i(params, "targetBits", dither_config.target_bits);
-    dither_config.type =
-        checked_enum<final::DitherType>(i(params, "ditherType", 2), 4, "dither type");
+    dither_config.type = checked_enum<final::DitherType>(i(params, "ditherType", 2), "dither type");
     final::BitDepthConfig bit_depth_config;
     bit_depth_config.target_bits = dither_config.target_bits;
     bit_depth_config.clamp = b(params, "clamp", bit_depth_config.clamp);
@@ -844,7 +961,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     config.threshold = f(map, "threshold", config.threshold);
     config.padding_samples = checked_nonnegative_size(
         i(map, "paddingSamples", static_cast<int>(config.padding_samples)), "paddingSamples");
-    config.mode = checked_enum<repair::TrimSilenceMode>(i(map, "mode", 0), 2, "trim silence mode");
+    config.mode = checked_enum<repair::TrimSilenceMode>(i(map, "mode", 0), "trim silence mode");
     config.gate_lufs = f(map, "gateLufs", config.gate_lufs);
     config.window_ms = f(map, "windowMs", config.window_ms);
     repair::validate_config(config);
@@ -854,9 +971,9 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
                                 });
   } else if (name == "repair.denoiseClassical" || name == "repair.denoise") {
     repair::DenoiseClassicalConfig config;
-    config.mode = checked_enum<repair::DenoiseMode>(i(map, "mode", 0), 3, "denoise mode");
+    config.mode = checked_enum<repair::DenoiseMode>(i(map, "mode", 0), "denoise mode");
     config.noise_estimator = checked_enum<repair::DenoiseNoiseEstimator>(
-        i(map, "noiseEstimator", 0), 4, "denoise noise estimator");
+        i(map, "noiseEstimator", 0), "denoise noise estimator");
     config.n_fft = i(map, "nFft", config.n_fft);
     config.hop_length = i(map, "hopLength", config.hop_length);
     config.dd_alpha = f(map, "ddAlpha", config.dd_alpha);
@@ -950,7 +1067,7 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
     fir_config.fft_size = i(map, "fftSize", fir_config.fft_size);
     fir_config.kernel_size = i(map, "kernelSize", fir_config.kernel_size);
     fir_config.phase = checked_enum<::sonare::mastering::match::MatchEqFirPhase>(
-        i(map, "phase", 0), 2, "match EQ FIR phase");
+        i(map, "phase", 0), "match EQ FIR phase");
     fir_config.partition_size = i(map, "partitionSize", fir_config.partition_size);
     ::sonare::mastering::match::validate_config(match_config);
     ::sonare::mastering::match::validate_config(fir_config);
@@ -965,7 +1082,7 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
     out =
         ::sonare::mastering::match::ab_switch(source_audio, reference_audio,
                                               checked_enum<::sonare::mastering::match::ABSelection>(
-                                                  i(map, "selection", 0), 2, "A/B selection"));
+                                                  i(map, "selection", 0), "A/B selection"));
   } else if (name == "match.abCrossfade") {
     out = ::sonare::mastering::match::ab_crossfade(source_audio, reference_audio,
                                                    f(map, "mix", 0.5f));
