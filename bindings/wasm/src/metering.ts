@@ -3,6 +3,7 @@ import { getSonareModule } from './module_state';
 import type { ValidateOptions } from './validation';
 import {
   assertInterleavedSamples,
+  assertNonNegativeInteger,
   assertPositiveInteger,
   assertSamples,
   assertSamplesInWindow,
@@ -277,9 +278,7 @@ export function meteringDetectClipping(
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('meteringDetectClipping', request.samples, request.validate !== false);
   const minRegionSamples = request.minRegionSamples ?? 1;
-  if (!Number.isInteger(minRegionSamples) || minRegionSamples < 0) {
-    throw new RangeError('meteringDetectClipping: minRegionSamples must be a non-negative integer');
-  }
+  assertNonNegativeInteger('meteringDetectClipping', minRegionSamples, 'minRegionSamples');
   return requireModule().meteringDetectClipping(
     request.samples,
     request.sampleRate ?? 22050,

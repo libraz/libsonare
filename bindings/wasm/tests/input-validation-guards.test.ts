@@ -715,6 +715,25 @@ describe('offline boundary validation is enforced by the native WASM layer', () 
     ).toThrow();
   });
 
+  it('refuses a fractional clipping-region length, the sign case naming the sign', () => {
+    // Clipped runs three samples long, so the region list responds to the
+    // threshold between 2 and 5 -- the control that makes the refusals below
+    // measure a live argument rather than an ignored one.
+    const samples = Float32Array.from({ length: 4096 }, (_, i) =>
+      i % 200 < 3 ? 1 : Math.sin(i * 0.05) * 0.3,
+    );
+    const regionsAt = (minRegionSamples: number) =>
+      meteringDetectClipping({ samples, sampleRate: 22050, minRegionSamples }).regions.length;
+    expect(regionsAt(2)).toBeGreaterThan(0);
+    expect(regionsAt(5)).toBe(0);
+
+    for (const value of [2.5, -1]) {
+      expect(() =>
+        meteringDetectClipping({ samples, sampleRate: 22050, minRegionSamples: value }),
+      ).toThrow(/minRegionSamples must be a non-negative integer/);
+    }
+  });
+
   it('accepts a zero-strip processStereo call and returns an empty master', () => {
     const mixer = Mixer.fromSceneJson(
       '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
