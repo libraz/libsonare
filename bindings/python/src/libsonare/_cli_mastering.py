@@ -29,6 +29,7 @@ from ._cli_common import (
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset, SoloProcessor
+    from .types import MasteringChainResult, MasteringChainStereoResult
 
 
 def _json_key_to_snake_case(key: str) -> str:
@@ -717,6 +718,10 @@ def cmd_mastering_chain(args: argparse.Namespace) -> int:
     config = _parse_json_config(args.config, args.config_file)
     if args.params:
         config.update(_parse_kv_params(args.params))
+    # Declared across the branches rather than inferred from the first one: the
+    # two results share the metrics this function goes on to read, and differ
+    # only in which buffers they carry.
+    result: MasteringChainStereoResult | MasteringChainResult
     if len(planes) == 2:
         result = mastering_chain_stereo(planes[0], planes[1], sample_rate=sr, config=config)
         rendered = [result.left, result.right]
@@ -783,6 +788,7 @@ def cmd_master(args: argparse.Namespace) -> int:
     overrides = _parse_json_config(args.config, args.config_file)
     if args.params:
         overrides.update(_parse_kv_params(args.params))
+    result: MasteringChainStereoResult | MasteringChainResult
     if len(planes) == 2:
         result = master_audio_stereo(
             planes[0], planes[1], sample_rate=sr, preset_name=args.preset, overrides=overrides
