@@ -15,7 +15,6 @@ from ._effects_dynamics import (
 from ._effects_dynamics import (
     _run_dynamics as _run_dynamics,
 )
-from ._effects_hpss import *  # noqa: F403
 from ._effects_level import *  # noqa: F403
 from ._effects_note_model import *  # noqa: F403
 from ._effects_note_ops import *  # noqa: F403
