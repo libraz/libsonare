@@ -115,17 +115,21 @@ TEST_CASE("resample Audio object", "[resample]") {
   REQUIRE_THAT(resampled.duration(), WithinRel(audio.duration(), 0.02f));
 }
 
-TEST_CASE("resample Audio same rate returns copy", "[resample]") {
+TEST_CASE("resample Audio same rate shares the input buffer", "[resample]") {
   constexpr int sr = 22050;
   std::vector<float> samples = generate_sine(1000, 440.0f, sr);
-  Audio audio = Audio::from_vector(std::move(samples), sr);
+  const Audio audio = Audio::from_vector(std::move(samples), sr);
 
-  Audio resampled = resample(audio, sr);
+  const Audio resampled = resample(audio, sr);
 
   REQUIRE(resampled.size() == audio.size());
   REQUIRE(resampled.sample_rate() == sr);
-  // Should be a copy, not the same buffer
-  REQUIRE(resampled.data() != audio.data());
+  // The buffer is immutable, so the already-at-rate path hands back a view
+  // instead of duplicating the samples.
+  REQUIRE(resampled.data() == audio.data());
+  // Positive control: a rate that does need work must not share the buffer.
+  const Audio converted = resample(audio, sr * 2);
+  REQUIRE(converted.data() != audio.data());
 }
 
 TEST_CASE("resample empty audio", "[resample]") {

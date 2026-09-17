@@ -12,7 +12,11 @@ namespace sonare {
 /// @brief Resamples audio to a target sample rate.
 /// @param audio Input audio
 /// @param target_sr Target sample rate in Hz
-/// @return Resampled audio at target sample rate
+/// @return Resampled audio at target sample rate. A call already at @p target_sr
+///         returns a view sharing @p audio's buffer rather than a duplicate, so
+///         it costs no allocation and keeps that buffer alive for as long as the
+///         result lives. The buffer is immutable, so sharing it is unobservable
+///         apart from that lifetime.
 Audio resample(const Audio& audio, int target_sr);
 
 /// @brief Resamples raw samples to a target sample rate.

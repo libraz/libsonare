@@ -101,7 +101,7 @@ Audio resample(const Audio& audio, int target_sr) {
   }
 
   if (audio.sample_rate() == target_sr) {
-    return audio.to_mono();  // Return a copy
+    return audio;
   }
 
   std::vector<float> resampled =

@@ -12,9 +12,13 @@
 
 namespace sonare {
 
-/// @brief Audio buffer with shared ownership and zero-copy slicing.
-/// @details Samples are always mono and normalized to [-1, 1].
-/// Slices share the underlying buffer, avoiding unnecessary copies.
+/// @brief One channel of audio, with shared ownership and zero-copy slicing.
+/// @details This models a single channel, not a multi-channel signal: samples
+/// are normalized to [-1, 1] and carry no channel count. Multi-channel callers
+/// hold a channel container of their own and wrap each channel in an Audio to
+/// reach the analysis and repair paths, which is what the mastering chain does.
+/// Slices share the underlying buffer, which is immutable, so copying an Audio
+/// costs a reference count rather than the samples.
 class Audio {
  public:
   /// @brief Default constructor creates an empty Audio.
@@ -69,9 +73,6 @@ class Audio {
   /// @brief Returns duration in seconds.
   float duration() const;
 
-  /// @brief Returns number of channels (always 1 for mono).
-  int channels() const { return 1; }
-
   /// @brief Returns true if audio is empty.
   bool empty() const { return size() == 0; }
 
@@ -92,9 +93,6 @@ class Audio {
   /// @param end_sample End sample index (negative means end of audio)
   /// @return New Audio object sharing the same buffer
   Audio slice_samples(size_t start_sample, size_t end_sample = static_cast<size_t>(-1)) const;
-
-  /// @brief Returns a copy with samples as mono (already mono, returns copy).
-  Audio to_mono() const;
 
   /// @brief Access sample by index.
   float operator[](size_t index) const;

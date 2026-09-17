@@ -173,7 +173,7 @@ Audio PitchCorrector::correct_timevarying(const Audio& audio, const F0Track& tra
                  ErrorCode::InvalidParameter);
   }
   if (audio.empty()) {
-    return audio.to_mono();
+    return audio;
   }
   const std::vector<float> smooth = compute_smooth_deltas(track, mode, fixed_target_midi);
   return resynthesize(audio, track, smooth);

@@ -28,7 +28,6 @@ TEST_CASE("Audio from_buffer", "[audio]") {
 
   REQUIRE(audio.size() == 1000);
   REQUIRE(audio.sample_rate() == 22050);
-  REQUIRE(audio.channels() == 1);
   REQUIRE_FALSE(audio.empty());
   REQUIRE_THAT(audio.duration(), WithinRel(1000.0f / 22050.0f, 0.001f));
 }
@@ -52,11 +51,11 @@ TEST_CASE("Audio from_buffer null safety", "[audio]") {
     REQUIRE(audio.size() == 0);
     REQUIRE(audio.sample_rate() == 22050);
 
-    Audio mono = audio.to_mono();
-    REQUIRE(mono.empty());
-    REQUIRE(mono.size() == 0);
-    REQUIRE(mono.sample_rate() == 22050);
-    REQUIRE(mono.data() == nullptr);
+    const Audio copy = audio;
+    REQUIRE(copy.empty());
+    REQUIRE(copy.size() == 0);
+    REQUIRE(copy.sample_rate() == 22050);
+    REQUIRE(copy.data() == nullptr);
   }
 
   SECTION("null pointer with non-zero size throws InvalidParameter") {
@@ -273,15 +272,15 @@ TEST_CASE("Audio slice by samples", "[audio]") {
   }
 }
 
-TEST_CASE("Audio to_mono creates copy", "[audio]") {
+TEST_CASE("Audio copy shares the buffer", "[audio]") {
   std::vector<float> samples = generate_sine(1000, 440.0f, 22050);
-  Audio audio = Audio::from_vector(std::move(samples), 22050);
-  Audio mono = audio.to_mono();
+  const Audio audio = Audio::from_vector(std::move(samples), 22050);
+  const Audio copy = audio;
 
-  REQUIRE(mono.size() == audio.size());
-  REQUIRE(mono.sample_rate() == audio.sample_rate());
-  // Should be a copy, not sharing buffer
-  REQUIRE(mono.data() != audio.data());
+  REQUIRE(copy.size() == audio.size());
+  REQUIRE(copy.sample_rate() == audio.sample_rate());
+  // The buffer is immutable, so a copy shares it instead of duplicating it.
+  REQUIRE(copy.data() == audio.data());
 }
 
 TEST_CASE("Audio empty", "[audio]") {

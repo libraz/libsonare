@@ -188,23 +188,6 @@ Audio Audio::slice_samples(size_t start_sample, size_t end_sample) const {
   return Audio(buffer_, new_offset, new_length, sample_rate_);
 }
 
-Audio Audio::to_mono() const {
-  // Already mono, just return a copy
-  if (!buffer_) {
-    return Audio();
-  }
-
-  // Keep the sample rate of an explicitly-created empty Audio while avoiding
-  // the [nullptr, nullptr) iterator range in the copying path.
-  if (empty()) {
-    return Audio::from_vector({}, sample_rate_);
-  }
-
-  // Create a copy with its own buffer
-  std::vector<float> samples(data(), data() + size());
-  return from_vector(std::move(samples), sample_rate_);
-}
-
 float Audio::operator[](size_t index) const {
   SONARE_CHECK(index < length_, ErrorCode::InvalidParameter);
   return (*buffer_)[offset_ + index];
