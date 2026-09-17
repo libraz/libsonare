@@ -1,11 +1,11 @@
 /**
  * Fractional values on the Node fields whose zero is not a quantity.
  *
- * The addon's integer readers truncate, so `0.5` reaches the callee as 0. On a
- * field whose 0 means "keep the library default" -- or, for an edit offset,
- * "make no change" -- that is a category change reported as success: the call
- * returns exactly what a caller who asked for nothing would have got. The
- * facade refuses such a value instead.
+ * `0.5` would reach the callee as 0 if anything truncated it. On a field whose
+ * 0 means "keep the library default" -- or, for an edit offset, "make no
+ * change" -- that is a category change reported as success: the call returns
+ * exactly what a caller who asked for nothing would have got. Both the facade
+ * and the addon's integer readers refuse such a value.
  *
  * Every case carries its own positive control. `differs` is asserted against a
  * second legitimate value that moves the result, because "the fractional
@@ -14,8 +14,9 @@
  * guard that also changed what the accepted values do fails here.
  *
  * The last block is the other half of the measurement: fields sitting in the
- * same options bag whose control did NOT move the result, which is why they are
- * left truncating.
+ * same options bag whose control did NOT move the result. They are refused all
+ * the same -- a fold no observation can reach is the one a caller has no way to
+ * catch, which argues for refusing it rather than for allowing it.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -442,12 +443,20 @@ describe('project bounce and take selection', () => {
   });
 });
 
-describe('bounce fields left truncating', () => {
+describe('bounce fields whose value the render cannot report', () => {
   it('renders identically whichever block size the caller asks for', () => {
     const omitted = onProject(({ project }) => digest(project.bounce()));
     expect(onProject(({ project }) => digest(project.bounce({ blockSize: 0 })))).toBe(omitted);
     expect(onProject(({ project }) => digest(project.bounce({ blockSize: 64 })))).toBe(omitted);
-    expect(onProject(({ project }) => digest(project.bounce({ blockSize: 0.5 })))).toBe(omitted);
+  });
+
+  it('refuses a fractional block size even though no render could tell', () => {
+    // The digest above cannot separate 0.5 from the 128 its truncation selects,
+    // which is the reason to refuse rather than to allow: an unobservable fold
+    // leaves the caller no way to learn the value was not the one they asked for.
+    const call = () => onProject(({ project }) => project.bounce({ blockSize: 0.5 }));
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(/blockSize must be an integer/);
   });
 
   it('accepts no sample rate but the project rate, which is what zero selects', () => {

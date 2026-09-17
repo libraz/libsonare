@@ -28,13 +28,14 @@ namespace sonare_node {
 ///   setting the caller chose. The range is the only thing that differs between
 ///   the widths, so this is written once rather than per reader.
 ///
-///   Truncation is deliberately left alone: ToInt32 already dropped the
-///   fraction at every one of these sites and 31.5 reaching the callee as 31
-///   does not change a magnitude, so refusing it would be a separate contract
-///   change. It is not inert on a field whose 0 means "keep the default" --
-///   there anything in (-1, 1) selects the default and reports success, a
-///   category change. Read such a field through @ref ZeroIsSentinel; a TS
-///   facade check is an addition, since a direct caller never reaches it.
+///   A fraction is refused here rather than truncated, because every caller of
+///   this function narrows onto an integer C type and 31.5 arriving as 31 is a
+///   setting the caller never chose that nothing downstream can separate from
+///   one they did. Doing it here rather than per entry point is what makes it
+///   hold for an entry point added later: the facade guard it would otherwise
+///   depend on is written by hand, so it covers whichever functions someone
+///   remembered. A field whose 0 means "keep the default" still reads through
+///   @ref ZeroIsSentinel, which names that consequence instead.
 ///
 ///   The refusal UNWINDS rather than leaving a pending JS exception, because
 ///   these readers are called from entry points that keep working afterwards.
@@ -53,7 +54,12 @@ inline double node_narrow_number(Napi::Env env, const Napi::Value& value, const 
                                          std::to_string(static_cast<long long>(low)) + ", " +
                                          std::to_string(static_cast<long long>(high)) + "]");
   }
-  return truncated;
+  // After the range, so an out-of-range fraction is reported by the property it
+  // is furthest outside rather than by whichever check runs first.
+  if (truncated != number) {
+    throw Napi::RangeError::New(env, std::string(name) + " must be an integer");
+  }
+  return number;
 }
 
 /// @brief int-width sibling of @ref node_narrow_number.
@@ -180,11 +186,11 @@ inline float node_narrow_finite_float_element(Napi::Env env, const Napi::Value& 
 /// @brief Marks a key whose 0 the library reads as "keep the default" rather
 ///        than as a quantity.
 /// @details Written where a fallback would go, because it IS the fallback: such
-///   a key defaults at 0. It selects the reader overloads below, which refuse a
-///   fractional value -- the refusal SynthEnumProperty performs for the enum
-///   fields under the same contract. Use it only where a facade entry point
-///   cannot assert instead; the narrowing note above says why the base readers
-///   keep truncating.
+///   a key defaults at 0. It selects the reader overloads below, which name the
+///   sentinel when they refuse a fraction -- anything in (-1, 1) would select the
+///   default and report success, which is a different mistake from a magnitude
+///   landing one step away, and a caller can only act on the one they made. The
+///   narrowing itself refuses a fraction for every key; this decides the wording.
 struct ZeroIsSentinel {};
 inline constexpr ZeroIsSentinel kZeroIsSentinel{};
 

@@ -1,10 +1,12 @@
 /**
  * A fractional number is refused on a key whose zero means "keep the default".
  *
- * Truncation is harmless where it only changes a magnitude, but on these keys
- * anything in (-1, 1) lands on the sentinel: the call succeeds and returns
- * exactly what a caller who asked for nothing would have got, so the parameter
- * silently stops being read. Each case opens with a positive control — an
+ * The addon's integer readers refuse a fraction outright, so the refusal these
+ * cases assert is theirs. What makes the sentinel keys worth their own file is
+ * the wording: anything in (-1, 1) would land on the sentinel, so the call would
+ * have succeeded returning exactly what a caller who asked for nothing gets, and
+ * a refusal that named only a magnitude would describe the wrong mistake. Each
+ * case opens with a positive control — an
  * integral value whose result differs from the omitted one — because without it
  * "the fraction gave the default" cannot be told from a key nothing reads.
  *
@@ -109,10 +111,17 @@ describe('a synth patch field whose zero keeps the base preset', () => {
   });
 
   it('still reads a keymap set of zero as the set it addresses, not as a sentinel', () => {
-    // sampleSet carries no presence bit and its zero is a real keymap set, so it
-    // keeps the family's plain truncation rather than joining the refusal above.
+    // sampleSet carries no presence bit and its zero is a real keymap set, so 0
+    // round-trips as a value while the sentinel fields read it as absence.
     expect(roundTrip('sampleSet', 2)).toBe(2);
-    expect(roundTrip('sampleSet', 0.5)).toBe(0);
+    expect(roundTrip('sampleSet', 0)).toBe(0);
+  });
+
+  it('refuses a fractional keymap set rather than selecting the set below it', () => {
+    // The refusal is the narrowing's, not the sentinel's: 0.5 names no set, and
+    // truncating it would address set 0 under a caller who asked for neither.
+    expect(() => roundTrip('sampleSet', 0.5)).toThrow(RangeError);
+    expect(() => roundTrip('sampleSet', 0.5)).toThrow(/sampleSet must be an integer/);
   });
 });
 
@@ -234,12 +243,14 @@ describe('a bounce option whose zero derives the value', () => {
     }
   });
 
-  it('leaves blockSize truncating, because no render can tell the two apart', () => {
-    // Documented as "<= 0 => 128", but the rendered buffer is identical at every
-    // block size, so the sentinel collision has nothing to report.
+  it('refuses a fractional blockSize although no render can tell the two apart', () => {
+    // Documented as "<= 0 => 128", and the rendered buffer is identical at every
+    // block size, so nothing downstream could report the collision. That is the
+    // argument for refusing: the caller has no observation to catch it with.
     const omitted = bounce('blockSize', undefined);
     expect(bounce('blockSize', 64)).toBe(omitted);
-    expect(bounce('blockSize', 0.5)).toBe(omitted);
+    expect(() => bounce('blockSize', 0.5)).toThrow(RangeError);
+    expect(() => bounce('blockSize', 0.5)).toThrow(/blockSize must be an integer/);
   });
 });
 
@@ -309,14 +320,16 @@ describe('a clip channel count whose zero means mono', () => {
     }
   });
 
-  it('leaves audioSampleRate truncating, because the field is mandatory', () => {
+  it('reports audioSampleRate as absent at zero and as non-integral at a fraction', () => {
     // Its zero is not a sentinel: once decoded audio is supplied the rate has no
-    // default at all, so omitting it is the same error that 0 is, and a fraction
-    // outside (-1, 1) truncates and succeeds like any other magnitude.
+    // default at all, so omitting it is the same error that 0 is. A fraction is a
+    // different mistake and reads as one -- 48000.5 is not a rate that was left
+    // out, and truncating it would have shipped a rate nobody chose.
     expect(addClip(1, 44100).sampleRateHint).toBe(44100);
-    expect(addClip(1, 48000.5).sampleRateHint).toBe(48000);
+    expect(() => addClip(1, 48000.5)).toThrow(RangeError);
+    expect(() => addClip(1, 48000.5)).toThrow(/audioSampleRate must be an integer/);
     expect(() => addClip(1, 0)).toThrow(/Invalid parameter/);
-    expect(() => addClip(1, 0.5)).toThrow(/Invalid parameter/);
+    expect(() => addClip(1, 0.5)).toThrow(/audioSampleRate must be an integer/);
   });
 });
 

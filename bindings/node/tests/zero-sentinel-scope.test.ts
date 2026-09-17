@@ -2,10 +2,11 @@
  * Every integer key whose fallback is a literal 0 has answered what its zero
  * means.
  *
- * The addon's integer readers truncate, so `0.5` reaches the callee as 0. Where
- * 0 is a quantity that only changes a magnitude; where 0 means "keep the library
- * default" it is a category change reported as success, and the call returns
- * what a caller who asked for nothing would have got. `kZeroIsSentinel` marks
+ * The addon's integer readers refuse a fraction, so `0.5` never reaches the
+ * callee. What a literal-zero fallback still decides is what an accepted 0
+ * means: a quantity the caller can ask for, or "keep the library default", in
+ * which case the call returns what a caller who asked for nothing would have
+ * got and the parameter silently stops being read. `kZeroIsSentinel` marks
  * the second kind, and marking it made the distinction a property of the source
  * SPELLING — `node_int_option(opts, "nFft", kZeroIsSentinel)` and
  * `node_int_option(opts, "frameStart", 0)` are now different text where they
@@ -106,7 +107,7 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   ],
   [
     'project/edit.cpp:takeId',
-    "0 falls back to the clip's active take; the facade refuses a fractional value ahead of the addon, which keeps truncating.",
+    "0 falls back to the clip's active take, which is a take a caller can mean rather than a stand-in for absence.",
   ],
   [
     'project/edit.cpp:targetParamId',
@@ -174,7 +175,7 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   ['sonare_wrap_effects.cpp:frameEnd', 'An analysis frame index; 0 is the first frame.'],
   [
     'sonare_wrap_effects.cpp:timeOffsetSamples',
-    'Zero is the identity shift; the facade refuses a fractional value ahead of the addon, which keeps truncating.',
+    'Zero is the identity shift, a displacement a caller can mean rather than a stand-in for absence.',
   ],
   [
     'sonare_wrap_effects.cpp:startSample',
@@ -227,7 +228,7 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   ],
   [
     'sonare_wrap_note_objects.h:timeOffsetSamples',
-    'Zero is the identity shift; the facade refuses a fractional value ahead of the addon, which keeps truncating.',
+    'Zero is the identity shift, a displacement a caller can mean rather than a stand-in for absence.',
   ],
   [
     'sonare_wrap_project.cpp:id',
