@@ -31,6 +31,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _validate_c_int_field,
 )
 
 # Keyword argument -> C-ABI param key. The C side accepts both spellings, but
@@ -50,6 +51,12 @@ _PARAM_KEYS = {
     "n_fft": "nFft",
     "hop_length": "hopLength",
 }
+
+# The options whose C++ field is an `int`. A param value travels as a double, so
+# without this the two integral options are the only named integer arguments on
+# this surface not narrowed before the call, and a fraction would reach the core
+# to be refused there under the camelCase key rather than the one a caller typed.
+_INTEGER_PARAMS = frozenset({"n_fft", "hop_length"})
 
 
 class MixTrackInput(NamedTuple):
@@ -181,6 +188,10 @@ def _assistant_params(
     params: dict[str, float | int | bool] = {}
     for name, value in options.items():
         if value is None:
+            continue
+        if name in _INTEGER_PARAMS:
+            # Ahead of the bool branch, so `True` is refused rather than read as 1.
+            params[_PARAM_KEYS[name]] = _validate_c_int_field(fn_name, value, name)
             continue
         if isinstance(value, bool):
             params[_PARAM_KEYS[name]] = value

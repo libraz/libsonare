@@ -760,8 +760,12 @@ def _int_refusal(fn_name: str, value: object, arg_name: str, domain: str) -> Son
     return SonareValueError(f"{fn_name}: {arg_name} {domain}")
 
 
-def _validate_c_int_field(fn_name: str, value: int, arg_name: str) -> int:
+def _validate_c_int_field(fn_name: str, value: object, arg_name: str) -> int:
     """Narrow a config field onto a C ``int``, refusing anything that would wrap.
+
+    Takes ``object``, like the :func:`_narrow_int` it wraps: refusing a value
+    that is not an integer is the job, so a parameter annotated ``int`` would
+    promise the callers had already done it.
 
     ctypes truncates on assignment to a ``c_int32`` field, so a value past the
     signed range reaches the core as a different, legal number instead of being
