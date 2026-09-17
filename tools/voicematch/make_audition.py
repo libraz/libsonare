@@ -86,6 +86,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -534,6 +535,30 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
     }
 
 
+#: A drum note's override key: `d038.percussion.wire_buzz` names note 38. The
+#: only prefix in the override key space that carries an instrument a take can
+#: be asked to strike; a patch or engine key names no note at all.
+_DRUM_KEY = re.compile(r"\bd(\d{3})\.")
+
+
+def played_notes(items: list[dict]) -> set[int]:
+    """Every note number this page's takes actually strike."""
+    return {int(n["note"]) for item in items
+            for n in (item.get("meta") or {}).get("notes") or []}
+
+
+def unheard_drum_notes(tuned: list[Variant], items: list[dict]) -> list[int]:
+    """Drum notes these settings move that no take on the page strikes.
+
+    Empty when the settings name no drum note, and empty as soon as ONE of them
+    is played: a page that can hear part of a setting is a page worth listening
+    to, and the reader is told which takes went unchanged separately.
+    """
+    named = {int(m.group(1)) for v in tuned for m in _DRUM_KEY.finditer(v.overrides)}
+    return sorted(named - played_notes(items)) if named and not (
+        named & played_notes(items)) else []
+
+
 def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
                extra: list[Variant]) -> int:
     """One voice's whole page: every take, every version, and the manifest.
@@ -604,11 +629,27 @@ def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
     if tuned:
         identical = [tid for tid, d in variant_digests.items() if len(d) == 1]
         if len(identical) == len(variant_digests):
-            print(f"WARNING: no setting changed the render on any take "
-                  f"({', '.join(v.name for v in tuned)}).\n         The library has no "
-                  f"tuning override layer -- rebuild it with -DBUILD_TUNING=ON, or point"
-                  f"\n         --lib at one that has; or the keys reach nothing this "
-                  f"voice consults.", file=sys.stderr)
+            unplayed = unheard_drum_notes(tuned, items)
+            if unplayed:
+                # Named separately because it sends the reader somewhere else
+                # entirely, and it is the cause a build flag looks exactly like:
+                # the settings reach the library and move nothing because no
+                # take strikes the instrument they are about. A candidate on a
+                # note no phrase plays cannot be listened to at all, which is
+                # the one thing recording it was supposed to make possible.
+                print(f"WARNING: no setting changed the render on any take "
+                      f"({', '.join(v.name for v in tuned)}), because no take on "
+                      f"this page\n         strikes the drum notes they move: "
+                      f"{', '.join(str(n) for n in unplayed)}. The takes play "
+                      f"{', '.join(str(n) for n in sorted(played_notes(items)))}."
+                      f"\n         This is a gap in the take set, not in the "
+                      f"settings.", file=sys.stderr)
+            else:
+                print(f"WARNING: no setting changed the render on any take "
+                      f"({', '.join(v.name for v in tuned)}).\n         The library has "
+                      f"no tuning override layer -- rebuild it with -DBUILD_TUNING=ON, "
+                      f"or point\n         --lib at one that has; or the keys reach "
+                      f"nothing this voice consults.", file=sys.stderr)
         elif identical:
             print(f"note: {len(identical)} take(s) render identically across the "
                   f"settings: {', '.join(sorted(identical))}", file=sys.stderr)

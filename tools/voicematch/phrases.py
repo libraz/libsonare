@@ -302,12 +302,45 @@ def drum_takes(program: int = 0) -> list[Take]:
         channel=DRUM_CHANNEL,
     ))
 
-    # A cymbal's wash is four to ten seconds and every measurement in this
-    # harness stops at 1.8. This is the take that hears what none of them reach.
+    # The hand percussion, which every other take here leaves out. These are the
+    # instruments whose whole character is their rise time — a shaker and a
+    # scraper are a gesture rather than a strike — so each speaks more than once
+    # and they are close enough together that a swell shows up as one.
     out.append(Take(
-        "cymbal-wash", "Cymbals — crash and ride, let ring", "the long tail",
-        "49 crash, then 51 ride, ten seconds",
-        [Note(49, 120, 0.3, 0.05), Note(51, 100, 3.0, 0.05)], tail_s=10.0,
+        "hand-perc", "Hand percussion — shakers, scrapers, cuica, vibraslap",
+        "the kit as a kit",
+        "69 cabasa, 70 maracas, 73/74 guiro, 78/79 cuica, 58 vibraslap",
+        [Note(69, 96, 0.3 + i * 0.25, 0.05) for i in range(4)]
+        + [Note(70, 100, 1.4 + i * 0.25, 0.05) for i in range(4)]
+        + [Note(73, 104, 2.5, 0.05), Note(74, 104, 3.0, 0.05),
+           Note(78, 100, 3.9, 0.05), Note(79, 100, 4.5, 0.05),
+           Note(58, 112, 5.3, 0.05)], tail_s=4.0,
+        channel=DRUM_CHANNEL,
+    ))
+
+    # A cymbal's wash is four to ten seconds and every measurement in this
+    # harness stops at 1.8. These are the takes that hear what none of them
+    # reach — split in two because the kit carries seven cymbals and a wash that
+    # is still blooming when the next plate enters cannot be judged. Between
+    # them they strike all seven: a candidate recorded against a cymbal no take
+    # plays is a setting nothing can listen to, which is the one thing
+    # `calibrations.json` exists to prevent.
+    out.append(Take(
+        "cymbal-wash", "Cymbals — the plates, let ring", "the long tail",
+        "49 crash, 57 crash 2, 52 china, ten seconds",
+        [Note(49, 120, 0.3, 0.05), Note(57, 120, 3.5, 0.05),
+         Note(52, 112, 6.7, 0.05)], tail_s=10.0,
+        channel=DRUM_CHANNEL,
+    ))
+
+    # The cymbals a part is played ON rather than punctuated with. Each is
+    # defined rather than blooming, so they sit closer together than the plates
+    # and need less tail.
+    out.append(Take(
+        "cymbal-ride", "Cymbals — rides, bell and splash", "the long tail",
+        "51 ride, 59 ride 2, 53 bell, 55 splash",
+        [Note(n, 100, 0.3 + i * 2.0, 0.05)
+         for i, n in enumerate((51, 59, 53, 55))], tail_s=6.0,
         channel=DRUM_CHANNEL,
     ))
 

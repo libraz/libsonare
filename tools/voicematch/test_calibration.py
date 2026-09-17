@@ -178,3 +178,29 @@ def test_the_detail_leads_with_why_rather_than_what():
     assert "x=1" in variant.detail
     assert calibration.Variant("bare", "x=1").detail == "x=1"
     assert calibration.Variant("control", "").detail == "no overrides"
+
+
+def test_every_drum_note_a_recorded_setting_moves_is_struck_by_a_take():
+    """Recording a candidate is only half of the mechanism — the other half is
+    hearing it, and a drum note no take strikes cannot be heard at all. The page
+    still builds, every version of every take renders, and all of them are the
+    same audio, which looks exactly like a library built without the override
+    layer.
+
+    This holds the take set to the settings that exist, not to the whole kit:
+    a note nothing is recorded against needs no take, and demanding one would
+    turn a listening page into a roll call of 47 drums.
+    """
+    from make_audition import _DRUM_KEY
+    from phrases import build_takes
+
+    struck = {n.note for take in build_takes("drums", 0) for n in take.notes}
+    unheard: dict[str, list[int]] = {}
+    for slug, variants in calibration.load().items():
+        if not slug.startswith("kit"):
+            continue
+        for variant in variants:
+            named = {int(m.group(1)) for m in _DRUM_KEY.finditer(variant.overrides)}
+            if named - struck:
+                unheard[f"{slug}/{variant.name}"] = sorted(named - struck)
+    assert not unheard

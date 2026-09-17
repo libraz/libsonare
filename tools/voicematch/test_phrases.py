@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import sys
 from pathlib import Path
 
@@ -113,3 +114,25 @@ def test_a_set_keeps_each_group_in_one_run(name):
                 f"{seen[-1]!r}"
             )
             seen.append(take.group)
+
+
+#: The cymbals GM lays out on the standard kit. Written here rather than read
+#: from a capture: a take set has no capture, and what the kit HAS is the spec's
+#: answer while what a capture holds is one product's.
+GM_CYMBALS = (49, 51, 52, 53, 55, 57, 59)
+
+
+def test_the_kit_set_strikes_every_cymbal_the_map_names():
+    """A candidate is recorded against a drum note and judged by listening to a
+    take. A cymbal no take strikes is a setting that cannot be listened to at
+    all — which is not a weaker page, it is the mechanism missing."""
+    struck = {n.note for take in build_takes("drums", 0) for n in take.notes}
+    assert not set(GM_CYMBALS) - struck
+
+
+def test_no_plate_blooms_into_the_next_one():
+    """The split exists because the washes overlap otherwise, so the thing that
+    makes it worth having is the spacing, not the note list."""
+    plates = next(t for t in build_takes("drums", 0) if t.id == "cymbal-wash")
+    starts = sorted(n.start for n in plates.notes)
+    assert all(b - a >= 3.0 for a, b in itertools.pairwise(starts))
