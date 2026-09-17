@@ -455,6 +455,18 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
         ]
 
+        if hasattr(lib, "sonare_project_transcribe_to_clip"):
+            lib.sonare_project_transcribe_to_clip.restype = ctypes.c_int32
+            lib.sonare_project_transcribe_to_clip.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareTranscribeConfig),
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+
         lib.sonare_project_import_smf.restype = ctypes.c_int32
         lib.sonare_project_import_smf.argtypes = [
             ctypes.c_void_p,

@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <exception>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -131,10 +132,35 @@ bool commands_apply_cleanly(arrangement::Project* scratch,
 /// candidate payload / iteration count. On a module exception OR an invalid
 /// command sequence the call is DISCARDED (nothing merged) and `discarded` is
 /// set. Returns the module's reported iteration count (0 when discarded).
+/// Whether @p collected already carries @p reason as one of its newline-joined
+/// lines. Exact match on a whole line: two modules reporting the same fault say
+/// it once, while two reporting different ones both survive.
+bool contains_reason(const std::string& collected, const std::string& reason) {
+  std::size_t start = 0;
+  while (start <= collected.size()) {
+    const std::size_t end = collected.find('\n', start);
+    const std::size_t stop = end == std::string::npos ? collected.size() : end;
+    if (collected.compare(start, stop - start, reason) == 0) return true;
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  return false;
+}
+
+/// @param out_reasons Collects each module's own `diagnostics.reason`, newline
+///        joined. Without this a module that comes back empty ON PURPOSE -- a
+///        request naming no target clip, a malformed parameter blob -- reports
+///        nothing at all to the caller, which is indistinguishable from a module
+///        that simply had nothing to add.
+/// @param out_module_rejected Set when a module REFUSED the request outright.
+/// @param out_module_truncated Set when a module reports its OWN budget
+///        truncation. The driver's gate only fires between slots, so a single
+///        registered module that stops early has no other way to say so.
 template <typename RunFn>
 void dispatch_slot(arrangement::Project* scratch, arrangement::MidiContentStore* scratch_store,
-                   const AssistScope& scope, RunFn&& run_module, AssistResult* out,
-                   bool* discarded) {
+                   const AssistScope& scope, RunFn&& run_module, AssistResult* out, bool* discarded,
+                   std::string* out_reasons, bool* out_module_truncated,
+                   bool* out_module_rejected) {
   *discarded = false;
   AssistResult module_result;
   try {
@@ -153,6 +179,19 @@ void dispatch_slot(arrangement::Project* scratch, arrangement::MidiContentStore*
   }
 
   out->diagnostics.iterations_consumed += module_result.diagnostics.iterations_consumed;
+  // Joined, but never repeated. A params fault is a REQUEST-level fault: every
+  // module reads the same params_json and refuses it identically, so appending
+  // blindly reports one mistake once per registered module -- which reads to a
+  // user like a bug in the library rather than a mistake in their request.
+  if (!module_result.diagnostics.reason.empty() &&
+      !contains_reason(*out_reasons, module_result.diagnostics.reason)) {
+    if (!out_reasons->empty()) out_reasons->push_back('\n');
+    *out_reasons += module_result.diagnostics.reason;
+  }
+  if (module_result.diagnostics.status == AssistStatus::kBudgetTruncated) {
+    *out_module_truncated = true;
+  }
+  if (module_result.diagnostics.status == AssistStatus::kRejected) *out_module_rejected = true;
   if (module_result.candidate_payloads.empty()) {
     if (!module_result.candidate_payload.empty()) {
       module_result.candidate_payloads.push_back(std::move(module_result.candidate_payload));
@@ -175,6 +214,11 @@ AssistResult CompositionAssist::run(const arrangement::ProjectView& view,
                                     const AssistRequest& request) const {
   AssistResult result;
   result.diagnostics.status = AssistStatus::kEmpty;
+  // Collected from the modules rather than composed here: a module's own reason
+  // is the only account of WHY it produced nothing, and the driver has none.
+  std::string module_reasons;
+  bool module_truncated = false;
+  bool module_rejected = false;
   const auto start_time = std::chrono::steady_clock::now();
 
   // Iteration budget: the driver stops dispatching further slots once the total
@@ -221,7 +265,7 @@ AssistResult CompositionAssist::run(const arrangement::ProjectView& view,
     bool discarded = false;
     dispatch_slot(
         &scratch, &scratch_store, request.scope, [&]() { return gen->generate(view, request); },
-        &result, &discarded);
+        &result, &discarded, &module_reasons, &module_truncated, &module_rejected);
     any_discarded = any_discarded || discarded;
     if (discarded) ++result.diagnostics.slots_discarded;
   }
@@ -231,7 +275,8 @@ AssistResult CompositionAssist::run(const arrangement::ProjectView& view,
     bool discarded = false;
     dispatch_slot(
         &scratch, &scratch_store, request.scope,
-        [&]() { return cp->derive(view, request, {}, queries); }, &result, &discarded);
+        [&]() { return cp->derive(view, request, {}, queries); }, &result, &discarded,
+        &module_reasons, &module_truncated, &module_rejected);
     any_discarded = any_discarded || discarded;
     if (discarded) ++result.diagnostics.slots_discarded;
   }
@@ -241,25 +286,50 @@ AssistResult CompositionAssist::run(const arrangement::ProjectView& view,
     bool discarded = false;
     dispatch_slot(
         &scratch, &scratch_store, request.scope, [&]() { return rhythm->generate(view, request); },
-        &result, &discarded);
+        &result, &discarded, &module_reasons, &module_truncated, &module_rejected);
     any_discarded = any_discarded || discarded;
     if (discarded) ++result.diagnostics.slots_discarded;
   }
 
   // Compose the final status from what happened.
-  if (truncated) {
+  if (module_rejected) {
+    // Ahead of every other branch, and NOT conditioned on the run being empty.
+    // A refusal is a verdict on the REQUEST, so one module refusing it settles
+    // the whole run: with the `commands.empty()` guard this branch was
+    // unreachable for the built-ins (they share one params reader, so a params
+    // fault fells all of them) and became reachable the moment a host installed
+    // a module of its own -- at which point a faulty request could have come
+    // back "ok" with rc 0 and the refusal buried in the reason, which is the
+    // same indistinguishability this status exists to end.
+    //
+    // The commands collected so far are deliberately NOT applied. Nothing is
+    // lost by that: preview and apply are separate calls, so a caller fixes the
+    // request and runs again.
+    result.diagnostics.status = AssistStatus::kRejected;
+    result.diagnostics.reason = module_reasons;
+    result.commands.clear();
+  } else if (truncated) {
     result.diagnostics.status = AssistStatus::kBudgetTruncated;
     result.diagnostics.reason =
         has_iter_cap && result.diagnostics.iterations_consumed >= request.budget.max_iterations
             ? "iteration budget exhausted"
             : "time budget exhausted";
+  } else if (module_truncated) {
+    // The gate above only fires when the driver tries to dispatch the NEXT slot,
+    // so a lone module that stopped early is invisible to it. Its own report is
+    // the only evidence, and dropping it made a truncated run read as complete.
+    result.diagnostics.status = AssistStatus::kBudgetTruncated;
+    result.diagnostics.reason =
+        module_reasons.empty() ? "module stopped on its own budget" : module_reasons;
   } else if (any_discarded && result.commands.empty()) {
     result.diagnostics.status = AssistStatus::kDiscarded;
     result.diagnostics.reason = "module threw or returned an invalid patch";
   } else if (!any_ran || result.commands.empty()) {
     result.diagnostics.status = AssistStatus::kEmpty;
+    result.diagnostics.reason = module_reasons;
   } else {
     result.diagnostics.status = AssistStatus::kOk;
+    result.diagnostics.reason = module_reasons;
   }
 
   return result;

@@ -86,9 +86,12 @@ export type {
   ProjectTrack,
   ProjectTrackDesc,
   ProjectTrackKind,
+  ProjectTranscribeRequest,
   ProjectWarpAnchor,
   ProjectWarpMapDesc,
   ProjectWarpMode,
+  TranscribeOptions,
+  TranscribeResult,
 } from './project_types';
 export {
   AutomationTargetKind,

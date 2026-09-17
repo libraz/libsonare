@@ -95,6 +95,7 @@ set(ADDON_SOURCES
   src/addon/sonare_wrap_streaming.cpp
   src/addon/streaming/realtime_voice_changer.cpp
   src/addon/streaming/stream_analyzer.cpp
+  src/addon/sonare_wrap_transcribe.cpp
   src/addon/sonare_wrap_utils.cpp
 )
 
@@ -132,6 +133,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/project_external_stems.cpp
   ${SONARE_ROOT}/src/c_api/project_midi.cpp
   ${SONARE_ROOT}/src/c_api/project_mir.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_transcribe.cpp
   ${SONARE_ROOT}/src/c_api/project_soundfont.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_sample_bank.cpp
 )

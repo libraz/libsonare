@@ -89,6 +89,7 @@ void registerProjectBindings() {
   registerProjectExternalStems(cls);
   registerProjectEdit(cls);
   registerProjectMidi(cls);
+  registerProjectTranscribe(cls);
   registerProjectBounce(cls);
   registerProjectMeta(cls);
   registerProjectFreeFunctions();

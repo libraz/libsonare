@@ -63,6 +63,7 @@ DOMAIN_TITLES = {
     "project_instruments": "project & arrangement",
     "project_midi": "project & arrangement",
     "streaming": "streaming",
+    "transcribe": "transcription",
     "voice_changer": "voice changer",
 }
 

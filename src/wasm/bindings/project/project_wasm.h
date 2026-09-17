@@ -145,6 +145,12 @@ struct ProjectWasm {
   // { ok, unmatchedNoteOns, unmatchedNoteOffs }; throws if the clip id is
   // unknown or not a MIDI clip.
   val validateMidiNotes(const val& clip_id);
+
+  // Transcribes mono audio straight into a MIDI clip's event list, REPLACING
+  // whatever it held. The PPQ grid is the project's own tempo map, which is why
+  // there is no tempo argument; returns the number of notes written.
+  uint32_t transcribeToClip(const val& clip_id, val samples, const val& sample_rate, val config);
+
   val analyzeTempo(val audio, const val& sample_rate, val options);
   float autoTempo(val audio, const val& sample_rate, const val& candidate_index,
                   bool apply_time_signatures, val options);
@@ -362,6 +368,11 @@ val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value, const
                         double ppq);
 val js_midi_route_events(val events, val config);
 
+// Standalone transcription (body in project_transcribe.cpp). Positional in the
+// C ABI's own order minus the derived length and the out parameter: samples,
+// sampleRate, tempoBpm, config. An undefined tempoBpm asks for detection.
+val js_transcribe(val samples, const val& sample_rate, const val& tempo_bpm, val config);
+
 // NativeSynth preset / enum free functions (bodies in project_bounce.cpp).
 val js_synth_preset_names();
 val js_synth_preset_patch(const std::string& name);
@@ -376,6 +387,7 @@ void registerProjectArrange(emscripten::class_<ProjectWasm>& cls);
 void registerProjectExternalStems(emscripten::class_<ProjectWasm>& cls);
 void registerProjectEdit(emscripten::class_<ProjectWasm>& cls);
 void registerProjectMidi(emscripten::class_<ProjectWasm>& cls);
+void registerProjectTranscribe(emscripten::class_<ProjectWasm>& cls);
 void registerProjectBounce(emscripten::class_<ProjectWasm>& cls);
 void registerProjectMeta(emscripten::class_<ProjectWasm>& cls);
 void registerProjectFreeFunctions();

@@ -76,6 +76,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::PreviewMidiFxCount>("previewMidiFxCount"),
           InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx"),
           InstanceMethod<&ProjectWrap::ValidateMidiNotes>("validateMidiNotes"),
+          InstanceMethod<&ProjectWrap::TranscribeToClip>("transcribeToClip"),
           InstanceMethod<&ProjectWrap::AutoTempo>("autoTempo"),
           InstanceMethod<&ProjectWrap::AnalyzeTempo>("analyzeTempo"),
           InstanceMethod<&ProjectWrap::SnapToGrid>("snapToGrid"),

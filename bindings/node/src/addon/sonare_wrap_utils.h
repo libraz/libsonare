@@ -103,6 +103,14 @@ struct HpssArguments {
 ///         must return before any further N-API call.
 bool ReadHpssArguments(Napi::Env env, const Napi::CallbackInfo& info, HpssArguments* out);
 
+/// @brief Marshal one C-ABI MIDI event into the `{ ppq, data0, data1 }` object
+///        every JS-facing event list on this surface is made of.
+///
+/// Shared rather than per-file: the flat event is the one shape the project,
+/// the MIDI helpers and the transcription all hand back, and a second spelling
+/// of it would be a second contract for `ProjectMidiEvent`.
+Napi::Object MidiEventToObject(Napi::Env env, const SonareMidiEventPod& event);
+
 bool IsFloat32Array(const Napi::Value& value);
 bool IsUint8Array(const Napi::Value& value);
 bool IsInt32Array(const Napi::Value& value);

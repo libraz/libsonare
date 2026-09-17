@@ -61,6 +61,9 @@ from .analyzer import (
     StreamingRetune as StreamingRetune,
 )
 from .analyzer import (
+    TranscribeResult as TranscribeResult,
+)
+from .analyzer import (
     abi_version as abi_version,
 )
 from .analyzer import (
@@ -654,6 +657,9 @@ from .analyzer import (
 from .analyzer import tone as tone
 from .analyzer import (
     tonnetz as tonnetz,
+)
+from .analyzer import (
+    transcribe as transcribe,
 )
 from .analyzer import (
     trim as trim,

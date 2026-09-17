@@ -94,6 +94,10 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'An index into the bank; 0 is the first sample, a valid index the caller can mean.',
   ],
   [
+    'sonare_wrap_transcribe.cpp:fixedVelocity',
+    'The 0 an omitted key sends, which the C ABI reads as "measure". Untagged deliberately: the sentinel wording claims a caller\'s zero selects the default, and here a WRITTEN 0 is refused by name (1..127), so the read site checks presence and no caller can reach this zero.',
+  ],
+  [
     'engine/graph_offline.cpp:type',
     'Graph node kind ordinal, where 0 is pass-through — a named member rather than an absent value.',
   ],

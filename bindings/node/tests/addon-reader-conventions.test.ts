@@ -78,6 +78,7 @@ import {
   spectralEdit,
   splitNote,
   synthesizeRir,
+  transcribe,
 } from '../src/index.js';
 import {
   addonEntryPoints,
@@ -758,6 +759,21 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           { ...o, ppq: 0, data0: Project.midiNoteOn(0, 0, 0, 60, 100).data0 },
         ]);
         return p.clipCount();
+      }),
+  },
+  {
+    jsName: 'transcribe',
+    invoke: (o) => transcribe({ ...o, samples: sine(8192), sampleRate: SR }),
+  },
+  {
+    jsName: 'transcribeToClip',
+    invoke: (o) =>
+      withProject((p) => {
+        const { clipId } = p.addMidiClip(0, 4);
+        // The note count alone would hold between two transcriptions that both
+        // found nothing, so the written events are compared too.
+        const noteCount = p.transcribeToClip({ ...o, clipId, samples: sine(8192), sampleRate: SR });
+        return [noteCount, p.toJson()];
       }),
   },
   {

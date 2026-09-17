@@ -933,6 +933,11 @@ class PatchMidiClip final : public EditCommand {
   const char* type_name() const noexcept override { return "PatchMidiClip"; }
   std::size_t retained_bytes() const noexcept override;
 
+  /// The patch this command would apply. Read by a caller that has to describe a
+  /// proposed edit without performing it -- the assist preview surface reports
+  /// what a module would add, and there is no other way to see it from outside.
+  const MidiClipPatch& patch() const noexcept { return patch_; }
+
  private:
   MidiClipPatch patch_;
 };

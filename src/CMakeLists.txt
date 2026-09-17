@@ -241,6 +241,8 @@ set(SONARE_C_PROJECT_SOURCES
   c_api/project_external_stems.cpp
   c_api/project_midi.cpp
   c_api/project_mir.cpp
+  c_api/sonare_c_transcribe.cpp
+  c_api/sonare_c_assist.cpp
   c_api/project_soundfont.cpp
   c_api/sonare_c_sample_bank.cpp
   c_api/synth_catalog.cpp
@@ -685,6 +687,7 @@ if(BUILD_PITCH_EDITOR)
     editing/note_model/note_extractor.cpp
     editing/note_model/note_renderer.cpp
     editing/note_model/note_split_merge.cpp
+    editing/note_model/note_transcriber.cpp
     editing/note_model/pitch_decomposition.cpp
     editing/pitch_editor/f0_provider.cpp
     editing/pitch_editor/note_editor.cpp
@@ -933,6 +936,13 @@ if(BUILD_ARRANGEMENT)
     add_library(sonare_assist STATIC
       midi/assist/assist_registry.cpp
       midi/assist/composition_assist.cpp
+      midi/assist/modules/music_theory.cpp
+      midi/assist/modules/harmony_context.cpp
+      midi/assist/modules/dissonance_analyzer.cpp
+      midi/assist/modules/placement_judge.cpp
+      midi/assist/modules/generator_params.cpp
+      midi/assist/modules/diatonic_harmonizer.cpp
+      midi/assist/modules/chord_tone_generator.cpp
     )
     target_include_directories(sonare_assist PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
     target_link_libraries(sonare_assist PUBLIC sonare_arrangement sonare_midi sonare_mir)
@@ -998,6 +1008,13 @@ if(BUILD_SHARED)
   endif()
   if(BUILD_PITCH_EDITOR)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_PITCH_EDITOR=1)
+  endif()
+  # The composition-assist C ABI is compiled into this target via
+  # SONARE_C_PROJECT_SOURCES and gates on SONARE_WITH_ASSIST, which sonare_assist
+  # PUBLIC-defines. Without the link it compiles its NOT_SUPPORTED stub and the
+  # whole seam stays unreachable from every binding that loads this library.
+  if(TARGET sonare_assist)
+    target_link_libraries(sonare_shared PUBLIC sonare_assist)
   endif()
   if(BUILD_VOICE_CHANGER)
     target_link_libraries(sonare_shared PUBLIC sonare_voice_changer)
@@ -1144,6 +1161,7 @@ if(BUILD_WASM)
       wasm/bindings/project/project_external_stems.cpp
       wasm/bindings/project/project_edit.cpp
       wasm/bindings/project/project_midi.cpp
+      wasm/bindings/project/project_transcribe.cpp
       wasm/bindings/project/project_bounce.cpp
       wasm/bindings/project/project_meta.cpp
       wasm/bindings/analysis/quick.cpp
@@ -1191,6 +1209,11 @@ if(BUILD_WASM)
   # must link the implementation library.
   if(BUILD_PITCH_EDITOR)
     target_link_libraries(sonare PRIVATE sonare_pitch_editor)
+    # Linking the library is not enough for a C-ABI unit compiled into this
+    # target: sonare_c_transcribe.cpp reads this define and compiles its
+    # NOT_SUPPORTED stub without it, so transcription linked and answered
+    # SONARE_ERROR_NOT_SUPPORTED at runtime.
+    target_compile_definitions(sonare PRIVATE SONARE_WITH_PITCH_EDITOR=1)
   endif()
   if(BUILD_VOICE_CHANGER AND NOT SONARE_WASM_ANALYSIS_ONLY)
     target_link_libraries(sonare PRIVATE sonare_voice_changer)
@@ -1235,6 +1258,15 @@ if(BUILD_WASM)
     target_link_libraries(sonare PRIVATE
       sonare_arrangement sonare_serialize sonare_midi sonare_mir)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_ARRANGEMENT=1)
+    # sonare_assist is deliberately NOT linked here. sonare_c_assist.cpp arrives
+    # with SONARE_C_PROJECT_SOURCES above and gates on SONARE_WITH_ASSIST, which
+    # only that library defines, so it compiles its NOT_SUPPORTED stub and the
+    # composition-assist seam stays unreachable from JS. The seam is a C-ABI and
+    # C++ plug-in point; note-level composition is not part of this package.
+    # Linking it is not a one-line change: sonare_assist carries units that
+    # catch, and emscripten elides their landing pads unless each is named in a
+    # per-target -fexceptions block, which silently removes the driver's
+    # guarantee that a throwing module is discarded rather than fatal.
   endif()
   # The binding layer carries the same warning contract as every other target.
   # Without it the whole of src/wasm/ compiled with no warnings enabled at all,
@@ -1282,6 +1314,8 @@ if(BUILD_WASM)
       c_api/project_external_stems.cpp
       c_api/project_midi.cpp
       c_api/project_mir.cpp
+      c_api/sonare_c_transcribe.cpp
+      c_api/sonare_c_assist.cpp
       c_api/project_soundfont.cpp
       c_api/sonare_c_mixing.cpp
       c_api/sonare_c_sample_bank.cpp
@@ -1323,6 +1357,7 @@ if(BUILD_WASM)
       wasm/bindings/project/project_external_stems.cpp
       wasm/bindings/project/project_meta.cpp
       wasm/bindings/project/project_midi.cpp
+      wasm/bindings/project/project_transcribe.cpp
       wasm/bindings/realtime/capture.cpp
       wasm/bindings/realtime/clips.cpp
       wasm/bindings/realtime/engine.cpp

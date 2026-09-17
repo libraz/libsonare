@@ -1666,6 +1666,12 @@ export interface SonareModule {
     group: number,
     ppq: number,
   ) => unknown;
+  transcribe: (
+    samples: Float32Array,
+    sampleRate: number,
+    tempoBpm: number | undefined,
+    config: unknown,
+  ) => unknown;
   _analysisResultSchemaPaths: () => string[];
   _analysisResultSchemaFixture: () => WasmAnalysisResult;
   analyzeImpulseResponse: (

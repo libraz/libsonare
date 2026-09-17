@@ -535,6 +535,7 @@ export type {
   ProjectTrack,
   ProjectTrackDesc,
   ProjectTrackKind,
+  ProjectTranscribeRequest,
   ProjectWarpAnchor,
   ProjectWarpMapDesc,
   SampleDesc,
@@ -555,6 +556,8 @@ export type {
   SynthModSource,
   SynthOscWaveform,
   SynthPatch,
+  TranscribeOptions,
+  TranscribeResult,
 } from './project';
 export {
   AutomationTargetKind,
@@ -860,6 +863,8 @@ export {
   StreamingRetune,
   validateRealtimeVoiceChangerPresetJson,
 } from './streaming_mixing';
+export type { TranscribeRequest } from './transcribe';
+export { transcribe } from './transcribe';
 export type { ValidateOptions } from './validation';
 export type {
   BindWebMidiOptions,

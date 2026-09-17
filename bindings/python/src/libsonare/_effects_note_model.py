@@ -14,6 +14,8 @@ from ._ffi import (
     SonareNoteExtractorConfig,
     SonareNoteObject,
     SonareNoteObjectsResult,
+    SonareTranscribeConfig,
+    SonareTranscribeResult,
 )
 from ._runtime import (
     _C_INT_MAX,
@@ -24,6 +26,7 @@ from ._runtime import (
     _check,
     _from_c_float_array,
     _get_lib,
+    _int_refusal,
     _narrow_int,
     _to_c_float,
     _to_c_float_array,
@@ -32,10 +35,15 @@ from ._runtime import (
     _to_c_size_t,
     _unsupported_effect_symbol,
     _validate_c_int_field,
+    _validate_scalar,
 )
 
 # Both note-object configs are at layout version 1; 0 selects the same layout.
 _NOTE_STRUCT_VERSION = 1
+
+# The transcription config's own layout version. Unlike the note-object configs
+# above, 0 is rejected rather than read as version 1.
+_TRANSCRIBE_STRUCT_VERSION = 1
 
 
 @dataclasses.dataclass
@@ -240,6 +248,123 @@ def _note_extractor_config(
         0.0 if min_note_ms is None else min_note_ms,
         0.0 if reference_hz is None else reference_hz,
         0.0 if voiced_threshold is None else voiced_threshold,
+    )
+
+
+@dataclasses.dataclass
+class TranscribeResult:
+    """What one transcription found, ready to hand to a MIDI clip.
+
+    Attributes:
+        events: Note-on / note-off pairs as ``(ppq, data0, data1)``, the shape
+            :meth:`Project.set_midi_events` takes, in canonical PPQ order with a
+            note-off before a note-on that shares its tick. Two events per note,
+            so ``len(events)`` is ``2 * note_count``.
+        note_count: Number of notes.
+        tempo_bpm: The tempo the PPQ coordinates were built on -- the requested
+            value when one was given, and the detected one otherwise.
+    """
+
+    events: list[tuple[float, int, int]] = dataclasses.field(default_factory=list)
+    note_count: int = 0
+    tempo_bpm: float = 0.0
+
+
+def _transcribe_int(fn_name: str, value: object, arg_name: str, low: int, high: int) -> int:
+    """Narrow one transcription config integer, naming the entry point it came from."""
+    domain = f"must be an integer in [{low}, {high}]"
+    try:
+        return _narrow_int(value, arg_name, low, high)
+    except SonareValueError as exc:
+        raise _int_refusal(fn_name, value, arg_name, domain) from exc
+
+
+def _transcribe_positive(fn_name: str, value: float, arg_name: str) -> float:
+    """Accept one transcription config float that has to be finite and positive."""
+    number = _validate_scalar(fn_name, value, arg_name)
+    if number <= 0.0:
+        raise SonareValueError(f"{fn_name}: {arg_name} must be positive")
+    return number
+
+
+def _transcribe_config(
+    fn_name: str,
+    *,
+    polyphonic: bool,
+    reference_hz: float | None,
+    fmin: float | None,
+    fmax: float | None,
+    min_note_ms: float | None,
+    segmentation_threshold_cents: float | None,
+    velocity_floor_db: float | None,
+    fixed_velocity: int | None,
+    group: int,
+    channel: int,
+) -> SonareTranscribeConfig:
+    """Build the transcription config, refusing an out-of-domain field by name.
+
+    ``None`` is this binding's spelling of "keep the library default" and the C
+    ABI's is 0, so a value the caller passed is always a request: an explicit
+    ``velocity_floor_db=0.0`` or ``fixed_velocity=0`` is a mistake rather than
+    the default, and is refused here. Whether ``fmin`` and ``fmax`` bracket each
+    other is left to the core, which is the side that has both resolved
+    defaults; passing both wrong way round is named here.
+    """
+    config = SonareTranscribeConfig()
+    config.struct_version = _TRANSCRIBE_STRUCT_VERSION
+    config.polyphonic = 1 if polyphonic else 0
+    for arg_name, value in (
+        ("reference_hz", reference_hz),
+        ("fmin", fmin),
+        ("fmax", fmax),
+        ("min_note_ms", min_note_ms),
+        ("segmentation_threshold_cents", segmentation_threshold_cents),
+    ):
+        setattr(
+            config,
+            arg_name,
+            0.0 if value is None else _transcribe_positive(fn_name, value, arg_name),
+        )
+    if fmin is not None and fmax is not None and config.fmax <= config.fmin:
+        raise SonareValueError(f"{fn_name}: fmax must be above fmin")
+
+    if velocity_floor_db is None:
+        config.velocity_floor_db = 0.0
+    else:
+        level = _validate_scalar(fn_name, velocity_floor_db, "velocity_floor_db")
+        if level >= 0.0:
+            raise SonareValueError(f"{fn_name}: velocity_floor_db must be negative")
+        config.velocity_floor_db = level
+
+    config.fixed_velocity = (
+        0
+        if fixed_velocity is None
+        else _transcribe_int(fn_name, fixed_velocity, "fixed_velocity", 1, 127)
+    )
+    config.group = _transcribe_int(fn_name, group, "group", 0, 15)
+    config.channel = _transcribe_int(fn_name, channel, "channel", 0, 15)
+    return config
+
+
+def _transcribe_sample_rate(fn_name: str, sample_rate: int) -> int:
+    """Refuse a non-positive rate here, where the argument still has a name."""
+    return _transcribe_int(fn_name, sample_rate, "sample_rate", 1, _C_INT_MAX)
+
+
+def _transcribe_result_from_c(out: SonareTranscribeResult) -> TranscribeResult:
+    """Copy a transcription out of C memory, before it is released.
+
+    Read length-first: the event pointer is NULL when nothing was found, and a
+    ctypes NULL raises on dereference rather than reading zeros.
+    """
+    events = [
+        (float(out.events[i].ppq), int(out.events[i].data0), int(out.events[i].data1))
+        for i in range(int(out.count))
+    ]
+    return TranscribeResult(
+        events=events,
+        note_count=int(out.note_count),
+        tempo_bpm=float(out.tempo_bpm),
     )
 
 

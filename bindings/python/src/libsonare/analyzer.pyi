@@ -684,6 +684,34 @@ def render_notes(
     vibrato_cutoff_hz: float | None = None,
 ) -> np.ndarray[Any, Any]: ...
 
+class TranscribeResult:
+    events: list[tuple[float, int, int]]
+    note_count: int
+    tempo_bpm: float
+    def __init__(
+        self,
+        events: list[tuple[float, int, int]] = ...,
+        note_count: int = 0,
+        tempo_bpm: float = 0.0,
+    ) -> None: ...
+
+def transcribe(
+    samples: FloatSamples,
+    sample_rate: int,
+    *,
+    tempo_bpm: float | None = None,
+    polyphonic: bool = False,
+    reference_hz: float | None = None,
+    fmin: float | None = None,
+    fmax: float | None = None,
+    min_note_ms: float | None = None,
+    segmentation_threshold_cents: float | None = None,
+    velocity_floor_db: float | None = None,
+    fixed_velocity: int | None = None,
+    group: int = 0,
+    channel: int = 0,
+) -> TranscribeResult: ...
+
 class PercussiveEventEdit:
     time_offset_samples: int
     gain_db: float

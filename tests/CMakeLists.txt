@@ -154,6 +154,7 @@ add_executable(sonare_tests
   api/sonare_c_note_split_merge_test.cpp
   api/sonare_c_polyphony_test.cpp
   api/sonare_c_percussive_events_test.cpp
+  api/sonare_c_transcribe_test.cpp
   api/sonare_c_metering_extra_test.cpp
   conformance/public_input_conformance_test.cpp
   conformance/wasm_float_saturation_test.cpp
@@ -406,7 +407,9 @@ if(BUILD_ACOUSTIC_SIM)
 endif()
 
 if(BUILD_PITCH_EDITOR)
-  target_sources(sonare_tests PRIVATE editing/note_model_test.cpp editing/note_pitch_curve_test.cpp
+  target_sources(sonare_tests PRIVATE editing/note_model_test.cpp
+                                      editing/note_transcriber_test.cpp
+                                      editing/note_pitch_curve_test.cpp
                                       editing/pitch_editor_test.cpp
                                       editing/polyphonic_notes_test.cpp
                                       editing/polyphonic_render_test.cpp
@@ -563,6 +566,8 @@ if(BUILD_ARRANGEMENT)
     ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_transcribe.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_assist.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_soundfont.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_sample_bank.cpp
   )
@@ -571,10 +576,17 @@ if(BUILD_ARRANGEMENT)
 
   # Composition-assist seam test. Exercises the seam end to end via a mock
   # module + a static layering guard (rt/ + engine/ must not include
-  # midi/assist/). Gated by BUILD_ASSIST so a no-assist build compiles cleanly
-  # with no assist symbols on the surface.
+  # midi/assist/). The module tests alongside it cover the built-in
+  # implementations, and the C ABI test covers the preview/apply pair. Gated by
+  # BUILD_ASSIST so a no-assist build compiles cleanly with no assist symbols on
+  # the surface.
   if(BUILD_ASSIST)
-    target_sources(sonare_tests PRIVATE assist/assist_seam_test.cpp)
+    target_sources(sonare_tests PRIVATE
+      assist/assist_seam_test.cpp
+      assist/music_theory_test.cpp
+      assist/assist_modules_test.cpp
+      api/sonare_c_assist_test.cpp
+    )
     target_link_libraries(sonare_tests PRIVATE sonare_assist)
     target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_ASSIST=1)
   endif()

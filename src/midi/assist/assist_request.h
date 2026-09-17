@@ -95,6 +95,12 @@ enum class AssistStatus : uint32_t {
   kEmpty = 1,            ///< Nothing to do / no module registered for the slot.
   kBudgetTruncated = 2,  ///< Stopped early because the budget was exhausted.
   kDiscarded = 3,        ///< Module threw / returned an invalid patch: call discarded.
+  /// The module REFUSED the request -- a parameter outside its domain, a blob it
+  /// could not read. Distinct from kEmpty on purpose: "I will not answer this"
+  /// and "I answered and had nothing to add" are different facts, and a caller
+  /// that cannot tell them apart has to string-match the reason to find its own
+  /// typo. The C ABI turns this one into an error return.
+  kRejected = 4,
 };
 
 /// @brief Diagnostics describing a run outcome (no state, pure telemetry).

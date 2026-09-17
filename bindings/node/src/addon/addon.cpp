@@ -11,6 +11,7 @@
 #include "sonare_wrap_project.h"
 #include "sonare_wrap_sample_bank.h"
 #include "sonare_wrap_synth_patch.h"
+#include "sonare_wrap_transcribe.h"
 #include "sonare_wrap_utils.h"
 
 namespace {
@@ -193,14 +194,6 @@ bool MidiEventFromObject(Napi::Env env, Napi::Object event, SonareMidiEventPod* 
   return !env.IsExceptionPending();
 }
 
-Napi::Object MidiEventToObject(Napi::Env env, const SonareMidiEventPod& event) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("ppq", Napi::Number::New(env, event.ppq));
-  out.Set("data0", Napi::Number::New(env, event.data0));
-  out.Set("data1", Napi::Number::New(env, event.data1));
-  return out;
-}
-
 bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCcBinding* out) {
   const Napi::Value cc_number = object.Get("ccNumber");
   const Napi::Value param_id = object.Get("paramId");
@@ -350,7 +343,7 @@ Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
     Napi::RangeError::New(env, "invalid MIDI param-to-CC arguments").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  return MidiEventToObject(env, event);
+  return sonare_node::MidiEventToObject(env, event);
   SONARE_NODE_CATCH(env)
 }
 
@@ -402,7 +395,7 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
   Napi::Object result = Napi::Object::New(env);
   Napi::Array events = Napi::Array::New(env, output_count);
   for (size_t i = 0; i < output_count; ++i) {
-    events.Set(i, MidiEventToObject(env, output[i]));
+    events.Set(i, sonare_node::MidiEventToObject(env, output[i]));
   }
   result.Set("events", events);
   result.Set("overflowed", overflowed != 0);
@@ -542,6 +535,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, MidiCcToBreakpoint, "midiCcToBreakpoint"));
   exports.Set("midiParamToCc", Napi::Function::New(env, MidiParamToCc, "midiParamToCc"));
   exports.Set("midiRouteEvents", Napi::Function::New(env, MidiRouteEvents, "midiRouteEvents"));
+  exports.Set("transcribe", Napi::Function::New(env, &sonare_node::Transcribe, "transcribe"));
   return exports;
 }
 

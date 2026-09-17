@@ -319,6 +319,44 @@ class SonareMidiEventPod(CStruct):
     ]
 
 
+class SonareTranscribeConfig(CStruct):
+    """Maps to SonareTranscribeConfig in sonare_c_transcribe.h (struct_version 1).
+
+    Every numeric field spells its own default as 0, so a zero-filled struct
+    carrying ``struct_version`` is the defaults. A value outside a field's
+    domain is refused by the C ABI rather than replaced by the default.
+    """
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int32),
+        ("polyphonic", ctypes.c_int32),
+        ("reference_hz", ctypes.c_float),
+        ("fmin", ctypes.c_float),
+        ("fmax", ctypes.c_float),
+        ("min_note_ms", ctypes.c_float),
+        ("segmentation_threshold_cents", ctypes.c_float),
+        ("velocity_floor_db", ctypes.c_float),
+        ("fixed_velocity", ctypes.c_int32),
+        ("group", ctypes.c_int32),
+        ("channel", ctypes.c_int32),
+    ]
+
+
+class SonareTranscribeResult(CStruct):
+    """Maps to SonareTranscribeResult in sonare_c_transcribe.h.
+
+    Heap-owned; release with ``sonare_free_transcribe_result``. ``events`` is
+    NULL when ``count`` is 0, so the length decides whether the pointer is read.
+    """
+
+    _fields_ = [
+        ("events", ctypes.POINTER(SonareMidiEventPod)),
+        ("count", ctypes.c_size_t),
+        ("note_count", ctypes.c_size_t),
+        ("tempo_bpm", ctypes.c_float),
+    ]
+
+
 class SonareNotePairValidation(CStruct):
     """Maps to SonareNotePairValidation in sonare_c_project.h."""
 

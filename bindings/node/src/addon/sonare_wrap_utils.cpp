@@ -200,6 +200,14 @@ bool ReadHpssArguments(Napi::Env env, const Napi::CallbackInfo& info, HpssArgume
   return true;
 }
 
+Napi::Object MidiEventToObject(Napi::Env env, const SonareMidiEventPod& event) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("ppq", Napi::Number::New(env, event.ppq));
+  out.Set("data0", Napi::Number::New(env, event.data0));
+  out.Set("data1", Napi::Number::New(env, event.data1));
+  return out;
+}
+
 bool IsFloat32Array(const Napi::Value& value) {
   return value.IsTypedArray() &&
          value.As<Napi::TypedArray>().TypedArrayType() == napi_float32_array;

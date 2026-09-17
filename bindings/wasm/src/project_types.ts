@@ -504,6 +504,106 @@ export interface ProjectMidiFxPreviewRequest {
   configJson: string;
 }
 
+/**
+ * Detector settings shared by {@link transcribe} and
+ * {@link Project.transcribeToClip}.
+ *
+ * Every field is optional and omitting one takes the documented default. A
+ * value outside a field's domain is **refused**, never silently replaced — a
+ * substituted default is indistinguishable downstream from one you chose.
+ *
+ * That includes `0` on the fields whose domain excludes it (`referenceHz`,
+ * `fmin`, `fmax`, `minNoteMs`, `segmentationThresholdCents`,
+ * `velocityFloorDb`, `fixedVelocity`): omitting the field is how you ask for
+ * the default, so a `0` you wrote is a value, and it is out of domain. Only
+ * `group` and `channel` accept `0` — there it is a value you can mean.
+ */
+export interface TranscribeOptions {
+  /**
+   * `true` reads the multi-F0 chain, which finds overlapping notes at the cost
+   * of a full STFT and a mask per tracked ridge. `false` (the default) reads
+   * pYIN cut into notes, which follows one line at a time.
+   */
+  polyphonic?: boolean;
+  /**
+   * Tuning reference in Hz the MIDI note numbers are measured against.
+   * Default `440`; must be finite and positive.
+   *
+   * **It is not measured for you.** A take recorded away from A440 should have
+   * its reference measured first — run `pitchPyin` and feed its F0 array to
+   * `pitchTuning` — and the answer passed in here. Measuring it internally
+   * would track the pitch twice and hide which of the two answers a wrong
+   * transcription came from.
+   */
+  referenceHz?: number;
+  /**
+   * Monophonic tracker range in Hz. Defaults `65` and `2093`; both must be
+   * finite and positive, and `fmax` must exceed `fmin`. The polyphonic chain
+   * sets its own range and reads neither.
+   */
+  fmin?: number;
+  /** Upper end of the monophonic tracker range in Hz. Default `2093`. */
+  fmax?: number;
+  /** Shortest span kept as a note, in milliseconds. Default `30`; must be positive. */
+  minNoteMs?: number;
+  /**
+   * Pitch movement, in cents, that ends one note and starts the next.
+   * Default `50`; must be positive.
+   */
+  segmentationThresholdCents?: number;
+  /**
+   * Level mapped to velocity 1, in dBFS. Default `-48`; **must be negative**.
+   *
+   * A note's peak per-frame RMS is taken in dBFS and mapped linearly from
+   * `[velocityFloorDb, 0]` onto `[1, 127]`, clamped at both ends.
+   */
+  velocityFloorDb?: number;
+  /**
+   * An integer in `[1, 127]` gives every note that velocity and skips the level
+   * measurement. **Omit the field to measure** — `0` is refused, because it is
+   * not a MIDI velocity and omission already says "measure".
+   */
+  fixedVelocity?: number;
+  /** UMP group the events are emitted on, `0..15`. Default `0`. */
+  group?: number;
+  /** MIDI channel the events are emitted on, `0..15`. Default `0`. */
+  channel?: number;
+}
+
+/** Result of {@link transcribe}. */
+export interface TranscribeResult {
+  /**
+   * Note-on / note-off pairs in canonical PPQ order, ready to hand straight to
+   * {@link Project.setMidiEvents}.
+   *
+   * Ordering is `(ppq, note-off before note-on)`. A note-off sharing a tick
+   * with the next note's on comes first, so a consumer playing the events in
+   * order does not start a legato repeat of the same pitch and immediately
+   * stop it.
+   */
+  events: ProjectMidiEvent[];
+  /** Number of notes, which is always half `events.length`. */
+  noteCount: number;
+  /** The tempo the PPQ coordinates were built on — yours when you gave one, the detected one otherwise. */
+  tempoBpm: number;
+}
+
+/**
+ * Request form of {@link Project.transcribeToClip}.
+ *
+ * No `tempoBpm`: the PPQ grid is the **project's own tempo map**, so a project
+ * whose tempo was installed by {@link Project.autoTempo} transcribes onto that
+ * map rather than onto a second, separately detected tempo.
+ */
+export interface ProjectTranscribeRequest extends TranscribeOptions {
+  /** Target MIDI clip id. Its entire event list is replaced. */
+  clipId: number;
+  /** Mono source audio. Must be non-empty and all-finite. */
+  samples: Float32Array;
+  /** Sample rate of `samples` in Hz, `[8000, 384000]`. */
+  sampleRate: number;
+}
+
 /** One compile diagnostic (mirrors SonareProjectDiagnostic). */
 export interface ProjectDiagnostic {
   code: number;

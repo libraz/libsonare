@@ -100,6 +100,9 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value PreviewMidiFxCount(const Napi::CallbackInfo& info);
   Napi::Value SetMidiFx(const Napi::CallbackInfo& info);
   Napi::Value ValidateMidiNotes(const Napi::CallbackInfo& info);
+  /// Defined in sonare_wrap_transcribe.cpp, beside the free `transcribe` entry
+  /// point it shares its config reader with.
+  Napi::Value TranscribeToClip(const Napi::CallbackInfo& info);
 
   // -- MIR --
   Napi::Value AutoTempo(const Napi::CallbackInfo& info);

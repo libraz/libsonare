@@ -13,6 +13,9 @@ export * from './realtime_engine.js';
 // reach the package entry without a deliberate edit and read as a parity
 // coverage gap.
 export { SampleBank } from './sample_bank.js';
+// Named for the same reason: the module's one entry point reaches the package
+// surface, and a helper added beside it later cannot follow without an edit.
+export { transcribe } from './transcribe.js';
 export type {
   AcousticOptions,
   AcousticResult,
@@ -228,6 +231,7 @@ export type {
   ProjectTrack,
   ProjectTrackDesc,
   ProjectTrackKind,
+  ProjectTranscribeRequest,
   ProjectWarpAnchor,
   ProjectWarpMapDesc,
   RealtimeVoiceChangerConfig,
@@ -294,6 +298,9 @@ export type {
   TimbreFrame,
   TimbreResult,
   TimeSignature,
+  TranscribeOptions,
+  TranscribeRequest,
+  TranscribeResult,
   TrimRange,
   TrimReport,
   TrimSilenceStereoResult,

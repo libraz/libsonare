@@ -12,6 +12,7 @@ extern "C" {
 #endif
 
 #include "sonare_c_acoustic.h"
+#include "sonare_c_assist.h"
 #include "sonare_c_effects.h"
 #include "sonare_c_features.h"
 #include "sonare_c_mastering.h"
@@ -21,6 +22,7 @@ extern "C" {
 #include "sonare_c_project.h"
 #include "sonare_c_sample_bank.h"
 #include "sonare_c_streaming.h"
+#include "sonare_c_transcribe.h"
 #include "sonare_c_types.h"
 
 // ============================================================================

@@ -302,6 +302,24 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
+    # sonare_transcribe + sonare_free_transcribe_result. The defaults accessor
+    # returns the config by value; the facade spells a default as None and
+    # leaves the field 0, so it is declared rather than called.
+    if hasattr(lib, "sonare_transcribe"):
+        lib.sonare_transcribe_config_default.restype = SonareTranscribeConfig
+        lib.sonare_transcribe_config_default.argtypes = []
+        lib.sonare_transcribe.restype = ctypes.c_int32
+        lib.sonare_transcribe.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(SonareTranscribeConfig),
+            ctypes.POINTER(SonareTranscribeResult),
+        ]
+        lib.sonare_free_transcribe_result.restype = None
+        lib.sonare_free_transcribe_result.argtypes = [ctypes.POINTER(SonareTranscribeResult)]
+
     # sonare_extract_percussive_events + sonare_free_percussive_events
     # + sonare_render_percussive_events
     if hasattr(lib, "sonare_extract_percussive_events"):

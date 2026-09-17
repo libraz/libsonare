@@ -56,10 +56,11 @@ import type {
   ProjectTrack,
   ProjectTrackDesc,
   ProjectTrackKind,
+  ProjectTranscribeRequest,
   ProjectWarpMapDesc,
   ProjectWarpMode,
 } from './project_types';
-import { assertBoundedInteger } from './validation';
+import { assertBoundedInteger, assertSampleRate, assertSamples } from './validation';
 
 /**
  * Folds the positional and request call forms of `bakeMidiFx` into one shape,
@@ -686,6 +687,37 @@ export class Project {
    */
   validateMidiNotes(clipId: number): ProjectNotePairValidation {
     return this.native.validateMidiNotes(clipId);
+  }
+
+  /**
+   * Transcribe mono audio straight into a MIDI clip's event list, **replacing**
+   * whatever it held — exactly as {@link setMidiEvents} does.
+   *
+   * The PPQ grid is this project's own tempo map, which is why there is no
+   * `tempoBpm` field: a project whose tempo was installed by {@link autoTempo}
+   * transcribes onto that map rather than onto a second, separately detected
+   * tempo. Use the standalone `transcribe` when you want events without a
+   * project.
+   *
+   * Quantizing, tempo detection and key/chord annotation are not done here —
+   * see `transcribe` for what each belongs to.
+   *
+   * @returns the number of notes written (half the events)
+   * @throws {RangeError} on empty `samples`, a non-finite sample, or a
+   *   `sampleRate` outside `[8000, 384000]`
+   * @throws {SonareError} `InvalidParameter` when `clipId` is unknown or not a
+   *   MIDI clip, or on an option outside its domain; `NotSupported` when the
+   *   library was built without the pitch editor
+   */
+  transcribeToClip(request: ProjectTranscribeRequest): number {
+    assertSamples('Project.transcribeToClip', request.samples, true);
+    assertSampleRate('Project.transcribeToClip', request.sampleRate);
+    return this.native.transcribeToClip(
+      request.clipId,
+      request.samples,
+      request.sampleRate,
+      request,
+    );
   }
 
   /** Return ranked tempo-octave and detected-meter candidates without editing. */

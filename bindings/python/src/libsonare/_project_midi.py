@@ -9,6 +9,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+# The transcription config is built once for the whole binding: this method and
+# the free `transcribe` take the same keyword options, and two builders would be
+# two chances for their domains to part company.
+from ._effects_note_model import (
+    _transcribe_config,
+    _transcribe_sample_rate,
+)
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _cc_binding_from_c,
@@ -32,8 +39,10 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
+    _guard_buffer,
     _to_c_double,
     _to_c_float,
+    _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
     _to_c_uint8,
@@ -75,6 +84,102 @@ class _ProjectMidiMixin:
                 _to_c_size_t(count, "count"),
             )
         )
+
+    @_guard_buffer("samples")
+    def transcribe_to_clip(
+        self,
+        clip_id: int,
+        samples: Sequence[float] | np.ndarray,
+        sample_rate: int,
+        *,
+        polyphonic: bool = False,
+        reference_hz: float | None = None,
+        fmin: float | None = None,
+        fmax: float | None = None,
+        min_note_ms: float | None = None,
+        segmentation_threshold_cents: float | None = None,
+        velocity_floor_db: float | None = None,
+        fixed_velocity: int | None = None,
+        group: int = 0,
+        channel: int = 0,
+    ) -> int:
+        """Transcribe mono audio straight into a MIDI clip's event list.
+
+        The PPQ grid is the PROJECT's tempo map, so a project whose tempo was
+        installed by :meth:`auto_tempo` transcribes onto that map rather than
+        onto a second, separately detected tempo -- which is why this takes no
+        tempo argument, where :func:`transcribe` does. It REPLACES the clip's
+        entire event list, exactly as :meth:`set_midi_events` does.
+
+        The keyword options, and what this deliberately leaves to
+        :meth:`bake_midi_fx`, :meth:`auto_tempo` and :func:`pitch_tuning`, are
+        :func:`transcribe`'s.
+
+        Args:
+            clip_id: MIDI clip to write; its previous events are discarded.
+            samples: Mono source audio (any sequence convertible to float32).
+            sample_rate: Sample rate of ``samples`` in Hz. Need not match the
+                project's: the conversion goes through seconds, so a 44.1 kHz
+                take lands correctly on a 48 kHz project's grid.
+            polyphonic: Read the multi-F0 chain instead of pYIN cut into notes.
+            reference_hz: Tuning reference; ``None`` keeps the default (440 Hz).
+            fmin: Lowest pitch the monophonic tracker looks for; ``None`` keeps
+                the default (65 Hz).
+            fmax: Highest pitch it looks for; ``None`` keeps the default (2093).
+            min_note_ms: Shortest span kept as a note; ``None`` keeps 30 ms.
+            segmentation_threshold_cents: Pitch movement that ends one note and
+                starts the next; ``None`` keeps 50 cents.
+            velocity_floor_db: Level mapped to velocity 1; must be negative.
+                ``None`` keeps the default (-48 dB).
+            fixed_velocity: 1..127 gives every note that velocity and skips the
+                level measurement; ``None`` measures.
+            group: UMP group the events are emitted on, 0..15.
+            channel: MIDI channel the events are emitted on, 0..15.
+
+        Returns:
+            The number of notes written; the clip holds twice that many events.
+
+        Raises:
+            SonareValueError: If ``samples`` is empty or holds a NaN or Inf
+                sample, or if a config argument is outside its domain.
+            SonareError: If the clip id is unknown, or ``NOT_SUPPORTED`` when the
+                library was built without the pitch editor or the arrangement
+                subsystem.
+
+        Example:
+            >>> project.auto_tempo(samples, sample_rate=sr)
+            >>> _track_id, clip_id = project.add_midi_clip(0.0, 8.0)
+            >>> project.transcribe_to_clip(clip_id, samples, sr)
+            4
+        """
+        rate = _transcribe_sample_rate("transcribe_to_clip", sample_rate)
+        config = _transcribe_config(
+            "transcribe_to_clip",
+            polyphonic=polyphonic,
+            reference_hz=reference_hz,
+            fmin=fmin,
+            fmax=fmax,
+            min_note_ms=min_note_ms,
+            segmentation_threshold_cents=segmentation_threshold_cents,
+            velocity_floor_db=velocity_floor_db,
+            fixed_velocity=fixed_velocity,
+            group=group,
+            channel=channel,
+        )
+        c_array, length = _to_c_float_array(samples)
+        note_count = ctypes.c_size_t()
+        _check(
+            _get_lib().sonare_project_transcribe_to_clip(
+                self._require_handle(),
+                _to_c_uint32(clip_id, "clip_id"),
+                c_array,
+                _to_c_size_t(length, "length"),
+                _to_c_int(rate, "sample_rate"),
+                ctypes.byref(config),
+                ctypes.byref(note_count),
+            )
+        )
+        return int(note_count.value)
 
     def import_smf(self, data: bytes) -> int:
         """Import an in-memory SMF buffer; return the first added clip id.

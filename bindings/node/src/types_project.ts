@@ -556,3 +556,128 @@ export interface ProjectMidiFxPreviewRequest {
   /** MIDI-FX chain configuration as JSON. */
   configJson: string;
 }
+
+/**
+ * What a transcription reads and how it converts what it finds.
+ *
+ * Shared by the one-shot {@link transcribe} and by
+ * {@link Project.transcribeToClip}; every field is optional and omitting one
+ * takes the documented default.
+ *
+ * Omission is the only way to ask for a default. A field whose documented
+ * domain excludes `0` refuses a written `0` instead of silently substituting
+ * its default, so an answer measured against a value nobody asked for is not
+ * something a caller can receive. `group` and `channel` are the exceptions:
+ * their `0` is a value a caller can mean. Python and WASM refuse the same set.
+ *
+ * Three neighbouring jobs are deliberately NOT done here, because the library
+ * already does each of them somewhere else:
+ *
+ * - Quantizing to a grid — {@link Project.bakeMidiFx}'s `quantize_ppq` /
+ *   `quantize_strength`.
+ * - Detecting and installing a tempo map — {@link Project.autoTempo}.
+ * - Annotating key and chords — {@link Project.annotateKeys} /
+ *   {@link Project.annotateChords}.
+ *
+ * The tuning reference is likewise not measured. A take recorded away from
+ * A440 should have its reference measured first — run {@link pitchPyin} and
+ * feed its `f0` array to {@link pitchTuning} — and the answer passed as
+ * {@link referenceHz}. Measuring it internally would track the pitch twice and
+ * hide which of the two answers a wrong transcription came from.
+ */
+export interface TranscribeOptions {
+  /**
+   * `true` reads the multi-F0 chain, which finds overlapping notes at the cost
+   * of a full STFT and a mask per tracked ridge. `false` reads pYIN cut into
+   * notes, which follows one line at a time. Default `false`.
+   */
+  polyphonic?: boolean;
+  /**
+   * Tuning reference the MIDI note numbers are measured against, in Hz.
+   * Must be finite and positive; `0` is refused rather than read as the
+   * default, which is what omitting the field asks for. Default `440`.
+   */
+  referenceHz?: number;
+  /**
+   * Low end of the monophonic tracker's range, in Hz. Must be finite and
+   * positive, and below {@link fmax}. The polyphonic chain sets its own range
+   * and reads neither. Default `65`.
+   */
+  fmin?: number;
+  /**
+   * High end of the monophonic tracker's range, in Hz. Must be finite and
+   * above {@link fmin}. Default `2093`.
+   */
+  fmax?: number;
+  /**
+   * Shortest span kept as a note, in milliseconds. Must be finite and
+   * positive. Default `30`.
+   */
+  minNoteMs?: number;
+  /**
+   * Pitch movement, in cents, that ends one note and starts the next. Must be
+   * finite and positive. Default `50`.
+   */
+  segmentationThresholdCents?: number;
+  /**
+   * Level mapped to velocity 1, in dBFS. A note's peak per-frame RMS is taken
+   * in dBFS and mapped linearly from `[velocityFloorDb, 0]` onto `[1, 127]`,
+   * clamped at both ends. Must be finite and negative; `0` is refused rather
+   * than read as the default. Default `-48`.
+   */
+  velocityFloorDb?: number;
+  /**
+   * Gives every note this velocity and skips the level measurement. Must be an
+   * integer in `[1, 127]`; `0` is not a MIDI velocity and is refused rather
+   * than read as "measure". Omit the field to measure, which is the default.
+   */
+  fixedVelocity?: number;
+  /** UMP group the events are emitted on, `0`..`15`. Default `0`. */
+  group?: number;
+  /** MIDI channel the events are emitted on, `0`..`15`. Default `0`. */
+  channel?: number;
+}
+
+/** Request form of {@link transcribe}. */
+export interface TranscribeRequest extends TranscribeOptions {
+  /** Mono source audio. Must not be empty. */
+  samples: Float32Array;
+  /** Sample rate of {@link samples}, in Hz. */
+  sampleRate: number;
+  /**
+   * The tempo the PPQ grid is built on. Omit it — or pass a value `<= 0` — to
+   * have it detected from {@link samples}, which costs an onset/tempo pass.
+   */
+  tempoBpm?: number;
+}
+
+/** Result of {@link transcribe}. */
+export interface TranscribeResult {
+  /**
+   * Note-on / note-off pairs in canonical PPQ order, ready to hand to
+   * {@link Project.setMidiEvents}. Ordering is `(ppq, note-off before
+   * note-on)`, so a note-off sharing a tick with the next note's on comes
+   * first. Empty when nothing was found, which is not an error.
+   */
+  events: ProjectMidiEvent[];
+  /** Number of notes, which is half `events.length`. */
+  noteCount: number;
+  /** The tempo the PPQ coordinates were built on — the supplied value when one was given, the detected one otherwise. */
+  tempoBpm: number;
+}
+
+/**
+ * Request form of {@link Project.transcribeToClip}.
+ *
+ * It carries no tempo: the PPQ grid is the PROJECT's own tempo map, so a
+ * project whose tempo was installed by {@link Project.autoTempo} transcribes
+ * onto that map rather than onto a second, separately detected one.
+ */
+export interface ProjectTranscribeRequest extends TranscribeOptions {
+  /** Target MIDI clip id. Its entire event list is replaced. */
+  clipId: number;
+  /** Mono source audio. Must not be empty. */
+  samples: Float32Array;
+  /** Sample rate of {@link samples}, in Hz. */
+  sampleRate: number;
+}

@@ -36,6 +36,7 @@ import type {
   ProjectTimeSignatureSegment,
   ProjectTrack,
   ProjectTrackDesc,
+  ProjectTranscribeRequest,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SynthEnumTables,
@@ -48,6 +49,8 @@ import {
   assertInt32,
   assertInt64,
   assertProjectMidiEvents,
+  assertSampleRate,
+  assertSamples,
   assertU32,
   midi1Event,
 } from './validation.js';
@@ -977,6 +980,25 @@ export class Project {
     unmatchedNoteOffs: number;
   } {
     return this.native.validateMidiNotes(clipId);
+  }
+
+  /**
+   * Transcribe mono audio straight into a MIDI clip's event list, returning the
+   * number of notes written.
+   *
+   * The PPQ grid is this project's own tempo map, which is why the request
+   * carries no tempo: a project whose tempo was installed by
+   * {@link autoTempo} transcribes onto that map rather than onto a second,
+   * separately detected one. The clip's entire event list is REPLACED, exactly
+   * as {@link setMidiEvents} replaces it.
+   *
+   * @throws If `clipId` is not a MIDI clip, if `samples` is empty, or if
+   *         `sampleRate` is out of range.
+   */
+  transcribeToClip(request: ProjectTranscribeRequest): number {
+    assertSamples('Project.transcribeToClip', request.samples, true);
+    assertSampleRate('Project.transcribeToClip', request.sampleRate);
+    return this.native.transcribeToClip(request);
   }
 
   // -- MIR --

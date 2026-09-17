@@ -11,17 +11,23 @@ from ._effects_note_model import (
     _NOTE_STRUCT_VERSION,
     NoteObject,
     PitchDecomposition,
+    TranscribeResult,
     _note_extractor_config,
     _note_set_edit,
     _note_set_index,
     _note_voicing_arrays,
     _notes_from_c,
     _notes_to_c,
+    _transcribe_config,
+    _transcribe_positive,
+    _transcribe_result_from_c,
+    _transcribe_sample_rate,
 )
 from ._ffi import (
     SonareNoteObjectsResult,
     SonareNoteRenderConfig,
     SonarePitchDecompositionResult,
+    SonareTranscribeResult,
 )
 from ._runtime import (
     SonareValueError,
@@ -548,3 +554,141 @@ def merge_notes(
             _to_c_size_t(_note_set_index("merge_notes", "last", last), "last"),
         ),
     )
+
+
+@_guard_buffer("samples")
+def transcribe(
+    samples: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int,
+    *,
+    tempo_bpm: float | None = None,
+    polyphonic: bool = False,
+    reference_hz: float | None = None,
+    fmin: float | None = None,
+    fmax: float | None = None,
+    min_note_ms: float | None = None,
+    segmentation_threshold_cents: float | None = None,
+    velocity_floor_db: float | None = None,
+    fixed_velocity: int | None = None,
+    group: int = 0,
+    channel: int = 0,
+) -> TranscribeResult:
+    """Transcribe mono audio into MIDI events on a constant-tempo grid.
+
+    The note spans and their measured pitch and level come from the same chains
+    :func:`extract_notes` and :class:`PolyphonicAnalysis` read, and the events
+    are ``(ppq, data0, data1)`` triples -- exactly what
+    :meth:`Project.set_midi_events` takes, so nothing is left to convert.
+
+    Three things are deliberately NOT done here, because the library already
+    does each of them elsewhere and a second implementation would drift from the
+    first:
+
+    - Quantizing to a grid: :meth:`Project.bake_midi_fx`'s ``quantize_ppq`` /
+      ``quantize_strength``.
+    - Detecting and installing a tempo map: :meth:`Project.auto_tempo`. What
+      ``tempo_bpm=None`` does here is detect ONE constant tempo for this grid;
+      it installs nothing and follows no tempo that moves during the take.
+    - Measuring the tuning reference. A take recorded away from A440 lands a
+      full semitone out at roughly 26 Hz of error, so measure it first --
+      :func:`pitch_pyin` into :func:`pitch_tuning` -- and pass the result as
+      ``reference_hz``.
+
+    Finding no notes is not an error: silence, and material the chain cannot
+    resolve, come back with an empty ``events`` list, and ``tempo_bpm`` still
+    reports the tempo that was used or detected.
+
+    Args:
+        samples: Mono source audio (any sequence convertible to float32).
+        sample_rate: Sample rate of ``samples`` in Hz.
+        tempo_bpm: The tempo the PPQ grid is built on. ``None`` detects one from
+            ``samples``, which costs an onset/tempo pass; a non-positive value is
+            refused rather than read as a request to detect. Note that the
+            coordinates scale WITH it -- the same audio on twice the tempo is
+            twice as many beats long.
+        polyphonic: Read the multi-F0 chain, which finds overlapping notes at
+            the cost of a full STFT and a mask per tracked ridge. The default
+            reads pYIN cut into notes, which follows one line at a time.
+        reference_hz: Tuning reference the MIDI note numbers are measured
+            against; ``None`` keeps the default (A4 = 440 Hz).
+        fmin: Lowest pitch the monophonic tracker looks for, in Hz; ``None``
+            keeps the default (65). The polyphonic chain sets its own range and
+            reads neither this nor ``fmax``.
+        fmax: Highest pitch the monophonic tracker looks for; ``None`` keeps the
+            default (2093).
+        min_note_ms: Shortest span kept as a note; ``None`` keeps the default
+            (30 ms).
+        segmentation_threshold_cents: Pitch movement that ends one note and
+            starts the next; ``None`` keeps the default (50 cents).
+        velocity_floor_db: Level mapped to velocity 1. A note's peak per-frame
+            RMS is taken in dBFS and mapped linearly from
+            ``[velocity_floor_db, 0]`` onto ``[1, 127]``, clamped at both ends.
+            Must be negative; ``None`` keeps the default (-48 dB).
+        fixed_velocity: 1..127 gives every note that velocity and skips the
+            level measurement; ``None`` measures.
+        group: UMP group the events are emitted on, 0..15.
+        channel: MIDI channel the events are emitted on, 0..15.
+
+    Returns:
+        A :class:`TranscribeResult`.
+
+    Raises:
+        SonareValueError: If ``samples`` is empty or holds a NaN or Inf sample,
+            or if a config argument is outside its domain -- each named against
+            this function.
+        SonareError: ``NOT_SUPPORTED`` when the library was built without the
+            pitch editor.
+
+    Example:
+        >>> result = libsonare.transcribe(samples, sr, tempo_bpm=120.0)
+        >>> result.note_count
+        4
+        >>> project = libsonare.Project()
+        >>> _track_id, clip_id = project.add_midi_clip(0.0, 4.0)
+        >>> project.set_midi_events(clip_id, result.events)
+
+        Off A440, measure the reference rather than letting the notes land a
+        semitone out:
+
+        >>> pitch = libsonare.pitch_pyin(samples, sample_rate=sr, hop_length=512)
+        >>> reference = libsonare.pitch_tuning(pitch.f0)
+        >>> result = libsonare.transcribe(samples, sr, reference_hz=reference)
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_transcribe"):
+        raise _unsupported_effect_symbol("sonare_transcribe")
+
+    rate = _transcribe_sample_rate("transcribe", sample_rate)
+    tempo = 0.0 if tempo_bpm is None else _transcribe_positive("transcribe", tempo_bpm, "tempo_bpm")
+    config = _transcribe_config(
+        "transcribe",
+        polyphonic=polyphonic,
+        reference_hz=reference_hz,
+        fmin=fmin,
+        fmax=fmax,
+        min_note_ms=min_note_ms,
+        segmentation_threshold_cents=segmentation_threshold_cents,
+        velocity_floor_db=velocity_floor_db,
+        fixed_velocity=fixed_velocity,
+        group=group,
+        channel=channel,
+    )
+    c_array, length = _to_c_float_array(samples)
+
+    out = SonareTranscribeResult()
+    try:
+        _check(
+            lib.sonare_transcribe(
+                c_array,
+                _to_c_size_t(length, "length"),
+                _to_c_int(rate, "sample_rate"),
+                _to_c_float(tempo, "tempo_bpm"),
+                ctypes.byref(config),
+                ctypes.byref(out),
+            )
+        )
+        return _transcribe_result_from_c(out)
+    finally:
+        # Covers the raising paths too: the C ABI clears the result before it
+        # validates anything, and freeing a cleared one is a no-op.
+        lib.sonare_free_transcribe_result(ctypes.byref(out))

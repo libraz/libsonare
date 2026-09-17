@@ -469,6 +469,7 @@ void registerProjectFreeFunctions() {
   function("midiCcToBreakpoint", &js_midi_cc_to_breakpoint);
   function("midiParamToCc", &js_midi_param_to_cc);
   function("midiRouteEvents", &js_midi_route_events);
+  function("transcribe", &js_transcribe);
   function("synthPresetNames", &js_synth_preset_names);
   function("synthPresetPatch", &js_synth_preset_patch);
   function("_synthEnumTables", &js_synth_enum_tables);

@@ -8897,6 +8897,108 @@
     ],
     "size": 12
   },
+  "SonareTranscribeConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "polyphonic",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reference_hz",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fmin",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fmax",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_note_ms",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "segmentation_threshold_cents",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "velocity_floor_db",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "fixed_velocity",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "group",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "channel",
+        "offset": 40,
+        "size": 4
+      }
+    ],
+    "size": 44
+  },
+  "SonareTranscribeResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "events",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "count",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "note_count",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "tempo_bpm",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 32
+  },
   "SonareTransientShaperConfig": {
     "align": 4,
     "fields": [

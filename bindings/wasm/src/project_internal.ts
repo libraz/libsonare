@@ -43,6 +43,8 @@ import type {
   ProjectTrackKind,
   ProjectWarpMapDesc,
   ProjectWarpMode,
+  TranscribeOptions,
+  TranscribeResult,
 } from './project_types';
 // A value import, and this module's one import cycle: sample_bank.ts reaches
 // back here for projectModule(). Both directions are read inside function
@@ -162,6 +164,12 @@ export interface WasmProject {
   previewMidiFxCount: (clipId: number, configJson: string) => number;
   setMidiFx: (clipId: number, configJson: string) => void;
   validateMidiNotes: (clipId: number) => ProjectNotePairValidation;
+  transcribeToClip: (
+    clipId: number,
+    samples: Float32Array,
+    sampleRate: number,
+    config: TranscribeOptions,
+  ) => number;
   analyzeTempo: (
     audio: Float32Array,
     sampleRate: number,
@@ -318,6 +326,12 @@ export interface ProjectModule {
     group: number,
     ppq: number,
   ) => ProjectMidiEvent | null;
+  transcribe: (
+    samples: Float32Array,
+    sampleRate: number,
+    tempoBpm: number | undefined,
+    config: TranscribeOptions,
+  ) => TranscribeResult;
 }
 
 export function projectModule(): ProjectModule {
