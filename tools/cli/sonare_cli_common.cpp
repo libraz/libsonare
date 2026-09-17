@@ -86,6 +86,30 @@ Audio load_reference_audio_any_length(const CliArgs& args, int expected_sample_r
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 
+StereoPlanes load_stereo_planes(const CliArgs& args, const Audio& audio) {
+  auto [interleaved, sample_rate, channels] = load_audio_interleaved(args.input_file);
+  SONARE_CHECK(sample_rate == audio.sample_rate() && channels == 2, ErrorCode::DecodeFailed);
+  StereoPlanes planes;
+  planes.left.resize(interleaved.size() / 2);
+  planes.right.resize(interleaved.size() / 2);
+  for (size_t frame = 0; frame < planes.left.size(); ++frame) {
+    planes.left[frame] = interleaved[2 * frame];
+    planes.right[frame] = interleaved[2 * frame + 1];
+  }
+  return planes;
+}
+
+void save_stereo_wav(const std::string& path, const std::vector<float>& left,
+                     const std::vector<float>& right, int sample_rate, int bits) {
+  std::vector<float> interleaved(2 * left.size());
+  for (size_t frame = 0; frame < left.size(); ++frame) {
+    interleaved[2 * frame] = left[frame];
+    interleaved[2 * frame + 1] = frame < right.size() ? right[frame] : 0.0f;
+  }
+  save_wav_multichannel(path, interleaved.data(), left.size(), 2, ChannelLayout::Stereo,
+                        sample_rate, bits);
+}
+
 std::vector<std::string> split_string(const std::string& text, char delimiter) {
   std::vector<std::string> values;
   std::stringstream stream(text);

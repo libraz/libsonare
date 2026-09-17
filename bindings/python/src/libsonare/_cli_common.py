@@ -480,6 +480,37 @@ def _write_wav_stereo(
                 _write_wav_stereo_frames(wav, left[offset:end], right[offset:end], bits_per_sample)
 
 
+def _load_channels_or_downmix(path: str) -> tuple[list[list[float]], int]:
+    """Load a file as a stereo pair where it is one, and as mono otherwise.
+
+    The library's offline operations come in a mono and a stereo form and
+    nothing wider, so a two-channel source is the only one that can be carried
+    through whole. Anything else goes through the downmixing loader, which says
+    so: silently keeping channel 0 of a surround file would deliver a quarter of
+    the record under the name of the whole.
+
+    The mono path goes through the facade loader rather than the direct one, so
+    the documented ``cli._load_audio`` patch point still intercepts it. Calling
+    the module-local loader here would work identically in production and stop
+    the seam working, which is the shape of difference a test suite finds and a
+    reader does not.
+    """
+    if _source_channel_count(path) == 2:
+        return _load_audio_channels(path)
+    samples, sample_rate = _load_audio_from_facade(path)
+    return [samples], sample_rate
+
+
+def _write_channel_output(
+    path: str, channels: list[list[float]], sample_rate: int, bits_per_sample: int = 16
+) -> None:
+    """Write however many channels an operation produced."""
+    if len(channels) == 2:
+        _write_wav_stereo(path, channels[0], channels[1], sample_rate, bits_per_sample)
+    else:
+        _write_wav(path, channels[0], sample_rate, bits_per_sample)
+
+
 def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:
     """Write a Project.bounce ndarray to WAV and return (frames, written channels)."""
     frames = len(cast(Any, audio))
@@ -569,7 +600,7 @@ def _read_bounded(path: str, max_bytes: int) -> bytes:
 
 def _emit_effect_result(
     args: argparse.Namespace,
-    result: list[float],
+    channels: list[list[float]],
     sr: int,
     *,
     extra: dict[str, object] | None = None,
@@ -578,11 +609,20 @@ def _emit_effect_result(
 ) -> int:
     """Write the optional output WAV and print an offline-effect result.
 
-    Shared by the offline-effect subcommands whose result is a mono buffer plus
-    an optional ``extra`` payload block. The JSON payload keeps the key order
-    ``length, sample_rate, duration, <extra...>, output`` and the human-readable
-    form prints ``<label>: <n> samples`` followed by an optional ``Wrote:`` line,
-    matching each command's historical output exactly.
+    Shared by the offline-effect subcommands. ``channels`` is one buffer for a
+    mono result and two for a stereo pair, the same shape ``_write_chain_output``
+    takes: a command that carries a stereo source through has a pair to write,
+    and giving it its own emitter would put two spellings on one payload. The
+    JSON payload keeps the key order ``length, sample_rate, duration,
+    <extra...>, output`` and the human-readable form prints ``<label>: <n>
+    samples`` followed by an optional ``Wrote:`` line, matching each command's
+    historical output exactly.
+
+    ``length`` is per channel, not the frame count times the channel count, so a
+    stereo result reports the same figure its mono downmix would. The payload
+    carries no channel count for the same reason the native CLI's does not:
+    these keys are a cross-front-end contract, and the channel layout is a
+    property of the written file.
 
     ``length`` and ``duration`` are the same quantity in two units and both are
     published: neither converts to the other without the sample rate, and the
@@ -598,13 +638,14 @@ def _emit_effect_result(
         print(f"Error: {label} requires an output file (-o/--output)", file=sys.stderr)
         return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
     if args.output:
-        _write_wav(args.output, result, sr)
+        _write_channel_output(args.output, channels, sr)
 
+    length = len(channels[0])
     if args.json:
         payload: dict[str, object] = {
-            "length": len(result),
+            "length": length,
             "sample_rate": sr,
-            "duration": len(result) / sr if sr > 0 else 0.0,
+            "duration": length / sr if sr > 0 else 0.0,
         }
         if extra:
             payload.update(extra)
@@ -612,7 +653,7 @@ def _emit_effect_result(
             payload["output"] = args.output
         print(_strict_json_dumps(payload))
     else:
-        print(f"  {label}: {len(result)} samples")
+        print(f"  {label}: {length} samples")
         if args.output:
             print(f"    Wrote: {args.output}")
     return 0

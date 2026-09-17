@@ -3337,6 +3337,66 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   }
 }
 
+TEST_CASE("CLI normalize carries a stereo input through on one gain", "[cli][effects]") {
+  // Two channels of one signal a known distance apart. Channel count alone does
+  // not separate a stereo normalize from a per-channel one -- both write two
+  // channels -- so what is checked is that the distance survives: a per-channel
+  // gain would bring the quieter side up to the target as well and erase it.
+  constexpr size_t kFrames = 22050;
+  constexpr int kRate = 22050;
+  constexpr float kRatio = 0.25f;  // the pair sits 12.04 dB apart
+  const std::string input = unique_temp_path("_stereo_normalize.wav");
+  std::vector<float> interleaved(2 * kFrames);
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  for (size_t frame = 0; frame < kFrames; ++frame) {
+    const float sample = 0.5f * std::sin(two_pi * 440.0f * (static_cast<float>(frame) / kRate));
+    interleaved[2 * frame] = sample;
+    interleaved[2 * frame + 1] = kRatio * sample;
+  }
+  save_wav_multichannel(input, interleaved.data(), kFrames, 2, ChannelLayout::Stereo, kRate);
+
+  const auto peak_db = [](const std::vector<float>& samples, int channels, int index) {
+    double peak = 0.0;
+    for (size_t frame = 0; (frame + 1) * channels <= samples.size(); ++frame) {
+      peak = std::max(peak, std::abs(static_cast<double>(samples[frame * channels + index])));
+    }
+    return 20.0 * std::log10(peak);
+  };
+
+  const std::string out = unique_temp_path("_stereo_normalized.wav");
+  auto [code, output] = exec_command(CLI + " normalize " + input + " -o " + out +
+                                     " --mode peak --target-db -1 --json -q");
+  REQUIRE(code == 0);
+  REQUIRE_THAT(output, !ContainsSubstring("downmixed to mono"));
+
+  auto [samples, rate, channels] = load_audio_interleaved(out);
+  REQUIRE(channels == 2);
+  const double left_db = peak_db(samples, channels, 0);
+  const double right_db = peak_db(samples, channels, 1);
+  const double expected_gap = -20.0 * std::log10(static_cast<double>(kRatio));
+  CHECK(std::abs(left_db - -1.0) < 0.01);
+  CHECK(std::abs((left_db - right_db) - expected_gap) < 0.02);
+  // Named rather than implied by the gap: this is the value a per-channel gain
+  // would produce, and it is the reading the assertion above rules out.
+  CHECK(right_db < -12.0);
+  std::remove(out.c_str());
+  std::remove(input.c_str());
+
+  // A mono source keeps the mono writer, so the stereo branch is entered on the
+  // file's own channel count rather than on the command being normalize.
+  const std::string mono_in = unique_temp_path("_mono_normalize.wav");
+  create_test_wav(mono_in, 1.0f, 440.0f, kRate);
+  const std::string mono_out = unique_temp_path("_mono_normalized.wav");
+  auto [mono_code, mono_output] = exec_command(CLI + " normalize " + mono_in + " -o " + mono_out +
+                                               " --mode peak --target-db -1 --json -q");
+  REQUIRE(mono_code == 0);
+  auto [mono_samples, mono_rate, mono_channels] = load_audio_interleaved(mono_out);
+  CHECK(mono_channels == 1);
+  CHECK(std::abs(peak_db(mono_samples, 1, 0) - -1.0) < 0.01);
+  std::remove(mono_in.c_str());
+  std::remove(mono_out.c_str());
+}
+
 TEST_CASE("CLI mastering carries a stereo input through as a stereo pair", "[cli][mastering]") {
   // A mono master written to two channels also reports two channels, so the
   // side signal is what separates a stereo output from a duplicated mono one.
@@ -3412,11 +3472,16 @@ TEST_CASE("CLI mastering carries a stereo input through as a stereo pair", "[cli
   auto [mono_samples, mono_rate, mono_channels] = load_audio_interleaved(mono_out);
   CHECK(mono_channels == 1);
 
+  // `pitch-shift` stands in for "a command that does downmix" only because it is
+  // currently one. When it learns to carry a pair, move this case to whichever
+  // leaf is still mono rather than deleting it -- the assertion is about the
+  // warning firing where a leaf has not declared preservation, and it stops
+  // being checked at all if the last named example quietly becomes an exception.
   const std::string downmixed_out = unique_temp_path("_downmixed.wav");
-  auto [normalize_code, normalize_output] =
-      exec_command(CLI + " normalize " + input + " -o " + downmixed_out + " --json -q");
-  REQUIRE(normalize_code == 0);
-  REQUIRE_THAT(normalize_output, ContainsSubstring("downmixed to mono"));
+  auto [downmix_code, downmix_output] = exec_command(
+      CLI + " pitch-shift " + input + " --semitones 3 -o " + downmixed_out + " --json -q");
+  REQUIRE(downmix_code == 0);
+  REQUIRE_THAT(downmix_output, ContainsSubstring("downmixed to mono"));
 
   // Shape, not just channel count: the stereo run publishes the keys its mono
   // counterpart publishes. Both come from one writer, which is what keeps their

@@ -531,7 +531,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         commands, "split-silence", true,
         {number_value("top-db", 60.0), global_int("n-fft", 2048), global_int("hop-length", 512)});
     add_command(commands, "normalize", true,
-                {string_value("mode", "peak"), number_value("target-db"), required_output()});
+                {string_value("mode", "peak"), number_value("target-db"), required_output()}, {},
+                nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "gain", true, {number_value("gain-db"), required_output()});
     add_command(commands, "fade", true,
                 {number_value("fade-in"), number_value("fade-out"), required_output()});
@@ -566,7 +567,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  // refusing an outside value.
                  target_platform_value(), flag("no-streaming-safe"),
                  number_value("speech-mono-amount", 1.0)},
-                {}, nullptr, 0, true);
+                {}, nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "mastering-processor", true,
                 {required_string("processor"), string_value("params"), bits_value(), output_value(),
                  flag("stereo")});
@@ -627,7 +628,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
                  number_value("pan", 0.0), string_value("pan-mode", "balance"),
                  number_value("width", 1.0), output_value()},
-                {}, nullptr, 0, true);
+                {}, nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "mixing-presets", false, {});
     // The advertised default has to be one the command can actually run: an
     // empty string reaches the preset lookup and fails, and the handler's own

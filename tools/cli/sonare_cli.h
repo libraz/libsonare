@@ -139,6 +139,21 @@ Audio load_reference_audio(const CliArgs& args, int expected_sample_rate, size_t
 // rate must still match (the match primitives require equal sample rates).
 Audio load_reference_audio_any_length(const CliArgs& args, int expected_sample_rate);
 
+/// The de-interleaved channels of a stereo input.
+struct StereoPlanes {
+  std::vector<float> left;
+  std::vector<float> right;
+};
+
+/// Re-reads `args.input_file` as stereo. A handler is handed the mono downmix
+/// main() decoded, so carrying both channels costs a second decode; the mono
+/// decode stays authoritative on the sample rate, which is what this checks.
+StereoPlanes load_stereo_planes(const CliArgs& args, const Audio& audio);
+
+/// Writes a processed pair as an interleaved stereo WAV.
+void save_stereo_wav(const std::string& path, const std::vector<float>& left,
+                     const std::vector<float>& right, int sample_rate, int bits = 16);
+
 int cmd_version(const CliArgs& args);
 int cmd_doctor(const CliArgs& args);
 int cmd_system_info(const CliArgs& args);

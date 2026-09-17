@@ -243,44 +243,6 @@ void write_mastering_report(const std::string& path,
   }
 }
 
-namespace {
-
-/// The de-interleaved channels of a stereo input.
-struct StereoPlanes {
-  std::vector<float> left;
-  std::vector<float> right;
-};
-
-/// Re-reads `args.input_file` as stereo. A handler is handed the mono downmix
-/// main() decoded, so carrying both channels costs a second decode; the mono
-/// decode stays authoritative on the sample rate, which is what this checks.
-StereoPlanes load_stereo_planes(const CliArgs& args, const Audio& audio) {
-  auto [interleaved, sample_rate, channels] = load_audio_interleaved(args.input_file);
-  SONARE_CHECK(sample_rate == audio.sample_rate() && channels == 2, ErrorCode::DecodeFailed);
-  StereoPlanes planes;
-  planes.left.resize(interleaved.size() / 2);
-  planes.right.resize(interleaved.size() / 2);
-  for (size_t frame = 0; frame < planes.left.size(); ++frame) {
-    planes.left[frame] = interleaved[2 * frame];
-    planes.right[frame] = interleaved[2 * frame + 1];
-  }
-  return planes;
-}
-
-/// Writes a processed pair as an interleaved stereo WAV.
-void save_stereo_wav(const std::string& path, const std::vector<float>& left,
-                     const std::vector<float>& right, int sample_rate, int bits) {
-  std::vector<float> interleaved(2 * left.size());
-  for (size_t frame = 0; frame < left.size(); ++frame) {
-    interleaved[2 * frame] = left[frame];
-    interleaved[2 * frame + 1] = frame < right.size() ? right[frame] : 0.0f;
-  }
-  save_wav_multichannel(path, interleaved.data(), left.size(), 2, ChannelLayout::Stereo,
-                        sample_rate, bits);
-}
-
-}  // namespace
-
 // Templated on the result rather than taking MonoChainResult: the stereo result
 // carries the same ChainMetrics and the same three loudness scalars, so one
 // writer keeps the two payloads identical by construction.

@@ -24,8 +24,13 @@ def _args(**values: object) -> argparse.Namespace:
 def _capture_emit(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
     calls: list[dict[str, object]] = []
 
-    def emit(args: argparse.Namespace, result: list[float], sr: int, **kwargs: object) -> int:
-        calls.append({"args": args, "result": result, "sample_rate": sr, **kwargs})
+    def emit(
+        args: argparse.Namespace, channels: list[list[float]], sr: int, **kwargs: object
+    ) -> int:
+        # Recorded as the emitter takes it: one buffer per channel. A handler
+        # that carries a stereo source through hands over two, and flattening
+        # here would make that case assert the same thing as the mono one.
+        calls.append({"args": args, "channels": channels, "sample_rate": sr, **kwargs})
         return 0
 
     monkeypatch.setattr(effects, "_emit_effect_result", emit)
@@ -64,7 +69,7 @@ def test_pitch_shift_and_time_stretch_forward_fft_options(
             {"sample_rate": 22050, "rate": 1.2, "n_fft": 1024, "hop_length": 256},
         ),
     ]
-    assert [call["result"] for call in emitted] == [[0.2, 0.3], [0.3, 0.4]]
+    assert [call["channels"] for call in emitted] == [[[0.2, 0.3]], [[0.3, 0.4]]]
 
 
 def test_pitch_correct_forwards_requested_pitch_to_constant_facade(
@@ -87,7 +92,7 @@ def test_pitch_correct_forwards_requested_pitch_to_constant_facade(
         "current_midi": 60.0,
         "target_midi": 64.0,
     }
-    assert emitted[0]["result"] == [0.5]
+    assert emitted[0]["channels"] == [[0.5]]
 
 
 def test_hpss_forwards_all_controls_and_writes_selected_artifacts(
@@ -169,6 +174,10 @@ def test_normalize_mode_and_trim_controls_forward_to_the_matching_facade(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(effects, "_load_audio", lambda _path: ([0.1], 22050))
+    # normalize reads the source through the channel-preserving loader, so it
+    # takes its own patch: a one-channel answer is what puts it on the mono
+    # branch, which is the branch these forwarding assertions are about.
+    monkeypatch.setattr(effects, "_load_channels_or_downmix", lambda _path: ([[0.1]], 22050))
     emitted = _capture_emit(monkeypatch)
     normalize_calls: list[tuple[str, dict[str, object]]] = []
 
@@ -196,7 +205,7 @@ def test_normalize_mode_and_trim_controls_forward_to_the_matching_facade(
         == 0
     )
     assert trim_calls == [("top", {"top_db": 24.0, "frame_length": 1024, "hop_length": 256})]
-    assert [call["result"] for call in emitted] == [[0.3], [0.4]]
+    assert [call["channels"] for call in emitted] == [[[0.3]], [[0.4]]]
 
 
 def test_trim_threshold_and_top_db_conflict_is_semantic_error(

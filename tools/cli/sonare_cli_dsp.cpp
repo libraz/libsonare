@@ -4,30 +4,52 @@
 
 int cmd_normalize(const CliArgs& args, const Audio& audio) {
   const std::string mode = args.get_string("mode", "peak");
-  Audio result;
-  float target_db = 0.0f;
-  if (mode == "rms") {
-    target_db = args.get_float("target-db", -20.0f);
-    result = normalize_rms(audio, target_db);
-  } else if (mode == "peak") {
-    target_db = args.get_float("target-db", 0.0f);
-    result = normalize(audio, target_db);
-  } else {
+  if (mode != "peak" && mode != "rms") {
     std::cerr << color::red << "Error: --mode must be 'peak' or 'rms'" << color::reset << "\n";
     return 1;
   }
+  const bool rms = mode == "rms";
+  const float target_db = args.get_float("target-db", rms ? -20.0f : 0.0f);
 
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  size_t length = 0;
+  double duration = 0.0;
+  if (args.source_channels == 2) {
+    // The planes bypass the offline-input policy Audio::from_file applied to the
+    // mono decode; a non-finite sample in either channel reaches the downmix as
+    // non-finite, so that decode has already refused such a file.
+    StereoPlanes planes = load_stereo_planes(args, audio);
+    const int sample_rate = audio.sample_rate();
+    const Audio left = Audio::from_vector(std::move(planes.left), sample_rate);
+    const Audio right = Audio::from_vector(std::move(planes.right), sample_rate);
+    // One gain for the pair: a per-channel gain would raise the quieter side
+    // further and collapse the image toward centre.
+    const NormalizeStereoResult result = rms ? normalize_rms_stereo(left, right, target_db)
+                                             : normalize_stereo(left, right, target_db);
+    const std::vector<float> out_left(result.left.data(), result.left.data() + result.left.size());
+    const std::vector<float> out_right(result.right.data(),
+                                       result.right.data() + result.right.size());
+    save_stereo_wav(args.output_file, out_left, out_right, result.left.sample_rate());
+    length = result.left.size();
+    duration = result.left.duration();
+  } else {
+    const Audio result = rms ? normalize_rms(audio, target_db) : normalize(audio, target_db);
+    save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+    length = result.size();
+    duration = result.duration();
+  }
 
   if (args.json_output) {
+    // `length` is per channel and no channel count is published: the payload is a
+    // cross-front-end contract, and how many channels the file carries is a
+    // property of the file.
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
         .kv("mode", mode)
         .kv("target_db", target_db)
-        .kv("length", result.size())
-        .kv("sample_rate", result.sample_rate())
-        .kv("duration", result.duration())
+        .kv("length", length)
+        .kv("sample_rate", audio.sample_rate())
+        .kv("duration", duration)
         .end_object()
         .print();
   } else if (!args.quiet) {

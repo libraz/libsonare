@@ -14,6 +14,7 @@ from ._cli_common import (
     _apply_voice_sets,
     _emit_effect_result,
     _legacy_exit_codes,
+    _load_channels_or_downmix,
     _load_voice_preset_pack,
     _resample,
     _strict_json_dumps,
@@ -219,7 +220,7 @@ def cmd_pitch_correct(args: argparse.Namespace) -> int:
 
     return _emit_effect_result(
         args,
-        result,
+        [result],
         sr,
         extra={"current_midi": current_midi, "target_midi": target_midi},
         label="Pitch correct",
@@ -244,7 +245,7 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
         voiced=[int(value) for value in track.voiced_flag],
         voiced_prob=track.voiced_prob,
     )
-    return _emit_effect_result(args, result, sr, label="Time-varying pitch correct")
+    return _emit_effect_result(args, [result], sr, label="Time-varying pitch correct")
 
 
 def cmd_note_move(args: argparse.Namespace) -> int:
@@ -258,7 +259,7 @@ def cmd_note_move(args: argparse.Namespace) -> int:
         offset_sample=args.offset,
         target_onset_sample=args.target_onset,
     )
-    return _emit_effect_result(args, result, sr, label="Note move")
+    return _emit_effect_result(args, [result], sr, label="Note move")
 
 
 def cmd_scale_quantize(args: argparse.Namespace) -> int:
@@ -288,7 +289,7 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
 
     return _emit_effect_result(
         args,
-        result,
+        [result],
         sr,
         extra={
             "onset_sample": args.onset,
@@ -491,7 +492,7 @@ def cmd_polyphonic_render(args: argparse.Namespace) -> int:
 
     return _emit_effect_result(
         args,
-        result,
+        [result],
         sr,
         extra={"note_count": note_count, "edits": len(assignments)},
         label="Polyphonic render",
@@ -514,7 +515,7 @@ def cmd_pitch_shift(args: argparse.Namespace) -> int:
 
     return _emit_effect_result(
         args,
-        result,
+        [result],
         sr,
         extra={"semitones": args.semitones},
         label=f"Pitch shift ({args.semitones:+.2f} semitones)",
@@ -537,7 +538,7 @@ def cmd_time_stretch(args: argparse.Namespace) -> int:
 
     return _emit_effect_result(
         args,
-        result,
+        [result],
         sr,
         extra={"rate": args.rate},
         label=f"Time stretch (rate {args.rate:.4f})",
@@ -545,23 +546,34 @@ def cmd_time_stretch(args: argparse.Namespace) -> int:
 
 
 def cmd_normalize(args: argparse.Namespace) -> int:
-    from . import normalize, normalize_rms
+    from . import normalize, normalize_rms, normalize_rms_stereo, normalize_stereo
 
-    samples, sr = _load_audio(args.file)
+    planes, sr = _load_channels_or_downmix(args.file)
     mode = getattr(args, "mode", "peak")
     target_db = getattr(args, "target_db", None)
     if target_db is None:
         target_db = -20.0 if mode == "rms" else 0.0
-    if mode == "peak":
-        result = normalize(samples, sample_rate=sr, target_db=target_db)
-    elif mode == "rms":
-        result = normalize_rms(samples, sample_rate=sr, target_db=target_db)
-    else:
+    if mode not in ("peak", "rms"):
         raise ValueError("--mode must be 'peak' or 'rms'")
+
+    # One gain for the pair, measured across both channels. Normalizing each
+    # channel to the target on its own would drive the quieter one up by a
+    # different amount and collapse the image toward the centre -- for a source
+    # 12 dB apart that is a factor of four on one side.
+    if len(planes) == 2:
+        stereo = (normalize_rms_stereo if mode == "rms" else normalize_stereo)(
+            planes[0], planes[1], sample_rate=sr, target_db=target_db
+        )
+        channels = [stereo.left, stereo.right]
+    else:
+        mono = (normalize_rms if mode == "rms" else normalize)(
+            planes[0], sample_rate=sr, target_db=target_db
+        )
+        channels = [mono]
 
     return _emit_effect_result(
         args,
-        result,
+        channels,
         sr,
         extra={"mode": mode, "target_db": target_db},
         label=f"Normalize ({mode}, target {target_db:.2f} dB)",
@@ -602,7 +614,7 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
 
     return _emit_effect_result(
         args,
-        result,
+        [result],
         sr,
         extra=extra,
         label=label,
@@ -739,7 +751,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
 
     return _emit_effect_result(
         args,
-        result,
+        [result],
         sr,
         extra={"latency_samples": latency_samples, **mode_metadata},
         label="Voice change",

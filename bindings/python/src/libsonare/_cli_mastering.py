@@ -12,15 +12,14 @@ from ._cli_common import (
     _atomic_wav_writer,
     _atomic_write_bytes,
     _float_sequence,
-    _load_audio_channels,
+    _load_channels_or_downmix,
     _parse_json_config,
     _parse_json_list,
     _parse_kv_params,
     _resample,
-    _source_channel_count,
     _strict_json_dumps,
+    _write_channel_output,
     _write_wav,
-    _write_wav_stereo,
     _write_wav_stereo_frames,
 )
 from ._cli_common import (
@@ -250,7 +249,7 @@ def _check_eq_enum_options(args: argparse.Namespace) -> None:
 
 
 def cmd_mastering(args: argparse.Namespace) -> int:
-    planes, sr = _load_for_stereo_chain(args.file)
+    planes, sr = _load_channels_or_downmix(args.file)
     samples = planes[0]
     stereo = len(planes) == 2
     report_path = getattr(args, "report", "") or ""
@@ -414,7 +413,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     rendered = [result.left, result.right] if stereo else [result.samples]
     output = getattr(args, "output", "") or ""
     if output:
-        _write_chain_output(output, rendered, result.sample_rate, bits)
+        _write_channel_output(output, rendered, result.sample_rate, bits)
     if report_path:
         _write_mastering_report(report_path, result.report)
 
@@ -714,7 +713,7 @@ def cmd_mastering_stereo_analyze(args: argparse.Namespace) -> int:
 def cmd_mastering_chain(args: argparse.Namespace) -> int:
     from . import mastering_chain, mastering_chain_stereo
 
-    planes, sr = _load_for_stereo_chain(args.file)
+    planes, sr = _load_channels_or_downmix(args.file)
     config = _parse_json_config(args.config, args.config_file)
     if args.params:
         config.update(_parse_kv_params(args.params))
@@ -731,7 +730,7 @@ def cmd_mastering_chain(args: argparse.Namespace) -> int:
     report_path = getattr(args, "report", "")
 
     if args.output:
-        _write_chain_output(args.output, rendered, result.sample_rate)
+        _write_channel_output(args.output, rendered, result.sample_rate)
     if report_path:
         _write_mastering_report(report_path, result.report)
 
@@ -756,35 +755,10 @@ def cmd_mastering_chain(args: argparse.Namespace) -> int:
     return 0
 
 
-def _load_for_stereo_chain(path: str) -> tuple[list[list[float]], int]:
-    """Load a file as a stereo pair where it is one, and as mono otherwise.
-
-    The mastering chain has a mono and a stereo entry point and nothing wider,
-    so a two-channel source is the only one that can be carried through whole.
-    Anything else goes through the downmixing loader, which says so: silently
-    keeping channel 0 of a surround file would deliver a quarter of the record
-    under the name of a master.
-    """
-    if _source_channel_count(path) == 2:
-        return _load_audio_channels(path)
-    samples, sample_rate = _load_audio(path)
-    return [samples], sample_rate
-
-
-def _write_chain_output(
-    path: str, channels: list[list[float]], sample_rate: int, bits_per_sample: int = 16
-) -> None:
-    """Write however many channels the chain produced."""
-    if len(channels) == 2:
-        _write_wav_stereo(path, channels[0], channels[1], sample_rate, bits_per_sample)
-    else:
-        _write_wav(path, channels[0], sample_rate, bits_per_sample)
-
-
 def cmd_master(args: argparse.Namespace) -> int:
     from . import master_audio, master_audio_stereo
 
-    planes, sr = _load_for_stereo_chain(args.file)
+    planes, sr = _load_channels_or_downmix(args.file)
     overrides = _parse_json_config(args.config, args.config_file)
     if args.params:
         overrides.update(_parse_kv_params(args.params))
@@ -802,7 +776,7 @@ def cmd_master(args: argparse.Namespace) -> int:
     report_path = getattr(args, "report", "")
 
     if args.output:
-        _write_chain_output(args.output, rendered, result.sample_rate)
+        _write_channel_output(args.output, rendered, result.sample_rate)
     if report_path:
         _write_mastering_report(report_path, result.report)
 
@@ -841,7 +815,7 @@ def cmd_mastering_streaming(args: argparse.Namespace) -> int:
 def cmd_declip(args: argparse.Namespace) -> int:
     from . import mastering_repair_declip, mastering_repair_declip_stereo
 
-    planes, sr = _load_for_stereo_chain(args.file)
+    planes, sr = _load_channels_or_downmix(args.file)
     knobs = {
         "clip_threshold": args.clip_threshold,
         "lpc_order": args.lpc_order,
@@ -860,7 +834,7 @@ def cmd_declip(args: argparse.Namespace) -> int:
     repaired = rendered[0]
 
     if args.output:
-        _write_chain_output(args.output, rendered, sr)
+        _write_channel_output(args.output, rendered, sr)
 
     if args.json:
         payload: dict[str, object] = {
@@ -1275,12 +1249,9 @@ def _mix_assistant_tracks(entries: list[str], sample_rate: int) -> list[Any]:
             raise ValueError(f"--input track id must not be empty: {entry}")
         if not path:
             raise ValueError(f"--input requires a file path: {entry}")
-        if _source_channel_count(path) == 2:
-            planes, track_rate = _load_audio_channels(path)
-            left, right = planes[0], planes[1]
-        else:
-            left, track_rate = _load_audio(path)
-            right = None
+        planes, track_rate = _load_channels_or_downmix(path)
+        left = planes[0]
+        right = planes[1] if len(planes) == 2 else None
         if track_rate != sample_rate:
             left = _resample(left, track_rate, sample_rate)
             if right is not None:
@@ -1357,13 +1328,9 @@ def _load_strip_pair(path: str, sample_rate: int) -> tuple[list[float], list[flo
     more channels than a strip has goes through the downmixing loader, which
     says so.
     """
-    if _source_channel_count(path) == 2:
-        planes, in_sr = _load_audio_channels(path)
-        left, right = list(planes[0]), list(planes[1])
-    else:
-        samples, in_sr = _load_audio(path)
-        left = list(samples)
-        right = list(left)
+    planes, in_sr = _load_channels_or_downmix(path)
+    left = list(planes[0])
+    right = list(planes[1]) if len(planes) == 2 else list(left)
     if in_sr != sample_rate:
         left = list(_resample(left, in_sr, sample_rate))
         right = list(_resample(right, in_sr, sample_rate))

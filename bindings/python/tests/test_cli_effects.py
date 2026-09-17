@@ -963,6 +963,11 @@ def test_cli_warns_once_when_it_downmixes_a_stereo_input(tmp_path) -> None:
     The native CLI prints this warning and the Python CLI printed nothing, so a
     user comparing the two front-ends saw a difference in what was processed
     where there was none.
+
+    ``pitch-shift`` is the subject because it still folds a stereo source. When
+    it grows a stereo form this case has to move to whichever command has not,
+    rather than be deleted: the warning stays correct for every command that
+    still downmixes, and a test that goes red here is naming its own successor.
     """
     stereo = tmp_path / "stereo.wav"
     mono = tmp_path / "mono.wav"
@@ -971,13 +976,57 @@ def test_cli_warns_once_when_it_downmixes_a_stereo_input(tmp_path) -> None:
     _write_stereo_wav(str(stereo), values, [-v for v in values], 48000)
     _write_test_wav(str(mono), values, 48000)
 
-    noisy = _run_cli(["normalize", str(stereo), "-o", str(tmp_path / "a.wav"), "--json"])
-    quiet = _run_cli(["normalize", str(mono), "-o", str(tmp_path / "b.wav"), "--json"])
+    args = ["--semitones", "1.0", "--json"]
+    noisy = _run_cli(["pitch-shift", str(stereo), "-o", str(tmp_path / "a.wav"), *args])
+    quiet = _run_cli(["pitch-shift", str(mono), "-o", str(tmp_path / "b.wav"), *args])
 
     assert noisy.returncode == 0, noisy.stderr
     assert quiet.returncode == 0, quiet.stderr
     assert "2-channel input is downmixed to mono" in noisy.stderr
     assert "downmixed to mono" not in quiet.stderr
+
+
+def test_normalize_carries_a_stereo_source_through_on_one_gain(tmp_path) -> None:
+    """normalize keeps both channels and moves them by a single gain.
+
+    Two things are asserted together because either alone passes for the wrong
+    reason: a two-channel output could be a mono result written twice, and a
+    correct level on the louder channel is what a per-channel gain produces too.
+    What separates the linked entry from a per-channel loop is where the QUIET
+    channel lands -- 12 dB under the target rather than on it -- so the control
+    is the level a per-channel gain would have to produce.
+
+    The downmix warning must also be absent: it is now false for this command,
+    and a warning that describes something the command stopped doing is worse
+    than none.
+    """
+    stereo = tmp_path / "stereo.wav"
+    out = tmp_path / "out.wav"
+    length = 9600
+    loud = [0.5 * math.sin(2.0 * math.pi * 220.0 * i / 48000) for i in range(length)]
+    quiet = [0.125 * math.sin(2.0 * math.pi * 330.0 * i / 48000) for i in range(length)]
+    _write_stereo_wav(str(stereo), loud, quiet, 48000)
+
+    run = _run_cli(["normalize", str(stereo), "-o", str(out), "--target-db", "-1", "--json"])
+    assert run.returncode == 0, run.stderr
+    assert "downmixed to mono" not in run.stderr
+
+    with wave.open(str(out), "rb") as handle:
+        assert handle.getnchannels() == 2
+        frames = handle.getnframes()
+        raw = handle.readframes(frames)
+    values = struct.unpack(f"<{frames * 2}h", raw)
+    left = [values[i] / 32767.0 for i in range(0, len(values), 2)]
+    right = [values[i] / 32767.0 for i in range(1, len(values), 2)]
+
+    def peak_db(channel: list[float]) -> float:
+        return 20.0 * math.log10(max(abs(v) for v in channel))
+
+    assert peak_db(left) == pytest.approx(-1.0, abs=0.01)
+    # The control: a per-channel gain would put this channel on the target too.
+    # It is 12 dB away instead, which is the gap the source was written with.
+    assert peak_db(right) == pytest.approx(-13.04, abs=0.05)
+    assert peak_db(left) - peak_db(right) == pytest.approx(12.04, abs=0.02)
 
 
 def test_declip_cli_repairs_a_stereo_pair_as_a_pair(tmp_path) -> None:
