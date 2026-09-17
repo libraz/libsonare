@@ -80,6 +80,13 @@ BANK_VERSIONS = REPO_ROOT / "tools" / "bank-versions.json"
 #: The step names, low to high. The index is the stage in fifths.
 STAGES = ("untouched", "voiced", "targeted", "fitted", "heard", "settled")
 
+#: The step at which a capital's timbre has been accepted by ear, and so the
+#: step at which a variation under it is worth capturing. `variations_follow_
+#: capital` is about a capital that still moves invalidating its variations;
+#: below `heard` nobody has said the capital is the instrument yet, and above it
+#: what remains is a diagnosis rather than a re-voicing.
+HEARD_STAGE = STAGES.index("heard") / 5.0
+
 #: The engine a program falls to when nothing chose one for it. Deliberate for a
 #: synth lead and a default everywhere else, which is why the untouched
 #: predicate needs the patch as well: `tremolo_strings` and `orchestra_hit` are
@@ -129,13 +136,13 @@ def open_candidates() -> dict[str, list[str]]:
     """Each voice's recorded-but-unadopted calibration settings, by slug."""
     out: dict[str, list[str]] = {}
     for slug, entry in _load(CALIBRATIONS).items():
-        if slug.startswith("_"):
+        if slug.startswith(signoff.DOC_PREFIX):
             continue
         out[slug] = [v["name"] for v in entry.get("variants", [])]
     return out
 
 
-def tier_of(pol: dict, program: int, bank: int) -> tuple[int, str]:
+def tier_of(pol: dict, program: int, bank: int, *, kit: bool) -> tuple[int, str]:
     """The working-priority tier a slot falls in, as (rank, name).
 
     Read at print time rather than written into `tools/voice-status.json`,
@@ -148,6 +155,11 @@ def tier_of(pol: dict, program: int, bank: int) -> tuple[int, str]:
     capital copied and narrowed, so it cannot be worked before the capital and
     has no priority of its own. `variations_follow_capital` records that the
     tier is deliberately shared, and the caller is what defers the work.
+
+    `kit` says which of two number spaces `program` is in and has no default. A
+    kit is named by the rhythm-part program a file selects it with, so `kits`
+    and `programs` are separate namespaces over the same integers: read as one,
+    a tier listing kit 8 also ranks the celesta.
     """
     tiers = pol.get("tiers") or []
     if not tiers:
@@ -161,7 +173,7 @@ def tier_of(pol: dict, program: int, bank: int) -> tuple[int, str]:
         if t.get("default"):
             fallback = (int(t.get("rank", fallback[0])), t["name"])
             continue
-        if program in set(t.get("programs") or []) or program in set(t.get("kits") or []):
+        if program in set(t.get("kits" if kit else "programs") or []):
             return int(t["rank"]), t["name"]
     return fallback
 
@@ -186,9 +198,17 @@ def goal_progress(pol: dict, rows: list[dict]) -> list[dict]:
     a version whose date arrives with a goal unmet ships with it unmet and the
     goal carries over; nothing built on this may block a release, a merge or a
     CI run, and a goal named after a version is not thereby a due date.
+
+    A `_`-prefixed key documents the block rather than naming a goal, the same
+    as in `calibrations.json`, `signoff.json` and every capture definition. It
+    is skipped here rather than read as a goal with no stage: the convention
+    holds everywhere else in this tree, so a note written into this block is
+    what a reader would expect to be able to do.
     """
     out = []
     for name, goal in sorted((pol.get("goals") or {}).items()):
+        if name.startswith(signoff.DOC_PREFIX):
+            continue
         want = float(goal.get("stage", 1.0))
         here = goal_members(goal, rows)
         out.append({
@@ -198,6 +218,56 @@ def goal_progress(pol: dict, rows: list[dict]) -> list[dict]:
             "met": len([r for r in here if r["stage"] >= want]),
             "short": [r for r in here if r["stage"] < want],
         })
+    return out
+
+
+def variation_split(rows: list[dict], pol: dict) -> tuple[int, int]:
+    """Variations below `heard`, split by whether their capital is heard yet.
+
+    The two need different work and the flat queue says neither. One is a
+    capture nobody should start — the capital it copies is still moving — and
+    the other is a capture ready to run.
+    """
+    waiting = ready = 0
+    for row in rows:
+        if row["stage"] >= HEARD_STAGE:
+            continue
+        capital = capital_of(row, rows, pol)
+        if capital is None:
+            continue
+        if capital["stage"] < HEARD_STAGE:
+            waiting += 1
+        else:
+            ready += 1
+    return waiting, ready
+
+
+def signoff_census(rows: list[dict]) -> dict:
+    """How many of the two hand-written claims are recorded, and how many hold.
+
+    Reported, never enforced, and for the same reason as `goal_progress`: this
+    says where the bank's recorded work is, not whether anything may ship.
+
+    The two claims are read a step apart — the musical one promotes a voice to
+    `heard` and the structural one carries it to `settled` — so a structural
+    diagnosis taken before anyone listened raises no stage at all, and goes on
+    ageing against the bank it was measured on. `structure_only` is that count.
+    Nothing else surfaces it: the stage column shows where a voice stopped and
+    not what has been recorded past the step it stopped at.
+    """
+    out = {"structure": 0, "structure_current": 0,
+           "music": 0, "music_current": 0, "structure_only": 0}
+    for r in rows:
+        axes = r.get("axes") or {}
+        structure, music = axes.get("structure"), axes.get("music")
+        for claim, key in ((structure, "structure"), (music, "music")):
+            if not claim:
+                continue
+            out[key] += 1
+            if claim["state"] == signoff.CURRENT:
+                out[f"{key}_current"] += 1
+        if structure and not music:
+            out["structure_only"] += 1
     return out
 
 
@@ -308,8 +378,74 @@ def stage_for(axes: dict) -> int:
     return 5
 
 
+def approximation(pol: dict, slug: str) -> dict | None:
+    """The policy's record that this slot is answered by a neighbour, or None.
+
+    An approximated slot has no oracle to capture and never will: the bank does
+    not have the mechanism and is deliberately answering with the nearest voice
+    it does have. Nothing downstream can tell that apart from an unfinished
+    voice, so without this the slot's next action reads `capture an oracle`,
+    which is precisely the work that is never going to happen for it.
+    """
+    entry = (pol.get("approximated") or {}).get(slug)
+    return entry if isinstance(entry, dict) else None
+
+
+def capital_of(row: dict, rows: list[dict], pol: dict) -> dict | None:
+    """The bank-0 row a variation is a copy of, or None where the rule is off.
+
+    Gated on `variations_follow_capital` rather than assumed. That flag is the
+    decision that a variation has no priority and no schedule of its own, and a
+    rule read from nowhere is a rule the policy cannot turn off — which is also
+    what would let this be baked into the generated file, where it does not
+    belong.
+    """
+    if not pol.get("variations_follow_capital"):
+        return None
+    if row["kit"] or not row["bank"]:
+        return None
+    return next((r for r in rows
+                 if r["program"] == row["program"] and not r["bank"] and not r["kit"]), None)
+
+
+def resolved_next(row: dict, pol: dict, rows: list[dict]) -> str:
+    """This voice's next move with the policy folded in, at print time.
+
+    The bank-only answer is generated into `tools/voice-status.json` and the
+    policy is not, for the reason `tier_of` gives: a tier, a goal and an
+    approximation are decisions, and baking one into the generated file would
+    make it stale every time the policy moved with no voice having changed. So
+    the two are resolved here, exactly where the rank is.
+
+    Two things the generated answer cannot say. An approximated slot is
+    terminal rather than uncaptured. And a variation is its capital copied and
+    then narrowed, so the honest answer for one is whichever of two holds --
+    the capital is not accepted yet and nothing here moves, or it is and this
+    one can be captured -- and `next_action` sees neither the policy nor the
+    other rows.
+    """
+    approx = approximation(pol, row["slug"])
+    if approx is not None:
+        answered = approx.get("answered_by") or "a neighbouring voice"
+        return (f"approximated by {answered}, and terminal: "
+                f"{approx.get('reason') or 'no reason recorded'}")
+    capital = capital_of(row, rows, pol)
+    if capital is not None and row["stage"] < HEARD_STAGE:
+        if capital["stage"] < HEARD_STAGE:
+            return (f"its capital {capital['slug']} is at {capital['stage']:.1f} and nothing "
+                    f"here moves until it is heard: a variation is the capital copied and "
+                    f"then narrowed, so starting one first buys a round of rework")
+        return (f"its capital {capital['slug']} is heard: capture this variation from the "
+                f"module and measure it")
+    return row["next"]
+
+
 def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
-    """The one move that would raise this voice's stage, in a line."""
+    """The one move that would raise this voice's stage, in a line.
+
+    The bank alone, which is what makes it safe to generate. Anything the
+    policy decides is folded in by `resolved_next` when the table is printed.
+    """
     if stage == 0:
         return "no deliberate voice: pick an engine and write a patch"
     if stage == 1:
@@ -447,15 +583,17 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
         bar = "#" * int(r["stage"] * 5) + "." * (5 - int(r["stage"] * 5))
         flag = f"  [{len(r['open_candidates'])} unwritten]" if r["open_candidates"] else ""
         oracle = r["capture"] or "-"
-        rank, _name = tier_of(pol, r["program"], r["bank"])
+        rank, _name = tier_of(pol, r["program"], r["bank"], kit=r["kit"])
         tier = f"t{rank}" if rank else "t-"
         print(f"    {r['slug']:<32} {tier} {r['stage']:.1f} {bar}  {r['engine'] or '?':<15}"
               f" {oracle:<10}{flag}".rstrip())
         # Only past the oracle step, where the line differs per voice. Below it
         # every voice says the same sentence, and 150 copies of it bury the four
-        # that say something.
-        if 0.2 < r["stage"] < 1.0:
-            print(f"      -> {r['next']}")
+        # that say something — except where the policy has something to add,
+        # which is per slot and is the reason it is worth a line.
+        resolved = resolved_next(r, pol, rows)
+        if 0.2 < r["stage"] < 1.0 or resolved != r["next"]:
+            print(f"      -> {resolved}")
     total = len(rows)
     counts: dict[str, int] = {}
     for r in rows:
@@ -463,13 +601,33 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
     print(f"\n  {total} voices: "
           + ", ".join(f"{n} {s}" for s, n in
                       sorted(counts.items(), key=lambda kv: STAGES.index(kv[0]))))
-    no_oracle = [r for r in rows if not r["capture"]]
+    # Counted apart from the unfinished voices rather than added to them: an
+    # approximated slot has no oracle and is not waiting for one.
+    approximated = [r for r in rows if approximation(pol, r["slug"])]
+    no_oracle = [r for r in rows if not r["capture"] and r not in approximated]
     if no_oracle:
         print(f"  {len(no_oracle)} with no oracle captured — that is the task list, "
               f"and nothing below stage 0.4 moves without one")
+    if approximated:
+        print(f"  {len(approximated)} approximated by a neighbouring voice and terminal: "
+              f"no oracle exists for them and none is being sought")
+    waiting, ready = variation_split(rows, pol)
+    if waiting or ready:
+        print(f"  {waiting + ready} variation(s) below heard: {waiting} behind a capital that "
+              f"is not heard yet, {ready} whose capital is and which can be captured")
     unwritten = sum(len(r["open_candidates"]) for r in rows)
     if unwritten:
         print(f"  {unwritten} recorded calibration setting(s) not written back")
+    census = signoff_census(rows)
+    if census["structure"] or census["music"]:
+        print(f"  sign-offs: {census['music']} musical "
+              f"({census['music_current']} current against this bank), "
+              f"{census['structure']} structural "
+              f"({census['structure_current']} current)")
+    if census["structure_only"]:
+        print(f"  {census['structure_only']} of those diagnoses sit on a voice nobody has "
+              f"signed a take off on: the ear is read one step earlier, so none of them "
+              f"raises a stage until somebody listens")
     for g in goals:
         step = STAGES[round(g["stage"] * 5)]
         print(f"  goal {g['name']}: {g['met']}/{g['total']} at {step} ({g['stage']:.1f})")

@@ -58,6 +58,220 @@ def test_a_kit_is_not_voiced_by_its_programs_melodic_patch():
 
 
 # --------------------------------------------------------------------------- #
+# The policy, resolved at print time
+# --------------------------------------------------------------------------- #
+
+CORE = {"name": "core", "rank": 1, "programs": [0, 3], "kits": [8]}
+COMMON = {"name": "common", "rank": 2, "default": True}
+POLICY = {"tiers": [CORE, COMMON]}
+
+
+def test_a_kit_number_does_not_rank_the_melodic_program_of_that_number():
+    """`kits` and `programs` are two number spaces over the same integers.
+
+    A kit is named by the rhythm-part program a file selects it with, so kit 8
+    is the Room set and program 8 is the celesta. Resolved as one list, a tier
+    naming the Room kit also promotes the celesta to the top of the bank.
+    """
+    assert status.tier_of(POLICY, 8, 0, kit=True) == (1, "core")
+    assert status.tier_of(POLICY, 8, 0, kit=False) == (2, "common")
+
+
+def test_a_melodic_program_is_not_ranked_by_the_kit_list_either_way():
+    assert status.tier_of(POLICY, 0, 0, kit=False) == (1, "core")
+    assert status.tier_of(POLICY, 0, 0, kit=True) == (2, "common")
+
+
+def test_a_variation_is_ranked_with_its_capital():
+    """It is the capital copied and narrowed, so it has no priority of its own."""
+    assert status.tier_of(POLICY, 3, 8, kit=False) == (1, "core")
+
+
+def test_no_policy_at_all_ranks_nothing_rather_than_ranking_everything_first():
+    """Rank 0 renders as `t-`; a 1 would report the long tail as the most urgent."""
+    assert status.tier_of({}, 0, 0, kit=False) == (0, "unranked")
+
+
+def test_a_documentation_key_inside_goals_is_not_read_as_a_goal():
+    """`_` documents a block in every other JSON file here — calibrations.json,
+    signoff.json, each capture definition — so a note written into this one is
+    what a reader would expect to be able to do. Read as a goal it has no
+    `stage`, and the only tool that reads the policy died on it."""
+    pol = {"goals": {"_": "which release asks for what",
+                     "1.8.0": {"stage": 0.8, "programs": [0]}}}
+    rows = [{"program": 0, "bank": 0, "kit": False, "stage": 0.6, "slug": "p000"}]
+    assert [g["name"] for g in status.goal_progress(pol, rows)] == ["1.8.0"]
+
+
+def test_a_goal_names_capital_tones_and_kits_and_never_a_variation():
+    """A variation is not something a file is owed, and one listed here would
+    block the goal on a capture nobody has a source for."""
+    rows = [{"program": 0, "bank": 0, "kit": False, "stage": 0.6, "slug": "capital"},
+            {"program": 0, "bank": 8, "kit": False, "stage": 0.2, "slug": "variation"}]
+    members = status.goal_members({"programs": [0]}, rows)
+    assert [r["slug"] for r in members] == ["capital"]
+
+
+# --------------------------------------------------------------------------- #
+# What the policy adds to a next action, and why it is added at print time
+# --------------------------------------------------------------------------- #
+
+def _row(slug, program, bank=0, stage=0.2, nxt="capture an oracle: no reference exists "
+         "for this voice", kit=False):
+    return {"slug": slug, "program": program, "bank": bank, "kit": kit,
+            "stage": stage, "next": nxt}
+
+
+def test_an_approximated_slot_is_terminal_rather_than_uncaptured():
+    """Its oracle is never going to be captured: the bank does not have the
+    mechanism and is deliberately answering with the nearest voice it has. The
+    generated answer says `capture an oracle`, which is the one instruction
+    that will never be carried out for this slot."""
+    pol = {"approximated": {"p105-banjo": {"answered_by": "p024-nylon-guitar",
+                                           "reason": "no plucked-membrane mechanism"}}}
+    rows = [_row("p105-banjo", 105)]
+    got = status.resolved_next(rows[0], pol, rows)
+    assert "terminal" in got
+    assert "p024-nylon-guitar" in got
+    assert "no plucked-membrane mechanism" in got
+    assert "capture an oracle" not in got
+
+
+def test_a_slot_the_policy_says_nothing_about_keeps_the_generated_answer():
+    rows = [_row("p105-banjo", 105)]
+    assert status.resolved_next(rows[0], {}, rows) == rows[0]["next"]
+
+
+def test_an_approximation_that_is_not_an_object_is_not_read_as_one():
+    """An entry shape the policy check refuses must not change an answer here."""
+    rows = [_row("p105-banjo", 105)]
+    pol = {"approximated": {"p105-banjo": "no mechanism"}}
+    assert status.resolved_next(rows[0], pol, rows) == rows[0]["next"]
+
+
+def test_a_variation_behind_an_unheard_capital_is_told_not_to_start():
+    """Starting one first buys a round of rework — `variations_follow_capital`."""
+    rows = [_row("p000-piano", 0, stage=0.6), _row("p000b008-piano-w", 0, bank=8)]
+    got = status.resolved_next(rows[1], {"variations_follow_capital": True}, rows)
+    assert "p000-piano" in got
+    assert "nothing here moves until it is heard" in got
+
+
+def test_a_variation_whose_capital_is_heard_is_told_to_capture_it():
+    rows = [_row("p000-piano", 0, stage=0.8), _row("p000b008-piano-w", 0, bank=8)]
+    got = status.resolved_next(rows[1], {"variations_follow_capital": True}, rows)
+    assert "capture this variation from the module" in got
+
+
+def test_the_rule_is_read_from_the_policy_rather_than_assumed():
+    """A rule read from nowhere is one the policy cannot turn off."""
+    rows = [_row("p000-piano", 0, stage=0.6), _row("p000b008-piano-w", 0, bank=8)]
+    assert status.resolved_next(rows[1], {}, rows) == rows[1]["next"]
+    assert status.capital_of(rows[1], rows, {}) is None
+    assert status.capital_of(rows[1], rows, {"variations_follow_capital": True}) is rows[0]
+
+
+def test_a_capital_is_not_its_own_capital_and_a_kit_has_none():
+    pol = {"variations_follow_capital": True}
+    rows = [_row("p000-piano", 0), _row("kit000-standard-kit", 0, kit=True)]
+    assert status.capital_of(rows[0], rows, pol) is None
+    assert status.capital_of(rows[1], rows, pol) is None
+
+
+def test_the_variation_queue_is_split_by_what_each_half_needs():
+    """A flat queue says neither, and the two are different work."""
+    pol = {"variations_follow_capital": True}
+    rows = [
+        _row("p000-piano", 0, stage=0.6), _row("p000b008-a", 0, bank=8),
+        _row("p019-organ", 19, stage=0.8), _row("p019b008-b", 19, bank=8),
+        _row("p019b016-c", 19, bank=16),
+    ]
+    assert status.variation_split(rows, pol) == (1, 2)
+    assert status.variation_split(rows, {}) == (0, 0)
+
+
+def test_the_policy_resolved_answer_never_reaches_the_generated_file():
+    """`next` is generated and the policy is not. Resolved at print time for the
+    reason `tier_of` gives: baking a decision in would make the generated file
+    stale every time the policy moved with no voice having changed."""
+    for row in _shipped():
+        assert "approximated" not in row["next"]
+        assert "its capital" not in row["next"]
+
+
+def test_an_approximated_slot_is_not_counted_among_the_voices_awaiting_an_oracle():
+    """Two different states, and adding them together names the wrong task list.
+
+    The shipped `approximated` block is empty — a claim that every slot is
+    answered by a patch written for it — so an entry is planted here, over a
+    slot that really has no capture, rather than measuring an empty set.
+    """
+    rows = _shipped()
+    uncaptured = next(r for r in rows if not r["capture"])
+    pol = {"approximated": {uncaptured["slug"]: {"answered_by": "p000-acoustic-grand-piano",
+                                                 "reason": "planted"}}}
+    approximated = [r for r in rows if status.approximation(pol, r["slug"])]
+    no_oracle = [r for r in rows if not r["capture"] and r not in approximated]
+    assert len(approximated) == 1
+    assert uncaptured["slug"] not in {r["slug"] for r in no_oracle}
+    assert len(no_oracle) == len([r for r in rows if not r["capture"]]) - 1
+
+
+def test_the_shipped_policy_claims_every_slot_has_a_patch_written_for_it():
+    """Empty is a claim rather than an omission, so it is worth asserting."""
+    assert json.loads(status.POLICY.read_text())["approximated"] == {}
+
+
+# --------------------------------------------------------------------------- #
+# The two hand-written claims, counted
+# --------------------------------------------------------------------------- #
+
+def _claim(state):
+    return {"state": state, "date": "2026-09-01"}
+
+
+def test_a_structural_diagnosis_behind_an_unmade_musical_claim_is_counted_apart():
+    """The expensive half of the last step, recorded where nothing can use it.
+
+    The musical claim promotes a voice to `heard` and the structural one carries
+    it to `settled`, so a diagnosis taken before anyone listened raises no stage
+    at all. The stage column cannot show it: it says where a voice stopped, not
+    what was recorded past the step it stopped at.
+    """
+    rows = [
+        {"axes": {"structure": _claim(signoff.CURRENT), "music": None}},
+        {"axes": {"structure": _claim(signoff.STALE), "music": None}},
+        {"axes": {"structure": _claim(signoff.CURRENT), "music": _claim(signoff.CURRENT)}},
+        {"axes": {"structure": None, "music": None}},
+    ]
+    got = status.signoff_census(rows)
+    assert got == {"structure": 3, "structure_current": 2,
+                   "music": 1, "music_current": 1, "structure_only": 2}
+
+
+def test_an_expired_claim_is_counted_as_recorded_and_not_as_current():
+    """Both numbers are printed: a record that expired was still work done."""
+    got = status.signoff_census([{"axes": {"structure": _claim(signoff.UNVERIFIED),
+                                           "music": None}}])
+    assert got["structure"] == 1
+    assert got["structure_current"] == 0
+
+
+def test_the_census_counts_nothing_on_a_bank_with_no_claims():
+    assert status.signoff_census([{"axes": {}}, {}]) == {
+        "structure": 0, "structure_current": 0, "music": 0, "music_current": 0,
+        "structure_only": 0}
+
+
+def test_the_shipped_bank_is_counted_from_the_rows_rather_than_from_signoff_json():
+    """The generated file already carries both claims' state per row, so the
+    census needs no build and no second read of the source file."""
+    got = status.signoff_census(_shipped())
+    assert got["structure"] + got["music"] > 0
+    assert got["structure_only"] <= got["structure"]
+
+
+# --------------------------------------------------------------------------- #
 # The ladder
 # --------------------------------------------------------------------------- #
 

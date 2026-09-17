@@ -27,7 +27,7 @@
       "rank": 1,
       "programs": [0, 1, 2, 3, 4, 5, 6, 19, 24, 26, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95],
       "kits": [0],
-      "reason": "the voices most files reach — piano, the standard kit, the synth leads and pads, the electric guitars and basses — plus pipe organ, harpsichord and classical guitar, which are this project's own interest and are worked ahead of their frequency rather than because the corpus asks for it"
+      "reason": "three grounds, and only the first is frequency. Reached often: the piano family, the standard kit, the electric guitars and the basses, measured in tools/gs/program-census.json. Irreplaceable: the synth basses, leads and pads are machine-defined, so nothing stands behind them for a recording to answer with and a substitute with a different envelope and spectrum stops the arrangement working — they are here whatever their frequency, and four of them are in the corpus's bottom quartile. This project's own interest: pipe organ, harpsichord and classical guitar, worked ahead of their frequency rather than because the corpus asks for it"
     },
     {
       "name": "long-tail",
@@ -43,11 +43,13 @@
     }
   ],
 
+  "_tiers_measured": "The frequency ground above is measured in tools/gs/program-census.json — 4 026 files, ranked by how many distinct files select a program rather than by how many program changes land on it, since one file changing program every bar would otherwise outweigh a hundred that each select a tone once. Two things it says that this order does not act on: the most-reached voice in the whole corpus is program 48, which sits in `common`, and eleven of the top twenty by file count are outside `core`. Stating the ground correctly and moving the order are separate decisions, and only the first has been made.",
+
   "variations_follow_capital": true,
   "_variations_follow_capital": "A GS variation is its capital copied and then changed by whatever its name claims is different, so a capital that moves invalidates every variation under it. A variation therefore ranks behind its capital's tier until that capital is finished, and starting one first buys a round of rework.",
 
   "approximated": {},
-  "_approximated": "A slot whose mechanism this bank does not have and is deliberately answering with the nearest voice it does have. Each entry names the voice answering it and what the model cannot reach, because nothing downstream can tell an approximation from an unfinished voice. Empty is a claim rather than an omission: every slot is currently answered by a patch written for it. Two programs sharing one patch is not an approximation — an electric piano voicing both of its slots is one instrument with two numbers.",
+  "_approximated": "A slot whose mechanism this bank does not have and is deliberately answering with the nearest voice it does have. Keyed by the slug of the slot being approximated; each entry carries `answered_by`, the slug of the voice answering it, and `reason`, what the model cannot reach. Both are required because nothing downstream can tell an approximation from an unfinished voice, and an entry with no reason reads as the oversight it was written to stop. Empty is a claim rather than an omission: every slot is currently answered by a patch written for it. Two programs sharing one patch is not an approximation — an electric piano voicing both of its slots is one instrument with two numbers.",
 
   "goals": {
     "1.8.0": {
