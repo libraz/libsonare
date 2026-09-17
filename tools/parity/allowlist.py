@@ -110,6 +110,12 @@ class Allowlist:
     # What each pattern actually suppressed: (scope, pattern) -> the set of
     # divergences it excused. See :meth:`suppressed_divergences`.
     _suppressed: dict[tuple[str, str], set[str]] = field(default_factory=dict)
+    # How many verdicts each finding category reached, counted here because the
+    # accessors below are the one place a verdict has to pass through. A finding
+    # count means nothing without it: zero findings out of zero comparisons
+    # renders exactly like zero out of two thousand, and the summary line is
+    # where a reader stops.
+    comparisons: dict[str, int] = field(default_factory=dict)
 
     def _mark(
         self,
@@ -216,29 +222,42 @@ class Allowlist:
     # only for DIVERGED, so every consult site has to state what it compared
     # before it is told whether the divergence is excused. A check that could
     # not compare at all calls none of them.
+    #
+    # That is also why the comparison count is taken here rather than at the
+    # consult sites: a new check reaching a verdict has to come through one of
+    # these, so a category cannot report a clean finding count while quietly
+    # never having compared anything.
+
+    def _counted(self, category: str) -> None:
+        self.comparisons[category] = self.comparisons.get(category, 0) + 1
 
     def coverage_ok(self, key: str, surface: str, verdict: str, div: str = "") -> bool:
+        self._counted("coverage")
         return self._mark(
             f"coverage.{surface}", key, self.coverage.get(surface, []), verdict, div
         )
 
     def input_naming_ok(self, key: str, verdict: str, div: str = "") -> bool:
+        self._counted("input")
         return self._mark("input_naming.keys", key, self.input_naming, verdict, div)
 
     def surface_only_ok(
         self, key: str, surface: str, verdict: str, div: str = ""
     ) -> bool:
+        self._counted("coverage")
         scope = f"surface_only.{surface}"
         if self._mark(scope, key, self.surface_only.get(surface, []), verdict, div):
             return True
         return self._mark(scope, key, self.surface_only.get("any", []), verdict, div)
 
     def order_ok(self, key: str, surface: str, verdict: str, div: str = "") -> bool:
+        self._counted("order")
         return self._mark(
             f"order.{surface}", key, self.order.get(surface, []), verdict, div
         )
 
     def default_ok(self, key: str, param: str, verdict: str, div: str = "") -> bool:
+        self._counted("default")
         return self._mark(
             "default.params", f"{key}.{param}", self.default, verdict, div
         )
@@ -246,19 +265,23 @@ class Allowlist:
     def core_default_ok(
         self, key: str, param: str, verdict: str, div: str = ""
     ) -> bool:
+        self._counted("core_default")
         return self._mark(
             "core_default.params", f"{key}.{param}", self.core_default, verdict, div
         )
 
     def enum_ok(self, key: str, param: str, verdict: str, div: str = "") -> bool:
+        self._counted("enum")
         return self._mark("enum.params", f"{key}.{param}", self.enum, verdict, div)
 
     def wasm_internal_ok(self, name: str, verdict: str, div: str = "") -> bool:
+        self._counted("wasm_internal")
         return self._mark(
             "wasm_internal.names", name, self.wasm_internal, verdict, div
         )
 
     def record_ok(self, key: str, surface: str, verdict: str, div: str = "") -> bool:
+        self._counted("record")
         scope = f"record.records.{surface}"
         return self._mark(
             scope, key, self.record.get(surface, []), verdict, div
@@ -274,6 +297,7 @@ class Allowlist:
         Missing C fields on the same record still report — this is deliberately
         one-directional.
         """
+        self._counted("record")
         scope = f"record.extra_fields.{surface}"
         return self._mark(
             scope, key, self.record_extra.get(surface, []), verdict, div
@@ -288,6 +312,7 @@ class Allowlist:
     def record_field_ok(
         self, key: str, field_name: str, verdict: str, div: str = ""
     ) -> bool:
+        self._counted("record")
         return self._mark(
             "record.fields", f"{key}.{field_name}", self.record_fields, verdict, div
         )

@@ -20,18 +20,15 @@
 #   mastering                <- high-level convenience wrapper (apply_processor)
 #   mix_stereo               <- stereo mix convenience
 #   onset_envelope           <- facade name for C onset_strength
+# The facade validation helpers (`assert_samples`, `assert_u7`, `midi1_event`
+# and the rest of that family) are NOT listed here. They live in modules the
+# index re-exports a TYPE from and no value, so they are importable by their
+# siblings and by nothing else — which the extractor now derives, the same way
+# it derives a folded argument order. An entry for one of them would excuse a
+# gap no caller can reach, and would go on excusing it after the helper became
+# public for real.
 any = [
   "init",                  # WASM async module init
-  "assert_samples",        # exported input validators (Node + WASM)
-  "assert_samples_in_window",  # same family, scoped to a windowed call's analysis frame
-  "assert_finite_samples",
-  "assert_finite_scalar",
-  "assert_non_empty_samples",
-  # Same family, and one-sided for a reason C cannot have: they reject a value
-  # the JS-to-int narrowing would WRAP into a different in-domain value, which
-  # no C entry point can see because the wrapped value reaches it looking valid.
-  "assert_int32",
-  "assert_hpss_kernels",
   "mastering",
   "mastering_pair_analyze",
   "mastering_pair_process",
@@ -45,32 +42,6 @@ node = [
   "analyze_async",          # libuv async variant, JS-only
   "master_audio_async",         # libuv async variant, JS-only
   "master_audio_stereo_async",  # libuv async variant, JS-only
-  # Node-only INTERNAL input/MIDI validation helpers exported from
-  # bindings/node/src/validation.ts. Only the `ValidateOptions` TYPE is
-  # re-exported through index.ts; these value functions are consumed by sibling
-  # facade modules (project/scale/lufs), not part of the public C-mapped API and
-  # have no C counterpart by design. (assert_samples / assert_finite_scalar /
-  # assert_non_empty_samples / assert_finite_samples are covered by the shared
-  # `any` list above; the rest are Node-specific MIDI helpers.)
-  "assert_sample_rate",     # Node facade sample-rate validation helper; no C counterpart by design
-  "assert_u7",
-  "assert_nibble",
-  "assert_u32",
-  "assert_int64",           # safe-integer-range sibling of assert_int32, same family
-  "assert_non_negative_safe_integer", # non-negative sibling of assert_int64, same family; assert_u32 caps lower and assert_int64 ignores sign
-  "assert_project_midi_events",
-  # Same family, added so the range and integrality predicates the facade modules
-  # used to spell inline live in one place. Each is a shape the list above does
-  # not already cover, which is why they are separate rather than folded.
-  "assert_non_negative_scalar",   # finite scalar with a floor of zero
-  "assert_integer_value",         # integrality, splitting the non-number case from the fractional one
-  "assert_bounded_integer",       # integer inside a caller-named interval, which assert_u7 and assert_nibble fix
-  "assert_positive_integer",      # integer above zero, capped at the C int range
-  "assert_even_integer_at_least", # even integer with a floor, for an FFT size
-  "assert_exact_integer",         # integer equal to one accepted value
-  "assert_integral_sample_rate",  # the integrality half of assert_sample_rate, for a generator whose core carries no range
-  "assert_interleaved_samples",   # interleaved buffer and channel-count check, the Node sibling of the WASM entry below
-  "midi1_event",
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
   "is_sonare_error",        # TS type guard for the SonareError shape; no C symbol
 ]
@@ -79,23 +50,6 @@ wasm = [
   "is_sonare_error",        # TS type guard for the SonareError shape; no C symbol
   "is_initialized",         # WASM init-state probe
   "engine_capabilities",    # WASM build capability descriptor
-  "assert_percussive_separation", # WASM facade integrality check for the percussive separation option fields; the shared reader narrows with a cast, so a fractional value truncates onto the sentinel that keeps the default
-  "assert_interleaved_samples",  # WASM test helper: validates interleaved buffers before embind calls
-  "assert_non_negative_integer", # WASM test helper: mirrors TS facade argument validation
-  "assert_positive_integer",     # WASM test helper: mirrors TS facade argument validation
-  "assert_sample_rate",          # WASM test helper: centralizes sample-rate validation
-  # The same guard family the Node list above carries, named here because each
-  # surface holds its own copy: the predicates are shared across facade modules
-  # and have no C counterpart by design.
-  "assert_u7",
-  "assert_nibble",
-  "assert_u32",
-  "assert_integer_value",         # integrality, splitting the non-number case from the fractional one
-  "assert_bounded_integer",       # integer inside a caller-named interval, which assert_u7 and assert_nibble fix
-  "assert_even_integer_at_least", # even integer with a floor, for an FFT size
-  "to_int32_array",               # the element shape of the family above, for an index array whose conversion would otherwise fold each entry
-  "validate_audio_buffer",     # Internal Audio constructor validator imported by audio.ts; not re-exported from the package entry
-  "assert_vqt_gamma",            # Internal variable-Q gamma validator imported by feature_music.ts; not re-exported from the package entry
   "stream_analyzer_config_defaults", # WASM facade default snapshot, not a C API symbol
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
   "synth_patch_round_trip_for_test", # WASM-only regression hook for embind patch shape

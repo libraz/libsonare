@@ -8,7 +8,7 @@ from dataclasses import asdict
 from compare import Report
 from model import SURFACES
 
-_CATEGORIES = (
+CATEGORIES = (
     "coverage",
     "default",
     "core_default",
@@ -57,18 +57,22 @@ def to_json(rep: Report) -> str:
 def _summary(rep: Report) -> dict:
     active = rep.active()
     info = [f for f in rep.reported() if f.informational]
-    by_cat_active = {c: 0 for c in _CATEGORIES}
-    by_cat_info = {c: 0 for c in _CATEGORIES}
+    by_cat_active = {c: 0 for c in CATEGORIES}
+    by_cat_info = {c: 0 for c in CATEGORIES}
     for f in active:
         by_cat_active[f.category] = by_cat_active.get(f.category, 0) + 1
     for f in info:
         by_cat_info[f.category] = by_cat_info.get(f.category, 0) + 1
     allowlisted = [f for f in rep.findings if f.allowlisted]
-    allow_by_cat = {c: 0 for c in _CATEGORIES}
+    allow_by_cat = {c: 0 for c in CATEGORIES}
     allow_by_surface: dict[str, int] = {}
     for f in allowlisted:
         allow_by_cat[f.category] = allow_by_cat.get(f.category, 0) + 1
         allow_by_surface[f.surface] = allow_by_surface.get(f.surface, 0) + 1
+    compared = rep.comparison_counts()
+    declined = {c: 0 for c in CATEGORIES}
+    for n in rep.not_compared:
+        declined[n["category"]] = declined.get(n["category"], 0) + 1
     return {
         "total_findings": len(rep.findings),
         "active_findings": len(active),
@@ -78,6 +82,11 @@ def _summary(rep: Report) -> dict:
         "by_category_informational": by_cat_info,
         "allowlisted_by_category": allow_by_cat,
         "allowlisted_by_surface": allow_by_surface,
+        # The reach behind each of the counts above: how many verdicts the
+        # category actually reached, and how many candidates carried nothing to
+        # compare. A category is only as clean as the fraction it looked at.
+        "compared_by_category": {c: compared.get(c, 0) for c in CATEGORIES},
+        "not_compared_by_category": declined,
     }
 
 
@@ -201,15 +210,34 @@ def to_markdown(rep: Report) -> str:
         f"informational: {summary['informational_findings']} | "
         f"allowlisted (suppressed): {summary['allowlisted']}\n"
     )
-    out.append("| category | active | informational | allowlisted |")
-    out.append("|---|---|---|---|")
-    for c in _CATEGORIES:
+    # `compared` is the denominator the three finding columns are fractions of.
+    # A row reading `0 | 0 | 0` says nothing until it is read beside the number
+    # of verdicts the category reached: `default` reaches one in twenty-five of
+    # its candidates, because a default a facade spells inside a request-object
+    # normalizer is not in the signature the extractor reads.
+    out.append(
+        "| category | compared | not compared | active | informational | allowlisted |"
+    )
+    out.append("|---|---|---|---|---|---|")
+    for c in CATEGORIES:
+        compared = summary["compared_by_category"][c]
+        declined = summary["not_compared_by_category"][c]
+        reach = f"{compared}" if compared else "**0**"
         out.append(
-            f"| {_CAT_TITLE[c]} | {summary['by_category_active'][c]} "
+            f"| {_CAT_TITLE[c]} | {reach} | {declined} "
+            f"| {summary['by_category_active'][c]} "
             f"| {summary['by_category_informational'][c]} "
             f"| {summary['allowlisted_by_category'][c]} |"
         )
     out.append("")
+    blind = [c for c in CATEGORIES if not summary["compared_by_category"][c]]
+    if blind:
+        out.append(
+            "**"
+            + ", ".join(blind)
+            + "** reached no verdict at all, so a clean row above is the absence "
+            "of a measurement rather than the result of one.\n"
+        )
 
     # Intentional exclusions (allowlisted) per surface: these are the divergences
     # the allowlist deliberately suppresses (each with a documented reason in
@@ -228,12 +256,20 @@ def to_markdown(rep: Report) -> str:
     reported = rep.reported()
 
     # Per-category sections (active first, then informational subsection).
-    for c in _CATEGORIES:
+    for c in CATEGORIES:
         active_items = [f for f in reported if f.category == c and not f.informational]
         info_items = [f for f in reported if f.category == c and f.informational]
         out.append(f"## {_CAT_TITLE[c]} — active ({len(active_items)})\n")
         if not active_items:
-            out.append("_none_\n")
+            # The other place a reader stops. "none" out of no comparisons is
+            # not the same answer as "none" out of five thousand, and only one
+            # of the two is about the tree.
+            compared = summary["compared_by_category"][c]
+            declined = summary["not_compared_by_category"][c]
+            out.append(
+                f"_none_ — out of **{compared}** comparison(s); {declined} "
+                "candidate(s) carried nothing to compare.\n"
+            )
         else:
             for f in sorted(active_items, key=lambda x: (x.key, x.surface)):
                 loc = f" — `{f.location}`" if f.location else ""

@@ -24,10 +24,19 @@ re-exports symbols from sibling modules (``export * from './features'``,
 ``export { mastering } from './effects_mastering'``) and those modules may in
 turn re-export from yet deeper modules (``features.ts`` -> ``feature_*``). The
 class facades (``Audio``, ``Mixer``, ``RealtimeEngine``, ...) likewise live in
-their own files. To capture the true surface we therefore (a) follow
-``export ... from './relative'`` re-exports recursively from the index (cycle
-safe, deduped) and (b) glob the whole ``bindings/<surface>/src/**/*.ts`` tree.
-The two sets are unioned and de-duplicated by canonical key.
+their own files. So the surface is the re-export closure of the index, followed
+transitively, cycle-safe and deduplicated -- not a glob of the source tree,
+which would sweep in internal-only modules the index never re-exports.
+
+An edge in that closure carries either values or only types, and the two reach
+different things. ``export type { EffectSamplesRequest } from './_effects_common'``
+publishes one type; the helper functions in that module stay importable only by
+its siblings, so they are not surface symbols and a coverage check that treats
+them as such reports a gap no caller could ever hit. Value reachability is
+therefore propagated separately: a module reached by value edges alone
+contributes its functions, and one reached only through type edges contributes
+its types and records. Re-exporting a helper for real is still a value edge, so
+the case worth catching stays caught.
 
 Declarations whose parameter list we cannot balance are recorded as unparsed
 rather than silently dropped.
@@ -68,12 +77,30 @@ _STRING_LIT = re.compile(r"""['"]([^'"]+)['"]""")
 #   export * from './features';
 #   export { mastering, normalize } from './effects_mastering';
 #   export type { Foo } from './types';
-# We only care about the module specifier; whatever the module exports is
-# captured by parsing that module's text directly (facade modules export exactly
-# what they intend to expose). The specifier must be relative (starts with '.').
+# The specifier must be relative (starts with '.'). Both the `type` marker and
+# the clause are captured, because an edge that carries only types reaches the
+# module's types and not its functions -- see `_edge_carries_values`.
 _REEXPORT_FROM = re.compile(
-    r"""export\s+(?:type\s+)?(?:\*|\{[^}]*\})\s*(?:as\s+[A-Za-z_][A-Za-z0-9_]*\s+)?from\s+['"](\.[^'"]+)['"]"""
+    r"""export\s+(type\s+)?(\*|\{[^}]*\})\s*(?:as\s+[A-Za-z_][A-Za-z0-9_]*\s+)?from\s+['"](\.[^'"]+)['"]"""
 )
+
+
+def _edge_carries_values(type_marker: str | None, clause: str) -> bool:
+    """True when this re-export publishes runtime bindings, not only types.
+
+    ``export type { … } from`` carries none, and neither does an ``export { … }``
+    whose every specifier is inline-``type``. One value specifier among them is
+    enough for the module's functions to be reachable.
+    """
+    if type_marker:
+        return False
+    if clause.strip() == "*":
+        return True
+    names = [n.strip() for n in clause.strip("{} \t\n").split(",")]
+    names = [n for n in names if n]
+    if not names:
+        return False
+    return any(not n.startswith("type ") for n in names)
 
 _NON_METHOD = {
     "if",
@@ -239,9 +266,15 @@ def _parse_text(
             if bal is None:
                 continue
             inner, after = bal
-            # Must be a method: a `{` should follow the (optional) return type.
+            # Must be a method: a `{` follows the (optional) return type, and it
+            # has to come before any `;`. A CALL inside another method's body
+            # also has a `{` within reach -- the next `if` statement's -- so
+            # looking only for the brace reads `assertU7(fnName, value, 'x');`
+            # as a method of the enclosing class.
             tail = class_body[after : after + 80]
-            if "{" not in tail:
+            brace = tail.find("{")
+            semi = tail.find(";")
+            if brace < 0 or (semi >= 0 and semi < brace):
                 continue
             try:
                 params = [
@@ -300,32 +333,49 @@ def _resolve_module_specifier(from_file: Path, spec: str) -> Path | None:
     return None
 
 
-def _reexport_closure(index_path: Path) -> list[Path]:
+def _reexport_closure(index_path: Path) -> tuple[list[Path], set[Path]]:
     """Follow ``export ... from './relative'`` re-exports transitively.
 
     Starts at ``index_path`` and walks every relative re-export specifier
     (``export *`` / ``export { ... }`` / ``export type { ... }``), recursively,
     cycle-safe and deduplicated. Returns the index plus every reachable module
-    in deterministic (sorted-by-path) order.
+    in deterministic (sorted-by-path) order, and the subset reachable along
+    value-carrying edges only.
+
+    The two differ wherever a module is published for its types alone. Value
+    reachability is a property of the whole path, not of the last edge: a module
+    a type-only edge leads to cannot publish a function, so nothing it re-exports
+    can be reached as a value through it either.
     """
     seen: set[Path] = set()
     order: list[Path] = []
-    stack = [index_path]
+    values: set[Path] = set()
+    # (path, reached-as-value); a file can be popped twice, once per flavour, so
+    # a type-first visit does not fix its flavour before the value edge arrives.
+    stack: list[tuple[Path, bool]] = [(index_path, True)]
     while stack:
-        cur = stack.pop()
-        if cur in seen or not cur.is_file():
+        cur, as_value = stack.pop()
+        first_visit = cur not in seen
+        upgrading = as_value and cur not in values
+        if not cur.is_file() or (not first_visit and not upgrading):
             continue
         seen.add(cur)
-        order.append(cur)
+        if first_visit:
+            order.append(cur)
+        if as_value:
+            values.add(cur)
         try:
             text = cur.read_text(encoding="utf-8")
         except OSError:
             continue
         for m in _REEXPORT_FROM.finditer(text):
-            target = _resolve_module_specifier(cur, m.group(1))
-            if target is not None and target not in seen:
-                stack.append(target)
-    return sorted(order)
+            target = _resolve_module_specifier(cur, m.group(3))
+            if target is None:
+                continue
+            carries = as_value and _edge_carries_values(m.group(1), m.group(2))
+            if target not in seen or (carries and target not in values):
+                stack.append((target, carries))
+    return sorted(order), values
 
 
 def extract_ts(
@@ -353,21 +403,28 @@ def extract_ts(
     root_res = root.resolve()
     files: list[Path] = []
     seen_files: set[Path] = set()
+    value_files: set[Path] = set()
 
-    def _add(p: Path) -> None:
+    def _add(p: Path, carries_values: bool) -> None:
         rp = p.resolve()
+        if rp.is_file() and not rp.name.endswith(".d.ts") and carries_values:
+            value_files.add(rp)
         if rp in seen_files or not rp.is_file() or rp.name.endswith(".d.ts"):
             return
         seen_files.add(rp)
         files.append(rp)
 
     if index_path.exists():
-        for p in _reexport_closure(index_path.resolve()):
-            _add(p)
+        closure, value_reachable = _reexport_closure(index_path.resolve())
+        for p in closure:
+            _add(p, p in value_reachable)
     for g in gen_files:
-        _add(g)
+        _add(g, True)
 
     all_texts = [p.read_text(encoding="utf-8") for p in files]
+    # Enum unions are read from every reachable module, including the ones
+    # published for their types alone -- a type-only edge is exactly how a
+    # string-union type reaches a caller.
     enum_types = _collect_enum_types(all_texts)
 
     def _rel(p: Path) -> str:
@@ -382,6 +439,11 @@ def extract_ts(
     # signature (free function ``cqt`` vs class method ``Audio.cqt``).
     raw_ex = Extraction(surface=surface)
     for p, text in zip(files, all_texts):
+        # A module nothing re-exports a value from publishes no callable, so its
+        # functions are not part of the surface and a coverage gap against them
+        # names something no caller could reach.
+        if p.resolve() not in value_files:
+            continue
         _parse_text(
             text,
             _rel(p),

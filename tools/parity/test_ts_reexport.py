@@ -165,6 +165,96 @@ def test_internal_module_not_globbed() -> None:
         assert "internal_only" not in keys, keys
 
 
+_SHARED_MODULE = (
+    "export interface SharedRequest {\n  samples: Float32Array;\n}\n"
+    "export function assertGeometry(x: number): number {\n  return x;\n}\n"
+)
+
+
+def _type_only_tree(root: Path, edge: str) -> None:
+    _write(root, "bindings/x/src/index.ts", "export * from './facade';\n")
+    _write(
+        root,
+        "bindings/x/src/facade.ts",
+        f"{edge}\nexport function publicFn(x: number): number {{\n  return x;\n}}\n",
+    )
+    _write(root, "bindings/x/src/_shared.ts", _SHARED_MODULE)
+
+
+def test_a_type_only_reexport_does_not_publish_the_module_functions() -> None:
+    """``export type { T } from './_m'`` publishes T, not ``_m``'s helpers.
+
+    The helper stays importable by siblings and unreachable from the package, so
+    counting it as a surface symbol reports a coverage gap against something no
+    caller can hold.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _type_only_tree(root, "export type { SharedRequest } from './_shared.js';")
+        keys = _keys(extract_ts(root, "node", "bindings/x/src/index.ts", "gen"))
+        assert "public_fn" in keys, keys
+        assert "assert_geometry" not in keys, keys
+
+
+def test_a_value_reexport_of_the_same_module_does_publish_them() -> None:
+    """The control, and the case the coverage check exists to catch."""
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _type_only_tree(root, "export { assertGeometry } from './_shared.js';")
+        keys = _keys(extract_ts(root, "node", "bindings/x/src/index.ts", "gen"))
+        assert "assert_geometry" in keys, keys
+
+
+def test_an_inline_type_specifier_beside_a_value_still_carries_values() -> None:
+    """``export { type T, fn } from`` is a value edge — one value is enough."""
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _type_only_tree(
+            root, "export { type SharedRequest, assertGeometry } from './_shared.js';"
+        )
+        keys = _keys(extract_ts(root, "node", "bindings/x/src/index.ts", "gen"))
+        assert "assert_geometry" in keys, keys
+
+
+def test_value_reachability_does_not_survive_a_type_only_hop() -> None:
+    """A module behind a type-only edge cannot re-export a value out of it."""
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _write(root, "bindings/x/src/index.ts", "export type { A } from './_mid.js';\n")
+        _write(
+            root,
+            "bindings/x/src/_mid.ts",
+            "export type A = 'a';\nexport * from './_deep.js';\n",
+        )
+        _write(
+            root,
+            "bindings/x/src/_deep.ts",
+            "export function deepFn(x: number): number {\n  return x;\n}\n",
+        )
+        keys = _keys(extract_ts(root, "node", "bindings/x/src/index.ts", "gen"))
+        assert "deep_fn" not in keys, keys
+
+
+def test_a_module_reached_both_ways_is_published() -> None:
+    """Order must not decide it: the type edge is followed first here."""
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _write(
+            root,
+            "bindings/x/src/index.ts",
+            "export type { SharedRequest } from './_shared.js';\n"
+            "export * from './facade.js';\n",
+        )
+        _write(
+            root,
+            "bindings/x/src/facade.ts",
+            "export { assertGeometry } from './_shared.js';\n",
+        )
+        _write(root, "bindings/x/src/_shared.ts", _SHARED_MODULE)
+        keys = _keys(extract_ts(root, "node", "bindings/x/src/index.ts", "gen"))
+        assert "assert_geometry" in keys, keys
+
+
 def test_js_extension_resolves_to_ts() -> None:
     """``./m.js`` and ``./m`` both resolve onto ``m.ts``."""
     with tempfile.TemporaryDirectory() as d:
@@ -172,9 +262,10 @@ def test_js_extension_resolves_to_ts() -> None:
         idx = root / "bindings/x/src/index.ts"
         _write(root, "bindings/x/src/index.ts", "export * from './m.js';\n")
         _write(root, "bindings/x/src/m.ts", "export function fn(x: number): number {\n  return x;\n}\n")
-        closure = _reexport_closure(idx.resolve())
+        closure, values = _reexport_closure(idx.resolve())
         names = {p.name for p in closure}
         assert "m.ts" in names, names
+        assert {p.name for p in values} == names, values
 
 
 def test_real_repo_surface_is_substantial() -> None:

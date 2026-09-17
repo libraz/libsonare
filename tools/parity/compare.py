@@ -398,6 +398,15 @@ class Report:
             {"category": category, "key": key, "surface": surface, "reason": reason}
         )
 
+    def comparison_counts(self) -> dict[str, int]:
+        """Verdicts reached per finding category, counted by the allowlist.
+
+        The denominator behind every finding count. Without it a category that
+        compared nothing reports exactly what a clean one does, and the summary
+        line is where a reader stops.
+        """
+        return dict(self.allowlist.comparisons) if self.allowlist is not None else {}
+
     def active(self) -> list[Finding]:
         """Findings that count toward failure (non-allowlisted, non-informational)."""
         return [f for f in self.findings if not f.allowlisted and not f.informational]

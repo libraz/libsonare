@@ -163,6 +163,24 @@ def _audit_allowlist(rep, selected: list[str], path: Path) -> int:
     return 1
 
 
+def _blind_categories(rep, selected: list[str]) -> list[str]:
+    """Categories that reached no verdict, on a run that was able to reach one.
+
+    A check whose extractor stops seeing the thing it compares does not report a
+    failure — it reports nothing, which is exactly what a clean tree reports.
+    Every category has candidates in this repository, so zero verdicts means the
+    check no longer runs rather than that it ran and found nothing.
+
+    Only a full-surface run can say this: with ``--surface c,python`` the WASM
+    wiring check is deliberately not built, and the record and default checks
+    lose the second facade they need.
+    """
+    if list(selected) != list(SURFACES):
+        return []
+    compared = rep.comparison_counts()
+    return [c for c in report_mod.CATEGORIES if not compared.get(c)]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
@@ -219,6 +237,16 @@ def main(argv: list[str] | None = None) -> int:
         print(report_mod.to_json(rep))
     else:
         print(report_mod.to_markdown(rep))
+
+    blind = _blind_categories(rep, selected)
+    if blind:
+        print(
+            f"{len(blind)} categor(ies) reached no verdict: {', '.join(blind)}. "
+            "Their clean rows are the absence of a measurement, not the result "
+            "of one — find what stopped the extractor feeding them.",
+            file=sys.stderr,
+        )
+        return 1
 
     return 0 if not rep.active() else 1
 
