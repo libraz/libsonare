@@ -6,9 +6,10 @@
 import type { GuardedOptions } from './_feature_validation';
 import { validateMelFrequencyRange, validatePositiveIntegers } from './_feature_validation';
 import { resolveFftOptions } from './_fft_options';
+import type { SpectralFrameRequest } from './feature_spectral';
 import { getSonareModule } from './module_state';
 import type { MelPowerResult, StftPowerResult } from './public_types';
-import { assertSampleRate, assertSamples } from './validation';
+import { assertFiniteScalar, assertSampleRate, assertSamples } from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -417,4 +418,37 @@ export function mfccToAudio(
     htk,
     lifter,
   );
+}
+
+export interface PhaseVocoderRequest extends SpectralFrameRequest {
+  rate: number;
+}
+
+/**
+ * Phase-vocoder time-scale modification (rate > 1 faster, < 1 slower).
+ */
+export function phaseVocoder(request: PhaseVocoderRequest): Float32Array;
+export function phaseVocoder(
+  samples: Float32Array,
+  sampleRate: number,
+  rate: number,
+  nFft?: number,
+  hopLength?: number,
+): Float32Array;
+export function phaseVocoder(
+  samples: Float32Array | PhaseVocoderRequest,
+  sampleRate = 22050,
+  rate = 1,
+  nFft = 2048,
+  hopLength = 512,
+): Float32Array {
+  if (!(samples instanceof Float32Array)) {
+    const r = samples;
+    return phaseVocoder(r.samples, r.sampleRate ?? 22050, r.rate, r.nFft, r.hopLength);
+  }
+  // Matches the addon. A finite value too wide for a float is not covered here
+  // and cannot be — it is still finite to Number.isFinite; the core's own guard
+  // refuses the infinity it becomes.
+  assertFiniteScalar('phaseVocoder', rate, 'rate');
+  return requireModule().phaseVocoder(samples, sampleRate, rate, nFft, hopLength);
 }

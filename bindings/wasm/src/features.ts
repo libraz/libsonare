@@ -33,7 +33,31 @@ export {
   trimSilence,
   vectorNormalize,
 } from './feature_core';
-export { griffinLim, melToAudio, melToStft, mfccToAudio, mfccToMel } from './feature_inverse';
+export {
+  decompose,
+  decomposeStems,
+  decomposeWithInit,
+  hpssWithResidual,
+  nnFilter,
+  remix,
+  remixAlignedIntervals,
+  segmentAgglomerative,
+  segmentCrossSimilarity,
+  segmentLagToRecurrence,
+  segmentPathEnhance,
+  segmentRecurrenceMatrix,
+  segmentRecurrenceToLag,
+  segmentSubsegment,
+} from './feature_decompose';
+export {
+  griffinLim,
+  melToAudio,
+  melToStft,
+  mfccToAudio,
+  mfccToMel,
+  phaseVocoder,
+} from './feature_inverse';
+export { ebur128LoudnessRange, lufsInterleaved, lufsSeriesInterleaved } from './feature_loudness';
 export {
   analyzeMelody,
   analyzeSections,
@@ -52,31 +76,18 @@ export {
   vqt,
   vqtToAudio,
 } from './feature_music';
-export { noteSegments, piptrack, pitchPyin, pitchYin } from './feature_pitch';
+export {
+  estimateTuning,
+  noteSegments,
+  piptrack,
+  pitchPyin,
+  pitchTuning,
+  pitchYin,
+} from './feature_pitch';
 export { resample } from './feature_resample';
 export {
-  decompose,
-  decomposeStems,
-  decomposeWithInit,
-  ebur128LoudnessRange,
-  estimateTuning,
-  hpssWithResidual,
-  lufsInterleaved,
-  lufsSeriesInterleaved,
-  nnFilter,
-  phaseVocoder,
-  pitchTuning,
   polyFeatures,
-  remix,
-  remixAlignedIntervals,
   rmsEnergy,
-  segmentAgglomerative,
-  segmentCrossSimilarity,
-  segmentLagToRecurrence,
-  segmentPathEnhance,
-  segmentRecurrenceMatrix,
-  segmentRecurrenceToLag,
-  segmentSubsegment,
   spectralBandwidth,
   spectralCentroid,
   spectralContrast,

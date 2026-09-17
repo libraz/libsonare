@@ -246,12 +246,34 @@ export type {
   VectorNormalizeRequest,
 } from './feature_core';
 export type {
+  DecomposeRequest,
+  DecomposeStemsRequest,
+  DecomposeStemsResult,
+  DecomposeWithInitRequest,
+  HpssWithResidualRequest,
+  NnFilterRequest,
+  RemixRequest,
+  SegmentAgglomerativeRequest,
+  SegmentCrossSimilarityRequest,
+  SegmentLagToRecurrenceRequest,
+  SegmentPathEnhanceRequest,
+  SegmentRecurrenceMatrixRequest,
+  SegmentRecurrenceToLagRequest,
+  SegmentSubsegmentRequest,
+} from './feature_decompose';
+export type {
   GriffinLimRequest,
   MelToAudioRequest,
   MelToStftRequest,
   MfccToAudioRequest,
   MfccToMelRequest,
+  PhaseVocoderRequest,
 } from './feature_inverse';
+export type {
+  Ebur128LoudnessRangeRequest,
+  LufsInterleavedRequest,
+  LufsSeriesInterleavedRequest,
+} from './feature_loudness';
 export type {
   AnalyzeMelodyRequest,
   AnalyzeSectionsRequest,
@@ -268,34 +290,16 @@ export type {
   VqtToAudioRequest,
 } from './feature_music';
 export type {
+  EstimateTuningRequest,
   NoteSegmentsRequest,
   PiptrackRequest,
   PitchPyinRequest,
+  PitchTuningRequest,
   PitchYinRequest,
 } from './feature_pitch';
 export type { ResampleRequest } from './feature_resample';
 export type {
-  DecomposeRequest,
-  DecomposeStemsRequest,
-  DecomposeStemsResult,
-  DecomposeWithInitRequest,
-  Ebur128LoudnessRangeRequest,
-  EstimateTuningRequest,
-  HpssWithResidualRequest,
-  LufsInterleavedRequest,
-  LufsSeriesInterleavedRequest,
-  NnFilterRequest,
-  PhaseVocoderRequest,
-  PitchTuningRequest,
   PolyFeaturesRequest,
-  RemixRequest,
-  SegmentAgglomerativeRequest,
-  SegmentCrossSimilarityRequest,
-  SegmentLagToRecurrenceRequest,
-  SegmentPathEnhanceRequest,
-  SegmentRecurrenceMatrixRequest,
-  SegmentRecurrenceToLagRequest,
-  SegmentSubsegmentRequest,
   SpectralContrastRequest,
   SpectralFrameRequest,
   SpectralRolloffRequest,

@@ -21,20 +21,8 @@ export * from './feature_core';
 // against the registrations of the module it loads and fails on a mismatch in
 // either direction, so adding a name here that the analysis binary lacks, or
 // omitting one it gained, is a test failure rather than a runtime surprise.
-export type * from './feature_inverse';
-export { griffinLim, melToAudio, melToStft, mfccToAudio, mfccToMel } from './feature_inverse';
-export * from './feature_music';
-export * from './feature_pitch';
-export type * from './feature_resample';
-export type * from './feature_spectral';
+export type * from './feature_decompose';
 export {
-  ebur128LoudnessRange,
-  estimateTuning,
-  lufsInterleaved,
-  lufsSeriesInterleaved,
-  pitchTuning,
-  polyFeatures,
-  rmsEnergy,
   segmentAgglomerative,
   segmentCrossSimilarity,
   segmentLagToRecurrence,
@@ -42,6 +30,18 @@ export {
   segmentRecurrenceMatrix,
   segmentRecurrenceToLag,
   segmentSubsegment,
+} from './feature_decompose';
+export type * from './feature_inverse';
+export { griffinLim, melToAudio, melToStft, mfccToAudio, mfccToMel } from './feature_inverse';
+export type * from './feature_loudness';
+export { ebur128LoudnessRange, lufsInterleaved, lufsSeriesInterleaved } from './feature_loudness';
+export * from './feature_music';
+export * from './feature_pitch';
+export type * from './feature_resample';
+export type * from './feature_spectral';
+export {
+  polyFeatures,
+  rmsEnergy,
   spectralBandwidth,
   spectralCentroid,
   spectralContrast,

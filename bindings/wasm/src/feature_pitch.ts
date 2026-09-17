@@ -1,3 +1,4 @@
+import type { SpectralFrameRequest } from './feature_spectral';
 import { getSonareModule } from './module_state';
 import type { NoteSegment, PiptrackResult, PitchResult } from './public_types';
 
@@ -220,4 +221,82 @@ export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
     referenceHz: request.referenceHz,
     voicedThreshold: request.voicedThreshold,
   });
+}
+
+// ============================================================================
+// Features - Tuning
+// ============================================================================
+
+export interface PitchTuningRequest {
+  frequencies: Float32Array;
+  resolution?: number;
+  binsPerOctave?: number;
+}
+
+export interface EstimateTuningRequest extends SpectralFrameRequest {
+  resolution?: number;
+  binsPerOctave?: number;
+}
+
+/**
+ * Estimate the global tuning offset from a set of frequencies
+ * (librosa.pitch_tuning). Returns a deviation in fractions of a bin.
+ */
+export function pitchTuning(request: PitchTuningRequest): number;
+export function pitchTuning(
+  frequencies: Float32Array,
+  resolution?: number,
+  binsPerOctave?: number,
+): number;
+export function pitchTuning(
+  frequencies: Float32Array | PitchTuningRequest,
+  resolution = 0.01,
+  binsPerOctave = 12,
+): number {
+  if (!(frequencies instanceof Float32Array)) {
+    const r = frequencies;
+    return pitchTuning(r.frequencies, r.resolution, r.binsPerOctave);
+  }
+  return requireModule().pitchTuning(frequencies, resolution, binsPerOctave);
+}
+
+/**
+ * Estimate the tuning offset of an audio signal (librosa.estimate_tuning).
+ */
+export function estimateTuning(request: EstimateTuningRequest): number;
+export function estimateTuning(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  resolution?: number,
+  binsPerOctave?: number,
+): number;
+export function estimateTuning(
+  samples: Float32Array | EstimateTuningRequest,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  resolution = 0.01,
+  binsPerOctave = 12,
+): number {
+  if (!(samples instanceof Float32Array)) {
+    const r = samples;
+    return estimateTuning(
+      r.samples,
+      r.sampleRate,
+      r.nFft,
+      r.hopLength,
+      r.resolution,
+      r.binsPerOctave,
+    );
+  }
+  return requireModule().estimateTuning(
+    samples,
+    sampleRate,
+    nFft,
+    hopLength,
+    resolution,
+    binsPerOctave,
+  );
 }
