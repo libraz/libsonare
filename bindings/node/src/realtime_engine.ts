@@ -595,14 +595,18 @@ export class RealtimeEngine {
     }
     const fnName = 'RealtimeEngine.setCaptureBuffer';
     if (capacityFrames === undefined) {
-      throw new RangeError('capture channel count and capacity must be positive safe integers');
+      throw new TypeError(`${fnName}: capacityFrames is required when numChannels is a number`);
     }
     // Two clauses, two owners: that each is a count a JS number still denotes is
-    // the shared check's, that neither may be zero is this buffer's.
+    // the shared check's, that neither may be zero is this buffer's. Each names
+    // its own argument, so a caller who passed one of the two is told which.
     assertNonNegativeSafeInteger(fnName, numChannelsOrChannels, 'numChannels');
     assertNonNegativeSafeInteger(fnName, capacityFrames, 'capacityFrames');
-    if (numChannelsOrChannels <= 0 || capacityFrames <= 0) {
-      throw new RangeError('capture channel count and capacity must be positive safe integers');
+    if (numChannelsOrChannels <= 0) {
+      throw new RangeError(`${fnName}: numChannels must be greater than zero`);
+    }
+    if (capacityFrames <= 0) {
+      throw new RangeError(`${fnName}: capacityFrames must be greater than zero`);
     }
     this.native.setCaptureBuffer(numChannelsOrChannels, capacityFrames);
   }
