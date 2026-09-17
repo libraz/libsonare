@@ -18,8 +18,7 @@ bool read_u8(const json::Value& root, const char* key, uint8_t* out, std::string
     return false;
   }
   const double number = value->as_number();
-  if (!std::isfinite(number) || number < 0.0 || number > 127.0 ||
-      number != std::floor(number)) {
+  if (!std::isfinite(number) || number < 0.0 || number > 127.0 || number != std::floor(number)) {
     *error = std::string(key) + " must be an integer in 0..127";
     return false;
   }

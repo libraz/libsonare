@@ -41,8 +41,8 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
     return refuse("struct_version must be 1");
   }
 
-  out->source = in->polyphonic != 0 ? ntm::TranscribeSource::kPolyphonic
-                                    : ntm::TranscribeSource::kMonophonic;
+  out->source =
+      in->polyphonic != 0 ? ntm::TranscribeSource::kPolyphonic : ntm::TranscribeSource::kMonophonic;
 
   // Each of these is "0 keeps the default, anything else must be valid on its
   // own terms". The core validates again; refusing here is what names the
@@ -182,9 +182,8 @@ void sonare_free_transcribe_result(SonareTranscribeResult* result) {
   result->tempo_bpm = 0.0f;
 }
 
-SonareError sonare_transcribe(const float* samples, size_t length, int sample_rate,
-                              float tempo_bpm, const SonareTranscribeConfig* config,
-                              SonareTranscribeResult* out) {
+SonareError sonare_transcribe(const float* samples, size_t length, int sample_rate, float tempo_bpm,
+                              const SonareTranscribeConfig* config, SonareTranscribeResult* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
@@ -252,8 +251,8 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   // installed by sonare_project_auto_tempo transcribes onto that grid.
   sonare::transport::TempoMap map;
   fill_project_tempo_map(project->history.project(), &map);
-  events = build_events(ntm::transcribe_notes(audio, core_config), map, sample_rate, group,
-                        channel);
+  events =
+      build_events(ntm::transcribe_notes(audio, core_config), map, sample_rate, group, channel);
   SONARE_C_CATCH
 
   // Committed through the public setter so the clip validation, the undo entry

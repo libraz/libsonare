@@ -191,7 +191,8 @@ void describe_commands(const assist::AssistResult& result, json::Object* documen
   json::Array patches;
   json::Array unrendered;
   for (const auto& command : result.commands) {
-    const auto* patch_command = dynamic_cast<const sonare::arrangement::PatchMidiClip*>(command.get());
+    const auto* patch_command =
+        dynamic_cast<const sonare::arrangement::PatchMidiClip*>(command.get());
     if (patch_command == nullptr) {
       unrendered.push_back(json::Value(std::string(command->type_name())));
       continue;

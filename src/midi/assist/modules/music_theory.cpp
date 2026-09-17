@@ -17,9 +17,8 @@ constexpr int kMaxMidiNote = 127;
 bool valid_pc(uint8_t pc) noexcept { return pc < kPitchClasses; }
 
 void push_unique(std::vector<uint8_t>& out, int semitone_above_root, int root_pc) {
-  const auto pc = static_cast<uint8_t>(((root_pc + semitone_above_root) % kPitchClasses +
-                                        kPitchClasses) %
-                                       kPitchClasses);
+  const auto pc = static_cast<uint8_t>(
+      ((root_pc + semitone_above_root) % kPitchClasses + kPitchClasses) % kPitchClasses);
   if (std::find(out.begin(), out.end(), pc) == out.end()) out.push_back(pc);
 }
 
@@ -208,7 +207,8 @@ int transpose_scale_steps(const std::vector<uint8_t>& pitch_classes, int midi_no
   }
 
   const int start_octave = start / kPitchClasses;
-  const int note = (start_octave + octave_shift) * kPitchClasses + sorted[static_cast<size_t>(target)];
+  const int note =
+      (start_octave + octave_shift) * kPitchClasses + sorted[static_cast<size_t>(target)];
   if (note < 0 || note > kMaxMidiNote) return -1;
   return note;
 }

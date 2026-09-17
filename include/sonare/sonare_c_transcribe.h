@@ -114,9 +114,8 @@ SonareTranscribeConfig sonare_transcribe_config_default(void);
 /// @param out Receives a heap-owned result, cleared before validation.
 /// @note SONARE_ERROR_NOT_SUPPORTED when the library was built without the
 ///       pitch editor.
-SonareError sonare_transcribe(const float* samples, size_t length, int sample_rate,
-                              float tempo_bpm, const SonareTranscribeConfig* config,
-                              SonareTranscribeResult* out);
+SonareError sonare_transcribe(const float* samples, size_t length, int sample_rate, float tempo_bpm,
+                              const SonareTranscribeConfig* config, SonareTranscribeResult* out);
 
 /// @brief Releases a transcription result. NULL is a no-op.
 void sonare_free_transcribe_result(SonareTranscribeResult* result);

@@ -40,8 +40,8 @@ PlacementVerdict RangeScaleJudge::judge(const arrangement::ProjectView& view,
     return refuse("velocity " + note_text(candidate.velocity) + " is outside 1..127");
   }
   if (voice.low_note > voice.high_note) {
-    return refuse("voice range " + note_text(voice.low_note) + ".." +
-                  note_text(voice.high_note) + " is empty");
+    return refuse("voice range " + note_text(voice.low_note) + ".." + note_text(voice.high_note) +
+                  " is empty");
   }
 
   CandidateNote adjusted = candidate;
@@ -74,8 +74,8 @@ PlacementVerdict RangeScaleJudge::judge(const arrangement::ProjectView& view,
                       " is outside the key and its nearest in-key note leaves the voice range");
       }
       if (!reason.empty()) reason += "; ";
-      reason += "snapped " + note_text(adjusted.note) + " to " + note_text(snapped) +
-                " to stay in key";
+      reason +=
+          "snapped " + note_text(adjusted.note) + " to " + note_text(snapped) + " to stay in key";
       adjusted.note = static_cast<uint8_t>(snapped);
     }
   }

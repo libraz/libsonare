@@ -65,8 +65,8 @@ std::vector<SourceNote> read_notes(const arrangement::MidiClipEventList& events)
       note.length_ppq = event.ppq - note.ppq;
       notes.push_back(note);
     } else if (ump.is_note_on()) {
-      open[key] = SourceNote{event.ppq, 0.0, ump.note_number(), ump.data2_7bit(), ump.group,
-                             ump.channel()};
+      open[key] =
+          SourceNote{event.ppq, 0.0, ump.note_number(), ump.data2_7bit(), ump.group, ump.channel()};
     }
   }
   std::sort(notes.begin(), notes.end(), [](const SourceNote& a, const SourceNote& b) noexcept {
@@ -161,13 +161,13 @@ AssistResult DiatonicHarmonizer::derive(const arrangement::ProjectView& view,
     decision["sourcePpq"] = json::Value(note.ppq);
     decision["sourceNote"] = json::Value(static_cast<int>(note.note));
 
-    const std::vector<uint8_t> scale =
-        queries.harmony != nullptr ? queries.harmony->scale_pitch_classes(view, note.ppq)
-                                   : std::vector<uint8_t>{};
+    const std::vector<uint8_t> scale = queries.harmony != nullptr
+                                           ? queries.harmony->scale_pitch_classes(view, note.ppq)
+                                           : std::vector<uint8_t>{};
     if (scale.empty()) {
       decision["accepted"] = json::Value(false);
-      decision["reason"] = json::Value(
-          "no key is annotated here, so there are no scale steps to move through");
+      decision["reason"] =
+          json::Value("no key is annotated here, so there are no scale steps to move through");
       decisions.push_back(json::Value(std::move(decision)));
       continue;
     }
@@ -207,9 +207,8 @@ AssistResult DiatonicHarmonizer::derive(const arrangement::ProjectView& view,
     decision["reason"] = json::Value(reason);
     decisions.push_back(json::Value(std::move(decision)));
 
-    const sonare::midi::Ump on = sonare::midi::make_midi1_note_on(note.group, note.channel,
-                                                                  candidate.note,
-                                                                  candidate.velocity);
+    const sonare::midi::Ump on = sonare::midi::make_midi1_note_on(
+        note.group, note.channel, candidate.note, candidate.velocity);
     const sonare::midi::Ump off =
         sonare::midi::make_midi1_note_off(note.group, note.channel, candidate.note, 0);
     patch.add.push_back(arrangement::MidiClipEvent{candidate.ppq, on.words[0], on.words[1], 0});

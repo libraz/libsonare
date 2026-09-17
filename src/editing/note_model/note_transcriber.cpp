@@ -108,8 +108,7 @@ uint8_t velocity_for_peak_rms(float peak_rms_linear, float velocity_floor_db) no
   if (!std::isfinite(level_db)) return kMinVelocity;
   const float fraction = (level_db - velocity_floor_db) / -velocity_floor_db;
   const float velocity =
-      static_cast<float>(kMinVelocity) +
-      fraction * static_cast<float>(kMaxVelocity - kMinVelocity);
+      static_cast<float>(kMinVelocity) + fraction * static_cast<float>(kMaxVelocity - kMinVelocity);
   if (velocity <= static_cast<float>(kMinVelocity)) return kMinVelocity;
   if (velocity >= static_cast<float>(kMaxVelocity)) return kMaxVelocity;
   return static_cast<uint8_t>(std::lround(velocity));
@@ -131,9 +130,9 @@ std::vector<TranscribedNote> transcribe_notes(const Audio& audio, const Transcri
     if (note.offset_sample <= note.onset_sample) continue;
     const int midi_note = midi_note_for_hz(note.median_hz, config.reference_hz);
     if (midi_note < 0) continue;
-    const uint8_t velocity =
-        config.fixed_velocity != 0 ? static_cast<uint8_t>(config.fixed_velocity)
-                                   : velocity_for_peak_rms(peak_rms(note), config.velocity_floor_db);
+    const uint8_t velocity = config.fixed_velocity != 0
+                                 ? static_cast<uint8_t>(config.fixed_velocity)
+                                 : velocity_for_peak_rms(peak_rms(note), config.velocity_floor_db);
     notes.push_back(TranscribedNote{note.onset_sample, note.offset_sample,
                                     static_cast<uint8_t>(midi_note), velocity, note.median_hz});
   }
