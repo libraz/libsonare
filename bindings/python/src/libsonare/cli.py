@@ -472,6 +472,7 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
         "mastering-chain",
         "master",
         "declip",
+        "repair",
         "midi-render",
         "mix",
         "project",
@@ -1220,6 +1221,34 @@ def _build_parser() -> _ContractArgumentParser:
         help="Platform targets as JSON array of {name,targetLufs,ceilingDb}",
     )
     mstream_p.add_argument("--platforms-file", default=None, help="Platform targets JSON file")
+    repair_p = sub.add_parser(
+        "repair",
+        parents=[common],
+        help=(
+            "Measure and repair defects only "
+            "(declip/declick/decrackle/dehum/denoise/dereverb, in that order)"
+        ),
+    )
+    repair_p.add_argument(
+        "--preset", default="", help="Repair preset name (omitted: measure and choose)"
+    )
+    repair_p.add_argument(
+        "--params",
+        default="",
+        help="Repair config overrides as repair.<stage>.<field>=value,...",
+    )
+    repair_p.add_argument(
+        "--detect",
+        action="store_true",
+        help="Measure and report only; no processing, --output not required",
+    )
+    repair_p.add_argument(
+        "--explain", action="store_true", help="Say why each repair stage was chosen"
+    )
+    _add_wav_bits_argument(repair_p)
+    repair_p.add_argument(
+        "-q", "--quiet", action="store_true", help="Suppress the non-JSON status report"
+    )
     declip_p = sub.add_parser("declip", parents=[common], help="Repair clipped audio")
     declip_p.add_argument("--clip-threshold", type=_finite_float, default=0.98)
     declip_p.add_argument("--lpc-order", type=int, default=36)
@@ -1442,6 +1471,7 @@ def _build_parser() -> _ContractArgumentParser:
         "master",
         "mastering-streaming",
         "declip",
+        "repair",
         "mastering-suggest",
         "mastering-profile",
     ]:
@@ -1541,6 +1571,7 @@ def _dispatch() -> None:
         "master": cmd_master,
         "mastering-streaming": cmd_mastering_streaming,
         "declip": cmd_declip,
+        "repair": cmd_repair,
         "mastering-presets": cmd_mastering_presets,
         "mastering-suggest": cmd_mastering_suggest,
         "mastering-profile": cmd_mastering_profile,

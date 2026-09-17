@@ -426,6 +426,7 @@ conformance:
 	python3 tools/conformance/check_public_contracts.py
 	python3 tools/api/check_request_object_coverage.py
 	python3 tools/conformance/check_cli_contract.py --schema
+	python3 tools/conformance/check_repair_cli_param_keys.py
 	python3 tools/conformance/check_lint_scope.py
 	python3 -m unittest tests/conformance/test_cli_contract.py
 	python3 -m unittest tests/conformance/test_wasm_exception_scope.py

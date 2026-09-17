@@ -106,6 +106,7 @@ TOP_LEVEL_ROUTES = (
     "master",
     "mastering-streaming",
     "declip",
+    "repair",
     "mastering-presets",
     "mastering-suggest",
     "mastering-profile",
