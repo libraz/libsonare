@@ -158,7 +158,11 @@ inline bool RequireFloat32Array(const Napi::CallbackInfo& info, size_t index, co
 
 /// @brief Coerce a JS value into a std::vector<int>, accepting an Int32Array or
 ///        a plain number[]. Throws a JS TypeError otherwise.
-inline std::vector<int> IntVectorFromValue(const Napi::Value& value) {
+/// @details A plain-array entry is read as a strict int named `@p name [i]`: a
+///   fraction such as 1000.7 is refused rather than truncated onto a legal
+///   index. The Int32Array path returns as-is because its elements are already
+///   exact ints -- there is no fold left to refuse.
+inline std::vector<int> IntVectorFromValue(const Napi::Value& value, const char* name) {
   if (value.IsTypedArray() && value.As<Napi::TypedArray>().TypedArrayType() == napi_int32_array) {
     auto arr = value.As<Napi::Int32Array>();
     return std::vector<int>(arr.Data(), arr.Data() + arr.ElementLength());
@@ -167,7 +171,7 @@ inline std::vector<int> IntVectorFromValue(const Napi::Value& value) {
     auto arr = value.As<Napi::Array>();
     std::vector<int> out(arr.Length());
     for (uint32_t i = 0; i < arr.Length(); ++i) {
-      out[i] = node_narrow_int(value.Env(), arr.Get(i), "value");
+      out[i] = node_narrow_int_element(value.Env(), arr.Get(i), name, i);
     }
     return out;
   }

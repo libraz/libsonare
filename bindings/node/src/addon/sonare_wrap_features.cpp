@@ -404,7 +404,7 @@ Napi::Value SonareWrap::SegmentSubsegment(const Napi::CallbackInfo& info) {
   const int rows = node_arg_int(info, 1, 0);
   const int cols = node_arg_int(info, 2, 0);
   if (!SegmentMatrixInput(env, "segmentSubsegment", data, rows, cols)) return env.Undefined();
-  const std::vector<int> boundaries = IntVectorFromValue(info[3]);
+  const std::vector<int> boundaries = IntVectorFromValue(info[3], "boundaries");
   const int n_segments = node_arg_int(info, 4, 4);
   SonareSegmentIndices result{};
   const SonareError err = sonare_segment_subsegment(data.Data(), rows, cols, boundaries.data(),

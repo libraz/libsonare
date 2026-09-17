@@ -719,6 +719,25 @@ inline bool Int32Value(Napi::Env env, const Napi::Value& value, const char* name
   return true;
 }
 
+/// @brief Read one element of a plain JS number array as a strict int, named by
+///        index.
+/// @details The element shape of @ref Int32Value, for the array readers whose
+///   caller-visible subject is `name[i]` rather than `name`: a fraction such as
+///   1000.7 is refused here instead of truncating onto a legal index. Int32Value
+///   reports through a pending exception; this converts that into a throw so an
+///   array-reader loop unwinds instead of running to completion on a dummy 0.
+/// @throws Napi::TypeError for a non-number entry, Napi::RangeError for a
+///         fractional, non-finite, or out-of-int-range value.
+inline int node_narrow_int_element(Napi::Env env, const Napi::Value& value, const char* name,
+                                   uint32_t index) {
+  const std::string element = std::string(name) + "[" + std::to_string(index) + "]";
+  int out = 0;
+  if (!Int32Value(env, value, element.c_str(), &out)) {
+    throw env.GetAndClearPendingException();
+  }
+  return out;
+}
+
 /// @brief Resolve a built-in oscillator waveform given as a JS string or a JS
 ///        number to its @ref SonareSynthWaveform ordinal.
 /// @details Both spellings reach the same rejection naming the accepted set.

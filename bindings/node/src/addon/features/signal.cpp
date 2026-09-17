@@ -197,7 +197,7 @@ Napi::Value SonareWrap::FixFrames(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  std::vector<int> frames = IntVectorFromValue(info[0]);
+  std::vector<int> frames = IntVectorFromValue(info[0], "frames");
   int x_min = node_arg_int(info, 1, 0);
   int x_max = node_arg_int(info, 2, -1);
   bool pad = info.Length() >= 4 && info[3].IsBoolean() ? info[3].As<Napi::Boolean>().Value() : true;
@@ -217,7 +217,7 @@ Napi::Value SonareWrap::OnsetBacktrack(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  const std::vector<int> events = IntVectorFromValue(info[0]);
+  const std::vector<int> events = IntVectorFromValue(info[0], "events");
   const auto energy = info[1].As<Napi::Float32Array>();
   int* out = nullptr;
   size_t count = 0;

@@ -190,6 +190,14 @@ describe('newly exposed Node functions', () => {
     expect(allFinite(out)).toBe(true);
   });
 
+  it('remix refuses a fractional plain-array interval instead of truncating it', () => {
+    const x = sine(0.5, 440);
+    // The control: a whole-number interval end is load-bearing for the output
+    // length, so a silent fold onto the same length would hide behind it.
+    expect(remix(x, [0, 1000], SR).length).not.toBe(remix(x, [0, 2000], SR).length);
+    expect(() => remix(x, [0, 1000.7], SR)).toThrow(/intervals\[1\]/);
+  });
+
   it('remixAlignedIntervals resolves one clamped pair per interval', () => {
     const x = sine(0.5, 440);
     const pairs = remixAlignedIntervals({

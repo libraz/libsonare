@@ -285,7 +285,7 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
-  std::vector<int> intervals = IntVectorFromValue(info[1]);
+  std::vector<int> intervals = IntVectorFromValue(info[1], "intervals");
   if (intervals.size() % 2 != 0) {
     Napi::TypeError::New(env, "remix intervals must be (start, end) pairs")
         .ThrowAsJavaScriptException();
@@ -312,7 +312,7 @@ Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
-  std::vector<int> intervals = IntVectorFromValue(info[1]);
+  std::vector<int> intervals = IntVectorFromValue(info[1], "intervals");
   if (intervals.size() % 2 != 0) {
     Napi::TypeError::New(env, "remix intervals must be (start, end) pairs")
         .ThrowAsJavaScriptException();
