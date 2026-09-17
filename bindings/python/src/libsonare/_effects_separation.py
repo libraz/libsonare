@@ -328,7 +328,7 @@ def remix(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    intervals_array, n_ints = _to_c_int_array(intervals)
+    intervals_array, n_ints = _to_c_int_array(intervals, "intervals")
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_remix(
@@ -377,7 +377,7 @@ def remix_aligned_intervals(
     if not hasattr(lib, "sonare_remix_aligned_intervals"):
         raise RuntimeError("loaded libsonare does not expose sonare_remix_aligned_intervals")
     c_array, length = _to_c_float_array(samples)
-    intervals_array, n_ints = _to_c_int_array(intervals)
+    intervals_array, n_ints = _to_c_int_array(intervals, "intervals")
     with _out_int_array(lib) as (out, out_count):
         _check(
             lib.sonare_remix_aligned_intervals(

@@ -603,7 +603,7 @@ def onset_backtrack(
 ) -> np.ndarray:
     """Backtrack onset event indices to local energy minima."""
     lib = _get_lib()
-    event_array, event_count = _to_c_int_array(events)
+    event_array, event_count = _to_c_int_array(events, "events")
     energy_array, energy_count = _to_c_float_array(energy, arg_name="energy")
     with _out_int_array(lib) as (out, out_count):
         _check(
@@ -1190,7 +1190,7 @@ def subsegment(
 ) -> list[int]:
     """Refine frame boundaries by clustering each parent segment."""
     c_data, _ = _segment_input("subsegment", data, rows, cols)
-    c_boundaries, count = _to_c_int_array(boundaries)
+    c_boundaries, count = _to_c_int_array(boundaries, "boundaries")
     lib = _get_lib()
     out = SonareSegmentIndices()
     _check(

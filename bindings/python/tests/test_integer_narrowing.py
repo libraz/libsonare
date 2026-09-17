@@ -630,3 +630,46 @@ def test_a_wrong_typed_packer_argument_is_refused_by_name_not_by_ctypes() -> Non
                     pytest.fail(f"{packer.__name__}/{name} leaked ctypes.ArgumentError")
                 except SonareValueError:
                     pass
+
+
+def test_an_interval_boundary_is_refused_rather_than_folded_onto_a_legal_index() -> None:
+    """The element route, which the scalar cases above cannot reach.
+
+    A count reaches the library through a ctypes argument constructor, but an
+    index array is bulk-marshalled, so every element rides one conversion that
+    the per-argument narrowing never sees. ``1000.7`` truncates to ``1000`` and
+    ``2**31`` wraps negative, and both are sample indices a caller could have
+    asked for, so the cut lands somewhere nothing downstream can question.
+    """
+    signal = np.sin(np.arange(4000) * 0.05).astype(np.float32)
+
+    # The control: the boundary selects the result, so a later refusal is not
+    # an argument the entry point had stopped reading.
+    assert len(ls.remix(signal, [0, 1000])) == 1000
+    assert len(ls.remix(signal, [0, 2000])) == 2000
+
+    with pytest.raises(SonareValueError, match=re.escape("intervals[1] must be an integer")):
+        ls.remix(signal, [0, 1000.7])
+    with pytest.raises(SonareValueError, match=re.escape("intervals[1] must be an integer within")):
+        ls.remix(signal, [0, 2**31])
+    with pytest.raises(SonareValueError, match=re.escape("intervals[1] must be a finite integer")):
+        ls.remix(signal, [0, float("nan")])
+
+    # A whole-valued float array is not a fraction and stays accepted, so the
+    # refusal cannot be passing by rejecting the dtype instead of the value.
+    assert len(ls.remix(signal, np.array([0.0, 1000.0]))) == 1000
+
+
+def test_every_integer_array_argument_names_itself_when_it_refuses() -> None:
+    """One conversion serves several entry points, so the name must travel.
+
+    Reporting each of these as the marshaller's own parameter would tell a
+    caller which helper refused rather than which argument they got wrong.
+    """
+    signal = np.sin(np.arange(4000) * 0.05).astype(np.float32)
+    with pytest.raises(SonareValueError, match=re.escape("intervals[1]")):
+        ls.remix_aligned_intervals(signal, [0, 1000.7])
+    rows, cols = 4, 32
+    matrix = np.tile(np.arange(cols, dtype=np.float32), rows)
+    with pytest.raises(SonareValueError, match=re.escape("boundaries[1]")):
+        ls.subsegment(matrix, rows, cols, [0, 16.5], n_segments=2)

@@ -314,7 +314,7 @@ def fix_frames(
 ) -> list[int]:
     """Adjust frame indices to fit within bounds."""
     lib = _get_lib()
-    c_array, length = _to_c_int_array(frames)
+    c_array, length = _to_c_int_array(frames, "frames")
     with _out_int_array(lib) as (out, out_length):
         rc = lib.sonare_fix_frames(
             c_array,

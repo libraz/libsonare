@@ -120,7 +120,7 @@ def detect_key(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     mode_values = _mode_values(modes)
-    mode_array, mode_count = _to_c_int_array(mode_values) if mode_values else (None, 0)
+    mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
     out_key = SonareKey()
     rc = lib.sonare_detect_key_with_extended_options(
         c_array,
@@ -162,7 +162,7 @@ def detect_key_candidates(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     mode_values = _mode_values(modes)
-    mode_array, mode_count = _to_c_int_array(mode_values) if mode_values else (None, 0)
+    mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
     out_candidates = ctypes.POINTER(SonareKeyCandidate)()
     out_count = ctypes.c_size_t()
     rc = lib.sonare_detect_key_candidates_with_extended_options(

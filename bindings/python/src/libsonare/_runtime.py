@@ -6,6 +6,7 @@ import contextlib
 import ctypes
 import functools
 import inspect
+import operator
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, SupportsIndex, TypeVar, cast
 
@@ -511,11 +512,52 @@ def _from_c_int_array(array: object, count: int) -> np.ndarray:
     return cast(np.ndarray, np.frombuffer(memoryview(view), dtype=np.int32, count=count).copy())
 
 
-def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[ctypes.c_int32], int]:
+def _reject_unrepresentable_int32(values: np.ndarray, name: str) -> None:
+    """Refuse an element the ``int32`` cast would change into another legal one.
+
+    The array counterpart of :func:`_narrow_int`, vectorised so the bulk path it
+    guards stays a bulk path. It exists because the cast is silent in both
+    directions a caller can reach: ``1000.7`` becomes the sample index ``1000``
+    and ``2**31`` becomes ``-2**31``, and the C ABI takes ``const int*``, so
+    nothing downstream can tell either from a value the caller meant.
+
+    Each refusal names the index and the property that element actually lacks,
+    rather than reporting the whole array under one name.
+    """
+    if values.size == 0:
+        return
+    if values.dtype.kind == "f":
+        unusable = ~np.isfinite(values)
+        if unusable.any():
+            raise SonareValueError(f"{name}[{int(np.argmax(unusable))}] must be a finite integer")
+        fractional = values != np.trunc(values)
+        if fractional.any():
+            raise SonareValueError(f"{name}[{int(np.argmax(fractional))}] must be an integer")
+    elif values.dtype.kind not in "iub":
+        # A Python int too wide for int64 arrives as object dtype. It IS an
+        # integer, so the range refusal below has to be the one that reports it.
+        try:
+            values = np.array([operator.index(v) for v in values.ravel()], dtype=object)
+        except TypeError as exc:
+            raise SonareValueError(f"{name} must hold integers") from exc
+    outside = (values < _C_INT_MIN) | (values > _C_INT_MAX)
+    if outside.any():
+        raise SonareValueError(
+            f"{name}[{int(np.argmax(outside))}] must be an integer within "
+            f"[{_C_INT_MIN}, {_C_INT_MAX}]"
+        )
+
+
+def _to_c_int_array(
+    values: Sequence[int] | list[int], name: str = "values"
+) -> tuple[ctypes.Array[ctypes.c_int32], int]:
     # Bulk-marshal via NumPy's vectorised C path instead of `(c_int32*N)(*seq)`,
     # which unpacks every element through Python varargs (mirrors the
     # zero-copy rewrite of `_to_c_float_array`).
-    buf = np.ascontiguousarray(np.asarray(values, dtype=np.int32)).reshape(-1)
+    source = np.asarray(values)
+    # Checked before the cast rather than after, which is where the fold happens.
+    _reject_unrepresentable_int32(source, name)
+    buf = np.ascontiguousarray(source.astype(np.int32, copy=False)).reshape(-1)
     # `ctypes.from_buffer` needs a *writable* buffer, and `ascontiguousarray`
     # hands a read-only int array back unchanged (`np.frombuffer`, mmap,
     # `setflags(write=False)`), so force a fresh writable copy in that case —
