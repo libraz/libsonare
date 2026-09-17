@@ -5,8 +5,10 @@
 #include <utility>
 #include <vector>
 
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/lpc.h"
+#include "util/numeric_validation.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
@@ -62,7 +64,37 @@ void repair_run(std::vector<float>& samples, const ClipRun& run, const DeclipCon
   report.repaired_samples += run.end - run.start;
 }
 
-ClipDetection to_detection(const std::vector<ClipRun>& runs, size_t size) {
+/// Counts the maximal runs of bit-identical samples sitting within
+/// kDeclipFlatRunPeakWindowDb of the peak. The equality is exact on purpose: a
+/// clipper writes one ceiling value into every sample it pins and a later gain
+/// scales them all by the same factor, so the run stays exactly level, while an
+/// unclipped apex never repeats a sample even at the lowest frequency this
+/// library accepts.
+void scan_flat_runs(const std::vector<float>& samples, ClipDetection& detection) {
+  float peak = 0.0f;
+  for (const float value : samples) {
+    if (numeric::finite(value)) peak = std::max(peak, std::abs(value));
+  }
+  if (!(peak > 0.0f)) return;
+
+  const float floor = peak * db_to_linear(-kDeclipFlatRunPeakWindowDb);
+  size_t i = 0;
+  while (i < samples.size()) {
+    const float value = samples[i];
+    size_t j = i + 1;
+    while (j < samples.size() && samples[j] == value) ++j;
+    const size_t length = j - i;
+    if (length >= kDeclipMinFlatRunSamples && numeric::finite(value) && std::abs(value) >= floor) {
+      ++detection.flat_run_count;
+      detection.flat_sample_count += length;
+      detection.longest_flat_run_samples = std::max(detection.longest_flat_run_samples, length);
+      detection.flat_level = std::max(detection.flat_level, std::abs(value));
+    }
+    i = j;
+  }
+}
+
+ClipDetection to_detection(const std::vector<float>& samples, const std::vector<ClipRun>& runs) {
   ClipDetection detection;
   detection.run_count = runs.size();
   for (const ClipRun& run : runs) {
@@ -70,7 +102,9 @@ ClipDetection to_detection(const std::vector<ClipRun>& runs, size_t size) {
     detection.sample_count += length;
     detection.longest_run_samples = std::max(detection.longest_run_samples, length);
   }
-  detection.sample_fraction = static_cast<float>(detection.sample_count) / static_cast<float>(size);
+  detection.sample_fraction =
+      static_cast<float>(detection.sample_count) / static_cast<float>(samples.size());
+  scan_flat_runs(samples, detection);
   return detection;
 }
 
@@ -165,7 +199,7 @@ ClipDetection detect_clipping(const float* samples, size_t size, int sample_rate
   if (samples == nullptr || size == 0) return {};
 
   const std::vector<float> buffer(samples, samples + size);
-  return to_detection(scan_clipped_runs(buffer, validated->clip_threshold), size);
+  return to_detection(buffer, scan_clipped_runs(buffer, validated->clip_threshold));
 }
 
 Audio declip(const Audio& audio, const DeclipConfig& config) {
@@ -178,7 +212,9 @@ Audio declip(const Audio& audio, const DeclipConfig& config, DeclipReport* repor
 
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   const std::vector<ClipRun> runs = scan_clipped_runs(samples, validated->clip_threshold);
-  const ClipDetection detected = to_detection(runs, samples.size());
+  // Before the repair overwrites the samples the flat-top scan reads, and only
+  // when a caller asked: the chain's declip stage passes no report at all.
+  const ClipDetection detected = report != nullptr ? to_detection(samples, runs) : ClipDetection{};
   DeclipReport pass = repair_channel(samples, runs, validated.get());
   if (report != nullptr) {
     pass.detected = detected;
@@ -198,8 +234,8 @@ DeclipStereoResult declip_stereo(const Audio& left, const Audio& right,
   const std::vector<ClipRun> left_runs = scan_clipped_runs(left_samples, validated->clip_threshold);
   const std::vector<ClipRun> right_runs =
       scan_clipped_runs(right_samples, validated->clip_threshold);
-  const ClipDetection left_detected = to_detection(left_runs, left_samples.size());
-  const ClipDetection right_detected = to_detection(right_runs, right_samples.size());
+  const ClipDetection left_detected = to_detection(left_samples, left_runs);
+  const ClipDetection right_detected = to_detection(right_samples, right_runs);
   const std::vector<ClipRun> applied = union_runs(left_runs, right_runs);
 
   DeclipStereoResult result;

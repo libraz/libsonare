@@ -83,6 +83,16 @@ struct DefectProfile {
   std::size_t clip_run_count = 0;
   std::size_t clip_longest_run_samples = 0;
   float clip_sample_fraction = 0.0f;
+  /// Flat tops, which answer a different question from the four fields above.
+  /// Those are read against declip's configured threshold, so they count the apex
+  /// of any waveform that reaches it and miss material clipped before it was
+  /// attenuated; these survive a gain change and do not fire on a sine.
+  /// clip_flat_level is the level the runs sit at, which is the threshold a
+  /// declip pass has to use to reach them.
+  std::size_t clip_flat_run_count = 0;
+  std::size_t clip_flat_sample_count = 0;
+  std::size_t clip_longest_flat_run_samples = 0;
+  float clip_flat_level = 0.0f;
 
   // repair/denoise_classical.h
   float noise_floor_dbfs = 0.0f;

@@ -605,6 +605,10 @@ export interface MasteringAudioProfile {
     clipRunCount: number;
     clipLongestRunSamples: number;
     clipSampleFraction: number;
+    clipFlatRunCount: number;
+    clipFlatSampleCount: number;
+    clipLongestFlatRunSamples: number;
+    clipFlatLevel: number;
     noiseFloorDbfs: number;
     noiseBandPeakDbfs: number;
     noiseBandPeakIndex: number;

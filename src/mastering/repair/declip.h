@@ -32,6 +32,17 @@ inline constexpr size_t kDeclipMaxLpcWorkingSetBytes =
     sizeof(float) * kDeclipMaxLpcGapSamples *
     (2 * kDeclipMaxLpcContextRadius + 3 * kDeclipMaxLpcGapSamples);
 
+/// @brief Shortest run of bit-identical samples counted as a flat top.
+/// @details Two is reachable by rounding alone. The shallowest clipped run in the
+/// evaluation corpus is four samples, so three separates with margin either way.
+inline constexpr size_t kDeclipMinFlatRunSamples = 3;
+
+/// @brief How far under the peak a flat run may sit and still count, in dB.
+/// @details A clipper pins samples at one ceiling, so the runs that matter sit at
+/// the peak and this window only admits the rounding spread around it. Corpus
+/// separation is unchanged anywhere between 0.1 and 6 dB.
+inline constexpr float kDeclipFlatRunPeakWindowDb = 1.0f;
+
 struct DeclipConfig {
   float clip_threshold = 0.98f;
   int lpc_order = 36;
@@ -52,6 +63,26 @@ struct ClipDetection {
   size_t longest_run_samples = 0;  ///< Compare against kDeclipMaxLpcGapSamples:
                                    ///  a longer run takes the interpolation
                                    ///  fallback rather than the LPC solver.
+
+  /// @name Flat-top analysis
+  /// Runs of bit-identical samples sitting at the signal's peak. The fields above
+  /// count what is at or past clip_threshold now, so they see only clipping that
+  /// still reaches that ceiling; a flat top survives a later gain change and so
+  /// reports material clipped before it was attenuated. Neither drives the
+  /// repair, which reconstructs what crosses clip_threshold. A waveform that is
+  /// genuinely flat on top -- a square or pulse train, a fully limited master --
+  /// counts here and cannot be told from clipping in the time domain. The reverse
+  /// error is the one to state: anything that moves samples independently erases
+  /// a real flat top, so zero is not proof the material was never clipped.
+  /// Resampling and lossy coding do it, and so does a stereo downmix -- measured,
+  /// a shallow clipped tone reports 440 runs per channel and none at all after
+  /// the two are averaged.
+  /// @{
+  size_t flat_run_count = 0;
+  size_t longest_flat_run_samples = 0;
+  size_t flat_sample_count = 0;
+  float flat_level = 0.0f;  ///< Magnitude the counted runs sit at; 0 when none.
+  /// @}
 };
 
 ClipDetection detect_clipping(const float* samples, size_t size, int sample_rate,

@@ -142,6 +142,34 @@ TEST_CASE("Defect profile clip fields separate a clipped tone from the same tone
   REQUIRE(planted.clip_longest_run_samples > clean.clip_longest_run_samples);
 }
 
+TEST_CASE("Defect profile still sees clipping after the file has been turned down",
+          "[mastering][assistant][defects]") {
+  // The four threshold fields go to zero once nothing reaches the ceiling, which
+  // is the whole population of material clipped in one tool and attenuated in
+  // the next. The flat fields are the ones that have to survive it.
+  auto turned_down = clipped(1.4f, 1.0f);
+  for (float& sample : turned_down) sample *= 0.25f;
+  const auto quiet = profile_of(turned_down);
+  const auto loud = profile_of(clipped(1.4f, 1.0f));
+
+  CAPTURE(quiet.clip_sample_count, quiet.clip_flat_run_count, quiet.clip_flat_level);
+  REQUIRE(quiet.clip_sample_count == 0);
+  REQUIRE(quiet.clip_run_count == 0);
+  REQUIRE(quiet.clip_flat_run_count == loud.clip_flat_run_count);
+  REQUIRE(quiet.clip_flat_sample_count == loud.clip_flat_sample_count);
+  REQUIRE(quiet.clip_longest_flat_run_samples == loud.clip_longest_flat_run_samples);
+  REQUIRE(quiet.clip_flat_level < 0.3f);
+  REQUIRE(quiet.clip_flat_level > 0.2f);
+
+  // The unclipped tone is the negative side: it reaches the ceiling on every
+  // cycle without a flat top, so a count alone would call it clipped.
+  const auto untouched = profile_of(tone(220.0f, 1.0f));
+  CAPTURE(untouched.clip_sample_count, untouched.clip_flat_run_count);
+  REQUIRE(untouched.clip_sample_count > 0);
+  REQUIRE(untouched.clip_flat_run_count == 0);
+  REQUIRE(untouched.clip_flat_level == 0.0f);
+}
+
 TEST_CASE("Defect profile noise fields separate added white noise from a clean tone",
           "[mastering][assistant][defects]") {
   const auto clean = profile_of(tone(220.0f, 0.2f));

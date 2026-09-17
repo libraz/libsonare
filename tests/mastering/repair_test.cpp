@@ -119,6 +119,58 @@ TEST_CASE("Decrackle wavelet shrinkage reduces crackle energy", "[mastering][rep
   REQUIRE(std::abs(result[32]) < std::abs(input[32]));
 }
 
+TEST_CASE("Clip detection survives the gain change that hides clipping from the threshold",
+          "[mastering][repair]") {
+  // The threshold fields answer "what is at the ceiling now", which is the wrong
+  // question for a file clipped in one tool and turned down in the next: the
+  // flat tops are all that is left of the clipping, and they are still there.
+  constexpr int kRate = 48000;
+  constexpr size_t kLength = 48000;
+  std::vector<float> clipped(kLength);
+  for (size_t i = 0; i < kLength; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(kRate);
+    clipped[i] = std::clamp(1.8f * std::sin(constants::kTwoPi * 220.0f * t), -1.0f, 1.0f);
+  }
+
+  const auto full_scale = detect_clipping(clipped.data(), clipped.size(), kRate);
+  REQUIRE(full_scale.sample_count > 0);
+  REQUIRE(full_scale.flat_run_count > 0);
+
+  std::vector<float> attenuated(clipped.size());
+  std::transform(clipped.begin(), clipped.end(), attenuated.begin(),
+                 [](float value) { return value * 0.25f; });
+  const auto quiet = detect_clipping(attenuated.data(), attenuated.size(), kRate);
+
+  CAPTURE(quiet.sample_count, quiet.flat_run_count, quiet.flat_level);
+  REQUIRE(quiet.sample_count == 0);
+  REQUIRE(quiet.run_count == 0);
+  REQUIRE(quiet.flat_run_count == full_scale.flat_run_count);
+  REQUIRE(quiet.flat_sample_count == full_scale.flat_sample_count);
+  REQUIRE(quiet.longest_flat_run_samples == full_scale.longest_flat_run_samples);
+  REQUIRE_THAT(quiet.flat_level, WithinAbs(0.25f, 1e-6f));
+}
+
+TEST_CASE("Clip detection does not read an unclipped peak as a flat top", "[mastering][repair]") {
+  // A full-scale sine reaches the default threshold every cycle without ever
+  // having been clipped, which is the false positive the counts alone produce.
+  // The apex of a sine never repeats a sample, so no run forms.
+  constexpr int kRate = 48000;
+  std::vector<float> sine(48000);
+  for (size_t i = 0; i < sine.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(kRate);
+    sine[i] = std::sin(constants::kTwoPi * 220.0f * t);
+  }
+
+  const auto detected = detect_clipping(sine.data(), sine.size(), kRate);
+
+  CAPTURE(detected.sample_count, detected.flat_run_count);
+  REQUIRE(detected.sample_count > 0);
+  REQUIRE(detected.flat_run_count == 0);
+  REQUIRE(detected.flat_sample_count == 0);
+  REQUIRE(detected.longest_flat_run_samples == 0);
+  REQUIRE(detected.flat_level == 0.0f);
+}
+
 TEST_CASE("Declip reconstructs clipped samples from neighbors", "[mastering][repair]") {
   const auto result = declip(make_audio({0.2f, 1.0f, 0.4f}), {0.98f});
 

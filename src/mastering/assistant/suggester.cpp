@@ -95,11 +95,12 @@ bool hum_is_mains(const DefectProfile& defects) {
 /// Turns on the repair stages the measurement supports, and only those.
 /// @details Three stages are selected on a count the detector either found or
 ///   did not; two more are selected against a threshold measured on real
-///   material. Dereverb is absent on purpose: its statistic reads *higher* on a
-///   sustaining dry signal than on a short reverberant one, so no threshold over
-///   it separates the two, and it stays under caller control until one does.
-///   The noise estimator is left at its default, which outperforms the adaptive
-///   trackers on every kind of material measured so far.
+///   material. Two of the five also take a parameter from the measurement rather
+///   than the default, because for those the default would select the stage and
+///   then give it nothing to act on. Dereverb is absent on purpose: its statistic reads *higher* on
+///   a sustaining dry signal than on a short reverberant one, so no threshold over it separates the
+///   two, and it stays under caller control until one does. The noise estimator is left at its
+///   default, which outperforms the adaptive trackers on every kind of material measured so far.
 void select_repair_stages(const AudioProfile& profile, const AssistantConfig& config,
                           api::MasteringChainConfig& out, std::vector<std::string>& explanation) {
   const DefectProfile& defects = profile.defects;
@@ -110,9 +111,14 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
     return;
   }
 
-  if (defects.clip_sample_count > 0) {
+  if (defects.clip_flat_run_count > 0) {
     out.repair.declip.enabled = true;
-    explain(explanation, "declip: samples reach the clipping threshold");
+    // The measured plateau, not the default ceiling. Material clipped before it
+    // was attenuated has no sample left at the default, so enabling the stage
+    // without moving the threshold reconstructs nothing while the explanation
+    // says it repaired. Clamped because float audio may sit over unity.
+    out.repair.declip.config.clip_threshold = std::min(defects.clip_flat_level, 1.0f);
+    explain(explanation, "declip: runs of samples sit pinned at one level");
   }
   if (defects.click_count > 0) {
     out.repair.declick.enabled = true;

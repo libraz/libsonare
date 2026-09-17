@@ -332,6 +332,29 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   REQUIRE(repair_result.config.repair.denoise.config.noise_estimator ==
           sonare::mastering::repair::DenoiseNoiseEstimator::Quantile);
 
+  // Declip is selected on flat tops, not on samples reaching the ceiling, and it
+  // carries the measured level with it. Leaving the threshold at its default
+  // would select the stage and then hand it nothing above that default to
+  // reconstruct, so the explanation would claim a repair that never happened.
+  assistant::AudioProfile attenuated = damaged;
+  attenuated.defects.clip_sample_count = 0;
+  attenuated.defects.clip_run_count = 0;
+  attenuated.defects.clip_flat_run_count = 40;
+  attenuated.defects.clip_flat_level = 0.25f;
+  auto attenuated_result = assistant::suggest_chain(attenuated, offline_repair);
+  REQUIRE(attenuated_result.config.repair.declip.enabled);
+  REQUIRE(attenuated_result.config.repair.declip.config.clip_threshold == 0.25f);
+
+  // The other direction: a peak that reaches the ceiling with no flat top is an
+  // unclipped full-scale waveform, and selecting declip on it would reconstruct
+  // undamaged samples.
+  assistant::AudioProfile at_ceiling = damaged;
+  at_ceiling.defects.clip_sample_count = 8460;
+  at_ceiling.defects.clip_run_count = 660;
+  at_ceiling.defects.clip_flat_run_count = 0;
+  auto at_ceiling_result = assistant::suggest_chain(at_ceiling, offline_repair);
+  REQUIRE_FALSE(at_ceiling_result.config.repair.declip.enabled);
+
   // An unmeasured profile selects nothing, whatever enable_repair says: "nobody
   // looked" must not read as "nothing is wrong".
   auto unmeasured = assistant::suggest_chain(profile, offline_repair);
@@ -517,6 +540,65 @@ TEST_CASE("Assistant params carry the delivery target as its index", "[mastering
   assistant::set_target_platform(by_name, "club");
   REQUIRE(by_name.target_platform == "club");
   REQUIRE_THROWS_AS(assistant::set_target_platform(by_name, "vinyl"), sonare::SonareException);
+}
+
+TEST_CASE("Profile params refuse a fractional analysis size rather than truncating it",
+          "[mastering][assistant]") {
+  namespace api = sonare::mastering::api;
+  constexpr int kSr = 22050;
+  auto signal = tone(kSr, 2.0f, 220.0f);
+  add_tone(signal, kSr, 5000.0f, 0.15f);
+  add_clicks(signal, kSr, 480.0f, 0.5f);
+
+  const auto profile_with = [&](const char* key, double value) {
+    const api::Param params[] = {{key, value}};
+    return assistant::analyze_audio_profile(signal.data(), signal.size(), kSr,
+                                            assistant::audio_profile_config_from_params(params, 1));
+  };
+
+  // Each field gets two valid settings that move the measurement, so the
+  // refusals below are known to be refusing a value that would have been read.
+  // A refusal-only case passes against a bare throw and proves nothing.
+  // Both sides are required finite first: `a != b` is true for free once either
+  // can be NaN, so the separation would otherwise pass on a broken measurement.
+  const auto differs = [](float lhs, float rhs) {
+    REQUIRE(std::isfinite(lhs));
+    REQUIRE(std::isfinite(rhs));
+    REQUIRE(lhs != rhs);
+  };
+
+  const auto coarse = profile_with("nFft", 512.0);
+  const auto fine = profile_with("nFft", 2048.0);
+  CAPTURE(coarse.spectral.centroid_hz, fine.spectral.centroid_hz);
+  differs(coarse.spectral.centroid_hz, fine.spectral.centroid_hz);
+
+  const auto dense = profile_with("hopLength", 128.0);
+  const auto sparse = profile_with("hopLength", 512.0);
+  // The spectral profile, not the onset density: the hop reaches the STFT that
+  // feeds the band measurements, while attack_density comes out of the onset
+  // detector's own framing and measures identically at 128 and at 512.
+  CAPTURE(dense.spectral.flatness, sparse.spectral.flatness);
+  differs(dense.spectral.flatness, sparse.spectral.flatness);
+
+  const auto oversampled = profile_with("truePeakOversample", 8.0);
+  const auto plain = profile_with("truePeakOversample", 1.0);
+  CAPTURE(oversampled.loudness.true_peak_db, plain.loudness.true_peak_db);
+  differs(oversampled.loudness.true_peak_db, plain.loudness.true_peak_db);
+
+  // A count cannot be fractional, and rounding one would answer with a window
+  // the caller never asked for. Both spellings of every key are accepted, so
+  // both have to refuse.
+  for (const char* key :
+       {"nFft", "n_fft", "hopLength", "hop_length", "truePeakOversample", "true_peak_oversample"}) {
+    const api::Param fractional[] = {{key, 512.5}};
+    CAPTURE(key);
+    REQUIRE_THROWS_AS(assistant::audio_profile_config_from_params(fractional, 1),
+                      sonare::SonareException);
+  }
+
+  const api::Param too_large[] = {{"nFft", 1.0e18}};
+  REQUIRE_THROWS_AS(assistant::audio_profile_config_from_params(too_large, 1),
+                    sonare::SonareException);
 }
 
 TEST_CASE("Assistant delivery target yields to a named loudness, default-valued or not",

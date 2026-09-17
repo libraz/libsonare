@@ -323,6 +323,10 @@ DefectProfile measure_defects(const Audio& audio) {
   defects.clip_run_count = clipping.run_count;
   defects.clip_longest_run_samples = clipping.longest_run_samples;
   defects.clip_sample_fraction = clipping.sample_fraction;
+  defects.clip_flat_run_count = clipping.flat_run_count;
+  defects.clip_flat_sample_count = clipping.flat_sample_count;
+  defects.clip_longest_flat_run_samples = clipping.longest_flat_run_samples;
+  defects.clip_flat_level = clipping.flat_level;
 
   const auto noise = repair::detect_noise_floor(samples, size, sample_rate, denoise_config);
   defects.noise_floor_dbfs = noise.floor_dbfs;
@@ -567,6 +571,13 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
   defects.emplace("clipLongestRunSamples",
                   json::Value(static_cast<double>(profile.defects.clip_longest_run_samples)));
   defects.emplace("clipSampleFraction", json::Value(profile.defects.clip_sample_fraction));
+  defects.emplace("clipFlatRunCount",
+                  json::Value(static_cast<double>(profile.defects.clip_flat_run_count)));
+  defects.emplace("clipFlatSampleCount",
+                  json::Value(static_cast<double>(profile.defects.clip_flat_sample_count)));
+  defects.emplace("clipLongestFlatRunSamples",
+                  json::Value(static_cast<double>(profile.defects.clip_longest_flat_run_samples)));
+  defects.emplace("clipFlatLevel", json::Value(profile.defects.clip_flat_level));
   defects.emplace("noiseFloorDbfs", json::Value(profile.defects.noise_floor_dbfs));
   defects.emplace("noiseBandPeakDbfs", json::Value(profile.defects.noise_band_peak_dbfs));
   defects.emplace("noiseBandPeakIndex", json::Value(profile.defects.noise_band_peak_index));
@@ -608,6 +619,10 @@ const std::vector<std::string>& audio_profile_schema_paths() {
       "defects.clickLongestRunSamples",
       "defects.clickPerSecond",
       "defects.clickRejected",
+      "defects.clipFlatLevel",
+      "defects.clipFlatRunCount",
+      "defects.clipFlatSampleCount",
+      "defects.clipLongestFlatRunSamples",
       "defects.clipLongestRunSamples",
       "defects.clipRunCount",
       "defects.clipSampleCount",
