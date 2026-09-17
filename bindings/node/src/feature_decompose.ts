@@ -337,6 +337,11 @@ export function nnFilter(
   );
 }
 
+export interface RemixRequest extends FeatureSamplesRequest {
+  intervals: Int32Array | number[];
+  alignZeros?: boolean;
+}
+
 /**
  * Reorder/concatenate a signal by (start,end) interval slices (librosa.effects.remix).
  *
@@ -345,18 +350,16 @@ export function nnFilter(
  * different frame and drifts a stereo take apart. Resolve one cut set with
  * {@link remixAlignedIntervals} and apply it to every channel instead.
  */
-export function remix(
-  request: FeatureSamplesRequest & { intervals: Int32Array; alignZeros?: boolean },
-): Float32Array;
+export function remix(request: RemixRequest): Float32Array;
 export function remix(
   samples: Float32Array,
-  intervals: Int32Array,
+  intervals: Int32Array | number[],
   sampleRate?: number,
   alignZeros?: boolean,
 ): Float32Array;
 export function remix(
-  samples: Float32Array | (FeatureSamplesRequest & { intervals: Int32Array; alignZeros?: boolean }),
-  intervals: Int32Array = new Int32Array(),
+  samples: Float32Array | RemixRequest,
+  intervals: Int32Array | number[] = new Int32Array(),
   sampleRate = 22050,
   alignZeros = false,
 ): Float32Array {
@@ -382,18 +385,16 @@ export function remix(
  * slice that had content but collapses to empty after snapping keeps its
  * unsnapped boundaries.
  */
-export function remixAlignedIntervals(
-  request: FeatureSamplesRequest & { intervals: Int32Array; alignZeros?: boolean },
-): Int32Array;
+export function remixAlignedIntervals(request: RemixRequest): Int32Array;
 export function remixAlignedIntervals(
   samples: Float32Array,
-  intervals: Int32Array,
+  intervals: Int32Array | number[],
   sampleRate?: number,
   alignZeros?: boolean,
 ): Int32Array;
 export function remixAlignedIntervals(
-  samples: Float32Array | (FeatureSamplesRequest & { intervals: Int32Array; alignZeros?: boolean }),
-  intervals: Int32Array = new Int32Array(),
+  samples: Float32Array | RemixRequest,
+  intervals: Int32Array | number[] = new Int32Array(),
   sampleRate = 22050,
   alignZeros = true,
 ): Int32Array {
