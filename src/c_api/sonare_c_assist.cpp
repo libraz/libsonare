@@ -300,6 +300,11 @@ const char* sonare_assist_module_ids(void) {
 SonareError sonare_project_assist_preview_json(const SonareProject* project,
                                                const char* request_json, char** out_json) {
   SONARE_C_API_ENTRY;
+  if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined before any other exit, and in both configurations: the document is
+  // written on the refusal path too, so a caller that reads it after an error
+  // must not be handed an untouched slot.
+  *out_json = nullptr;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_ASSIST)
   SONARE_C_TRY
   // const_cast is safe on this path: run_assist is called with apply = false and
@@ -308,7 +313,6 @@ SonareError sonare_project_assist_preview_json(const SonareProject* project,
   return run_assist(const_cast<SonareProject*>(project), request_json, false, out_json);
   SONARE_C_CATCH
 #else
-  if (out_json) *out_json = nullptr;
   SONARE_C_STUB_NOT_SUPPORTED(project, request_json, out_json);
 #endif
 }
@@ -316,12 +320,14 @@ SonareError sonare_project_assist_preview_json(const SonareProject* project,
 SonareError sonare_project_assist_apply_json(SonareProject* project, const char* request_json,
                                              char** out_json) {
   SONARE_C_API_ENTRY;
+  if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  // See the preview entry point: defined before any other exit, both configurations.
+  *out_json = nullptr;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_ASSIST)
   SONARE_C_TRY
   return run_assist(project, request_json, true, out_json);
   SONARE_C_CATCH
 #else
-  if (out_json) *out_json = nullptr;
   SONARE_C_STUB_NOT_SUPPORTED(project, request_json, out_json);
 #endif
 }

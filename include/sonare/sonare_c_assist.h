@@ -128,6 +128,9 @@ SonareError sonare_project_assist_preview_json(const SonareProject* project,
 ///          @ref sonare_project_assist_preview_json, which is the call to make
 ///          first: this one is undoable but it is not a dry run. A run whose
 ///          status is not @c "ok" commits nothing.
+/// @param out_json Receives the document
+///        @ref sonare_project_assist_preview_json describes, on the refusal path
+///        as well. Release with @ref sonare_free_string.
 /// @note SONARE_ERROR_NOT_SUPPORTED when the library was built without the
 ///       assist seam or without the arrangement subsystem.
 SonareError sonare_project_assist_apply_json(SonareProject* project, const char* request_json,
