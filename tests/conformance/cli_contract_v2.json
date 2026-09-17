@@ -3059,6 +3059,66 @@
           "required": false,
           "domain": null
         }
+      ],
+      "mastering-presets": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "mastering-profile": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "mastering-streaming": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "platforms",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "platforms-file",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
       ]
     }
   },
@@ -3349,8 +3409,8 @@
       "option_status": "active"
     },
     "sections": {
-      "classification": "native_only",
-      "status": "native_only",
+      "classification": "intentional_variant",
+      "status": "intentional_variant",
       "option_status": "pending"
     },
     "melody": {
@@ -3599,9 +3659,9 @@
       "option_status": "pending"
     },
     "mastering-streaming": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "declip": {
       "classification": "python_only",
@@ -3609,9 +3669,9 @@
       "option_status": "pending"
     },
     "mastering-presets": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "mastering-suggest": {
       "classification": "python_only",
@@ -3619,9 +3679,9 @@
       "option_status": "pending"
     },
     "mastering-profile": {
-      "classification": "python_only",
-      "status": "python_only",
-      "option_status": "pending"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "midi-render": {
       "classification": "python_only",
@@ -3637,6 +3697,21 @@
       "classification": "shared",
       "status": "active",
       "option_status": "active"
+    },
+    "decompose-stems": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "transcribe": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "suggest-mix": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
     }
   },
   "active_paths": [
@@ -10146,6 +10221,174 @@
           "exit": 0,
           "legacy_exit": 0,
           "payload": "preset",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-presets",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "presets": {
+              "type": "array",
+              "items": "string"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mastering-presets",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-profile",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "bpm": "number",
+            "bpm_confidence": "number",
+            "duration_sec": "number",
+            "defects": "any",
+            "dynamics": "any",
+            "loudness": "any",
+            "spectral": "any",
+            "genre_candidates": {
+              "type": "array",
+              "items": "any"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mastering-profile",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-streaming",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "platforms",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "platforms-file",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "platforms": {
+              "type": "array",
+              "items": "any"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "mastering-streaming",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
           "artifact": "none",
           "stdout": "json"
         }

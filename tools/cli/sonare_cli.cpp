@@ -83,6 +83,11 @@ const std::vector<CommandInfo>& get_commands() {
        false},
       {"mastering-stereo-analyses", "List stereo mastering analyses", cmd_mastering_stereo_analyses,
        false},
+      {"mastering-presets", "List built-in mastering presets", cmd_mastering_presets, false},
+      {"mastering-profile", "Profile audio for the mastering assistant", cmd_mastering_profile,
+       true},
+      {"mastering-streaming", "Preview streaming-platform normalization", cmd_mastering_streaming,
+       true},
       {"repair",
        "Run only the repair stages (declip/declick/decrackle/dehum/denoise/dereverb, in that "
        "order); never masters",

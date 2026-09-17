@@ -18,6 +18,14 @@ target_link_libraries(sonare PRIVATE sonare_core)
 if(BUILD_MASTERING)
   target_link_libraries(sonare PRIVATE sonare_mastering)
   target_compile_definitions(sonare PRIVATE SONARE_WITH_MASTERING=1)
+  # `mastering-profile` and `mastering-streaming` print the C ABI's own JSON so
+  # that either CLI emits one document from one serializer. That translation
+  # unit is in no static lib the CLI links, and it returns through the
+  # sonare_free_* helpers, so both are compiled in here.
+  target_sources(sonare PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mastering_streaming.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_memory.cpp
+  )
 endif()
 if(BUILD_MIXING)
   target_link_libraries(sonare PRIVATE sonare_mixing)

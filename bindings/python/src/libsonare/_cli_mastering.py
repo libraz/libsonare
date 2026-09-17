@@ -700,7 +700,8 @@ def cmd_mastering_streaming(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     platforms = _parse_json_list(args.platforms, args.platforms_file) or None
-    print(mastering_streaming_preview(samples, sample_rate=sr, platforms=platforms))
+    result_json = mastering_streaming_preview(samples, sample_rate=sr, platforms=platforms)
+    print(_strict_json_dumps(_json_keys_to_snake_case(json.loads(result_json))))
     return 0
 
 
@@ -1063,7 +1064,16 @@ def cmd_mastering_suggest(args: argparse.Namespace) -> int:
     params: dict[str, float | int | bool | str] = (
         dict(_parse_kv_params(args.params)) if args.params else {}
     )
-    print(mastering_assistant_suggest(samples, sample_rate=sr, params=params))
+    suggestion = json.loads(mastering_assistant_suggest(samples, sample_rate=sr, params=params))
+    # The suggested chain is fed back to the library verbatim (`mastering --config`),
+    # so the names under it belong to the chain param schema rather than to CLI
+    # stdout, and re-keying them would make the document the library rejects.
+    # Everything beside it is measurement output and follows the snake_case rule.
+    chain_config = suggestion.pop("chainConfig", None)
+    payload = _json_keys_to_snake_case(suggestion)
+    if chain_config is not None:
+        payload["chain_config"] = chain_config
+    print(_strict_json_dumps(payload))
     return 0
 
 
@@ -1072,7 +1082,67 @@ def cmd_mastering_profile(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     params = _parse_kv_params(args.params) if args.params else {}
-    print(mastering_audio_profile(samples, sample_rate=sr, params=params))
+    result_json = mastering_audio_profile(samples, sample_rate=sr, params=params)
+    print(_strict_json_dumps(_json_keys_to_snake_case(json.loads(result_json))))
+    return 0
+
+
+def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
+    """Map ``suggest-mix --params`` keys onto ``suggest_mix_scene`` keywords.
+
+    The accepted set is the assistant's own option table, so either spelling the
+    C ABI reads is accepted and nothing here restates the list. Two conversions
+    are this boundary's: an option whose config field is a bool is converted
+    rather than handed a number, and an integral value for an integer option is
+    narrowed, since ``--params`` parses every value as a float.
+    """
+    from .mixing_assistant import _INTEGER_PARAMS, _PARAM_KEYS
+
+    options: dict[str, Any] = {}
+    for key, value in params.items():
+        name = _json_key_to_snake_case(key)
+        if name not in _PARAM_KEYS:
+            raise ValueError(f"unknown suggest-mix param: {key}")
+        if name.startswith("enable_"):
+            options[name] = value != 0.0
+        elif name in _INTEGER_PARAMS and value.is_integer():
+            options[name] = int(value)
+        else:
+            options[name] = value
+    return options
+
+
+def _mix_assistant_tracks(entries: list[str], sample_rate: int) -> list[Any]:
+    """Load each ``[ID=]WAV`` entry as one mono track at ``sample_rate``."""
+    from .mixing_assistant import MixTrackInput
+
+    tracks: list[Any] = []
+    for entry in entries:
+        track_id, separator, path = entry.partition("=")
+        if not separator:
+            # Bare path: the file's own name is the id the scene addresses it by.
+            path = entry
+            track_id = os.path.splitext(os.path.basename(path))[0]
+        if not track_id:
+            raise ValueError(f"--input track id must not be empty: {entry}")
+        if not path:
+            raise ValueError(f"--input requires a file path: {entry}")
+        samples, track_rate = _load_audio(path)
+        if track_rate != sample_rate:
+            samples = _resample(samples, track_rate, sample_rate)
+        tracks.append(MixTrackInput(track_id=track_id, left=samples, name=track_id))
+    return tracks
+
+
+def cmd_suggest_mix(args: argparse.Namespace) -> int:
+    from . import suggest_mix_scene
+
+    if not args.input:
+        raise ValueError("suggest-mix requires at least one --input")
+    options = _mix_assistant_options(_parse_kv_params(args.params) if args.params else {})
+    tracks = _mix_assistant_tracks(args.input, args.sample_rate)
+    document = suggest_mix_scene(tracks, sample_rate=args.sample_rate, **options)
+    print(_strict_json_dumps(document))
     return 0
 
 

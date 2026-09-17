@@ -132,6 +132,17 @@ CliOptionSpec path_value(const char* name, bool required = false, bool global_le
 CliOptionSpec required_path(const char* name) { return path_value(name, true); }
 #endif
 
+#ifdef SONARE_WITH_MASTERING
+// A string option whose absence is null rather than the empty string. Both
+// spellings mean "not supplied" to the reader, but the CLI contract compares
+// declared defaults across the two front-ends, so the representation has to
+// agree with the one the Python CLI publishes.
+CliOptionSpec nullable_string_value(const char* name) {
+  return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::String,
+                     null_default(), {}, {}, false, false, false, true);
+}
+#endif
+
 #ifdef SONARE_WITH_ARRANGEMENT
 CliOptionSpec optional_string(const char* name, const char* implicit = "true",
                               bool repeatable = false) {
@@ -521,6 +532,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "mastering-pair-processors", false, {});
     add_command(commands, "mastering-pair-analyses", false, {});
     add_command(commands, "mastering-stereo-analyses", false, {});
+    add_command(commands, "mastering-presets", false, {});
+    add_command(commands, "mastering-profile", true, {string_value("params")});
+    add_command(commands, "mastering-streaming", true,
+                {nullable_string_value("platforms"), path_value("platforms-file")});
     add_command(commands, "repair", true,
                 {string_value("preset"), string_value("params"), bits_value(), output_value(),
                  flag("detect"), flag("explain")},

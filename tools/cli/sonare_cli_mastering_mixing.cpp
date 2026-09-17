@@ -85,6 +85,57 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
   return params;
 }
 
+/// One `--platforms` entry, owning its name so the C array built from it can
+/// borrow a stable pointer.
+struct StreamingPlatformSpec {
+  std::string name;
+  float target_lufs = -14.0f;
+  float ceiling_db = -1.0f;
+};
+
+namespace {
+
+/// Read a platform number under either spelling, defaulting when absent.
+float streaming_platform_number(const sonare::util::json::Value& entry, const char* camel,
+                                const char* snake, float fallback) {
+  const sonare::util::json::Value* value = entry.find(camel);
+  if (value == nullptr) value = entry.find(snake);
+  if (value == nullptr) return fallback;
+  if (!value->is_number()) {
+    throw std::invalid_argument(std::string("--platforms \"") + camel + "\" must be a number");
+  }
+  return value->as_float();
+}
+
+}  // namespace
+
+std::vector<StreamingPlatformSpec> parse_streaming_platforms(const std::string& text) {
+  // Same document the Python CLI's --platforms takes, so one platform list
+  // drives either front-end. An absent option is not an empty set: it selects
+  // the built-in platform list, which is what the C entry point reads NULL/0 as.
+  std::vector<StreamingPlatformSpec> platforms;
+  if (text.empty()) return platforms;
+  const auto document = sonare::util::json::parse(text);
+  if (!document.is_array()) {
+    throw std::invalid_argument("--platforms expects a JSON array of platform objects");
+  }
+  for (const auto& entry : document.as_array()) {
+    if (!entry.is_object()) {
+      throw std::invalid_argument("--platforms entries must be JSON objects");
+    }
+    StreamingPlatformSpec spec;
+    const sonare::util::json::Value* name = entry.find("name");
+    if (name == nullptr || !name->is_string() || name->as_string().empty()) {
+      throw std::invalid_argument("--platforms entry needs a non-empty \"name\"");
+    }
+    spec.name = name->as_string();
+    spec.target_lufs = streaming_platform_number(entry, "targetLufs", "target_lufs", -14.0f);
+    spec.ceiling_db = streaming_platform_number(entry, "ceilingDb", "ceiling_db", -1.0f);
+    platforms.push_back(std::move(spec));
+  }
+  return platforms;
+}
+
 namespace {
 
 // Refuses a supplied --params key the named processor does not read.
@@ -879,6 +930,71 @@ int cmd_mastering_stereo_analyses(const CliArgs& args, const Audio&) {
     for (const auto& name : names) std::cout << name << "\n";
   }
   return 0;
+}
+
+int cmd_mastering_presets(const CliArgs& args, const Audio&) {
+  const auto names = mastering::api::preset_names();
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object().key("presets").begin_array();
+    for (const auto& name : names) json.value(name);
+    json.end_array().end_object().print();
+  } else {
+    for (const auto& name : names) std::cout << name << "\n";
+  }
+  return 0;
+}
+
+/// Print a C ABI JSON document on CLI stdout.
+///
+/// These two go through the C entry point, rather than the C++ API the commands
+/// around them call, so that one serializer builds the document for either
+/// front-end. Its keys arrive in the core's camelCase and are re-keyed here for
+/// the same reason @ref analysis_json_for_cli exists: CLI stdout is snake_case
+/// throughout, and the core does not change convention for one pair of callers.
+int print_c_api_json(SonareError err, char* json) {
+  if (err != SONARE_OK || json == nullptr) {
+    sonare_free_string(json);
+    throw std::runtime_error(std::string("mastering analysis failed: ") +
+                             sonare_error_message(err));
+  }
+  const std::string document(json);
+  sonare_free_string(json);
+  std::cout << analysis_json_for_cli(document) << "\n";
+  return 0;
+}
+
+int cmd_mastering_profile(const CliArgs& args, const Audio& audio) {
+  const auto parsed = parse_mastering_params(args.get_string("params"));
+  std::vector<SonareMasteringParam> params;
+  params.reserve(parsed.size());
+  for (const auto& param : parsed) params.push_back({param.key.c_str(), param.value});
+
+  char* json = nullptr;
+  const SonareError err = sonare_mastering_audio_profile(
+      audio.data(), audio.size(), audio.sample_rate(), params.data(), params.size(), &json);
+  return print_c_api_json(err, json);
+}
+
+int cmd_mastering_streaming(const CliArgs& args, const Audio& audio) {
+  // A platform list is optional: NULL/0 selects the built-in one, which is what
+  // an absent --platforms means here rather than an empty set. `specs` outlives
+  // the call, so the borrowed name pointers stay valid. --platforms-file wins
+  // over --platforms when both are given, as it does on the Python CLI.
+  const std::string platforms_file = args.get_string("platforms-file");
+  const auto specs = parse_streaming_platforms(
+      platforms_file.empty() ? args.get_string("platforms", "") : read_text_file(platforms_file));
+  std::vector<SonareStreamingPlatform> platforms;
+  platforms.reserve(specs.size());
+  for (const auto& spec : specs) {
+    platforms.push_back({spec.name.c_str(), spec.target_lufs, spec.ceiling_db});
+  }
+
+  char* json = nullptr;
+  const SonareError err = sonare_mastering_streaming_preview(
+      audio.data(), audio.size(), audio.sample_rate(),
+      platforms.empty() ? nullptr : platforms.data(), platforms.size(), &json);
+  return print_c_api_json(err, json);
 }
 
 int cmd_mastering_pair_processor(const CliArgs& args, const Audio& audio) {
