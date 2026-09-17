@@ -193,6 +193,7 @@ int cmd_mastering_stereo_analyses(const CliArgs& args, const Audio& audio);
 int cmd_mastering_pair_processor(const CliArgs& args, const Audio& audio);
 int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio);
 int cmd_mastering_stereo_analyze(const CliArgs& args, const Audio& audio);
+int cmd_repair(const CliArgs& args, const Audio& audio);
 #endif
 
 #ifdef SONARE_WITH_MIXING

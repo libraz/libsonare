@@ -204,6 +204,19 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "repair",
+      "option": "bits",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "16",
+        "24"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "pitch",
       "option": "algorithm",
       "rejectExit": "invalid_parameter",

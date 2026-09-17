@@ -83,6 +83,10 @@ const std::vector<CommandInfo>& get_commands() {
        false},
       {"mastering-stereo-analyses", "List stereo mastering analyses", cmd_mastering_stereo_analyses,
        false},
+      {"repair",
+       "Run only the repair stages (declip/declick/decrackle/dehum/denoise/dereverb, in that "
+       "order); never masters",
+       cmd_repair, true},
 #endif
 #ifdef SONARE_WITH_MIXING
       {"mix-strip", "Apply a single-input channel strip", cmd_mix, true},

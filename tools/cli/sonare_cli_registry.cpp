@@ -254,6 +254,15 @@ CliOptionSpec target_platform_value() {
       string_value("target-platform", "streaming"),
       choices_of(sonare::mastering::assistant::platform_names(), CliOptionDomainStage::Usage));
 }
+
+// `repair` writes a repaired file, so `--output` is normally required; `--detect`
+// trades processing for a report and explicitly does not need it. A plain
+// `required_output()` cannot express that the requirement is conditional, so
+// the command carries this validator instead.
+CliValidationError validate_repair_output(const CliArgs& args) {
+  if (args.has("detect") || args.has("output")) return {};
+  return {"--output is required unless --detect is given", true};
+}
 #endif
 
 // `--fmax` must stay above `--fmin`; neither option's own domain can express
@@ -512,6 +521,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "mastering-pair-processors", false, {});
     add_command(commands, "mastering-pair-analyses", false, {});
     add_command(commands, "mastering-stereo-analyses", false, {});
+    add_command(commands, "repair", true,
+                {string_value("preset"), string_value("params"), bits_value(), output_value(),
+                 flag("detect"), flag("explain")},
+                {}, validate_repair_output);
 #endif
 #ifdef SONARE_WITH_MIXING
     // `mix` is the deprecated spelling of `mix-strip` and resolves through the

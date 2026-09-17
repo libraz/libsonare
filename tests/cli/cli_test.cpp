@@ -3334,6 +3334,122 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     std::remove(eq_out.c_str());
   }
 }
+
+TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
+  create_noisy_wav(TEST_WAV);
+
+  SECTION("default path measures, repairs and reports the defects it found") {
+    const std::string out = unique_temp_path("_repaired.wav");
+    std::remove(out.c_str());
+    auto [code, output] =
+        exec_command(CLI + " repair " + TEST_WAV + " -o " + out + " --explain --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload["mode"].as_string() == "assistant");
+    REQUIRE_THAT(output, ContainsSubstring("\"repair.denoise\""));
+    // A repair-only chain never turns on a mastering stage, even one the
+    // suggester would otherwise have picked for this noisy material.
+    REQUIRE_THAT(output, !ContainsSubstring("\"eq."));
+    REQUIRE_THAT(output, !ContainsSubstring("\"dynamics."));
+    REQUIRE_THAT(output, !ContainsSubstring("\"loudness"));
+    REQUIRE(payload.contains("explanation"));
+    REQUIRE(payload["defects"]["measured"].as_bool());
+    REQUIRE(payload["defects"]["noise_band_measured"].as_bool());
+    REQUIRE(payload["defects"].contains("hum_peak_found"));
+    // The fixed cross-surface shape carries no loudness fields: applied_gain_db
+    // is structurally always 0 (repair never touches loudness) and the LUFS
+    // pair would otherwise be the only numbers here that vary with the field
+    // this command is not about.
+    REQUIRE_FALSE(payload.contains("input_lufs"));
+    REQUIRE_FALSE(payload.contains("output_lufs"));
+    REQUIRE_FALSE(payload.contains("applied_gain_db"));
+
+    std::ifstream f(out);
+    REQUIRE(f.good());
+    std::remove(out.c_str());
+  }
+
+  SECTION("--preset strips every non-repair stage the named preset turns on") {
+    // "speech" enables repair.denoise plus eq.tilt, dynamics.deesser,
+    // dynamics.compressor and loudness -- exactly the stages that must not
+    // survive into a command that promises never to master.
+    const std::string out = unique_temp_path("_preset_repaired.wav");
+    std::remove(out.c_str());
+    auto [code, output] =
+        exec_command(CLI + " repair " + TEST_WAV + " --preset speech -o " + out + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload["mode"].as_string() == "preset");
+    REQUIRE(payload["preset"].as_string() == "speech");
+    REQUIRE_THAT(output, ContainsSubstring("\"repair.denoise\""));
+    REQUIRE_THAT(output, !ContainsSubstring("\"eq."));
+    REQUIRE_THAT(output, !ContainsSubstring("\"dynamics."));
+    REQUIRE_THAT(output, !ContainsSubstring("\"loudness"));
+    // The report is unconditional: a caller scripting against --json should not
+    // have to branch on mode to find out whether it exists.
+    REQUIRE(payload["defects"]["measured"].as_bool());
+
+    std::ifstream f(out);
+    REQUIRE(f.good());
+    std::remove(out.c_str());
+  }
+
+  SECTION("--detect measures and reports without writing anything") {
+    const std::string out = unique_temp_path("_detect_should_not_exist.wav");
+    std::remove(out.c_str());
+    auto [code, output] = exec_command(CLI + " repair " + TEST_WAV + " --detect --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload["mode"].as_string() == "detect");
+    REQUIRE(payload["defects"]["measured"].as_bool());
+    REQUIRE(payload["defects"]["noise_floor_dbfs"].as_number() < 0.0);
+
+    std::ifstream f(out);
+    REQUIRE_FALSE(f.good());
+  }
+
+  SECTION("an input too short for the detectors reports unmeasured, not clean") {
+    const std::string tiny = unique_temp_path("_tiny.wav");
+    create_test_wav(tiny, 0.02f);
+    auto [code, output] = exec_command(CLI + " repair " + tiny + " --detect --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE_FALSE(payload["defects"]["measured"].as_bool());
+    REQUIRE(payload["defects"].size() == 1);
+    std::remove(tiny.c_str());
+  }
+
+  SECTION("--output is required unless --detect is given") {
+    auto [code, output] = exec_command(CLI + " repair " + TEST_WAV + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--output is required unless --detect is given"));
+  }
+
+  SECTION("--explain is refused with --preset or --detect, where nothing was chosen to explain") {
+    auto [preset_code, preset_output] =
+        exec_command(CLI + " repair " + TEST_WAV + " --preset speech --explain -q -o " + TEST_OUT);
+    REQUIRE(preset_code == 3);
+    REQUIRE_THAT(preset_output, ContainsSubstring("--explain requires the default"));
+
+    auto [detect_code, detect_output] =
+        exec_command(CLI + " repair " + TEST_WAV + " --detect --explain -q");
+    REQUIRE(detect_code == 3);
+    REQUIRE_THAT(detect_output, ContainsSubstring("--explain requires the default"));
+  }
+
+  SECTION("--params overrides must stay inside the repair config") {
+    auto [code, output] = exec_command(CLI + " repair " + TEST_WAV +
+                                       " --params loudness.enabled=1 "
+                                       "-o " +
+                                       TEST_OUT + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--params key for repair must start with 'repair.'"));
+
+    auto [ok_code, ok_output] = exec_command(
+        CLI + " repair " + TEST_WAV + " --params repair.denoise.enabled=1 -o " + TEST_OUT + " -q");
+    REQUIRE(ok_code == 0);
+  }
+}
 #endif
 
 #ifdef SONARE_WITH_MIXING
