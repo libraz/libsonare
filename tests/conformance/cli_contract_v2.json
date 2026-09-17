@@ -3775,7 +3775,7 @@
       "status": "native_only",
       "option_status": "pending",
       "reason_kind": "unported",
-      "reason": "the nearest Python route, analyze_sections(), returns labelled sections rather than the raw boundary times this reports"
+      "reason": "BoundaryDetector is core C++ with no C ABI entry, so no binding reaches it and porting this is a four-surface addition rather than a CLI change; the nearest Python route, analyze_sections(), returns labelled sections rather than raw boundary times"
     },
     "meter": {
       "classification": "native_only",
