@@ -562,6 +562,15 @@ def restaged(manifest: dict, item: str, feed: str) -> list[Case]:
 STEP_RELATIVE = 0.20
 STEP_DECIBELS = 0.5
 
+# Enough frames for the dereverberator to accept a call, and only that: the probe
+# asks whether a stepped value is refused, never what it does to audio.
+STEP_PROBE_FRAMES = 8192
+STEP_PROBE_RATE = 48_000
+
+# Steps the sweep could not take, so that a knob which produced no rows is
+# distinguishable from one that was swept and found inert.
+STEPS_NOT_TAKEN: list[dict] = []
+
 # Which rule each dereverb knob takes. Every knob the config carries is here,
 # including the two the audit found unread, because a sweep that leaves a knob
 # out cannot report on it either way -- and `output_identical` on these rows is
@@ -643,6 +652,42 @@ def _dereverb_step(knob: str, default: Any) -> tuple[Any, Any, str]:
     if kind == "count":
         return int(default) - 1, int(default) + 1, "one step"
     raise ValueError(f"{knob} takes no step: it is {kind}")
+
+
+def _step_taken(knob: str, default: Any, value: Any, extra: dict) -> bool:
+    """Whether stepping @p knob to @p value is a step the sweep can read.
+
+    Two ways it is not, and a report that drops the row silently shows them the
+    same way. A default sitting on a bound has no step outward -- `attenuation`
+    is 1.0 and the processor refuses 1.2 -- and a default of zero has no relative
+    step at all, because the ratio returns zero on both sides. `threshold` is
+    0.0, so both of its rows re-ran the baseline and `output_identical` then
+    called the knob inert when nothing had moved it.
+
+    Reachability is asked of the processor rather than of a table of bounds, so a
+    bound that moves is followed instead of restated.
+    """
+    if float(value) == float(default):
+        _record_step_not_taken(knob, default, value, "the ratio returns the default itself")
+        return False
+    probe = np.zeros(STEP_PROBE_FRAMES, dtype=np.float32)
+    try:
+        _dereverb(probe, STEP_PROBE_RATE, dict(extra, **{knob: value}))
+    except libsonare.SonareError as error:
+        _record_step_not_taken(knob, default, value, str(error))
+        return False
+    return True
+
+
+def _record_step_not_taken(knob: str, default: Any, value: Any, reason: str) -> None:
+    entry = {
+        "knob": knob,
+        "default": float(default),
+        "requested": float(value),
+        "reason": reason,
+    }
+    if entry not in STEPS_NOT_TAKEN:
+        STEPS_NOT_TAKEN.append(entry)
 
 
 def build_steps(manifest: dict) -> list[Case]:
@@ -735,6 +780,7 @@ def build_steps(manifest: dict) -> list[Case]:
                 knob, item, sign, dict(extra, **{knob: default}), dict(extra, **{knob: value}), how
             )
             for sign, value in (("-", low), ("+", high))
+            if _step_taken(knob, default, value, extra)
         ]
 
     def dereverb_control(key: str, title: str, item: str, base: dict, other: dict) -> Case:
@@ -799,6 +845,8 @@ def build_steps(manifest: dict) -> list[Case]:
             for knob in DEREVERB_DISABLED_BY_INERT:
                 low, high, how = _dereverb_step(knob, defaults[knob])
                 for sign, value in (("-", low), ("+", high)):
+                    if not _step_taken(knob, defaults[knob], value, inert):
+                        continue
                     out.append(
                         dereverb_control(
                             f"inert[{held}].{knob}{sign}",
@@ -1243,6 +1291,7 @@ def main() -> int:
         "provenance": provenance(),
         "tables": tables,
         "ensembles": ensembles,
+        "steps_not_taken": STEPS_NOT_TAKEN,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, indent=2) + "\n")
