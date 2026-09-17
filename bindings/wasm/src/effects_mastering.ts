@@ -95,46 +95,38 @@ export {
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
 } from './mastering_dynamics';
+export type { MixStereoRequest } from './mixing_oneshot';
+export { mixingScenePresetJson, mixingScenePresetNames, mixStereo } from './mixing_oneshot';
+export type {
+  DereverbClassicalOptions,
+  MasteringRepairDereverbClassicalLinkedRequest,
+  MasteringRepairDereverbClassicalRequest,
+  MasteringRepairDereverbClassicalStereoRequest,
+  MasteringRepairDereverbConfigForRoomRequest,
+  MasteringRepairDetectReverbRequest,
+} from './repair_dereverb';
+export {
+  masteringRepairDereverbClassical,
+  masteringRepairDereverbClassicalLinked,
+  masteringRepairDereverbClassicalStereo,
+  masteringRepairDereverbConfigForRoom,
+  masteringRepairDetectReverb,
+} from './repair_dereverb';
 export type {
   DeclickOptions,
   DeclipOptions,
   DecrackleMode,
   DecrackleOptions,
-  DehumMode,
-  DehumOptions,
-  DenoiseClassicalMode,
-  DenoiseClassicalNoiseEstimator,
-  DenoiseClassicalOptions,
-  DereverbClassicalOptions,
   MasteringRepairDeclickRequest,
   MasteringRepairDeclickStereoRequest,
   MasteringRepairDeclipRequest,
   MasteringRepairDeclipStereoRequest,
   MasteringRepairDecrackleRequest,
   MasteringRepairDecrackleStereoRequest,
-  MasteringRepairDehumRequest,
-  MasteringRepairDehumStereoRequest,
-  MasteringRepairDenoiseClassicalLinkedRequest,
-  MasteringRepairDenoiseClassicalRequest,
-  MasteringRepairDenoiseClassicalStereoRequest,
-  MasteringRepairDereverbClassicalLinkedRequest,
-  MasteringRepairDereverbClassicalRequest,
-  MasteringRepairDereverbClassicalStereoRequest,
-  MasteringRepairDereverbConfigForRoomRequest,
   MasteringRepairDetectClicksRequest,
   MasteringRepairDetectClippingRequest,
   MasteringRepairDetectCrackleRequest,
-  MasteringRepairDetectHumRequest,
-  MasteringRepairDetectNoiseFloorRequest,
-  MasteringRepairDetectReverbRequest,
-  MasteringRepairDetectTrimRangeRequest,
-  MasteringRepairDetectTrimRangeStereoRequest,
-  MasteringRepairNoiseBandBinsRequest,
-  MasteringRepairTrimSilenceRequest,
-  MasteringRepairTrimSilenceStereoRequest,
-  TrimSilenceMode,
-  TrimSilenceOptions,
-} from './mastering_repair';
+} from './repair_impulsive';
 export {
   masteringRepairDeclick,
   masteringRepairDeclickStereo,
@@ -142,26 +134,46 @@ export {
   masteringRepairDeclipStereo,
   masteringRepairDecrackle,
   masteringRepairDecrackleStereo,
+  masteringRepairDetectClicks,
+  masteringRepairDetectClipping,
+  masteringRepairDetectCrackle,
+} from './repair_impulsive';
+export type {
+  DehumMode,
+  DehumOptions,
+  DenoiseClassicalMode,
+  DenoiseClassicalNoiseEstimator,
+  DenoiseClassicalOptions,
+  MasteringRepairDehumRequest,
+  MasteringRepairDehumStereoRequest,
+  MasteringRepairDenoiseClassicalLinkedRequest,
+  MasteringRepairDenoiseClassicalRequest,
+  MasteringRepairDenoiseClassicalStereoRequest,
+  MasteringRepairDetectHumRequest,
+  MasteringRepairDetectNoiseFloorRequest,
+  MasteringRepairNoiseBandBinsRequest,
+} from './repair_noise';
+export {
   masteringRepairDehum,
   masteringRepairDehumStereo,
   masteringRepairDenoiseClassical,
   masteringRepairDenoiseClassicalLinked,
   masteringRepairDenoiseClassicalStereo,
-  masteringRepairDereverbClassical,
-  masteringRepairDereverbClassicalLinked,
-  masteringRepairDereverbClassicalStereo,
-  masteringRepairDereverbConfigForRoom,
-  masteringRepairDetectClicks,
-  masteringRepairDetectClipping,
-  masteringRepairDetectCrackle,
   masteringRepairDetectHum,
   masteringRepairDetectNoiseFloor,
-  masteringRepairDetectReverb,
+  masteringRepairNoiseBandBins,
+} from './repair_noise';
+export type {
+  MasteringRepairDetectTrimRangeRequest,
+  MasteringRepairDetectTrimRangeStereoRequest,
+  MasteringRepairTrimSilenceRequest,
+  MasteringRepairTrimSilenceStereoRequest,
+  TrimSilenceMode,
+  TrimSilenceOptions,
+} from './repair_trim';
+export {
   masteringRepairDetectTrimRange,
   masteringRepairDetectTrimRangeStereo,
-  masteringRepairNoiseBandBins,
   masteringRepairTrimSilence,
   masteringRepairTrimSilenceStereo,
-} from './mastering_repair';
-export type { MixStereoRequest } from './mixing_oneshot';
-export { mixingScenePresetJson, mixingScenePresetNames, mixStereo } from './mixing_oneshot';
+} from './repair_trim';
