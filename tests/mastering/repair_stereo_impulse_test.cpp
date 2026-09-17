@@ -437,8 +437,9 @@ TEST_CASE("Declip mono digests stay stable", "[.][repair][stereo][impulse][golde
 // 48000 samples, no sample moves by more than 1e-6, and detected / rejected /
 // repaired_runs / repaired_samples are identical -- so the digest is a finer
 // instrument than the behaviour it guards. Both values are recorded rather than
-// one guarded and the other skipped, because `make test-golden` configures Debug
-// and a skip there would leave the sanctioned path checking nothing.
+// one guarded and the other skipped: the sanctioned target builds Release, while
+// the default ctest tree is Debug, so skipping either branch would leave one of
+// the two ways this case gets invoked checking nothing.
 TEST_CASE("Declick mono digests stay stable", "[.][repair][stereo][impulse][golden]") {
   const std::vector<float> click_left = click_fixture(0.0);
   const std::vector<float> click_right = click_fixture(0.35);

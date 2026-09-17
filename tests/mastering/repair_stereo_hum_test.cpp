@@ -629,8 +629,9 @@ TEST_CASE("Dehum and decrackle mono digests stay stable", "[.][repair][stereo][h
   // tracked trajectory differs by 3.8e-6 Hz against its own 0.011 Hz steady-state
   // spread, and the four harmonics' removal depths agree to 4e-6 dB -- so the
   // digest is finer than the behaviour. Both values are recorded rather than one
-  // skipped, because `make test-golden` configures Debug and a skip there would
-  // leave the sanctioned path checking nothing.
+  // skipped: the sanctioned target builds Release, while the default ctest tree
+  // is Debug, so skipping either branch would leave one of the two ways this
+  // case gets invoked checking nothing.
 #ifdef NDEBUG
   CHECK(digest(dehum(view(hum_left), kHum50Adaptive)) == 0xb8aa5682u);
   CHECK(digest(dehum(view(hum_right), kHum50Adaptive)) == 0xae820256u);
