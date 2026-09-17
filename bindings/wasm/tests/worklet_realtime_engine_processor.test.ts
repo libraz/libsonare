@@ -88,6 +88,28 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('refuses a channelCount instead of rounding it into range', () => {
+      const build = (channelCount: number): SonareRealtimeEngineWorkletProcessor =>
+        new SonareRealtimeEngineWorkletProcessor({
+          sampleRate: 48000,
+          blockSize: 128,
+          channelCount,
+        });
+
+      const control = build(2);
+      try {
+        expect(control.process([[]], [[new Float32Array(128), new Float32Array(128)]])).toBe(true);
+      } finally {
+        control.destroy();
+      }
+
+      for (const channelCount of [2.7, 0, -1, Number.NaN]) {
+        expect(() => build(channelCount)).toThrow(/channelCount must be an integer of at least 1/);
+      }
+      // The ceiling is the engine's, so a count past it is refused there.
+      expect(() => build(1e9)).toThrow(/max_channels must be within 1\.\./);
+    });
+
     it('applies SAB transport commands within the next processed block', () => {
       const blockSize = 128;
       const commandRing = createSonareEngineCommandRingBuffer(8);

@@ -1,6 +1,6 @@
 import { RealtimeVoiceChanger } from '../index';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types';
-import { isRealtimeVoiceChangerMessage } from './guards';
+import { isRealtimeVoiceChangerMessage, requireChannelCount } from './guards';
 import type {
   SonareRealtimeVoiceChangerMessage,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
@@ -32,7 +32,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   constructor(options: SonareRealtimeVoiceChangerWorkletProcessorOptions = {}) {
     this.sampleRate = options.sampleRate ?? 48000;
     this.blockSize = options.blockSize ?? 128;
-    this.channelCount = Math.max(1, Math.floor(options.channelCount ?? 1));
+    this.channelCount = requireChannelCount(options.channelCount, 1);
     this.changer = new RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
     this.changer.prepare(this.sampleRate, this.blockSize, this.channelCount);
     // Acquire WASM-heap views once, sized to the worst case. These are alive

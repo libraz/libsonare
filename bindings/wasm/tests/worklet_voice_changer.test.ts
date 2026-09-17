@@ -53,6 +53,20 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
   setupWorklet();
 
   describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
+    it('refuses a channelCount instead of rounding it into range', () => {
+      for (const channelCount of [1.5, 0, -1, Number.NaN]) {
+        expect(
+          () =>
+            new SonareRealtimeVoiceChangerWorkletProcessor({
+              preset: 'neutral-monitor',
+              sampleRate: 48000,
+              blockSize: 128,
+              channelCount,
+            }),
+        ).toThrow(/channelCount must be an integer of at least 1/);
+      }
+    });
+
     it('processes mono render quanta through the unified realtime voice changer', () => {
       const blockSize = 128;
       const processor = new SonareRealtimeVoiceChangerWorkletProcessor({

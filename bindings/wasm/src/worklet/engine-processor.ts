@@ -1,6 +1,7 @@
 import type { EngineClip } from '../index';
 import { RealtimeEngine } from '../index';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types';
+import { requireChannelCount } from './guards';
 import {
   DEFAULT_METRONOME_CONFIG,
   type ResolvedMetronomeConfig,
@@ -116,7 +117,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   ) {
     this.sampleRate = options.sampleRate ?? 48000;
     this.blockSize = options.blockSize ?? 128;
-    this.channelCount = Math.max(1, Math.floor(options.channelCount ?? 2));
+    this.channelCount = requireChannelCount(options.channelCount, 2);
     this.transport = transport;
     this.meterIntervalFrames = Math.max(0, Math.floor(options.meterIntervalFrames ?? 2048));
     this.commandRing = options.commandSharedBuffer

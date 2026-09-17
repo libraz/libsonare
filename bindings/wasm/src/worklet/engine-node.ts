@@ -9,6 +9,7 @@ import {
   isEngineTransportResponseMessage,
   isExternalMidiBatchMessage,
   isMeterSnapshot,
+  requireChannelCount,
 } from './guards';
 import type {
   SonareEngineCaptureRequestMessage,
@@ -306,7 +307,7 @@ export class SonareRealtimeEngineNode {
       mode === 'sab'
         ? createSonareExternalMidiRingBuffer(options.externalMidiRingCapacity ?? 256)
         : undefined;
-    const channelCount = Math.max(1, Math.floor(options.channelCount ?? 2));
+    const channelCount = requireChannelCount(options.channelCount, 2);
     const cueOutput = options.cueOutput === true;
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       sampleRate: options.sampleRate ?? context.sampleRate,

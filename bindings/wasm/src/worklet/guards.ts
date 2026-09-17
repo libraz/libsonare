@@ -296,3 +296,18 @@ export function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnap
     (typeof value.targetId === 'number' || value.targetId === undefined)
   );
 }
+
+/**
+ * Resolves the channel count every worklet entry point accepts on its options.
+ *
+ * Rounding a count into range gives the caller a working node with a channel
+ * layout they never asked for, and nothing downstream can tell that apart from
+ * the layout they meant. The ceiling stays with the engine, which owns it.
+ */
+export function requireChannelCount(channelCount: number | undefined, fallback: number): number {
+  const resolved = channelCount ?? fallback;
+  if (!Number.isSafeInteger(resolved) || resolved < 1) {
+    throw new RangeError('channelCount must be an integer of at least 1');
+  }
+  return resolved;
+}
