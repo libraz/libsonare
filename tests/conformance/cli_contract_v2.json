@@ -3908,22 +3908,22 @@
       "classification": "python_only",
       "status": "python_only",
       "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the native CLI is a curated subset of the library and this is not part of it"
+      "reason_kind": "unported",
+      "reason": "no native route to NMF separation; hpss is a harmonic-percussive split rather than a component decomposition"
     },
     "transcribe": {
       "classification": "python_only",
       "status": "python_only",
       "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the native CLI is a curated subset of the library and this is not part of it"
+      "reason_kind": "unported",
+      "reason": "no native route to audio-to-MIDI; polyphonic-notes reports the notes as JSON and project.export-smf writes a file from a project, so neither reaches the transcription the command performs"
     },
     "suggest-mix": {
       "classification": "python_only",
       "status": "python_only",
       "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the native CLI is a curated subset of the library and this is not part of it"
+      "reason_kind": "unported",
+      "reason": "no native route to the mixing assistant's suggestions; mixing-preset only prints a built-in scene document"
     }
   },
   "active_paths": [

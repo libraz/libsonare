@@ -835,12 +835,15 @@ class CliContractSelfTest(unittest.TestCase):
             unported,
             {
                 "boundaries",
+                "decompose-stems",
                 "mastering-suggest",
                 "midi-render",
                 "mix-strip",
                 "note-move",
                 "pitch-correct-timevarying",
                 "scale-quantize",
+                "suggest-mix",
+                "transcribe",
             },
         )
 
