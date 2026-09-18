@@ -64,7 +64,7 @@ const std::array<float, 12>& minor_base_profile(KeyProfileType profile_type) {
   }
 }
 
-/// @brief The four weights a modal profile is built from, in the order a listener
+/// @brief The six weights a modal profile is built from, in the order a listener
 ///        uses them to place a tonic.
 /// @details These are a stated construction, not a measured hierarchy. Nothing
 /// like the Krumhansl-Kessler probe-tone experiment exists here for the five
