@@ -931,6 +931,7 @@ inline saturation::TransformerConfig transformer_config(const ParamMap& params) 
 inline saturation::MultibandExciterConfig multiband_exciter_config(const ParamMap& params) {
   saturation::MultibandExciterConfig config;
   config.crossover = crossover_config(params);
+  resize_bands_to_crossover(config.bands, config.crossover);
   for (size_t index = 0; index < config.bands.size(); ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
     config.bands[index].frequency_hz =

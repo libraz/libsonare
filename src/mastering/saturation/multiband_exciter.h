@@ -31,17 +31,23 @@ class MultibandExciter : public rt::ProcessorBase {
   /// host can compensate, matching the other multiband processors.
   int latency_samples() const noexcept override { return crossover_.latency_samples(); }
 
-  // Automatable parameters (RT-safe, no allocation, no state reset). Each id is
-  // forwarded to every band's Exciter::set_parameter, which updates its config
-  // and recomputes any biquad coefficients in place:
-  //   0 = frequency_hz (all bands)
-  //   1 = drive_db (all bands)
-  //   2 = amount (all bands)
-  //   3 = q (all bands)
-  //   4 = even_odd_mix (all bands)
+  // Automatable parameters (RT-safe, no allocation, no state reset).
+  // Per-band block layout with kBandStride params per band: band b occupies
+  // ids [b * kBandStride, b * kBandStride + kBandStride). Within each band the
+  // ids forward directly to Exciter::set_parameter:
+  //   +0 = frequency_hz (clamped positive; recomputes the band filters)
+  //   +1 = drive_db
+  //   +2 = amount (clamped to >= 0)
+  //   +3 = q (clamped positive; recomputes the band filters)
+  //   +4 = even_odd_mix (clamped to [0, 1])
   // The kept config_ mirror stays consistent so config() reflects automation.
+  // Crossover cutoff frequencies are not automatable here: changing them
+  // requires rebuilding the crossover filters and would reset audio state.
+  static constexpr unsigned int kBandStride = 5;
   bool set_parameter(unsigned int param_id, float value) override;
-  // Automatable parameters: 0=frequencyHz, 1=driveDb, 2=amount, 3=q, 4=evenOddMix
+  // Automatable parameters: band b id [b*kBandStride .. +kBandStride) maps to
+  // keys band{b}.frequencyHz, band{b}.driveDb, band{b}.amount, band{b}.q,
+  // band{b}.evenOddMix -- the same keys multiband_exciter_config() reads.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

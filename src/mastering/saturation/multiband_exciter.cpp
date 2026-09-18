@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <string>
 #include <utility>
 
 #include "mastering/dynamics/channel_limits.h"
@@ -97,17 +98,33 @@ void MultibandExciter::set_config(const MultibandExciterConfig& config) {
 }
 
 bool MultibandExciter::set_parameter(unsigned int param_id, float value) {
-  if (param_id > 4 || exciters_.empty()) return false;
-  for (size_t band = 0; band < exciters_.size(); ++band) {
-    if (!exciters_[band].set_parameter(param_id, value)) return false;
+  const unsigned int band = param_id / kBandStride;
+  if (band >= exciters_.size()) {
+    return false;
+  }
+  const unsigned int band_param = param_id % kBandStride;
+  if (exciters_[band].set_parameter(band_param, value)) {
     // Keep the kept config mirror in sync so config() reflects the automation.
     config_.bands[band] = exciters_[band].config();
+    return true;
   }
-  return true;
+  return false;
 }
 
 std::vector<rt::ParamDescriptor> MultibandExciter::parameter_descriptors() const {
-  return {{"frequencyHz", 0}, {"driveDb", 1}, {"amount", 2}, {"q", 3}, {"evenOddMix", 4}};
+  // Mirror the per-band block layout of set_parameter: each band forwards its
+  // local param ids to Exciter, so reuse the Exciter descriptors and offset both
+  // the id and the construction-time JSON key by the band index.
+  std::vector<rt::ParamDescriptor> descriptors;
+  descriptors.reserve(exciters_.size() * kBandStride);
+  for (size_t band = 0; band < exciters_.size(); ++band) {
+    const std::string prefix = "band" + std::to_string(band) + ".";
+    const unsigned int base = static_cast<unsigned int>(band) * kBandStride;
+    for (const auto& band_descriptor : exciters_[band].parameter_descriptors()) {
+      descriptors.push_back({prefix + band_descriptor.key, base + band_descriptor.id});
+    }
+  }
+  return descriptors;
 }
 
 void MultibandExciter::validate_config(const MultibandExciterConfig& config) {

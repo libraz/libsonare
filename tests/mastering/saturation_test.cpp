@@ -888,6 +888,50 @@ TEST_CASE("MultibandExciter reports crossover latency for FIR mode", "[mastering
   REQUIRE(iir_exciter.latency_samples() == 0);
 }
 
+TEST_CASE("MultibandExciter publishes band-prefixed descriptors for every band",
+          "[mastering][saturation]") {
+  MultibandExciterConfig config;
+  config.crossover = {{1000.0f, 4000.0f},
+                      sonare::mastering::multiband::CrossoverSlope::LR4,
+                      sonare::mastering::multiband::CrossoverMode::LinkwitzRiley};
+  config.bands.resize(3);
+  MultibandExciter exciter(config);
+
+  static constexpr const char* kBandParamKeys[MultibandExciter::kBandStride] = {
+      "frequencyHz", "driveDb", "amount", "q", "evenOddMix"};
+  const auto descriptors = exciter.parameter_descriptors();
+  REQUIRE(descriptors.size() == config.bands.size() * MultibandExciter::kBandStride);
+
+  for (unsigned int band = 0; band < config.bands.size(); ++band) {
+    const std::string prefix = "band" + std::to_string(band) + ".";
+    for (unsigned int index = 0; index < MultibandExciter::kBandStride; ++index) {
+      const auto& descriptor = descriptors[band * MultibandExciter::kBandStride + index];
+      // The key is the one multiband_exciter_config() reads at construction, so
+      // a host can automate what it configured under the same name.
+      REQUIRE(descriptor.key == prefix + kBandParamKeys[index]);
+      // Descriptor ids must match the block layout set_parameter accepts.
+      REQUIRE(descriptor.id == band * MultibandExciter::kBandStride + index);
+      REQUIRE(exciter.set_parameter(descriptor.id, 0.5f));
+    }
+  }
+  REQUIRE_FALSE(exciter.set_parameter(
+      static_cast<unsigned int>(config.bands.size()) * MultibandExciter::kBandStride, 0.5f));
+}
+
+TEST_CASE("MultibandExciter automates one band without moving the others",
+          "[mastering][saturation]") {
+  MultibandExciterConfig config;
+  config.crossover = {{1000.0f},
+                      sonare::mastering::multiband::CrossoverSlope::LR2,
+                      sonare::mastering::multiband::CrossoverMode::LinkwitzRiley};
+  config.bands = {{3000.0f, 6.0f, 0.25f}, {3000.0f, 6.0f, 0.25f}};
+  MultibandExciter exciter(config);
+
+  REQUIRE(exciter.set_parameter(MultibandExciter::kBandStride + 1, 18.0f));
+  REQUIRE(exciter.config().bands[1].drive_db == 18.0f);
+  REQUIRE(exciter.config().bands[0].drive_db == 6.0f);
+}
+
 TEST_CASE("Saturation processors validate configurations", "[mastering][saturation]") {
   REQUIRE_THROWS(Waveshaper({0.0f, -0.1f, 0.0f, 0.0f, WaveshaperCurve::Tanh}));
   REQUIRE_THROWS(SoftClipper({0.0f, 0.0f, 1.0f}));
