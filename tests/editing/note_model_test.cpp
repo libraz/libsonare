@@ -10,11 +10,13 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "core/convert.h"
 #include "core/fft.h"
 #include "editing/note_model/note_extractor.h"
 #include "editing/note_model/note_object.h"
 #include "editing/note_model/note_renderer.h"
 #include "editing/note_model/note_split_merge.h"
+#include "editing/note_model/note_target.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "effects/formant_warp.h"
 #include "effects/pitch_shift.h"
@@ -1601,4 +1603,146 @@ TEST_CASE("merge_notes rejects a first/last pair that is not an ascending in-ran
 
   REQUIRE_NOTHROW(merge_notes(audio, track, notes, 0, 1));
   REQUIRE_NOTHROW(merge_notes(audio, track, notes, 0, 2));
+}
+
+// ============================================================================
+// Reference-melody assignment
+// ============================================================================
+
+namespace {
+
+/// A note spanning [start_sec, end_sec) at kSampleRate, sounding at @p midi.
+NoteObject note_at(double start_sec, double end_sec, float midi) {
+  NoteObject note;
+  note.onset_sample = static_cast<int64_t>(start_sec * kSampleRate);
+  note.offset_sample = static_cast<int64_t>(end_sec * kSampleRate);
+  note.median_hz = sonare::midi_to_hz(midi);
+  return note;
+}
+
+}  // namespace
+
+TEST_CASE("assign_note_targets lands each note on the pitch its target names",
+          "[note_model][note_target]") {
+  std::vector<NoteObject> notes{note_at(0.0, 1.0, 60.0f), note_at(1.0, 2.0, 60.0f)};
+  const std::vector<NoteTarget> targets{{0.0, 1.0, 67.0f}, {1.0, 2.0, 55.0f}};
+
+  REQUIRE(assign_note_targets(notes, kSampleRate, targets, {}) == 2);
+  // The two notes sound the same pitch, so a rule that ignored the target would
+  // give them the same shift.
+  REQUIRE_THAT(notes[0].edit.pitch_shift_semitones, WithinAbs(7.0f, 1e-3f));
+  REQUIRE_THAT(notes[1].edit.pitch_shift_semitones, WithinAbs(-5.0f, 1e-3f));
+}
+
+TEST_CASE("assign_note_targets takes the target it overlaps longest", "[note_model][note_target]") {
+  // The note runs 1.0-2.0 s; the second target covers 0.7 s of it against 0.3 s.
+  std::vector<NoteObject> notes{note_at(1.0, 2.0, 60.0f)};
+  const std::vector<NoteTarget> targets{{0.5, 1.3, 64.0f}, {1.3, 2.4, 72.0f}};
+
+  NoteTargetAssignConfig config;
+  config.min_overlap_ratio = 0.25f;
+  REQUIRE(assign_note_targets(notes, kSampleRate, targets, config) == 1);
+  REQUIRE_THAT(notes[0].edit.pitch_shift_semitones, WithinAbs(12.0f, 1e-3f));
+
+  // Order-independent: the same two targets the other way round answer the same.
+  std::vector<NoteObject> reversed_notes{note_at(1.0, 2.0, 60.0f)};
+  const std::vector<NoteTarget> reversed{targets[1], targets[0]};
+  REQUIRE(assign_note_targets(reversed_notes, kSampleRate, reversed, config) == 1);
+  REQUIRE_THAT(reversed_notes[0].edit.pitch_shift_semitones, WithinAbs(12.0f, 1e-3f));
+}
+
+TEST_CASE("assign_note_targets gates on min_overlap_ratio", "[note_model][note_target]") {
+  // 0.2 s of a 1.0 s note, so the same pair matches at 0.1 and not at 0.5.
+  const std::vector<NoteTarget> targets{{0.8, 1.2, 67.0f}};
+
+  std::vector<NoteObject> loose{note_at(1.0, 2.0, 60.0f)};
+  NoteTargetAssignConfig permissive;
+  permissive.min_overlap_ratio = 0.1f;
+  REQUIRE(assign_note_targets(loose, kSampleRate, targets, permissive) == 1);
+  REQUIRE_THAT(loose[0].edit.pitch_shift_semitones, WithinAbs(7.0f, 1e-3f));
+
+  std::vector<NoteObject> strict{note_at(1.0, 2.0, 60.0f)};
+  NoteTargetAssignConfig demanding;
+  demanding.min_overlap_ratio = 0.5f;
+  REQUIRE(assign_note_targets(strict, kSampleRate, targets, demanding) == 0);
+  REQUIRE(strict[0].edit.is_identity());
+}
+
+TEST_CASE("assign_note_targets follows the policy for a note no target reaches",
+          "[note_model][note_target]") {
+  const std::vector<NoteTarget> targets{{0.0, 0.5, 67.0f}};
+
+  SECTION("leave keeps the note as recorded") {
+    std::vector<NoteObject> notes{note_at(5.0, 6.0, 60.0f)};
+    NoteTargetAssignConfig config;
+    config.unmatched_policy = UnmatchedTargetPolicy::Leave;
+    REQUIRE(assign_note_targets(notes, kSampleRate, targets, config) == 0);
+    REQUIRE(notes[0].edit.is_identity());
+  }
+
+  SECTION("mute silences its span") {
+    std::vector<NoteObject> notes{note_at(5.0, 6.0, 60.0f)};
+    NoteTargetAssignConfig config;
+    config.unmatched_policy = UnmatchedTargetPolicy::Mute;
+    REQUIRE(assign_note_targets(notes, kSampleRate, targets, config) == 0);
+    REQUIRE(notes[0].edit.muted);
+    REQUIRE(notes[0].edit.pitch_shift_semitones == 0.0f);
+  }
+
+  SECTION("nearest reaches across the gap and counts as an assignment") {
+    std::vector<NoteObject> notes{note_at(5.0, 6.0, 60.0f)};
+    NoteTargetAssignConfig config;
+    config.unmatched_policy = UnmatchedTargetPolicy::Nearest;
+    REQUIRE(assign_note_targets(notes, kSampleRate, targets, config) == 1);
+    REQUIRE_THAT(notes[0].edit.pitch_shift_semitones, WithinAbs(7.0f, 1e-3f));
+    REQUIRE_FALSE(notes[0].edit.muted);
+  }
+
+  SECTION("nearest with no targets at all leaves the note alone") {
+    std::vector<NoteObject> notes{note_at(5.0, 6.0, 60.0f)};
+    NoteTargetAssignConfig config;
+    config.unmatched_policy = UnmatchedTargetPolicy::Nearest;
+    REQUIRE(assign_note_targets(notes, kSampleRate, {}, config) == 0);
+    REQUIRE(notes[0].edit.is_identity());
+  }
+}
+
+TEST_CASE("assign_note_targets never touches a note with no measured pitch",
+          "[note_model][note_target]") {
+  // The extractor spells "no pitch here" as a non-positive median, the way an F0
+  // track spells an unvoiced frame. No shift can be computed from it, so no
+  // policy applies -- muting or reaching for the nearest target would both be
+  // acting on a pitch that was never measured.
+  const std::vector<NoteTarget> targets{{0.0, 10.0, 67.0f}};
+  const auto policies = {UnmatchedTargetPolicy::Leave, UnmatchedTargetPolicy::Mute,
+                         UnmatchedTargetPolicy::Nearest};
+
+  for (const UnmatchedTargetPolicy policy : policies) {
+    for (const float median : {0.0f, -220.0f, kNaN, kInf}) {
+      NoteObject note = note_at(1.0, 2.0, 60.0f);
+      note.median_hz = median;
+      std::vector<NoteObject> notes{note};
+      NoteTargetAssignConfig config;
+      config.unmatched_policy = policy;
+      REQUIRE(assign_note_targets(notes, kSampleRate, targets, config) == 0);
+      REQUIRE(notes[0].edit.is_identity());
+    }
+  }
+}
+
+TEST_CASE("assign_note_targets saturates the correction rather than refusing it",
+          "[note_model][note_target]") {
+  std::vector<NoteObject> notes{note_at(0.0, 1.0, 60.0f)};
+  const std::vector<NoteTarget> targets{{0.0, 1.0, 96.0f}};
+
+  NoteTargetAssignConfig config;
+  config.max_correction_semitones = 12.0f;
+  REQUIRE(assign_note_targets(notes, kSampleRate, targets, config) == 1);
+  REQUIRE_THAT(notes[0].edit.pitch_shift_semitones, WithinAbs(12.0f, 1e-3f));
+
+  // Downward too, so the clamp is not one-sided.
+  std::vector<NoteObject> down{note_at(0.0, 1.0, 96.0f)};
+  const std::vector<NoteTarget> low{{0.0, 1.0, 60.0f}};
+  REQUIRE(assign_note_targets(down, kSampleRate, low, config) == 1);
+  REQUIRE_THAT(down[0].edit.pitch_shift_semitones, WithinAbs(-12.0f, 1e-3f));
 }
