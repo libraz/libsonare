@@ -546,6 +546,7 @@ conformance:
 	python3 tools/parity/test_surface_coverage.py
 	python3 tools/parity/test_allowlist_audit.py
 	python3 tools/parity/test_comparison_reach.py
+	python3 tools/parity/test_c_return_type_coverage.py
 	python3 tools/eval/test_summarize_accuracy.py
 	python3 tools/audition/test_serve.py
 	python3 tools/audition/test_page.py

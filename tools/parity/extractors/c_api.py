@@ -24,7 +24,12 @@ from normalize import canonical_field_name, canonical_key, canonical_record_key
 
 from ._tokens import split_top_level_commas, strip_c_comments
 
-# Return types we accept as the start of a real declaration.
+# Return types we accept as the start of a real declaration. A closed list, so a
+# declaration returning a type missing from it is not compared and produces no
+# finding of any kind -- indistinguishable from a symbol every surface exposes.
+# Keep it covering every return type the public headers actually spell; the
+# conformance check below asserts that, so a new one fails there rather than
+# going quiet.
 _RETURN_TYPES = (
     "SonareError",
     "void",
@@ -40,6 +45,21 @@ _RETURN_TYPES = (
     "uint64_t",
     "int32_t",
     "int64_t",
+    # Handle constructors return an owning pointer to an opaque type.
+    "SonareEq*",
+    "SonareMixer*",
+    "SonareSampleBank*",
+    "SonareStreamingMasteringChain*",
+    "SonareStreamingRetune*",
+    "SonareStrip*",
+    # Default seeders return a config struct by value.
+    "SonareBoundaryOptions",
+    "SonareMeterOptions",
+    "SonareMusicAnalyzeOptions",
+    "SonareProjectTempoOptions",
+    "SonareTranscribeConfig",
+    # Scalar enum accessor.
+    "SonareDiagnosticSeverity",
 )
 
 _DECL_RE = re.compile(

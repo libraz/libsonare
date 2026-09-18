@@ -153,15 +153,24 @@ _HANDLE_FULL_PREFIXES = (
 def _is_lifecycle_key(key: str) -> bool:
     """A C op every facade expresses through its OBJECT MODEL, not a free fn.
 
-    Constructors (``*_create`` / ``*_create_json``), destructors (``*_destroy``)
-    and heap/buffer release helpers (``free_*`` / ``*_free`` / ``*_free_*``) have
-    no free-function facade counterpart by design — the facades construct via a
-    class constructor and release via GC / RAII. These are reported
-    informationally, never gated (a "missing" one is not a coverage bug).
+    Constructors (``*_create`` / ``*_create_json`` / ``*_create_ex``),
+    destructors (``*_destroy``) and heap/buffer release helpers (``free_*`` /
+    ``*_free`` / ``*_free_*``) have no free-function facade counterpart by design
+    — the facades construct via a class constructor and release via GC / RAII.
+    These are reported informationally, never gated (a "missing" one is not a
+    coverage bug).
+
+    ``_create_ex`` is here because a constructor variant is still a constructor:
+    the extra arguments arrive as constructor options
+    (``loudnessStaticGainDb`` on the streaming mastering chain), so matching it
+    to a free function was never going to succeed. Tested by suffix, so the
+    ``_ex`` variant of a lifecycle op is gated the moment it is added while its
+    plain sibling never is — which is a family the list has to name, not an entry
+    per instance.
     """
     return (
         key.startswith("free_")
-        or key.endswith(("_free", "_create", "_create_json", "_destroy"))
+        or key.endswith(("_free", "_create", "_create_json", "_create_ex", "_destroy"))
         or "_free_" in key
     )
 

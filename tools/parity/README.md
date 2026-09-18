@@ -315,6 +315,15 @@ a curated subset — coverage-only, informational). These are gaps in *coverage*
 not silent passes: an un-mapped function simply isn't checked for core-default
 drift.
 
+The C extractor matches a declaration by its **return type**, against the closed
+`_RETURN_TYPES` tuple in `extractors/c_api.py`. A return type missing from that
+tuple is not a coverage gap and not an informational line — the symbol is never
+extracted, so it reads exactly like one every surface exposes. The tuple is held
+against the headers rather than against itself by
+`test_c_return_type_coverage.py`, which fails when a public declaration spells a
+return type the extractor would skip. Adding a C entry point that returns a new
+type means adding that type there.
+
 The `wasm_internal` check covers only WASM **free-function** wiring (embind
 `function(...)` ↔ `SonareModule` ↔ a facade `module.X`). It does NOT
 cross-validate class-method registrations (`.function(...)` inside a
