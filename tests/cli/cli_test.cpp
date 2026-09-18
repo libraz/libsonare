@@ -3009,6 +3009,10 @@ TEST_CASE("CLI time-stretch command", "[cli]") {
 }
 
 TEST_CASE("CLI vqt reports the gamma its bandwidths were built from", "[cli]") {
+  // TEST_WAV is a per-process temp path, and ctest runs one case per process, so
+  // a case that reads it has to write it: relying on a sibling leaves this green
+  // under the whole-tag run and red under ctest.
+  create_test_wav(TEST_WAV);
   // A negative gamma is the automatic sentinel, and the ERB value it selects
   // depends on bins-per-octave, so echoing the sentinel told a consumer nothing
   // about the transform it just ran.
