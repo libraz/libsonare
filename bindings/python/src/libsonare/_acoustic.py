@@ -14,6 +14,7 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 
+from ._errors import SonareValueError
 from ._runtime import (
     SonareRirSynthConfig,
     SonareRirSynthResult,
@@ -72,6 +73,19 @@ def _band_array_args(
     return ctypes.cast(buf, ctypes.POINTER(ctypes.c_float)), count, buf
 
 
+def _checked_seed(seed: int) -> int:
+    """Refuse a seed the C field cannot express.
+
+    The C ``seed`` is a ``uint32``, and Node and WASM both reject a value outside
+    its range rather than folding one in. Folding here instead made ``-1`` and the
+    library default indistinguishable under a successful call, so two different
+    requests returned the same tail with nothing to tell them apart.
+    """
+    if not 0 <= seed <= 0xFFFFFFFF:
+        raise SonareValueError("seed must be within [0, 4294967295]")
+    return seed
+
+
 def synthesize_rir(
     length_m: float = 7.0,
     width_m: float = 5.0,
@@ -115,7 +129,8 @@ def synthesize_rir(
         ism_order: Image-source reflection order.
         prefer_eyring: Use the Eyring statistical late-tail model (default);
             False selects Sabine.
-        seed: Deterministic late-tail seed.
+        seed: Deterministic late-tail seed, in [0, 4294967295]; 0 keeps the
+            library default, as it does on every other surface.
         max_seconds: Hard RIR length cap (0 = natural length).
         mixing_time_ms: Early/late crossover in ms (0 = auto, ~sqrt(V) ms).
         crossfade_ms: Equal-power crossfade width around the mixing time in ms
@@ -163,9 +178,7 @@ def synthesize_rir(
         crossfade_ms=crossfade_ms,
         ism_order=ism_order,
         late_model=_late_model(prefer_eyring),
-        # Clamp a negative seed to 0 so every binding (Node/WASM clamp the same
-        # way) yields identical deterministic late-tail noise.
-        seed=max(0, seed),
+        seed=_checked_seed(seed),
         air_absorption_enabled=1 if air_absorption_enabled else 0,
         air_temperature_c=air_temperature_c,
         air_humidity_percent=air_humidity_percent,
@@ -361,9 +374,7 @@ def room_morph(
         crossfade_ms=crossfade_ms,
         ism_order=ism_order,
         late_model=_late_model(prefer_eyring),
-        # Match Node/WASM: clamp a negative seed to 0 for cross-surface
-        # reproducibility of the deterministic late-tail noise.
-        seed=max(0, seed),
+        seed=_checked_seed(seed),
         air_absorption_enabled=1 if air_absorption_enabled else 0,
         air_temperature_c=air_temperature_c,
         air_humidity_percent=air_humidity_percent,

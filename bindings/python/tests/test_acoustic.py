@@ -383,3 +383,20 @@ def test_room_morph_accepts_numpy_band_arrays() -> None:
         samples, scattering_bands=np.array([0.3, 0.4, 0.5], dtype=np.float32), **room
     )
     assert scattered == libsonare.room_morph(samples, scattering_bands=[0.3, 0.4, 0.5], **room)
+
+
+@acoustic
+def test_a_seed_the_c_field_cannot_express_is_rejected_rather_than_folded() -> None:
+    # Node and WASM both refuse one outside the C field's uint32 range. Folding a
+    # negative to 0 here made -1 and the library default indistinguishable under a
+    # successful call, so two different requests returned the same tail.
+    room = dict(sample_rate=22050, length_m=7.0, width_m=5.0, height_m=3.0, max_seconds=0.2)
+    for invalid in (-1, 0x1_0000_0000):
+        with pytest.raises(libsonare.SonareValueError, match="seed"):
+            libsonare.synthesize_rir(seed=invalid, **room)
+        with pytest.raises(libsonare.SonareValueError, match="seed"):
+            libsonare.room_morph([0.0] * 2205, seed=invalid, **room)
+
+    # The whole uint32 range stays reachable, and 0 keeps the library default.
+    assert len(libsonare.synthesize_rir(seed=0xFFFF_FFFF, **room).rir) > 0
+    assert libsonare.synthesize_rir(seed=0, **room).rir == libsonare.synthesize_rir(**room).rir
