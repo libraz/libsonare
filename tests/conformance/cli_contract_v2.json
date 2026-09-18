@@ -1629,7 +1629,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "fmin",
@@ -1638,7 +1645,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "hop-length",
@@ -2332,7 +2346,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "json",
@@ -2350,7 +2371,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -2997,7 +3025,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "height",
@@ -3098,7 +3133,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "source-x",
@@ -3307,7 +3349,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "height",
@@ -3417,7 +3466,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "source-x",
@@ -3549,7 +3605,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "json",
@@ -3567,7 +3630,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -6175,7 +6245,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "height",
@@ -6285,7 +6362,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "source-x",
@@ -7348,7 +7432,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "json",
@@ -7366,7 +7457,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -7438,7 +7536,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "json",
@@ -7456,7 +7561,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "output",
@@ -7872,7 +7984,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "fmin",
@@ -7881,7 +8000,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "hop-length",
@@ -9636,7 +9762,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "height",
@@ -9737,7 +9870,14 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "source-x",

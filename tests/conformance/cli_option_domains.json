@@ -549,6 +549,156 @@
       "exclusiveMinimum": false,
       "maximum": null,
       "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch-shift",
+      "option": "n-fft",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch-shift",
+      "option": "hop-length",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "time-stretch",
+      "option": "n-fft",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "time-stretch",
+      "option": "hop-length",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "tone",
+      "option": "sr",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 8000.0,
+      "exclusiveMinimum": false,
+      "maximum": 384000.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "chirp",
+      "option": "sr",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 8000.0,
+      "exclusiveMinimum": false,
+      "maximum": 384000.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "clicks",
+      "option": "sr",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 8000.0,
+      "exclusiveMinimum": false,
+      "maximum": 384000.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mel",
+      "option": "fmin",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mel",
+      "option": "fmax",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "cqt",
+      "option": "fmin",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vqt",
+      "option": "fmin",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "synthesize-rir",
+      "option": "absorption",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": 1.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "synthesize-rir",
+      "option": "seed",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "room-morph",
+      "option": "absorption",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": 1.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "room-morph",
+      "option": "seed",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
     }
   ],
   "requiredInvalidParameter": [

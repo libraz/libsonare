@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/audio.h"
 #include "core/channel_layout.h"
 
 #ifdef SONARE_WITH_MASTERING
@@ -551,12 +552,22 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         {}, validate_boundary_feature_streams);
 
     // Processing leaves.
-    add_command(commands, "pitch-shift", true,
-                {number_value("semitones"), required_output(), global_int("n-fft", 2048),
-                 global_int("hop-length", 512)});
-    add_command(commands, "time-stretch", true,
-                {number_value("rate"), required_output(), global_int("n-fft", 2048),
-                 global_int("hop-length", 512)});
+    // The native spectral backend repairs a non-positive analysis geometry into
+    // the librosa defaults instead of refusing it, five lines above a comment
+    // saying a geometry that cannot be overlap-added is an error rather than
+    // something to repair. These two make the refusal the one a caller gets.
+    add_command(
+        commands, "pitch-shift", true,
+        {number_value("semitones"), required_output(),
+         with_domain(global_int("n-fft", 2048), greater_than(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(global_int("hop-length", 512),
+                     greater_than(0.0, CliOptionDomainStage::Parameter))});
+    add_command(
+        commands, "time-stretch", true,
+        {number_value("rate"), required_output(),
+         with_domain(global_int("n-fft", 2048), greater_than(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(global_int("hop-length", 512),
+                     greater_than(0.0, CliOptionDomainStage::Parameter))});
     add_command(
         commands, "pitch-correct", true,
         {number_value("current-midi", 69.0), number_value("target-midi", 69.0), required_output()});
@@ -652,16 +663,30 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  flag("zero-phase")});
     add_command(commands, "resample", true,
                 {required_int("target-rate", {"target-sr"}), required_output()});
+    // The generators accept any positive rate, so a rate the library's own decoder
+    // refuses produces a file none of these commands can read back. `resample`
+    // already bounds its target rate here for the same reason; these three are the
+    // rest of that family.
     add_command(commands, "tone", false,
-                {number_value("frequency"), int_value("sr", 22050), number_value("duration", 1.0),
-                 number_value("phase", 0.0), number_value("amplitude", 1.0), required_output()});
+                {number_value("frequency"),
+                 with_domain(int_value("sr", 22050),
+                             between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
+                                     CliOptionDomainStage::Parameter)),
+                 number_value("duration", 1.0), number_value("phase", 0.0),
+                 number_value("amplitude", 1.0), required_output()});
     add_command(commands, "chirp", false,
-                {int_value("sr", 22050), number_value("duration", 1.0), required_output(),
-                 flag("exponential"), global_number("fmin", 0.0), global_number("fmax", 0.0)});
+                {with_domain(int_value("sr", 22050),
+                             between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
+                                     CliOptionDomainStage::Parameter)),
+                 number_value("duration", 1.0), required_output(), flag("exponential"),
+                 global_number("fmin", 0.0), global_number("fmax", 0.0)});
     add_command(commands, "clicks", false,
-                {string_value("times"), int_value("sr", 22050), int_value("length", 0),
-                 number_value("frequency", 1000.0), number_value("click-duration", 0.1),
-                 required_output()});
+                {string_value("times"),
+                 with_domain(int_value("sr", 22050),
+                             between(sonare::kMinAudioSampleRate, sonare::kMaxAudioSampleRate,
+                                     CliOptionDomainStage::Parameter)),
+                 int_value("length", 0), number_value("frequency", 1000.0),
+                 number_value("click-duration", 0.1), required_output()});
 
 #ifdef SONARE_WITH_MASTERING
     add_command(commands, "mastering", true,
@@ -755,10 +780,18 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
 #endif
 
     // Feature leaves.
+    // Zero is the librosa default both bounds are spelled with on every surface, so
+    // the domains refuse negatives only: the handler substitutes sr/2 for a negative
+    // `fmax`, which made a typo produce output bit-identical to omitting the flag,
+    // and a negative `fmin` reaches the filterbank, where only fmax > fmin is
+    // checked. `n-mels` needs none -- the filterbank's own ceiling refuses an
+    // oversized band count for every command and every surface at once.
     add_command(
         commands, "mel", true,
         {global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128),
-         global_number("fmin", 0.0), global_number("fmax", 0.0), flag("htk")});
+         with_domain(global_number("fmin", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(global_number("fmax", 0.0), at_least(0.0, CliOptionDomainStage::Parameter)),
+         flag("htk")});
     add_command(commands, "chroma", true,
                 {global_int("n-fft", 2048), global_int("hop-length", 512)});
     add_command(commands, "tonnetz", true,
@@ -796,13 +829,18 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  global_int("n-mels", 128), number_value("tempo-min", 30.0),
                  number_value("tempo-max", 300.0), int_value("win-length", 384)});
     add_command(commands, "nnls-chroma", true, {global_int("hop-length", 512)});
-    add_command(commands, "cqt", true,
-                {int_value("n-bins", 84), int_value("bins-per-octave", 12),
-                 global_int("hop-length", 512), global_number("fmin", 0.0)});
-    add_command(commands, "vqt", true,
-                {int_value("n-bins", 84), int_value("bins-per-octave", 12),
-                 number_value("gamma", 0.0), number_value("filter-scale", 1.0),
-                 global_int("hop-length", 512), global_number("fmin", 0.0)});
+    // Zero keeps the 32.7 Hz default, so the domain refuses only a negative lower
+    // bound -- which the handler otherwise substitutes that same default for,
+    // leaving a typo indistinguishable from an omission.
+    add_command(
+        commands, "cqt", true,
+        {int_value("n-bins", 84), int_value("bins-per-octave", 12), global_int("hop-length", 512),
+         with_domain(global_number("fmin", 0.0), at_least(0.0, CliOptionDomainStage::Parameter))});
+    add_command(
+        commands, "vqt", true,
+        {int_value("n-bins", 84), int_value("bins-per-octave", 12), number_value("gamma", 0.0),
+         number_value("filter-scale", 1.0), global_int("hop-length", 512),
+         with_domain(global_number("fmin", 0.0), at_least(0.0, CliOptionDomainStage::Parameter))});
     add_command(commands, "mel-to-audio", true,
                 {int_value("n-iter", 32), required_output(), global_int("n-fft", 2048),
                  global_int("hop-length", 512), global_int("n-mels", 128),
@@ -822,22 +860,32 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  number_value("reference-absorption", 0.15), flag("sabine"),
                  make_option("n-octave-bands", CliOptionArity::RequiredValue,
                              CliOptionScalarType::Integer, null_default(), {"n-bands"})});
-    add_command(commands, "synthesize-rir", false,
-                {number_value("length", 7.0), number_value("width", 5.0),
-                 number_value("height", 3.0), number_value("absorption", 0.2),
-                 number_value("source-x", 1.0), number_value("source-y", 1.0),
-                 number_value("source-z", 1.2), number_value("listener-x", 5.0),
-                 number_value("listener-y", 4.0), number_value("listener-z", 1.7),
-                 int_value("sample-rate", 48000), int_value("ism-order", 3), int_value("seed", 1),
-                 number_value("max-seconds", 0.0), required_output(), flag("sabine")});
+    // `absorption` reaches uniform_shoebox, which clamps to [0, 0.999] rather than
+    // calling validate_material_coefficient beside it, so the C entry point's
+    // refusal of anything outside [0, 1] has no counterpart on this path. `seed`
+    // keeps 0 as the library-default sentinel the C ABI spells the same way, and
+    // refuses the negatives the handler currently swallows into that default.
+    add_command(
+        commands, "synthesize-rir", false,
+        {number_value("length", 7.0), number_value("width", 5.0), number_value("height", 3.0),
+         with_domain(number_value("absorption", 0.2),
+                     between(0.0, 1.0, CliOptionDomainStage::Parameter)),
+         number_value("source-x", 1.0), number_value("source-y", 1.0),
+         number_value("source-z", 1.2), number_value("listener-x", 5.0),
+         number_value("listener-y", 4.0), number_value("listener-z", 1.7),
+         int_value("sample-rate", 48000), int_value("ism-order", 3),
+         with_domain(int_value("seed", 1), at_least(0.0, CliOptionDomainStage::Parameter)),
+         number_value("max-seconds", 0.0), required_output(), flag("sabine")});
     add_command(
         commands, "room-morph", true,
         {number_value("length", 7.0), number_value("width", 5.0), number_value("height", 3.0),
-         number_value("absorption", 0.2), number_value("source-x", 1.0),
-         number_value("source-y", 1.0), number_value("source-z", 1.2),
-         number_value("listener-x", 5.0), number_value("listener-y", 4.0),
-         number_value("listener-z", 1.7), number_value("suppression", 0.5),
-         number_value("wet", 0.5), int_value("ism-order", 3), int_value("seed", 1),
+         with_domain(number_value("absorption", 0.2),
+                     between(0.0, 1.0, CliOptionDomainStage::Parameter)),
+         number_value("source-x", 1.0), number_value("source-y", 1.0),
+         number_value("source-z", 1.2), number_value("listener-x", 5.0),
+         number_value("listener-y", 4.0), number_value("listener-z", 1.7),
+         number_value("suppression", 0.5), number_value("wet", 0.5), int_value("ism-order", 3),
+         with_domain(int_value("seed", 1), at_least(0.0, CliOptionDomainStage::Parameter)),
          number_value("max-seconds", 0.0), required_output(), flag("sabine")});
 #endif
 

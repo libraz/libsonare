@@ -1806,7 +1806,13 @@ TEST_CASE("CLI estimate-room accepts both band-count spellings", "[cli][argument
   REQUIRE_THAT(alias_output, !ContainsSubstring("Unknown option"));
 }
 
-TEST_CASE("CLI acoustic commands preserve the default seed for non-positive values",
+// Zero keeps the library default because that is how the C ABI spells the same
+// sentinel (`sonare_c_acoustic.cpp`: `if (config->seed != 0)`), so a zeroed POD and
+// an omitted flag agree across the surfaces. A negative has no such counterpart --
+// the C field is `unsigned int`, so no other surface can express one -- and the
+// handler used to fold it into that same default, leaving `--seed -1` and a
+// deliberate `--seed 1` indistinguishable under a green exit.
+TEST_CASE("CLI acoustic commands keep zero as the default seed and refuse a negative one",
           "[cli][acoustic]") {
   const std::string synth_options =
       " --length 7 --width 5 --height 3 --absorption 0.2 --ism-order 0"
@@ -1825,13 +1831,19 @@ TEST_CASE("CLI acoustic commands preserve the default seed for non-positive valu
 
   const auto synth_default = run_synthesize("default", "");
   const auto synth_zero = run_synthesize("zero", " --seed 0");
-  const auto synth_negative = run_synthesize("negative", " --seed -1");
   const auto synth_one = run_synthesize("one", " --seed 1");
   const auto synth_other = run_synthesize("other", " --seed 7");
   REQUIRE(synth_default == synth_zero);
-  REQUIRE(synth_default == synth_negative);
   REQUIRE(synth_default == synth_one);
   REQUIRE(synth_default != synth_other);
+
+  // Named rather than merely non-zero: an exit of 3 with no mention of the option
+  // would also pass a bare code check, and the refusal has to be the domain's.
+  const auto [synth_negative_code, synth_negative_output] =
+      exec_command(CLI + " synthesize-rir -o " + unique_temp_path("_seed_synth_negative.wav") +
+                   synth_options + " --seed -1");
+  REQUIRE(synth_negative_code == 3);
+  REQUIRE_THAT(synth_negative_output, ContainsSubstring("--seed"));
 
   const std::string input = unique_temp_path("_seed_morph_input.wav");
   std::vector<float> impulse(256, 0.0f);
@@ -1854,13 +1866,17 @@ TEST_CASE("CLI acoustic commands preserve the default seed for non-positive valu
 
   const auto morph_default = run_morph("default", "");
   const auto morph_zero = run_morph("zero", " --seed 0");
-  const auto morph_negative = run_morph("negative", " --seed -1");
   const auto morph_one = run_morph("one", " --seed 1");
   const auto morph_other = run_morph("other", " --seed 7");
   REQUIRE(morph_default == morph_zero);
-  REQUIRE(morph_default == morph_negative);
   REQUIRE(morph_default == morph_one);
   REQUIRE(morph_default != morph_other);
+
+  const auto [morph_negative_code, morph_negative_output] =
+      exec_command(CLI + " room-morph " + input + " -o " +
+                   unique_temp_path("_seed_morph_negative.wav") + morph_options + " --seed -1");
+  REQUIRE(morph_negative_code == 3);
+  REQUIRE_THAT(morph_negative_output, ContainsSubstring("--seed"));
   std::remove(input.c_str());
 }
 
