@@ -55,9 +55,7 @@ def _check(value: Any, node: Any, where: str, findings: list[str]) -> None:
         expected = _JSON_TYPES[declared]
         # bool is an int in Python, so a boolean would satisfy "number" and an
         # integer field would accept True without this.
-        if isinstance(value, bool) != (declared == "boolean") or not isinstance(
-            value, expected
-        ):
+        if isinstance(value, bool) != (declared == "boolean") or not isinstance(value, expected):
             findings.append(f"{where}: {type(value).__name__} is not {declared}")
             return
     if "const" in node and value != node["const"]:
@@ -123,8 +121,10 @@ def test_a_suggested_scene_satisfies_the_shipped_schema() -> None:
         (lambda s: s["strips"][0].update(width=7.0), "over the maximum"),
         (lambda s: s["strips"][0].update(muted=1), "is not boolean"),
         (lambda s: s.update(version=2), "is not the required 1"),
-        (lambda s: s["strips"][0]["inserts"].append({"slot": "middle", "processor": "x"}),
-         "outside ['pre', 'post']"),
+        (
+            lambda s: s["strips"][0]["inserts"].append({"slot": "middle", "processor": "x"}),
+            "outside ['pre', 'post']",
+        ),
         (lambda s: s["strips"][0]["inserts"].append({"slot": "pre"}), "required but absent"),
     ],
 )
