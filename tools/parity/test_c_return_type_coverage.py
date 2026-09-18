@@ -27,7 +27,7 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-from extractors.c_api import _RETURN_TYPES  # noqa: E402
+from extractors.c_api import _RETURN_TYPES
 
 _INCLUDE_DIR = _HERE.parent.parent / "include" / "sonare"
 
