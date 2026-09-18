@@ -616,12 +616,16 @@ export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResu
   const sizes: Record<string, number> = {};
   for (const name of ['nFft', 'hopLength', 'kernelSize', 'nMfcc', 'nChroma'] as const) {
     const value = request[name];
-    if (value != null) sizes[name] = value;
+    if (value != null) {
+      sizes[name] = value;
+    }
   }
   validatePositiveIntegers('detectBoundaries', sizes);
   for (const name of ['threshold', 'absoluteThreshold', 'peakDistance'] as const) {
     const value = request[name];
-    if (value == null) continue;
+    if (value == null) {
+      continue;
+    }
     assertFiniteScalar('detectBoundaries', value, name);
     if (value < 0) {
       throw new RangeError(`detectBoundaries: ${name} must be non-negative`);
