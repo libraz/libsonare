@@ -407,6 +407,9 @@ int cmd_vqt(const CliArgs& args, const Audio& audio) {
   config.filter_scale = args.get_float("filter-scale", 1.0f);
 
   VqtResult result = vqt(audio, config);
+  // A negative gamma is the automatic sentinel, so report what the bandwidths were
+  // built from rather than the sentinel that selected it.
+  const float gamma = resolve_vqt_gamma(config);
 
   if (args.json_output) {
     JsonBuilder()
@@ -416,7 +419,7 @@ int cmd_vqt(const CliArgs& args, const Audio& audio) {
         .kv("duration", result.duration())
         .kv("fmin", config.fmin)
         .kv("bins_per_octave", config.bins_per_octave)
-        .kv("gamma", config.gamma)
+        .kv("gamma", gamma)
         .end_object()
         .print();
   } else {
@@ -426,7 +429,7 @@ int cmd_vqt(const CliArgs& args, const Audio& audio) {
     std::cout << "Variable-Q Transform:\n";
     printf("  Shape:           %d bins x %d frames\n", result.n_bins(), result.n_frames());
     printf("  Frequency Range: %.1f - %.1f Hz (%d octaves)\n", config.fmin, fmax, octaves);
-    printf("  Gamma:           %.2f\n", config.gamma);
+    printf("  Gamma:           %.2f\n", gamma);
     printf("  Duration:        %.2fs\n", result.duration());
   }
   return 0;

@@ -40,6 +40,7 @@
 #include "editing/voice_changer/realtime.h"
 #include "editing/voice_changer/voice_changer.h"
 #include "effects/decompose.h"
+#include "effects/formant_warp.h"
 #include "effects/hpss.h"
 #include "effects/normalize.h"
 #include "effects/pitch_shift.h"

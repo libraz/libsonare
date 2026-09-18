@@ -2828,6 +2828,21 @@ TEST_CASE("CLI time-stretch command", "[cli]") {
   }
 }
 
+TEST_CASE("CLI vqt reports the gamma its bandwidths were built from", "[cli]") {
+  // A negative gamma is the automatic sentinel, and the ERB value it selects
+  // depends on bins-per-octave, so echoing the sentinel told a consumer nothing
+  // about the transform it just ran.
+  auto [auto_code, auto_output] = exec_command(CLI + " vqt --gamma -1 " + TEST_WAV + " --json -q");
+  REQUIRE(auto_code == 0);
+  REQUIRE_THAT(auto_output, ContainsSubstring("\"gamma\": 13.19"));
+
+  // An explicit gamma is not a sentinel and is reported unchanged.
+  auto [explicit_code, explicit_output] =
+      exec_command(CLI + " vqt --gamma 3.5 " + TEST_WAV + " --json -q");
+  REQUIRE(explicit_code == 0);
+  REQUIRE_THAT(explicit_output, ContainsSubstring("\"gamma\": 3.5"));
+}
+
 TEST_CASE("CLI DAW editing commands", "[cli]") {
   create_test_wav(TEST_WAV, 0.5f);
   std::remove(TEST_OUT.c_str());
@@ -2860,6 +2875,17 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"formant_factor\""));
     std::ifstream f(TEST_OUT);
     REQUIRE(f.good());
+  }
+
+  SECTION("voice-change reports the formant factor the warp applied") {
+    // The warp resolves its factor into [0.55, 1.65] and 100 lands on the
+    // ceiling, so echoing the request made two invocations that produce
+    // byte-identical audio read as different settings.
+    auto [code, output] = exec_command(CLI + " voice-change --formant-factor 100 " + TEST_WAV +
+                                       " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"formant_factor\": 1.64"));
+    REQUIRE_THAT(output, !ContainsSubstring("\"formant_factor\": 100"));
   }
 
   SECTION("voice-change preset rejects simple knob conflicts") {

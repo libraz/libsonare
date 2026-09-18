@@ -21,6 +21,13 @@ struct FormantWarpConfig {
   float amount = 1.0f;
 };
 
+/// @brief Factor the warp actually applies, after the range clamp and the
+///        dry/wet fold.
+/// @details Published so a caller that echoes the factor it was given reports the
+///          one that was used. A NaN comes back a NaN, because std::clamp does not
+///          launder one; the warp refuses it rather than resolving it.
+float effective_formant_factor(float factor, float amount) noexcept;
+
 class FormantWarp {
  public:
   explicit FormantWarp(FormantWarpConfig config = {});

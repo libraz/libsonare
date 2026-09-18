@@ -35,6 +35,12 @@ struct VqtConfig {
 /// @brief VQT result (same structure as CQT).
 using VqtResult = CqtResult;
 
+/// @brief Concrete gamma the transform runs with, resolving the automatic sentinel.
+/// @details A negative or NaN @ref VqtConfig::gamma selects the ERB-derived value,
+///          which depends on @ref VqtConfig::bins_per_octave. Published so a caller
+///          that reports the gamma reports the one the bandwidths were built from.
+float resolve_vqt_gamma(const VqtConfig& config);
+
 /// @brief VQT kernel for efficient computation.
 class VqtKernel {
  public:

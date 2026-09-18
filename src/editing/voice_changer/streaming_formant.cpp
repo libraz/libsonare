@@ -15,7 +15,7 @@ float clamp_factor(float value) noexcept {
 }
 
 float effective_factor(float factor, float amount) noexcept {
-  return clamp_factor(1.0f + (clamp_factor(factor) - 1.0f) * std::clamp(amount, 0.0f, 1.0f));
+  return effective_formant_factor(factor, amount);
 }
 
 float effective_factor(const StreamingFormantConfig& config) noexcept {

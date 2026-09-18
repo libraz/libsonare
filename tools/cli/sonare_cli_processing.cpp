@@ -594,6 +594,9 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     config.formant_factor = formant_factor;
     editing::voice_changer::VoiceChanger changer(config);
     result = changer.process(audio);
+    // The warp resolves the factor into its own range, and the changer leaves the
+    // dry/wet amount at its default, so this is the value the audio was made with.
+    formant_factor = effective_formant_factor(formant_factor, FormantWarpConfig{}.amount);
   }
 
   // Pitch/formant processing uses spectral transforms whose boundary
@@ -622,8 +625,8 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
       json.kv("preset", preset_id);
     } else if (!uses_realtime_preset) {
       // Offline voice-change path: echo the simple pitch/formant knobs the
-      // caller supplied so JSON consumers can correlate input args with the
-      // result without re-parsing CLI flags.
+      // result was made with, so a JSON consumer reading the formant factor back
+      // gets the value that shaped the audio rather than the one that was asked for.
       json.kv("pitch_semitones", pitch_semitones).kv("formant_factor", formant_factor);
     }
     json.end_object().print();

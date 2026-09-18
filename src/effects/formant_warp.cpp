@@ -33,6 +33,12 @@ std::vector<float> make_hann(int size) {
 
 }  // namespace
 
+float effective_formant_factor(float factor, float amount) noexcept {
+  const float clamped = std::clamp(factor, kFormantFactorMin, kFormantFactorMax);
+  const float wet = std::clamp(amount, 0.0f, 1.0f);
+  return std::clamp(1.0f + (clamped - 1.0f) * wet, kFormantFactorMin, kFormantFactorMax);
+}
+
 FormantWarp::FormantWarp(FormantWarpConfig config) : config_(config) {}
 
 Audio FormantWarp::process(const Audio& audio) const {
@@ -45,10 +51,7 @@ Audio FormantWarp::process(const Audio& audio) const {
   const float* x = audio.data();
 
   // Effective warp factor folds the dry/wet amount into the shift strength.
-  const float amount = std::clamp(config_.amount, 0.0f, 1.0f);
-  const float factor = std::clamp(config_.factor, kFormantFactorMin, kFormantFactorMax);
-  const float effective_factor =
-      std::clamp(1.0f + (factor - 1.0f) * amount, kFormantFactorMin, kFormantFactorMax);
+  const float effective_factor = effective_formant_factor(config_.factor, config_.amount);
   // LPC analysis/re-synthesis is not identity even when its envelope is not
   // shifted. Bypass it at unity so pitch-only voice changes preserve samples.
   if (std::abs(effective_factor - 1.0f) < 1.0e-6f) return audio;
