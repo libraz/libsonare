@@ -3137,7 +3137,7 @@
             "choices": [],
             "minimum": 0,
             "exclusiveMinimum": false,
-            "maximum": null,
+            "maximum": 4294967295,
             "exclusiveMaximum": false,
             "rejectExit": "invalid_parameter"
           }
@@ -3470,7 +3470,7 @@
             "choices": [],
             "minimum": 0,
             "exclusiveMinimum": false,
-            "maximum": null,
+            "maximum": 4294967295,
             "exclusiveMaximum": false,
             "rejectExit": "invalid_parameter"
           }
@@ -6366,7 +6366,7 @@
             "choices": [],
             "minimum": 0,
             "exclusiveMinimum": false,
-            "maximum": null,
+            "maximum": 4294967295,
             "exclusiveMaximum": false,
             "rejectExit": "invalid_parameter"
           }
@@ -9874,7 +9874,7 @@
             "choices": [],
             "minimum": 0,
             "exclusiveMinimum": false,
-            "maximum": null,
+            "maximum": 4294967295,
             "exclusiveMaximum": false,
             "rejectExit": "invalid_parameter"
           }

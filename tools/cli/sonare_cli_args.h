@@ -83,6 +83,12 @@ struct CliArgs {
 
   float get_float(const std::string& k, float def) const;
   int get_int(const std::string& k, int def) const;
+  /// Reads an option backed by a C `uint32` field. Separate from @ref get_int
+  /// because that one cannot express the upper half of the field's range, which
+  /// left every seed above 2^31-1 unreachable from this front-end while the
+  /// other surfaces accepted it.
+  /// @throws sonare::SonareException(InvalidParameter) — CLI exit 3.
+  unsigned get_uint32(const std::string& k, unsigned def) const;
   /// Reads an optional integer option and rejects a value outside
   /// [@p minimum, @p maximum].
   ///
@@ -154,3 +160,15 @@ class CliUsageError final : public std::invalid_argument {
 /// checks parse a candidate value the same way the accessors above do.
 float parse_float_strict(const std::string& option, const std::string& value);
 int parse_int_strict(const std::string& option, const std::string& value);
+/// Widest integer the CLI parses. `parse_int_strict` refuses anything `int`
+/// cannot hold, which is the right ceiling for the options a handler reads with
+/// `get_int`, but it also put half of a uint32 field out of reach. An option
+/// whose declared domain reaches above `INT_MAX` is parsed with this instead, so
+/// the range is the domain's rather than the parser's.
+long long parse_int64_strict(const std::string& option, const std::string& value);
+/// Double-precision sibling of @ref parse_float_strict, for comparing a candidate
+/// against a declared domain bound. A float cannot hold every integer a domain
+/// may bound (2^32-1 rounds up past itself), which refused the top of a uint32
+/// range the option was declared to accept. The scalar-type check has already
+/// run by then, so an option whose values must fit a float has been narrowed.
+double parse_double_strict(const std::string& option, const std::string& value);

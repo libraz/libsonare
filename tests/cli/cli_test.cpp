@@ -1845,6 +1845,24 @@ TEST_CASE("CLI acoustic commands keep zero as the default seed and refuse a nega
   REQUIRE(synth_negative_code == 3);
   REQUIRE_THAT(synth_negative_output, ContainsSubstring("--seed"));
 
+  // The C field is a uint32 and every other surface reaches all of it. This
+  // front-end read the value through `int`, so the whole upper half answered
+  // "invalid integer value" -- a refusal, but of a seed the library accepts.
+  const auto synth_high = run_synthesize("high", " --seed 2147483648");
+  const auto synth_top = run_synthesize("top", " --seed 4294967295");
+  REQUIRE(synth_high != synth_default);
+  REQUIRE(synth_top != synth_default);
+  REQUIRE(synth_high != synth_top);
+
+  const auto [synth_over_code, synth_over_output] =
+      exec_command(CLI + " synthesize-rir -o " + unique_temp_path("_seed_synth_over.wav") +
+                   synth_options + " --seed 4294967296");
+  REQUIRE(synth_over_code == 3);
+  REQUIRE_THAT(synth_over_output, ContainsSubstring("--seed"));
+  // The bound is written out rather than left to the stream's default precision,
+  // which rendered it as "4.29497e+09" -- a number the caller cannot type back.
+  REQUIRE_THAT(synth_over_output, ContainsSubstring("4294967295"));
+
   const std::string input = unique_temp_path("_seed_morph_input.wav");
   std::vector<float> impulse(256, 0.0f);
   impulse[0] = 1.0f;

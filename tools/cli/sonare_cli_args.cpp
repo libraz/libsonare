@@ -76,6 +76,37 @@ int parse_int_strict(const std::string& option, const std::string& value) {
   return parsed;
 }
 
+double parse_double_strict(const std::string& option, const std::string& value) {
+  size_t consumed = 0;
+  double parsed = 0.0;
+  try {
+    parsed = std::stod(value, &consumed);
+  } catch (const std::exception&) {
+    throw std::invalid_argument("invalid float value for --" + option + ": " + value);
+  }
+  if (consumed != value.size()) {
+    throw std::invalid_argument("invalid float value for --" + option + ": " + value);
+  }
+  if (!std::isfinite(parsed)) {
+    throw std::invalid_argument("numeric value for --" + option + " must be finite: " + value);
+  }
+  return parsed;
+}
+
+long long parse_int64_strict(const std::string& option, const std::string& value) {
+  size_t consumed = 0;
+  long long parsed = 0;
+  try {
+    parsed = std::stoll(value, &consumed);
+  } catch (const std::exception&) {
+    throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
+  }
+  if (consumed != value.size()) {
+    throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
+  }
+  return parsed;
+}
+
 namespace {
 
 const CliOptionSpec* lexical_option_for_spelling(const std::string& spelling) {
@@ -214,6 +245,27 @@ int CliArgs::get_int(const std::string& k, int def) const {
   }
   const CliOptionValue value = static_default_for(*this, k);
   return value.kind == CliOptionDefaultKind::Integer ? value.integer_value : def;
+}
+
+unsigned CliArgs::get_uint32(const std::string& k, unsigned def) const {
+  const auto it = option_value_for(*this, k);
+  if (it == options.end()) {
+    const CliOptionValue value = static_default_for(*this, k);
+    return value.kind == CliOptionDefaultKind::Integer ? static_cast<unsigned>(value.integer_value)
+                                                       : def;
+  }
+  const CliOptionSpec* spec = cli_option_spec_for_command(command_path_for_args(*this), k);
+  const std::string& name = spec == nullptr ? k : spec->name;
+  const long long parsed = parse_int64_strict(name, it->second);
+  // The option's domain is what refuses a value outside the field; this is the
+  // width backstop for a handler reaching here without one.
+  if (parsed < 0 || parsed > static_cast<long long>(std::numeric_limits<unsigned>::max())) {
+    std::ostringstream message;
+    message << "value out of range for --" << name << ": " << it->second << " (expected 0 to "
+            << std::numeric_limits<unsigned>::max() << ")";
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message.str());
+  }
+  return static_cast<unsigned>(parsed);
 }
 
 namespace {

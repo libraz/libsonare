@@ -1,6 +1,9 @@
 #include "sonare_cli_registry.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -204,6 +207,11 @@ CliOptionDomain between(double minimum, double maximum, CliOptionDomainStage sta
   domain.maximum = maximum;
   return domain;
 }
+
+// The C `seed` field's own width rather than a policy bound: every other surface
+// accepts the whole uint32 range, and this front-end reached only the lower half
+// while `int` was the widest thing its parser produced. Exact as a double.
+constexpr double kMaxCliSeed = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
 
 CliOptionDomain choices_of(std::vector<std::string> values, CliOptionDomainStage stage) {
   CliOptionDomain domain;
@@ -874,7 +882,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          number_value("source-z", 1.2), number_value("listener-x", 5.0),
          number_value("listener-y", 4.0), number_value("listener-z", 1.7),
          int_value("sample-rate", 48000), int_value("ism-order", 3),
-         with_domain(int_value("seed", 1), at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(int_value("seed", 1),
+                     between(0.0, kMaxCliSeed, CliOptionDomainStage::Parameter)),
          number_value("max-seconds", 0.0), required_output(), flag("sabine")});
     add_command(
         commands, "room-morph", true,
@@ -885,7 +894,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          number_value("source-z", 1.2), number_value("listener-x", 5.0),
          number_value("listener-y", 4.0), number_value("listener-z", 1.7),
          number_value("suppression", 0.5), number_value("wet", 0.5), int_value("ism-order", 3),
-         with_domain(int_value("seed", 1), at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(int_value("seed", 1),
+                     between(0.0, kMaxCliSeed, CliOptionDomainStage::Parameter)),
          number_value("max-seconds", 0.0), required_output(), flag("sabine")});
 #endif
 
@@ -1038,14 +1048,27 @@ std::string describe_domain(const CliOptionDomain& domain) {
     }
     return text;
   }
+  // A whole-number bound is written out rather than left to the stream's default
+  // precision, which turned a uint32 ceiling into "4.29497e+09" -- a number the
+  // caller cannot type back.
+  const auto bound = [](double value) {
+    std::ostringstream text;
+    if (value == std::floor(value) && std::abs(value) < 1e18) {
+      text << static_cast<long long>(value);
+    } else {
+      text << value;
+    }
+    return text.str();
+  };
   std::ostringstream text;
   if (domain.has_minimum && domain.has_maximum) {
-    text << (domain.exclusive_minimum ? "greater than " : "at least ") << domain.minimum << " and "
-         << (domain.exclusive_maximum ? "less than " : "at most ") << domain.maximum;
+    text << (domain.exclusive_minimum ? "greater than " : "at least ") << bound(domain.minimum)
+         << " and " << (domain.exclusive_maximum ? "less than " : "at most ")
+         << bound(domain.maximum);
   } else if (domain.has_minimum) {
-    text << (domain.exclusive_minimum ? "greater than " : "at least ") << domain.minimum;
+    text << (domain.exclusive_minimum ? "greater than " : "at least ") << bound(domain.minimum);
   } else {
-    text << (domain.exclusive_maximum ? "less than " : "at most ") << domain.maximum;
+    text << (domain.exclusive_maximum ? "less than " : "at most ") << bound(domain.maximum);
   }
   return text.str();
 }
@@ -1076,7 +1099,7 @@ std::string domain_error_for(const CliOptionSpec& spec, const std::string& value
   }
   double parsed = 0.0;
   try {
-    parsed = static_cast<double>(parse_float_strict(spec.name, value));
+    parsed = parse_double_strict(spec.name, value);
   } catch (const std::exception&) {
     // A value the scalar parse rejects is reported by that check, not here.
     return {};
@@ -1100,7 +1123,15 @@ std::string validate_numeric_option_values(const CliArgs& args) {
     try {
       if (spec->scalar_type == CliOptionScalarType::Integer) {
         if (key == "candidates" && value == "true") continue;
-        (void)parse_int_strict(key, value);
+        // An option whose declared domain reaches past int is parsed at 64 bits,
+        // so the domain below is what refuses the value rather than the parser's
+        // width silently doing it first with a message that names no range.
+        if (spec->domain.has_maximum &&
+            spec->domain.maximum > static_cast<double>(std::numeric_limits<int>::max())) {
+          (void)parse_int64_strict(key, value);
+        } else {
+          (void)parse_int_strict(key, value);
+        }
       } else if (spec->scalar_type == CliOptionScalarType::Number) {
         (void)parse_float_strict(key, value);
       }

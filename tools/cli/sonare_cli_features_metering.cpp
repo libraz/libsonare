@@ -582,8 +582,10 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
   const int sample_rate = args.get_int("sample-rate", 48000);
   sonare::acoustic::RirSynthConfig cfg;
   cfg.ism_order = args.get_int("ism-order", cfg.ism_order);
-  if (const int seed = args.get_int("seed", static_cast<int>(cfg.seed)); seed > 0)
-    cfg.seed = static_cast<unsigned>(seed);
+  // Read at the C field's width: get_int cannot express the upper half of a
+  // uint32, which put every seed above 2^31-1 out of reach here while the other
+  // surfaces took it. Zero keeps the library default, as it does everywhere.
+  if (const unsigned seed = args.get_uint32("seed", cfg.seed); seed > 0) cfg.seed = seed;
   cfg.max_seconds = args.get_float("max-seconds", cfg.max_seconds);
   // --sabine selects the Sabine late-reverb model (default Eyring), matching the
   // core/C-ABI/Python-CLI selection so every surface exposes the same choice.
@@ -693,8 +695,10 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   cfg.source_tail_suppression = args.get_float("suppression", cfg.source_tail_suppression);
   cfg.wet = args.get_float("wet", cfg.wet);
   cfg.ism_order = args.get_int("ism-order", cfg.ism_order);
-  if (const int seed = args.get_int("seed", static_cast<int>(cfg.seed)); seed > 0)
-    cfg.seed = static_cast<unsigned>(seed);
+  // Read at the C field's width: get_int cannot express the upper half of a
+  // uint32, which put every seed above 2^31-1 out of reach here while the other
+  // surfaces took it. Zero keeps the library default, as it does everywhere.
+  if (const unsigned seed = args.get_uint32("seed", cfg.seed); seed > 0) cfg.seed = seed;
   cfg.max_seconds = args.get_float("max-seconds", cfg.max_seconds);
   // --sabine selects the Sabine late-reverb model (default Eyring), matching the
   // core/C-ABI/Python-CLI selection so every surface exposes the same choice.

@@ -677,7 +677,7 @@
       "choices": [],
       "minimum": 0.0,
       "exclusiveMinimum": false,
-      "maximum": null,
+      "maximum": 4294967295.0,
       "exclusiveMaximum": false
     },
     {
@@ -697,7 +697,7 @@
       "choices": [],
       "minimum": 0.0,
       "exclusiveMinimum": false,
-      "maximum": null,
+      "maximum": 4294967295.0,
       "exclusiveMaximum": false
     }
   ],
