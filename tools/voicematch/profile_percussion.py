@@ -36,6 +36,49 @@ def mean_band_decay_delta(model: list, ref: list) -> float | None:
     return float(np.mean([m - r for m, r in pairs])) if pairs else None
 
 
+def ring_doublings(model: dict, ref: dict) -> float | None:
+    """How much longer the model rings than the reference, in doublings.
+
+    In doublings rather than in milliseconds or percent, because the kit spans
+    24x on this quantity — 60 ms of woodblock against 1428 of cymbal — so a
+    median taken in milliseconds is the cymbals and a median taken in percent
+    prices a doubling at +100 and a halving at -50.
+
+    Refused where either side hit its analysis ceiling: a capped reading is the
+    window and not the instrument, the same way a capped damper release is.
+    """
+    m, r = model.get("decay_ms"), ref.get("decay_ms")
+    if not m or not r or m <= 0.0 or r <= 0.0:
+        return None
+    if model.get("decay_capped") or ref.get("decay_capped"):
+        return None
+    return float(np.log2(m / r))
+
+
+def band_decay_reach(model: dict, ref: dict) -> tuple[int, int]:
+    """Octaves the reference resolved a rate in, and how many the model did too.
+
+    `mean_band_decay_delta` averages the octaves both sides resolved and says
+    nothing about how many that was, so a model that stopped resolving the top
+    of its spectrum contributes a number drawn from the bottom of it and looks
+    like any other row. The count is what makes that visible.
+
+    Not charged, which the loss's `bdecay` does do to the same case and for a
+    reason that does not hold here: that term faces a search, so an unresolved
+    band has to cost something or a candidate buys a discount by rendering a
+    shorter hit. This one faces a fixed model, and the references say partial
+    non-resolution is ordinary — kit-a resolves 1667 octave-cells and kit-b is
+    silent on 100 of them, kit-b resolves 1804 and kit-a is silent on 237 — so
+    a charge levied here would price the capture. The failure the loss's comment
+    describes, a hit four times too short, is `ring`'s to report.
+    """
+    ref_cells = [r for r in (ref.get("band_decay_db_s") or []) if r is not None]
+    both = [1 for m, r in zip(model.get("band_decay_db_s") or [],
+                              ref.get("band_decay_db_s") or [])
+            if m is not None and r is not None]
+    return len(both), len(ref_cells)
+
+
 def print_kit_relations(kit_rows: list[tuple[dict, dict]],
                         groups: dict[str, tuple[int, ...]]) -> None:
     """What the kit's own families do, against what the reference's do.
@@ -89,6 +132,20 @@ def percussion_row_deltas(m: dict, r: dict) -> dict[str, float | None]:
         "crest": m["crest_db"] - r["crest_db"],
         "centroid_pct": (100.0 * (m["centroid_hz"] / r["centroid_hz"] - 1.0)
                          if r.get("centroid_hz") else None),
+        # How long the hit rings, which is the whole of dry against wet and is
+        # the one gestural dimension `band_decay` cannot stand in for: that one
+        # averages the octaves both sides resolved, so a hit that ends early
+        # loses those octaves from its own average instead of being charged.
+        "ring": ring_doublings(m, r),
+        # How much of the hit stands in peaks, which is metal against filtered
+        # noise. Absent on either side where the window was too short to
+        # transform, which is not a flat spectrum.
+        "tonality": (None if m.get("flatness_db") is None or r.get("flatness_db") is None
+                     else m["flatness_db"] - r["flatness_db"]),
+        # The image. 38 of the kit's drum notes carry a `stereo_spread` and
+        # nothing faced it until this column existed.
+        "stereo": (None if m.get("stereo_width") is None or r.get("stereo_width") is None
+                   else m["stereo_width"] - r["stereo_width"]),
         # How loud the hit actually is. Every other column here is normalised —
         # a band profile against its own loudest band, a crest against its own
         # RMS, a decay against its own peak — which is what makes them measure

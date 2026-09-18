@@ -34,7 +34,9 @@ DELTA_LABELS = {"stretch": "tuning vs the reference (cents)",
                 # the only wording true of both.
                 "attack": "time to the note's arrival (ms)",
                 "crest": "peak over RMS of the hit (dB)",
-                "level": "how loud the hit is vs the reference (dBFS)"}
+                "level": "how loud the hit is vs the reference (dBFS)",
+                "ring": "ring length, + = model rings longer (doublings)",
+                "tonality": "spectral flatness, + = model is noisier (dB)"}
 
 
 def register_levels(rows: list[dict], timbre: str) -> dict[int, dict[int, float]]:
@@ -399,7 +401,12 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
     # recorded value times the margin still wins whenever it is larger.
     guesses = {"stretch": 1.0, "decay": 0.5, "damper": 5.0, "balance": 0.5,
                "centroid_pct": 1.0, "tnr": 1.0, "vel_range": 1.0,
-               "stereo": 0.27, "attack": 40.0, "aftersound": 1.81}
+               "stereo": 0.27, "attack": 40.0, "aftersound": 1.81,
+               # A sixth of a doubling and a decibel: the smallest change in
+               # ring length and in tonality a listener would call a different
+               # instrument. Both are fallbacks — a capture with two references
+               # measures its own floor and that one wins.
+               "ring": 0.17, "tonality": 1.0}
     floors = {**guesses, **{k: v for k, v in (spread or {}).items() if v > 0.0}}
     bounds = {}
     for key, row in summary.items():

@@ -23,9 +23,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import profile as profile_module
 
 import metrics as metrics_module
+import profile_percussion
 from capture import note_groups, note_map
 from loss import _kit_terms, kit_report
 from metrics import _spectrum
+from toneclass import PERCUSSION_DIMENSIONS, canonical_dimensions
 
 SR = 48000
 
@@ -705,6 +707,115 @@ def test_a_band_that_decayed_on_only_one_side_is_left_out_of_the_decay_average()
     assert profile_module.mean_band_decay_delta([1.0, None, 3.0],
                                                 [0.0, 2.0, None]) == pytest.approx(1.0)
     assert profile_module.mean_band_decay_delta([None], [1.0]) is None
+
+
+def test_the_decay_average_reports_how_many_octaves_it_was_read_over():
+    """A row averaged over two octaves and one averaged over seven look alike.
+
+    The average is a per-row number and carries no count, so a model that stopped
+    resolving the top of its spectrum contributes a figure drawn from the bottom
+    of it and reads like any other row. Both counts are against the REFERENCE's
+    cells: what the model resolved where the reference did not is not evidence
+    about a band the reference has nothing to say about.
+    """
+    reach = profile_percussion.band_decay_reach
+    assert reach({"band_decay_db_s": [-10.0, -20.0, None]},
+                 {"band_decay_db_s": [-11.0, -21.0, -31.0]}) == (2, 3)
+    # The model resolving MORE than the reference does not raise either number.
+    assert reach({"band_decay_db_s": [-10.0, -20.0, -30.0]},
+                 {"band_decay_db_s": [-11.0, None, None]}) == (1, 1)
+    assert reach({"band_decay_db_s": []}, {"band_decay_db_s": []}) == (0, 0)
+
+
+def test_ring_length_is_measured_in_doublings_and_refuses_a_capped_reading():
+    """A capped `decay_ms` is the analysis window, the way a capped damper is.
+
+    In doublings because the kit spans 24x on this quantity, so a median taken
+    in milliseconds is the cymbals and nothing else.
+    """
+    ring = profile_percussion.ring_doublings
+    assert ring({"decay_ms": 400.0}, {"decay_ms": 200.0}) == pytest.approx(1.0)
+    assert ring({"decay_ms": 100.0}, {"decay_ms": 200.0}) == pytest.approx(-1.0)
+    # Symmetric, which is the whole reason for the unit: a percent would price
+    # the doubling at +100 and the halving at -50.
+    assert ring({"decay_ms": 400.0}, {"decay_ms": 200.0}) == pytest.approx(
+        -ring({"decay_ms": 100.0}, {"decay_ms": 200.0}))
+    assert ring({"decay_ms": 400.0, "decay_capped": True}, {"decay_ms": 200.0}) is None
+    assert ring({"decay_ms": 400.0}, {"decay_ms": 200.0, "decay_capped": True}) is None
+    assert ring({"decay_ms": 0.0}, {"decay_ms": 200.0}) is None
+    assert ring({}, {"decay_ms": 200.0}) is None
+
+
+def _hit_row(**over):
+    row = {"bands_db": [0.0] * 25, "band_decay_db_s": [-10.0] * 8, "attack_ms": 2.0,
+           "crest_db": 12.0, "centroid_hz": 1000.0, "decay_ms": 200.0,
+           "decay_capped": False, "flatness_db": -20.0, "stereo_width": 0.4,
+           "peak_dbfs": -6.0}
+    row.update(over)
+    return row
+
+
+def test_a_hit_is_compared_on_tonality_and_image_as_well_as_on_its_spectrum():
+    """The three qualities no band profile can carry, and their one-sided case.
+
+    `None` on either side is an absence rather than a flat spectrum or a centred
+    source, so the column drops the row instead of charging it a number invented
+    from a missing reading.
+    """
+    deltas = profile_percussion.percussion_row_deltas(
+        _hit_row(flatness_db=-12.0, stereo_width=0.7, decay_ms=400.0), _hit_row())
+    assert deltas["tonality"] == pytest.approx(8.0)
+    assert deltas["stereo"] == pytest.approx(0.3)
+    assert deltas["ring"] == pytest.approx(1.0)
+    for field in ("flatness_db", "stereo_width"):
+        one_sided = profile_percussion.percussion_row_deltas(
+            _hit_row(**{field: None}), _hit_row())
+        assert one_sided["tonality" if field == "flatness_db" else "stereo"] is None
+
+
+def test_every_dimension_a_kit_names_is_one_the_percussion_set_produces():
+    """A named dimension nothing measures reads as a column that was fine.
+
+    `select_dimensions` prints it once on the run that notices and the gate holds
+    nothing there, which is the same silence as a dimension that was never named
+    at all. The canonical set is the list that says what the words are allowed to
+    be, on both sides: a capture excusing one it could not have had asserts a
+    measurement that was never available to fail.
+
+    Percussion captures only, which is the class this list belongs to. The
+    melodic classes are not held here because two of their exclusions are
+    deliberately broader than their own canonical set — a sustained voice's
+    capture may argue `decay` away in its own words although the class already
+    drops it — and one of them is an open question rather than a slip.
+    """
+    wrong = []
+    for name in shipped_captures():
+        cfg = json.loads((CAPTURE_DIR / f"{name}.json").read_text())
+        if not profile_module.is_percussion(cfg):
+            continue
+        canon = set(canonical_dimensions(int(cfg.get("program", 0)), percussive=True))
+        for key in ("dimensions", "dimensions_na"):
+            for dim in cfg.get(key) or []:
+                if dim not in canon:
+                    wrong.append(f"{name}.{key}: {dim!r} is not one of this class's")
+    assert wrong == []
+
+
+def test_a_kit_is_judged_on_every_percussion_dimension_or_told_why_not():
+    """The drum capture is the one percussion capture, so its list IS the claim.
+
+    A dimension in neither list is a gap, which `status.py` reports and nothing
+    fails on — legitimate while a measurement is being built and indefensible
+    once one exists. This kit has none, and that is worth holding: the three
+    added last are exactly the qualities the spectral columns cannot carry, and
+    losing one back into silence is how the set got to eight in the first place.
+    """
+    cfg = json.loads((CAPTURE_DIR / "drums.json").read_text())
+    named = set(cfg["dimensions"]) | set(cfg["dimensions_na"])
+    assert named == set(PERCUSSION_DIMENSIONS)
+    assert not (set(cfg["dimensions"]) & set(cfg["dimensions_na"])), \
+        "a bound recorded from a measurement the same file calls invalid asserts both"
+    assert all(cfg["dimensions_na"].values()), "an excuse with no reason excuses nothing"
 
 
 def _attack_of(sig, sr=48000):

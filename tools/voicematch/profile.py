@@ -153,6 +153,7 @@ from profile_measure import (
     usable_decay_end,
 )
 from profile_percussion import (
+    band_decay_reach,
     band_shape_error_db,
     mean_band_decay_delta,
     percussion_reference_spread,
@@ -644,12 +645,17 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
     place.announce()
     print(f"{'note':>5} {'vel':>4} | {'tilt Δdb':>9} {'shape db':>9} "
           f"{'decay Δdb/s':>12} {'centroid Δ%':>12} {'attack Δms':>11} "
-          f"{'crest Δdb':>10} {'level Δdb':>10}")
-    print("-" * 89)
+          f"{'crest Δdb':>10} {'level Δdb':>10} {'ring Δ2x':>9} {'tonal Δdb':>10}")
+    print("-" * 110)
 
     deltas: dict[str, list[float]] = {}
     peaks: dict[str, dict[int, dict[int, float]]] = {}
     silent: list[tuple[int, int]] = []
+    # Octave-cells the `band_decay` column was actually read over, against the
+    # cells the reference offered it. The dimension averages the octaves both
+    # sides resolved, which is a per-row number that cannot say how many rows it
+    # came from -- see `band_decay_reach`.
+    reach = [0, 0]
     # Kept side by side and index-aligned, for the relations no single row can
     # carry — see `loss.kit_report`. The reference row is stored under the note
     # it was CAPTURED on, since the families are declared in the capture's own
@@ -682,6 +688,9 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
             continue
 
         row = percussion_row_deltas(m, r)
+        got, offered = band_decay_reach(m, r)
+        reach[0] += got
+        reach[1] += offered
         for k, v in row.items():
             if v is not None and np.isfinite(v):
                 deltas.setdefault(k, []).append(float(v))
@@ -698,7 +707,8 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         print(f"{label} {vel:4d} | {fmt(row['band_tilt'], '+9.1f')} "
               f"{fmt(row['band_shape'], '9.1f')} {fmt(row['band_decay'], '+12.2f')} "
               f"{fmt(row['centroid_pct'], '+12.1f')} {fmt(row['attack'], '+11.1f')} "
-              f"{fmt(row['crest'], '+10.1f')} {fmt(row['level'], '+10.1f')}")
+              f"{fmt(row['crest'], '+10.1f')} {fmt(row['level'], '+10.1f')} "
+              f"{fmt(row['ring'], '+9.2f')} {fmt(row['tonality'], '+10.2f')}")
 
     if silent:
         print(f"\n* {len(silent)} of {len(pairs)} hits are silent on the model side; "
@@ -764,6 +774,14 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
               f"the attack is no slower than that and nothing\n  more, so an `attack` delta "
               f"taken against a reference above the floor is a LOWER\n  bound on the gap. It "
               f"understates and never invents.")
+
+    if reach[1]:
+        print(f"\n  per-octave decay read over {reach[0]} of the {reach[1]} octave-cells "
+              f"the reference\n  resolved a rate in ({100.0 * reach[0] / reach[1]:.0f} %). "
+              f"The rest are octaves the model gave no\n  measurable rate, and they leave "
+              f"that row's average rather than being charged\n  to it — so a low figure "
+              f"here says the column is speaking for less of the kit\n  than its row count "
+              f"suggests. Two reference kits reach 94 and 87 % of each other.")
 
     print_kit_relations(kit_rows, note_groups(cfg))
 

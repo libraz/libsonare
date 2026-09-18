@@ -46,6 +46,18 @@ In place of the harmonic set:
 - `crest_db` — peak-to-RMS over the hit
 - `centroid_hz` — broadband centroid. Unlike for a pitched voice, this is worth reading: the register is fixed, so nothing confounds it.
 - `level_db` — hit RMS after global RMS alignment
+- `flatness_db` — geometric over arithmetic mean of the power spectrum over the first 300 ms, cut at the capture's edge. 0 dB is a flat spectrum; a struck bar runs tens of dB under a shaker. This is what stands in for `tnr_db`, which cannot be computed here at all: that one masks around a harmonic ladder and a drum has no fundamental to build one on.
+- `stereo_width` — `1 − |channel correlation|` over the hit's own window, the same measurement the pitched set takes. Measured over the hit rather than the file, because a capture is mostly tail and a correlation taken across it reports the padding as a source in the middle.
+
+### Two qualities the band profile is structurally unable to carry
+
+Every spectral column above is a level or a first moment over 1/3-octave bands. Build a comb of tones — one per band, each carrying that band's energy — and it has the **same** `bands_db` as the noise it was built from, to a hundredth of a decibel, the same `band_tilt`, the same `band_shape` and the same centroid. Nothing in the set could separate a struck bar from a filtered shaker. `flatness_db` separates those two by 87 dB.
+
+Measured across the reference kit it spans 49 dB, from −55.6 to −6.8, in the order a listener would give: open triangle −45.8, woodblock −28.1, claves −27.6, cowbell −22.7, kick −22.1, ride −17.2, conga −14.2, maracas −9.7, hats and snare −8.8, crash −8.0.
+
+What it does **not** answer is how narrow a peak is. A line and a filled quarter-octave carrying the same band energy over the same floor come back about a decibel apart, which is inside the 3.5 dB the two reference kits disagree by. Narrowness within a band is unmeasured, and a small `tonality` delta is not evidence about it.
+
+The other one is `decay_ms`, which is not in a spectrum at all. It was measured from the first grid and compared by nothing for as long as the kit had a gate; `band_decay`, its nearest stand-in, averages only the octaves both sides resolved, so a hit that ends early loses those octaves from its own average instead of being charged for them. The gate reads it as `ring`, in doublings — the kit spans 24× on this quantity, 60 ms of woodblock against 1428 of cymbal, so a median in milliseconds is the cymbals and percent would price a doubling at +100 and a halving at −50.
 
 ### Most of a kit does have a pitch
 
@@ -78,7 +90,7 @@ The drum capture is why the second exists. Both of its references discriminate t
 
 The edge is applied when the profile is **measured**, not when it is scored, and that is the part a skip in the loss cannot replace. A band profile is normalised to its own loudest band, so a model whose loudest band lands above the reference's ceiling drags every band below it down by however far the wash stood over them — an error the loss then charges across the whole profile. Excluding the band from the normalisation is the only place that can be fixed.
 
-It reaches every field a comparison reads: the 1/3-octave profile, the per-octave decay, and the centroid's integration range. A partial cut is the worst of the three states, since one gated dimension then charges the model for an octave another has already agreed is unmeasurable — moving the drum capture's edge to 5 kHz took the two references' disagreement about centroid from 1.92× to 1.09×, which is the measurement saying what had been cut was the chain and not the kit. Above the edge both sides are reported at the floor, which is what `percussion_terms` already skips on, and `band_bins` reports how many cells the comparison actually charged for. `peak_band_hz` deliberately stays full-range, because a wash peaking above the reference's ceiling is exactly what that field exists to show.
+It reaches every field a comparison reads: the 1/3-octave profile, the per-octave decay, the centroid's integration range and the flatness band. A partial cut is the worst of those states, since one gated dimension then charges the model for an octave another has already agreed is unmeasurable — moving the drum capture's edge to 5 kHz took the two references' disagreement about centroid from 1.92× to 1.09×, which is the measurement saying what had been cut was the chain and not the kit. Above the edge both sides are reported at the floor, which is what `percussion_terms` already skips on, and `band_bins` reports how many cells the comparison actually charged for. `peak_band_hz` deliberately stays full-range, because a wash peaking above the reference's ceiling is exactly what that field exists to show.
 
 ## Reading a delta
 

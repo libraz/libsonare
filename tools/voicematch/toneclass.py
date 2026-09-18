@@ -262,9 +262,17 @@ CANONICAL_DIMENSIONS: dict[ToneClass, tuple[str, ...]] = {
 #: A drum kit's, which are per-metric-set rather than per class for the same
 #: reason `PERCUSSION_WEIGHTS` is: the percussion metric set produces a band
 #: profile and no ladder, whatever the piece.
+#:
+#: `ring`, `tonality` and `stereo` are the three qualities the spectral columns
+#: are structurally unable to carry. Every column above is a level or a first
+#: moment over 1/3-octave bands, so a comb of lines and a continuum with the same
+#: band profile are the same instrument to all of them; how long the hit lasts is
+#: not in a spectrum at all; and the image is not in a mono mix. `tonality`
+#: stands where `tnr` stands in `_MELODIC_ALL` and is a different measurement,
+#: because that one masks around a harmonic ladder and a drum has none.
 PERCUSSION_DIMENSIONS: tuple[str, ...] = (
     "band_tilt", "band_shape", "band_decay", "attack", "crest", "centroid_pct",
-    "level", "vel_range",
+    "level", "vel_range", "ring", "tonality", "stereo",
 )
 
 

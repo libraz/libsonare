@@ -9519,7 +9519,8 @@
       "stage_name": "fitted",
       "open_candidates": [
         "vibraslap-thinned",
-        "scrapers-speak"
+        "scrapers-speak",
+        "crash2-and-china-reopened"
       ],
       "axes": {
         "engine": "percussion",
@@ -9528,15 +9529,17 @@
         "profile_rows": 564,
         "gate_state": "current",
         "coverage": {
-          "canonical": 8,
-          "gated": 8,
-          "excused": [],
+          "canonical": 11,
+          "gated": 10,
+          "excused": [
+            "stereo"
+          ],
           "gaps": [],
           "complete": true
         },
         "agreement": {
-          "inside": 7,
-          "total": 8,
+          "inside": 9,
+          "total": 10,
           "outside": {
             "band_shape": 1.26
           }
@@ -9550,7 +9553,7 @@
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — vibraslap-thinned, scrapers-speak — then listen to a take and record the verdict in signoff.json"
+      "next": "judge the recorded candidate(s) — vibraslap-thinned, scrapers-speak, crash2-and-china-reopened — then listen to a take and record the verdict in signoff.json"
     }
   ]
 }
