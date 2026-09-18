@@ -492,6 +492,12 @@ EXCLUSIONS: dict[str, dict[str, tuple[str, str]]] = {
     "analyzer.mastering_assistant_suggest_stereo": {
         "params": _ASSISTANT_BAG,
     },
+    "analyzer.mastering_assistant_suggest_chain": {
+        "params": _ASSISTANT_BAG,
+    },
+    "analyzer.mastering_assistant_suggest_chain_stereo": {
+        "params": _ASSISTANT_BAG,
+    },
     "types.ClipPageRequest.__init__": {
         "sample": (
             "domain_checked",
