@@ -879,6 +879,7 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
   return SONARE_OK;
   SONARE_C_CATCH
 #else
+  if (out_assigned_count) *out_assigned_count = 0;
   SONARE_C_STUB_NOT_SUPPORTED(notes, note_count, sample_rate, targets, target_count, config,
                               out_assigned_count);
 #endif
