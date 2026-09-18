@@ -709,6 +709,27 @@ export interface RoomMorphOptions extends RoomGeometryOptions {
   crossfadeMs?: number;
 }
 
+/**
+ * Morphed audio and what the target-room synthesis had to change to make it.
+ *
+ * Shaped like {@link RirResult} because the same synthesis runs underneath.
+ * There is no `hasError` / `errorMessage` counterpart: an unusable morph throws,
+ * so every entry in {@link RoomMorphResult.diagnostics} is a warning.
+ */
+export interface RoomMorphResult {
+  /** Morphed samples: input length plus the target room's reverb tail. */
+  audio: Float32Array;
+  sampleRate: number;
+  /**
+   * Every diagnostic the target-room synthesis reported, in order. Each says the
+   * morph went through a room other than the one requested — an image-source
+   * order reduced to the safe maximum (`acoustic.ism_order_clamped`), a tail cut
+   * against `maxSeconds` (`acoustic.rir_length_clamped`), a request that produced
+   * no diffuse tail (`acoustic.no_late_tail`) — and is otherwise invisible.
+   */
+  diagnostics: RirDiagnostic[];
+}
+
 /** Row-major dense matrix returned by feature/decompose helpers. */
 export interface Matrix2D {
   /** Number of rows. */

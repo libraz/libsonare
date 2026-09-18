@@ -221,7 +221,7 @@ describe('acoustic room options', () => {
 
   it('refuses a fractional morph seed', () => {
     expectSentinelRefused(
-      (seed) => roomMorph({ samples: SHORT, sampleRate: SR, seed }),
+      (seed) => roomMorph({ samples: SHORT, sampleRate: SR, seed }).audio,
       digest,
       987654,
     );

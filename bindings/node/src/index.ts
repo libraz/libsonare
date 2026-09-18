@@ -253,6 +253,7 @@ export type {
   RoomEstimateResult,
   RoomGeometryOptions,
   RoomMorphOptions,
+  RoomMorphResult,
   SampleDesc,
   SampleDescLoopMode,
   SampleKeyTrack,

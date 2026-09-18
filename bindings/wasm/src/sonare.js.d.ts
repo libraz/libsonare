@@ -325,6 +325,12 @@ export interface WasmRirDiagnostic {
   severity: 'info' | 'warning' | 'error';
 }
 
+export interface WasmRoomMorphResult {
+  audio: Float32Array;
+  sampleRate: number;
+  diagnostics: WasmRirDiagnostic[];
+}
+
 export interface WasmRirResult {
   rir: Float32Array;
   sampleRate: number;
@@ -1747,7 +1753,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     options: WasmRoomMorphOptions,
-  ) => Float32Array;
+  ) => WasmRoomMorphResult;
   analyzeWithProgress: (
     samples: Float32Array,
     sampleRate: number,
@@ -2918,6 +2924,12 @@ export interface SonareModule {
   ) => WasmTrimResult;
   splitSilence: (
     samples: Float32Array,
+    topDb: number,
+    frameLength: number,
+    hopLength: number,
+  ) => Int32Array;
+  splitSilenceCommon: (
+    signals: Float32Array[],
     topDb: number,
     frameLength: number,
     hopLength: number,

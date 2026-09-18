@@ -960,20 +960,27 @@ const char* rirSeverityName(sonare::Diagnostic::Severity severity) {
 // fired, nor that a maxSeconds clamp shortened the tail of an otherwise
 // successful RIR. `errorMessage` carries the first error as "code: message",
 // matching the string the C ABI leaves in sonare_last_error_message().
-void setRirDiagnostics(val& out, const std::vector<sonare::Diagnostic>& diagnostics) {
+val diagnosticsArray(const std::vector<sonare::Diagnostic>& diagnostics) {
   val entries = val::array();
-  std::string error_message;
   for (const sonare::Diagnostic& diagnostic : diagnostics) {
     val entry = val::object();
     entry.set("code", diagnostic.code);
     entry.set("message", diagnostic.message);
     entry.set("severity", std::string(rirSeverityName(diagnostic.severity)));
     entries.call<void>("push", entry);
-    if (error_message.empty() && diagnostic.severity == sonare::Diagnostic::Severity::Error) {
+  }
+  return entries;
+}
+
+void setRirDiagnostics(val& out, const std::vector<sonare::Diagnostic>& diagnostics) {
+  std::string error_message;
+  for (const sonare::Diagnostic& diagnostic : diagnostics) {
+    if (diagnostic.severity == sonare::Diagnostic::Severity::Error) {
       error_message = diagnostic.code + ": " + diagnostic.message;
+      break;
     }
   }
-  out.set("diagnostics", entries);
+  out.set("diagnostics", diagnosticsArray(diagnostics));
   out.set("errorMessage", error_message);
 }
 
@@ -1126,12 +1133,21 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
       sonare::ZeroIsDefault(floatProperty(opts, "airHumidityPercent", 0.0f))
           .or_default(config.air.humidity_percent);
 
-  const Audio result = sonare::effects::acoustic::room_morph(audio, config).audio;
-  std::vector<float> out;
-  if (!result.empty()) {
-    out.assign(result.data(), result.data() + result.size());
+  const auto result = sonare::effects::acoustic::room_morph(audio, config);
+  std::vector<float> morphed;
+  if (!result.audio.empty()) {
+    morphed.assign(result.audio.data(), result.audio.data() + result.audio.size());
   }
-  return vectorToFloat32Array(out);
+
+  // Shaped like js_synthesize_rir's result rather than a bare buffer: the same
+  // synthesis runs underneath and its warnings describe a room the caller did
+  // not ask for. There is no hasError/errorMessage counterpart -- the morph
+  // throws on an unusable request, so every entry here is a warning.
+  val out = val::object();
+  out.set("audio", vectorToFloat32Array(morphed));
+  out.set("sampleRate", result.audio.sample_rate());
+  out.set("diagnostics", diagnosticsArray(result.diagnostics));
+  return out;
 }
 #endif  // SONARE_WITH_ACOUSTIC_SIM
 

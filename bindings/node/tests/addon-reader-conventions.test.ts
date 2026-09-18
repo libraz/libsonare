@@ -375,7 +375,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'roomMorph',
-    invoke: (o) => Array.from(roomMorph(sine(4000, 440, 48000), 48000, o)).slice(0, 32),
+    invoke: (o) => Array.from(roomMorph(sine(4000, 440, 48000), 48000, o).audio).slice(0, 32),
   },
   {
     jsName: 'synthesizeRir',

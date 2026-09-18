@@ -85,8 +85,8 @@ describe('geometric room acoustics', () => {
     const omitted = roomMorph(samples, 48000, base);
     const zero = roomMorph(samples, 48000, { ...base, crossfadeMs: 0 });
     const wide = roomMorph(samples, 48000, { ...base, crossfadeMs: 40 });
-    expect(Array.from(zero)).toEqual(Array.from(omitted));
-    expect(Array.from(zero)).not.toEqual(Array.from(wide));
+    expect(Array.from(zero.audio)).toEqual(Array.from(omitted.audio));
+    expect(Array.from(zero.audio)).not.toEqual(Array.from(wide.audio));
   });
 
   it('morphs toward a target room and is deterministic', () => {
@@ -95,8 +95,36 @@ describe('geometric room acoustics', () => {
     const opts = { lengthM: 12, widthM: 9, heightM: 5, absorption: 0.08, wet: 0.7 };
     const a = roomMorph(samples, 48000, opts);
     const b = roomMorph(samples, 48000, opts);
-    expect(a.length).toBeGreaterThan(samples.length);
-    expect(Array.from(a)).toEqual(Array.from(b));
+    expect(a.audio.length).toBeGreaterThan(samples.length);
+    expect(a.sampleRate).toBe(48000);
+    expect(Array.from(a.audio)).toEqual(Array.from(b.audio));
+  });
+
+  it("publishes the target room synthesis's own diagnostics", () => {
+    // The morph synthesizes its target RIR with the same code synthesizeRir
+    // uses, so the same clamp fires — and it used to be dropped, leaving a morph
+    // through a room the caller did not ask for indistinguishable from one
+    // through the room they did.
+    const samples = new Float32Array(4000);
+    samples[0] = 1.0;
+    const base = {
+      lengthM: 12,
+      widthM: 9,
+      heightM: 5,
+      absorption: 0.4,
+      wet: 1.0,
+      maxSeconds: 0.3,
+    };
+    // Well above the synthesizer's safe maximum rather than one past it: this
+    // case is about the channel the warning travels on, not about where the
+    // clamp sits.
+    const clamped = roomMorph(samples, 48000, { ...base, ismOrder: 99 });
+    expect(clamped.diagnostics.map((d) => d.code)).toContain('acoustic.ism_order_clamped');
+    expect(clamped.diagnostics.every((d) => d.severity === 'warning')).toBe(true);
+    // An order the synthesizer does not clamp leaves the list clear of it, so
+    // the entry above is the clamp's rather than one every call carries.
+    const unclamped = roomMorph(samples, 48000, { ...base, ismOrder: 2 });
+    expect(unclamped.diagnostics.map((d) => d.code)).not.toContain('acoustic.ism_order_clamped');
   });
 
   it('rejects out-of-range sample rates', () => {
@@ -377,8 +405,8 @@ describe('geometric room acoustics', () => {
       airTemperatureC: 20,
       airHumidityPercent: 50,
     });
-    expect(on.length).toBe(off.length);
-    expect(Array.from(on)).not.toEqual(Array.from(off));
+    expect(on.audio.length).toBe(off.audio.length);
+    expect(Array.from(on.audio)).not.toEqual(Array.from(off.audio));
     // The morph validates its config rather than diagnosing, so this throws.
     expect(() =>
       roomMorph(samples, 48000, {

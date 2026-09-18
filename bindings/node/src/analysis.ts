@@ -29,6 +29,7 @@ import type {
   RoomEstimateOptions,
   RoomEstimateResult,
   RoomMorphOptions,
+  RoomMorphResult,
   Section,
   TimbreResult,
 } from './types.js';
@@ -366,20 +367,23 @@ export function estimateRoom(
 
 /**
  * Morph a recording's reverberation toward a target room (creative FX, not
- * dereverberation). Returns the morphed samples (input length plus the target
- * room's reverb tail).
+ * dereverberation).
+ *
+ * Returns the morphed samples in `audio` (input length plus the target room's
+ * reverb tail) alongside the target-room synthesis's own `diagnostics`, which
+ * report a room other than the one requested — see {@link RoomMorphResult}.
  */
-export function roomMorph(request: RoomMorphRequest): Float32Array;
+export function roomMorph(request: RoomMorphRequest): RoomMorphResult;
 export function roomMorph(
   samples: Float32Array,
   sampleRate: number,
   options?: RoomMorphOptions,
-): Float32Array;
+): RoomMorphResult;
 export function roomMorph(
   samples: Float32Array | RoomMorphRequest,
   sampleRate = 48000,
   options: RoomMorphOptions = {},
-): Float32Array {
+): RoomMorphResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertRoomOptions('roomMorph', request);
   const resolvedSampleRate = request.sampleRate ?? 48000;

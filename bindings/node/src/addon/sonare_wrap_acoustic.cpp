@@ -197,10 +197,8 @@ const char* SeverityName(sonare::Diagnostic::Severity severity) {
 // that a maxSeconds clamp shortened the tail of an otherwise successful RIR.
 // `errorMessage` carries the first error as "code: message", matching the string
 // the C ABI leaves in sonare_last_error_message() and Python's RirResult.
-void SetRirDiagnostics(Napi::Env env, Napi::Object out,
-                       const std::vector<sonare::Diagnostic>& diagnostics) {
+Napi::Array DiagnosticsArray(Napi::Env env, const std::vector<sonare::Diagnostic>& diagnostics) {
   Napi::Array entries = Napi::Array::New(env, diagnostics.size());
-  std::string error_message;
   for (size_t index = 0; index < diagnostics.size(); ++index) {
     const sonare::Diagnostic& diagnostic = diagnostics[index];
     Napi::Object entry = Napi::Object::New(env);
@@ -208,11 +206,20 @@ void SetRirDiagnostics(Napi::Env env, Napi::Object out,
     entry.Set("message", Napi::String::New(env, diagnostic.message));
     entry.Set("severity", Napi::String::New(env, SeverityName(diagnostic.severity)));
     entries.Set(static_cast<uint32_t>(index), entry);
-    if (error_message.empty() && diagnostic.severity == sonare::Diagnostic::Severity::Error) {
+  }
+  return entries;
+}
+
+void SetRirDiagnostics(Napi::Env env, Napi::Object out,
+                       const std::vector<sonare::Diagnostic>& diagnostics) {
+  std::string error_message;
+  for (const sonare::Diagnostic& diagnostic : diagnostics) {
+    if (diagnostic.severity == sonare::Diagnostic::Severity::Error) {
       error_message = diagnostic.code + ": " + diagnostic.message;
+      break;
     }
   }
-  out.Set("diagnostics", entries);
+  out.Set("diagnostics", DiagnosticsArray(env, diagnostics));
   out.Set("errorMessage", Napi::String::New(env, error_message));
 }
 
@@ -393,8 +400,17 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   cfg.air.humidity_percent = sonare::ZeroIsDefault(FloatProperty(opts, "airHumidityPercent", 0.0f))
                                  .or_default(cfg.air.humidity_percent);
 
-  const sonare::Audio result = sonare::effects::acoustic::room_morph(audio, cfg).audio;
-  std::vector<float> out = AudioToVector(result);
-  return VecToFloat32(env, out);
+  const auto result = sonare::effects::acoustic::room_morph(audio, cfg);
+  std::vector<float> morphed = AudioToVector(result.audio);
+
+  // Shaped like SynthesizeRir's result rather than a bare buffer: the same
+  // synthesis runs underneath and its warnings describe a room the caller did
+  // not ask for. There is no hasError/errorMessage counterpart -- the morph
+  // throws on an unusable request, so every entry here is a warning.
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("audio", VecToFloat32(env, morphed));
+  out.Set("sampleRate", Napi::Number::New(env, result.audio.sample_rate()));
+  out.Set("diagnostics", DiagnosticsArray(env, result.diagnostics));
+  return out;
   SONARE_NODE_CATCH(env)
 }

@@ -26,6 +26,7 @@ import type {
   RoomEstimateOptions,
   RoomEstimateResult,
   RoomMorphOptions,
+  RoomMorphResult,
 } from './public_types';
 import { Mode, PitchClass } from './public_types';
 import type { ProgressCallback, WasmAcousticResult } from './sonare.js';
@@ -662,20 +663,23 @@ export function estimateRoom(
 
 /**
  * Morph a recording's reverberation toward a target room (creative FX, not
- * dereverberation). Returns the morphed samples (input length plus the target
- * room's reverb tail).
+ * dereverberation).
+ *
+ * Returns the morphed samples in `audio` (input length plus the target room's
+ * reverb tail) alongside the target-room synthesis's own `diagnostics`, which
+ * report a room other than the one requested — see {@link RoomMorphResult}.
  */
-export function roomMorph(request: RoomMorphRequest): Float32Array;
+export function roomMorph(request: RoomMorphRequest): RoomMorphResult;
 export function roomMorph(
   samples: Float32Array,
   sampleRate: number,
   options?: RoomMorphOptions,
-): Float32Array;
+): RoomMorphResult;
 export function roomMorph(
   samples: Float32Array | RoomMorphRequest,
   sampleRate?: number,
   options: RoomMorphOptions = {},
-): Float32Array {
+): RoomMorphResult {
   const module = requireModule();
   if (typeof module.roomMorph !== 'function') {
     throw new Error('libsonare was built without acoustic-simulation support');
