@@ -25,11 +25,14 @@ Percussion metric set (per hit, `analyze_hit`):
   crest_db               peak-to-RMS ratio over the hit
   centroid_hz            broadband spectral centroid of the hit
   level_db               hit RMS (post global normalization)
+  flatness_db            how much of the hit stands in peaks rather than a continuum
+  stereo_width           1 - |channel correlation| over the hit's own window
 A drum note has no fundamental, so every metric above that is anchored on one —
 the harmonic ladder, the intonation error, the tonal-to-noise ratio — measures a
 frequency the sound does not contain. What is left of a percussion hit is its
-level *profile* and how fast each part of that profile dies, which is what these
-measure instead.
+level *profile*, how fast each part of that profile dies, how peaky it is and
+how wide, which is what these measure instead. `flatness_db` is what stands in
+for `tnr_db` here and it needs no target frequencies, which is why it can.
 """
 
 # Every importer reads this module by name, and two of them read attributes off
@@ -88,6 +91,8 @@ from metrics_decay import (
 )
 from metrics_hit import (
     ATTACK_FLOOR_MS,
+    FLATNESS_FLOOR_DB,
+    FLATNESS_LOW_HZ,
     HIT_ATTACK_TOLERANCE_DB,
     HIT_ENVELOPE_HOP_MS,
     HIT_ENVELOPE_WIN_MS,
@@ -109,6 +114,7 @@ from metrics_hit import (
     compare_hit,
     hit_tone,
     pitch_drop,
+    spectral_flatness_db,
 )
 from metrics_modal import (
     MODAL_BASELINE_HZ,
@@ -179,6 +185,7 @@ from metrics_signal import (
     a_weight_db,
     audibility_weights,
     channel_correlation,
+    channel_width,
     midi_to_hz,
     normalize_rms,
     to_mono,

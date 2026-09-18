@@ -16,7 +16,7 @@ from metrics_bands import (
 )
 from metrics_decay import _band_decay, _band_power
 from metrics_modal import measure_modes
-from metrics_signal import _db, _rms_envelope, _spectrum
+from metrics_signal import _db, _rms_envelope, _spectrum, channel_width
 from smf import Note
 
 # Longest stretch of one hit that is analyzed.
@@ -114,6 +114,14 @@ ATTACK_FLOOR_MS = HIT_ENVELOPE_WIN_MS / 2.0
 
 
 HIT_TONE_WINDOW_S = 0.30
+#: Bottom of the band a hit's tonality is read over. Under it is the capture's
+#: own rumble, and a kick's fundamental is the one thing in a kit whose peakiness
+#: nobody is in doubt about.
+FLATNESS_LOW_HZ = 50.0
+#: How far under the window's loudest bin a null is taken to be the transform's
+#: rather than the hit's. A geometric mean is decided by its smallest terms, so
+#: without a floor one cancelled bin carries the whole reading.
+FLATNESS_FLOOR_DB = 120.0
 #: How far the strike's pitch overshoot is tracked, and on what grid. A membrane
 #: released from the strike falls back through a time constant of a few tens of
 #: milliseconds, so the window has to be short and the hop finer than it.
@@ -129,7 +137,49 @@ PITCH_DROP_POINTS = 61
 PITCH_DROP_FLOOR_DB = 24.0
 
 
-def hit_tone(seg: np.ndarray, sr: int) -> dict:
+def spectral_flatness_db(freqs: np.ndarray, mag: np.ndarray,
+                         max_band_hz: float | None) -> float | None:
+    """Geometric over arithmetic mean of the power spectrum, in dB.
+
+    How much of a hit stands in lines rather than lying in a continuum: a struck
+    bar or a cowbell runs tens of dB under a shaker, and 0 dB is a flat spectrum.
+    The band profile cannot see it at all — a tone per 1/3-octave band carrying
+    that band's energy has the same `bands_db` as the noise it was built from, to
+    a hundredth of a decibel, with the same tilt and the same centroid. What it
+    does NOT resolve is where inside one band the energy sits: a line and a
+    filled quarter-octave over the same floor come back about a decibel apart,
+    which is under the references' own disagreement, so narrowness within a band
+    stays unmeasured.
+
+    The percussion counterpart of `tnr_db`, which cannot be computed here: that
+    one is the power inside windows around a harmonic ladder, and a drum hit has
+    no fundamental to build a ladder on. A measure that needs no target
+    frequencies at all is the only one available, and on the metal it is also the
+    more trustworthy — `measure_modes` returns twelve peaks for a cymbal, and
+    those peaks move by 14 % of their frequency between velocities of the same
+    instrument, so a mask built from them would be measuring the extractor.
+
+    Cut at the capture's own ceiling, for the reason the band profile is: above
+    it the spectrum is the recording chain's roll-off, which is smooth and would
+    read as tone.
+    """
+    ceiling = min(CENTROID_MAX_HZ,
+                  float("inf") if max_band_hz is None
+                  else max_band_hz * THIRD_OCTAVE_RATIO)
+    band = (freqs >= FLATNESS_LOW_HZ) & (freqs <= ceiling)
+    power = np.asarray(mag[band], dtype=np.float64) ** 2
+    if power.size < 16:
+        return None
+    top = float(power.max())
+    if top <= 0.0:
+        return None
+    power = np.maximum(power, top * 10.0 ** (-FLATNESS_FLOOR_DB / 10.0))
+    geometric = float(np.exp(np.mean(np.log(power))))
+    arithmetic = float(np.mean(power))
+    return round(10.0 * math.log10(geometric / arithmetic), 2)
+
+
+def hit_tone(seg: np.ndarray, sr: int, *, max_band_hz: float | None = None) -> dict:
     """The tonal part of a percussion hit: its modes and its pitch.
 
     Measured over the first `HIT_TONE_WINDOW_S` rather than the whole hit,
@@ -158,17 +208,23 @@ def hit_tone(seg: np.ndarray, sr: int) -> dict:
     is 1 : 1.59 : 2.14 : 2.30 : 2.65, and those ratios are to the fundamental.
     """
     empty = {"modal_hz": [], "modal_db": [], "modal_ratio": [],
-             "tone_f0_hz": None, "tone_lowest_hz": None}
+             "tone_f0_hz": None, "tone_lowest_hz": None, "flatness_db": None}
     n = min(len(seg), int(HIT_TONE_WINDOW_S * sr))
     if n < 512:
         return empty
     freqs, mag = _spectrum(np.asarray(seg[:n], dtype=np.float64), sr)
+    # Flatness is read here rather than off the hit's whole spectrum because
+    # this window is a fixed length and that one is not: a geometric mean moves
+    # with the bin width, and two renders whose strikes land at different
+    # moments would be compared at different resolutions.
+    flatness = spectral_flatness_db(freqs, mag, max_band_hz)
     modes = measure_modes(freqs, mag)
     if not modes:
-        return empty
+        return {**empty, "flatness_db": flatness}
     lowest = modes[0][0]
     strongest = max(modes, key=lambda m: m[1])[0]
     return {
+        "flatness_db": flatness,
         "modal_hz": [hz for hz, _ in modes],
         "modal_db": [db for _, db in modes],
         "modal_ratio": [round(hz / lowest, 4) for hz, _ in modes],
@@ -256,6 +312,12 @@ class HitMetrics:
     decay_capped: bool
     crest_db: float
     level_db: float
+    #: How peaky the hit's spectrum is, and how wide its image. Both are `None`
+    #: rather than 0.0 where they could not be read — a hit too short to
+    #: transform, and a mono render, are absences and not a noise floor or a
+    #: centred source.
+    flatness_db: float | None
+    stereo_width: float | None
     #: The tonal part, for the two thirds of a kit that has one. Empty for a
     #: cymbal or a shaker, which is an absence rather than a pitch of zero.
     modal_hz: list[float]
@@ -297,7 +359,8 @@ def _hit_onset(mono: np.ndarray, sr: int, start: float, limit: float) -> float:
 
 
 def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
-                max_band_hz: float | None = None) -> HitMetrics:
+                max_band_hz: float | None = None,
+                stereo: np.ndarray | None = None) -> HitMetrics:
     """Compute the percussion metric set for one hit.
 
     The window runs from the strike to `window_end` (the next hit, or the end of
@@ -316,14 +379,20 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
     comparison must be measured with the same value or the profiles are
     normalised against different things.
 
-    It reaches every field a comparison reads, which is three: the 1/3-octave
-    profile, the per-octave decay, and the centroid's integration range. They
-    were not all cut at first, and a partial cut is the worst of the three
-    states — the profile stops at the edge while the centroid keeps integrating
-    a chain's roll-off, so one gated dimension charges the model for the top
-    octave the other has already agreed is unmeasurable. `peak_band_hz`
+    It reaches every field a comparison reads, which is four: the 1/3-octave
+    profile, the per-octave decay, the centroid's integration range and the
+    flatness band. They were not all cut at first, and a partial cut is the worst
+    of the three states — the profile stops at the edge while the centroid keeps
+    integrating a chain's roll-off, so one gated dimension charges the model for
+    the top octave the other has already agreed is unmeasurable. `peak_band_hz`
     deliberately stays full-range, because a wash that peaks above the
     reference's ceiling is exactly what that field exists to show.
+
+    `stereo` is the same audio with its channels, when the render has two. It is
+    passed in rather than measured by the caller so the image is read over the
+    window the rest of the hit is read over: a kit's recording is mostly tail
+    padding, and a correlation taken across that reports the silence as a source
+    in the middle.
     """
     onset = _hit_onset(mono, sr, note.start, window_end)
     on = int(onset * sr)
@@ -381,10 +450,11 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
     rms = float(np.sqrt(np.mean(seg**2)))
     crest_db = float(_db(np.max(np.abs(seg))) - _db(rms))
 
-    tone = hit_tone(seg, sr)
+    tone = hit_tone(seg, sr, max_band_hz=max_band_hz)
     drop = pitch_drop(seg, sr, tone["tone_f0_hz"])
 
     return HitMetrics(
+        stereo_width=channel_width(stereo, on, min(end, len(mono))),
         note=note.note,
         velocity=note.velocity,
         bands_db=[round(float(v), 2) for v in bands_db],
@@ -423,4 +493,13 @@ def compare_hit(model: HitMetrics, oracle: HitMetrics) -> dict:
         "decay_delta_ms": round(model.decay_ms - oracle.decay_ms, 1),
         "crest_delta_db": round(model.crest_db - oracle.crest_db, 2),
         "level_delta_db": round(model.level_db - oracle.level_db, 2),
+        "flatness_delta_db": _delta(model.flatness_db, oracle.flatness_db, 2),
+        "stereo_delta": _delta(model.stereo_width, oracle.stereo_width, 3),
     }
+
+
+def _delta(model: float | None, oracle: float | None, digits: int) -> float | None:
+    """A difference, or `None` where either side had no reading to difference."""
+    if model is None or oracle is None:
+        return None
+    return round(model - oracle, digits)

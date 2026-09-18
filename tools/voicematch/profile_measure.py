@@ -15,6 +15,7 @@ from metrics import (
     _spectrum,
     _under_peak_db,
     analyze_hit,
+    channel_width,
     fit_partial_series,
     midi_to_hz,
     partial_hz,
@@ -561,11 +562,9 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
     tnr = tone_to_noise_db(freqs, mag, row["f0_hz"])
     if np.isfinite(tnr):
         row["tnr_db"] = round(tnr, 2)
-    if audio.ndim > 1 and audio.shape[1] == 2:
-        left, right = audio[on:off, 0], audio[on:off, 1]
-        denom = float(np.std(left) * np.std(right))
-        corr = float(np.mean((left - left.mean()) * (right - right.mean())) / denom) if denom > 0 else 1.0
-        row["stereo_width"] = round(1.0 - abs(corr), 3)
+    width = channel_width(audio, on, off)
+    if width is not None:
+        row["stereo_width"] = width
     return row
 
 
@@ -576,9 +575,13 @@ def measure_hit(audio: np.ndarray, sr: int, note: int, velocity: int, *,
 
     A struck instrument has no fundamental, so none of the measurements above it
     apply: there is no partial to be inharmonic, no temperament to be stretched
-    against, and nothing for a tone-to-noise ratio to be a ratio of. What is
-    left is the shape of the spectrum, how each band of it decays, and how hard
-    the strike was — which is what `analyze_hit` reports.
+    against, and no ladder for a tone-to-noise ratio to mask around. What is
+    left is the shape of the spectrum, how each band of it decays, how hard the
+    strike was, how much of the spectrum stands in peaks rather than lying in a
+    continuum, and how wide the image is — which is what `analyze_hit` reports.
+    The last two are what the pitched set gets from `tnr_db` and `stereo_width`;
+    the image is the same measurement, and the tonality is a different one
+    answering the same question, because this one needs no target frequencies.
 
     `peak_dbfs` is carried alongside so the velocity response is measured for a
     drum by exactly the code that measures it for a piano. It is also the only
@@ -587,7 +590,8 @@ def measure_hit(audio: np.ndarray, sr: int, note: int, velocity: int, *,
     """
     mono = to_mono(audio)
     hit = analyze_hit(mono, sr, Note(note, velocity, preroll_s, gate_s), len(mono) / sr,
-                      max_band_hz=max_band_hz)
+                      max_band_hz=max_band_hz,
+                      stereo=audio if audio.ndim == 2 and audio.shape[1] == 2 else None)
     row = hit.to_dict()
     strike = mono[int(preroll_s * sr):]
     row["peak_dbfs"] = round(float(_db(float(np.max(np.abs(strike))))), 2) if len(strike) else None

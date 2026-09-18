@@ -259,13 +259,14 @@ def _bright_hit(sr: int = 48000, seconds: float = 0.6) -> np.ndarray:
     return (body + wash).astype(np.float64)
 
 
-@pytest.mark.parametrize("field", ["bands_db", "band_decay_db_s", "centroid_hz"])
+@pytest.mark.parametrize("field", ["bands_db", "band_decay_db_s", "centroid_hz",
+                                   "flatness_db"])
 def test_every_field_a_comparison_reads_is_cut_at_the_edge(field):
-    """The guard has three siblings and had been on one of them.
+    """The guard has four siblings and had been on one of them.
 
     Parametrised rather than asserted together so a field that stops being cut
-    fails by name — the failure this is written against is one of the three
-    silently keeping its full range while the other two shrink.
+    fails by name — the failure this is written against is one of the four
+    silently keeping its full range while the others shrink.
     """
     hit = _bright_hit()
     note = Note(49, 100, 0.0, 0.05)

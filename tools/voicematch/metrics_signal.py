@@ -70,6 +70,22 @@ def channel_correlation(audio: np.ndarray) -> float | None:
     return float(np.mean(left * right) / denom)
 
 
+def channel_width(audio: np.ndarray | None, lo: int = 0,
+                  hi: int | None = None) -> float | None:
+    """How wide a render's image is over `[lo, hi)`: 0 is mono, 1 is decorrelated.
+
+    `channel_correlation` read as a width, which is the direction a comparison
+    wants — a model that radiates wider than its reference reads positive. The
+    window is the caller's because the answer depends on it: a correlation taken
+    across a recording's tail padding reports the silence as a source in the
+    middle, and every capture here is mostly tail.
+    """
+    if audio is None or audio.ndim != 2:
+        return None
+    corr = channel_correlation(audio[lo:hi])
+    return None if corr is None else round(1.0 - abs(corr), 3)
+
+
 def normalize_rms(audio: np.ndarray, target_rms: float = 0.05) -> np.ndarray:
     """Scale the whole render to a common RMS so level metrics compare balance."""
     rms = float(np.sqrt(np.mean(audio**2)))
