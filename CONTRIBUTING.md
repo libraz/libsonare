@@ -56,6 +56,8 @@ make test-python
 
 Tests import built output, so build before testing. The Node and WASM tests import from `dist/`, and the WASM test run refuses to start against a `dist/` older than its sources.
 
+Build through the package scripts rather than calling `tsc` yourself. A declaration emit only ever adds to `dist/`, so a deleted or renamed source leaves its `.d.ts` behind, and the npm tarball ships `dist/` whole — `yarn build` is what removes it, and nothing fails while the orphan is there.
+
 **The WASM module** — additionally emsdk 5.0.2:
 
 ```bash

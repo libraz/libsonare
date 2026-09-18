@@ -13,7 +13,8 @@
   ],
   "scripts": {
     "build:native": "node scripts/build-native.mjs",
-    "build": "yarn build:native && tsc",
+    "build:ts": "rm -rf dist && tsc",
+    "build": "yarn build:native && yarn build:ts",
     "lint": "biome check src/ tests/",
     "lint:fix": "git ls-files -z -- 'src/**' 'tests/**' | xargs -0 biome check --write",
     "format": "git ls-files -z -- 'src/**' 'tests/**' | xargs -0 biome format --write",
