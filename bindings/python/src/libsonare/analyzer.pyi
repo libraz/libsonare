@@ -835,6 +835,32 @@ def merge_notes(
     voiced_threshold: float | None = None,
 ) -> list[NoteObject]: ...
 
+class NoteTarget:
+    start_sec: float
+    end_sec: float
+    target_midi: float
+    def __init__(
+        self,
+        start_sec: float,
+        end_sec: float,
+        target_midi: float,
+    ) -> None: ...
+
+def note_targets_from_smf(
+    data: bytes | bytearray,
+    *,
+    track_index: int = 0,
+) -> list[NoteTarget]: ...
+def assign_note_targets(
+    notes: Sequence[NoteObject],
+    sample_rate: int,
+    targets: Sequence[NoteTarget],
+    *,
+    unmatched_policy: str = "leave",
+    min_overlap_ratio: float | None = None,
+    max_correction_semitones: float | None = None,
+) -> tuple[list[NoteObject], int]: ...
+
 class SpectralRegionOp:
     start_sample: int
     end_sample: int
@@ -1099,6 +1125,15 @@ class Mixer:
         ...
     def strip_count(self) -> int: ...
     def strip_by_id(self, strip_id: str) -> int: ...
+    def add_strip(
+        self,
+        strip_id: str,
+        *,
+        enabled: bool = True,
+        lufs: bool = True,
+        true_peak: bool = True,
+        true_peak_oversample: int = 0,
+    ) -> None: ...
     def add_bus(self, bus_id: str, role: str = "aux") -> None: ...
     def remove_bus(self, bus_id: str) -> None: ...
     def bus_count(self) -> int: ...

@@ -27,11 +27,13 @@ import {
   Audio,
   analyze,
   analyzePolyphonic,
+  assignNoteTargets,
   decomposeStems,
   detectBoundaries,
   estimateMeter,
   extractNotes,
   extractPercussiveEvents,
+  Mixer,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
@@ -62,6 +64,7 @@ import {
   masteringRepairTrimSilence,
   masteringRepairTrimSilenceStereo,
   mergeNotes,
+  mixingScenePresetJson,
   mixStereo,
   noteSegments,
   Project,
@@ -332,6 +335,56 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         frameRate: SR / 512,
       };
       return mergeNotes({ ...o, ...track, notes: extractNotes(track), first: 0, last: 1 });
+    },
+  },
+  {
+    // The note's edit is all zeros, which is the identity the C struct spells,
+    // so an edit key read as undefined answers exactly as the omitted one.
+    jsName: 'assignNoteTargets',
+    invoke: (o) => {
+      const note = {
+        onsetSample: 0,
+        offsetSample: SR / 2,
+        frameStart: 0,
+        frameEnd: 0,
+        medianHz: 440,
+        medianCents: 0,
+        f0Stability: 1,
+        amplitude: new Float32Array(0),
+        edit: {
+          timeOffsetSamples: 0,
+          amplitudeEnvelope: new Float32Array(0),
+          pitchShiftSemitones: 0,
+          gainDb: 0,
+          timeStretchRatio: 0,
+          formantShiftSemitones: 0,
+          vibratoDepthChange: 0,
+          driftChange: 0,
+          muted: false,
+        },
+      };
+      const result = assignNoteTargets({
+        ...o,
+        notes: [
+          {
+            ...note,
+            ...o,
+            onsetSample: 0,
+            offsetSample: SR / 2,
+            medianHz: 440,
+            edit: { ...note.edit, ...o },
+          },
+        ],
+        sampleRate: SR,
+        targets: [{ startSec: 0, endSec: 0.5, targetMidi: 72 }],
+      });
+      return {
+        assignedCount: result.assignedCount,
+        edits: result.notes.map((assigned) => [
+          assigned.edit.pitchShiftSemitones,
+          assigned.edit.muted,
+        ]),
+      };
     },
   },
   {
@@ -898,6 +951,17 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       }
     },
   },
+  {
+    // The strip count alone would hold between two adds that configured their
+    // meters differently, so the serialized scene is compared too: the metering
+    // object is where every key on this bag lands.
+    jsName: 'addStrip',
+    invoke: (o) =>
+      withMixer((mixer) => {
+        mixer.addStrip('probe', { ...o });
+        return [mixer.stripCount(), mixer.toSceneJson()];
+      }),
+  },
   { jsName: 'detectClipping', invoke: (o) => meterAudio().detectClipping(o) },
   { jsName: 'dynamicRange', invoke: (o) => meterAudio().dynamicRange(o) },
   { jsName: 'spectrum', invoke: (o) => meterAudio().spectrum(o) },
@@ -919,6 +983,15 @@ function withSampleBank<T>(body: (bank: SampleBank) => T): T {
     return body(bank);
   } finally {
     bank.destroy();
+  }
+}
+
+function withMixer<T>(body: (mixer: Mixer) => T): T {
+  const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), 48000, 8);
+  try {
+    return body(mixer);
+  } finally {
+    mixer.destroy();
   }
 }
 

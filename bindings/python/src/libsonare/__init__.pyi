@@ -34,6 +34,9 @@ from .analyzer import (
     NoteObject as NoteObject,
 )
 from .analyzer import (
+    NoteTarget as NoteTarget,
+)
+from .analyzer import (
     PercussiveEvent as PercussiveEvent,
 )
 from .analyzer import (
@@ -98,6 +101,9 @@ from .analyzer import (
 )
 from .analyzer import (
     analyze_with_progress as analyze_with_progress,
+)
+from .analyzer import (
+    assign_note_targets as assign_note_targets,
 )
 from .analyzer import (
     bass_chroma as bass_chroma,
@@ -505,6 +511,9 @@ from .analyzer import (
 )
 from .analyzer import (
     note_stretch as note_stretch,
+)
+from .analyzer import (
+    note_targets_from_smf as note_targets_from_smf,
 )
 from .analyzer import (
     note_to_hz as note_to_hz,
@@ -1018,6 +1027,9 @@ from .types import (
 )
 from .types import (
     RhythmResult as RhythmResult,
+)
+from .types import (
+    RirDiagnostic as RirDiagnostic,
 )
 from .types import (
     RirResult as RirResult,
