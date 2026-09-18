@@ -113,10 +113,51 @@ python = [
 #     calls the C `_ex` entry point; omitting it reproduces the base call. The
 #     companion sizing entry point project_preview_midi_fx_count is a real
 #     facade method on all three surfaces and is NOT allowlisted.
-#   error_message / last_error_message / last_warning_message: C-ABI
-#     error/warning-string helpers consumed internally by each facade (errors map
-#     to native exceptions; the scene-load warning surfaces as Mixer.sceneWarnings
-#     / scene_warnings), not standalone public facade functions.
+#   error_message / last_error_message / last_warning_message /
+#     last_diagnostic_count / last_diagnostic_code / last_diagnostic_message /
+#     last_diagnostic_severity: C-ABI error/warning/diagnostic channel accessors
+#     consumed internally by each facade (errors map to native exceptions; the
+#     scene-load warning surfaces as Mixer.sceneWarnings / scene_warnings; the
+#     diagnostic list becomes RirResult.diagnostics / RoomMorphResult.diagnostics),
+#     not standalone public facade functions. Node and WASM reach the same
+#     entries from the core's own std::vector<Diagnostic> and never call these.
+# --- default seeders for C-only options structs ---
+#   A C struct cannot spell "field omitted", so the C ABI ships a seeder that
+#   fills one with the core config's values. No facade needs a free function for
+#   it: an omitted keyword or an absent request field already means "default"
+#   there. Each seeder below was checked against what the facades actually spell,
+#   and the values agree.
+#   boundary_options_default: Node reads the seeder live, WASM starts from
+#     BoundaryConfig itself, and Python's detect_boundaries keyword defaults are
+#     held to it by test.
+#   meter_options_default: same three routes, against MeterConfig and
+#     estimate_meter.
+#   music_analyze_options_default: same, against MusicAnalyzerConfig and
+#     analyze. Only four of the nineteen Python defaults are pinned by a test;
+#     the rest agree without anything holding them.
+#   transcribe_config_default: the struct the facades deliberately do NOT
+#     forward — sonare_c_transcribe.h states that a zero field means the default
+#     in C and does not in a binding, so Python and WASM spell absence
+#     themselves and only Node reads the seeder.
+#   project_tempo_options_default: all three facades call it internally to seed
+#     SonareProjectTempoOptions before overlaying the caller's fields, so no
+#     facade restates a value.
+#   note_target_assign_config_default: the same route on all three, and here it
+#     is forced rather than preferred. min_overlap_ratio and
+#     max_correction_semitones both take 0 as a legal value — any overlap counts,
+#     and no note moves — so a facade cannot read 0 as "unset", and restating the
+#     defaults as literals would make it a second source of truth for values the
+#     core struct already owns. Each facade calls the seeder and overlays only
+#     the fields the caller supplied.
+#   mixer_strip_at: the handle->index convention the [order] notes already
+#     record for strip_meter. No facade hands out a SonareStrip*; every strip op
+#     takes an index or an id and resolves the borrowed handle internally.
+#   mixer_add_strip_ex: folded into the facade `addStrip` / `add_strip`, whose
+#     optional metering argument IS the `_ex` parameter set -- `enabled` / `lufs`
+#     / `truePeak` / `truePeakOversample` on Node and WASM, the matching keywords
+#     on Python, under the same names the scene document spells them. Omitting it
+#     reproduces the base sonare_mixer_add_strip call exactly. The base entry
+#     point is NOT allowlisted: it is the facade method.
 # --- mastering ops exposed under ERGONOMIC facade names (see [surface_only]) ---
 #   mastering_analyze_pair / mastering_analyze_stereo / mastering_apply_processor
 #   / mastering_apply_pair_processor / mastering_apply_processor_stereo: these C
@@ -150,6 +191,17 @@ node = [
   "error_message",
   "last_error_message",
   "last_warning_message",
+  "last_diagnostic_count",
+  "last_diagnostic_code",
+  "last_diagnostic_message",
+  "last_diagnostic_severity",
+  "boundary_options_default",
+  "meter_options_default",
+  "music_analyze_options_default",
+  "transcribe_config_default",
+  "project_tempo_options_default",
+  "mixer_strip_at",
+  "mixer_add_strip_ex",
   "mastering_chain_with_progress",
   "mastering_chain_stereo_with_progress",
   "mastering_analyze_pair",
@@ -212,6 +264,11 @@ node = [
   # the documented defaults; the facade pitchCorrectTimevarying applies them
   # inline through its PitchCorrectOptions bag, so there is no 1:1 facade member.
   "pitch_correction_config_default",
+  # assignNoteTargets reads this seeder live and uses its two float fields as the
+  # fallbacks of its own request properties, so an omitted field takes the core's
+  # default and an explicit 0 survives. It cannot inline them: 0 is legal for
+  # both. Not a facade member.
+  "note_target_assign_config_default",
   # External-instrument bounce is deliberately Python-only: Node batch jobs never
   # play instruments, and a synchronous JS render callback fired from deep in the
   # offline graph overflows V8's shared C++/JS stack. The interactive/native path
@@ -256,6 +313,17 @@ wasm = [
   "error_message",
   "last_error_message",
   "last_warning_message",
+  "last_diagnostic_count",
+  "last_diagnostic_code",
+  "last_diagnostic_message",
+  "last_diagnostic_severity",
+  "boundary_options_default",
+  "meter_options_default",
+  "music_analyze_options_default",
+  "transcribe_config_default",
+  "project_tempo_options_default",
+  "mixer_strip_at",
+  "mixer_add_strip_ex",
   "mastering_analyze_pair",
   "mastering_analyze_stereo",
   "mastering_apply_processor",
@@ -291,6 +359,7 @@ wasm = [
   "stream_analyzer_config_default",
   "stream_quantize_config_default",
   "pitch_correction_config_default",
+  "note_target_assign_config_default",
   # --- WASM platform / API-shape differences ---
   # No host filesystem and no compressed-audio decoder in the WASM build: the
   # WASM Audio class is a pure-JS sample wrapper constructed via Audio.fromBuffer.
@@ -340,6 +409,17 @@ python = [
   "error_message",
   "last_error_message",
   "last_warning_message",
+  "last_diagnostic_count",
+  "last_diagnostic_code",
+  "last_diagnostic_message",
+  "last_diagnostic_severity",
+  "boundary_options_default",
+  "meter_options_default",
+  "music_analyze_options_default",
+  "transcribe_config_default",
+  "project_tempo_options_default",
+  "mixer_strip_at",
+  "mixer_add_strip_ex",
   "mastering_chain_with_progress",
   "mastering_chain_stereo_with_progress",
   "mastering_analyze_pair",
@@ -379,6 +459,10 @@ python = [
   # pitch_correct_timevarying seeds its SonarePitchCorrectionConfig by calling
   # this internally; not re-exposed as a standalone public function.
   "pitch_correction_config_default",
+  # assign_note_targets does the same, and has to: 0 is a legal value for both
+  # min_overlap_ratio and max_correction_semitones, so None cannot be spelled as
+  # 0 and the defaults cannot be restated here as literals.
+  "note_target_assign_config_default",
   # See the JS notes: Python resolves typed waveform strings internally.
   "synth_builtin_waveform_from_name",
   # Called by the Python facade to turn the targetPlatform name into the index
@@ -508,6 +592,17 @@ python = [
 # passing one alongside would let the two disagree. Same array-length derivation
 # as lufs_interleaved, on a ragged input. Node and WASM carry no entry: their
 # request object declares no order, so nothing reaches the comparison.
+#
+# note_targets_from_smf (python): C is (bytes, len). The facade spells the buffer
+# `data` and derives the length from it, so only `track_index` is left to compare
+# and the two sides disagree on a count rather than an order. `data` is what this
+# project's Python already calls an in-memory file buffer — Project.import_smf and
+# import_clip_file both take `data` — and `bytes` cannot be borrowed from the C
+# side because it is a Python builtin, so shadowing it in a published signature
+# would be worse than the rename. The C side keeps `bytes` to match its own
+# sibling, sonare_project_import_smf. Ergonomic rename plus the usual
+# array-length derivation; Node and WASM carry no entry, their request object
+# declares no order.
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -549,6 +644,7 @@ python = [
   "decompose_note_pitch",
   "split_note",
   "merge_notes",
+  "note_targets_from_smf",
   "render_percussive_events",
   "split_silence_common",
   "mel_to_stft",  # Python facade derives matrix extents from sequences; C requires explicit dims
