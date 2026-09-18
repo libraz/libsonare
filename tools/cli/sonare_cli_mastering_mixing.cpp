@@ -60,7 +60,7 @@ std::string analysis_json_for_cli(const std::string& core_json) {
 
 /// The assistant's document, re-keyed except for the chain it suggests.
 ///
-/// The chain is fed back to the library verbatim (`mastering --config`), so the
+/// The chain is fed back to the library verbatim (`mastering --chain-config`), so the
 /// names under it belong to the chain param schema rather than to CLI stdout:
 /// re-keying them would produce a document the library then rejects. Only the
 /// key naming it is renamed; everything beside it is measurement output and
@@ -311,17 +311,18 @@ void print_loudness_result_text(const LoudnessResult& result, const std::string&
 
 int cmd_mastering(const CliArgs& args, const Audio& audio) {
   const bool has_preset = args.has("preset");
-  const bool has_config = args.has("config");
+  const bool has_config = args.has("chain-config");
   const bool has_assistant = args.has("assistant");
   const int selector_count =
       static_cast<int>(has_preset) + static_cast<int>(has_config) + static_cast<int>(has_assistant);
   if (selector_count > 1) {
-    throw std::invalid_argument("--preset, --config, and --assistant are mutually exclusive");
+    throw std::invalid_argument(
+        "--preset, --chain-config (--config), and --assistant are mutually exclusive");
   }
   const std::string params_text = args.get_string("params");
   const bool has_params = args.has("params");
   if (!selector_count && has_params) {
-    throw std::invalid_argument("--params requires --preset, --config, or --assistant");
+    throw std::invalid_argument("--params requires --preset, --chain-config, or --assistant");
   }
   // Every option that only reaches an AssistantConfig field. Refusing them
   // without --assistant rather than accepting and dropping them is the same rule
@@ -372,7 +373,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       mode = "assistant";
     } else if (has_config) {
       chain_config =
-          mastering::api::chain_config_from_json(read_text_file(args.get_string("config")));
+          mastering::api::chain_config_from_json(read_text_file(args.get_string("chain-config")));
       mode = "config";
     } else {
       preset_name = args.get_string("preset");
@@ -384,10 +385,13 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
     // overrides); reject standalone loudness flags instead of silently
     // ignoring them. Use --params to override chain parameters.
     if (mode == "preset" || mode == "config") {
+      // Named by the option rather than by `mode`, which stays the reported
+      // payload value: the option's canonical spelling is --chain-config.
+      const std::string selector = mode == "config" ? "chain-config" : mode;
       for (const char* loudness_flag : {"target-lufs", "ceiling-db", "true-peak-oversample"}) {
         if (args.has(loudness_flag)) {
           throw std::invalid_argument(std::string("--") + loudness_flag +
-                                      " cannot be combined with --" + mode);
+                                      " cannot be combined with --" + selector);
         }
       }
     }
@@ -1185,6 +1189,19 @@ int cmd_mastering_suggest(const CliArgs& args, const Audio& audio) {
   const auto config =
       mastering::assistant::assistant_config_from_params(params.data(), params.size());
   const auto suggestion = mastering::assistant::suggest_chain(audio, config);
+
+  const std::string config_out = args.get_string("config-out");
+  if (!config_out.empty()) {
+    // Through the chain serializer on the config already in hand: that is the
+    // form `mastering --chain-config` parses, and re-deriving it from the
+    // printed document would re-key what the library must read back verbatim.
+    std::ofstream file(config_out, std::ios::binary);
+    file << mastering::api::chain_config_to_json(suggestion.config) << "\n";
+    // The class save_wav gives a failed render, as the report writer uses.
+    if (!file) {
+      throw SonareException(ErrorCode::EncodeFailed, "cannot write chain config: " + config_out);
+    }
+  }
   std::cout << suggestion_json_for_cli(mastering::assistant::assistant_result_to_json(suggestion))
             << "\n";
   return 0;

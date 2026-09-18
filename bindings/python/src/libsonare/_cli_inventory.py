@@ -17,6 +17,7 @@ _TargetT = TypeVar("_TargetT")
 # action's ``type`` callable (which is often left as ``None`` for strings).
 _PATH_OPTION_NAMES = frozenset(
     {
+        "chain-config",
         "config",
         "config-file",
         "in",

@@ -13,6 +13,7 @@ from ._cli_common import (
     _atomic_write_bytes,
     _float_sequence,
     _load_channels_or_downmix,
+    _load_json_object,
     _parse_json_config,
     _parse_json_list,
     _parse_kv_params,
@@ -261,19 +262,23 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     params_raw = getattr(args, "params", "") or ""
     bits = _wav_bits(args)
 
+    # Named by the option's canonical spelling, which is --chain-config; `mode`
+    # below stays the reported payload value.
     selectors = [
         name
         for name, selected in (
             ("preset", bool(preset)),
-            ("config", bool(config_raw)),
+            ("chain-config", bool(config_raw)),
             ("assistant", assistant),
         )
         if selected
     ]
     if len(selectors) > 1:
-        raise ValueError("--preset, --config, and --assistant are mutually exclusive")
+        raise ValueError(
+            "--preset, --chain-config (--config), and --assistant are mutually exclusive"
+        )
     if params_raw and not selectors:
-        raise ValueError("--params requires --preset, --config, or --assistant")
+        raise ValueError("--params requires --preset, --chain-config, or --assistant")
     target_platform = getattr(args, "target_platform", "streaming") or "streaming"
     no_streaming_safe = bool(getattr(args, "no_streaming_safe", False))
     speech_mono_amount = float(getattr(args, "speech_mono_amount", 1.0))
@@ -759,23 +764,87 @@ def cmd_mastering_chain(args: argparse.Namespace) -> int:
 
 
 def cmd_master(args: argparse.Namespace) -> int:
-    from . import master_audio, master_audio_stereo
+    from . import (
+        master_audio,
+        master_audio_stereo,
+        mastering_assistant_suggest_chain,
+        mastering_assistant_suggest_chain_stereo,
+        mastering_chain,
+        mastering_chain_stereo,
+    )
 
     planes, sr = _load_channels_or_downmix(args.file)
+    stereo = len(planes) == 2
     overrides = _parse_json_config(args.config, args.config_file)
     if args.params:
         overrides.update(_parse_kv_params(args.params))
+    chain_config_path = getattr(args, "chain_config", None) or ""
+    assistant = bool(getattr(args, "assistant", False))
+    # --preset carries a default, so which selectors the caller chose is decided
+    # by what was spelled rather than by the value that reached the namespace.
+    # The same three-way exclusion the native `mastering` handler enforces;
+    # --config / --config-file / --params stay overrides on top of whichever one
+    # built the chain, as --params is on the native side.
+    selectors = [
+        name
+        for name, selected in (
+            ("preset", _option_supplied(args, "preset")),
+            ("chain-config", bool(chain_config_path)),
+            ("assistant", assistant),
+        )
+        if selected
+    ]
+    if len(selectors) > 1:
+        raise ValueError("--preset, --chain-config, and --assistant are mutually exclusive")
+
+    def _run_chain(
+        config: dict[str, Any],
+    ) -> tuple[MasteringChainStereoResult | MasteringChainResult, list[Any]]:
+        """Run one complete chain config over however many channels the source has.
+
+        Returns the channels to write beside the result, because which attribute
+        carries them is what the two chain entry points differ in.
+        """
+        if stereo:
+            pair = mastering_chain_stereo(planes[0], planes[1], sample_rate=sr, config=config)
+            return pair, [pair.left, pair.right]
+        mono = mastering_chain(planes[0], sample_rate=sr, config=config)
+        return mono, [mono.samples]
+
     result: MasteringChainStereoResult | MasteringChainResult
-    if len(planes) == 2:
-        result = master_audio_stereo(
+    rendered: list[Any]
+    mode = "preset"
+    if chain_config_path:
+        # A complete chain, so it runs as the chain rather than as overrides over
+        # a preset the caller never named -- the file states every stage.
+        config = _chain_params_config(_load_json_object(chain_config_path))
+        config.update(overrides)
+        result, rendered = _run_chain(config)
+        # `mode` names how the chain was chosen, not the option that carried it,
+        # so it is the same token the native CLI reports for a chain read from a
+        # file. The option's canonical spelling only shows up in diagnostics.
+        mode = "config"
+    elif assistant:
+        # The assistant reads the material to decide the chain, so it is handed
+        # the same channels the chain will run over rather than a fold of them.
+        suggested: dict[str, Any] = dict(
+            mastering_assistant_suggest_chain_stereo(planes[0], planes[1], sample_rate=sr)
+            if stereo
+            else mastering_assistant_suggest_chain(planes[0], sample_rate=sr)
+        )
+        suggested.update(overrides)
+        result, rendered = _run_chain(suggested)
+        mode = "assistant"
+    elif stereo:
+        stereo_result = master_audio_stereo(
             planes[0], planes[1], sample_rate=sr, preset_name=args.preset, overrides=overrides
         )
-        rendered = [result.left, result.right]
+        result, rendered = stereo_result, [stereo_result.left, stereo_result.right]
     else:
-        result = master_audio(
+        mono_result = master_audio(
             planes[0], sample_rate=sr, preset_name=args.preset, overrides=overrides
         )
-        rendered = [result.samples]
+        result, rendered = mono_result, [mono_result.samples]
     report_path = getattr(args, "report", "")
 
     if args.output:
@@ -784,19 +853,28 @@ def cmd_master(args: argparse.Namespace) -> int:
         _write_mastering_report(report_path, result.report)
 
     if args.json:
-        payload: dict[str, object] = {
-            "preset": args.preset,
-            "input_lufs": round(result.input_lufs, 4),
-            "output_lufs": round(result.output_lufs, 4),
-            "applied_gain_db": round(result.applied_gain_db, 4),
-            "sample_rate": result.sample_rate,
-            "stages": result.stages,
-        }
+        payload: dict[str, object] = {}
+        # A preset name only describes the preset route; the other two chose
+        # every stage themselves, so they name the route instead of reporting a
+        # preset that took no part in the render.
+        if mode == "preset":
+            payload["preset"] = args.preset
+        else:
+            payload["mode"] = mode
+        payload.update(
+            {
+                "input_lufs": round(result.input_lufs, 4),
+                "output_lufs": round(result.output_lufs, 4),
+                "applied_gain_db": round(result.applied_gain_db, 4),
+                "sample_rate": result.sample_rate,
+                "stages": result.stages,
+            }
+        )
         if args.output:
             payload["output"] = args.output
         print(_strict_json_dumps(payload))
     else:
-        print(f"  Master preset: {args.preset}")
+        print(f"  Master preset: {args.preset}" if mode == "preset" else f"  Master {mode}:")
         print(f"    Stages:      {', '.join(result.stages) if result.stages else '(none)'}")
         print(f"    Input LUFS:  {result.input_lufs:.2f}")
         print(f"    Output LUFS: {result.output_lufs:.2f}")
@@ -1210,11 +1288,21 @@ def cmd_mastering_suggest(args: argparse.Namespace) -> int:
         dict(_parse_kv_params(args.params)) if args.params else {}
     )
     suggestion = json.loads(mastering_assistant_suggest(samples, sample_rate=sr, params=params))
-    # The suggested chain is fed back to the library verbatim (`mastering --config`),
-    # so the names under it belong to the chain param schema rather than to CLI
-    # stdout, and re-keying them would make the document the library rejects.
-    # Everything beside it is measurement output and follows the snake_case rule.
+    # The suggested chain is fed back to the library verbatim
+    # (`mastering --chain-config`), so the names under it belong to the chain
+    # param schema rather than to CLI stdout, and re-keying them would make the
+    # document the library rejects. Everything beside it is measurement output
+    # and follows the snake_case rule.
     chain_config = suggestion.pop("chainConfig", None)
+    config_out = getattr(args, "config_out", "") or ""
+    if config_out:
+        if not isinstance(chain_config, dict):
+            raise ValueError("mastering assistant returned no chain config to write")
+        # Written from the document already in hand rather than through the
+        # chain-only entry point, which would re-measure the file to reach the
+        # same config, and written through the shared artifact writer so a failed
+        # write carries the class every other CLI artifact's does.
+        _atomic_write_bytes(config_out, (_strict_json_dumps(chain_config) + "\n").encode("utf-8"))
     payload = _json_keys_to_snake_case(suggestion)
     if chain_config is not None:
         payload["chain_config"] = chain_config

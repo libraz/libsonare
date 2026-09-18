@@ -1151,7 +1151,12 @@ def _build_parser() -> _ContractArgumentParser:
         "mastering", parents=[common], help="Loudness-normalize with a true-peak ceiling"
     )
     mastering_p.add_argument("--preset", default="")
-    mastering_p.add_argument("--config", default=None)
+    # "--chain-config" names a complete chain config in the core's own
+    # ``{params, version}`` form. It is the canonical spelling because the bare
+    # ``--config`` carries a second meaning on this CLI (preset overrides on
+    # ``master``); that original spelling stays accepted here as an alias, and
+    # the handler's destination keeps its own name.
+    mastering_p.add_argument("--chain-config", "--config", dest="config", default=None)
     mastering_p.add_argument("--target-lufs", type=_finite_float, default=-14.0)
     mastering_p.add_argument("--ceiling-db", type=_finite_float, default=-1.0)
     mastering_p.add_argument("--params", default="")
@@ -1332,6 +1337,19 @@ def _build_parser() -> _ContractArgumentParser:
     master_p.add_argument("--preset", default="pop", help="Mastering preset name")
     master_p.add_argument("--config", default=None, help="Preset overrides as a JSON object")
     master_p.add_argument("--config-file", default=None, help="Preset override JSON file")
+    # A whole chain rather than a base to override: the file is a complete chain
+    # config in the core's own ``{params, version}`` form, the one
+    # ``mastering-suggest --config-out`` writes and the native CLI reads. It
+    # replaces the preset instead of layering on it, which is why it is a third
+    # spelling rather than a meaning added to --config / --config-file.
+    master_p.add_argument(
+        "--chain-config", default=None, help="Complete chain config JSON file (replaces --preset)"
+    )
+    master_p.add_argument(
+        "--assistant",
+        action="store_true",
+        help="Master with the chain the assistant suggests for this file",
+    )
     master_p.add_argument("--params", default="", help="Flat overrides as k=v,k=v (floats)")
     master_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
     mstream_p = sub.add_parser(
@@ -1382,6 +1400,11 @@ def _build_parser() -> _ContractArgumentParser:
         "mastering-suggest", parents=[stdout_options], help="Suggest a mastering chain as JSON"
     )
     msuggest_p.add_argument("--params", default="", help="Assistant params as k=v,k=v")
+    msuggest_p.add_argument(
+        "--config-out",
+        default="",
+        help="Write the suggested chain config where --chain-config reads it back",
+    )
     mprofile_p = sub.add_parser(
         "mastering-profile",
         parents=[stdout_options],

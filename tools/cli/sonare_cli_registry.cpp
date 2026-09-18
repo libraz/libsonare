@@ -697,20 +697,25 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  number_value("click-duration", 0.1), required_output()});
 
 #ifdef SONARE_WITH_MASTERING
-    add_command(commands, "mastering", true,
-                {string_value("preset"), path_value("config"), number_value("target-lufs", -14.0),
-                 number_value("ceiling-db", -1.0), string_value("params"), bits_value(),
-                 true_peak_oversample_value(), path_value("report"), output_value(),
-                 flag("assistant"), flag("enable-repair"), flag("explain"),
-                 // The remaining AssistantConfig fields. `prefer_streaming_safe`
-                 // defaults to true, so the reachable control is the one that
-                 // turns it off -- a `--prefer-streaming-safe` flag would only
-                 // ever restate the default. `--speech-mono-amount` carries no
-                 // domain because the suggester clamps it to [0, 1] rather than
-                 // refusing an outside value.
-                 target_platform_value(), flag("no-streaming-safe"),
-                 number_value("speech-mono-amount", 1.0)},
-                {}, nullptr, 0, /*preserves_stereo_input=*/true);
+    // "--chain-config" names a complete chain config in the core's own
+    // `{params, version}` form. It is the canonical spelling because the bare
+    // `--config` carries a second meaning on the Python CLI (preset overrides on
+    // `master`); that original spelling stays accepted here as an alias.
+    add_command(
+        commands, "mastering", true,
+        {string_value("preset"), path_value("chain-config", false, false, true, {"config"}),
+         number_value("target-lufs", -14.0), number_value("ceiling-db", -1.0),
+         string_value("params"), bits_value(), true_peak_oversample_value(), path_value("report"),
+         output_value(), flag("assistant"), flag("enable-repair"), flag("explain"),
+         // The remaining AssistantConfig fields. `prefer_streaming_safe`
+         // defaults to true, so the reachable control is the one that
+         // turns it off -- a `--prefer-streaming-safe` flag would only
+         // ever restate the default. `--speech-mono-amount` carries no
+         // domain because the suggester clamps it to [0, 1] rather than
+         // refusing an outside value.
+         target_platform_value(), flag("no-streaming-safe"),
+         number_value("speech-mono-amount", 1.0)},
+        {}, nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(
         commands, "mastering-processor", true,
         {required_string("processor"), string_value("params"), bits_value(), output_value()}, {},
@@ -748,7 +753,11 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {required_string("analysis"), required_path("reference"), string_value("params")});
     add_command(commands, "mastering-stereo-analyze", true,
                 {required_string("analysis"), required_path("reference"), string_value("params")});
-    add_command(commands, "mastering-suggest", true, {string_value("params")});
+    // `--config-out` writes the suggested chain in the core's own chain-config
+    // form, which is what `mastering --chain-config` reads back -- the same
+    // role `suggest-mix --scene-out` plays for a mix scene.
+    add_command(commands, "mastering-suggest", true,
+                {string_value("params"), string_value("config-out", "")});
     add_command(commands, "mastering-processors", false, {});
     add_command(commands, "mastering-pair-processors", false, {});
     add_command(commands, "mastering-pair-analyses", false, {});

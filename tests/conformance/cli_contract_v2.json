@@ -1157,10 +1157,12 @@
           "domain": null
         },
         {
-          "name": "config",
+          "name": "chain-config",
           "type": "path",
           "default": null,
-          "aliases": [],
+          "aliases": [
+            "config"
+          ],
           "repeatable": false,
           "required": false,
           "domain": null
@@ -1602,6 +1604,15 @@
         }
       ],
       "mastering-suggest": [
+        {
+          "name": "config-out",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
         {
           "name": "json",
           "type": "boolean",
@@ -4740,7 +4751,7 @@
       "status": "python_only",
       "option_status": "pending",
       "reason_kind": "by_design",
-      "reason": "the native CLI spells this mastering --config; the capability is on both front-ends under the name each already had"
+      "reason": "the native CLI spells this mastering --chain-config; the capability is on both front-ends under the name each already had"
     },
     "master": {
       "classification": "python_only",
@@ -6027,10 +6038,12 @@
           "domain": null
         },
         {
-          "name": "config",
+          "name": "chain-config",
           "type": "path",
           "default": null,
-          "aliases": [],
+          "aliases": [
+            "config"
+          ],
           "repeatable": false,
           "required": false,
           "domain": null
@@ -12414,6 +12427,15 @@
     {
       "path": "mastering-suggest",
       "options": [
+        {
+          "name": "config-out",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
         {
           "name": "json",
           "type": "boolean",
