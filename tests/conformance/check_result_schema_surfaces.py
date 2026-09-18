@@ -30,6 +30,7 @@ describing less of it than it claims.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -94,6 +95,9 @@ FAMILIES = {
         "surfaces": {
             "node": NODE / "types_mixing.ts",
             "wasm": WASM / "public_types_mixing.ts",
+            # A shipped JSON Schema is a declaration of the same shape for a
+            # consumer with no TypeScript, so it answers to the same writer.
+            "jsonschema": REPO_ROOT / "schemas/mixer-scene.schema.json",
         },
     },
     "audio_profile_schema_paths": {
@@ -135,6 +139,91 @@ def schema_paths(source: str, accessor: str) -> list[str] | None:
     if re.sub(r"[\s,]", "", remainder):
         return None
     return literals
+
+
+def _resolve(node: object, schema: dict) -> object:
+    """Follow `$ref` to the node it names, or None when it does not resolve."""
+    for _ in range(16):  # a cyclic $ref would otherwise spin here
+        if not isinstance(node, dict) or "$ref" not in node:
+            return node
+        ref = node["$ref"]
+        if not isinstance(ref, str) or not ref.startswith("#/"):
+            return None
+        target: object = schema
+        for part in ref[2:].split("/"):
+            if not isinstance(target, dict) or part not in target:
+                return None
+            target = target[part]
+        node = target
+    return None
+
+
+def _descend(schema: dict, segments: list[str]) -> object:
+    """The schema node `segments` names, or None when the walk cannot continue.
+
+    A `[]` segment steps through `items`, which the TypeScript walk cannot do
+    because a TS array type names its element inline. Keeping it here means a
+    path that is an array on one side and an object on the other is caught
+    rather than flattened away.
+    """
+    node: object = schema
+    for segment in segments:
+        name = segment.removesuffix("[]")
+        node = _resolve(node, schema)
+        props = node.get("properties") if isinstance(node, dict) else None
+        if not isinstance(props, dict) or name not in props:
+            return None
+        node = props[name]
+        if segment.endswith("[]"):
+            node = _resolve(node, schema)
+            if not isinstance(node, dict) or "items" not in node:
+                return None
+            node = node["items"]
+    return node
+
+
+def scan_json_schema(paths: list[str], text: str, root: str) -> tuple[list, list, int]:
+    """scan() for a shipped JSON Schema, with the same three return meanings."""
+    schema = json.loads(text)
+    # Anchored on the declared title for the same reason the TypeScript walk is
+    # anchored on a root type: a file-wide key search would accept a path that
+    # only some sub-schema carries.
+    if not isinstance(schema, dict) or schema.get("title") != root:
+        return [], list(paths), 0
+    missing: list[str] = []
+    unreached: list[str] = []
+    comparisons = 0
+    for path in paths:
+        segments = path.split(".")
+        parent = _descend(schema, segments[:-1])
+        resolved = _resolve(parent, schema) if parent is not None else None
+        props = resolved.get("properties") if isinstance(resolved, dict) else None
+        # No properties block is "the schema says nothing about this object",
+        # which is undecidable rather than absent -- the same verdict the
+        # TypeScript walk gives a Record<string, unknown>. A $ref that does not
+        # resolve lands here too, so a cycle cannot be reported as a missing
+        # leaf, which would claim the block was reached.
+        if not isinstance(props, dict):
+            unreached.append(path)
+            continue
+        comparisons += 1
+        leaf = segments[-1]
+        name = leaf.removesuffix("[]")
+        if name not in props:
+            missing.append(path)
+    return missing, unreached, comparisons
+
+
+def scan_surface(paths: list[str], path: Path, root: str) -> tuple[list, list, int]:
+    """Walk one surface with the reader its file kind calls for.
+
+    The one place a surface is matched to a walker: a second copy of this test
+    would let the self-test and the check disagree about what a file is, and the
+    disagreement would surface as every path being unreachable rather than as a
+    wrong reader.
+    """
+    walker = scan_json_schema if path.suffix == ".json" else scan
+    return walker(paths, path.read_text(), root)
 
 
 def scan(paths: list[str], text: str, root: str) -> tuple[list, list, int]:
@@ -187,7 +276,7 @@ def main() -> int:
             continue
         root = family["root"]
         for side, path in family["surfaces"].items():
-            missing, unreached, comparisons = scan(paths, path.read_text(), root)
+            missing, unreached, comparisons = scan_surface(paths, path, root)
             print(
                 f"{accessor} [{side}]: paths {len(paths)} | comparisons {comparisons}"
             )
@@ -201,8 +290,9 @@ def main() -> int:
                 failed = True
     if failed:
         return 1
+    surfaces = sum(len(family["surfaces"]) for family in FAMILIES.values())
     print(
-        f"every schema path of {len(FAMILIES)} results is declared on both TypeScript surfaces"
+        f"every schema path of {len(FAMILIES)} results is declared on each of its {surfaces} surfaces"
     )
     return 0
 

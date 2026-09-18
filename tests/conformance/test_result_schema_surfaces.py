@@ -13,10 +13,12 @@ list and a clean verdict over the part it managed to parse.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -42,8 +44,8 @@ class TheRepository(unittest.TestCase):
             self.assertIsNotNone(paths, accessor)
             self.assertGreater(len(paths), 5, accessor)
             for side, path in family["surfaces"].items():
-                missing, unreached, comparisons = check.scan(
-                    paths, path.read_text(), family["root"]
+                missing, unreached, comparisons = check.scan_surface(
+                    paths, path, family["root"]
                 )
                 self.assertEqual(unreached, [], f"{accessor} [{side}]")
                 self.assertEqual(missing, [], f"{accessor} [{side}]")
@@ -58,8 +60,17 @@ class TheRepository(unittest.TestCase):
         self.assertEqual(len(set(lists.values())), len(check.FAMILIES))
 
     def test_both_surfaces_are_checked_for_every_family(self):
+        """A family that lost a surface stays clean on the one it kept.
+
+        Stated as a floor rather than an exact set so a family can carry an
+        extra declaration of the same shape -- a shipped JSON Schema is one --
+        without the addition reading as the loss this case exists to catch.
+        """
         for accessor, family in check.FAMILIES.items():
-            self.assertEqual(sorted(family["surfaces"]), ["node", "wasm"], accessor)
+            surfaces = family["surfaces"]
+            self.assertLessEqual({"node", "wasm"}, set(surfaces), accessor)
+            for side, path in surfaces.items():
+                self.assertTrue(path.is_file(), f"{accessor} [{side}]: {path}")
 
 
 class RootAnchoring(unittest.TestCase):
@@ -164,6 +175,65 @@ class TheListReader(unittest.TestCase):
             self.assertIsNone(
                 check.schema_paths(source, accessor + "_no_such"), accessor
             )
+
+
+class JsonSchemaSurface(unittest.TestCase):
+    """The JSON Schema walk, held to the same failures the TypeScript one is.
+
+    Each case starts from the schema actually shipped and breaks exactly one
+    thing, so a clean control and a red mutant differ by that one thing and
+    nothing else.
+    """
+
+    ROOT: ClassVar[str] = "MixSceneDocument"
+    PATHS: ClassVar[list[str]] = ["version", "strips[].sends[].sendDb", "strips[].sends"]
+
+    def setUp(self):
+        self.schema = json.loads(
+            (check.REPO_ROOT / "schemas/mixer-scene.schema.json").read_text()
+        )
+
+    def scan(self, schema):
+        return check.scan_json_schema(self.PATHS, json.dumps(schema), self.ROOT)
+
+    def test_the_shipped_schema_is_the_control(self):
+        missing, unreached, comparisons = self.scan(self.schema)
+        self.assertEqual((missing, unreached), ([], []))
+        self.assertEqual(comparisons, len(self.PATHS))
+
+    def test_a_removed_leaf_is_reported_as_missing(self):
+        del self.schema["$defs"]["send"]["properties"]["sendDb"]
+        missing, unreached, _ = self.scan(self.schema)
+        self.assertEqual(missing, ["strips[].sends[].sendDb"])
+        self.assertEqual(unreached, [])
+
+    def test_a_removed_parent_takes_its_children_out_of_the_comparison(self):
+        del self.schema["$defs"]["strip"]["properties"]["sends"]
+        missing, unreached, comparisons = self.scan(self.schema)
+        self.assertEqual(missing, ["strips[].sends"])
+        self.assertEqual(unreached, ["strips[].sends[].sendDb"])
+        self.assertEqual(comparisons, 2)
+
+    def test_an_array_turned_scalar_is_caught_rather_than_flattened(self):
+        """The one failure the TypeScript walk cannot see, which is why `[]`
+        steps through `items` here instead of being stripped."""
+        self.schema["$defs"]["strip"]["properties"]["sends"] = {"type": "string"}
+        missing, unreached, _ = self.scan(self.schema)
+        self.assertEqual(missing, [])
+        self.assertEqual(unreached, ["strips[].sends[].sendDb"])
+
+    def test_a_wrong_title_fails_rather_than_reporting_clean(self):
+        self.schema["title"] = "SomethingElse"
+        missing, unreached, comparisons = self.scan(self.schema)
+        self.assertEqual(comparisons, 0)
+        self.assertEqual(unreached, self.PATHS)
+        self.assertEqual(missing, [])
+
+    def test_a_cyclic_ref_terminates_instead_of_spinning(self):
+        self.schema["$defs"]["send"] = {"$ref": "#/$defs/send"}
+        missing, unreached, _ = self.scan(self.schema)
+        self.assertEqual(unreached, ["strips[].sends[].sendDb"])
+        self.assertEqual(missing, [])
 
 
 if __name__ == "__main__":

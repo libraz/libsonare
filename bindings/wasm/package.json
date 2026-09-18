@@ -26,6 +26,7 @@
     "./wasm": "./dist/sonare.wasm",
     "./schemas/realtime-voice-changer-preset.schema.json": "./dist/schemas/realtime-voice-changer-preset.schema.json",
     "./schemas/realtime-voice-changer-preset-pack.schema.json": "./dist/schemas/realtime-voice-changer-preset-pack.schema.json",
+    "./schemas/mixer-scene.schema.json": "./dist/schemas/mixer-scene.schema.json",
     "./package.json": "./package.json"
   },
   "files": [

@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://libraz.net/schemas/libsonare/mixer-scene.schema.json",
+  "title": "MixSceneDocument",
+  "description": "A libsonare mixer scene: the document `sonare mix --scene` reads, `suggestMixScene` returns, and `Mixer.fromSceneJson` builds a graph from. Field paths are held to src/mixing/api/scene_json.cpp's scene_schema_paths() by tests/conformance/check_result_schema_surfaces.py, so this file cannot drift from the writer. Two things this schema deliberately does not describe. The parser also accepts a legacy snake_case spelling of most keys (fader_db beside faderDb); the writer never emits one, and admitting them here would let a document validate in a shape nothing produces. And a scene reaches the mixer through the C++ parser, which refuses values this schema cannot express - an unknown insert processor, a send naming a bus that is not in the document, a connection whose endpoints do not exist. Validating here narrows what reaches that parser; it does not replace it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "description": "Scene document version. 1 is the only accepted value; the parser refuses anything else rather than attempting a migration.",
+      "const": 1
+    },
+    "strips": {
+      "description": "Channel strips. A strip is fed by one source and is named by its id, which is what a send's destinationBusId, a connection's source, and a vcaGroup's members refer to.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/strip" }
+    },
+    "buses": {
+      "description": "Summing buses. Exactly one bus conventionally carries role 'master'; every other bus reaches it through a connection.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/bus" }
+    },
+    "vcaGroups": {
+      "description": "VCA groups. A group applies its gain to every member strip's vcaOffsetDb without moving the strips' own faders.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/vcaGroup" }
+    },
+    "connections": {
+      "description": "Routing edges. Each names a source strip or bus and the bus it sums into; a strip reaches the output only through one.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/connection" }
+    }
+  },
+  "$defs": {
+    "insert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["processor"],
+      "properties": {
+        "slot": {
+          "description": "Where the insert runs relative to the fader. Defaults to 'pre'.",
+          "enum": ["pre", "post"],
+          "default": "pre"
+        },
+        "processor": {
+          "description": "Processor id, e.g. 'dynamics.compressor' or 'effects.reverb.plate'. The accepted set is the `processors[].id` list in the capability catalog (schemas/capability-catalog.schema.json); an id outside it is refused by the parser, not by this schema.",
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "description": "The processor's parameters as a JSON **string**, not as an object - the value is a nested document that the mixer parses separately, so it is written as text (\"{\\\"ratio\\\":4}\"). Each processor's parameter names, ranges and defaults are the catalog's `processors[].params[]`.",
+          "type": "string"
+        },
+        "sidechainKey": {
+          "description": "Names the signal this insert keys off, for the processors that take one. Empty means no sidechain.",
+          "type": "string"
+        }
+      }
+    },
+    "send": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["destinationBusId"],
+      "properties": {
+        "id": {
+          "description": "Send id, unique within the strip.",
+          "type": "string"
+        },
+        "destinationBusId": {
+          "description": "The id of the bus this send feeds. It must name a bus present in this document.",
+          "type": "string",
+          "minLength": 1
+        },
+        "sendDb": {
+          "description": "Send level in dB.",
+          "type": "number",
+          "default": 0
+        },
+        "timing": {
+          "description": "Whether the send is taken before or after the strip's fader. A post-fader send follows the fader; a pre-fader one does not.",
+          "enum": ["pre", "post"],
+          "default": "post"
+        }
+      }
+    },
+    "surroundPan": {
+      "description": "Surround position. Omitted entirely by the writer at the centred point-source default, so a stereo scene carries no surroundPan object at all.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "azimuth": { "type": "number", "default": 0 },
+        "elevation": { "type": "number", "default": 0 },
+        "divergence": { "type": "number", "default": 0 },
+        "lfe": { "type": "number", "default": 0 },
+        "distance": { "type": "number", "default": 1 }
+      }
+    },
+    "metering": {
+      "description": "Which meters this strip computes. Switching one off costs nothing but the measurement.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "lufs": { "type": "boolean", "default": true },
+        "truePeak": { "type": "boolean", "default": true },
+        "truePeakOversample": {
+          "description": "Oversampling factor for the inter-sample peak meter.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 4
+        }
+      }
+    },
+    "strip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "description": "Strip id, unique within the document. A `mix --input ID=file.wav` entry feeds the strip of this name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "inputTrimDb": {
+          "description": "Gain applied before the strip's inserts, used to stage a source to a working level.",
+          "type": "number",
+          "default": 0
+        },
+        "faderDb": {
+          "description": "The strip's fader, applied after its pre-fader inserts.",
+          "type": "number",
+          "default": 0
+        },
+        "vcaOffsetDb": {
+          "description": "Offset contributed by the vcaGroups this strip belongs to. Written by the mixer; setting it by hand is additive with the group's own gain.",
+          "type": "number",
+          "default": 0
+        },
+        "pan": {
+          "description": "Stereo position, -1 hard left to +1 hard right.",
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1,
+          "default": 0
+        },
+        "width": {
+          "description": "Stereo width: 0 is mono, 1 is unchanged, 2 is doubled. The mixer clamps to [0, 2] on construction, so a scene it emitted is always inside this range and a value outside it would be silently narrowed rather than honoured. Requires a stereo source.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 1
+        },
+        "muted": { "type": "boolean", "default": false },
+        "soloed": { "type": "boolean", "default": false },
+        "soloSafe": {
+          "description": "Keeps this strip audible while another is soloed - what a reverb return wants, so soloing a source does not also mute its tail.",
+          "type": "boolean",
+          "default": false
+        },
+        "panMode": {
+          "description": "Panner shape, matching SONARE_PAN_MODE_*. 0 is balance, which is what `pan` drives; a dual-pan mode reads dualPanLeft / dualPanRight instead.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "dualPanLeft": {
+          "description": "Destination of the source's left channel under a dual-pan panMode. Ignored in balance mode.",
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1,
+          "default": -1
+        },
+        "dualPanRight": {
+          "description": "Destination of the source's right channel under a dual-pan panMode. Ignored in balance mode.",
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1,
+          "default": 1
+        },
+        "polarityInvertLeft": { "type": "boolean", "default": false },
+        "polarityInvertRight": { "type": "boolean", "default": false },
+        "panLaw": {
+          "description": "Pan law, matching the PanLaw enum order. 0 is Const3dB.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "channelDelaySamples": {
+          "description": "Whole-sample delay applied to this strip, for time-aligning a multi-mic source against its siblings.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "sourceLayout": {
+          "description": "Channel layout of the source feeding this strip. Written only when it is not the stereo default.",
+          "enum": ["mono", "stereo", "5.1", "7.1"],
+          "default": "stereo"
+        },
+        "surroundPan": { "$ref": "#/$defs/surroundPan" },
+        "metering": { "$ref": "#/$defs/metering" },
+        "inserts": {
+          "description": "Processors on this strip, run in array order within each slot.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/insert" }
+        },
+        "sends": {
+          "description": "Feeds from this strip to buses, each with its own level and timing.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/send" }
+        }
+      }
+    },
+    "bus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "description": "Bus id, unique within the document and referred to by sends and connections.",
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "description": "What the bus is for. 'master' marks the output bus and carries the project output layout; 'aux' is an effect return and 'group' a subgroup. The parser does not restrict this string, so a role it does not recognise is stored rather than refused - which means a misspelt 'master' produces a scene with no output bus instead of an error.",
+          "type": "string",
+          "default": "aux"
+        },
+        "layout": {
+          "description": "Channel layout of this bus. The master bus carries the project output layout.",
+          "enum": ["mono", "stereo", "5.1", "7.1"],
+          "default": "stereo"
+        },
+        "inputTrimDb": { "type": "number", "default": 0 },
+        "width": {
+          "description": "Stereo width of the bus, clamped to [0, 2] the way a strip's is.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 1
+        },
+        "polarityInvertLeft": { "type": "boolean", "default": false },
+        "polarityInvertRight": { "type": "boolean", "default": false },
+        "inserts": {
+          "description": "Processors on this bus, run on the summed signal.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/insert" }
+        }
+      }
+    },
+    "vcaGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "gainDb": {
+          "description": "Gain the group contributes to every member's vcaOffsetDb.",
+          "type": "number",
+          "default": 0
+        },
+        "members": {
+          "description": "Ids of the strips this group drives.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "connection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "destination"],
+      "properties": {
+        "source": {
+          "description": "Id of the strip or bus this edge takes signal from.",
+          "type": "string",
+          "minLength": 1
+        },
+        "destination": {
+          "description": "Id of the bus this edge sums into.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
