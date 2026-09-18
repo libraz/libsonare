@@ -12,6 +12,9 @@ import type {
   NoteObjectInput,
   NoteSetEntry,
   NoteStretchOptions,
+  NoteTarget,
+  NoteTargetAssignResult,
+  NoteTargetUnmatchedPolicy,
   PitchDecompositionResult,
   VoicedFlags,
 } from './public_types';
@@ -171,6 +174,46 @@ export interface MergeNotesRequest extends NoteSetRequest {
   first: number;
   /** Index of the last note to join, inclusive. */
   last: number;
+}
+
+/** Canonical request form for {@link noteTargetsFromSmf}. */
+export interface NoteTargetsFromSmfRequest {
+  /** The Standard MIDI File, in memory. */
+  data: Uint8Array;
+  /**
+   * Which MIDI-bearing track to read, NOT an index into the file's own tracks: a
+   * track holding only meta events — a conductor track carrying the tempo map is
+   * the usual one — is not counted. A file whose first track is a conductor track
+   * therefore has its melody at 0, which is also the default.
+   */
+  trackIndex?: number;
+}
+
+/** Canonical request form for {@link assignNoteTargets}. */
+export interface AssignNoteTargetsRequest {
+  /**
+   * The notes to assign targets to. Not modified; the result carries a new array.
+   * Only `onsetSample`, `offsetSample` and `medianHz` are read.
+   */
+  notes: readonly NoteObject[];
+  /** Converts each note's sample span to seconds, so the targets line up. Must be > 0. */
+  sampleRate: number;
+  /** The reference melody. An empty array assigns nothing and applies the policy. */
+  targets: readonly NoteTarget[];
+  /** What to do with a note that has a pitch and no target. Default `'leave'`. */
+  unmatchedPolicy?: NoteTargetUnmatchedPolicy;
+  /**
+   * Fraction of the note that must overlap a target for it to count, in `[0, 1]`.
+   * Default 0.5. `0` is its own meaning — any overlap at all counts — not a
+   * request for the default.
+   */
+  minOverlapRatio?: number;
+  /**
+   * Where the assigned shift saturates, in semitones. Default 12. `0` is its own
+   * meaning, as above: every correction saturates to nothing and the take is left
+   * as recorded. Must not be negative.
+   */
+  maxCorrectionSemitones?: number;
 }
 
 /**
@@ -497,6 +540,96 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
     request.notes,
     request.first,
     request.last,
+    request,
+  );
+}
+
+/**
+ * Read one track of an in-memory Standard MIDI File as a reference melody.
+ *
+ * Each note-on is paired with the next note-off of the same note number on the
+ * same channel, and the pair becomes one {@link NoteTarget} at the note's own
+ * pitch. Times come from the file's tempo map, so a tempo change or a ramp inside
+ * it is followed rather than the initial tempo being scaled.
+ *
+ * A note-on the track never closes is dropped: it has no end, and the track's end
+ * is not a substitute for one — with events after it the note would span the whole
+ * remainder and, being the longest overlap everywhere, take the assignment away
+ * from every note that follows. Zero-length notes are skipped for the mirror
+ * reason: they overlap nothing, so they could never be assigned.
+ *
+ * @param request - The file's bytes and which MIDI-bearing track to read
+ * @returns One target per closed note, sorted by `startSec`; an empty array for a
+ *   track with no closed note, which is a measurement that came up empty rather
+ *   than an error
+ * @throws SonareError (`InvalidFormat`) when the bytes are not a readable SMF
+ * @throws SonareError (`InvalidParameter`) when `trackIndex` names no
+ *   MIDI-bearing track
+ *
+ * @example
+ * ```ts
+ * // A project's own export writes the tempo map as a conductor track, which
+ * // carries no MIDI, so the melody is at index 0 rather than 1.
+ * const targets = noteTargetsFromSmf({ data: project.exportSmf() });
+ * ```
+ */
+export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarget[] {
+  const module = requireModule();
+  if (typeof module.noteTargetsFromSmf !== 'function') {
+    throw new Error('libsonare was built without arrangement support');
+  }
+  return module.noteTargetsFromSmf(request.data, request.trackIndex ?? 0);
+}
+
+/**
+ * Write each note's `edit.pitchShiftSemitones` from the reference target it
+ * overlaps, which is what makes a take follow a written melody instead of a
+ * single stated interval.
+ *
+ * A note is matched to the target it overlaps longest, provided that overlap is
+ * at least `minOverlapRatio` of the note's own span; an exact tie goes to the
+ * target that starts first, so the answer does not depend on the order the
+ * targets arrived in. The shift is `targetMidi` minus the note's own `medianHz`
+ * as a MIDI number, saturated at `maxCorrectionSemitones` — a reference an octave
+ * out is a wrong reference, and a rejected call would tell the caller less than a
+ * bounded correction does.
+ *
+ * A note whose `medianHz` is not finite and positive is never assigned and never
+ * edited, whatever `unmatchedPolicy` says. Such a note has no measured pitch to
+ * correct from, so `'nearest'` would compute a shift from a pitch that does not
+ * exist; the policy governs notes that have a pitch and no target, which is a
+ * different thing from having no pitch.
+ *
+ * The notes handed in are not modified. Only `edit.pitchShiftSemitones` and
+ * `edit.muted` are written on the returned copies; every other field of a note —
+ * its spans, its metrics, its amplitude curve and its other edits — comes back
+ * exactly as it went in.
+ *
+ * @param request - The notes, their sample rate, the reference melody, and the
+ *   three tunable knobs
+ * @returns The new note set and how many notes received a target
+ * @throws SonareError (`InvalidParameter`) on a non-positive `sampleRate`, an
+ *   unknown `unmatchedPolicy`, a `minOverlapRatio` outside `[0, 1]`, a negative
+ *   `maxCorrectionSemitones`, a note missing `onsetSample` / `offsetSample`, or a
+ *   target whose `startSec`, `endSec` or `targetMidi` is not finite
+ *
+ * @example
+ * ```ts
+ * const notes = extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate });
+ * const { notes: retuned, assignedCount } = assignNoteTargets({
+ *   notes,
+ *   sampleRate,
+ *   targets: noteTargetsFromSmf({ data: smf }),
+ *   unmatchedPolicy: 'mute',
+ * });
+ * const corrected = renderNotes({ samples, sampleRate, notes: retuned });
+ * ```
+ */
+export function assignNoteTargets(request: AssignNoteTargetsRequest): NoteTargetAssignResult {
+  return requireModule().assignNoteTargets(
+    request.notes,
+    request.sampleRate,
+    request.targets,
     request,
   );
 }

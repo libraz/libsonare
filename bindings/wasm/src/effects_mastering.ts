@@ -1,9 +1,11 @@
 export {
+  assignNoteTargets,
   decomposeNotePitch,
   extractNotes,
   mergeNotes,
   noteMove,
   noteStretch,
+  noteTargetsFromSmf,
   renderNotes,
   splitNote,
 } from './effects_note_ops';

@@ -227,6 +227,38 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
+    # sonare_note_targets_from_smf + sonare_free_note_targets. The SMF reader
+    # carries the arrangement gate, not the pitch-editor one the assignment
+    # below is behind, so the two are guarded apart.
+    if hasattr(lib, "sonare_note_targets_from_smf"):
+        lib.sonare_note_targets_from_smf.restype = ctypes.c_int32
+        lib.sonare_note_targets_from_smf.argtypes = [
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(SonareNoteTarget)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_free_note_targets.restype = None
+        lib.sonare_free_note_targets.argtypes = [ctypes.POINTER(SonareNoteTarget)]
+
+    # sonare_note_target_assign_config_default + sonare_assign_note_targets
+    if hasattr(lib, "sonare_assign_note_targets"):
+        lib.sonare_note_target_assign_config_default.restype = ctypes.c_int32
+        lib.sonare_note_target_assign_config_default.argtypes = [
+            ctypes.POINTER(SonareNoteTargetAssignConfig)
+        ]
+        lib.sonare_assign_note_targets.restype = ctypes.c_int32
+        lib.sonare_assign_note_targets.argtypes = [
+            ctypes.POINTER(SonareNoteObject),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareNoteTarget),
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareNoteTargetAssignConfig),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
     # sonare_polyphonic_* (the handle door onto the same note objects)
     if hasattr(lib, "sonare_polyphonic_analyze"):
         lib.sonare_polyphonic_analyze.restype = ctypes.c_int32

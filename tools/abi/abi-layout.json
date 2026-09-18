@@ -4967,6 +4967,54 @@
     ],
     "size": 16
   },
+  "SonareNoteTarget": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "start_sec",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "end_sec",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "target_midi",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 24
+  },
+  "SonareNoteTargetAssignConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "unmatched_policy",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_overlap_ratio",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_correction_semitones",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
   "SonareOnsetDetectConfig": {
     "align": 4,
     "fields": [

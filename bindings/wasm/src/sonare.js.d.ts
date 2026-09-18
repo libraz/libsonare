@@ -13,6 +13,9 @@ import type {
   NoteObject,
   NoteObjectInput,
   NoteSetEntry,
+  NoteTarget,
+  NoteTargetAssignResult,
+  NoteTargetUnmatchedPolicy,
   PercussiveEvent,
   PercussiveEventInput,
   PitchDecompositionResult,
@@ -2195,6 +2198,18 @@ export interface SonareModule {
       voicedThreshold?: number;
     },
   ) => NoteObject[];
+  assignNoteTargets: (
+    notes: readonly NoteObject[],
+    sampleRate: number,
+    targets: readonly NoteTarget[],
+    options: {
+      unmatchedPolicy?: NoteTargetUnmatchedPolicy;
+      minOverlapRatio?: number;
+      maxCorrectionSemitones?: number;
+    },
+  ) => NoteTargetAssignResult;
+  /** Absent from a build without arrangement support, which is what links the MIDI reader. */
+  noteTargetsFromSmf?: (data: Uint8Array, trackIndex: number) => NoteTarget[];
   createPolyphonicAnalysis: (
     samples: Float32Array,
     sampleRate: number,

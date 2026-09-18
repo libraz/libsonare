@@ -572,6 +572,37 @@ class SonareNoteObjectsResult(CStruct):
     ]
 
 
+class SonareNoteTarget(CStruct):
+    """Maps to SonareNoteTarget in sonare_c_effects.h."""
+
+    _fields_ = [
+        ("start_sec", ctypes.c_double),
+        ("end_sec", ctypes.c_double),
+        ("target_midi", ctypes.c_float),
+    ]
+
+
+# SonareNoteTargetAssignConfig.unmatched_policy values.
+SONARE_NOTE_TARGET_UNMATCHED_LEAVE = 0
+SONARE_NOTE_TARGET_UNMATCHED_MUTE = 1
+SONARE_NOTE_TARGET_UNMATCHED_NEAREST = 2
+
+
+class SonareNoteTargetAssignConfig(CStruct):
+    """Maps to SonareNoteTargetAssignConfig in sonare_c_effects.h.
+
+    Zeroing this is not the default: a zeroed ``max_correction_semitones``
+    saturates every correction to nothing. Seed it through
+    ``sonare_note_target_assign_config_default``.
+    """
+
+    _fields_ = [
+        ("unmatched_policy", ctypes.c_int32),
+        ("min_overlap_ratio", ctypes.c_float),
+        ("max_correction_semitones", ctypes.c_float),
+    ]
+
+
 class SonarePercussiveEventConfig(CStruct):
     """Maps to SonarePercussiveEventConfig in sonare_c_effects.h."""
 

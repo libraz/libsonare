@@ -221,6 +221,54 @@ export interface NoteSetEntry {
 }
 
 /**
+ * One note of a reference melody, as `noteTargetsFromSmf` returns it and
+ * `assignNoteTargets` reads it.
+ *
+ * Times are seconds from the start of the audio the notes being corrected were
+ * extracted from — a reference is lined up against a take by its own clock, not
+ * by a frame index into either one. Every field must be finite.
+ */
+export interface NoteTarget {
+  /** First second of the target's span. */
+  startSec: number;
+  /** One past the last second of the span. */
+  endSec: number;
+  /** The pitch that stretch of the part is supposed to be, as a MIDI number. */
+  targetMidi: number;
+}
+
+/**
+ * What `assignNoteTargets` does with a note that has a measurable pitch and no
+ * target.
+ *
+ * A note carrying no pitch at all is a different case and no policy reaches it:
+ * there is nothing to correct from, so it is never assigned and never edited.
+ */
+export type NoteTargetUnmatchedPolicy =
+  /** Leave the edit alone; the note renders as recorded. Default. */
+  | 'leave'
+  /** Mute the note's span. */
+  | 'mute'
+  /** Take the nearest target in time, however far away it is. */
+  | 'nearest';
+
+/** What `assignNoteTargets` returns. */
+export interface NoteTargetAssignResult {
+  /**
+   * The note set with each assigned note's `edit.pitchShiftSemitones` — and,
+   * under `'mute'`, its `edit.muted` — rewritten. A new array: the notes handed
+   * in are not touched, and every other field of a note comes back as it went.
+   */
+  notes: NoteObject[];
+  /**
+   * How many notes received a target. Zero is a legitimate answer — a reference
+   * that does not line up with the take — which is why it is reported rather
+   * than left for the caller to infer from the edits.
+   */
+  assignedCount: number;
+}
+
+/**
  * One note's pitch curve split into a centre, a slow drift and a vibrato by
  * `decomposeNotePitch`.
  *

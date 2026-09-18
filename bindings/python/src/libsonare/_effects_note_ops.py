@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ctypes
+import dataclasses
 from collections.abc import Sequence
+from typing import cast
 
 import numpy as np
 
@@ -24,8 +26,14 @@ from ._effects_note_model import (
     _transcribe_sample_rate,
 )
 from ._ffi import (
+    SONARE_NOTE_TARGET_UNMATCHED_LEAVE,
+    SONARE_NOTE_TARGET_UNMATCHED_MUTE,
+    SONARE_NOTE_TARGET_UNMATCHED_NEAREST,
+    SonareNoteObject,
     SonareNoteObjectsResult,
     SonareNoteRenderConfig,
+    SonareNoteTarget,
+    SonareNoteTargetAssignConfig,
     SonarePitchDecompositionResult,
     SonareTranscribeResult,
 )
@@ -36,6 +44,8 @@ from ._runtime import (
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
+    _narrow_double,
+    _narrow_float,
     _out_float_array,
     _to_c_float,
     _to_c_float_array,
@@ -44,7 +54,16 @@ from ._runtime import (
     _to_c_size_t,
     _unsupported_effect_symbol,
     _validate_samples,
+    _validate_scalar,
 )
+
+# The policy is published as a name, so the ordinals live here and go no further
+# than the ctypes boundary below.
+_UNMATCHED_POLICIES = {
+    "leave": SONARE_NOTE_TARGET_UNMATCHED_LEAVE,
+    "mute": SONARE_NOTE_TARGET_UNMATCHED_MUTE,
+    "nearest": SONARE_NOTE_TARGET_UNMATCHED_NEAREST,
+}
 
 
 @_guard_buffer("samples")
@@ -562,6 +581,272 @@ def merge_notes(
             _to_c_size_t(_note_set_index("merge_notes", "last", last), "last"),
         ),
     )
+
+
+@dataclasses.dataclass
+class NoteTarget:
+    """One note of a reference melody.
+
+    Times are seconds from the start of the audio the notes being corrected were
+    extracted from, so a reference written against a different take has to be
+    offset before it is passed in. Nothing here has a default: a target is three
+    quantities and a zero-length span at pitch 0 is not a sensible one.
+
+    Attributes:
+        start_sec: Where this stretch of the melody begins.
+        end_sec: Where it ends. A span that is not longer than ``start_sec``
+            overlaps nothing, so it can never be assigned.
+        target_midi: The pitch that stretch is supposed to be, as a MIDI number.
+            Fractional values are meaningful -- a reference measured off audio
+            rather than written in a sequencer lands between the keys.
+
+    Example:
+        >>> targets = [libsonare.NoteTarget(0.0, 0.5, 60.0),
+        ...            libsonare.NoteTarget(0.5, 1.0, 67.0)]
+    """
+
+    start_sec: float
+    end_sec: float
+    target_midi: float
+
+
+def _unmatched_policy_value(fn_name: str, policy: str) -> int:
+    """Resolve the policy name to its ordinal, refusing an unknown one by name.
+
+    The ordinal is never published: a caller passing 1 would be spelling a
+    number the C ABI happens to use today, and a name says which of the three
+    behaviours was wanted.
+    """
+    if not isinstance(policy, str) or policy not in _UNMATCHED_POLICIES:
+        raise SonareValueError(
+            f"{fn_name}: unmatched_policy must be one of {sorted(_UNMATCHED_POLICIES)}"
+        )
+    return _UNMATCHED_POLICIES[policy]
+
+
+def _note_targets_to_c(fn_name: str, targets: Sequence[NoteTarget]) -> tuple[object, int]:
+    """Marshal a target list into the C target array; an empty set is NULL and 0.
+
+    The two times are doubles, which ``CStruct`` has no fold to refuse, so their
+    finiteness is checked here -- the C ABI rejects a non-finite target, and a
+    refusal naming ``targets[i].start_sec`` says which one.
+    """
+    count = len(targets)
+    if count == 0:
+        return None, 0
+
+    rows = (SonareNoteTarget * count)()
+    for i, target in enumerate(targets):
+        rows[i].start_sec = _narrow_double(target.start_sec, f"{fn_name}: targets[{i}].start_sec")
+        rows[i].end_sec = _narrow_double(target.end_sec, f"{fn_name}: targets[{i}].end_sec")
+        rows[i].target_midi = _narrow_float(
+            target.target_midi, f"{fn_name}: targets[{i}].target_midi"
+        )
+    return rows, count
+
+
+def _note_with_assigned_edit(note: NoteObject, row: SonareNoteObject) -> NoteObject:
+    """Copy one note out of the edited C row, leaving the caller's own untouched.
+
+    The C call rewrites ``pitch_shift_semitones`` and ``muted`` in place and
+    reads nothing else back, so those two are taken from the row and everything
+    else -- the span, the metrics, the other edits, both curves -- is the note
+    that went in.
+    """
+    return dataclasses.replace(
+        note,
+        edit=dataclasses.replace(
+            note.edit,
+            pitch_shift_semitones=float(row.edit.pitch_shift_semitones),
+            muted=bool(row.edit.muted),
+        ),
+    )
+
+
+def note_targets_from_smf(data: bytes | bytearray, *, track_index: int = 0) -> list[NoteTarget]:
+    """Read one track of an in-memory Standard MIDI File as a reference melody.
+
+    Each note-on is paired with the next note-off of the same note number on the
+    same channel, and the pair becomes one :class:`NoteTarget` at the note's own
+    pitch. Times follow the file's tempo map, so a tempo change or a tempo ramp
+    inside it is honoured rather than the initial tempo being scaled.
+
+    A note-on the track never closes is dropped. It has no end, and the track's
+    end is not a substitute for one -- the file's length is derived from its last
+    event, which is the open note-on itself when the file stops there; with
+    events after it, the note would instead span the whole remainder and, being
+    the longest overlap everywhere, take the assignment away from every note that
+    follows. A zero-length note is skipped too: it overlaps nothing, so it could
+    never be assigned.
+
+    Args:
+        data: The whole SMF as bytes.
+        track_index: Index into the tracks that carried MIDI events, **not** the
+            SMF's own track numbering: a track holding only meta events -- a
+            conductor track carrying the tempo map is the usual one -- is not
+            counted, so a file whose first track is a conductor track has its
+            melody at 0.
+
+    Returns:
+        List of :class:`NoteTarget` sorted by ``start_sec``. A track with no
+        closed note is an empty list rather than an error.
+
+    Raises:
+        SonareValueError: If ``track_index`` is not a whole number fitting in a C
+            ``int``.
+        SonareError: ``INVALID_FORMAT`` when the bytes are not a readable SMF,
+            ``INVALID_PARAMETER`` when the file has no MIDI-bearing track at
+            ``track_index``, or ``NOT_SUPPORTED`` when the library was built
+            without the arrangement subsystem.
+
+    Example:
+        >>> targets = libsonare.note_targets_from_smf(Path("melody.mid").read_bytes())
+        >>> notes, assigned = libsonare.assign_note_targets(notes, sr, targets)
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_note_targets_from_smf"):
+        raise _unsupported_effect_symbol("sonare_note_targets_from_smf")
+
+    raw = bytes(data)
+    buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
+    out = ctypes.POINTER(SonareNoteTarget)()
+    out_count = ctypes.c_size_t()
+    _check(
+        lib.sonare_note_targets_from_smf(
+            buf,
+            _to_c_size_t(len(raw), "length"),
+            _to_c_int(track_index, "track_index"),
+            ctypes.byref(out),
+            ctypes.byref(out_count),
+        )
+    )
+    try:
+        return [
+            NoteTarget(
+                start_sec=float(out[i].start_sec),
+                end_sec=float(out[i].end_sec),
+                target_midi=float(out[i].target_midi),
+            )
+            for i in range(out_count.value)
+        ]
+    finally:
+        if out:
+            lib.sonare_free_note_targets(out)
+
+
+def assign_note_targets(
+    notes: Sequence[NoteObject],
+    sample_rate: int,
+    targets: Sequence[NoteTarget],
+    *,
+    unmatched_policy: str = "leave",
+    min_overlap_ratio: float | None = None,
+    max_correction_semitones: float | None = None,
+) -> tuple[list[NoteObject], int]:
+    """Write each note's ``pitch_shift_semitones`` from the target it overlaps.
+
+    This is what makes a take follow a written melody rather than a single stated
+    interval: hand it the notes :func:`extract_notes` found and a reference --
+    :func:`note_targets_from_smf` reads one out of a MIDI file -- and render the
+    result with :func:`render_notes`.
+
+    A note is matched to the target it overlaps longest, provided that overlap is
+    at least ``min_overlap_ratio`` of the note's own span; ties go to the target
+    that starts first, so the answer does not depend on the order the targets
+    arrived in. The shift is ``target_midi`` minus the note's own ``median_hz``
+    as a MIDI number, saturated at ``max_correction_semitones`` rather than
+    refused: a reference an octave out is a wrong reference, and a rejected call
+    tells the caller less than a bounded correction does.
+
+    A note whose ``median_hz`` is not finite and positive is never assigned and
+    never edited, whatever the policy says. Such a note has no measured pitch to
+    correct from, so ``"nearest"`` would compute a shift from a pitch that does
+    not exist; the policy governs notes that have a pitch and no target, which is
+    a different thing from having no pitch.
+
+    Args:
+        notes: The notes to correct. They are **not** modified -- the C call
+            edits in place, so this copies in and copies out, and the returned
+            notes carry the same amplitude curves and envelopes the input did.
+        sample_rate: Converts each note's sample span to seconds; must be
+            positive.
+        targets: The reference melody. An empty sequence assigns nothing and
+            applies ``unmatched_policy`` to every note carrying a pitch.
+        unmatched_policy: What to do with a note that has a measurable pitch and
+            no target. ``"leave"`` leaves its edit alone and the note renders as
+            recorded; ``"mute"`` mutes its span; ``"nearest"`` takes the target
+            nearest in time, however far away it is, and counts as an
+            assignment.
+        min_overlap_ratio: Fraction of the note that must overlap a target for it
+            to count, in ``[0, 1]``; ``None`` keeps the library default (0.5). 0
+            is its own meaning -- any overlap at all counts -- not a second way
+            of asking for the default.
+        max_correction_semitones: Where the assigned shift saturates; must be
+            non-negative. ``None`` keeps the default (12). 0 is its own meaning
+            as above: it saturates every correction to nothing, which assigns
+            targets and moves no note.
+
+    Returns:
+        ``(notes, assigned)`` -- a new list of :class:`NoteObject` carrying the
+        edits, and how many of them got a target. Zero is a legitimate answer,
+        a reference that does not line up with the take, so it is reported rather
+        than left implicit in the notes.
+
+    Raises:
+        SonareValueError: If ``unmatched_policy`` is not one of the three names,
+            if a ratio or bound is not a finite number, or if a note's span or a
+            target's times do not fit their C fields.
+        SonareError: If the C call rejects the request (a non-positive
+            ``sample_rate``, a ``min_overlap_ratio`` outside ``[0, 1]``, a
+            negative ``max_correction_semitones``), or ``NOT_SUPPORTED`` when the
+            library was built without the pitch editor.
+
+    Example:
+        >>> notes = libsonare.extract_notes(audio, sr, f0_hz, sr / 512, voiced=voiced)
+        >>> targets = libsonare.note_targets_from_smf(melody_bytes)
+        >>> notes, assigned = libsonare.assign_note_targets(
+        ...     notes, sr, targets, unmatched_policy="mute"
+        ... )
+        >>> corrected = libsonare.render_notes(audio, sr, notes)
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_assign_note_targets"):
+        raise _unsupported_effect_symbol("sonare_assign_note_targets")
+
+    policy = _unmatched_policy_value("assign_note_targets", unmatched_policy)
+    # Seeded from the C ABI rather than from literals here, because 0 is a legal
+    # value for both floats and so cannot double as the unset sentinel.
+    config = SonareNoteTargetAssignConfig()
+    _check(lib.sonare_note_target_assign_config_default(ctypes.byref(config)))
+    config.unmatched_policy = policy
+    if min_overlap_ratio is not None:
+        config.min_overlap_ratio = _validate_scalar(
+            "assign_note_targets", min_overlap_ratio, "min_overlap_ratio"
+        )
+    if max_correction_semitones is not None:
+        config.max_correction_semitones = _validate_scalar(
+            "assign_note_targets", max_correction_semitones, "max_correction_semitones"
+        )
+
+    c_notes, note_count, _envelopes, _envelope_count = _notes_to_c("assign_note_targets", notes)
+    c_targets, target_count = _note_targets_to_c("assign_note_targets", targets)
+    assigned = ctypes.c_size_t()
+    _check(
+        lib.sonare_assign_note_targets(
+            c_notes,
+            _to_c_size_t(note_count, "note_count"),
+            _to_c_int(sample_rate, "sample_rate"),
+            c_targets,
+            _to_c_size_t(target_count, "target_count"),
+            ctypes.byref(config),
+            ctypes.byref(assigned),
+        )
+    )
+    # The shared marshaller hands the array back as `object`, which is all its
+    # other callers need; this is the one entry point that reads the rows again.
+    rows = cast("Sequence[SonareNoteObject]", c_notes)
+    edited = [_note_with_assigned_edit(note, rows[i]) for i, note in enumerate(notes)]
+    return edited, int(assigned.value)
 
 
 @_guard_buffer("samples")

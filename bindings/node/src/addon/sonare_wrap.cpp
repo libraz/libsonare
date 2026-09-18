@@ -211,6 +211,10 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::DecomposeNotePitch, "decomposeNotePitch"));
   exports.Set("splitNote", Napi::Function::New(env, &SonareWrap::SplitNote, "splitNote"));
   exports.Set("mergeNotes", Napi::Function::New(env, &SonareWrap::MergeNotes, "mergeNotes"));
+  exports.Set("noteTargetsFromSmf",
+              Napi::Function::New(env, &SonareWrap::NoteTargetsFromSmf, "noteTargetsFromSmf"));
+  exports.Set("assignNoteTargets",
+              Napi::Function::New(env, &SonareWrap::AssignNoteTargets, "assignNoteTargets"));
   exports.Set(
       "extractPercussiveEvents",
       Napi::Function::New(env, &SonareWrap::ExtractPercussiveEvents, "extractPercussiveEvents"));

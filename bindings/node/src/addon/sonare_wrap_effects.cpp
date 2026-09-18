@@ -449,6 +449,12 @@ struct OwnedNoteObjects {
   ~OwnedNoteObjects() { sonare_free_note_objects(&value); }
 };
 
+/// Releases a heap-owned note-target array however its marshalling leaves scope.
+struct OwnedNoteTargets {
+  SonareNoteTarget* value = nullptr;
+  ~OwnedNoteTargets() { sonare_free_note_targets(value); }
+};
+
 /// Releases a percussive-event result however the marshalling below leaves scope.
 struct OwnedPercussiveEvents {
   SonarePercussiveEventsResult value{};
@@ -595,6 +601,62 @@ Napi::Array NoteObjectsToJs(Napi::Env env, const char* fn, const SonareNoteObjec
                              result.envelopes + note.edit.envelope_offset, envelope_count));
   }
   return notes;
+}
+
+/// Reads a JS reference-melody array onto the C structs. All three fields are
+/// required: a target IS its span and its pitch, and an omitted one defaulting to
+/// 0 is a zero-length span at the start of the take or a pitch five octaves below
+/// middle C -- values a caller could have named, so nothing downstream could tell
+/// the omission from a choice.
+bool ReadNoteTargets(Napi::Env env, const char* fn, const Napi::Array& js_targets,
+                     std::vector<SonareNoteTarget>* targets) {
+  const uint32_t count = js_targets.Length();
+  targets->assign(count, SonareNoteTarget{});
+  for (uint32_t i = 0; i < count; ++i) {
+    Napi::Value item = js_targets.Get(i);
+    if (!item.IsObject() || item.IsArray()) {
+      throw std::runtime_error(std::string(fn) + ": each target must be a plain object");
+    }
+    Napi::Object target = item.As<Napi::Object>();
+    SonareNoteTarget& row = (*targets)[i];
+    // Indexed, because the key alone cannot say which target was refused.
+    const std::string label = std::string(fn) + " targets[" + std::to_string(i) + "]";
+    if (!RequiredDoubleValue(env, target.Get("startSec"), label + ".startSec", &row.start_sec) ||
+        !RequiredDoubleValue(env, target.Get("endSec"), label + ".endSec", &row.end_sec) ||
+        !RequiredFloatValue(env, target.Get("targetMidi"), label + ".targetMidi",
+                            &row.target_midi)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Resolves the unmatched-note policy spelling to its C ordinal. An absent key
+/// keeps whatever seeded @p out; any other value is refused by name, so a
+/// misspelling cannot read as the default policy.
+bool ReadUnmatchedTargetPolicy(Napi::Env env, const Napi::Object& opts, int32_t* out) {
+  static const char* kExpected = "' (expected leave, mute, or nearest)";
+  const Napi::Value value = opts.Get("unmatchedPolicy");
+  if (value.IsUndefined() || value.IsNull()) {
+    return true;
+  }
+  if (!value.IsString()) {
+    Napi::TypeError::New(env, "unmatchedPolicy must be a string").ThrowAsJavaScriptException();
+    return false;
+  }
+  const std::string policy = value.As<Napi::String>().Utf8Value();
+  if (policy == "leave") {
+    *out = SONARE_NOTE_TARGET_UNMATCHED_LEAVE;
+  } else if (policy == "mute") {
+    *out = SONARE_NOTE_TARGET_UNMATCHED_MUTE;
+  } else if (policy == "nearest") {
+    *out = SONARE_NOTE_TARGET_UNMATCHED_NEAREST;
+  } else {
+    Napi::RangeError::New(env, "Unknown unmatchedPolicy: '" + policy + kExpected)
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  return true;
 }
 
 /// Reads the four separation keys both percussive-event entry points share. The
@@ -939,6 +1001,129 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return NoteObjectsToJs(env, "mergeNotes", result.value);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::NoteTargetsFromSmf(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  SONARE_NODE_TRY
+  // (bytes, track?)
+  const uint8_t* bytes = nullptr;
+  size_t len = 0;
+  if (info.Length() > 0 && info[0].IsBuffer()) {
+    Napi::Buffer<uint8_t> buffer = info[0].As<Napi::Buffer<uint8_t>>();
+    bytes = buffer.Data();
+    len = buffer.Length();
+  } else if (info.Length() > 0 && IsUint8Array(info[0])) {
+    Napi::Uint8Array typed = info[0].As<Napi::Uint8Array>();
+    bytes = typed.Data();
+    len = typed.ByteLength();
+  } else {
+    Napi::TypeError::New(env, "noteTargetsFromSmf expects a Buffer or Uint8Array")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  // An index is an ordinal, so the strict reader: 1.5 truncating to 1 would read
+  // a track the caller never named. A negative one is the C ABI's to refuse.
+  int track_index = 0;
+  if (!Int32Arg(env, info, 1, "trackIndex", 0, &track_index)) {
+    return env.Undefined();
+  }
+
+  OwnedNoteTargets targets;
+  size_t count = 0;
+  const SonareError err =
+      sonare_note_targets_from_smf(bytes, len, track_index, &targets.value, &count);
+  if (err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+
+  Napi::Array out = Napi::Array::New(env, count);
+  for (size_t i = 0; i < count; ++i) {
+    const SonareNoteTarget& target = targets.value[i];
+    Napi::Object row = Napi::Object::New(env);
+    row.Set("startSec", Napi::Number::New(env, target.start_sec));
+    row.Set("endSec", Napi::Number::New(env, target.end_sec));
+    row.Set("targetMidi", Napi::Number::New(env, target.target_midi));
+    out.Set(static_cast<uint32_t>(i), row);
+  }
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::AssignNoteTargets(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (notes, sampleRate, targets, options?)
+  if (info.Length() < 3 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsArray()) {
+    Napi::TypeError::New(
+        env, "Expected (notes: object[], sampleRate, targets: object[], options?: object)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  const int sr = node_narrow_int(env, info[1], "sr");
+
+  // Seeded from the library rather than from literals here: 0 is a legal value on
+  // both floats, so it cannot spell "unset" and an omitted key has to keep
+  // whatever the C ABI reports as its own default.
+  SonareNoteTargetAssignConfig config{};
+  const SonareError seeded = sonare_note_target_assign_config_default(&config);
+  if (seeded != SONARE_OK) {
+    ThrowIfError(env, seeded);
+    return env.Undefined();
+  }
+  if (info.Length() > 3 && info[3].IsObject()) {
+    Napi::Object opts = info[3].As<Napi::Object>();
+    if (!ReadUnmatchedTargetPolicy(env, opts, &config.unmatched_policy)) {
+      return env.Undefined();
+    }
+    // Neither field documents a non-finite spelling, so the finite reader: an
+    // infinity is out of domain rather than a request.
+    config.min_overlap_ratio =
+        FiniteFloatProperty(opts, "minOverlapRatio", config.min_overlap_ratio);
+    config.max_correction_semitones =
+        FiniteFloatProperty(opts, "maxCorrectionSemitones", config.max_correction_semitones);
+  }
+
+  std::vector<SonareNoteObject> notes;
+  std::vector<float> envelopes;
+  // The sample bounds are what the rule measures each overlap against, so they
+  // are required here as they are for a render.
+  ReadNotes("assignNoteTargets", info[0].As<Napi::Array>(), &notes, &envelopes,
+            /*require_span=*/true);
+
+  std::vector<SonareNoteTarget> targets;
+  if (!ReadNoteTargets(env, "assignNoteTargets", info[2].As<Napi::Array>(), &targets)) {
+    return env.Undefined();
+  }
+
+  size_t assigned = 0;
+  const SonareError err = sonare_assign_note_targets(
+      notes.empty() ? nullptr : notes.data(), notes.size(), sr,
+      targets.empty() ? nullptr : targets.data(), targets.size(), &config, &assigned);
+  if (err != SONARE_OK) {
+    ThrowIfError(env, err);
+    return env.Undefined();
+  }
+
+  // Only the two fields the C ABI writes come back. The measured fields and the
+  // amplitude curve were never read here, so the facade merges these onto the
+  // caller's own notes rather than this door rebuilding a note it cannot.
+  Napi::Array edits = Napi::Array::New(env, notes.size());
+  for (size_t i = 0; i < notes.size(); ++i) {
+    Napi::Object edit = Napi::Object::New(env);
+    edit.Set("pitchShiftSemitones", Napi::Number::New(env, notes[i].edit.pitch_shift_semitones));
+    edit.Set("muted", Napi::Boolean::New(env, notes[i].edit.muted != 0));
+    edits.Set(static_cast<uint32_t>(i), edit);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("edits", edits);
+  out.Set("assignedCount", Napi::Number::New(env, static_cast<double>(assigned)));
+  return out;
   SONARE_NODE_CATCH(env)
 }
 

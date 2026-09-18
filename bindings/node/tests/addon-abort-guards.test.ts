@@ -1510,6 +1510,27 @@ const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'SonareWrap.noteTargetsFromSmf',
+    missingRequired: [],
+    // The track index is read before the bytes are parsed, so every rejection
+    // here needs no readable file. 2^32 is the wrap that matters: ToInt32 lands
+    // it on 0, the default track, so it would read the melody of a file the
+    // caller asked nothing about and report success.
+    rejectsArgument: [
+      { argument: 'trackIndex', call: () => addon.noteTargetsFromSmf(new Uint8Array(8), 'x') },
+      {
+        argument: 'trackIndex past the signed range',
+        call: () => addon.noteTargetsFromSmf(new Uint8Array(8), 2 ** 32),
+        error: RangeError,
+      },
+      {
+        argument: 'fractional trackIndex',
+        call: () => addon.noteTargetsFromSmf(new Uint8Array(8), 0.5),
+        error: RangeError,
+      },
+    ],
+  },
+  {
     name: 'SonareWrap.hpss',
     missingRequired: [],
     // Stateless separation over a buffer, so there is no handle state to

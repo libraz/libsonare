@@ -11,12 +11,15 @@ import {
 } from './_effects_common.js';
 import { addon } from './native.js';
 import type {
+  AssignNoteTargetsResult,
   NoteExtractorOptions,
   NoteMoveOptions,
   NoteObject,
   NoteObjectInput,
   NoteSetEntry,
   NoteStretchOptions,
+  NoteTarget,
+  NoteTargetUnmatchedPolicy,
   PitchDecompositionResult,
   VoicedFlags,
 } from './types.js';
@@ -119,6 +122,44 @@ export interface RenderNotesRequest extends EffectSamplesRequest {
    * it never showed anyone.
    */
   vibratoCutoffHz?: number;
+}
+
+export interface NoteTargetsFromSmfRequest {
+  /** The Standard MIDI File's bytes. */
+  data: Uint8Array;
+  /**
+   * Index into the tracks that carried MIDI events, NOT the file's own track
+   * numbering: a track holding only meta events — a conductor track carrying the
+   * tempo map is the usual one — is not counted. A file whose first track is a
+   * conductor track therefore has its melody at index 0. Default 0.
+   */
+  trackIndex?: number;
+}
+
+export interface AssignNoteTargetsRequest {
+  /**
+   * The notes to assign to. Their sample bounds, `medianHz` and `edit` are read;
+   * the array itself is not modified.
+   */
+  notes: readonly NoteObject[];
+  /** Sample rate in Hz, which converts each note's sample span to seconds. */
+  sampleRate: number;
+  /** The reference melody, as {@link noteTargetsFromSmf} returns it. */
+  targets: readonly NoteTarget[];
+  /** What to do with a note that has a pitch and no target. Default `'leave'`. */
+  unmatchedPolicy?: NoteTargetUnmatchedPolicy;
+  /**
+   * Fraction of the note that must overlap a target for it to count. Default
+   * 0.5; 0 is its own meaning — any overlap at all counts — not a request for
+   * the default.
+   */
+  minOverlapRatio?: number;
+  /**
+   * The assigned shift saturates here rather than being refused: a reference an
+   * octave out is a wrong reference, and a rejected call says less than a bounded
+   * correction does. Default 12; 0 is its own meaning, as above.
+   */
+  maxCorrectionSemitones?: number;
 }
 
 /**
@@ -457,4 +498,102 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
     ...options,
     voiced: voiced ? toVoicedInt32(voiced) : undefined,
   });
+}
+
+/**
+ * Read one track of an in-memory Standard MIDI File as a reference melody.
+ *
+ * Each note-on is paired with the next note-off of the same note number on the
+ * same channel, and the pair becomes one target at the note's own pitch. Times
+ * follow the file's tempo map, so a tempo change or a ramp inside it is honoured
+ * rather than the initial tempo being scaled over the whole file.
+ *
+ * A note-on the track never closes is dropped — it has no end, and the track's
+ * end is not a substitute for one. Zero-length notes are skipped: they overlap
+ * nothing, so they could never be assigned.
+ *
+ * @param request - The file's bytes and which of its MIDI-carrying tracks to read.
+ * @returns One {@link NoteTarget} per closed note, sorted by `startSec`. A track
+ *   with no closed note comes back as an empty array rather than as an error.
+ * @throws {TypeError} `data` is neither a `Buffer` nor a `Uint8Array`.
+ * @throws {RangeError} `trackIndex` is not a whole number.
+ * @throws {SonareError} `trackIndex` is out of range, or the bytes are not a
+ *   readable Standard MIDI File.
+ *
+ * @example
+ * ```ts
+ * const targets = noteTargetsFromSmf({ data: await readFile('melody.mid') });
+ * const notes = extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate });
+ * const { notes: tuned } = assignNoteTargets({ notes, sampleRate, targets });
+ * const output = renderNotes({ samples, sampleRate, notes: tuned });
+ * ```
+ */
+export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarget[] {
+  return addon.noteTargetsFromSmf(request.data, request.trackIndex ?? 0);
+}
+
+/**
+ * Write each note's `edit.pitchShiftSemitones` from the target it overlaps.
+ *
+ * A note is matched to the target it overlaps longest, provided that overlap is
+ * at least `minOverlapRatio` of the note's own span; ties go to the target that
+ * starts first. The shift is `targetMidi` minus the note's own `medianHz` as a
+ * MIDI number, saturated at `maxCorrectionSemitones`.
+ *
+ * A note whose `medianHz` is not finite and positive is never assigned and never
+ * edited, whatever `unmatchedPolicy` says: such a note has no measured pitch to
+ * correct from, which is a different thing from having a pitch and no target.
+ *
+ * The returned notes are a new array — the C ABI edits in place, and a caller
+ * handing in its own notes does not expect them rewritten. Every field but the
+ * two the assignment writes is the caller's own, so the result goes straight to
+ * {@link renderNotes}.
+ *
+ * @param request - The notes, their sample rate, the reference melody, and the
+ *   optional matching tuning.
+ * @returns The new notes and how many of them got a target.
+ * @throws {TypeError} `notes` or `targets` is not an array, an entry of either is
+ *   not a plain object, a note is missing `onsetSample` / `offsetSample`, a
+ *   target is missing one of its three fields, or `unmatchedPolicy` is not a
+ *   string.
+ * @throws {RangeError} `sampleRate` is out of the supported range, or
+ *   `unmatchedPolicy` is not one of the three spellings.
+ * @throws {SonareError} `minOverlapRatio` is outside `[0, 1]`,
+ *   `maxCorrectionSemitones` is negative, or a target carries a non-finite value.
+ *
+ * @example
+ * ```ts
+ * // Mute whatever the reference does not cover, and cap corrections at a fifth.
+ * const { notes: tuned, assignedCount } = assignNoteTargets({
+ *   notes,
+ *   sampleRate,
+ *   targets,
+ *   unmatchedPolicy: 'mute',
+ *   maxCorrectionSemitones: 7,
+ * });
+ * if (assignedCount === 0) throw new Error('the reference does not line up with the take');
+ * ```
+ */
+export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNoteTargetsResult {
+  const { notes, sampleRate, targets, ...options } = request;
+  assertSampleRate('assignNoteTargets', sampleRate);
+  if (!Array.isArray(notes)) {
+    throw new TypeError('assignNoteTargets: notes must be an array');
+  }
+  if (!Array.isArray(targets)) {
+    throw new TypeError('assignNoteTargets: targets must be an array');
+  }
+  const assigned = addon.assignNoteTargets(notes, sampleRate, targets, options) as {
+    edits: ReadonlyArray<{ pitchShiftSemitones: number; muted: boolean }>;
+    assignedCount: number;
+  };
+  return {
+    // The addon answers only the two fields the assignment writes, so the rest of
+    // each note travels through here rather than through the C ABI.
+    notes: notes.map((note, index) => ({
+      ...note,
+      edit: { ...note.edit, ...assigned.edits[index] },
+    })),
+    assignedCount: assigned.assignedCount,
+  };
 }

@@ -13,10 +13,15 @@
 #include "editing/note_model/note_extractor.h"
 #include "editing/note_model/note_renderer.h"
 #include "editing/note_model/note_split_merge.h"
+#include "editing/note_model/note_target.h"
 #include "editing/note_model/pitch_decomposition.h"
 #include "util/constants.h"
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/common/note_val.h"
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "midi/note_targets.h"
+#endif
 
 // ============================================================================
 // Effects
@@ -711,6 +716,181 @@ val js_merge_notes(val samples, const val& sample_rate_val, val f0_hz, val voice
 
 namespace {
 
+using editing::note_model::NoteTarget;
+using editing::note_model::NoteTargetAssignConfig;
+using editing::note_model::UnmatchedTargetPolicy;
+
+// The policy crosses as a name, so the ordinal the C enumeration fixes never
+// reaches JS. An unknown name is refused rather than falling back to Leave,
+// which would run a different rule than the caller asked for.
+UnmatchedTargetPolicy unmatchedTargetPolicyFromVal(const val& request) {
+  const val value = objectProperty(request, "unmatchedPolicy");
+  if (value.isUndefined()) return UnmatchedTargetPolicy::Leave;
+  if (value.typeOf().as<std::string>() == "string") {
+    const std::string name = value.as<std::string>();
+    if (name == "leave") return UnmatchedTargetPolicy::Leave;
+    if (name == "mute") return UnmatchedTargetPolicy::Mute;
+    if (name == "nearest") return UnmatchedTargetPolicy::Nearest;
+  }
+  throw SonareException(ErrorCode::InvalidParameter,
+                        "assignNoteTargets: unmatchedPolicy must be 'leave', 'mute' or 'nearest'");
+}
+
+// Both floats fall back to a default-constructed config, so the defaults are the
+// core's own member initialisers rather than literals repeated here. Presence
+// decides: 0 is each field's own meaning, so it cannot double as "unset".
+NoteTargetAssignConfig noteTargetAssignConfigFromVal(const val& request) {
+  NoteTargetAssignConfig config;
+  config.unmatched_policy = unmatchedTargetPolicyFromVal(request);
+  config.min_overlap_ratio =
+      typedFloatProperty(request, "minOverlapRatio", config.min_overlap_ratio);
+  config.max_correction_semitones =
+      typedFloatProperty(request, "maxCorrectionSemitones", config.max_correction_semitones);
+  // Refused rather than left to the core, which reads a bad ratio as the
+  // strictest one and saturates a bad bound to zero -- both in-domain values
+  // nothing downstream can tell from a deliberate one. This is the C ABI's
+  // resolve_note_target_config, which this surface does not go through.
+  if (config.min_overlap_ratio < 0.0f || config.min_overlap_ratio > 1.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "assignNoteTargets: minOverlapRatio must be in [0, 1]");
+  }
+  if (config.max_correction_semitones < 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "assignNoteTargets: maxCorrectionSemitones must not be negative");
+  }
+  return config;
+}
+
+// One reference note. A non-finite bound or pitch is refused here because every
+// overlap comparison is false for a NaN, so the target would be taken by the
+// nearest arm and written into pitch_shift_semitones with nothing left to catch
+// it (sonare_assign_note_targets).
+std::vector<NoteTarget> noteTargetsFromVal(const val& targets, const char* entry_point) {
+  const std::string subject = std::string(entry_point) + " target";
+  const std::string list_subject = subject + "s";
+  const std::size_t count = wasmArrayLikeLength(targets, list_subject.c_str());
+  std::vector<NoteTarget> out;
+  out.reserve(std::min(count, kMaxWasmObjectArrayReserve));
+  for (std::size_t i = 0; i < count; ++i) {
+    const val row = targets[i];
+    NoteTarget target;
+    target.start_sec = requireNumberProperty(row, "startSec", subject.c_str());
+    target.end_sec = requireNumberProperty(row, "endSec", subject.c_str());
+    const double target_midi = requireNumberProperty(row, "targetMidi", subject.c_str());
+    // float32 turns a finite value past FLT_MAX into an infinity, and the
+    // correction clamp would then report the saturated bound as the answer.
+    if (std::abs(target_midi) > static_cast<double>(std::numeric_limits<float>::max())) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            subject + ".targetMidi must be within the 32-bit float range");
+    }
+    target.target_midi = static_cast<float>(target_midi);
+    out.push_back(target);
+  }
+  return out;
+}
+
+// All the rule reads -- the sample span and the measured pitch -- plus the two
+// fields it writes, which are carried in so a note it never touches comes back
+// with the edit it arrived with rather than a zeroed one.
+editing::note_model::NoteObject assignableNoteFromVal(const val& row) {
+  editing::note_model::NoteObject note;
+  note.onset_sample =
+      static_cast<int64_t>(requireNumberProperty(row, "onsetSample", "assignNoteTargets note"));
+  note.offset_sample =
+      static_cast<int64_t>(requireNumberProperty(row, "offsetSample", "assignNoteTargets note"));
+  // floatOption, not floatProperty: a note carrying no measured pitch spells it
+  // 0 or non-finite and the rule reads both the same way, so a NaN here is the
+  // caller's own "unvoiced" rather than a bad argument (note_target.h). 0 is
+  // also NoteObject::median_hz's own default, so an absent field means the same.
+  note.median_hz = floatOption(row, "medianHz", 0.0f);
+  const val edit = objectProperty(row, "edit");
+  note.edit.pitch_shift_semitones = floatProperty(edit, "pitchShiftSemitones", 0.0f);
+  note.edit.muted = boolProperty(edit, "muted", false);
+  return note;
+}
+
+// The two fields the rule writes, replaced on a copy of the caller's own note.
+// Everything else -- the span, the metrics, the amplitude curve, the other edits
+// -- reaches the result exactly as it arrived, which is what the C ABI gets for
+// free by editing in place.
+val assignedNoteToVal(const val& row, const editing::note_model::NoteEdit& edit) {
+  const val object_ctor = val::global("Object");
+  val out = object_ctor.call<val>("assign", val::object(), row);
+  val out_edit = object_ctor.call<val>("assign", val::object(), objectProperty(row, "edit"));
+  out_edit.set("pitchShiftSemitones", edit.pitch_shift_semitones);
+  out_edit.set("muted", edit.muted);
+  // The two arrays a note carries are copied, not shared: a spread carries the
+  // reference across, so a host editing the result would reach back into the
+  // notes it handed in. The addon and ctypes surfaces marshal field by field and
+  // hand back fresh arrays, and this is the one surface that has to ask for it.
+  const val envelope = objectProperty(out_edit, "amplitudeEnvelope");
+  if (!envelope.isUndefined()) out_edit.set("amplitudeEnvelope", envelope.call<val>("slice"));
+  out.set("edit", out_edit);
+  const val amplitude = objectProperty(row, "amplitude");
+  if (!amplitude.isUndefined()) out.set("amplitude", amplitude.call<val>("slice"));
+  return out;
+}
+
+}  // namespace
+
+// Note targets: a reference melody in seconds, and the rule that writes each
+// note's pitch shift from the target it overlaps. The C-ABI translation unit is
+// not linked into this module, so the core rule is called directly and the
+// validation sonare_assign_note_targets performs is reproduced above -- without
+// it WASM would be the one surface where a non-finite target reaches the edit.
+val js_assign_note_targets(val notes, const val& sample_rate_val, val targets, val request) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  if (sample_rate <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "assignNoteTargets: sampleRate must be a positive number");
+  }
+  const NoteTargetAssignConfig config = noteTargetAssignConfigFromVal(request);
+  const std::vector<NoteTarget> core_targets = noteTargetsFromVal(targets, "assignNoteTargets");
+
+  const std::size_t count = wasmArrayLikeLength(notes, "assignNoteTargets notes");
+  std::vector<editing::note_model::NoteObject> core_notes;
+  core_notes.reserve(std::min(count, kMaxWasmObjectArrayReserve));
+  for (std::size_t i = 0; i < count; ++i) {
+    core_notes.push_back(assignableNoteFromVal(notes[i]));
+  }
+
+  const std::size_t assigned =
+      editing::note_model::assign_note_targets(core_notes, sample_rate, core_targets, config);
+
+  val out_notes = val::array();
+  for (std::size_t i = 0; i < count; ++i) {
+    out_notes.call<void>("push", assignedNoteToVal(notes[i], core_notes[i].edit));
+  }
+  val out = val::object();
+  out.set("notes", out_notes);
+  // Counts cross as plain JS numbers, matching every other size on this surface.
+  out.set("assignedCount", static_cast<double>(assigned));
+  return out;
+}
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+// Gated with the library it calls: sonare_midi is linked only for an arrangement
+// build, so the reader goes with it rather than resolving to a stub. Times follow
+// the file's tempo map, and the index counts only MIDI-bearing tracks, so a file
+// whose first track is a conductor track has its melody at 0.
+val js_note_targets_from_smf(val data, const val& track_index_val) {
+  const int track_index = checkedIntFromVal(track_index_val, "trackIndex");
+  const std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+  val out = val::array();
+  for (const NoteTarget& target :
+       midi::note_targets_from_smf(bytes.data(), bytes.size(), track_index)) {
+    val row = val::object();
+    row.set("startSec", target.start_sec);
+    row.set("endSec", target.end_sec);
+    row.set("targetMidi", target.target_midi);
+    out.call<void>("push", row);
+  }
+  return out;
+}
+#endif
+
+namespace {
+
 using editing::event_model::PercussiveEvent;
 
 // The separation both percussive-event calls take, with every field defaulting
@@ -1362,6 +1542,10 @@ void registerEffectsAudioBindings() {
   function("decomposeNotePitch", &js_decompose_note_pitch);
   function("splitNote", &js_split_note);
   function("mergeNotes", &js_merge_notes);
+  function("assignNoteTargets", &js_assign_note_targets);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  function("noteTargetsFromSmf", &js_note_targets_from_smf);
+#endif
   function("extractPercussiveEvents", &js_extract_percussive_events);
   function("renderPercussiveEvents", &js_render_percussive_events);
   function("voiceChange", &js_voice_change);

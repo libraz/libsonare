@@ -219,6 +219,49 @@ export interface NoteSetEntry {
 }
 
 /**
+ * One note of a reference melody, as {@link noteTargetsFromSmf} returns it and
+ * {@link assignNoteTargets} reads it.
+ *
+ * Times are seconds from the start of the audio the notes were extracted from,
+ * so a reference that starts elsewhere has to be offset by its caller.
+ */
+export interface NoteTarget {
+  /** First second of the target's span. */
+  startSec: number;
+  /** One past the last second of the span. */
+  endSec: number;
+  /** The pitch the overlapping note is corrected to, as a MIDI number. */
+  targetMidi: number;
+}
+
+/**
+ * What {@link assignNoteTargets} does with a note that has a measurable pitch
+ * and no target.
+ *
+ * `'leave'` keeps the note's own edit, so it renders as recorded; `'mute'`
+ * silences its span; `'nearest'` takes the nearest target in time, however far
+ * away. A note with no measured pitch is never edited whatever this says — that
+ * is a different thing from having a pitch and no target.
+ */
+export type NoteTargetUnmatchedPolicy = 'leave' | 'mute' | 'nearest';
+
+/** The notes {@link assignNoteTargets} produced, and how many got a target. */
+export interface AssignNoteTargetsResult {
+  /**
+   * A new array, one note per input note in the same order, carrying the
+   * assigned `edit.pitchShiftSemitones` and `edit.muted`. Every other field is
+   * the caller's own, unchanged.
+   */
+  notes: NoteObject[];
+  /**
+   * How many notes got a target. Zero is a legitimate answer — a reference that
+   * does not line up with the take — so it is reported rather than left implicit
+   * in the notes.
+   */
+  assignedCount: number;
+}
+
+/**
  * Tuning for {@link analyzePolyphonic}. Every field is optional and an omitted
  * one takes the default stated below.
  *

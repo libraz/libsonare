@@ -131,6 +131,8 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value DecomposeNotePitch(const Napi::CallbackInfo& info);
   static Napi::Value SplitNote(const Napi::CallbackInfo& info);
   static Napi::Value MergeNotes(const Napi::CallbackInfo& info);
+  static Napi::Value NoteTargetsFromSmf(const Napi::CallbackInfo& info);
+  static Napi::Value AssignNoteTargets(const Napi::CallbackInfo& info);
   static Napi::Value ExtractPercussiveEvents(const Napi::CallbackInfo& info);
   static Napi::Value RenderPercussiveEvents(const Napi::CallbackInfo& info);
   static Napi::Value VoiceChange(const Napi::CallbackInfo& info);

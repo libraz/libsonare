@@ -115,6 +115,7 @@ export type {
   VoiceChangeRequest,
 } from './effects_mastering';
 export {
+  assignNoteTargets,
   decomposeNotePitch,
   extractNotes,
   extractPercussiveEvents,
@@ -190,6 +191,7 @@ export {
   normalizeStereo,
   noteMove,
   noteStretch,
+  noteTargetsFromSmf,
   percussive,
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
@@ -204,12 +206,14 @@ export {
   voiceChangeRealtime,
 } from './effects_mastering';
 export type {
+  AssignNoteTargetsRequest,
   DecomposeNotePitchRequest,
   ExtractNotesRequest,
   MergeNotesRequest,
   NoteMoveRequest,
   NoteSetRequest,
   NoteStretchRequest,
+  NoteTargetsFromSmfRequest,
   RenderNotesRequest,
   SplitNoteRequest,
 } from './effects_note_ops';
@@ -697,6 +701,9 @@ export type {
   NoteSegment,
   NoteSetEntry,
   NoteStretchOptions,
+  NoteTarget,
+  NoteTargetAssignResult,
+  NoteTargetUnmatchedPolicy,
   PairAnalysis,
   PairProcessor,
   PanLaw,
