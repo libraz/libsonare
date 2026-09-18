@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -30,6 +31,7 @@
 #include "cli/sonare_cli_registry.h"
 #include "core/audio.h"
 #include "core/audio_io.h"
+#include "effects/silence.h"
 #include "sonare.h"
 #include "util/constants.h"
 #include "util/json.h"
@@ -97,6 +99,48 @@ void create_stepped_level_wav(const std::string& path, int sample_rate = 22050) 
                  std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 220.0f * t);
   }
   save_wav(path, samples, sample_rate);
+}
+
+/// @brief Creates a WAV from consecutive (amplitude, seconds) blocks.
+/// @param path Output path
+/// @param blocks Amplitude and duration of each block, in order
+/// @param sample_rate Sample rate
+///
+/// split-silence reports where a signal sounds, so its fixture needs silence
+/// somewhere other than the ends; the union across takes only differs from the
+/// intersection when two takes fall quiet at different times, which needs one
+/// schedule per take.
+void create_blocked_level_wav(const std::string& path,
+                              const std::vector<std::pair<float, float>>& blocks,
+                              int sample_rate = 22050) {
+  std::vector<float> samples;
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  for (const auto& block : blocks) {
+    const size_t count = static_cast<size_t>(block.second * static_cast<float>(sample_rate));
+    for (size_t i = 0; i < count; ++i) {
+      const float t = static_cast<float>(samples.size()) / static_cast<float>(sample_rate);
+      samples.push_back(block.first * std::sin(two_pi * 220.0f * t));
+    }
+  }
+  save_wav(path, samples, sample_rate);
+}
+
+/// @brief Reads the intervals a `split-silence --json` run printed.
+std::vector<std::pair<int, int>> parse_split_silence_json(const std::string& text) {
+  // Named, because as_array() hands back a reference into the document.
+  const sonare::util::json::Value document = sonare::util::json::parse_strict(text);
+  std::vector<std::pair<int, int>> ranges;
+  for (const auto& entry : document.as_array()) {
+    ranges.emplace_back(entry["start_sample"].as_int(), entry["end_sample"].as_int());
+  }
+  return ranges;
+}
+
+/// @brief Whether any reported interval covers @p sample.
+bool split_silence_covers(const std::vector<std::pair<int, int>>& ranges, int sample) {
+  return std::any_of(ranges.begin(), ranges.end(), [sample](const std::pair<int, int>& range) {
+    return range.first <= sample && sample < range.second;
+  });
 }
 
 void create_test_stereo_wav(const std::string& path, int sample_rate = 22050) {
@@ -1791,6 +1835,91 @@ TEST_CASE("CLI trim-silence keeps the native threshold fallback dynamic", "[cli]
   const auto explicit_payload = sonare::util::json::parse_strict(explicit_output);
   REQUIRE(default_payload["threshold_db"].as_number() == -60.0);
   REQUIRE(default_payload["length"].as_int() == explicit_payload["length"].as_int());
+}
+
+TEST_CASE("CLI split-silence unions the takes instead of intersecting them", "[cli]") {
+  // Take B sounds through the middle of take A's silence, so that stretch is
+  // reported only by the union. An intersection would drop it and a cut placed
+  // there would land mid-phrase in B.
+  const std::string take_a = unique_temp_path("_take_a.wav");
+  const std::string take_b = unique_temp_path("_take_b.wav");
+  const int sample_rate = 22050;
+  create_blocked_level_wav(take_a, {{0.5f, 0.30f}, {0.0f, 0.60f}, {0.5f, 0.30f}}, sample_rate);
+  create_blocked_level_wav(
+      take_b, {{0.5f, 0.30f}, {0.0f, 0.20f}, {0.5f, 0.15f}, {0.0f, 0.25f}, {0.5f, 0.30f}},
+      sample_rate);
+  // Middle of the 0.50 s - 0.65 s stretch only take B sounds in.
+  const int only_b_sample = static_cast<int>(0.575f * static_cast<float>(sample_rate));
+
+  auto [alone_code, alone_output] = exec_command(CLI + " split-silence " + take_a + " --json -q");
+  REQUIRE(alone_code == 0);
+  const auto alone = parse_split_silence_json(alone_output);
+  REQUIRE_FALSE(split_silence_covers(alone, only_b_sample));
+
+  auto [both_code, both_output] =
+      exec_command(CLI + " split-silence " + take_a + " --input " + take_b + " --json -q");
+  REQUIRE(both_code == 0);
+  const auto both = parse_split_silence_json(both_output);
+  REQUIRE(split_silence_covers(both, only_b_sample));
+  // The union adds; it never narrows what one take alone reported.
+  for (const auto& range : alone) {
+    REQUIRE(split_silence_covers(both, range.first));
+    REQUIRE(split_silence_covers(both, range.second - 1));
+  }
+}
+
+TEST_CASE("CLI split-silence with one take reports what split() reports", "[cli]") {
+  const std::string take = unique_temp_path("_single_take.wav");
+  create_blocked_level_wav(take, {{0.5f, 0.30f}, {0.0f, 0.40f}, {0.5f, 0.30f}});
+
+  auto [code, output] = exec_command(CLI + " split-silence " + take + " --json -q");
+  REQUIRE(code == 0);
+  const auto samples = std::get<0>(load_wav(take));
+  REQUIRE(parse_split_silence_json(output) == sonare::split(samples, 60.0f, 2048, 512));
+}
+
+TEST_CASE("CLI split-silence refuses a take at another sample rate", "[cli]") {
+  // Frame indices from two rates are not comparable, so accepting the take would
+  // report intervals in units the caller cannot map back onto either of them.
+  const std::string take_a = unique_temp_path("_rate_a.wav");
+  const std::string take_b = unique_temp_path("_rate_b.wav");
+  create_blocked_level_wav(take_a, {{0.5f, 0.30f}, {0.0f, 0.40f}}, 22050);
+  create_blocked_level_wav(take_b, {{0.5f, 0.30f}, {0.0f, 0.40f}}, 44100);
+
+  auto [code, output] =
+      exec_command(CLI + " split-silence " + take_a + " --input " + take_b + " --json -q");
+  REQUIRE(code == 3);
+  REQUIRE_THAT(output, ContainsSubstring("44100"));
+  REQUIRE_THAT(output, ContainsSubstring("22050"));
+}
+
+TEST_CASE("CLI split-silence --write-takes slices every take at every interval", "[cli]") {
+  const std::string take_a = unique_temp_path("_written_a.wav");
+  const std::string take_b = unique_temp_path("_written_b.wav");
+  const std::string prefix = unique_temp_path("_written_");
+  create_blocked_level_wav(take_a, {{0.5f, 0.30f}, {0.0f, 0.40f}, {0.5f, 0.30f}});
+  // A different level in the second take, so two takes' slices of one interval
+  // cannot compare equal by both carrying take 1.
+  create_blocked_level_wav(take_b, {{0.2f, 0.30f}, {0.0f, 0.40f}, {0.2f, 0.30f}});
+
+  auto [code, output] = exec_command(CLI + " split-silence " + take_a + " --input " + take_b +
+                                     " --write-takes " + prefix + " --json -q");
+  REQUIRE(code == 0);
+  const auto ranges = parse_split_silence_json(output);
+  REQUIRE(ranges.size() >= 2);
+
+  for (size_t interval = 0; interval < ranges.size(); ++interval) {
+    std::vector<std::vector<float>> slices;
+    for (size_t take = 1; take <= 2; ++take) {
+      char suffix[32];
+      std::snprintf(suffix, sizeof(suffix), "%02zu_%03zu.wav", take, interval + 1);
+      const auto written = std::get<0>(load_wav(prefix + suffix));
+      REQUIRE(written.size() ==
+              static_cast<size_t>(ranges[interval].second - ranges[interval].first));
+      slices.push_back(written);
+    }
+    REQUIRE(slices[0] != slices[1]);
+  }
 }
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM

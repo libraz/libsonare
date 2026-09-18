@@ -80,6 +80,7 @@ TOP_LEVEL_ROUTES = (
     "time-stretch",
     "normalize",
     "trim-silence",
+    "split-silence",
     "resample",
     "voice-change",
     "voice-presets",

@@ -147,15 +147,13 @@ CliOptionSpec nullable_string_value(const char* name) {
 }
 #endif
 
-#ifdef SONARE_WITH_MIXING_ASSISTANT
-// A repeatable path. `path_value` takes no repeatable flag because every other
-// path option here is single-valued, and the default has to be the empty array
+// A repeatable path. `path_value` takes no repeatable flag because most path
+// options here are single-valued, and the default has to be the empty array
 // rather than null so the two front-ends publish the same absent value.
 CliOptionSpec repeatable_path(const char* name) {
   return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::Path,
                      string_array_default(), {}, {}, false, true, false, true);
 }
-#endif
 
 #ifdef SONARE_WITH_ARRANGEMENT
 CliOptionSpec optional_string(const char* name, const char* implicit = "true",
@@ -656,9 +654,12 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "trim-silence", true,
                 {number_value("threshold-db"), number_value("top-db"), output_value(),
                  global_int("n-fft", 2048), global_int("hop-length", 512)});
-    add_command(
-        commands, "split-silence", true,
-        {number_value("top-db", 60.0), global_int("n-fft", 2048), global_int("hop-length", 512)});
+    // `--input` names further takes of the same part; the positional is the
+    // first. `--write-takes` is the destination rather than `-o`, because one
+    // run writes a file per take per interval.
+    add_command(commands, "split-silence", true,
+                {repeatable_path("input"), number_value("top-db", 60.0), path_value("write-takes"),
+                 global_int("n-fft", 2048), global_int("hop-length", 512)});
     add_command(commands, "normalize", true,
                 {string_value("mode", "peak"), number_value("target-db"), required_output()}, {},
                 nullptr, 0, /*preserves_stereo_input=*/true);

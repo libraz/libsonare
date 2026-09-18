@@ -3314,6 +3314,62 @@
           "domain": null
         }
       ],
+      "split-silence": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "input",
+          "type": "path",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "top-db",
+          "type": "number",
+          "default": 60.0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "write-takes",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
       "suggest-mix": [
         {
           "name": "input",
@@ -4486,11 +4542,9 @@
       "reason": "a librosa-style primitive; a Python caller reaches it as libsonare.deemphasis() over the array it already holds, where it composes"
     },
     "split-silence": {
-      "classification": "native_only",
-      "status": "native_only",
-      "option_status": "pending",
-      "reason_kind": "by_design",
-      "reason": "the measurement is already a Python entry point, libsonare.split_silence(), so the CLI would only add a JSON round trip"
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
     },
     "gain": {
       "classification": "native_only",
@@ -8387,6 +8441,114 @@
             "{audio}",
             "-o",
             "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "split-silence",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "input",
+          "type": "path",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "top-db",
+          "type": "number",
+          "default": 60.0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "write-takes",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "type": "array",
+          "items": {
+            "keys": {
+              "start_sample": "integer",
+              "end_sample": "integer"
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "split-silence",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "two_takes",
+          "argv": [
+            "split-silence",
+            "{audio}",
+            "--input",
+            "{audio}",
             "--json"
           ],
           "exit": 0,

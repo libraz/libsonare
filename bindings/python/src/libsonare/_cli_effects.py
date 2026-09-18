@@ -624,6 +624,75 @@ def cmd_trim_silence(args: argparse.Namespace) -> int:
     )
 
 
+def _split_silence_takes(args: argparse.Namespace) -> tuple[list[list[float]], int]:
+    """Load the takes ``split-silence`` measures together, positional first."""
+    samples, sr = _load_audio(args.file)
+    takes = [samples]
+    for path in getattr(args, "input", None) or []:
+        take, take_sr = _load_audio(path)
+        # Frame indices from two rates are not comparable, so a mismatch would
+        # report intervals in units the caller cannot map back onto either take.
+        if take_sr != sr:
+            raise ValueError(
+                f"take sample rate differs: {path} is {take_sr} Hz, the first take is {sr} Hz"
+            )
+        takes.append(take)
+    return takes, sr
+
+
+def _split_silence_slice(take: list[float], start: int, end: int) -> list[float]:
+    """One interval of one take, padded where the take ended before it.
+
+    A take shorter than the interval is silent past its end -- the rule the union
+    was built on -- so the slice is padded rather than shortened and every take's
+    file for one interval carries the same sample count.
+    """
+    window = take[start:end]
+    if len(window) < end - start:
+        window = window + [0.0] * (end - start - len(window))
+    return window
+
+
+def cmd_split_silence(args: argparse.Namespace) -> int:
+    from . import split_silence_common
+
+    top_db = getattr(args, "top_db", 60.0)
+    n_fft = getattr(args, "n_fft", 2048)
+    hop_length = getattr(args, "hop_length", 512)
+
+    takes, sr = _split_silence_takes(args)
+    intervals = split_silence_common(
+        takes,
+        top_db=top_db,
+        frame_length=n_fft,
+        hop_length=hop_length,
+    )
+
+    write_takes = getattr(args, "write_takes", None)
+    if write_takes:
+        for take_index, take in enumerate(takes, start=1):
+            for interval_index, (start, end) in enumerate(intervals, start=1):
+                _write_wav(
+                    f"{write_takes}{take_index:02d}_{interval_index:03d}.wav",
+                    _split_silence_slice(take, start, end),
+                    sr,
+                )
+
+    if args.json:
+        print(
+            _strict_json_dumps(
+                [{"start_sample": start, "end_sample": end} for start, end in intervals]
+            )
+        )
+    else:
+        print(f"Non-silent intervals: {len(intervals)}")
+        for start, end in intervals:
+            print(f"  {start} - {end}")
+        if write_takes:
+            print(f"Wrote {len(takes) * len(intervals)} take files with prefix {write_takes}")
+    return 0
+
+
 def cmd_resample(args: argparse.Namespace) -> int:
     if not args.output:
         print("Error: resample requires an output file (-o/--output)", file=sys.stderr)

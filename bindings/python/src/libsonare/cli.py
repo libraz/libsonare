@@ -1008,6 +1008,32 @@ def _build_parser() -> _ContractArgumentParser:
     trim_silence_p.add_argument("--top-db", type=_finite_float, default=None)
     trim_silence_p.add_argument("--n-fft", type=int, default=2048)
     trim_silence_p.add_argument("--hop-length", type=int, default=512)
+    split_silence_p = sub.add_parser(
+        "split-silence", parents=[fft_stdout_options], help="List non-silent intervals"
+    )
+    # One take per occurrence, as suggest-mix --input does. The positional is the
+    # first take, so this option names the further ones.
+    split_silence_p.add_argument(
+        "--input",
+        action="append",
+        default=[],
+        metavar="WAV",
+        help=(
+            "Another take of the same part (repeat once per take); the intervals "
+            "become the union, so a cut falls only where every take is quiet"
+        ),
+    )
+    split_silence_p.add_argument(
+        "--top-db",
+        type=_finite_float,
+        default=60.0,
+        help="Silence threshold below the peak in dB (default: 60)",
+    )
+    split_silence_p.add_argument(
+        "--write-takes",
+        metavar="PREFIX",
+        help=("Write every take sliced at every interval as PREFIX{take:02d}_{interval:03d}.wav"),
+    )
     resample_p = sub.add_parser(
         "resample", parents=[common], help="Resample audio to a target sample rate"
     )
@@ -1820,6 +1846,7 @@ def _build_parser() -> _ContractArgumentParser:
         "time-stretch",
         "normalize",
         "trim-silence",
+        "split-silence",
         "resample",
         "voice-change",
         "acoustic",
@@ -1919,6 +1946,7 @@ def _dispatch() -> None:
         "time-stretch": cmd_time_stretch,
         "normalize": cmd_normalize,
         "trim-silence": cmd_trim_silence,
+        "split-silence": cmd_split_silence,
         "resample": cmd_resample,
         "voice-change": cmd_voice_change,
         "voice-presets": cmd_voice_presets,

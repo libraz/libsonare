@@ -513,6 +513,124 @@ def test_mastering_processor_cli_uses_the_runtime_stereo_catalog(monkeypatch) ->
     assert called == ["custom.stereo"]
 
 
+def _blocked_sine(blocks: list[tuple[float, float]], sample_rate: int) -> list[float]:
+    """A 220 Hz signal of consecutive (amplitude, seconds) blocks.
+
+    split-silence needs silence somewhere other than the ends, and the union
+    across takes differs from the intersection only where two takes fall quiet at
+    different times, so each take needs its own schedule.
+    """
+    samples: list[float] = []
+    for amplitude, seconds in blocks:
+        for _ in range(int(seconds * sample_rate)):
+            samples.append(amplitude * math.sin(2.0 * math.pi * 220.0 * len(samples) / sample_rate))
+    return samples
+
+
+def _split_silence_covers(intervals: list[dict[str, int]], sample: int) -> bool:
+    """Whether any reported interval covers one sample index."""
+    return any(item["start_sample"] <= sample < item["end_sample"] for item in intervals)
+
+
+def test_split_silence_cli_unions_the_takes(tmp_path) -> None:
+    """A stretch only one take sounds in is reported, so the result is the union."""
+    sample_rate = 22050
+    take_a = str(tmp_path / "take_a.wav")
+    take_b = str(tmp_path / "take_b.wav")
+    _write_test_wav(
+        take_a, _blocked_sine([(0.5, 0.30), (0.0, 0.60), (0.5, 0.30)], sample_rate), sample_rate
+    )
+    _write_test_wav(
+        take_b,
+        _blocked_sine(
+            [(0.5, 0.30), (0.0, 0.20), (0.5, 0.15), (0.0, 0.25), (0.5, 0.30)], sample_rate
+        ),
+        sample_rate,
+    )
+    # Middle of the 0.50 s - 0.65 s stretch only take B sounds in.
+    only_b_sample = int(0.575 * sample_rate)
+
+    alone = _run_cli(["split-silence", take_a, "--json"])
+    assert alone.returncode == 0, alone.stderr
+    alone_intervals = json.loads(alone.stdout)
+    assert not _split_silence_covers(alone_intervals, only_b_sample)
+
+    both = _run_cli(["split-silence", take_a, "--input", take_b, "--json"])
+    assert both.returncode == 0, both.stderr
+    both_intervals = json.loads(both.stdout)
+    assert _split_silence_covers(both_intervals, only_b_sample)
+    # The union adds; it never narrows what one take alone reported.
+    for item in alone_intervals:
+        assert _split_silence_covers(both_intervals, item["start_sample"])
+        assert _split_silence_covers(both_intervals, item["end_sample"] - 1)
+
+
+def test_split_silence_cli_single_take_matches_the_facade(tmp_path) -> None:
+    """With no --input the intervals are exactly split_silence()'s own."""
+    import libsonare
+
+    sample_rate = 22050
+    take = str(tmp_path / "take.wav")
+    _write_test_wav(
+        take, _blocked_sine([(0.5, 0.30), (0.0, 0.40), (0.5, 0.30)], sample_rate), sample_rate
+    )
+
+    result = _run_cli(["split-silence", take, "--json"])
+    assert result.returncode == 0, result.stderr
+    with libsonare.Audio.from_file(take) as audio:
+        expected = libsonare.split_silence(
+            audio.data, top_db=60.0, frame_length=2048, hop_length=512
+        )
+    assert json.loads(result.stdout) == [
+        {"start_sample": start, "end_sample": end} for start, end in expected
+    ]
+
+
+def test_split_silence_cli_write_takes_slices_every_take(tmp_path) -> None:
+    """Every take is sliced at every interval, each file carrying its own take."""
+    sample_rate = 22050
+    take_a = str(tmp_path / "take_a.wav")
+    take_b = str(tmp_path / "take_b.wav")
+    prefix = str(tmp_path / "slice_")
+    _write_test_wav(
+        take_a, _blocked_sine([(0.5, 0.30), (0.0, 0.40), (0.5, 0.30)], sample_rate), sample_rate
+    )
+    # A different level in the second take, so two takes' slices of one interval
+    # cannot compare equal by both carrying take 1.
+    _write_test_wav(
+        take_b, _blocked_sine([(0.2, 0.30), (0.0, 0.40), (0.2, 0.30)], sample_rate), sample_rate
+    )
+
+    result = _run_cli(
+        ["split-silence", take_a, "--input", take_b, "--write-takes", prefix, "--json"]
+    )
+    assert result.returncode == 0, result.stderr
+    intervals = json.loads(result.stdout)
+    assert len(intervals) >= 2
+
+    for index, item in enumerate(intervals, start=1):
+        expected_frames = item["end_sample"] - item["start_sample"]
+        written = []
+        for take in (1, 2):
+            with wave.open(f"{prefix}{take:02d}_{index:03d}.wav", "rb") as handle:
+                assert handle.getnframes() == expected_frames
+                written.append(handle.readframes(handle.getnframes()))
+        assert written[0] != written[1]
+
+
+def test_split_silence_cli_refuses_a_take_at_another_rate(tmp_path) -> None:
+    """Frame indices from two rates are not comparable, so the take is refused."""
+    take_a = str(tmp_path / "take_a.wav")
+    take_b = str(tmp_path / "take_b.wav")
+    _write_test_wav(take_a, _blocked_sine([(0.5, 0.30), (0.0, 0.40)], 22050), 22050)
+    _write_test_wav(take_b, _blocked_sine([(0.5, 0.30), (0.0, 0.40)], 44100), 44100)
+
+    result = _run_cli(["split-silence", take_a, "--input", take_b, "--json"])
+    assert result.returncode == 3, result.stderr
+    assert "44100" in result.stderr
+    assert "22050" in result.stderr
+
+
 def test_effect_cli_commands_appear_in_help() -> None:
     """The new offline effect subcommands are advertised in --help."""
     result = _run_cli(["--help"])

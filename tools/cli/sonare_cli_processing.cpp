@@ -1,5 +1,6 @@
 #include <cctype>
 
+#include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli.h"
 
 // Offline-effect output contract: a command that renders an audio buffer
@@ -1011,10 +1012,99 @@ int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+namespace {
+
+// The takes `split-silence` measures together: the positional first, then every
+// --input in command-line order.
+std::vector<std::vector<float>> load_split_silence_takes(const CliArgs& args, const Audio& audio) {
+  std::vector<std::vector<float>> takes;
+  const std::vector<std::string> paths = args.get_string_list("input");
+  takes.reserve(paths.size() + 1);
+  takes.emplace_back(audio.begin(), audio.end());
+  for (const std::string& path : paths) {
+    // Through Audio::from_file, as main() loads the positional, so every take
+    // meets the same offline-input policy.
+    Audio take = Audio::from_file(path);
+    // Frame indices from two rates are not comparable, so a mismatch would
+    // report intervals in units the caller cannot map back onto either take.
+    if (take.sample_rate() != audio.sample_rate()) {
+      throw std::invalid_argument("take sample rate differs: " + path + " is " +
+                                  std::to_string(take.sample_rate()) + " Hz, the first take is " +
+                                  std::to_string(audio.sample_rate()) + " Hz");
+    }
+    takes.emplace_back(take.begin(), take.end());
+  }
+  return takes;
+}
+
+// Writes every take sliced at every interval as `{prefix}{take}_{interval}.wav`,
+// both indices 1-based and zero-padded. A take that ended before an interval is
+// silent there, which is the rule the union was built on, so its slice is padded
+// rather than shortened and every take's file for one interval is the same
+// length.
+void write_split_silence_takes(const std::string& prefix,
+                               const std::vector<std::vector<float>>& takes,
+                               const std::vector<std::pair<int, int>>& ranges, int sample_rate) {
+  for (size_t take = 0; take < takes.size(); ++take) {
+    for (size_t interval = 0; interval < ranges.size(); ++interval) {
+      const size_t start = static_cast<size_t>(ranges[interval].first);
+      const size_t end = static_cast<size_t>(ranges[interval].second);
+      std::vector<float> slice(end - start, 0.0f);
+      // Guarded rather than clamped to a zero count: a take that ends before the
+      // interval starts is the documented unequal-length case, and `begin() +
+      // start` past the end is undefined even when nothing is copied from it.
+      if (start < takes[take].size()) {
+        const size_t available = takes[take].size() - start;
+        std::copy_n(takes[take].begin() + static_cast<std::ptrdiff_t>(start),
+                    std::min(available, slice.size()), slice.begin());
+      }
+      char suffix[32];
+      std::snprintf(suffix, sizeof(suffix), "%02zu_%03zu.wav", take + 1, interval + 1);
+      save_wav(prefix + suffix, slice, sample_rate);
+    }
+  }
+}
+
+}  // namespace
+
 int cmd_split_silence(const CliArgs& args, const Audio& audio) {
   const float top_db = args.get_float("top-db", 60.0f);
-  std::vector<float> input(audio.begin(), audio.end());
-  auto ranges = sonare::split(input, top_db, args.n_fft, args.hop_length);
+  const std::vector<std::vector<float>> takes = load_split_silence_takes(args, audio);
+
+  std::vector<const float*> signals;
+  std::vector<size_t> lengths;
+  signals.reserve(takes.size());
+  lengths.reserve(takes.size());
+  for (const std::vector<float>& take : takes) {
+    signals.push_back(take.data());
+    lengths.push_back(take.size());
+  }
+
+  // The union across the takes, from the one implementation every other surface
+  // calls. A single take answers exactly as sonare_split_silence does.
+  int* flat = nullptr;
+  size_t flat_count = 0;
+  const SonareError err =
+      sonare_split_silence_common(signals.data(), signals.size(), lengths.data(), top_db,
+                                  args.n_fft, args.hop_length, &flat, &flat_count);
+  if (err != SONARE_OK) {
+    // Mapped rather than raised as a plain runtime error, so the failure keeps
+    // the class it carries out to the exit code the two front-ends publish for
+    // it. The CLI refuses an unreadable or empty take before this point, so this
+    // is the defensive branch; a divergence here would be found by nothing.
+    const char* message = sonare_error_message(err);
+    throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err),
+                                  message != nullptr ? message : "split-silence failed");
+  }
+  std::vector<std::pair<int, int>> ranges;
+  ranges.reserve(flat_count / 2);
+  for (size_t i = 0; i + 1 < flat_count; i += 2) ranges.emplace_back(flat[i], flat[i + 1]);
+  sonare_free_ints(flat);
+
+  const std::string write_takes = args.get_string("write-takes");
+  if (!write_takes.empty()) {
+    write_split_silence_takes(write_takes, takes, ranges, audio.sample_rate());
+  }
 
   if (args.json_output) {
     JsonBuilder json;
@@ -1030,6 +1120,10 @@ int cmd_split_silence(const CliArgs& args, const Audio& audio) {
     std::cout << "Non-silent intervals: " << ranges.size() << "\n";
     for (const auto& range : ranges) {
       printf("  %d - %d\n", range.first, range.second);
+    }
+    if (!write_takes.empty()) {
+      std::cout << "Wrote " << takes.size() * ranges.size() << " take files with prefix "
+                << write_takes << "\n";
     }
   }
   return 0;

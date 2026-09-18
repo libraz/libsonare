@@ -31,6 +31,7 @@ _PATH_OPTION_NAMES = frozenset(
         "report",
         "scene",
         "smf",
+        "write-takes",
     }
 )
 
