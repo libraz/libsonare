@@ -620,11 +620,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {}, validate_repair_output);
 #endif
 #ifdef SONARE_WITH_MIXING
-    // `mix` is the deprecated spelling of `mix-strip` and resolves through the
-    // alias path, which is why there is one row rather than two. Two rows that
-    // each named the other as an alias never used that path -- path lookup wins
-    // -- so each name was validated against its own copy of the option list, and
-    // an option added to one became an unknown option under the other.
+    // `mix-strip` is the only spelling for the strip. `mix` names the Python
+    // CLI's scene mixer, which this front-end has no equivalent of, so it is
+    // refused here as an unknown command rather than carried as an alias.
     add_command(commands, "mix-strip", true,
                 {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
                  number_value("pan", 0.0), string_value("pan-mode", "balance"),

@@ -1593,8 +1593,9 @@ def _build_parser() -> _ContractArgumentParser:
         default=[],
         metavar="[ID=]WAV",
         help=(
-            "Per-track input WAV (repeat once per track); loaded as mono and "
-            "resampled to --sample-rate; ID defaults to the file's base name"
+            "Per-track input WAV (repeat once per track); a stereo file keeps both "
+            "channels and more than two are downmixed, then resampled to "
+            "--sample-rate; ID defaults to the file's base name"
         ),
     )
     suggest_mix_p.add_argument(
