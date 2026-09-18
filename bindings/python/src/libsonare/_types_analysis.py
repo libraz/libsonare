@@ -768,37 +768,47 @@ class AcousticResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RirDiagnostic:
+    """One diagnostic reported by the RIR synthesizer.
+
+    Args:
+        code: Stable machine-readable id, e.g. ``acoustic.rir_length_clamped``.
+        message: Human-readable detail.
+        severity: ``"info"``, ``"warning"`` or ``"error"``.
+    """
+
+    code: str
+    message: str
+    severity: str
+
+
+@dataclass(frozen=True, slots=True)
 class RirResult:
     """Room impulse response synthesized from shoebox geometry.
 
     ``error_message`` contains the stable acoustic diagnostic code and detail
     when geometry validation makes the result unusable.
 
-    ``warning_message`` carries non-fatal diagnostics, which appear on
-    SUCCESSFUL calls too and are otherwise invisible: a ``max_seconds`` clamp
-    that cut the reverb tail (``acoustic.rir_length_clamped``), a ``max_seconds``
-    shorter than the direct sound's own arrival, which is raised to fit it
+    ``diagnostics`` carries every diagnostic the synthesizer reported, in its own
+    order. Warnings appear on SUCCESSFUL calls too and are otherwise invisible: a
+    ``max_seconds`` clamp that cut the reverb tail
+    (``acoustic.rir_length_clamped``), a ``max_seconds`` shorter than the direct
+    sound's own arrival, which is raised to fit it
     (``acoustic.rir_length_floored``), or a request reduced from "early
     reflections + diffuse tail" to early reflections only
     (``acoustic.no_late_tail``). None of them sets ``has_error``, so a truncated
-    RIR is indistinguishable from a complete one without reading this field. A
-    call can raise several; they arrive joined with ``"; "``, in the order the
-    synthesizer reported them.
+    RIR is indistinguishable from a complete one without reading this field.
     """
 
     rir: list[float]
     sample_rate: int
     has_error: bool
     error_message: str = ""
-    warning_message: str = ""
+    diagnostics: list[RirDiagnostic] = field(default_factory=list)
 
     @property
     def sampleRate(self) -> int:  # noqa: N802
         return self.sample_rate
-
-    @property
-    def warningMessage(self) -> str:  # noqa: N802
-        return self.warning_message
 
     @property
     def hasError(self) -> bool:  # noqa: N802
@@ -810,27 +820,22 @@ class RoomMorphResult:
     """Morphed audio and what the target-room synthesis had to change to make it.
 
     Shaped like :class:`RirResult` because the same synthesis runs underneath.
-    There is no ``has_error`` counterpart: an invalid morph raises, so
-    ``warning_message`` is the whole diagnostic channel. It carries the same
-    non-fatal codes the RIR path publishes — an image-source order reduced to the
-    safe maximum (``acoustic.ism_order_clamped``), a tail cut against
-    ``max_seconds`` (``acoustic.rir_length_clamped``), a request that produced no
-    diffuse tail (``acoustic.no_late_tail``) — each of which says the morph went
-    through a room other than the one requested. Several arrive joined with
-    ``"; "``, in the order the synthesizer reported them.
+    There is no ``has_error`` / ``error_message`` counterpart: an unusable morph
+    raises, so every entry in ``diagnostics`` is a warning. Each says the morph
+    went through a room other than the one requested — an image-source order
+    reduced to the safe maximum (``acoustic.ism_order_clamped``), a tail cut
+    against ``max_seconds`` (``acoustic.rir_length_clamped``), a request that
+    produced no diffuse tail (``acoustic.no_late_tail``) — and is otherwise
+    invisible.
     """
 
     audio: list[float]
     sample_rate: int
-    warning_message: str = ""
+    diagnostics: list[RirDiagnostic] = field(default_factory=list)
 
     @property
     def sampleRate(self) -> int:  # noqa: N802
         return self.sample_rate
-
-    @property
-    def warningMessage(self) -> str:  # noqa: N802
-        return self.warning_message
 
 
 @dataclass(frozen=True, slots=True)

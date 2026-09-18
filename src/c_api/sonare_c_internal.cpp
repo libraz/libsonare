@@ -20,7 +20,19 @@ std::string& last_warning_storage() {
 
 void set_last_warning(const char* msg) { last_warning_storage().assign(msg != nullptr ? msg : ""); }
 
-void clear_last_warning() { last_warning_storage().clear(); }
+std::vector<sonare::Diagnostic>& last_diagnostics_storage() {
+  static thread_local std::vector<sonare::Diagnostic> storage;
+  return storage;
+}
+
+void set_last_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics) {
+  last_diagnostics_storage() = diagnostics;
+}
+
+void clear_last_warning() {
+  last_warning_storage().clear();
+  last_diagnostics_storage().clear();
+}
 
 SonareError map_sonare_exception(const SonareException& e) {
   switch (e.code()) {

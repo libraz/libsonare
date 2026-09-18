@@ -939,6 +939,20 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_last_warning_message.restype = ctypes.c_char_p
         lib.sonare_last_warning_message.argtypes = []
 
+    # sonare_last_diagnostic_*: the structured form of the warning channel, one
+    # entry per diagnostic with its own code, message and severity. Read instead
+    # of splitting the joined warning string, which cannot be split back when a
+    # message holds the separator and carries no severity at all.
+    if hasattr(lib, "sonare_last_diagnostic_count"):
+        lib.sonare_last_diagnostic_count.restype = ctypes.c_size_t
+        lib.sonare_last_diagnostic_count.argtypes = []
+        lib.sonare_last_diagnostic_code.restype = ctypes.c_char_p
+        lib.sonare_last_diagnostic_code.argtypes = [ctypes.c_size_t]
+        lib.sonare_last_diagnostic_message.restype = ctypes.c_char_p
+        lib.sonare_last_diagnostic_message.argtypes = [ctypes.c_size_t]
+        lib.sonare_last_diagnostic_severity.restype = ctypes.c_int32
+        lib.sonare_last_diagnostic_severity.argtypes = [ctypes.c_size_t]
+
     # --- Version ---
 
     # sonare_version

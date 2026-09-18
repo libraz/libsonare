@@ -117,6 +117,11 @@ void publish_rir_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics)
     warnings += diagnostic.code + ": " + diagnostic.message;
   }
   if (!warnings.empty()) sonare_c_detail::set_last_warning(warnings.c_str());
+  // The whole list, unflattened, so a binding can rebuild the array Node and
+  // WASM get from the core. The joined string above cannot be split back into
+  // it: a message holding the separator would split wrong, and the severity is
+  // not in the text at all.
+  sonare_c_detail::set_last_diagnostics(diagnostics);
 }
 #endif
 

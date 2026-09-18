@@ -30,13 +30,44 @@ from ._runtime import (
     _to_c_int,
     _to_c_size_t,
 )
-from .types import RirResult, RoomEstimate, RoomMorphResult
+from .types import RirDiagnostic, RirResult, RoomEstimate, RoomMorphResult
 
 # SONARE_REVERB_MODEL_* selectors (sonare_c_acoustic.h). DEFAULT (0) resolves to
 # the library default (Eyring); only SABINE selects Sabine explicitly.
 _REVERB_MODEL_DEFAULT = 0
 _REVERB_MODEL_SABINE = 1
 _REVERB_MODEL_EYRING = 2
+
+# SonareDiagnosticSeverity ordinals (sonare_c_types_enums.h), mapped to the
+# strings Node and WASM put on RirDiagnostic.severity.
+_DIAGNOSTIC_SEVERITIES = ("info", "warning", "error")
+
+
+def _read_diagnostics() -> list[RirDiagnostic]:
+    """Reads the structured diagnostic channel the last C call published.
+
+    Must run before any later C ABI call can replace the thread-local list, the
+    same contract the error and warning strings carry.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_last_diagnostic_count"):
+        return []
+    out: list[RirDiagnostic] = []
+    for position in range(lib.sonare_last_diagnostic_count()):
+        index = _to_c_size_t(position, "index")
+        code = lib.sonare_last_diagnostic_code(index) or b""
+        message = lib.sonare_last_diagnostic_message(index) or b""
+        severity = lib.sonare_last_diagnostic_severity(index)
+        out.append(
+            RirDiagnostic(
+                code=code.decode("utf-8"),
+                message=message.decode("utf-8"),
+                severity=_DIAGNOSTIC_SEVERITIES[severity]
+                if 0 <= severity < len(_DIAGNOSTIC_SEVERITIES)
+                else "info",
+            )
+        )
+    return out
 
 
 def _late_model(prefer_eyring: bool) -> int:
@@ -198,23 +229,19 @@ def synthesize_rir(
     try:
         detail = lib.sonare_last_error_message() if out.has_error else None
         error_message = detail.decode("utf-8") if detail else ""
-        # Read the warning channel unconditionally, exactly as the Node and WASM
-        # facades do. Non-fatal diagnostics are recorded on SUCCESS returns -- a
-        # max_seconds clamp that cut the tail, or a request degraded to early
-        # reflections only -- so gating this on has_error would leave a truncated
-        # RIR indistinguishable from a complete one. Read before any later C ABI
-        # call can overwrite the thread-local slot.
-        warning_message = ""
-        if hasattr(lib, "sonare_last_warning_message"):
-            raw_warning = lib.sonare_last_warning_message()
-            if raw_warning:
-                warning_message = raw_warning.decode("utf-8")
+        # Read the diagnostic channel unconditionally, exactly as the Node and
+        # WASM facades do. Non-fatal diagnostics are recorded on SUCCESS returns
+        # -- a max_seconds clamp that cut the tail, or a request degraded to
+        # early reflections only -- so gating this on has_error would leave a
+        # truncated RIR indistinguishable from a complete one. Read before any
+        # later C ABI call can overwrite the thread-local list.
+        diagnostics = _read_diagnostics()
         return RirResult(
             rir=_float_array_result(out.rir, out.length),
             sample_rate=int(out.sample_rate),
             has_error=bool(out.has_error),
             error_message=error_message,
-            warning_message=warning_message,
+            diagnostics=diagnostics,
         )
     finally:
         lib.sonare_free_rir_synth_result(ctypes.byref(out))
@@ -398,17 +425,13 @@ def room_morph(
     )
     _check(rc)
     try:
-        # Read before any later C ABI call can overwrite the thread-local slot,
+        # Read before any later C ABI call can overwrite the thread-local list,
         # exactly as synthesize_rir does.
-        warning_message = ""
-        if hasattr(lib, "sonare_last_warning_message"):
-            raw_warning = lib.sonare_last_warning_message()
-            if raw_warning:
-                warning_message = raw_warning.decode("utf-8")
+        diagnostics = _read_diagnostics()
         return RoomMorphResult(
             audio=_float_array_result(out, out_length.value),
             sample_rate=sample_rate,
-            warning_message=warning_message,
+            diagnostics=diagnostics,
         )
     finally:
         if out and out_length.value > 0:

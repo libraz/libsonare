@@ -250,6 +250,9 @@ from ._types_analysis import (
     RhythmResult as RhythmResult,
 )
 from ._types_analysis import (
+    RirDiagnostic as RirDiagnostic,
+)
+from ._types_analysis import (
     RirResult as RirResult,
 )
 from ._types_analysis import (

@@ -1,5 +1,6 @@
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
@@ -121,6 +122,48 @@ TEST_CASE("sonare acoustic C API publishes recoverable RIR diagnostics", "[c_api
           std::string::npos);
 
   sonare_free_rir_synth_result(&result);
+}
+
+TEST_CASE("sonare acoustic C API publishes diagnostics unflattened", "[c_api][acoustic]") {
+  // A request that trips three at once, so the structured channel is measured
+  // where the joined string is at its least recoverable.
+  SonareRirSynthConfig cfg = valid_rir_config();
+  cfg.max_seconds = 0.005f;
+  SonareRirSynthResult result{};
+  REQUIRE(sonare_synthesize_rir(&cfg, 22050, &result) == SONARE_OK);
+  REQUIRE(result.has_error == 0);
+
+  REQUIRE(sonare_last_diagnostic_count() >= 2);
+  std::vector<std::string> codes;
+  for (size_t i = 0; i < sonare_last_diagnostic_count(); ++i) {
+    codes.emplace_back(sonare_last_diagnostic_code(i));
+    // Severity is the field the joined string cannot carry at all.
+    CHECK(sonare_last_diagnostic_severity(i) == SONARE_DIAGNOSTIC_WARNING);
+    CHECK(!std::string(sonare_last_diagnostic_message(i)).empty());
+  }
+  CHECK(std::find(codes.begin(), codes.end(), "acoustic.rir_length_clamped") != codes.end());
+
+  // Each entry appears in the flattened string too, so the two channels describe
+  // one call rather than drifting apart.
+  const std::string joined = sonare_last_warning_message();
+  for (const std::string& code : codes) CHECK(joined.find(code) != std::string::npos);
+
+  // Past the end is an empty entry, not a fault, so a caller that miscounts gets
+  // nothing rather than memory it does not own.
+  const size_t past_end = sonare_last_diagnostic_count();
+  CHECK(std::string(sonare_last_diagnostic_code(past_end)).empty());
+  CHECK(std::string(sonare_last_diagnostic_message(past_end)).empty());
+
+  // A later clean call clears the list, so a count read after it is that call's
+  // rather than a slot nothing resets.
+  SonareRirSynthConfig clean = valid_rir_config();
+  clean.max_seconds = 3.0f;
+  SonareRirSynthResult clean_result{};
+  REQUIRE(sonare_synthesize_rir(&clean, 22050, &clean_result) == SONARE_OK);
+  CHECK(sonare_last_diagnostic_count() == 0);
+
+  sonare_free_rir_synth_result(&result);
+  sonare_free_rir_synth_result(&clean_result);
 }
 
 TEST_CASE("sonare acoustic C API honors the late-tail model selector", "[c_api][acoustic]") {

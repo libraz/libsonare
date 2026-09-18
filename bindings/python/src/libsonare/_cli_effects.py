@@ -29,6 +29,21 @@ if TYPE_CHECKING:
     from .analyzer import NoteEdit
 
 
+def _print_diagnostic_warnings(result: Any) -> None:
+    """Prints one stderr line per warning the acoustic synthesis reported.
+
+    One line per entry rather than one joined line, so the two front-ends print
+    the same thing: the native binary walks the diagnostic list the same way, and
+    a message holding the join separator would be unreadable on either.
+    """
+    # Direct attribute access rather than a getattr default: a result type that
+    # stopped carrying the field should fail here, not print nothing.
+    for diagnostic in result.diagnostics:
+        if diagnostic.severity != "warning":
+            continue
+        print(f"warning: {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
+
+
 def cmd_hpss(args: argparse.Namespace) -> int:
     from . import hpss, hpss_with_residual
 
@@ -1002,9 +1017,7 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
     # made a truncated RIR indistinguishable from a complete one. They go to
     # stderr in every mode so the JSON document on stdout stays exactly the
     # payload both CLIs publish.
-    warning = getattr(result, "warning_message", "")
-    if warning:
-        print(f"warning: {warning}", file=sys.stderr)
+    _print_diagnostic_warnings(result)
     # 24-bit, not the 16-bit default. A synthesized RIR carries its physical
     # 1/(4*pi*d) attenuation, so its peak sits far below full scale and 16-bit
     # quantization would cost the tail roughly 36 dB of the headroom it needs;
@@ -1051,8 +1064,7 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
     # clamps fire and each one says the morph went through a room the caller did
     # not ask for. stderr in every mode, so the JSON document on stdout stays
     # exactly the payload both CLIs publish.
-    if result.warning_message:
-        print(f"warning: {result.warning_message}", file=sys.stderr)
+    _print_diagnostic_warnings(result)
     _write_wav(args.output, result.audio, sr)
     if args.json:
         print(_strict_json_dumps({"output": args.output, "samples": len(result.audio)}))

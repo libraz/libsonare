@@ -82,14 +82,17 @@ def test_synthesize_rir_surfaces_non_fatal_diagnostics() -> None:
     clamped = libsonare.synthesize_rir(12.0, 9.0, 5.0, absorption=0.05, max_seconds=0.3)
     assert clamped.has_error is False
     assert clamped.error_message == ""
-    assert "acoustic.rir_length_clamped" in clamped.warning_message
-    assert clamped.warningMessage == clamped.warning_message
+    clamp = next(d for d in clamped.diagnostics if d.code == "acoustic.rir_length_clamped")
+    # Each entry keeps its own severity and message rather than arriving as one
+    # flattened line, so the set matches what Node and WASM hand back.
+    assert clamp.severity == "warning"
+    assert clamp.message != ""
 
     # ... and a request that needed no clamping reports nothing, so the field is
     # a real signal rather than always-populated noise.
     clean = libsonare.synthesize_rir(5.0, 4.0, 3.0, absorption=0.3, max_seconds=3.0)
     assert clean.has_error is False
-    assert clean.warning_message == ""
+    assert clean.diagnostics == []
 
 
 @acoustic
@@ -418,11 +421,13 @@ def test_room_morph_reports_the_target_synthesis_warnings() -> None:
     room = dict(sample_rate=48000, length_m=12.0, width_m=9.0, height_m=5.0, max_seconds=2.0)
 
     clamped = libsonare.room_morph(samples, ism_order=99, **room)
-    assert "acoustic.ism_order_clamped" in clamped.warning_message
-    assert clamped.warningMessage == clamped.warning_message
+    codes = [d.code for d in clamped.diagnostics]
+    assert "acoustic.ism_order_clamped" in codes
+    # An unusable morph raises rather than reporting, so nothing here is an error.
+    assert {d.severity for d in clamped.diagnostics} == {"warning"}
     assert len(clamped.audio) > len(samples)
 
-    # An order the synthesizer honours leaves the channel clear, so the message
+    # An order the synthesizer honours leaves the channel clear, so the entry
     # above is that run's rather than a slot nothing ever resets.
     quiet = libsonare.room_morph(samples, ism_order=2, **room)
-    assert "acoustic.ism_order_clamped" not in quiet.warning_message
+    assert "acoustic.ism_order_clamped" not in [d.code for d in quiet.diagnostics]

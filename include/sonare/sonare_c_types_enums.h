@@ -45,6 +45,15 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_ERROR_UNKNOWN = 99
 } SonareError;
 
+/* Severity of one entry in the structured diagnostic channel
+   (sonare_last_diagnostic_*). Ordinals mirror sonare::Diagnostic::Severity; do
+   not reorder. */
+typedef enum SONARE_ENUM_BASE {
+  SONARE_DIAGNOSTIC_INFO = 0,
+  SONARE_DIAGNOSTIC_WARNING = 1,
+  SONARE_DIAGNOSTIC_ERROR = 2
+} SonareDiagnosticSeverity;
+
 // Pitch class enum
 typedef enum SONARE_ENUM_BASE {
   SONARE_PITCH_C = 0,

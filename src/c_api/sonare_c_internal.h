@@ -11,6 +11,7 @@
 #include "automation/automation_lane.h"
 #include "automation/parameter.h"
 #include "core/audio.h"
+#include "core/diagnostic.h"
 #include "engine/realtime_engine.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "host/midi_io.h"
@@ -79,9 +80,23 @@ void clear_last_error();
 /// (e.g. a scene loaded fine but some insert params were silently ignored).
 std::string& last_warning_storage();
 void set_last_warning(const char* msg);
-/// @brief Clears the thread-local warning message. Called at the entry of the
-/// C-ABI calls that may record one, so a stale warning never leaks forward.
+/// @brief Clears the thread-local warning message AND the structured diagnostic
+/// list below. Called at the entry of the C-ABI calls that may record either, so
+/// a stale warning never leaks forward.
+/// @details The two are cleared together rather than separately because every
+///          publisher of the structured list also writes the flattened string,
+///          so a per-channel clear would let a call that records only the string
+///          leave the previous call's structured entries readable beside it.
 void clear_last_warning();
+/// @brief Thread-local structured form of the warning channel: the diagnostics a
+/// call published, each keeping its code, message and severity. Surfaced by
+/// @ref sonare_last_diagnostic_count and its accessors.
+std::vector<sonare::Diagnostic>& last_diagnostics_storage();
+/// @brief Publishes @p diagnostics on the structured channel, replacing whatever
+/// the previous call left there. Callers also write the flattened warning string
+/// (and the first Error to the error channel) so the two channels describe the
+/// same call.
+void set_last_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics);
 SonareError map_sonare_exception(const SonareException& e);
 /// @brief Validates an offline audio buffer shared by every run_*_offline entry.
 /// @details EMPTY-AUDIO POLICY: a NULL @p samples or @c length == 0 is rejected

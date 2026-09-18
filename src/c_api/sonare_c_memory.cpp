@@ -192,6 +192,34 @@ const char* sonare_last_error_message(void) { return last_error_storage().c_str(
 
 const char* sonare_last_warning_message(void) { return last_warning_storage().c_str(); }
 
+size_t sonare_last_diagnostic_count(void) { return last_diagnostics_storage().size(); }
+
+const char* sonare_last_diagnostic_code(size_t index) {
+  const std::vector<sonare::Diagnostic>& diagnostics = last_diagnostics_storage();
+  if (index >= diagnostics.size()) return "";
+  return diagnostics[index].code.c_str();
+}
+
+const char* sonare_last_diagnostic_message(size_t index) {
+  const std::vector<sonare::Diagnostic>& diagnostics = last_diagnostics_storage();
+  if (index >= diagnostics.size()) return "";
+  return diagnostics[index].message.c_str();
+}
+
+SonareDiagnosticSeverity sonare_last_diagnostic_severity(size_t index) {
+  const std::vector<sonare::Diagnostic>& diagnostics = last_diagnostics_storage();
+  if (index >= diagnostics.size()) return SONARE_DIAGNOSTIC_INFO;
+  switch (diagnostics[index].severity) {
+    case sonare::Diagnostic::Severity::Info:
+      return SONARE_DIAGNOSTIC_INFO;
+    case sonare::Diagnostic::Severity::Warning:
+      return SONARE_DIAGNOSTIC_WARNING;
+    case sonare::Diagnostic::Severity::Error:
+      return SONARE_DIAGNOSTIC_ERROR;
+  }
+  return SONARE_DIAGNOSTIC_INFO;
+}
+
 const char* sonare_version(void) { return SONARE_VERSION_STRING; }
 
 uint32_t sonare_engine_abi_version(void) { return sonare::rt::kEngineAbiVersion; }

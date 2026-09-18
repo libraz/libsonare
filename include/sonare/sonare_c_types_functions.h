@@ -378,12 +378,46 @@ const char* sonare_last_error_message(void);
 ///   - @ref sonare_synthesize_rir publishes EVERY recoverable diagnostic it
 ///     raised, each as ``acoustic.code: explanation`` and joined with "; " in
 ///     the synthesizer's own order, so a request that trips two reports both.
-///     Parse the string as a "; "-separated list, not as a single diagnostic.
+///     This flattening is lossy -- a message containing the separator cannot be
+///     split back out, and the severity is gone. Read the structured channel
+///     below instead of parsing this string; it is kept for callers written
+///     against it.
 ///   - Cleared at the entry of sonare_mixer_from_scene_json and of
 ///     sonare_synthesize_rir, so a stale warning from an earlier call never
 ///     leaks into a later, clean one.
 /// @return Pointer to a NUL-terminated thread-local message string.
 const char* sonare_last_warning_message(void);
+
+/// @brief Number of structured diagnostics the most recent call published on the
+///        calling thread, or 0 when it published none.
+/// @details The structured form of the flattened sonare_last_warning_message
+///   string: the same entries, each keeping its own code, message and severity
+///   instead of being joined into one line. Published by the entry points that
+///   produce sonare::Diagnostic values -- @ref sonare_synthesize_rir and
+///   @ref sonare_room_morph -- and empty after any other call, including one
+///   that recorded a warning string built from something other than diagnostics
+///   (sonare_mixer_from_scene_json's ignored insert params).
+///   - Both channels are cleared together at the entry of every call that may
+///     record either, so a count read after a later clean call is 0 rather than
+///     stale.
+///   - Reading does not consume: the list stays valid until the next API call
+///     that records or clears a diagnostic on the same thread.
+size_t sonare_last_diagnostic_count(void);
+
+/// @brief Stable machine-readable id of diagnostic @p index, e.g.
+///        "acoustic.rir_length_clamped".
+/// @details Never NULL: an @p index at or past sonare_last_diagnostic_count()
+///   returns "", so a caller that reads past the end gets an empty entry rather
+///   than a fault. The pointer follows the same lifetime as the count.
+const char* sonare_last_diagnostic_code(size_t index);
+
+/// @brief Human-readable detail of diagnostic @p index, "" when out of range.
+const char* sonare_last_diagnostic_message(size_t index);
+
+/// @brief Severity of diagnostic @p index. An out-of-range index reports
+///        SONARE_DIAGNOSTIC_INFO, which is also what an entry that carries no
+///        action reports -- test the index against the count, not the severity.
+SonareDiagnosticSeverity sonare_last_diagnostic_severity(size_t index);
 
 // Version
 /// @brief Returns the library version string (e.g. "1.2.3").
