@@ -249,8 +249,10 @@ def render_notes(
         ``numpy.ndarray`` of ``float32`` with the same length as the input.
 
     Raises:
-        SonareValueError: If ``samples`` is empty or non-finite, or if ``f0_hz``
-            was given without ``frame_rate``.
+        SonareValueError: If ``samples`` is empty or non-finite, if ``f0_hz`` is
+            empty, or if ``f0_hz`` was given without ``frame_rate``. A
+            non-finite ``f0_hz`` frame is read as carrying no pitch, not
+            refused.
         SonareError: If the C call rejects the request (e.g. a note span that
             overlaps another's, or a curve edit with no ``f0_hz``).
 
@@ -274,8 +276,14 @@ def render_notes(
     if f0_hz is not None:
         if frame_rate is None:
             raise SonareValueError("render_notes: pass frame_rate with f0_hz")
+        # Shape-only, the way the five siblings spell it through the decorator's
+        # `shape_only`: pYIN marks an unvoiced frame with NaN, so the track this
+        # call's own docstring tells the caller to pass carries one. It is
+        # written here rather than on the decorator because the argument is
+        # optional, and an explicit `f0_hz=None` reaches the decorator as a
+        # supplied name.
         f0_array, n_frames = _to_c_float_array(
-            _validate_samples("render_notes", f0_hz, arg_name="f0_hz")
+            _validate_samples("render_notes", f0_hz, validate=False, arg_name="f0_hz")
         )
         c_frame_rate = float(frame_rate)
 
