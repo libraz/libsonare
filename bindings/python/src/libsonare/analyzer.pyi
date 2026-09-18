@@ -68,6 +68,7 @@ from .types import (
     RhythmResult,
     RirResult,
     RoomEstimate,
+    RoomMorphResult,
     SectionResult,
     SegmentMatrix,
     SendTiming,
@@ -103,6 +104,7 @@ MasteringParams: TypeAlias = dict[str, MasteringParamValue]
 # The assistant additionally accepts targetPlatform, whose value is a
 # delivery-target name (see mastering_platform_names).
 MasteringAssistantParams: TypeAlias = dict[str, MasteringParamValue | str]
+MasteringChainParams: TypeAlias = dict[str, float | bool]
 ProgressCallback: TypeAlias = Callable[[float, str], None]
 CancelCallback: TypeAlias = Callable[[], bool]
 
@@ -411,7 +413,7 @@ def room_morph(
     air_absorption_enabled: bool = False,
     air_temperature_c: float = 0.0,
     air_humidity_percent: float = 0.0,
-) -> list[float]: ...
+) -> RoomMorphResult: ...
 def analyze_rhythm(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -1008,6 +1010,11 @@ def mastering_assistant_suggest(
     sample_rate: int = 22050,
     params: MasteringAssistantParams | None = None,
 ) -> str: ...
+def mastering_assistant_suggest_chain(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    params: MasteringAssistantParams | None = None,
+) -> MasteringChainParams: ...
 def mastering_audio_profile(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -1019,6 +1026,12 @@ def mastering_assistant_suggest_stereo(
     sample_rate: int = 22050,
     params: MasteringAssistantParams | None = None,
 ) -> str: ...
+def mastering_assistant_suggest_chain_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    params: MasteringAssistantParams | None = None,
+) -> MasteringChainParams: ...
 def mastering_audio_profile_stereo(
     left: FloatSamples,
     right: FloatSamples,

@@ -268,6 +268,12 @@ from .analyzer import (
     mastering_assistant_suggest as mastering_assistant_suggest,
 )
 from .analyzer import (
+    mastering_assistant_suggest_chain as mastering_assistant_suggest_chain,
+)
+from .analyzer import (
+    mastering_assistant_suggest_chain_stereo as mastering_assistant_suggest_chain_stereo,
+)
+from .analyzer import (
     mastering_assistant_suggest_stereo as mastering_assistant_suggest_stereo,
 )
 from .analyzer import (
@@ -1015,6 +1021,9 @@ from .types import (
 )
 from .types import (
     RoomEstimate as RoomEstimate,
+)
+from .types import (
+    RoomMorphResult as RoomMorphResult,
 )
 from .types import (
     ScopeTelemetryRecord as ScopeTelemetryRecord,
