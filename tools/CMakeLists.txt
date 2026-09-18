@@ -71,10 +71,10 @@ if(BUILD_ARRANGEMENT)
     ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
-    # Reads SONARE_WITH_ARRANGEMENT, which decides whether `transcribe` exists
-    # at all, and SONARE_WITH_PITCH_EDITOR, which the top-level CMakeLists
-    # forces on for every configuration because the C editing API needs it. The
-    # not-supported branch in this TU is therefore unreachable from this tree.
+    # Reads SONARE_WITH_ARRANGEMENT, which decides whether `transcribe` exists at
+    # all, and SONARE_WITH_PITCH_EDITOR, an ON default rather than a forced value
+    # -- only the Node addon forces it. `make build-feature-matrix` configures a
+    # pitch-editor-off row, so this TU's not-supported branch is compiled there.
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_transcribe.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_memory.cpp
   )
