@@ -45,6 +45,12 @@
       "reason": "Each entry is the length returned by _to_c_float_array for a buffer this call already allocated, so it is bounded by that allocation."
     },
     {
+      "file": "_conversions.py",
+      "argument": "lengths",
+      "type": "c_size_t",
+      "reason": "The same per-take lengths as the mixing-assistant entry above: split_silence_common derives each one from _to_c_float_array for a buffer it already allocated, so it is bounded by that allocation."
+    },
+    {
       "file": "_runtime.py",
       "argument": "length",
       "type": "c_size_t",
