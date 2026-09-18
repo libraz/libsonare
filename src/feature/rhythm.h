@@ -20,10 +20,19 @@ enum class TempogramMode {
   kCosine,
 };
 
+/// @brief Largest accepted @ref TempogramConfig::win_length, counted in onset frames.
+/// @details A backstop rather than a domain bound: 32 times the 384-frame default, which
+/// at the default geometry is a lag near 285 seconds, so it sits above every consumer's
+/// useful maximum instead of binding one. The autocorrelation is quadratic in the window
+/// and linear in the frame count -- 16384 frames already costs 5 s over one second of
+/// audio -- so an unbounded window does not finish rather than failing.
+inline constexpr int kMaxTempogramWinLength = 384 * 32;
+
 /// @brief Configuration for tempogram / fourier_tempogram.
 struct TempogramConfig {
-  int hop_length = 512;                  ///< Hop length used for the onset envelope
-  int win_length = 384;                  ///< Window length in onset-envelope frames
+  int hop_length = 512;  ///< Hop length used for the onset envelope
+  /// Window length in onset-envelope frames; in [2, @ref kMaxTempogramWinLength]
+  int win_length = 384;
   WindowType window = WindowType::Hann;  ///< Analysis window
   bool center = true;                    ///< Center-pad the onset envelope
   bool norm = true;                      ///< Max-abs (L-inf) normalize each column (librosa)
@@ -117,6 +126,8 @@ struct PlpConfig {
   int hop_length = 512;
   float tempo_min = 30.0f;
   float tempo_max = 300.0f;
+  /// Tempogram window in onset frames; in [2, @ref kMaxTempogramWinLength], the
+  /// same range the field takes on TempogramConfig.
   int win_length = 384;
 };
 

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "core/fft.h"
 #include "core/window.h"
@@ -90,6 +91,12 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
   if (config.win_length <= 1) {
     throw SonareException(ErrorCode::InvalidParameter, "tempogram: win_length must be > 1");
   }
+  if (config.win_length > kMaxTempogramWinLength) {
+    throw SonareException(ErrorCode::InvalidParameter, "tempogram: win_length must not exceed " +
+                                                           std::to_string(kMaxTempogramWinLength) +
+                                                           ", got " +
+                                                           std::to_string(config.win_length));
+  }
   if (config.hop_length <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "tempogram: hop_length must be > 0");
   }
@@ -167,6 +174,12 @@ std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, i
                                      const TempogramConfig& config) {
   if (config.win_length <= 1) {
     throw SonareException(ErrorCode::InvalidParameter, "fourier_tempogram: win_length must be > 1");
+  }
+  if (config.win_length > kMaxTempogramWinLength) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "fourier_tempogram: win_length must not exceed " +
+                              std::to_string(kMaxTempogramWinLength) + ", got " +
+                              std::to_string(config.win_length));
   }
   if (config.hop_length <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "fourier_tempogram: hop_length must be > 0");
@@ -248,6 +261,12 @@ std::vector<float> cyclic_tempogram(const Audio& audio, const TempogramConfig& c
 std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig& config) {
   if (config.win_length <= 1) {
     throw SonareException(ErrorCode::InvalidParameter, "plp: win_length must be > 1");
+  }
+  if (config.win_length > kMaxTempogramWinLength) {
+    throw SonareException(ErrorCode::InvalidParameter, "plp: win_length must not exceed " +
+                                                           std::to_string(kMaxTempogramWinLength) +
+                                                           ", got " +
+                                                           std::to_string(config.win_length));
   }
   if (config.hop_length <= 0 || config.sr <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "plp: sr and hop_length must be > 0");

@@ -403,3 +403,26 @@ TEST_CASE("cyclic_tempogram rejects a non-finite bpm_min", "[tempogram]") {
 
   REQUIRE_NOTHROW(cyclic_tempogram(env, 22050, cfg, 60.0f, 16));
 }
+
+TEST_CASE("the tempogram window is bounded, and the same bound on every reader", "[tempogram]") {
+  // The autocorrelation is quadratic in the window and linear in the frame count,
+  // so an unbounded window does not finish rather than failing: 16384 frames
+  // already costs seconds over one second of audio.
+  const std::vector<float> env(256, 1.0f);
+  TempogramConfig cfg;
+
+  cfg.win_length = kMaxTempogramWinLength;
+  REQUIRE_NOTHROW(tempogram(env, 22050, cfg));
+  cfg.win_length = kMaxTempogramWinLength + 1;
+  REQUIRE_THROWS_AS(tempogram(env, 22050, cfg), SonareException);
+
+  // One quantity, one accepted range. plp spells it on its own config, and a
+  // window one reader takes while another refuses is the asymmetry the shared
+  // constant exists to prevent.
+  REQUIRE_THROWS_AS(fourier_tempogram(env, 22050, cfg), SonareException);
+  PlpConfig plp_cfg;
+  plp_cfg.win_length = kMaxTempogramWinLength;
+  REQUIRE_NOTHROW(plp(env, plp_cfg));
+  plp_cfg.win_length = kMaxTempogramWinLength + 1;
+  REQUIRE_THROWS_AS(plp(env, plp_cfg), SonareException);
+}
