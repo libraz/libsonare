@@ -540,10 +540,12 @@ ChromaDtwResult chroma_dtw_align(const Audio& reference, const Audio& target,
   // to 252/bins_per_octave octaves, whose top bin runs past Nyquist and is
   // rejected by the CQT kernel. Deriving n_bins from the octave span is what
   // the binding-level chroma entry points already do, so the grid here is the
-  // same one those produce for a given resolution. Seven octaves above C1 top
-  // out under 4 kHz, so any sample rate from 8 kHz up carries the whole grid;
-  // below that the CQT kernel rejects it rather than this silently analysing a
-  // narrower, sample-rate-dependent range.
+  // same one those produce for a given resolution. At the default twelve bins
+  // per octave the top bin sits at 3951 Hz, so any sample rate from 8 kHz up
+  // carries the whole grid; a finer resolution raises that bin and needs the
+  // sample rate to follow. Either way the CQT kernel rejects a grid that runs
+  // past Nyquist, rather than this silently analysing a narrower,
+  // sample-rate-dependent range.
   ChromaCqtConfig ccfg;
   ccfg.cqt.hop_length = config.hop_length;
   ccfg.cqt.bins_per_octave = config.bins_per_octave;

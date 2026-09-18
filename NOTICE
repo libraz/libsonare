@@ -46,8 +46,9 @@ r8brain-free-src
   third_party/r8brain/fft/. The MIT notice above covers Aleksey Vaneev's work
   only; each bundled implementation keeps its own copyright and terms:
 
-    Ooura FFT (fft4g.h) — the implementation this project actually compiles,
-    since neither R8B_PFFFT nor R8B_IPP is defined.
+    Ooura FFT (fft4g.h) — the implementation r8brain's own resampler uses,
+    since neither R8B_PFFFT nor R8B_IPP is defined. PFFFT below is compiled
+    separately by this project when SONARE_USE_PFFFT is on.
 
       Copyright (C) 1996-2001 Takuya OOURA
 

@@ -216,7 +216,7 @@ WeightedBlockEnergies k_weighted_block_energies(const float* interleaved, size_t
                              /*allow_partial_window=*/false);
 
   // The K-weighted signal is held in a sliding window rather than materialized
-  // per channel: an hour of 48 kHz audio is 1.4 GB of `double` scratch for a
+  // whole: an hour of 48 kHz audio is 1.4 GB of `double` scratch for a
   // measurement that never reaches further back than the longest gating window
   // (3 s for short-term). The window keeps whatever the earliest unfinished
   // block still needs, so the footprint is bounded by that window plus one
