@@ -693,3 +693,46 @@ def test_estimate_meter_keyword_defaults_match_the_core() -> None:
     assert core.denominator > 0
     assert core.candidate_numerator_count > 0
     assert ctypes.sizeof(SonareMeterOptions) > 0
+
+
+def test_detect_boundaries_keyword_defaults_match_the_core() -> None:
+    """`detect_boundaries`' ten keyword defaults are the core's, not a hand-copy.
+
+    ``sonare_boundary_options_default()`` was added so a caller could not reach
+    the detector through a zeroed struct, and its ctypes signature is declared
+    beside ``sonare_detect_boundaries`` — but nothing on this surface called it,
+    so the ten Python literals were the effective defaults with nothing holding
+    them to ``BoundaryConfig``. ``absolute_threshold`` is the one that matters
+    most: it is the only floor asking whether anything changed at all, and a
+    drift there re-segments stationary material without failing anything.
+    """
+    import ctypes
+
+    import libsonare
+    from libsonare._ffi_types_streaming import SonareBoundaryOptions
+    from libsonare._runtime import _get_lib
+
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_boundary_options_default"):
+        pytest.skip("libsonare was built without sonare_boundary_options_default")
+    lib.sonare_boundary_options_default.restype = SonareBoundaryOptions
+    lib.sonare_boundary_options_default.argtypes = []
+    core = lib.sonare_boundary_options_default()
+
+    parameters = inspect.signature(libsonare.detect_boundaries).parameters
+    for name in ("n_fft", "hop_length", "kernel_size", "n_mfcc", "n_chroma"):
+        assert parameters[name].default == getattr(core, name), name
+    # Stored as C float, so compare at float32 precision rather than pinning a
+    # decimal literal that only happens to round-trip.
+    for name in ("threshold", "absolute_threshold", "peak_distance"):
+        assert parameters[name].default == pytest.approx(getattr(core, name), rel=1e-6), name
+    # The C struct spells the two flags as int32; Python spells them as bool.
+    for name in ("use_mfcc", "use_chroma"):
+        assert parameters[name].default is bool(getattr(core, name)), name
+
+    # Guard the comparison itself: reading the struct wrong would compare zeros,
+    # and every size field above is positive, so zeros would pass nothing.
+    assert core.n_fft > 0
+    assert core.kernel_size > 0
+    assert core.absolute_threshold > 0.0
+    assert ctypes.sizeof(SonareBoundaryOptions) > 0
