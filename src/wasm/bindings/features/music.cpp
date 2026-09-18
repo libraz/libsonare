@@ -186,17 +186,17 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
 
   BoundaryConfig config;
   if (!options.isUndefined() && !options.isNull()) {
-    config.n_fft = intProperty(options, "nFft", config.n_fft);
-    config.hop_length = intProperty(options, "hopLength", config.hop_length);
-    config.kernel_size = intProperty(options, "kernelSize", config.kernel_size);
-    config.threshold = floatProperty(options, "threshold", config.threshold);
+    config.n_fft = typedIntProperty(options, "nFft", config.n_fft);
+    config.hop_length = typedIntProperty(options, "hopLength", config.hop_length);
+    config.kernel_size = typedIntProperty(options, "kernelSize", config.kernel_size);
+    config.threshold = typedFloatProperty(options, "threshold", config.threshold);
     config.absolute_threshold =
-        floatProperty(options, "absoluteThreshold", config.absolute_threshold);
-    config.n_mfcc = intProperty(options, "nMfcc", config.n_mfcc);
-    config.n_chroma = intProperty(options, "nChroma", config.n_chroma);
-    config.peak_distance = floatProperty(options, "peakDistance", config.peak_distance);
-    config.use_mfcc = boolProperty(options, "useMfcc", config.use_mfcc);
-    config.use_chroma = boolProperty(options, "useChroma", config.use_chroma);
+        typedFloatProperty(options, "absoluteThreshold", config.absolute_threshold);
+    config.n_mfcc = typedIntProperty(options, "nMfcc", config.n_mfcc);
+    config.n_chroma = typedIntProperty(options, "nChroma", config.n_chroma);
+    config.peak_distance = typedFloatProperty(options, "peakDistance", config.peak_distance);
+    config.use_mfcc = typedBoolProperty(options, "useMfcc", config.use_mfcc);
+    config.use_chroma = typedBoolProperty(options, "useChroma", config.use_chroma);
   }
   // This facade calls the detector directly, so it carries the C ABI's guards
   // (sonare_detect_boundaries) itself; nothing below would refuse these. They

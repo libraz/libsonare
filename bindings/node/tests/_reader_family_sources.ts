@@ -129,7 +129,9 @@ export const READER_FAMILIES: Readonly<
     // Type-checked first, so a wrong type is refused rather than converted.
     enumProperty: 'refuse',
     floatOption: 'refuse',
+    typedBoolProperty: 'refuse',
     typedFloatProperty: 'refuse',
+    typedIntProperty: 'refuse',
     // Type-checked fallback, the mirror of the addon's node_*_option family.
     repairBoolOption: 'substitute',
     repairFloatOption: 'substitute',

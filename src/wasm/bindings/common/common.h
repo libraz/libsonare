@@ -293,6 +293,20 @@ void requireIntegral(double number, const char* key);
 /// @throws SonareException(InvalidParameter) naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
 int intProperty(val object, const char* key, int default_value);
+/// @brief Presence- AND type-checked int reader: an absent field takes @p
+///        default_value, a present one must be a JS number.
+/// @details The addon's IntProperty spelled for this surface, and @ref
+///          typedFloatProperty's integer sibling: for a COUNT or a SIZE, which
+///          has no value meaning "unspecified", so omitting the key is the only
+///          way to ask for the default. @ref intProperty reaches the same field
+///          through val::as<double>(), which COERCES, so `'1024'` and `[1024]`
+///          arrive as 1024 and `true` as 1 -- a caller error that lands inside
+///          the field's own domain, where no later range check can see it. The
+///          narrowing is unchanged: a present number still goes through @ref
+///          checkedIntFromVal, so out-of-range and fractional stay refused.
+/// @throws SonareException(InvalidParameter) naming @p key, for a wrong-typed
+///         value and for one @ref checkedIntFromVal refuses.
+int typedIntProperty(val object, const char* key, int default_value);
 /// @brief Unsigned sibling of @ref checkedIntFromVal.
 /// @details val::as<uint32_t>() saturates at the top and clamps a negative to 0,
 ///          so -1 -- the sentinel several fields here spell "none" with -- lands
@@ -355,6 +369,17 @@ double doubleProperty(val object, const char* key, double default_value);
 /// @throws SonareException(InvalidParameter) for any value outside the set.
 int builtinWaveformFromVal(const val& value);
 bool boolProperty(val object, const char* key, bool default_value);
+/// @brief Presence- AND type-checked bool reader: an absent field takes @p
+///        default_value, a present one must be a JS boolean.
+/// @details The addon's BoolProperty spelled for this surface, for a FLAG, whose
+///          two values are the whole domain -- there is no third one meaning
+///          "unspecified". @ref boolProperty reaches the same field through
+///          val::as<bool>(), which applies JS truthiness, so `'false'`, `[]` and
+///          `0` all arrive as a flag the caller never wrote and every one of them
+///          is a legal flag downstream. There is no narrowing to keep: a JS
+///          boolean is already the value, so the type test is the whole check.
+/// @throws SonareException(InvalidParameter) naming @p key.
+bool typedBoolProperty(val object, const char* key, bool default_value);
 std::string stringProperty(val object, const char* key, const std::string& default_value);
 /// @brief Type-checked optional reader: returns the numeric value only when @p v
 /// is present (not undefined/null) and is a JS number, otherwise std::nullopt.

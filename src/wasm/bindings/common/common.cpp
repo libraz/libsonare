@@ -398,6 +398,15 @@ int intProperty(val object, const char* key, int default_value) {
   return value.isUndefined() ? default_value : checkedIntFromVal(value, key);
 }
 
+int typedIntProperty(val object, const char* key, int default_value) {
+  val value = objectProperty(object, key);
+  if (value.isUndefined()) return default_value;
+  if (value.typeOf().as<std::string>() != "number") {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
+  }
+  return checkedIntFromVal(value, key);
+}
+
 uint32_t checkedUintFromVal(const val& value, const char* key) {
   return static_cast<uint32_t>(
       checkedUnsignedNumber(value, key, static_cast<double>(std::numeric_limits<uint32_t>::max())));
@@ -519,6 +528,15 @@ int builtinWaveformFromVal(const val& value) {
 bool boolProperty(val object, const char* key, bool default_value) {
   val value = objectProperty(object, key);
   return value.isUndefined() ? default_value : value.as<bool>();
+}
+
+bool typedBoolProperty(val object, const char* key, bool default_value) {
+  val value = objectProperty(object, key);
+  if (value.isUndefined()) return default_value;
+  if (value.typeOf().as<std::string>() != "boolean") {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a boolean");
+  }
+  return value.as<bool>();
 }
 
 std::string stringProperty(val object, const char* key, const std::string& default_value) {
