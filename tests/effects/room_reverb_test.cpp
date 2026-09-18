@@ -131,6 +131,23 @@ TEST_CASE("RoomReverb rejects non-physical air absorption at construction",
   }
 }
 
+TEST_CASE("RoomReverb rejects an out-of-range absorption at construction",
+          "[effects][reverb][acoustic][numeric]") {
+  // uniform_shoebox clamps to [0, 0.999] before validate_shoebox reads the walls,
+  // so an out-of-range value used to arrive already in range and build a room the
+  // caller never asked for. The insert factory and the C entry point both refuse
+  // the same value; a bare construction has to as well.
+  for (const float invalid : {-0.2f, 1.5f, kNaN}) {
+    RoomReverbConfig config = valid_config();
+    config.absorption = invalid;
+    REQUIRE(rejects_at_construction(config));
+  }
+  // The clamp's own upper bound is not a domain bound: 1.0 is a legal request.
+  RoomReverbConfig rigid = valid_config();
+  rigid.absorption = 1.0f;
+  REQUIRE_FALSE(rejects_at_construction(rigid));
+}
+
 TEST_CASE("RoomReverb rejects a negative image-source order at construction",
           "[effects][reverb][acoustic][numeric]") {
   RoomReverbConfig config = valid_config();

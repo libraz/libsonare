@@ -27,6 +27,11 @@ sonare::acoustic::RirSynthConfig rir_config_from(const RoomReverbConfig& config)
 }  // namespace
 
 RoomReverb::RoomReverb(RoomReverbConfig config) : config_(config) {
+  // uniform_shoebox clamps rather than validates, so an out-of-range absorption
+  // would reach validate_shoebox already inside the range and be accepted as a
+  // different room. The insert factory rejects the same value; so does the C
+  // entry point.
+  sonare::acoustic::validate_material_coefficient(config_.absorption, "absorption");
   const sonare::acoustic::ShoeboxRoom room =
       sonare::acoustic::uniform_shoebox(config_.dims, config_.absorption);
   const std::vector<Diagnostic> geometry = sonare::acoustic::validate_shoebox(
