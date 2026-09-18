@@ -156,13 +156,13 @@ def _resolve_bounce_audio_sources(project: object, args: argparse.Namespace) -> 
     if resolve:
         for source_id in cast(Any, project).unresolved_audio_source_ids():
             uri = uris.get(source_id, "")
-            path = _path_from_file_uri(uri)
-            if path is None:
+            resolved = _path_from_file_uri(uri)
+            if resolved is None:
                 raise ValueError(
                     f"source {source_id} ({uri}): --resolve-audio opens file:// URIs only; "
                     f"pass --audio {source_id}=FILE"
                 )
-            _bind_source_audio(project, source_id, path)
+            _bind_source_audio(project, source_id, resolved)
     remaining = cast(Any, project).unresolved_audio_source_ids()
     if remaining:
         # One line per source, each carrying its own id, because the caller has
