@@ -1126,7 +1126,7 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
       sonare::ZeroIsDefault(floatProperty(opts, "airHumidityPercent", 0.0f))
           .or_default(config.air.humidity_percent);
 
-  const Audio result = sonare::effects::acoustic::room_morph(audio, config);
+  const Audio result = sonare::effects::acoustic::room_morph(audio, config).audio;
   std::vector<float> out;
   if (!result.empty()) {
     out.assign(result.data(), result.data() + result.size());

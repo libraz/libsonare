@@ -705,7 +705,17 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   cfg.late_model = args.has("sabine") ? sonare::acoustic::ReverbModel::Sabine
                                       : sonare::acoustic::ReverbModel::Eyring;
 
-  const Audio result = sonare::effects::acoustic::room_morph(audio, cfg);
+  const sonare::effects::acoustic::RoomMorphResult morph =
+      sonare::effects::acoustic::room_morph(audio, cfg);
+  const Audio& result = morph.audio;
+  // The same loop synthesize-rir runs, for the same reason: a warning describes a
+  // target room the caller did not ask for, and it goes to stderr in every mode so
+  // the --json document on stdout stays the payload both CLIs publish.
+  for (const sonare::Diagnostic& diagnostic : morph.diagnostics) {
+    if (diagnostic.severity != sonare::Diagnostic::Severity::Warning) continue;
+    std::cerr << color::yellow << "warning: " << diagnostic.code << ": " << diagnostic.message
+              << color::reset << "\n";
+  }
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
   if (args.json_output) {
     JsonBuilder()

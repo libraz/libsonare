@@ -304,6 +304,7 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
                               size_t* out_length) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
+  sonare_c_detail::clear_last_warning();
   if (!config) return SONARE_ERROR_INVALID_PARAMETER;
   const auto unit = [](float value) {
     return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
@@ -351,7 +352,13 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
             sonare::ZeroIsDefault(config->air_temperature_c).or_default(cfg.air.temperature_c);
         cfg.air.humidity_percent = sonare::ZeroIsDefault(config->air_humidity_percent)
                                        .or_default(cfg.air.humidity_percent);
-        return sonare::effects::acoustic::room_morph(audio, cfg);
+        sonare::effects::acoustic::RoomMorphResult result =
+            sonare::effects::acoustic::room_morph(audio, cfg);
+        // Published the way synthesize_rir publishes its own: the target RIR is
+        // synthesized by the same code, and a clamp there means this morph used a
+        // room the caller did not request.
+        publish_rir_diagnostics(result.diagnostics);
+        return std::move(result.audio);
       });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out, out_length);

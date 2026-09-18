@@ -82,6 +82,9 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   // the diagnostics are read rather than dropped.
   SONARE_CHECK_MSG(!has_error(res.diagnostics), ErrorCode::InvalidParameter,
                    "room morph target RIR synthesis failed: " + first_error_text(res.diagnostics));
+  // Kept rather than dropped: the surviving diagnostics are Warnings, and each
+  // one says the target room differs from the requested one.
+  diagnostics_ = res.diagnostics;
 
   // prepare() otherwise synthesizes a default noise IR which the load below
   // immediately discards. This processor always supplies its own target RIR,
@@ -172,10 +175,10 @@ std::vector<rt::ParamDescriptor> RoomMorphProcessor::parameter_descriptors() con
   return {{"dryWet", 0}, {"sourceTailSuppression", 1}};
 }
 
-Audio room_morph(const Audio& recording, const RoomMorphConfig& config) {
+RoomMorphResult room_morph(const Audio& recording, const RoomMorphConfig& config) {
   validate_room_morph_config(config);
   if (recording.empty()) {
-    return recording;
+    return {recording, {}};
   }
   const int sr = recording.sample_rate();
 
@@ -204,7 +207,7 @@ Audio room_morph(const Audio& recording, const RoomMorphConfig& config) {
   for (size_t i = 0; i < out_len && (i + static_cast<size_t>(latency)) < total; ++i) {
     out[i] = buf[i + static_cast<size_t>(latency)];
   }
-  return Audio::from_vector(std::move(out), sr);
+  return {Audio::from_vector(std::move(out), sr), processor.diagnostics()};
 }
 
 }  // namespace sonare::effects::acoustic

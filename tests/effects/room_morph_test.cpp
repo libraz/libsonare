@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "acoustic/image_source.h"
 #include "acoustic/material.h"
 #include "acoustic/rir_synthesizer.h"
 #include "acoustic/room_model.h"
@@ -93,7 +94,7 @@ TEST_CASE("room_morph moves the reverberation toward the target room",
   cfg.wet = 0.6f;
   cfg.source_tail_suppression = 0.5f;
 
-  const Audio morphed = room_morph(recording, cfg);
+  const Audio morphed = room_morph(recording, cfg).audio;
   REQUIRE(morphed.size() > recording.size());  // target reverb tail was appended
 
   const AcousticParameters src = detect_acoustic(recording);
@@ -133,7 +134,7 @@ TEST_CASE("room_morph is a passthrough at zero wet and zero suppression",
   cfg.wet = 0.0f;                      // no target room added
   cfg.source_tail_suppression = 0.0f;  // suppressor bypassed
 
-  const Audio out = room_morph(rec, cfg);
+  const Audio out = room_morph(rec, cfg).audio;
   REQUIRE(out.size() == rec.size());
   // Dry-only, latency-compensated: the leading recording is reproduced exactly.
   for (size_t i = 0; i < rec.size(); ++i) {
@@ -161,8 +162,8 @@ TEST_CASE("room_morph suppression reduces the source tail energy",
   RoomMorphConfig full = base;
   full.source_tail_suppression = 1.0f;
 
-  const Audio out_full = room_morph(rec, full);
-  const double e_none = energy(room_morph(rec, none));
+  const Audio out_full = room_morph(rec, full).audio;
+  const double e_none = energy(room_morph(rec, none).audio);
   const double e_full = energy(out_full);
   REQUIRE(e_full < e_none);  // the tail was attenuated
   REQUIRE(e_full > 0.0);     // but not removed (the transient survives)
@@ -188,6 +189,40 @@ TEST_CASE("room_morph rejects an invalid target room before processing",
   cfg.placement = {{99.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
 
   REQUIRE_THROWS_AS(room_morph(rec, cfg), SonareException);
+}
+
+TEST_CASE("room_morph returns the target synthesis diagnostics rather than dropping them",
+          "[effects][acoustic][room_morph]") {
+  constexpr int sr = 48000;
+  std::vector<float> samples(2000, 0.0f);
+  samples[0] = 1.0f;
+  const Audio rec = Audio::from_vector(std::move(samples), sr);
+
+  RoomMorphConfig cfg;
+  cfg.target = uniform_room(8.0f, 6.0f, 3.5f, 0.3f);
+  cfg.placement = {{2.0f, 2.0f, 1.5f}, {6.0f, 4.0f, 1.7f}};
+  cfg.max_seconds = 0.3f;
+
+  const auto clamped_order = [](const std::vector<Diagnostic>& diagnostics) {
+    return std::any_of(diagnostics.begin(), diagnostics.end(), [](const Diagnostic& d) {
+      return d.code == "acoustic.ism_order_clamped" && d.severity == Diagnostic::Severity::Warning;
+    });
+  };
+
+  // The same clamp synthesize_rir reports. It used to be read for its Errors and
+  // then discarded, so a morph through a room the caller did not ask for came
+  // back indistinguishable from one through the room they did.
+  cfg.ism_order = sonare::acoustic::kMaxImageSourceOrder + 1;
+  const RoomMorphResult clamped = room_morph(rec, cfg);
+  REQUIRE_FALSE(clamped.audio.empty());
+  REQUIRE(clamped_order(clamped.diagnostics));
+
+  // The highest order the synthesizer honours is not clamped, so the case above
+  // fails for the clamp rather than for any order being reported.
+  cfg.ism_order = sonare::acoustic::kMaxImageSourceOrder;
+  const RoomMorphResult exact = room_morph(rec, cfg);
+  REQUIRE_FALSE(exact.audio.empty());
+  REQUIRE_FALSE(clamped_order(exact.diagnostics));
 }
 
 TEST_CASE("room_morph rejects non-finite and out-of-range controls",
@@ -289,8 +324,8 @@ TEST_CASE("room_morph is deterministic", "[effects][acoustic][room_morph]") {
   cfg.target = uniform_room(7.0f, 5.0f, 3.0f, 0.15f);
   cfg.placement = {{1.5f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
 
-  const Audio a = room_morph(rec, cfg);
-  const Audio b = room_morph(rec, cfg);
+  const Audio a = room_morph(rec, cfg).audio;
+  const Audio b = room_morph(rec, cfg).audio;
   REQUIRE(a.size() == b.size());
   for (size_t i = 0; i < a.size(); ++i) REQUIRE(a[i] == b[i]);
 }
@@ -316,8 +351,8 @@ TEST_CASE("room_morph exposes the late-tail synthesis controls",
   RoomMorphConfig eyring = sabine;
   eyring.late_model = ReverbModel::Eyring;
 
-  const Audio a = room_morph(rec, sabine);
-  const Audio b = room_morph(rec, eyring);
+  const Audio a = room_morph(rec, sabine).audio;
+  const Audio b = room_morph(rec, eyring).audio;
   bool differs = a.size() != b.size();
   const size_t common = std::min(a.size(), b.size());
   for (size_t i = 0; i < common && !differs; ++i) differs = (a[i] != b[i]);
@@ -328,8 +363,8 @@ TEST_CASE("room_morph exposes the late-tail synthesis controls",
   RoomMorphConfig pinned = eyring;
   pinned.mixing_time_ms = 35.0f;
   pinned.crossfade_ms = 12.0f;
-  const Audio p1 = room_morph(rec, pinned);
-  const Audio p2 = room_morph(rec, pinned);
+  const Audio p1 = room_morph(rec, pinned).audio;
+  const Audio p2 = room_morph(rec, pinned).audio;
   REQUIRE(p1.size() == p2.size());
   REQUIRE(p1.size() > rec.size());
   for (size_t i = 0; i < p1.size(); ++i) REQUIRE(p1[i] == p2[i]);
@@ -356,8 +391,8 @@ TEST_CASE("room_morph exposes air absorption controls", "[effects][acoustic][roo
   with_air.air_absorption_enabled = true;
   with_air.air = sonare::acoustic::AirAbsorption{};  // ISO reference climate
 
-  const Audio a = room_morph(rec, without_air);
-  const Audio b = room_morph(rec, with_air);
+  const Audio a = room_morph(rec, without_air).audio;
+  const Audio b = room_morph(rec, with_air).audio;
   bool differs = a.size() != b.size();
   const size_t common = std::min(a.size(), b.size());
   for (size_t i = 0; i < common && !differs; ++i) differs = (a[i] != b[i]);

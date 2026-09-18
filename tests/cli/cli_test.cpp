@@ -1938,6 +1938,39 @@ TEST_CASE("CLI synthesize-rir reports its warning diagnostics and keeps the tail
   REQUIRE(wav_header_bits_per_sample(complete) == 24);
   std::remove(complete.c_str());
 }
+
+TEST_CASE("CLI room-morph reports the same warning diagnostics its sibling does",
+          "[cli][acoustic]") {
+  // The morph synthesizes its target RIR with the same code, so the same clamp
+  // fires -- and it was read for Errors and then dropped, so a morph through a
+  // room the caller did not ask for exited green and said nothing.
+  const std::string input = unique_temp_path("_morph_warn_input.wav");
+  std::vector<float> impulse(2048, 0.0f);
+  impulse[0] = 1.0f;
+  save_wav(input, impulse, 22050);
+
+  const std::string clamped = unique_temp_path("_morph_warn_clamped.wav");
+  auto [code, output] = exec_command(CLI + " room-morph " + input + " -o " + clamped +
+                                     " --ism-order 99 --max-seconds 2 --json");
+  REQUIRE(code == 0);
+  REQUIRE_THAT(output, ContainsSubstring("acoustic.ism_order_clamped"));
+
+  // stderr, so the JSON document on stdout stays the payload both CLIs publish.
+  const std::string stdout_only = output.substr(output.find('{'));
+  const auto payload = sonare::util::json::parse_strict(stdout_only);
+  for (const char* key : {"output", "samples"}) REQUIRE(payload.contains(key));
+  std::remove(clamped.c_str());
+
+  // An order the synthesizer honours stays silent, so the line above is evidence
+  // about that run rather than boilerplate.
+  const std::string quiet = unique_temp_path("_morph_warn_quiet.wav");
+  auto [quiet_code, quiet_output] = exec_command(CLI + " room-morph " + input + " -o " + quiet +
+                                                 " --ism-order 2 --max-seconds 2 --json");
+  REQUIRE(quiet_code == 0);
+  REQUIRE_THAT(quiet_output, !ContainsSubstring("warning:"));
+  std::remove(quiet.c_str());
+  std::remove(input.c_str());
+}
 #endif
 
 TEST_CASE("CLI info command", "[cli]") {

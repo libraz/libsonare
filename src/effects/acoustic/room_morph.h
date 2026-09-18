@@ -72,12 +72,25 @@ struct RoomMorphConfig {
 /// RIR that the convolution path would render as dry passthrough.
 void validate_room_morph_config(const RoomMorphConfig& config);
 
+/// @brief A morph and what the target-room synthesis had to change to make it.
+/// @details Shaped like @ref sonare::acoustic::RirSynthResult because the same
+///          synthesis runs underneath, and its clamps describe a room the caller
+///          did not ask for. Errors are thrown rather than reported here, so the
+///          list carries Warnings: an image-source order reduced to the safe
+///          maximum, a tail cut against `max_seconds`, a request that produced no
+///          late tail. Dropping them made a morph through a room the caller did
+///          not ask for indistinguishable from one through the room they did.
+struct RoomMorphResult {
+  Audio audio;                          ///< morphed signal
+  std::vector<Diagnostic> diagnostics;  ///< target-RIR synthesis telemetry
+};
+
 /// @brief Offline room-character morph.
 ///
-/// Returns a buffer of length `recording.size()` plus the target room's reverb
-/// tail (so the added reverberation is not truncated). The internal
-/// convolution latency is compensated. An empty recording returns empty audio.
-Audio room_morph(const Audio& recording, const RoomMorphConfig& config);
+/// `audio` is `recording.size()` samples plus the target room's reverb tail (so
+/// the added reverberation is not truncated). The internal convolution latency is
+/// compensated. An empty recording returns empty audio and no diagnostics.
+RoomMorphResult room_morph(const Audio& recording, const RoomMorphConfig& config);
 
 /// @brief Streaming room-character morph.
 ///
@@ -110,6 +123,11 @@ class RoomMorphProcessor : public rt::ProcessorBase {
   /// Synthesized target RIR length in samples (valid after `prepare`).
   int target_ir_size() const noexcept { return reverb_.ir_size(); }
 
+  /// Target-RIR synthesis diagnostics from the last `prepare` (Warnings only; an
+  /// Error is raised there). A host that reports what an insert changed reads
+  /// them here rather than re-synthesizing the RIR to find out.
+  const std::vector<Diagnostic>& diagnostics() const noexcept { return diagnostics_; }
+
  private:
   // Per-channel state for the relative downward expander that suppresses the
   // source reverberation tail.
@@ -122,6 +140,7 @@ class RoomMorphProcessor : public rt::ProcessorBase {
   RoomMorphConfig config_{};
   reverb::ConvolutionReverb reverb_{};
   std::vector<SuppressorState> suppressor_;
+  std::vector<Diagnostic> diagnostics_;
 
   // One-pole coefficients computed from the sample rate in prepare().
   float env_attack_ = 0.0f;

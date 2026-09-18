@@ -393,7 +393,7 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   cfg.air.humidity_percent = sonare::ZeroIsDefault(FloatProperty(opts, "airHumidityPercent", 0.0f))
                                  .or_default(cfg.air.humidity_percent);
 
-  const sonare::Audio result = sonare::effects::acoustic::room_morph(audio, cfg);
+  const sonare::Audio result = sonare::effects::acoustic::room_morph(audio, cfg).audio;
   std::vector<float> out = AudioToVector(result);
   return VecToFloat32(env, out);
   SONARE_NODE_CATCH(env)

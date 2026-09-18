@@ -246,6 +246,53 @@ TEST_CASE("sonare acoustic C API zero-init seed matches the library default", "[
   sonare_free_rir_synth_result(&other_rir);
 }
 
+TEST_CASE("sonare acoustic C API publishes the morph's own RIR diagnostics", "[c_api][acoustic]") {
+  // The morph synthesizes its target RIR with the same code synthesize_rir uses,
+  // so the same clamp fires -- and it used to be dropped, leaving a morph through
+  // a room the caller did not ask for indistinguishable from one through the room
+  // they did.
+  std::vector<float> input(4000, 0.0f);
+  input[0] = 1.0f;
+
+  SonareRoomMorphConfig cfg{};
+  cfg.length_m = 12.0f;
+  cfg.width_m = 9.0f;
+  cfg.height_m = 5.0f;
+  cfg.source_x = 2.0f;
+  cfg.source_y = 2.0f;
+  cfg.source_z = 1.5f;
+  cfg.listener_x = 8.0f;
+  cfg.listener_y = 6.0f;
+  cfg.listener_z = 1.7f;
+  cfg.absorption = 0.4f;
+  cfg.wet = 1.0f;
+  cfg.max_seconds = 0.3f;
+  cfg.seed = 1u;
+  // Well above the synthesizer's safe maximum rather than one past it: this case
+  // is about the channel the warning travels on, not about where the clamp sits.
+  cfg.ism_order = 99;
+
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &cfg, &out, &out_length) ==
+          SONARE_OK);
+  REQUIRE(out_length > 0);
+  REQUIRE(std::string(sonare_last_warning_message()).find("acoustic.ism_order_clamped") !=
+          std::string::npos);
+  sonare_free_floats(out);
+
+  // An order the synthesizer does not clamp leaves the channel clear, so the
+  // warning above is the clamp's rather than a slot nothing ever resets.
+  cfg.ism_order = 2;
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &cfg, &out, &out_length) ==
+          SONARE_OK);
+  REQUIRE(std::string(sonare_last_warning_message()).find("acoustic.ism_order_clamped") ==
+          std::string::npos);
+  sonare_free_floats(out);
+}
+
 TEST_CASE("sonare acoustic C API morph zero-init late_model matches Eyring", "[c_api][acoustic]") {
   // The same zero-init == Eyring guarantee for the morph path: a {}-zeroed
   // SonareRoomMorphConfig must render identically to an explicit Eyring morph
