@@ -462,12 +462,22 @@ int project_bounce_impl(const CliArgs& args, bool use_synth) {
   if (use_synth) {
     const std::string requested = args.get_string("synth");
     const bool auto_select_gm = requested.empty() || requested == "true";
-    const std::string preset = auto_select_gm ? "sine" : requested;
-    const SonareError patch_error = sonare_synth_preset_patch(preset.c_str(), &synth_binding.patch);
-    if (patch_error != SONARE_OK) {
-      std::cerr << color::red << "Error: unknown synth preset '" << preset << "'" << color::reset
-                << "\n";
-      return project_exit_code(patch_error);
+    if (auto_select_gm) {
+      // GM routing replaces the patch at every note-on, so a base preset named
+      // here would assert thirty field values the caller never chose and that
+      // nothing ever reads. The zero-initialized patch is the init patch (an
+      // empty preset name), which is what the other front-end sends: with the
+      // patch inert either spelling renders the same, and this one stays the
+      // same if the routing is ever asked to yield.
+      synth_binding.patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    } else {
+      const SonareError patch_error =
+          sonare_synth_preset_patch(requested.c_str(), &synth_binding.patch);
+      if (patch_error != SONARE_OK) {
+        std::cerr << color::red << "Error: unknown synth preset '" << requested << "'"
+                  << color::reset << "\n";
+        return project_exit_code(patch_error);
+      }
     }
     synth_binding.destination_id = 0;
     synth_binding.use_gm_programs = auto_select_gm ? 1 : 0;
