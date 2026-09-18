@@ -825,16 +825,25 @@ class CliContractSelfTest(unittest.TestCase):
         Asserted as a set rather than a count: a port that lands without its
         ledger row, and a row retitled by_design without the port, both fail
         naming the command.
+
+        The set is currently empty, and an empty set is the one value that
+        could also mean the query stopped finding anything. The second
+        assertion is what separates those: the ledger still carries one-sided
+        commands, they are all ``by_design``, and a reason_kind that stopped
+        being read would take that count to zero too.
         """
         unported = {
             path
             for path, record in self.manifest["commands"].items()
             if record.get("reason_kind") == "unported"
         }
-        self.assertEqual(
-            unported,
-            {"mix-strip"},
-        )
+        self.assertEqual(unported, set())
+        by_design = {
+            path
+            for path, record in self.manifest["commands"].items()
+            if record.get("reason_kind") == "by_design"
+        }
+        self.assertGreater(len(by_design), 20)
 
     def test_a_missing_reason_is_rejected(self) -> None:
         candidate = copy.deepcopy(self.manifest)
@@ -870,13 +879,100 @@ class CliContractSelfTest(unittest.TestCase):
         errors = CHECKER.validate_manifest(candidate)
         self.assertTrue(any("commands.cqt.reason" in error for error in errors), errors)
 
+    def test_a_requires_entry_names_a_build_feature_the_binary_can_report(self) -> None:
+        """A gate the capability descriptor cannot name is one nothing can satisfy.
+
+        The manifest and ``doctor --json`` share one vocabulary on purpose: a
+        name only the manifest knows would gate a command on a feature no
+        binary ever reports off, which reads as a gate that is always
+        satisfied rather than as a mistake.
+        """
+        candidate = copy.deepcopy(self.manifest)
+        candidate["commands"]["repair"]["requires"] = ["masteringChain"]
+        errors = CHECKER.validate_manifest(candidate)
+        self.assertTrue(
+            any("unknown build feature 'masteringChain'" in error for error in errors),
+            errors,
+        )
+
+    def test_a_requires_entry_must_be_a_sorted_unique_list(self) -> None:
+        for value in (["mixing", "mastering"], ["mixing", "mixing"], [], "mixing"):
+            with self.subTest(value=value):
+                candidate = copy.deepcopy(self.manifest)
+                candidate["commands"]["repair"]["requires"] = value
+                errors = CHECKER.validate_manifest(candidate)
+                self.assertTrue(
+                    any("commands.repair.requires" in error for error in errors),
+                    (value, errors),
+                )
+
+    def test_every_gated_command_declares_the_feature_that_gates_it(self) -> None:
+        """The build options that change the native command set are a closed set.
+
+        Asserted per feature rather than as one total, so a whole gate losing
+        its rows fails naming the gate. A command added inside one of those
+        gates without a ``requires`` row fails here rather than waiting for
+        someone to configure a feature-off build.
+
+        The counts are not readable off the ``#ifdef`` blocks alone. Most rows
+        follow the registry gates in tools/cli/sonare_cli_registry.cpp and the
+        ``#if`` in tools/cli/sonare_cli_processing.cpp, but ``transcribe`` sits
+        inside the arrangement gate and still answers NOT_SUPPORTED without the
+        pitch editor, so it declares both -- which is why ``pitchEditor`` is
+        eight and not the seven that file lists.
+        """
+        declared: dict[str, int] = {}
+        for record in self.manifest["commands"].values():
+            for feature in record.get("requires") or ():
+                declared[feature] = declared.get(feature, 0) + 1
+        self.assertEqual(
+            declared,
+            {
+                "mastering": 15,
+                "mixing": 3,
+                "mixingAssistant": 1,
+                "acousticSim": 3,
+                "fx": 3,
+                "arrangement": 12,
+                "pitchEditor": 8,
+                "voiceChanger": 4,
+            },
+        )
+
+    def test_a_disabled_feature_stops_its_commands_being_demanded(self) -> None:
+        """The axis in both directions, against the real manifest.
+
+        Without the second half this would pass on a filter that dropped every
+        path, and without the third on one that dropped none: a gated command
+        must leave the required set when its feature is off, stay in it when
+        the feature is on, and an unrelated command must be untouched either
+        way.
+        """
+        commands = self.manifest["commands"]
+        full = CHECKER._expected_paths(commands, "native")
+        reduced = CHECKER._expected_paths(commands, "native", frozenset({"pitchEditor"}))
+        self.assertIn("pitch-correct", full)
+        self.assertNotIn("pitch-correct", reduced)
+        self.assertIn("normalize", full)
+        self.assertIn("normalize", reduced)
+        # The stub shape leaves the command listed, so it must be tolerated
+        # rather than merely undemanded -- otherwise it reads as unclassified.
+        tolerated = CHECKER._tolerated_paths(
+            commands, "native", frozenset({"pitchEditor"})
+        )
+        self.assertIn("pitch-correct", tolerated)
+        self.assertNotIn("normalize", tolerated)
+        self.assertEqual(
+            CHECKER._tolerated_paths(commands, "native"), set()
+        )
+
     def test_all_shared_paths_have_active_canonical_option_contracts(self) -> None:
         shared = {
             path
             for path, record in self.manifest["commands"].items()
             if record["classification"] == "shared"
         }
-        self.assertEqual(len(shared), 73)
+        self.assertEqual(len(shared), 74)
         self.assertEqual(set(self.manifest["inventory"]["expected_options"]), shared)
         for path in shared:
             self.assertEqual(

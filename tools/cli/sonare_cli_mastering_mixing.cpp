@@ -657,6 +657,28 @@ std::vector<std::string> repair_only_explanation(const std::vector<std::string>&
   return repair_lines;
 }
 
+/// Scales @p samples so their peak lands at full scale, and returns the applied
+/// gain in dB (0 when the peak already fit and nothing was touched).
+///
+/// Declipping reconstructs the peaks a clipper cut off, so its output routinely
+/// exceeds full scale -- and this command deliberately runs no limiter. The
+/// integer writer clamps, which pins exactly the samples the repair just
+/// rebuilt back onto the ceiling they were rescued from, undoing the stage that
+/// was asked for. One gain for the whole file keeps the reconstructed waveform
+/// intact; a per-sample fit would be the clipper again.
+float fit_repair_output_to_full_scale(std::vector<float>& samples) {
+  float peak = 0.0f;
+  for (const float sample : samples) {
+    // A non-finite sample would make every comparison below false and leave the
+    // peak at 0, so the scale is skipped rather than turned into a NaN gain.
+    if (std::isfinite(sample)) peak = std::max(peak, std::abs(sample));
+  }
+  if (peak <= 1.0f) return 0.0f;
+  const float gain = 1.0f / peak;
+  for (float& sample : samples) sample *= gain;
+  return 20.0f * std::log10(gain);
+}
+
 }  // namespace
 
 int cmd_repair(const CliArgs& args, const Audio& audio) {
@@ -721,7 +743,9 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
 
   mastering::api::MasteringChain chain(std::move(repair_config));
   const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
-  save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
+  std::vector<float> samples = result.samples;
+  const float applied_gain_db = fit_repair_output_to_full_scale(samples);
+  save_wav(args.output_file, samples.data(), samples.size(), result.sample_rate,
            args.get_int("bits", 16));
 
   const bool show_explanation = args.has("explain") && !explanation.empty();
@@ -738,6 +762,10 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
       json.end_array();
     }
     json.kv("output", args.output_file);
+    // Always emitted, 0 when the peak already fit: a key that appeared only on
+    // the files it acted on would make its absence mean both "did not clip" and
+    // "this build does not report it".
+    json.kv("output_gain_db", applied_gain_db);
     append_defect_profile_json(json, defects);
     json.end_object().print();
   } else {
@@ -747,6 +775,10 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
     if (!preset_name.empty()) std::cout << "  Preset:          " << preset_name << "\n";
     std::cout << "  Stages:          " << result.stages.size() << "\n"
               << "  Output:          " << args.output_file << "\n";
+    if (applied_gain_db != 0.0f) {
+      std::cout << "  Output gain:     " << applied_gain_db
+                << " dB (the repair rebuilt peaks past full scale)\n";
+    }
     if (show_explanation) {
       std::cout << "  Explanation:\n";
       for (const auto& item : explanation) std::cout << "    - " << item << "\n";

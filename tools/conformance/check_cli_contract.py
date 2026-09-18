@@ -34,6 +34,7 @@ from cli_contract_inventory import (
     _build_shared_option_snapshot,
     _compare_active_inventory_options,
     _expected_paths,
+    _tolerated_paths,
     _validate_inventory,
 )
 from cli_contract_payload import (
@@ -46,6 +47,9 @@ from cli_contract_payload import (
     validate_payload,  # noqa: F401
 )
 from cli_contract_schema import (
+    _FEATURE_NAMES,
+    NOT_SUPPORTED_EXIT,
+    UNKNOWN_COMMAND_EXIT,
     _normalized_option_inventory,
     _validate_option,  # noqa: F401
     validate_manifest,
@@ -353,12 +357,67 @@ def _read_inventory_dump(
         )
 
 
+def _disabled_features(
+    surface: str, executable: str, timeout: float, report: list[tuple[str, str]]
+) -> frozenset[str]:
+    """Ask one surface which build options its library was compiled without.
+
+    ``doctor --json`` prints the library's own capability descriptor, so the
+    answer comes from the artifact under test rather than from the
+    configuration the caller believes it used. Asked per surface rather than
+    once, because the two do not have to load the same library: ``--python``
+    names an interpreter whose shared object is resolved by its own search
+    order, which does not follow ``--native``.
+
+    A surface too old to answer, or one whose descriptor cannot be read,
+    reports nothing disabled -- the same demands as before, which is the
+    direction that fails loudly rather than quietly.
+    """
+    result = _run(surface, executable, ["doctor", "--json"], False, timeout)
+    if result["returncode"] != 0 or not result["stdout"].strip():
+        detail = result.get("error") or f"exit {result['returncode']}"
+        report.append(
+            ("expected", f"{surface}: doctor --json is not available ({detail})")
+        )
+        return frozenset()
+    try:
+        document = parse_single_json(result["stdout"])
+    except ValueError as exc:
+        report.append(
+            (
+                "fail",
+                f"{surface}: doctor --json did not return one JSON document ({exc})",
+            )
+        )
+        return frozenset()
+    features = document.get("features") if isinstance(document, dict) else None
+    if not isinstance(features, dict):
+        report.append(("fail", f"{surface}: doctor --json carries no features object"))
+        return frozenset()
+    # Only the names the manifest can depend on. A descriptor key outside that
+    # set is not this check's business, and a name in the set that the
+    # descriptor omits is: the manifest could gate on it while no binary can
+    # ever report it off, which reads as a gate that is always satisfied.
+    missing = sorted(_FEATURE_NAMES - set(features))
+    if missing:
+        report.append(
+            (
+                "fail",
+                f"{surface}: doctor --json omits build features {', '.join(missing)}",
+            )
+        )
+    return frozenset(
+        name for name in _FEATURE_NAMES if features.get(name) is False
+    )
+
+
 def _inventory_checks(
     surface: str,
     executable: str,
     manifest: dict[str, Any],
     timeout: float,
     report: list[tuple[str, str]],
+    disabled_features: frozenset[str] = frozenset(),
 ) -> dict[str, dict[str, Any]] | None:
     result = _run(surface, executable, ["--dump-cli-contract"], False, timeout)
     if result["returncode"] != 0 or not result["stdout"].strip():
@@ -384,11 +443,12 @@ def _inventory_checks(
     errors, commands = _validate_inventory(value, surface)
     for error in errors:
         report.append(("fail", error))
-    expected = _expected_paths(manifest["commands"], surface)
+    expected = _expected_paths(manifest["commands"], surface, disabled_features)
+    tolerated = _tolerated_paths(manifest["commands"], surface, disabled_features)
     actual = set(commands)
     for path in sorted(expected - _accepted_names(commands)):
         report.append(("fail", f"inventory.{surface}: missing classified path {path}"))
-    for path in sorted(actual - expected):
+    for path in sorted(actual - expected - tolerated):
         report.append(("fail", f"inventory.{surface}: unclassified path {path}"))
     expected_options_by_path = manifest.get("inventory", {}).get("expected_options", {})
     if not isinstance(expected_options_by_path, dict):
@@ -439,6 +499,35 @@ def _inventory_checks(
     return commands
 
 
+def _command_for_argv(manifest: dict[str, Any], argv: list[str]) -> dict[str, Any]:
+    """The command record an argv addresses, or an empty one.
+
+    A path is one token or two (``project bounce``), and a parser case carries
+    no path of its own -- naming it in the manifest would be a second spelling
+    of what argv already says, and the two would drift.
+    """
+    commands = manifest.get("commands", {})
+    if not argv:
+        return {}
+    if len(argv) >= 2 and f"{argv[0]}.{argv[1]}" in commands:
+        return commands[f"{argv[0]}.{argv[1]}"]
+    return commands.get(argv[0], {})
+
+
+def _accepted_gated_exits(expected_exit: int) -> set[int]:
+    """What a command may exit with once its build feature is off.
+
+    A case that already expects a refusal may keep answering with it: the option
+    registry is not gated, so an out-of-range value is still rejected at parse
+    time, before the handler the gate replaced. A case that expects success may
+    not -- that is the half where a gate doing nothing would show.
+    """
+    accepted = {NOT_SUPPORTED_EXIT, UNKNOWN_COMMAND_EXIT}
+    if expected_exit != 0:
+        accepted.add(expected_exit)
+    return accepted
+
+
 def _run_active_cases(
     surface: str,
     executable: str,
@@ -446,12 +535,45 @@ def _run_active_cases(
     paths: dict[str, str],
     timeout: float,
     report: list[tuple[str, str]],
+    disabled_features: frozenset[str] = frozenset(),
 ) -> dict[tuple[str, str], Any]:
     payloads: dict[tuple[str, str], Any] = {}
     for contract in manifest["active_paths"]:
         path = contract["path"]
+        # `.get` on both: the self-tests exercise this runner with manifest
+        # fragments that carry active_paths and nothing else.
+        record = manifest.get("commands", {}).get(path, {})
+        gating = disabled_features & set(record.get("requires") or ())
         for case in contract["cases"]:
             label = f"{surface}.{path}.{case['id']}"
+            if gating:
+                # The command is present but refuses, or absent and unknown.
+                # Both are the build saying it does not carry this feature, and
+                # neither is a contract failure -- but it is still exercised,
+                # because a gate that let a command run normally would mean the
+                # gate is not doing anything. No payload is recorded, so the
+                # cross-surface comparison skips the case rather than reading
+                # the refusal as a disagreement with the Python front-end.
+                result = _run(
+                    surface,
+                    executable,
+                    _resolve_argv(case["argv"], dict(paths)),
+                    False,
+                    timeout,
+                )
+                accepted = _accepted_gated_exits(case["exit"])
+                if result["returncode"] not in accepted:
+                    report.append(
+                        (
+                            "fail",
+                            (
+                                f"{label}: gated off by {sorted(gating)}, expected exit "
+                                f"{' or '.join(str(code) for code in sorted(accepted))}, "
+                                f"got exit {result['returncode']}"
+                            ),
+                        )
+                    )
+                continue
             normal_paths = dict(paths)
             if case["artifact"] != "none":
                 artifact = contract["artifacts"][case["artifact"]]
@@ -663,12 +785,27 @@ def _run_parser_cases(
     paths: dict[str, str],
     timeout: float,
     report: list[tuple[str, str]],
+    disabled_features: frozenset[str] = frozenset(),
 ) -> None:
     for case in manifest["parser_cases"]:
         label = f"{surface}.parser.{case['id']}"
         argv = _resolve_argv(case["argv"], paths)
         expected_exit = case["exit"]
+        # A parser case for a command this build dropped reaches the unknown
+        # -command path instead of the option it was written about, so the same
+        # relaxation the active cases take applies here. The command is derived
+        # from argv rather than declared, so a case added later inherits it.
+        gating = disabled_features & set(
+            _command_for_argv(manifest, case["argv"]).get("requires") or ()
+        )
         result = _run(surface, executable, argv, False, timeout)
+        if gating:
+            if result["returncode"] not in _accepted_gated_exits(expected_exit):
+                detail = f"got exit {result['returncode']}"
+                report.append(
+                    ("fail", f"{label}: gated off by {sorted(gating)}, {detail}")
+                )
+            continue
         if result["returncode"] != expected_exit:
             detail = result.get("error") or f"got exit {result['returncode']}"
             report.append(("fail", f"{label}: expected exit {expected_exit}, {detail}"))
@@ -819,13 +956,35 @@ def main(argv: list[str] | None = None) -> int:
 
     report: list[tuple[str, str]] = []
     _check_artifact_skew(native_executable, python_executable, args.timeout, report)
+    # Each surface is asked about its own library. The inventory half only ever
+    # relaxes the native front-end -- the Python parser is built
+    # unconditionally, so a feature-off library changes what its commands DO
+    # rather than which ones it lists -- but the active-case half applies to
+    # both, because a command whose subsystem is absent cannot run on either.
+    native_disabled = _disabled_features(
+        "native", native_executable, args.timeout, report
+    )
+    python_disabled = _disabled_features(
+        "python", python_executable, args.timeout, report
+    )
+    for surface, missing in (
+        ("native", native_disabled),
+        ("python", python_disabled),
+    ):
+        if missing:
+            print(f"{surface} build is missing: {', '.join(sorted(missing))}")
     with tempfile.TemporaryDirectory(prefix="libsonare-cli-contract-") as temporary:
         paths = _write_fixtures(Path(temporary), manifest)
         native_inventory: dict[str, dict[str, Any]] | None = None
         python_inventory: dict[str, dict[str, Any]] | None = None
         if not args.no_inventory:
             native_inventory = _inventory_checks(
-                "native", native_executable, manifest, args.timeout, report
+                "native",
+                native_executable,
+                manifest,
+                args.timeout,
+                report,
+                native_disabled,
             )
             python_inventory = _inventory_checks(
                 "python", python_executable, manifest, args.timeout, report
@@ -835,10 +994,22 @@ def main(argv: list[str] | None = None) -> int:
                     native_inventory, python_inventory, manifest, report
                 )
         native_payloads = _run_active_cases(
-            "native", native_executable, manifest, paths, args.timeout, report
+            "native",
+            native_executable,
+            manifest,
+            paths,
+            args.timeout,
+            report,
+            native_disabled,
         )
         python_payloads = _run_active_cases(
-            "python", python_executable, manifest, paths, args.timeout, report
+            "python",
+            python_executable,
+            manifest,
+            paths,
+            args.timeout,
+            report,
+            python_disabled,
         )
         for contract in manifest["active_paths"]:
             path = contract["path"]
@@ -892,10 +1063,22 @@ def main(argv: list[str] | None = None) -> int:
                                 )
                             )
         _run_parser_cases(
-            "native", native_executable, manifest, paths, args.timeout, report
+            "native",
+            native_executable,
+            manifest,
+            paths,
+            args.timeout,
+            report,
+            native_disabled,
         )
         _run_parser_cases(
-            "python", python_executable, manifest, paths, args.timeout, report
+            "python",
+            python_executable,
+            manifest,
+            paths,
+            args.timeout,
+            report,
+            python_disabled,
         )
 
     if report:

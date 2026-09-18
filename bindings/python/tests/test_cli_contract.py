@@ -121,6 +121,7 @@ TOP_LEVEL_ROUTES = (
     "mixing-presets",
     "mixing-preset",
     "mix",
+    "mix-strip",
 )
 
 

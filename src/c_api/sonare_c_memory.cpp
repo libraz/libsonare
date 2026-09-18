@@ -95,6 +95,44 @@ constexpr bool capability_instrument_param_automation_enabled() {
 #endif
 }
 
+// The four below exist so this descriptor covers every build option that
+// changes which commands a binary answers. It reported six features while the
+// tree has nine gates, and the three it could not name are exactly the ones a
+// caller cannot otherwise detect: the cross-surface CLI contract has to ask a
+// binary what it was built with, and a gate missing from here reads as a
+// command that vanished for no reason.
+constexpr bool capability_arrangement_enabled() {
+#if defined(SONARE_BUILD_ARRANGEMENT) && SONARE_BUILD_ARRANGEMENT
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_acoustic_sim_enabled() {
+#if defined(SONARE_BUILD_ACOUSTIC_SIM) && SONARE_BUILD_ACOUSTIC_SIM
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_pitch_editor_enabled() {
+#if defined(SONARE_BUILD_PITCH_EDITOR) && SONARE_BUILD_PITCH_EDITOR
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_voice_changer_enabled() {
+#if defined(SONARE_BUILD_VOICE_CHANGER) && SONARE_BUILD_VOICE_CHANGER
+  return true;
+#else
+  return false;
+#endif
+}
+
 }  // namespace
 
 void sonare_free_floats(float* ptr) { delete[] ptr; }
@@ -172,6 +210,10 @@ const char* sonare_capabilities_json(void) {
                  ",\"ffmpeg\":" + json_bool(sonare_has_ffmpeg_support() != 0) +
                  ",\"instrumentParamAutomation\":" +
                  json_bool(capability_instrument_param_automation_enabled()) +
+                 ",\"arrangement\":" + json_bool(capability_arrangement_enabled()) +
+                 ",\"acousticSim\":" + json_bool(capability_acoustic_sim_enabled()) +
+                 ",\"pitchEditor\":" + json_bool(capability_pitch_editor_enabled()) +
+                 ",\"voiceChanger\":" + json_bool(capability_voice_changer_enabled()) +
                  "},\"decode\":{\"builtin\":[\"wav\",\"mp3\"],\"ffmpeg\":[";
 #ifdef SONARE_WITH_FFMPEG
   capabilities += "\"m4a\",\"aac\",\"flac\",\"ogg\",\"opus\",\"wma\"";

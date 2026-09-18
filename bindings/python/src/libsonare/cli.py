@@ -477,6 +477,7 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
         "repair",
         "midi-render",
         "mix",
+        "mix-strip",
         "project",
         "transcribe",
     }
@@ -1657,6 +1658,30 @@ def _build_parser() -> _ContractArgumentParser:
         "--block-size", type=int, default=512, help="Mixer max block size (default: 512)"
     )
 
+    mix_strip_p = sub.add_parser(
+        "mix-strip",
+        parents=[common],
+        help="Run one channel strip over a file and write the stereo result",
+        description=(
+            "A stereo input keeps its own two channels and a mono one is carried "
+            "on both. The output is always stereo, and --width requires a stereo "
+            "input because a duplicated mono pair carries no side signal to widen."
+        ),
+    )
+    mix_strip_p.add_argument(
+        "--input-trim-db", type=float, default=0.0, help="Input trim in dB (default: 0)"
+    )
+    mix_strip_p.add_argument("--fader-db", type=float, default=0.0, help="Fader in dB (default: 0)")
+    mix_strip_p.add_argument(
+        "--pan", type=float, default=0.0, help="Pan position, -1 to 1 (default: 0)"
+    )
+    mix_strip_p.add_argument(
+        "--pan-mode",
+        default="balance",
+        help="Pan mode: balance, stereo-pan or dual-pan (default: balance)",
+    )
+    mix_strip_p.add_argument("--width", type=float, default=1.0, help="Stereo width (default: 1.0)")
+
     # Add file argument to all subcommands that need it
     for name in [
         "info",
@@ -1710,6 +1735,7 @@ def _build_parser() -> _ContractArgumentParser:
         "repair",
         "mastering-suggest",
         "mastering-profile",
+        "mix-strip",
         "transcribe",
     ]:
         sub.choices[name].add_argument("file", help="Audio file path")
@@ -1823,6 +1849,7 @@ def _dispatch() -> None:
         "mixing-presets": cmd_mixing_presets,
         "mixing-preset": cmd_mixing_preset,
         "mix": cmd_mix,
+        "mix-strip": cmd_mix_strip,
     }
 
     handler = commands.get(args.command)

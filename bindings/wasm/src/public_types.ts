@@ -32,6 +32,15 @@ export interface SonareCapabilities {
      * parameters (`RealtimeEngine.resolveInstrumentAutomationId`).
      */
     instrumentParamAutomation: boolean;
+    /**
+     * The four below name the remaining build options that change which
+     * commands and entry points a binary answers. Without them a caller can
+     * observe that a capability is missing but not that it was never built.
+     */
+    arrangement: boolean;
+    acousticSim: boolean;
+    pitchEditor: boolean;
+    voiceChanger: boolean;
   };
   decode: {
     builtin: string[];

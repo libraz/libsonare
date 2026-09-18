@@ -260,6 +260,28 @@ void create_clipped_wav(const std::string& path, int sample_rate = 22050) {
   save_wav(path, samples, sample_rate);
 }
 
+/// @brief Creates a WAV clipped by driving a tone past full scale.
+/// @details Distinct from @ref create_clipped_wav, whose flat run interrupts a
+///   quiet sine: a declipper reconstructs from the neighbourhood it is given,
+///   and a flat top surrounded by a quarter-scale signal is reconstructed back
+///   inside full scale. Here the clipped run IS the top of a loud sine, so the
+///   reconstruction extrapolates above the ceiling -- which is the only case
+///   where the writer's clamp can discard the repair.
+void create_overdriven_wav(const std::string& path, int sample_rate = 22050) {
+  const size_t n_samples = static_cast<size_t>(sample_rate);
+  std::vector<float> samples(n_samples);
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / sample_rate;
+    // 1.06x drive clips roughly a fifth of the samples: enough runs for the
+    // detector, short enough runs for the LPC fit to have something to read.
+    const float driven = 1.06f * std::sin(two_pi * 180.0f * t) +
+                         0.2f * std::sin(two_pi * 430.0f * t) * std::sin(two_pi * 3.0f * t);
+    samples[i] = std::clamp(driven, -1.0f, 1.0f);
+  }
+  save_wav(path, samples, sample_rate);
+}
+
 /// @brief Creates a WAV whose noise floor sits close under its programme.
 /// @details The assistant selects repair from measurement, so a clean tone
 ///   selects nothing and cannot show whether a flag reached the suggester. The
@@ -3636,6 +3658,62 @@ TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
 
     std::ifstream f(out);
     REQUIRE(f.good());
+    std::remove(out.c_str());
+  }
+
+  SECTION("a repair that rebuilds peaks past full scale is fitted, not clamped") {
+    // Declipping restores the peaks a clipper cut off, so its output routinely
+    // exceeds full scale, and this command runs no limiter. The integer writer
+    // clamps, which pinned the rebuilt samples back onto the ceiling they had
+    // just been rescued from: the stage ran and its result was discarded at the
+    // last step.
+    const std::string clipped = unique_temp_path("_clipped_in.wav");
+    create_overdriven_wav(clipped);
+    const std::string out = unique_temp_path("_declipped.wav");
+    std::remove(out.c_str());
+    auto [code, output] = exec_command(CLI + " repair " + clipped + " -o " + out + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE_THAT(output, ContainsSubstring("\"repair.declip\""));
+    // Reported, not silent: the caller's file is quieter than the chain made it
+    // and has to be able to find out by how much.
+    REQUIRE(payload.contains("output_gain_db"));
+    REQUIRE(payload["output_gain_db"].as_number() < 0.0);
+
+    // The measurement that settles it: the input is pinned at full scale over
+    // its clipped run, and the repaired file must not be. Counting the pinned
+    // samples rather than reading the peak is what separates "the ceiling
+    // moved" from "the waveform came back" -- a clamped output also peaks at
+    // full scale, and so does a correctly fitted one.
+    const auto pinned_at_full_scale = [](const std::string& path) {
+      auto [samples, rate, channels] = load_audio_interleaved(path);
+      (void)rate;
+      (void)channels;
+      size_t pinned = 0;
+      for (const float sample : samples) {
+        if (std::abs(sample) >= 0.9999f) ++pinned;
+      }
+      return pinned;
+    };
+    const size_t before = pinned_at_full_scale(clipped);
+    const size_t after = pinned_at_full_scale(out);
+    REQUIRE(before > 0);
+    REQUIRE(after * 10 < before);
+
+    std::remove(clipped.c_str());
+    std::remove(out.c_str());
+  }
+
+  SECTION("a repair whose output already fits is written untouched") {
+    // The other direction, and the reason the fit is conditional: a file that
+    // never exceeds full scale must come back with no gain at all, so the key
+    // reports 0 rather than a small correction nobody asked for.
+    const std::string out = unique_temp_path("_fits.wav");
+    std::remove(out.c_str());
+    auto [code, output] = exec_command(CLI + " repair " + TEST_WAV + " -o " + out + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload["output_gain_db"].as_number() == 0.0);
     std::remove(out.c_str());
   }
 

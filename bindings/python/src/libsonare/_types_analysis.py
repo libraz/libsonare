@@ -43,6 +43,13 @@ class CapabilitiesFeatures(TypedDict):
     ffmpeg: bool
     # Key stays camelCase: capabilities() returns the C ABI JSON verbatim.
     instrumentParamAutomation: bool
+    # The four below name the remaining build options that change which
+    # commands and entry points a binary answers. Without them a caller can
+    # observe that a capability is missing but not that it was never built.
+    arrangement: bool
+    acousticSim: bool
+    pitchEditor: bool
+    voiceChanger: bool
 
 
 class CapabilitiesDecode(TypedDict):

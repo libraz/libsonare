@@ -16,12 +16,54 @@ from cli_contract_schema import (
 )
 
 
-def _expected_paths(commands: dict[str, Any], surface: str) -> set[str]:
+def _expected_paths(
+    commands: dict[str, Any],
+    surface: str,
+    disabled_features: frozenset[str] = frozenset(),
+) -> set[str]:
+    """Every command path @p surface must carry, for the build in front of us.
+
+    ``disabled_features`` names the build options this binary was compiled
+    without. A command that declares one of them in ``requires`` is not demanded
+    here: the gate either drops it from the registry or leaves it answering
+    NOT_SUPPORTED, and the first shape is indistinguishable from a command that
+    was never implemented. It stays demanded of a binary that has the feature,
+    so an empty set -- a default full build, which is what CI runs -- asks
+    exactly what it asked before.
+
+    Not demanded is not the same as forbidden: the stub shape leaves the command
+    listed, so @ref _tolerated_paths carries the other half and the two must be
+    read together.
+    """
     return {
         path
         for path, record in commands.items()
         if record["classification"]
         in {"shared", "intentional_variant", f"{surface}_only"}
+        and not (disabled_features & set(record.get("requires") or ()))
+    }
+
+
+def _tolerated_paths(
+    commands: dict[str, Any],
+    surface: str,
+    disabled_features: frozenset[str] = frozenset(),
+) -> set[str]:
+    """Paths a gated-off build may still list without being unclassified.
+
+    The two gate shapes differ in exactly this: a dropped command is absent and
+    a stubbed one is present, answering NOT_SUPPORTED. Which shape a given gate
+    takes is an implementation detail that has already changed once, so the
+    manifest records only the dependency and both shapes are accepted.
+    """
+    if not disabled_features:
+        return set()
+    return {
+        path
+        for path, record in commands.items()
+        if record["classification"]
+        in {"shared", "intentional_variant", f"{surface}_only"}
+        and (disabled_features & set(record.get("requires") or ()))
     }
 
 

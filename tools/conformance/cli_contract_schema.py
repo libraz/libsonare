@@ -32,6 +32,33 @@ _STATUSES = {"active", "pending", "native_only", "python_only", "intentional_var
 # expires with the port, the way an allowlist entry expires with its drift.
 _REASON_KINDS = {"by_design", "unported"}
 _MIN_REASON_LENGTH = 24
+# Build options that decide whether the native binary answers a command at all.
+# Spelled as the capability descriptor spells them (``doctor --json`` ->
+# ``features``), because that descriptor is what the checker asks a binary about
+# itself -- a name here that the descriptor does not carry can never be
+# answered, so the two sets are one vocabulary rather than two.
+#
+# The gate produces one of two shapes and a command record does not say which:
+# the command is dropped from the registry (mastering, mixing, the assistant,
+# the acoustic simulator, arrangement) or it stays listed and its handler
+# answers NOT_SUPPORTED (the pitch editor, the voice changer). Which shape a
+# gate takes has already changed once, so the manifest records the dependency
+# and the checker accepts either shape.
+_FEATURE_NAMES = {
+    "mastering",
+    "mixing",
+    "mixingAssistant",
+    "fx",
+    "arrangement",
+    "acousticSim",
+    "pitchEditor",
+    "voiceChanger",
+}
+# The two exits a gated-off command may answer with, one per gate shape:
+# ErrorCode::NotImplemented from a stub handler, and the parser's own unknown
+# -command code when the registry never listed it.
+NOT_SUPPORTED_EXIT = 8
+UNKNOWN_COMMAND_EXIT = 2
 _OPTION_TYPES = {"boolean", "integer", "number", "string", "path"}
 _POSITIONAL_TYPES = {"boolean", "integer", "number", "string", "path"}
 _EXIT_CODES = {0, 2, 3, 4, 5, 9}
@@ -171,6 +198,31 @@ def _is_number(value: Any) -> bool:
     return (isinstance(value, int) and not isinstance(value, bool)) or (
         isinstance(value, float) and math.isfinite(value)
     )
+
+
+def _validate_command_requires(
+    record: Any, label: str, errors: list[str]
+) -> None:
+    """Check the build options a command needs the native binary to carry.
+
+    Absent means unconditional, which is most commands. Present means the
+    native front-end drops or stubs the command when any named feature is off,
+    so the checker stops demanding it there. The Python front-end builds its
+    parser unconditionally and is never relaxed by this.
+    """
+    requires = record.get("requires") if isinstance(record, dict) else None
+    if requires is None:
+        return
+    if not isinstance(requires, list) or not requires:
+        errors.append(f"{label}.requires: expected a non-empty array of feature names")
+        return
+    if requires != sorted(set(requires)):
+        errors.append(
+            f"{label}.requires: expected unique feature names in sorted order, got {requires!r}"
+        )
+    for name in requires:
+        if name not in _FEATURE_NAMES:
+            errors.append(f"{label}.requires: unknown build feature {name!r}")
 
 
 def _validate_command_reason(
@@ -1049,8 +1101,13 @@ def validate_manifest(manifest: Any) -> list[str]:
             expected_keys = (
                 base_keys | {"reason_kind", "reason"} if one_sided else base_keys
             )
+            # Optional: only a command the native binary can be built without
+            # carries one, and most cannot.
+            if isinstance(record, dict) and "requires" in record:
+                expected_keys = expected_keys | {"requires"}
             if not _exact(record, expected_keys, label, errors):
                 continue
+            _validate_command_requires(record, label, errors)
             classification = record["classification"]
             status = record["status"]
             option_status = record["option_status"]

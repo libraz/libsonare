@@ -332,6 +332,33 @@ def _compare_payloads(
         return _compare_values(
             left_json, right_json, f"{path}.normalized_json", absolute, relative
         )
+    if path == "doctor":
+        if not isinstance(left, dict) or not isinstance(right, dict):
+            return f"{path}.{case_id}: expected objects for surface comparison"
+        # `features` reports which build options the artifact behind each
+        # front-end was compiled with, and the two front-ends do not have to
+        # load the same artifact -- the Python surface resolves its shared
+        # library by its own search order. Comparing the values would assert
+        # they are one build, which is what the artifact-skew check is for, and
+        # would turn a deliberately feature-reduced binary into a contract
+        # failure. The KEY SET is still compared, so a feature reported by one
+        # surface and not the other is still caught.
+        left_features = left.get("features")
+        right_features = right.get("features")
+        if not isinstance(left_features, dict) or not isinstance(right_features, dict):
+            return f"{path}.{case_id}: expected a features object on both surfaces"
+        if set(left_features) != set(right_features):
+            return (
+                f"{path}.{case_id}.features: feature names differ "
+                f"({sorted(left_features)} != {sorted(right_features)})"
+            )
+        return _compare_values(
+            {key: value for key, value in left.items() if key != "features"},
+            {key: value for key, value in right.items() if key != "features"},
+            f"{path}.{case_id}",
+            absolute,
+            relative,
+        )
     if path == "synthesize-rir":
         if not isinstance(left, dict) or not isinstance(right, dict):
             return f"{path}.{case_id}: expected objects for surface comparison"

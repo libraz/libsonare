@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from typing import TYPE_CHECKING, Any, cast
 
@@ -924,6 +925,28 @@ def _repair_explanation(explanation: list[str]) -> list[str]:
     ]
 
 
+def _fit_repair_output_to_full_scale(samples: Any) -> tuple[Any, float]:
+    """Scale ``samples`` so their peak lands at full scale.
+
+    Returns the samples to write and the applied gain in dB (``0.0`` when the
+    peak already fit and nothing was touched).
+
+    Declipping reconstructs the peaks a clipper cut off, so its output routinely
+    exceeds full scale -- and this command deliberately runs no limiter. The
+    integer writer clamps, which pins exactly the samples the repair just
+    rebuilt back onto the ceiling they were rescued from, undoing the stage that
+    was asked for. One gain for the whole file keeps the reconstructed waveform
+    intact; a per-sample fit would be the clipper again.
+    """
+    # A non-finite sample would make every comparison false and leave the peak
+    # at 0, so the scale is skipped rather than turned into a NaN gain.
+    peak = max((abs(float(v)) for v in samples if math.isfinite(v)), default=0.0)
+    if peak <= 1.0:
+        return samples, 0.0
+    gain = 1.0 / peak
+    return [float(v) * gain for v in samples], 20.0 * math.log10(gain)
+
+
 def _repair_detection_report(defects: dict[str, Any]) -> dict[str, object]:
     """Render the assistant's defect profile as the flat, snake_case ``defects``
     object the native CLI's ``--json`` also emits, key-for-key.
@@ -1136,7 +1159,8 @@ def cmd_repair(args: argparse.Namespace) -> int:
         explanation = _repair_explanation(explanation_value)
 
     stages = list(getattr(result, "stages", []))
-    _write_wav(output, result.samples, result.sample_rate, bits)
+    samples, output_gain_db = _fit_repair_output_to_full_scale(result.samples)
+    _write_wav(output, samples, result.sample_rate, bits)
 
     if getattr(args, "json", False):
         payload: dict[str, object] = {"mode": mode}
@@ -1146,6 +1170,10 @@ def cmd_repair(args: argparse.Namespace) -> int:
         if explain:
             payload["explanation"] = explanation
         payload["output"] = output
+        # Always emitted, 0 when the peak already fit: a key that appeared only
+        # on the files it acted on would make its absence mean both "did not
+        # clip" and "this build does not report it".
+        payload["output_gain_db"] = output_gain_db
         payload["defects"] = defects
         print(_strict_json_dumps(payload))
     else:
@@ -1153,6 +1181,8 @@ def cmd_repair(args: argparse.Namespace) -> int:
         if preset:
             print(f"    Preset:  {preset}")
         print(f"    Stages:  {', '.join(stages) if stages else '(none)'}")
+        if output_gain_db != 0.0:
+            print(f"    Gain:    {output_gain_db} dB (the repair rebuilt peaks past full scale)")
         if explain:
             if explanation:
                 for line in explanation:
@@ -1503,4 +1533,135 @@ def cmd_mix(args: argparse.Namespace) -> int:
                 print(f"    Wrote: {args.output}")
     finally:
         mixer.close()
+    return 0
+
+
+# The spellings the native front-end accepts, lowercased before the lookup, with
+# the scene JSON's integer encoding of mixing::PanMode. Mixer.set_pan takes its
+# own vocabulary, which is not the same set, so this command resolves its option
+# here rather than through the facade.
+_MIX_STRIP_PAN_MODES = {
+    "balance": 0,
+    "stereopan": 1,
+    "stereo-pan": 1,
+    "pan": 1,
+    "dualpan": 2,
+    "dual-pan": 2,
+}
+
+
+def _mix_strip_pan_mode(value: str) -> int:
+    """Resolve one ``--pan-mode`` spelling to its scene JSON encoding."""
+    mode = _MIX_STRIP_PAN_MODES.get(value.lower())
+    if mode is None:
+        raise ValueError(f"invalid pan mode: {value}")
+    return mode
+
+
+def _mix_strip_scene_json(
+    input_trim_db: float, fader_db: float, pan: float, pan_mode: int, width: float
+) -> str:
+    """Build the one-strip-to-master scene this command renders through.
+
+    The native front-end applies a bare channel strip to the buffer, which this
+    surface has no facade for; a single strip routed straight to master with no
+    inserts and no sends is the same signal path. Every field the strip carries
+    is spelled out so the scene defaults cannot drift away from the bare strip's.
+    """
+    return json.dumps(
+        {
+            "version": 1,
+            "buses": [{"id": "master", "role": "master", "inserts": []}],
+            "connections": [{"source": "s", "destination": "master"}],
+            "strips": [
+                {
+                    "id": "s",
+                    "inputTrimDb": input_trim_db,
+                    "faderDb": fader_db,
+                    "pan": pan,
+                    "panMode": pan_mode,
+                    "panLaw": 0,
+                    "width": width,
+                    "channelDelaySamples": 0,
+                    "dualPanLeft": -1,
+                    "dualPanRight": 1,
+                    "inserts": [],
+                    "muted": False,
+                    "polarityInvertLeft": False,
+                    "polarityInvertRight": False,
+                    "sends": [],
+                    "soloSafe": False,
+                    "soloed": False,
+                    "vcaOffsetDb": 0,
+                }
+            ],
+            "vcaGroups": [],
+        }
+    )
+
+
+def cmd_mix_strip(args: argparse.Namespace) -> int:
+    """Run one channel strip over a file and write the stereo result."""
+    from . import Mixer
+
+    width = float(getattr(args, "width", 1.0))
+    planes, sample_rate = _load_channels_or_downmix(args.file)
+    left = list(planes[0])
+    right = list(planes[1]) if len(planes) == 2 else list(left)
+    if len(planes) != 2 and width != 1.0:
+        raise ValueError("--width requires a stereo input")
+
+    scene_json = _mix_strip_scene_json(
+        float(getattr(args, "input_trim_db", 0.0)),
+        float(getattr(args, "fader_db", 0.0)),
+        float(getattr(args, "pan", 0.0)),
+        _mix_strip_pan_mode(getattr(args, "pan_mode", "balance")),
+        width,
+    )
+
+    # One block covering the whole file, as the native front-end does: the strip
+    # is prepared for that block size and processed once.
+    frames = len(left)
+    mixer = Mixer.from_scene_json(scene_json, sample_rate=sample_rate, block_size=max(frames, 1))
+    try:
+        mixer.compile()
+        # The native sets every value before prepare(), which snaps the
+        # smoothers. A scene applies them after, so without this the first
+        # block glides up to them instead of opening at them.
+        mixer.settle(0)
+        result = mixer.process_stereo([left], [right])
+        meter = mixer.strip_meter(0)
+    finally:
+        mixer.close()
+
+    if args.output:
+        _write_channel_output(args.output, [result.left, result.right], sample_rate)
+
+    if args.json:
+        print(
+            _strict_json_dumps(
+                {
+                    "sample_rate": sample_rate,
+                    "length": frames,
+                    "meter": {
+                        "peak_db_l": meter.peak_db_l,
+                        "peak_db_r": meter.peak_db_r,
+                        "rms_db_l": meter.rms_db_l,
+                        "rms_db_r": meter.rms_db_r,
+                        "correlation": meter.correlation,
+                        "mono_compat_width": meter.mono_compat_width,
+                        "likely_mono_compatible": meter.likely_mono_compatible,
+                        "max_true_peak_db": meter.max_true_peak_db,
+                    },
+                }
+            )
+        )
+    else:
+        print("  Channel strip:")
+        print(f"    Samples:     {frames}")
+        print(f"    Sample rate: {sample_rate} Hz")
+        print(f"    Correlation: {meter.correlation:.6f}")
+        print(f"    Mono-compatible: {'yes' if meter.likely_mono_compatible else 'no'}")
+        if args.output:
+            print(f"    Wrote: {args.output}")
     return 0
