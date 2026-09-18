@@ -18,7 +18,7 @@ export type ProjectAutomationCurve = 0 | 1 | 2 | 3 | keyof typeof PROJECT_AUTOMA
  * that differs means the native binary lays out the flat project PODs
  * differently than this binding expects (0 = arrangement support compiled out).
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 1;
+export const EXPECTED_PROJECT_ABI_VERSION = 2;
 
 /** Track kind for {@link ProjectTrackDesc} (mirrors SonareProjectTrackKind). */
 export type ProjectTrackKind = 'audio' | 'midi' | 'aux' | 0 | 1 | 2;
@@ -430,6 +430,12 @@ export interface ProjectClipCompSegment {
   endPpq: number;
   /** Take id to play in this range; 0 falls back to the active/default take. */
   takeId?: number;
+  /**
+   * Equal-power crossfade length in PPQ, fading this segment in over the part
+   * of the preceding segment taken from before `startPpq` (the clip's length
+   * does not move). Finite and >= 0; default `0` (a butt join).
+   */
+  crossfadePpq?: number;
 }
 
 /**

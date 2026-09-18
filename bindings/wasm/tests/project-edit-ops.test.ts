@@ -281,6 +281,48 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
+  it('setClipCompSegments crossfadePpq reaches the module and refuses a wrong type', () => {
+    const { project, clipId } = buildAudioProject();
+    try {
+      expect(() =>
+        project.setClipTakes(
+          clipId,
+          [
+            { id: 1, sourceOffsetPpq: 0, name: 'take A' },
+            { id: 2, sourceOffsetPpq: 0.5, name: 'take B' },
+          ],
+          1,
+        ),
+      ).not.toThrow();
+
+      expect(() =>
+        project.setClipCompSegments(clipId, [
+          { startPpq: 0, endPpq: 2, takeId: 1 },
+          { startPpq: 2, endPpq: 4, takeId: 2, crossfadePpq: 0.25 },
+        ]),
+      ).not.toThrow();
+      expect(project.toJson()).toContain('"crossfade_ppq":0.25');
+
+      let caught: unknown;
+      try {
+        project.setClipCompSegments(clipId, [
+          { startPpq: 0, endPpq: 2, takeId: 1 },
+          { startPpq: 2, endPpq: 4, takeId: 2, crossfadePpq: 'bad' as never },
+        ]);
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught)).toBe(true);
+      if (!isSonareError(caught)) {
+        throw new Error('expected SonareError');
+      }
+      expect(caught.code).toBe(ErrorCode.InvalidParameter);
+      expect(caught.message).toContain('crossfadePpq');
+    } finally {
+      project.delete();
+    }
+  });
+
   it('addLoopRecordingTakes splits captured loops into takes', () => {
     const project = new Project();
     try {

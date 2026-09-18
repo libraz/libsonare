@@ -9,6 +9,7 @@ undo/redo, MIR snap-to-grid, and malformed-input handling.
 
 from __future__ import annotations
 
+import ctypes
 import json
 import math
 
@@ -870,6 +871,52 @@ def test_set_clip_takes_and_comp_segments_round_trip_and_undo() -> None:
             project.set_clip_comp_segments(
                 audio_clip, [{"startPpq": 0.0, "endPpq": 1.0, "takeId": 99}]
             )
+    finally:
+        project.close()
+
+
+def test_comp_segment_crossfade_ppq_ctypes_offset() -> None:
+    """The trailing crossfade_ppq field sits at the C offset (32-byte struct)."""
+    from libsonare._ffi_types_mastering_project import SonareProjectClipCompSegment
+
+    assert ctypes.sizeof(SonareProjectClipCompSegment) == 4 * ctypes.sizeof(ctypes.c_double)
+    assert SonareProjectClipCompSegment.crossfade_ppq.offset == 3 * ctypes.sizeof(ctypes.c_double)
+
+
+def test_comp_segment_crossfade_ppq_reaches_the_library() -> None:
+    project, audio_clip, *_ = _build_project()
+    try:
+        project.set_clip_takes(
+            audio_clip,
+            [{"id": 1, "source_offset_ppq": 0.0}, {"id": 2, "source_offset_ppq": 0.5}],
+            active_take_id=1,
+        )
+
+        # Mapping form, both naming conventions; omitted defaults to 0.0.
+        project.set_clip_comp_segments(
+            audio_clip,
+            [
+                {"start_ppq": 0.0, "end_ppq": 1.0, "take_id": 1},
+                {"startPpq": 1.0, "endPpq": 2.0, "takeId": 2, "crossfadePpq": 0.25},
+            ],
+        )
+        as_dict = json.loads(project.to_json_bytes())
+        segments = as_dict["clips"][0]["comp_segments"]
+        assert segments[0]["crossfade_ppq"] == 0.0
+        assert segments[1]["crossfade_ppq"] == 0.25
+
+        # 4-tuple positional form round-trips the same way.
+        project.set_clip_comp_segments(
+            audio_clip,
+            [(0.0, 1.0, 1, 0.0), (1.0, 2.0, 2, 0.25)],
+        )
+        as_tuple_dict = json.loads(project.to_json_bytes())
+        assert as_tuple_dict["clips"][0]["comp_segments"] == segments
+
+        # The 3-tuple compatibility form still works and defaults to 0.0.
+        project.set_clip_comp_segments(audio_clip, [(0.0, 1.0, 1), (1.0, 2.0, 2)])
+        as_three_tuple_dict = json.loads(project.to_json_bytes())
+        assert as_three_tuple_dict["clips"][0]["comp_segments"][1]["crossfade_ppq"] == 0.0
     finally:
         project.close()
 

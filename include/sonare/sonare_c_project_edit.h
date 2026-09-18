@@ -251,10 +251,23 @@ static_assert(sizeof(SonareProjectClipTake) ==
 #endif
 
 /// @brief One clip-local comp segment selecting a take over [start_ppq,end_ppq).
+///
+/// @p crossfade_ppq fades this segment in over the segment that precedes it,
+/// which is what keeps a comp from clicking at every splice: the two takes are
+/// different signals, so a butt join steps the waveform unless the seam happens
+/// to land on a shared zero crossing. The fade is taken from BEFORE
+/// @p start_ppq -- this segment opens early and the previous one plays to the
+/// seam, so the switch completes at @p start_ppq and the clip's length does not
+/// move. It is equal-power, so a correlated seam holds its level.
+///
+/// 0 keeps the butt join. The value must be finite and non-negative, must not
+/// exceed either this segment's length or the preceding part's, and is 0 on a
+/// segment that starts at 0, which has nothing in front of it to fade over.
 typedef struct {
   double start_ppq;
   double end_ppq;
   uint32_t take_id;
+  double crossfade_ppq;
 } SonareProjectClipCompSegment;
 
 #ifdef __cplusplus
@@ -264,7 +277,9 @@ static_assert(offsetof(SonareProjectClipCompSegment, end_ppq) == sizeof(double),
               "ClipCompSegment.end_ppq offset");
 static_assert(offsetof(SonareProjectClipCompSegment, take_id) == 2u * sizeof(double),
               "ClipCompSegment.take_id offset");
-static_assert(sizeof(SonareProjectClipCompSegment) == 3u * sizeof(double),
+static_assert(offsetof(SonareProjectClipCompSegment, crossfade_ppq) == 3u * sizeof(double),
+              "ClipCompSegment.crossfade_ppq offset");
+static_assert(sizeof(SonareProjectClipCompSegment) == 4u * sizeof(double),
               "SonareProjectClipCompSegment layout drift");
 #endif
 

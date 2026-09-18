@@ -494,6 +494,15 @@ double doubleProperty(val object, const char* key, double default_value) {
   return value.isUndefined() ? default_value : checkedDoubleFromVal(value, key);
 }
 
+double typedDoubleProperty(val object, const char* key, double default_value) {
+  val value = objectProperty(object, key);
+  if (value.isUndefined() || value.isNull()) return default_value;
+  if (value.typeOf().as<std::string>() != "number") {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
+  }
+  return checkedDoubleFromVal(value, key);
+}
+
 int builtinWaveformFromVal(const val& value) {
   // One rejection for both spellings, matching the C ABI. The first invalid
   // ordinal is 4 -- what an off-by-one or a 1-based mirror emits -- so the

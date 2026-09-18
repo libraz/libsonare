@@ -298,6 +298,27 @@ float ClipPlayer::fade_gain(const ClipSchedule& clip, int64_t position) noexcept
       gain *= curve_gain(fraction, clip.fade_out_curve);
     }
   }
+  // Comp-seam crossfade. It rides on top of the clip-level envelope above and
+  // is measured against this fragment's own span, so `position` is used raw
+  // where the clip fades used the reference-shifted one. Equal-power rather
+  // than a curve choice: the two sides of a seam are the same performance, so
+  // a linear pair would dip through the overlap.
+  const int64_t seam_in =
+      std::min(std::max<int64_t>(0, clip.seam_fade_in_samples), clip.length_samples);
+  const int64_t seam_out =
+      std::min(std::max<int64_t>(0, clip.seam_fade_out_samples), clip.length_samples);
+  if (seam_in > 0 && position < seam_in) {
+    gain *=
+        std::sqrt(static_cast<float>(std::max<int64_t>(0, position)) / static_cast<float>(seam_in));
+  }
+  if (seam_out > 0) {
+    const int64_t seam_start = clip.length_samples - seam_out;
+    if (position >= seam_start) {
+      gain *= std::sqrt(
+          static_cast<float>(std::clamp<int64_t>(clip.length_samples - position, 0, seam_out)) /
+          static_cast<float>(seam_out));
+    }
+  }
   return std::clamp(gain, 0.0f, 1.0f);
 }
 

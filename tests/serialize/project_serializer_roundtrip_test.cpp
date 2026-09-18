@@ -155,7 +155,9 @@ Fixture make_fixture() {
   aclip.warp_mode = WarpMode::kTempoSync;
   aclip.takes = {{1, 0, 120.0, "take A"}, {2, audio_sid, 360.0, "take B"}};
   aclip.active_take_id = 1;
-  aclip.comp_segments = {{0.0, 480.0, 1}, {480.0, 960.0, 2}};
+  // The second segment carries a non-zero crossfade so the seam field round-trips
+  // as itself; the first cannot, having nothing in front of it to fade over.
+  aclip.comp_segments = {{0.0, 480.0, 1, 0.0}, {480.0, 960.0, 2, 120.0}};
   const ClipId aclip_id = p.add_clip(aclip);
 
   WarpMapRef warp;
@@ -387,7 +389,7 @@ static_assert(field_count<ClipFade>() == 2,
 static_assert(field_count<ClipTake>() == 4,
               "ClipTake gained or lost a field: add it to ClipTake::operator== and update this "
               "count");
-static_assert(field_count<ClipCompSegment>() == 3,
+static_assert(field_count<ClipCompSegment>() == 4,
               "ClipCompSegment gained or lost a field: add it to ClipCompSegment::operator== and "
               "update this count");
 

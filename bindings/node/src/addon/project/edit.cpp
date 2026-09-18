@@ -94,6 +94,8 @@ bool ParseClipCompSegments(Napi::Env env, const Napi::Value& value,
     if (!RequiredDoubleProperty(env, obj, "endPpq", &segment.end_ppq)) return false;
     segment.take_id = static_cast<uint32_t>(IntProperty(obj, "takeId", 0));
     if (env.IsExceptionPending()) return false;
+    segment.crossfade_ppq = DoubleProperty(obj, "crossfadePpq", 0.0);
+    if (env.IsExceptionPending()) return false;
     segments->push_back(segment);
   }
   return true;

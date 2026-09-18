@@ -39,10 +39,10 @@
 ///
 /// This is the PUBLISHED project ABI contract. Bump it once per RELEASE that
 /// changes the flat POD layout a distributed binary exposes — NOT on every
-/// in-development edit. The project ABI has not shipped in any release yet
-/// (absent from v1.2.3), so it stays at 1 while the surface is still being
-/// built out; additive, unreleased changes do not require a bump.
-#define SONARE_PROJECT_ABI_VERSION 1u
+/// in-development edit. The structs below have shipped since v1.6.0, so a
+/// consumer compiled against a released header is holding the old layout: a
+/// field added to any of them is a bump, not an additive change.
+#define SONARE_PROJECT_ABI_VERSION 2u
 
 // This header is the single public entry point for the headless arrangement /
 // DAW project C ABI; every consumer includes <sonare/sonare_c_project.h>. Its

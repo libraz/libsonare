@@ -11,7 +11,7 @@ import type { Project } from './project_class';
  * `src/sonare_c_project.h`; checked against {@link projectAbiVersion} to detect
  * a WASM build whose flat project POD layout has drifted from this wrapper.
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 1;
+export const EXPECTED_PROJECT_ABI_VERSION = 2;
 
 /** Render options for {@link Project.bounce}. All fields are optional. */
 export interface ProjectBounceOptions {
@@ -155,6 +155,8 @@ export interface ProjectClipCompSegment {
   startPpq: number;
   endPpq: number;
   takeId?: number;
+  /** Equal-power crossfade from the preceding segment, in PPQ (default 0 = butt join). */
+  crossfadePpq?: number;
 }
 
 /** Descriptor for {@link Project.addLoopRecordingTakes}. */

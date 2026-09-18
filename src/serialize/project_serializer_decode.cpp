@@ -158,6 +158,9 @@ arrangement::ClipCompSegment comp_segment_from_json(const Value& v) {
   segment.start_ppq = num_or(v, "start_ppq", 0.0);
   segment.end_ppq = num_or(v, "end_ppq", 0.0);
   segment.take_id = uint_or(v, "take_id", 0);
+  // Gated read: a document written before comp seams could crossfade has no
+  // key here and loads as the butt join it was rendered with.
+  segment.crossfade_ppq = num_or(v, "crossfade_ppq", 0.0);
   return segment;
 }
 

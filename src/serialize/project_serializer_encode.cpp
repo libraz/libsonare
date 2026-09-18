@@ -97,6 +97,7 @@ Value comp_segment_to_json(const arrangement::ClipCompSegment& segment) {
   o["start_ppq"] = segment.start_ppq;
   o["end_ppq"] = segment.end_ppq;
   o["take_id"] = static_cast<double>(segment.take_id);
+  o["crossfade_ppq"] = segment.crossfade_ppq;
   return o;
 }
 

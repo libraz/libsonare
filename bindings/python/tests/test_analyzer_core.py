@@ -32,7 +32,7 @@ def test_capabilities_returns_native_build_descriptor() -> None:
 
     assert isinstance(descriptor, dict)
     assert descriptor["version"] == libsonare.version()
-    assert descriptor["abi"]["project"] == 1
+    assert descriptor["abi"]["project"] == libsonare.project_abi_version()
     assert descriptor["abi"]["engine"] == libsonare.engine_abi_version()
     assert descriptor["features"]["ffmpeg"] is libsonare.has_ffmpeg_support()
     assert descriptor["decode"]["builtin"] == ["wav", "mp3"]

@@ -472,7 +472,10 @@ class _ProjectEditMixin:
     def set_clip_comp_segments(
         self,
         clip_id: int,
-        segments: Sequence[Mapping[str, object]] | Sequence[tuple[float, float, int]] | None,
+        segments: Sequence[Mapping[str, object]]
+        | Sequence[tuple[float, float, int]]
+        | Sequence[tuple[float, float, int, float]]
+        | None,
     ) -> None:
         """Replace a clip's comp lane via an undoable edit."""
         segment_items = list(segments or [])
@@ -482,8 +485,14 @@ class _ProjectEditMixin:
                 start_ppq = float(item.get("start_ppq", item.get("startPpq", 0.0)))
                 end_ppq = float(item.get("end_ppq", item.get("endPpq", 0.0)))
                 take_id = item.get("take_id", item.get("takeId", 0))
+                crossfade_ppq = float(item.get("crossfade_ppq", item.get("crossfadePpq", 0.0)))
+            elif len(item) == 4:
+                start_ppq, end_ppq, take_id, crossfade_ppq = cast(
+                    tuple[float, float, int, float], item
+                )
             else:
                 start_ppq, end_ppq, take_id = cast(tuple[float, float, int], item)
+                crossfade_ppq = 0.0
             c_segments[i].start_ppq = float(start_ppq)
             c_segments[i].end_ppq = float(end_ppq)
             # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
@@ -492,6 +501,7 @@ class _ProjectEditMixin:
             c_segments[i].take_id = _narrow_int(
                 take_id, f"set_clip_comp_segments: segments[{i}].take_id", 0, _UINT32_MAX
             )
+            c_segments[i].crossfade_ppq = float(crossfade_ppq)
         _check(
             _get_lib().sonare_project_set_clip_comp_segments(
                 self._require_handle(),

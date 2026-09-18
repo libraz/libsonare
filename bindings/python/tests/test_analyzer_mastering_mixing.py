@@ -164,7 +164,7 @@ def test_capability_catalog_aggregates_processors_and_presets() -> None:
     catalog = libsonare.capability_catalog()
 
     assert catalog["version"] == libsonare.version()
-    assert catalog["abi"]["project"] == 1
+    assert catalog["abi"]["project"] == libsonare.project_abi_version()
     assert catalog["processors"]
     assert "pop" in catalog["presets"]["mastering"]
     assert "harp-plucked" in catalog["presets"]["synth"]

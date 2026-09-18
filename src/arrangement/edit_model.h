@@ -118,13 +118,20 @@ struct ClipTake {
 
 /// A comp region selects a take over a clip-local PPQ span
 /// [start_ppq, end_ppq). Empty comp lanes mean the active take/base clip plays.
+///
+/// crossfade_ppq fades this segment in over the part before it, taken from
+/// BEFORE start_ppq so the switch completes at the seam and the clip's length
+/// does not move. 0 is a butt join, which steps the waveform wherever the two
+/// takes differ. It cannot exceed either part's length, and is 0 at start_ppq 0.
 struct ClipCompSegment {
   double start_ppq = 0.0;
   double end_ppq = 0.0;
   TakeId take_id = 0;
+  double crossfade_ppq = 0.0;
 
   bool operator==(const ClipCompSegment& o) const noexcept {
-    return start_ppq == o.start_ppq && end_ppq == o.end_ppq && take_id == o.take_id;
+    return start_ppq == o.start_ppq && end_ppq == o.end_ppq && take_id == o.take_id &&
+           crossfade_ppq == o.crossfade_ppq;
   }
   bool operator!=(const ClipCompSegment& o) const noexcept { return !(*this == o); }
 };

@@ -96,6 +96,10 @@ inline bool valid_comp_segments(const std::vector<ClipTake>& takes,
                                 const std::vector<ClipCompSegment>& segments,
                                 double clip_length_ppq) {
   double previous_end = 0.0;
+  // Start of the part that plays immediately before the segment under test: the
+  // previous segment when the two are contiguous, otherwise the fallback part
+  // filling the gap. A crossfade is taken from inside it, so it bounds the fade.
+  double preceding_start = 0.0;
   for (const ClipCompSegment& segment : segments) {
     if (!std::isfinite(segment.start_ppq) || !std::isfinite(segment.end_ppq) ||
         segment.start_ppq < 0.0 || !(segment.end_ppq > segment.start_ppq) ||
@@ -103,6 +107,17 @@ inline bool valid_comp_segments(const std::vector<ClipTake>& takes,
         !take_id_exists(takes, segment.take_id)) {
       return false;
     }
+    // A segment at 0 has nothing in front of it, so this resolves to 0 and the
+    // check below admits only a 0 crossfade.
+    const double preceding_length = segment.start_ppq > previous_end
+                                        ? segment.start_ppq - previous_end
+                                        : segment.start_ppq - preceding_start;
+    if (!std::isfinite(segment.crossfade_ppq) || segment.crossfade_ppq < 0.0 ||
+        segment.crossfade_ppq > segment.end_ppq - segment.start_ppq ||
+        segment.crossfade_ppq > preceding_length) {
+      return false;
+    }
+    preceding_start = segment.start_ppq;
     previous_end = segment.end_ppq;
   }
   return true;
@@ -123,6 +138,11 @@ inline std::vector<ClipCompSegment> shifted_clamped_comp_segments(
     segment.start_ppq = std::max(0.0, segment.start_ppq + delta_ppq);
     segment.end_ppq = std::min(clip_length_ppq, segment.end_ppq + delta_ppq);
     if (segment.end_ppq > segment.start_ppq) {
+      // A clamped segment is shorter than it was, and a segment pushed to 0 has
+      // lost what it faded over, so the fade follows the span rather than
+      // outliving it and failing revalidation.
+      segment.crossfade_ppq =
+          std::min({segment.crossfade_ppq, segment.end_ppq - segment.start_ppq, segment.start_ppq});
       out.push_back(segment);
     }
   }

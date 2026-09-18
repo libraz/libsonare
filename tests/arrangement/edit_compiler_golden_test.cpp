@@ -803,6 +803,74 @@ TEST_CASE("compiler rejects a multi-source comp carrying pre-baked warped audio"
   REQUIRE(single_source.timeline.has_value());
 }
 
+TEST_CASE("a comp seam crossfades instead of stepping", "[arrangement]") {
+  // Two takes held at DIFFERENT CONSTANTS, so the seam's discontinuity is the
+  // whole distance between them and does not depend on where a waveform happened
+  // to be. A butt join therefore steps by exactly 1.2 at one sample.
+  const auto constant_source = [](arr::Project& project, arr::AudioContentStore& store,
+                                  float value) {
+    sonare::arrangement::AudioSourceRef ref;
+    ref.sample_rate_hint = kProjectSr;
+    ref.channel_count = 2;
+    const arr::SourceId id = project.add_audio_source(ref);
+    arr::AudioSourceSamples samples;
+    samples.sample_rate = kProjectSr;
+    samples.channels.assign(2, std::vector<float>(48000, value));
+    store.sources.emplace(id, std::move(samples));
+    return id;
+  };
+
+  // Largest single-sample move in the left channel. The seam sits at 1.0 PPQ,
+  // which is 24000 frames in at 120 BPM, so a whole-render scan cannot miss it.
+  const auto max_step = [](const std::vector<float>& interleaved) {
+    float worst = 0.0f;
+    for (size_t i = 2; i + 1 < interleaved.size(); i += 2) {
+      worst = std::max(worst, std::abs(interleaved[i] - interleaved[i - 2]));
+    }
+    return worst;
+  };
+
+  const auto render_with_crossfade = [&](double crossfade_ppq) {
+    Fixture f = make_fixture();
+    arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+    REQUIRE(clip != nullptr);
+    const arr::SourceId high = constant_source(f.project, f.audio, 0.6f);
+    const arr::SourceId low = constant_source(f.project, f.audio, -0.6f);
+    clip->takes = {{1, high, 0.0, "high"}, {2, low, 0.0, "low"}};
+    clip->active_take_id = 1;
+    clip->comp_segments = {{0.0, 1.0, 1, 0.0}, {1.0, 2.0, 2, crossfade_ppq}};
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE_FALSE(result.has_errors());
+    REQUIRE(result.timeline.has_value());
+    return std::make_pair(render(*result.timeline, 48000), result.timeline->audio_clips);
+  };
+
+  SECTION("a butt join steps by the whole distance between the takes") {
+    const auto [audio, schedules] = render_with_crossfade(0.0);
+    REQUIRE(max_step(audio) > 1.0f);
+    for (const auto& sched : schedules) {
+      CHECK(sched.seam_fade_in_samples == 0);
+      CHECK(sched.seam_fade_out_samples == 0);
+    }
+  }
+
+  SECTION("a crossfaded seam moves in steps two orders of magnitude smaller") {
+    // A quarter of a quarter note: 6000 frames at 120 BPM.
+    const auto [audio, schedules] = render_with_crossfade(0.25);
+    CHECK(max_step(audio) < 0.05f);
+
+    // The fade is taken from BEFORE the seam, so the part after it opens early
+    // and the part before it carries the matching fade-out. Both halves must be
+    // present, or one side of the seam is a straight cut wearing a ramp.
+    REQUIRE(schedules.size() == 2);
+    CHECK(schedules[0].seam_fade_out_samples == 6000);
+    CHECK(schedules[0].seam_fade_in_samples == 0);
+    CHECK(schedules[1].seam_fade_in_samples == 6000);
+    // Opening early must not move the clip's end.
+    CHECK(schedules[1].start_sample == 24000 - 6000);
+  }
+}
+
 TEST_CASE("compiler rejects invalid audio comp segments from loaded projects", "[arrangement]") {
   Fixture f = make_fixture();
   arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);

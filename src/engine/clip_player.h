@@ -173,6 +173,14 @@ struct ClipSchedule {
   /// segments). 0 length means use this schedule's own length.
   int64_t fade_reference_offset_samples = 0;
   int64_t fade_reference_length_samples = 0;
+  /// Comp-seam crossfade, measured from THIS schedule's own ends rather than
+  /// the fade reference above: the clip-level fade shapes the whole clip while
+  /// these shape one fragment against the fragment it overlaps. Equal-power, so
+  /// two halves of a correlated seam sum back to their own level. The compiler
+  /// gives the fragment after a seam the fade-in and the one before it the
+  /// matching fade-out; both are 0 for a butt join.
+  int64_t seam_fade_in_samples = 0;
+  int64_t seam_fade_out_samples = 0;
   /// Legacy combined curve view. New code should use fade_in_curve /
   /// fade_out_curve; kept so existing aggregate users keep the old shape.
   FadeCurve fade_curve = FadeCurve::Linear;

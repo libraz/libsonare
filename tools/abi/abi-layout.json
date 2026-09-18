@@ -5959,9 +5959,15 @@
         "name": "take_id",
         "offset": 16,
         "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "crossfade_ppq",
+        "offset": 24,
+        "size": 8
       }
     ],
-    "size": 24
+    "size": 32
   },
   "SonareProjectClipDesc": {
     "align": 8,

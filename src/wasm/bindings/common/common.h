@@ -360,6 +360,20 @@ double checkedDoubleFromVal(const val& value, const char* key);
 /// @brief Presence-checked double reader: an absent field takes @p default_value,
 ///        a present one is validated by @ref checkedDoubleFromVal.
 double doubleProperty(val object, const char* key, double default_value);
+/// @brief Presence- AND type-checked double reader: an absent field -- omitted,
+///        `undefined` or `null` -- takes @p default_value, a present one must be
+///        a JS number.
+/// @details @ref typedFloatProperty's full-width sibling, for a field the C ABI
+///          declares as a double. @ref doubleProperty reaches the same field
+///          through val::as<double>(), which COERCES, so a numeric string
+///          arrives as the number it spells and the addon refuses the very same
+///          input. It carries no range check because a double IS what a JS
+///          number is -- there is nothing to narrow to, which is why
+///          @ref typedFloatProperty's 32-bit bound has no counterpart here.
+///          That absence is the type's, not an omission to copy forward.
+/// @throws SonareException(InvalidParameter) naming @p key, for a wrong-typed
+///         value and for a non-finite one.
+double typedDoubleProperty(val object, const char* key, double default_value);
 /// @brief Resolves a built-in oscillator waveform given as a JS string or a JS
 ///        number to its @ref SonareSynthWaveform ordinal.
 /// @details Both spellings reach the same rejection naming the accepted set.

@@ -439,10 +439,12 @@ SonareError clip_comp_segments_from_desc(const SonareProjectClipCompSegment* seg
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectClipCompSegment& segment = segments[i];
     if (!finite_non_negative(segment.start_ppq) || !finite_positive(segment.end_ppq) ||
-        !(segment.end_ppq > segment.start_ppq)) {
+        !(segment.end_ppq > segment.start_ppq) || !finite_non_negative(segment.crossfade_ppq)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    out->push_back({segment.start_ppq, segment.end_ppq, segment.take_id});
+    // The bounds a crossfade has against its neighbours need the whole lane, so
+    // they are the edit command's to check; this rejects only the value itself.
+    out->push_back({segment.start_ppq, segment.end_ppq, segment.take_id, segment.crossfade_ppq});
   }
   return SONARE_OK;
 }

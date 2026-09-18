@@ -150,6 +150,7 @@ void ProjectWasm::setClipCompSegments(const val& clip_id_val, val segments_val) 
     segment.start_ppq = entry["startPpq"].as<double>();
     segment.end_ppq = entry["endPpq"].as<double>();
     segment.take_id = uintProperty(entry, "takeId", segment.take_id);
+    segment.crossfade_ppq = typedDoubleProperty(entry, "crossfadePpq", segment.crossfade_ppq);
     segments.push_back(segment);
   }
   const SonareError err = sonare_project_set_clip_comp_segments(

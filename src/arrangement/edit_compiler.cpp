@@ -208,6 +208,11 @@ struct AudioClipPart {
   double end_ppq = 0.0;
   SourceId source_id = 0;
   double source_offset_ppq = 0.0;
+  // Comp-seam fades, measured from this part's own ends rather than the clip's.
+  // A seam is shared, so the part after it carries the fade-in and the part
+  // before it carries the matching fade-out.
+  double seam_fade_in_ppq = 0.0;
+  double seam_fade_out_ppq = 0.0;
 };
 
 const ClipTake* find_take(const EditClip& clip, TakeId id) noexcept {
@@ -241,33 +246,40 @@ bool resolve_take_part(const EditClip& clip, TakeId take_id, double start_ppq, d
 std::vector<AudioClipPart> build_audio_clip_parts(const EditClip& clip, bool* ok) {
   if (ok != nullptr) *ok = true;
   std::vector<AudioClipPart> parts;
-  const auto push_part = [&](TakeId take_id, double start_ppq, double end_ppq) {
+  const auto push_part = [&](TakeId take_id, double start_ppq, double end_ppq, double crossfade) {
     if (!(end_ppq > start_ppq)) return;
     AudioClipPart part;
-    if (!resolve_take_part(clip, take_id, start_ppq, end_ppq, &part)) {
+    // A seam's fade is taken from BEFORE the segment starts, so the part opens
+    // early and resolve_take_part walks its source back by the same amount: the
+    // take plays continuously across the overlap and only the gain differs.
+    // valid_comp_segments bounds the fade by the preceding part, so the earlier
+    // start can neither precede the clip nor run off the head of the take.
+    if (!resolve_take_part(clip, take_id, start_ppq - crossfade, end_ppq, &part)) {
       if (ok != nullptr) *ok = false;
       return;
     }
+    part.seam_fade_in_ppq = crossfade;
+    if (crossfade > 0.0 && !parts.empty()) parts.back().seam_fade_out_ppq = crossfade;
     parts.push_back(part);
   };
 
   const TakeId fallback_take_id = clip.active_take_id;
   if (clip.comp_segments.empty()) {
-    push_part(fallback_take_id, 0.0, clip.length_ppq);
+    push_part(fallback_take_id, 0.0, clip.length_ppq, 0.0);
     return parts;
   }
 
   double cursor = 0.0;
   for (const ClipCompSegment& segment : clip.comp_segments) {
     if (segment.start_ppq > cursor) {
-      push_part(fallback_take_id, cursor, segment.start_ppq);
+      push_part(fallback_take_id, cursor, segment.start_ppq, 0.0);
     }
     push_part(segment.take_id == 0 ? fallback_take_id : segment.take_id, segment.start_ppq,
-              segment.end_ppq);
+              segment.end_ppq, segment.crossfade_ppq);
     cursor = segment.end_ppq;
   }
   if (cursor < clip.length_ppq) {
-    push_part(fallback_take_id, cursor, clip.length_ppq);
+    push_part(fallback_take_id, cursor, clip.length_ppq, 0.0);
   }
   return parts;
 }
@@ -941,6 +953,21 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       sched.loop_crossfade_samples = loop_crossfade_samples;
       sched.fade_reference_offset_samples = std::max<int64_t>(0, start_sample - clip_start_sample);
       sched.fade_reference_length_samples = clip_length_samples;
+      // Converted through the tempo map from this part's own start, the way the
+      // loop crossfade above is, so a fade keeps its musical length across a
+      // tempo change rather than its sample length.
+      sched.seam_fade_in_samples =
+          part.seam_fade_in_ppq > 0.0
+              ? std::max<int64_t>(0, tempo_map.ppq_to_sample(clip.start_ppq + part.start_ppq +
+                                                             part.seam_fade_in_ppq) -
+                                         start_sample)
+              : 0;
+      sched.seam_fade_out_samples =
+          part.seam_fade_out_ppq > 0.0
+              ? std::max<int64_t>(
+                    0, end_sample - tempo_map.ppq_to_sample(clip.start_ppq + part.end_ppq -
+                                                            part.seam_fade_out_ppq))
+              : 0;
       sched.warp_ref_id = clip.warp_ref_id;
       sched.warp_mode = baked_warp_ref == 0 && !compile_baked_tempo_sync
                             ? to_engine_warp_mode(clip.warp_mode)

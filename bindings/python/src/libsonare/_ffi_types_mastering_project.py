@@ -817,6 +817,7 @@ class SonareProjectClipCompSegment(CStruct):
         ("start_ppq", ctypes.c_double),
         ("end_ppq", ctypes.c_double),
         ("take_id", ctypes.c_uint32),
+        ("crossfade_ppq", ctypes.c_double),
     ]
 
 

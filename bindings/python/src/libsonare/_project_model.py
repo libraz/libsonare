@@ -134,7 +134,7 @@ _SYNTH_WAVEFORM_NAMES = {
 # bindings' expected project ABI constant. A mismatch means the loaded native
 # binary lays out the flat project PODs differently than this wrapper expects,
 # or the arrangement subsystem was compiled out (runtime version 0).
-EXPECTED_PROJECT_ABI_VERSION = 1
+EXPECTED_PROJECT_ABI_VERSION = 2
 
 # Track kind ordinals (mirror SonareProjectTrackKind).
 TRACK_AUDIO = 0

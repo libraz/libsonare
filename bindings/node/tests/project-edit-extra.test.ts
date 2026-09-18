@@ -122,10 +122,11 @@ describe('Project edit ops (new bindings)', () => {
 
     project.setClipCompSegments(clip, [
       { startPpq: 0, endPpq: 2, takeId: 1 },
-      { startPpq: 2, endPpq: 4, takeId: 2 },
+      { startPpq: 2, endPpq: 4, takeId: 2, crossfadePpq: 0.25 },
     ]);
     const withComp = project.toJson();
     expect(withComp).toContain('"comp_segments"');
+    expect(withComp).toContain('"crossfade_ppq":0.25');
 
     project.undo();
     expect(project.toJson()).toBe(withTakes);
@@ -177,6 +178,15 @@ describe('Project edit ops (new bindings)', () => {
         { startPpq: 1, endPpq: 2, takeId: 2 },
       ] as unknown as Parameters<typeof project.setClipCompSegments>[1]),
     ).toThrow(/endPpq must be a number/);
+    expect(project.toJson()).toBe(before);
+
+    // crossfadePpq is optional (DoubleProperty), so a wrong-typed value is
+    // refused by name rather than silently substituted.
+    expect(() =>
+      project.setClipCompSegments(clip, [
+        { startPpq: 0, endPpq: 1, takeId: 1, crossfadePpq: 'nope' },
+      ] as unknown as Parameters<typeof project.setClipCompSegments>[1]),
+    ).toThrow(/crossfadePpq must be a number/);
     expect(project.toJson()).toBe(before);
     project.destroy();
   });
