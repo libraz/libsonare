@@ -96,6 +96,116 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "chords",
+      "option": "smoothing-window",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "chords",
+      "option": "hmm-beam-width",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "sections",
+      "option": "min-duration",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "dynamics",
+      "option": "window-sec",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "rhythm",
+      "option": "start-bpm",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "rhythm",
+      "option": "bpm-min",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "rhythm",
+      "option": "bpm-max",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "melody",
+      "option": "threshold",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "melody",
+      "option": "hop-length",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "melody",
+      "option": "fmin",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "melody",
+      "option": "fmax",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "eq",
       "option": "bits",
       "rejectExit": "invalid_parameter",

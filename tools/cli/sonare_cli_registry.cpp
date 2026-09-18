@@ -328,6 +328,48 @@ CliValidationError validate_boundary_feature_streams(const CliArgs& args) {
       true};
 }
 
+// The tempo search runs between the two bounds, so an inverted pair searches
+// nothing and reports whatever the fallback is rather than failing. Neither the
+// rhythm analyzer nor the beat analyzer behind it looks at these.
+CliValidationError validate_rhythm_tempo_range(const CliArgs& args) {
+  const float minimum = args.get_float("bpm-min", 60.0f);
+  const float maximum = args.get_float("bpm-max", 200.0f);
+  if (maximum > minimum) return {};
+  std::ostringstream message;
+  message << "--bpm-max must be greater than --bpm-min (--bpm-min " << minimum << ", --bpm-max "
+          << maximum << ")";
+  return {message.str(), true};
+}
+
+// Compared against the values the handler will actually use, not the raw
+// options: melody substitutes its own band for an absent one, so checking the
+// raw pair lets `--fmax 50` through against an unstated 80 Hz floor that the
+// analyzer then inverts. The two numbers repeat the handler's because the
+// substitution lives there; they are this command's published band, not
+// MelodyConfig's wider default.
+CliValidationError validate_melody_frequency_band(const CliArgs& args) {
+  const float minimum = args.fmin > 0.0f ? args.fmin : 80.0f;
+  const float maximum = args.fmax > 0.0f ? args.fmax : 1000.0f;
+  if (maximum > minimum) return {};
+  std::ostringstream message;
+  message << "--fmax must be greater than --fmin (--fmin " << minimum << ", --fmax " << maximum
+          << ")";
+  return {message.str(), true};
+}
+
+// Only when HPSS is on: the separation needs enough overlap to resynthesize, and
+// the C entry point refuses a hop below 16 for exactly this pair. The STFT's own
+// geometry check does not reach it -- at the 4096-point default a hop of 8
+// satisfies `hop <= n_fft / 2` and still starves the separation. A per-option
+// domain cannot express it because the same hop is fine without the flag.
+CliValidationError validate_key_hpss_hop(const CliArgs& args) {
+  if (!args.has("use-hpss") && !args.has("hpss")) return {};
+  if (args.hop_length >= 16) return {};
+  std::ostringstream message;
+  message << "--hop-length must be at least 16 with --use-hpss (got " << args.hop_length << ")";
+  return {message.str(), true};
+}
+
 #ifdef SONARE_WITH_ARRANGEMENT
 // The project bounce renders a stereo master and writes either that pair or its
 // mono downmix, so the C ABI accepts a channel count of 1 or 2 and refuses any
@@ -426,26 +468,64 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {global_int("n-fft", 4096), global_int("hop-length", 512), int_value("candidates"),
                  flag("use-hpss", false, true, {"hpss"}), flag("loudness-weighted"),
                  number_value("high-pass-hz", 0.0), string_value("modes"), string_value("profile"),
-                 string_value("genre-hint")});
+                 string_value("genre-hint")},
+                {}, validate_key_hpss_hop);
+    // `smoothing-window` and `hmm-beam-width` carry the C entry point's domains;
+    // `min-duration` and `threshold` are checked by ChordAnalyzer itself and so
+    // need none. A zero smoothing window is the one the analyzer accepts and the
+    // C entry refuses, and a negative beam width is never truncated against, so
+    // `--use-hmm --hmm-beam-width -1` silently ran an unbeamed search.
     add_command(commands, "chords", true,
                 {global_int("n-fft", 2048), global_int("hop-length", 512),
-                 number_value("min-duration", 0.3), number_value("smoothing-window", 2.0),
+                 number_value("min-duration", 0.3),
+                 with_domain(number_value("smoothing-window", 2.0),
+                             greater_than(0.0, CliOptionDomainStage::Parameter)),
                  number_value("threshold", 0.5), flag("triads-only"), flag("nnls"),
-                 flag("no-beat-sync"), flag("use-hmm"), int_value("hmm-beam-width", 24),
+                 flag("no-beat-sync"), flag("use-hmm"),
+                 with_domain(int_value("hmm-beam-width", 24),
+                             at_least(0.0, CliOptionDomainStage::Parameter)),
                  flag("key-context"), string_value("key-root", "C"),
                  string_value("key-mode", "major"), flag("detect-inversions")});
-    add_command(commands, "sections", true,
-                {number_value("min-duration", 4.0), number_value("threshold", 0.3),
-                 global_int("n-fft", 2048), global_int("hop-length", 512)});
-    add_command(commands, "dynamics", true,
-                {number_value("window-sec", 0.4), global_int("hop-length", 512)});
+    // SectionAnalyzer validates only that the audio is non-empty, so nothing
+    // downstream refuses a negative minimum section length.
     add_command(
-        commands, "rhythm", true,
-        {number_value("start-bpm", 120.0), number_value("bpm-min", 60.0),
-         number_value("bpm-max", 200.0), global_int("n-fft", 2048), global_int("hop-length", 512)});
+        commands, "sections", true,
+        {with_domain(number_value("min-duration", 4.0),
+                     at_least(0.0, CliOptionDomainStage::Parameter)),
+         number_value("threshold", 0.3), global_int("n-fft", 2048), global_int("hop-length", 512)});
+    // DynamicsAnalyzer floors a tiny or negative window to avoid a 0/0 rather
+    // than refusing it, so the refusal the other surfaces get has to be here.
+    add_command(commands, "dynamics", true,
+                {with_domain(number_value("window-sec", 0.4),
+                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                 global_int("hop-length", 512)});
+    // Neither RhythmAnalyzer nor the BeatAnalyzer it forwards to validates any of
+    // the three tempo bounds; the derived periods are merely floored at 1.
+    add_command(commands, "rhythm", true,
+                {with_domain(number_value("start-bpm", 120.0),
+                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                 with_domain(number_value("bpm-min", 60.0),
+                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                 with_domain(number_value("bpm-max", 200.0),
+                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                 global_int("n-fft", 2048), global_int("hop-length", 512)},
+                {}, validate_rhythm_tempo_range);
+    // This command's `hop-length` does NOT reach the STFT, so the guard that
+    // covers every other command's copy does not cover this one: MelodyAnalyzer
+    // frames the signal itself and advances by the hop, so zero never advances
+    // and the loop does not terminate. The plain-YIN entry it calls
+    // (yin_with_confidence) validates nothing either -- the checks live in
+    // yin_track, which this path does not go through.
     add_command(commands, "melody", true,
-                {number_value("threshold", 0.1), global_int("hop-length", 512),
-                 global_number("fmin", 80.0), global_number("fmax", 1000.0)});
+                {with_domain(number_value("threshold", 0.1),
+                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                 with_domain(global_int("hop-length", 512),
+                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                 with_domain(global_number("fmin", 80.0),
+                             greater_than(0.0, CliOptionDomainStage::Parameter)),
+                 with_domain(global_number("fmax", 1000.0),
+                             greater_than(0.0, CliOptionDomainStage::Parameter))},
+                {}, validate_melody_frequency_band);
     // The whole of BoundaryConfig, so a command line can reach the same detector
     // the other surfaces do. `absolute-threshold` is the one that was missing and
     // mattered: `threshold` is relative to the curve's own maximum, so it cannot
