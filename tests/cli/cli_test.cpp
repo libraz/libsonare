@@ -366,6 +366,110 @@ float tone_magnitude(const std::vector<float>& samples, int sample_rate, float f
                             static_cast<double>(samples.size()));
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+/// One note of a reference melody, in quarter notes. The project's default tempo
+/// is 120 BPM, so one PPQ is half a second of reference time.
+struct ReferenceNote {
+  double on_ppq;
+  double off_ppq;
+  uint8_t midi;
+};
+
+/// @brief Writes @p melody at @p path as a Standard MIDI File.
+/// @details Through the project exporter rather than hand-built bytes: the
+///   reader under test is this writer's counterpart, so a byte layout spelled
+///   here would be a second SMF writer to keep in step with it.
+void create_reference_smf(const std::string& path, const std::vector<ReferenceNote>& melody,
+                          double clip_length_ppq) {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track_id = 0;
+  uint32_t clip_id = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, clip_length_ppq, &track_id, &clip_id) ==
+          SONARE_OK);
+
+  std::vector<SonareMidiEventPod> events;
+  for (const ReferenceNote& note : melody) {
+    SonareMidiEventPod on{};
+    SonareMidiEventPod off{};
+    REQUIRE(sonare_midi_note_on(note.on_ppq, 0, 0, note.midi, 100, &on) == SONARE_OK);
+    REQUIRE(sonare_midi_note_off(note.off_ppq, 0, 0, note.midi, 0, &off) == SONARE_OK);
+    events.push_back(on);
+    events.push_back(off);
+  }
+  REQUIRE(sonare_project_set_midi_events(project, clip_id, events.data(), events.size()) ==
+          SONARE_OK);
+
+  uint8_t* bytes = nullptr;
+  size_t len = 0;
+  REQUIRE(sonare_project_export_smf(project, &bytes, &len) == SONARE_OK);
+  {
+    std::ofstream file(path, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
+  }
+  sonare_free_bytes(bytes);
+  sonare_project_destroy(project);
+}
+
+/// @brief Creates a take of equal-length tones separated by silence.
+/// @param path Output path
+/// @param frequencies One tone per note, in order
+/// @param note_sec Sounding length of each note
+/// @param gap_sec Silence after each note
+/// @param sample_rate Sample rate
+///
+/// The silence is what makes the take segment: the note extractor breaks on the
+/// unvoiced frames, so each tone becomes one note with a span the reference can
+/// be written against. A single sustained tone yields one note covering the whole
+/// take, which no per-note assignment can be read off.
+void create_note_sequence_wav(const std::string& path, const std::vector<float>& frequencies,
+                              float note_sec, float gap_sec, int sample_rate) {
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  const size_t note_samples = static_cast<size_t>(note_sec * static_cast<float>(sample_rate));
+  const size_t gap_samples = static_cast<size_t>(gap_sec * static_cast<float>(sample_rate));
+  std::vector<float> samples;
+  for (float frequency : frequencies) {
+    for (size_t i = 0; i < note_samples; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+      samples.push_back(0.5f * std::sin(two_pi * frequency * t));
+    }
+    samples.insert(samples.end(), gap_samples, 0.0f);
+  }
+  save_wav(path, samples, sample_rate);
+}
+
+/// @brief The strongest frequency in @p samples on a 1 Hz grid over [@p fmin,
+///        @p fmax].
+/// @details Reported rather than compared against one expectation, so a case
+///   states the pitch it measured instead of only whether a probe frequency was
+///   present. The grid is coarse on purpose: the intervals under test are
+///   semitones, which are tens of Hz apart here.
+float dominant_frequency(const std::vector<float>& samples, int sample_rate, float fmin,
+                         float fmax) {
+  float best_frequency = 0.0f;
+  float best_magnitude = 0.0f;
+  for (float frequency = fmin; frequency <= fmax; frequency += 1.0f) {
+    const float magnitude = tone_magnitude(samples, sample_rate, frequency);
+    if (magnitude > best_magnitude) {
+      best_magnitude = magnitude;
+      best_frequency = frequency;
+    }
+  }
+  return best_frequency;
+}
+
+/// @brief The samples of one note's sounding span, as the take lays them out.
+std::vector<float> note_span(const std::vector<float>& samples, size_t note, float note_sec,
+                             float gap_sec, int sample_rate) {
+  const size_t note_samples = static_cast<size_t>(note_sec * static_cast<float>(sample_rate));
+  const size_t gap_samples = static_cast<size_t>(gap_sec * static_cast<float>(sample_rate));
+  const size_t begin = note * (note_samples + gap_samples);
+  if (begin + note_samples > samples.size()) return {};
+  return std::vector<float>(samples.begin() + static_cast<std::ptrdiff_t>(begin),
+                            samples.begin() + static_cast<std::ptrdiff_t>(begin + note_samples));
+}
+#endif  // SONARE_WITH_ARRANGEMENT && SONARE_WITH_PITCH_EDITOR
+
 const std::string CLI = get_cli_path();
 const std::string TEST_WAV = unique_temp_path(".wav");
 const std::string TEST_OUT = unique_temp_path("_out.wav");
@@ -4601,3 +4705,278 @@ TEST_CASE("CLI project command group", "[cli]") {
   }
 }
 #endif  // SONARE_WITH_ARRANGEMENT
+
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+// `tune-to-midi` needs both subsystems -- the SMF reader and the assignment rule
+// -- so a build missing either does not register it and these cases are absent
+// with it.
+//
+// Every case below writes its own take and its own reference. Catch2 discovery
+// gives one process per case, and the temp paths are per process, so a case
+// reading an input a sibling wrote is green in a whole-tag run and red on its
+// own.
+namespace {
+
+// The take is A4, which is a whole MIDI number, so every shift the reference asks
+// for is exact and the expected output pitch is midi_to_hz of the target.
+constexpr float kTakeToneHz = sonare::constants::kA4Hz;
+constexpr int kTakeSampleRate = 48000;
+constexpr float kTakeNoteSec = 0.4f;
+constexpr float kTakeGapSec = 0.1f;
+
+// The grid the measured pitches are searched on: wide enough for a whole octave
+// down from the take's own tone and for the upward reach the reference asks for.
+constexpr float kProbeFminHz = 150.0f;
+constexpr float kProbeFmaxHz = 700.0f;
+
+}  // namespace
+
+TEST_CASE("CLI tune-to-midi moves each note onto the pitch the reference names",
+          "[cli][tune-to-midi]") {
+  const std::string take = unique_temp_path("_take.wav");
+  const std::string reference = unique_temp_path("_reference.mid");
+  const std::string tuned = unique_temp_path("_tuned.wav");
+  // Three notes at 440 Hz, each inside its own half-second reference interval.
+  create_note_sequence_wav(take, {kTakeToneHz, kTakeToneHz, kTakeToneHz}, kTakeNoteSec, kTakeGapSec,
+                           kTakeSampleRate);
+  create_reference_smf(reference, {{0.0, 1.0, 60}, {1.0, 2.0, 67}, {2.0, 3.0, 64}}, 4.0);
+
+  auto [code, output] = exec_command(CLI + " tune-to-midi " + take + " --reference-smf " +
+                                     reference + " -o " + tuned + " --json");
+  INFO(output);
+  REQUIRE(code == 0);
+
+  const auto payload = sonare::util::json::parse_strict(output);
+  REQUIRE(payload["output"].as_string() == tuned);
+  REQUIRE(payload["assigned_count"].as_int() == 3);
+  REQUIRE(payload["note_count"].as_int() == 3);
+  REQUIRE(payload["sample_rate"].as_int() == kTakeSampleRate);
+
+  const Audio before = Audio::from_file(take);
+  const Audio after = Audio::from_file(tuned);
+  // The render keeps the input's length, which is what makes the per-note spans
+  // below line up on both sides.
+  REQUIRE(payload["length"].as_int() == static_cast<int>(before.size()));
+  REQUIRE(after.size() == before.size());
+
+  const std::vector<float> source(before.data(), before.data() + before.size());
+  const std::vector<float> result(after.data(), after.data() + after.size());
+  const std::array<float, 3> expected{midi_to_hz(60.0f), midi_to_hz(67.0f), midi_to_hz(64.0f)};
+  for (size_t note = 0; note < expected.size(); ++note) {
+    const float source_hz =
+        dominant_frequency(note_span(source, note, kTakeNoteSec, kTakeGapSec, kTakeSampleRate),
+                           kTakeSampleRate, kProbeFminHz, kProbeFmaxHz);
+    const float tuned_hz =
+        dominant_frequency(note_span(result, note, kTakeNoteSec, kTakeGapSec, kTakeSampleRate),
+                           kTakeSampleRate, kProbeFminHz, kProbeFmaxHz);
+    CAPTURE(note, source_hz, tuned_hz, expected[note]);
+    REQUIRE(std::abs(source_hz - kTakeToneHz) < 3.0f);
+    // A semitone is 6% here, so 2% keeps the tolerance well inside the interval
+    // the reference asked for rather than accepting its neighbour.
+    REQUIRE(std::abs(tuned_hz - expected[note]) / expected[note] < 0.02f);
+  }
+}
+
+TEST_CASE("CLI tune-to-midi answers an unreached note by the policy it was given",
+          "[cli][tune-to-midi]") {
+  const std::string take = unique_temp_path("_take.wav");
+  const std::string reference = unique_temp_path("_reference.mid");
+  create_note_sequence_wav(take, {kTakeToneHz, kTakeToneHz}, kTakeNoteSec, kTakeGapSec,
+                           kTakeSampleRate);
+  // One interval, covering the first note only, so the second note has a
+  // measured pitch and no target -- which is exactly what the policy governs.
+  create_reference_smf(reference, {{0.0, 1.0, 60}}, 4.0);
+
+  // The count and the second note's span, which is where the three answers part.
+  const auto tune = [&](const std::string& policy) {
+    const std::string tuned = unique_temp_path("_tuned_" + policy + ".wav");
+    auto [code, output] =
+        exec_command(CLI + " tune-to-midi " + take + " --reference-smf " + reference + " -o " +
+                     tuned + " --unmatched-policy " + policy + " --json");
+    INFO(output);
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload["note_count"].as_int() == 2);
+    const Audio after = Audio::from_file(tuned);
+    const std::vector<float> result(after.data(), after.data() + after.size());
+    return std::make_pair(static_cast<int>(payload["assigned_count"].as_int()),
+                          note_span(result, 1, kTakeNoteSec, kTakeGapSec, kTakeSampleRate));
+  };
+
+  const auto [leave_assigned, leave] = tune("leave");
+  const auto [mute_assigned, mute] = tune("mute");
+  const auto [nearest_assigned, nearest] = tune("nearest");
+
+  const float leave_hz = dominant_frequency(leave, kTakeSampleRate, kProbeFminHz, kProbeFmaxHz);
+  const float nearest_hz = dominant_frequency(nearest, kTakeSampleRate, kProbeFminHz, kProbeFmaxHz);
+  const float mute_peak =
+      mute.empty() ? 0.0f : *std::max_element(mute.begin(), mute.end(), [](float a, float b) {
+        return std::abs(a) < std::abs(b);
+      });
+  CAPTURE(leave_assigned, mute_assigned, nearest_assigned, leave_hz, nearest_hz, mute_peak);
+
+  // Left alone the note renders as recorded, and only the one overlapping note
+  // counts as assigned.
+  REQUIRE(leave_assigned == 1);
+  REQUIRE(std::abs(leave_hz - kTakeToneHz) < 3.0f);
+  // Muted it is silent, which no pitch can be read off at all. Muting is not
+  // assigning, so the count is the one `leave` reports.
+  REQUIRE(mute_assigned == 1);
+  REQUIRE(std::abs(mute_peak) < 0.01f);
+  // `nearest` does assign, so its count covers both notes, and the unreached one
+  // lands on the only target there is -- the pitch the first note was given.
+  REQUIRE(nearest_assigned == 2);
+  REQUIRE(std::abs(nearest_hz - midi_to_hz(60.0f)) / midi_to_hz(60.0f) < 0.02f);
+}
+
+TEST_CASE("CLI tune-to-midi reports a reference that reaches nothing as zero assignments",
+          "[cli][tune-to-midi]") {
+  const std::string take = unique_temp_path("_take.wav");
+  const std::string reference = unique_temp_path("_reference.mid");
+  const std::string tuned = unique_temp_path("_tuned.wav");
+  create_note_sequence_wav(take, {kTakeToneHz, kTakeToneHz}, kTakeNoteSec, kTakeGapSec,
+                           kTakeSampleRate);
+  // Ten seconds past the end of a one-second take: every note has a pitch and no
+  // target, so nothing is assigned. That is an answer about the reference, not a
+  // failure, and the exit code has to say so.
+  create_reference_smf(reference, {{20.0, 21.0, 60}}, 22.0);
+
+  auto [code, output] = exec_command(CLI + " tune-to-midi " + take + " --reference-smf " +
+                                     reference + " -o " + tuned + " --json");
+  INFO(output);
+  REQUIRE(code == 0);
+
+  const auto payload = sonare::util::json::parse_strict(output);
+  REQUIRE(payload["assigned_count"].as_int() == 0);
+  REQUIRE(payload["note_count"].as_int() > 0);
+
+  // With the default policy nothing moves, so the written take is the one that
+  // came in -- the property the whole editing model rests on.
+  const Audio before = Audio::from_file(take);
+  const Audio after = Audio::from_file(tuned);
+  REQUIRE(after.size() == before.size());
+  float largest = 0.0f;
+  for (size_t i = 0; i < before.size(); ++i) {
+    largest = std::max(largest, std::abs(after.data()[i] - before.data()[i]));
+  }
+  CAPTURE(largest);
+  // Exactly zero, not a tolerance: a note set whose edits are all identity is
+  // reproduced bit for bit, and the 16-bit round trip on both sides is the same
+  // quantization applied to the same samples.
+  REQUIRE(largest == 0.0f);
+}
+
+TEST_CASE("CLI tune-to-midi refuses each rejected argument in its own exit class",
+          "[cli][tune-to-midi]") {
+  const std::string take = unique_temp_path("_take.wav");
+  const std::string reference = unique_temp_path("_reference.mid");
+  const std::string tuned = unique_temp_path("_tuned.wav");
+  create_note_sequence_wav(take, {kTakeToneHz}, kTakeNoteSec, kTakeGapSec, kTakeSampleRate);
+  create_reference_smf(reference, {{0.0, 1.0, 60}}, 4.0);
+
+  const std::string base =
+      CLI + " tune-to-midi " + take + " --reference-smf " + reference + " -o " + tuned;
+
+  SECTION("a missing output is an invalid parameter, not a usage error") {
+    // The render would be computed and thrown away, which is the offline-effect
+    // contract's one hard error rather than a mis-spelled command line.
+    auto [code, output] =
+        exec_command(CLI + " tune-to-midi " + take + " --reference-smf " + reference);
+    INFO(output);
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--output"));
+  }
+
+  SECTION("a missing reference is a usage error") {
+    // Required in the parser on both front-ends, so it keeps the usage class
+    // every other parser-required option carries.
+    auto [code, output] = exec_command(CLI + " tune-to-midi " + take + " -o " + tuned);
+    INFO(output);
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("--reference-smf"));
+  }
+
+  SECTION("a negative track index is an invalid parameter") {
+    auto [code, output] = exec_command(base + " --track -1");
+    INFO(output);
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--track"));
+  }
+
+  SECTION("an overlap ratio outside [0, 1] is an invalid parameter") {
+    for (const char* value : {"-0.1", "1.5"}) {
+      CAPTURE(value);
+      auto [code, output] = exec_command(base + " --min-overlap-ratio " + value);
+      INFO(output);
+      REQUIRE(code == 3);
+      REQUIRE_THAT(output, ContainsSubstring("--min-overlap-ratio"));
+    }
+    // Both bounds are inclusive, so neither end is refused.
+    for (const char* value : {"0", "1"}) {
+      CAPTURE(value);
+      auto [code, output] = exec_command(base + " --min-overlap-ratio " + value + " --json");
+      INFO(output);
+      REQUIRE(code == 0);
+    }
+  }
+
+  SECTION("a negative correction bound is an invalid parameter") {
+    auto [code, output] = exec_command(base + " --max-correction-semitones -1");
+    INFO(output);
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--max-correction-semitones"));
+    // Zero is legal and means no note moves, so it cannot double as a sentinel.
+    auto [zero_code, zero_output] = exec_command(base + " --max-correction-semitones 0 --json");
+    INFO(zero_output);
+    REQUIRE(zero_code == 0);
+  }
+
+  SECTION("an unknown policy name is an invalid parameter") {
+    auto [code, output] = exec_command(base + " --unmatched-policy bogus");
+    INFO(output);
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--unmatched-policy"));
+  }
+}
+
+TEST_CASE("CLI tune-to-midi bounds reach the assignment rule", "[cli][tune-to-midi]") {
+  // A domain check only proves the value was parsed. These two run the same
+  // command twice, differing in one argument, and require the answers to differ:
+  // a bound dropped on the floor produces the same answer both times.
+  const std::string take = unique_temp_path("_take.wav");
+  const std::string reference = unique_temp_path("_reference.mid");
+  create_note_sequence_wav(take, {kTakeToneHz, kTakeToneHz}, kTakeNoteSec, kTakeGapSec,
+                           kTakeSampleRate);
+  create_reference_smf(reference, {{0.0, 1.0, 60}, {1.0, 2.0, 67}}, 4.0);
+
+  const auto run = [&](const std::string& extra) {
+    const std::string tuned = unique_temp_path("_tuned.wav");
+    auto [code, output] = exec_command(CLI + " tune-to-midi " + take + " --reference-smf " +
+                                       reference + " -o " + tuned + " --json " + extra);
+    INFO(output);
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    const Audio after = Audio::from_file(tuned);
+    const std::vector<float> result(after.data(), after.data() + after.size());
+    return std::make_pair(
+        static_cast<int>(payload["assigned_count"].as_int()),
+        dominant_frequency(note_span(result, 0, kTakeNoteSec, kTakeGapSec, kTakeSampleRate),
+                           kTakeSampleRate, kProbeFminHz, kProbeFmaxHz));
+  };
+
+  const auto [default_assigned, default_hz] = run("");
+  // The correction saturates at the bound, so 0 leaves every assigned note where
+  // it was recorded while the count is unchanged.
+  const auto [clamped_assigned, clamped_hz] = run("--max-correction-semitones 0");
+  CAPTURE(default_assigned, default_hz, clamped_assigned, clamped_hz);
+  REQUIRE(clamped_assigned == default_assigned);
+  REQUIRE(std::abs(default_hz - midi_to_hz(60.0f)) / midi_to_hz(60.0f) < 0.02f);
+  REQUIRE(std::abs(clamped_hz - kTakeToneHz) < 3.0f);
+
+  // Nothing overlaps a whole note exactly, so demanding the whole of it assigns
+  // fewer notes than the default half does.
+  const auto [strict_assigned, strict_hz] = run("--min-overlap-ratio 1");
+  CAPTURE(strict_assigned, strict_hz);
+  REQUIRE(strict_assigned < default_assigned);
+}
+#endif  // SONARE_WITH_ARRANGEMENT && SONARE_WITH_PITCH_EDITOR

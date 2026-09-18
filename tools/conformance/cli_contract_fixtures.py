@@ -37,6 +37,54 @@ def _write_wav(path: Path, fixture: dict[str, Any]) -> None:
         output.writeframes(bytes(samples))
 
 
+def _variable_length_quantity(value: int) -> bytes:
+    """Encode a delta time the way a MIDI track spells it, high group first."""
+    encoded = bytearray([value & 0x7F])
+    value >>= 7
+    while value:
+        encoded.insert(0, 0x80 | (value & 0x7F))
+        value >>= 7
+    return bytes(encoded)
+
+
+def _write_smf(path: Path, fixture: dict[str, Any]) -> None:
+    """Write a melody as a single-track SMF from the manifest's note list.
+
+    Built here rather than exported by the library, because this module is stdlib
+    only and runs before either front-end does: producing the reference through
+    one CLI would make the other's fixture depend on a command's own output. The
+    note list also stays readable in the manifest, which a byte blob would not.
+    """
+    tempo_microseconds = round(60_000_000 / float(fixture["tempo_bpm"]))
+    events: list[tuple[int, int, bytes]] = []
+    for note in fixture["notes"]:
+        pitch = int(note["midi"])
+        start = int(note["start_ticks"])
+        # A note-off is ordered ahead of a note-on at the same tick, so a
+        # repeated pitch does not end the note that follows it.
+        events.append((start, 1, bytes((0x90, pitch, int(note["velocity"])))))
+        events.append((start + int(note["length_ticks"]), 0, bytes((0x80, pitch, 0))))
+    events.sort(key=lambda event: (event[0], event[1]))
+    track = bytearray(
+        _variable_length_quantity(0)
+        + b"\xff\x51\x03"
+        + tempo_microseconds.to_bytes(3, "big")
+    )
+    previous_tick = 0
+    for tick, _order, message in events:
+        track.extend(_variable_length_quantity(tick - previous_tick) + message)
+        previous_tick = tick
+    track.extend(_variable_length_quantity(0) + b"\xff\x2f\x00")
+    header = (
+        b"MThd"
+        + (6).to_bytes(4, "big")
+        + (0).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + int(fixture["ppq"]).to_bytes(2, "big")
+    )
+    path.write_bytes(header + b"MTrk" + len(track).to_bytes(4, "big") + bytes(track))
+
+
 def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]:
     fixtures = manifest["fixtures"]
     paths: dict[str, str] = {}
@@ -53,9 +101,14 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
             json.dumps(value, separators=(",", ":")), encoding="utf-8"
         )
         paths[f"preset_{name}"] = str(preset_path)
+    for name, value in fixtures["melodies"].items():
+        melody_path = directory / f"melody_{name}.mid"
+        _write_smf(melody_path, value)
+        paths[f"melody_{name}"] = str(melody_path)
     paths["project_warning_output"] = str(directory / "canonical_project.json")
     paths["mastering_report"] = str(directory / "mastering-report.json")
     paths["preset_missing"] = str(directory / "preset-does-not-exist.json")
+    paths["melody_missing"] = str(directory / "melody-does-not-exist.mid")
     paths["output"] = str(directory / "rejected-output.wav")
     # The WAV writers are the only place the two surfaces hold separate code for
     # the same bytes, and a sample with no PCM image is the one input where they

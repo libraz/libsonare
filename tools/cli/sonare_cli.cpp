@@ -52,6 +52,10 @@ const std::vector<CommandInfo>& get_commands() {
        "Apply note edits to a polyphonic analysis (--edit N.FIELD=VALUE, repeatable; -o out.wav; "
        "amplitude envelopes are outside this CLI)",
        cmd_polyphonic_render, true},
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+      {"tune-to-midi", "Tune a take to the reference melody a MIDI file carries", cmd_tune_to_midi,
+       true},
+#endif
       {"voice-change", "Apply pitch and formant voice change", cmd_voice_change, true},
       {"voice-presets", "List realtime voice changer presets", cmd_voice_presets, false},
       {"voice-preset", "Print a realtime voice changer preset JSON", cmd_voice_preset, false},

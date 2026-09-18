@@ -2,6 +2,12 @@
 
 #include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli.h"
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+#include "editing/note_model/note_extractor.h"
+#include "editing/note_model/note_renderer.h"
+#include "editing/note_model/note_target.h"
+#include "midi/note_targets.h"
+#endif
 
 // Offline-effect output contract: a command that renders an audio buffer
 // requires -o/--output. Running it without a destination has no useful result
@@ -489,6 +495,91 @@ int cmd_polyphonic_render(const CliArgs&, const Audio&) {
 }
 
 #endif  // SONARE_WITH_PITCH_EDITOR
+
+// `tune-to-midi in.wav --reference-smf ref.mid -o out.wav` -- the take follows a
+// written melody instead of a single stated interval. Unlike the family above,
+// this one is absent from the command table when either gate is off rather than
+// answering with a NotImplemented diagnostic: the SMF reader lives in the
+// arrangement library, which an arrangement-off build does not link at all, so it
+// takes the registration shape the other arrangement commands take.
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+
+namespace {
+
+// The three policy names, in the order the help, the published domain and the
+// refusal all name them. The registry's choices domain refuses every other
+// spelling before dispatch, so the throw below is unreachable from a command
+// line and is here to keep the mapping total.
+editing::note_model::UnmatchedTargetPolicy parse_unmatched_policy(const std::string& name) {
+  using editing::note_model::UnmatchedTargetPolicy;
+  if (name == "leave") return UnmatchedTargetPolicy::Leave;
+  if (name == "mute") return UnmatchedTargetPolicy::Mute;
+  if (name == "nearest") return UnmatchedTargetPolicy::Nearest;
+  throw std::invalid_argument("invalid value for --unmatched-policy: " + name);
+}
+
+}  // namespace
+
+int cmd_tune_to_midi(const CliArgs& args, const Audio& audio) {
+  const std::string reference_path = args.get_string("reference-smf");
+  std::vector<uint8_t> smf;
+  if (!read_binary_file(reference_path, &smf)) {
+    throw sonare::SonareException(sonare::ErrorCode::FileNotFound,
+                                  "cannot open reference SMF: " + reference_path);
+  }
+
+  // Only what the caller spelled is written: 0 is a legal value for both bounds,
+  // so neither can double as the sentinel that asks for the core default.
+  editing::note_model::NoteTargetAssignConfig config;
+  config.unmatched_policy = parse_unmatched_policy(args.get_string("unmatched-policy", "leave"));
+  if (args.has("min-overlap-ratio")) {
+    config.min_overlap_ratio = args.get_float("min-overlap-ratio", config.min_overlap_ratio);
+  }
+  if (args.has("max-correction-semitones")) {
+    config.max_correction_semitones =
+        args.get_float("max-correction-semitones", config.max_correction_semitones);
+  }
+
+  // The reference is resolved before the analysis, which is what the command
+  // costs: a malformed file and a --track naming no MIDI-bearing track are both
+  // answerable from the arguments alone, so neither is worth a pitch track first.
+  // The other front-end reads it in the same place, so the two cannot report a
+  // different failure for one command line.
+  const std::vector<editing::note_model::NoteTarget> targets =
+      midi::note_targets_from_smf(smf.data(), smf.size(), args.get_int("track", 0));
+
+  // The command advertises no analysis geometry, so the contour is pYIN at the
+  // library's own defaults -- the track the Python CLI measures for it.
+  const editing::pitch_editor::F0Track track =
+      editing::pitch_editor::PyinF0Provider().detect(audio);
+  std::vector<editing::note_model::NoteObject> notes =
+      editing::note_model::extract_notes(audio, track);
+  const size_t assigned =
+      editing::note_model::assign_note_targets(notes, audio.sample_rate(), targets, config);
+
+  const Audio result = editing::note_model::render_notes(audio, notes);
+  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        // Zero assigned is a legitimate answer -- a reference that does not line
+        // up with the take -- so it is reported rather than raised.
+        .kv("assigned_count", assigned)
+        .kv("note_count", notes.size())
+        .kv("length", result.size())
+        .kv("sample_rate", result.sample_rate())
+        .kv("duration", result.duration())
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cerr << color::green << "Saved to " << args.output_file << color::reset << "\n";
+  }
+  return 0;
+}
+
+#endif  // SONARE_WITH_ARRANGEMENT && SONARE_WITH_PITCH_EDITOR
 
 // The four voice-changer commands below stay registered in the CLI's command
 // table regardless of BUILD_VOICE_CHANGER (see get_commands() in

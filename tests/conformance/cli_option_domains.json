@@ -538,6 +538,50 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "tune-to-midi",
+      "option": "track",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "tune-to-midi",
+      "option": "unmatched-policy",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "leave",
+        "mute",
+        "nearest"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "tune-to-midi",
+      "option": "min-overlap-ratio",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": 1.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "tune-to-midi",
+      "option": "max-correction-semitones",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "decompose-stems",
       "option": "init",
       "rejectExit": "invalid_parameter",
@@ -824,6 +868,10 @@
     },
     {
       "command": "transcribe",
+      "option": "output"
+    },
+    {
+      "command": "tune-to-midi",
       "option": "output"
     },
     {

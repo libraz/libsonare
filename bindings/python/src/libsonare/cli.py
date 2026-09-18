@@ -139,7 +139,13 @@ from ._cli_common import (
 )
 from ._cli_effects import *  # noqa: F403
 from ._cli_effects import (
+    _DEFAULT_UNMATCHED_POLICY as _DEFAULT_UNMATCHED_POLICY,
+)
+from ._cli_effects import (
     _POLYPHONIC_EDIT_FIELDS as _POLYPHONIC_EDIT_FIELDS,
+)
+from ._cli_effects import (
+    _UNMATCHED_POLICY_NAMES as _UNMATCHED_POLICY_NAMES,
 )
 from ._cli_inventory import (
     _cli_domain as _cli_domain,
@@ -458,6 +464,7 @@ _OUTPUT_CAPABLE_COMMANDS = frozenset(
         "pitch-correct-timevarying",
         "note-move",
         "note-stretch",
+        "tune-to-midi",
         "polyphonic-render",
         "pitch-shift",
         "time-stretch",
@@ -931,6 +938,73 @@ def _build_parser() -> _ContractArgumentParser:
         type=_finite_float,
         default=1.0,
         help="Stretch factor for the region (>1 lengthens)",
+    )
+    tune_to_midi_p = sub.add_parser(
+        "tune-to-midi",
+        parents=[common],
+        help="Tune a take to the reference melody a MIDI file carries",
+    )
+    tune_to_midi_p.add_argument(
+        "--reference-smf",
+        required=True,
+        metavar="PATH",
+        help="Standard MIDI File holding the reference melody",
+    )
+    # Indexes the MIDI-bearing tracks, not the SMF's own numbering, so a file
+    # whose first track is a conductor track has its melody at 0.
+    _cli_domain(
+        tune_to_midi_p.add_argument(
+            "--track",
+            type=int,
+            default=0,
+            metavar="N",
+            help="MIDI-bearing track the melody is read from (default: 0)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
+    # Declared rather than given to argparse as choices=: an unknown name is
+    # refused by the handler, which carries the invalid-parameter class the
+    # command's other value domains carry rather than argparse's usage class.
+    _cli_domain(
+        tune_to_midi_p.add_argument(
+            "--unmatched-policy",
+            default=_DEFAULT_UNMATCHED_POLICY,
+            metavar="{" + ",".join(_UNMATCHED_POLICY_NAMES) + "}",
+            help=(
+                "What to do with a note that has a pitch and no target: "
+                + ", ".join(_UNMATCHED_POLICY_NAMES)
+                + f" (default: {_DEFAULT_UNMATCHED_POLICY})"
+            ),
+        ),
+        choices=_UNMATCHED_POLICY_NAMES,
+        reject_exit="invalid_parameter",
+    )
+    # Neither of the next two carries a CLI default: 0 is a legal value for both,
+    # so an absent flag has to reach the handler as None and leave the library's
+    # own default in place.
+    _cli_domain(
+        tune_to_midi_p.add_argument(
+            "--min-overlap-ratio",
+            type=_finite_float,
+            default=None,
+            metavar="R",
+            help="Fraction of a note that must overlap a target (library default: 0.5)",
+        ),
+        minimum=0.0,
+        maximum=1.0,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        tune_to_midi_p.add_argument(
+            "--max-correction-semitones",
+            type=_finite_float,
+            default=None,
+            metavar="S",
+            help="Where an assigned pitch shift saturates (library default: 12)",
+        ),
+        minimum=0.0,
+        reject_exit="invalid_parameter",
     )
     sub.add_parser(
         "polyphonic-notes",
@@ -1840,6 +1914,7 @@ def _build_parser() -> _ContractArgumentParser:
         "pitch-correct-timevarying",
         "note-move",
         "note-stretch",
+        "tune-to-midi",
         "polyphonic-notes",
         "polyphonic-render",
         "pitch-shift",
@@ -1940,6 +2015,7 @@ def _dispatch() -> None:
         "note-move": cmd_note_move,
         "scale-quantize": cmd_scale_quantize,
         "note-stretch": cmd_note_stretch,
+        "tune-to-midi": cmd_tune_to_midi,
         "polyphonic-notes": cmd_polyphonic_notes,
         "polyphonic-render": cmd_polyphonic_render,
         "pitch-shift": cmd_pitch_shift,

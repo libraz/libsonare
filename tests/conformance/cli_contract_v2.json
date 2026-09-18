@@ -3924,6 +3924,105 @@
           "domain": null
         }
       ],
+      "tune-to-midi": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "max-correction-semitones",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "min-overlap-ratio",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-smf",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "track",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "unmatched-policy",
+          "type": "string",
+          "default": "leave",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "leave",
+              "mute",
+              "nearest"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        }
+      ],
       "version": [
         {
           "name": "json",
@@ -4219,6 +4318,15 @@
       "status": "active",
       "option_status": "active",
       "requires": [
+        "pitchEditor"
+      ]
+    },
+    "tune-to-midi": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active",
+      "requires": [
+        "arrangement",
         "pitchEditor"
       ]
     },
@@ -13727,6 +13835,448 @@
         }
       ],
       "artifacts": {}
+    },
+    {
+      "path": "tune-to-midi",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "max-correction-semitones",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "min-overlap-ratio",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-smf",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "track",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "unmatched-policy",
+          "type": "string",
+          "default": "leave",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "leave",
+              "mute",
+              "nearest"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "assigned_count": "integer",
+            "note_count": "integer",
+            "length": "integer",
+            "sample_rate": "integer",
+            "duration": "number"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "nearest_policy",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--unmatched-policy",
+            "nearest",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "mute_policy",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--unmatched-policy",
+            "mute",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "unmatched_left",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_away}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "unmatched_muted",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_away}",
+            "-o",
+            "{output}",
+            "--unmatched-policy",
+            "mute",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "unmatched_nearest",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_away}",
+            "-o",
+            "{output}",
+            "--unmatched-policy",
+            "nearest",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "zero_overlap_ratio",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--min-overlap-ratio",
+            "0",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "zero_max_correction",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--max-correction-semitones",
+            "0",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "unknown_policy",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--unmatched-policy",
+            "hum",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "negative_track",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--track",
+            "-1",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "track_past_last",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--track",
+            "5",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "overlap_ratio_above_one",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--min-overlap-ratio",
+            "1.5",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "overlap_ratio_below_zero",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--min-overlap-ratio",
+            "-0.1",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "negative_max_correction",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "-o",
+            "{output}",
+            "--max-correction-semitones",
+            "-1",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "missing_output",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_reference}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "missing_reference",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "--reference-smf",
+            "{melody_missing}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 4,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "missing_reference_flag",
+          "argv": [
+            "tune-to-midi",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
     }
   ],
   "parser_cases": [
@@ -14059,6 +14609,32 @@
       "frames": 13230,
       "frequency_hz": 220.0,
       "amplitude": 0.5
+    },
+    "melodies": {
+      "reference": {
+        "ppq": 480,
+        "tempo_bpm": 120.0,
+        "notes": [
+          {
+            "midi": 60,
+            "velocity": 96,
+            "start_ticks": 0,
+            "length_ticks": 960
+          }
+        ]
+      },
+      "away": {
+        "ppq": 480,
+        "tempo_bpm": 120.0,
+        "notes": [
+          {
+            "midi": 60,
+            "velocity": 96,
+            "start_ticks": 960,
+            "length_ticks": 960
+          }
+        ]
+      }
     },
     "projects": {
       "clean": "{\"version\":1,\"sample_rate\":48000,\"tracks\":[],\"clips\":[]}",

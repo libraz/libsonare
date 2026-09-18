@@ -200,6 +200,42 @@ def _is_number(value: Any) -> bool:
     )
 
 
+def _validate_melody(melody: Any, label: str, errors: list[str]) -> None:
+    """Check one reference-melody fixture: the tick grid, the tempo, the notes.
+
+    The bounds are the MIDI encoding's own, so a value the writer would have to
+    truncate into a byte is refused here instead of reaching a file as some other
+    note.
+    """
+    if not _exact(melody, {"ppq", "tempo_bpm", "notes"}, label, errors):
+        return
+    if not _is_int(melody["ppq"]) or not 1 <= melody["ppq"] <= 0x7FFF:
+        errors.append(f"{label}.ppq: expected ticks per quarter note in 1..32767")
+    if not _is_number(melody["tempo_bpm"]) or melody["tempo_bpm"] <= 0:
+        errors.append(f"{label}.tempo_bpm: expected a positive finite number")
+    notes = melody["notes"]
+    if not isinstance(notes, list) or not notes:
+        errors.append(f"{label}.notes: expected a non-empty array")
+        return
+    for index, note in enumerate(notes):
+        note_label = f"{label}.notes[{index}]"
+        if not _exact(
+            note, {"midi", "velocity", "start_ticks", "length_ticks"}, note_label, errors
+        ):
+            continue
+        for key, low, high in (
+            ("midi", 0, 127),
+            # Velocity 0 is a note-off in the encoding, so it cannot open a note.
+            ("velocity", 1, 127),
+            ("start_ticks", 0, None),
+            ("length_ticks", 1, None),
+        ):
+            value = note[key]
+            if not _is_int(value) or value < low or (high is not None and value > high):
+                bound = f"{low}..{high}" if high is not None else f"at least {low}"
+                errors.append(f"{note_label}.{key}: expected an integer {bound}")
+
+
 def _validate_command_requires(
     record: Any, label: str, errors: list[str]
 ) -> None:
@@ -1440,7 +1476,12 @@ def validate_manifest(manifest: Any) -> list[str]:
                 )
 
     fixtures = manifest["fixtures"]
-    if _exact(fixtures, {"audio", "projects", "presets"}, "manifest.fixtures", errors):
+    if _exact(
+        fixtures,
+        {"audio", "melodies", "projects", "presets"},
+        "manifest.fixtures",
+        errors,
+    ):
         audio = fixtures["audio"]
         if _exact(
             audio,
@@ -1461,6 +1502,12 @@ def validate_manifest(manifest: Any) -> list[str]:
                     errors.append(
                         f"manifest.fixtures.audio.{key}: expected a finite number"
                     )
+        melodies = fixtures["melodies"]
+        if not isinstance(melodies, dict) or not melodies:
+            errors.append("manifest.fixtures.melodies: expected a non-empty object")
+        else:
+            for name, melody in melodies.items():
+                _validate_melody(melody, f"manifest.fixtures.melodies.{name}", errors)
         projects = fixtures["projects"]
         if _exact(
             projects,

@@ -575,6 +575,12 @@ def _atomic_write_bytes(path: str, data: bytes) -> None:
         raise
 
 
+# The largest project or MIDI document this CLI reads. It lives beside the
+# bounded reader rather than in one command module, because both the project
+# commands and the reference-melody read go through it.
+_MAX_PROJECT_OR_MIDI_BYTES = 64 * 1024 * 1024
+
+
 def _read_bounded(path: str, max_bytes: int) -> bytes:
     """Read at most ``max_bytes`` and reject oversized files before facade copies."""
     if max_bytes < 0:

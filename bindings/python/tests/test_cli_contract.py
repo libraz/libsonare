@@ -74,6 +74,7 @@ TOP_LEVEL_ROUTES = (
     "note-move",
     "scale-quantize",
     "note-stretch",
+    "tune-to-midi",
     "polyphonic-notes",
     "polyphonic-render",
     "pitch-shift",

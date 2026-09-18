@@ -11,6 +11,7 @@ import urllib.request
 from typing import Any, cast
 
 from ._cli_common import (
+    _MAX_PROJECT_OR_MIDI_BYTES,
     EXIT_INVALID_STATE,
     _atomic_write_bytes,
     _legacy_exit_codes,
@@ -23,8 +24,6 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._runtime import ErrorCode, SonareError
-
-_MAX_PROJECT_OR_MIDI_BYTES = 64 * 1024 * 1024
 
 # A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
 # audio source carries a `uri`, so the kind decides which entries are addressable

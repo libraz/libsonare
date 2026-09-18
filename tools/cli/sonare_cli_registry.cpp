@@ -1008,6 +1008,28 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  number_value("min-note-ms"), number_value("segmentation-threshold-cents"),
                  number_value("velocity-floor-db"), int_value("fixed-velocity"),
                  int_value("group", 0), int_value("channel", 0)});
+    // The reference melody is read by the arrangement library and assigned by the
+    // pitch editor, so the leaf exists only where both do. `--reference-smf` is
+    // required in the parser on both front-ends and so keeps the usage class,
+    // while every value domain below is one the Python handler enforces after
+    // parsing and therefore carries the invalid-parameter class.
+    //
+    // The two bounds are the null-default overload rather than a restated 0.5 and
+    // 12: both values are legal inputs, so an absent flag cannot be spelled as a
+    // sentinel and the handler leaves NoteTargetAssignConfig's own field alone.
+#ifdef SONARE_WITH_PITCH_EDITOR
+    add_command(
+        commands, "tune-to-midi", true,
+        {required_path("reference-smf"),
+         with_domain(int_value("track", 0), at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(string_value("unmatched-policy", "leave"),
+                     choices_of({"leave", "mute", "nearest"}, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("min-overlap-ratio"),
+                     between(0.0, 1.0, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("max-correction-semitones"),
+                     at_least(0.0, CliOptionDomainStage::Parameter)),
+         required_output()});
+#endif
     add_project_command("project.export-smf", {required_path("in"), required_output()});
     add_project_command("project.import-smf", {required_path("smf"), required_output()});
     add_project_command("project.export-midi2", {required_path("in"), required_output()});

@@ -118,6 +118,15 @@ struct CommandInfo {
 std::vector<float> parse_float_list(const std::string& text);
 std::vector<int> parse_int_list(const std::string& text);
 std::string read_plain_text_file(const std::string& path);
+#ifdef SONARE_WITH_ARRANGEMENT
+/// Reads a file into a byte buffer, binary-safe, refusing an input past the
+/// shared project / SMF / MIDI 2.0 size cap. Declared here rather than kept
+/// file-local because every command that loads one of those must enforce the
+/// same cap; it is defined beside that cap in sonare_cli_project.cpp.
+/// @return false when the path cannot be opened.
+/// @throws std::invalid_argument — the input exceeds the cap.
+bool read_binary_file(const std::string& path, std::vector<uint8_t>* out);
+#endif
 std::vector<std::string> split_string(const std::string& text, char delimiter);
 void set_json_path(sonare::util::json::Value& root, const std::string& path,
                    sonare::util::json::Value value);
@@ -196,6 +205,13 @@ int cmd_note_move(const CliArgs& args, const Audio& audio);
 int cmd_note_stretch(const CliArgs& args, const Audio& audio);
 int cmd_polyphonic_notes(const CliArgs& args, const Audio& audio);
 int cmd_polyphonic_render(const CliArgs& args, const Audio& audio);
+// Both gates, because neither half alone answers the command: the reference
+// melody comes from the arrangement library's SMF reader and the assignment rule
+// from the pitch editor. A build missing either does not register it, which is
+// what the arrangement-gated commands already do.
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
+int cmd_tune_to_midi(const CliArgs& args, const Audio& audio);
+#endif
 int cmd_voice_change(const CliArgs& args, const Audio& audio);
 int cmd_voice_presets(const CliArgs& args, const Audio& audio);
 int cmd_voice_preset(const CliArgs& args, const Audio& audio);

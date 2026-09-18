@@ -10,12 +10,14 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
+    _MAX_PROJECT_OR_MIDI_BYTES,
     EXIT_INVALID_PARAMETER,
     _apply_voice_sets,
     _emit_effect_result,
     _legacy_exit_codes,
     _load_channels_or_downmix,
     _load_voice_preset_pack,
+    _read_bounded,
     _resample,
     _strict_json_dumps,
     _write_wav,
@@ -23,6 +25,7 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
+from ._effects_note_ops import _UNMATCHED_POLICIES
 from ._runtime import _C_INT_MAX, _C_INT_MIN
 
 if TYPE_CHECKING:
@@ -312,6 +315,95 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
             "ratio": args.ratio,
         },
         label="Note stretch",
+    )
+
+
+# The policy names ``assign_note_targets`` accepts, in the order the help, the
+# published domain and the refusal all name them. Read off the facade's own table
+# so a policy added there cannot stay unadvertised here.
+_UNMATCHED_POLICY_NAMES = tuple(sorted(_UNMATCHED_POLICIES))
+
+# What an absent --unmatched-policy means, mirroring the facade's own default.
+# Spelled rather than taken as the first name above: that order is alphabetical,
+# so a policy added ahead of it would move the default with nothing to show.
+_DEFAULT_UNMATCHED_POLICY = "leave"
+
+# The hop the take's pitch track is measured at. tune-to-midi advertises no
+# analysis geometry, so the value the track and the note frame rate must agree on
+# is stated once.
+_TUNE_HOP_LENGTH = 512
+
+
+def cmd_tune_to_midi(args: argparse.Namespace) -> int:
+    """Tune a take to the reference melody a MIDI file carries."""
+    from . import (
+        assign_note_targets,
+        extract_notes,
+        note_targets_from_smf,
+        pitch_pyin,
+        render_notes,
+    )
+
+    # Refused before the pitch track and the extraction, which are what the
+    # command costs: every check below is answerable from argv alone.
+    if not args.output:
+        print("Error: tune-to-midi requires an output file (-o/--output)", file=sys.stderr)
+        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+    if args.track < 0:
+        raise ValueError(f"--track must be a non-negative track index: {args.track}")
+    if args.unmatched_policy not in _UNMATCHED_POLICIES:
+        raise ValueError(
+            f"--unmatched-policy must be one of {', '.join(_UNMATCHED_POLICY_NAMES)}: "
+            f"{args.unmatched_policy}"
+        )
+    if args.min_overlap_ratio is not None and not 0.0 <= args.min_overlap_ratio <= 1.0:
+        raise ValueError(f"--min-overlap-ratio must be between 0 and 1: {args.min_overlap_ratio:g}")
+    if args.max_correction_semitones is not None and args.max_correction_semitones < 0.0:
+        raise ValueError(
+            f"--max-correction-semitones must be non-negative: {args.max_correction_semitones:g}"
+        )
+
+    # Only what the caller spelled is forwarded: 0 is legal for both, so neither
+    # can double as the sentinel that asks for the library default.
+    options: dict[str, float] = {}
+    if args.min_overlap_ratio is not None:
+        options["min_overlap_ratio"] = args.min_overlap_ratio
+    if args.max_correction_semitones is not None:
+        options["max_correction_semitones"] = args.max_correction_semitones
+
+    samples, sr = _load_audio(args.file)
+    # Read ahead of the pitch track, which is what the command costs: the native
+    # front-end receives its audio already decoded and reads the reference next,
+    # so refusing an unreadable one here keeps the two orders identical.
+    targets = note_targets_from_smf(
+        _read_bounded(args.reference_smf, _MAX_PROJECT_OR_MIDI_BYTES),
+        track_index=args.track,
+    )
+    pitch = pitch_pyin(samples, sample_rate=sr, hop_length=_TUNE_HOP_LENGTH)
+    notes = extract_notes(
+        samples,
+        sr,
+        pitch.f0,
+        sr / _TUNE_HOP_LENGTH,
+        voiced=[int(value) for value in pitch.voiced_flag],
+    )
+    tuned, assigned_count = assign_note_targets(
+        notes,
+        sr,
+        targets,
+        unmatched_policy=args.unmatched_policy,
+        **options,
+    )
+    rendered = render_notes(samples, sr, tuned)
+
+    return _emit_effect_result(
+        args,
+        [[float(value) for value in rendered]],
+        sr,
+        # Zero assigned is a legitimate answer -- a reference that does not line up
+        # with the take -- so it is reported rather than raised.
+        extra={"assigned_count": assigned_count, "note_count": len(notes)},
+        label="Tune to MIDI",
     )
 
 

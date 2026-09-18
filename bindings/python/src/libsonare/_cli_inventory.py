@@ -28,6 +28,7 @@ _PATH_OPTION_NAMES = frozenset(
         "preset-pack",
         "platforms-file",
         "reference",
+        "reference-smf",
         "report",
         "scene",
         "smf",

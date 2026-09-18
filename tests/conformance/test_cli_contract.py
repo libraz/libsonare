@@ -916,10 +916,12 @@ class CliContractSelfTest(unittest.TestCase):
 
         The counts are not readable off the ``#ifdef`` blocks alone. Most rows
         follow the registry gates in tools/cli/sonare_cli_registry.cpp and the
-        ``#if`` in tools/cli/sonare_cli_processing.cpp, but ``transcribe`` sits
-        inside the arrangement gate and still answers NOT_SUPPORTED without the
-        pitch editor, so it declares both -- which is why ``pitchEditor`` is
-        eight and not the seven that file lists.
+        ``#if`` in tools/cli/sonare_cli_processing.cpp, whose pitch-editor block
+        holds seven commands, while ``pitchEditor`` is nine: two commands declare
+        both features, in the gate's two different shapes. ``transcribe`` sits
+        inside the arrangement gate and stays listed, answering NOT_SUPPORTED
+        without the pitch editor; ``tune-to-midi`` is gated on both and is absent
+        from the command table without either.
         """
         declared: dict[str, int] = {}
         for record in self.manifest["commands"].values():
@@ -933,8 +935,8 @@ class CliContractSelfTest(unittest.TestCase):
                 "mixingAssistant": 1,
                 "acousticSim": 3,
                 "fx": 3,
-                "arrangement": 12,
-                "pitchEditor": 8,
+                "arrangement": 13,
+                "pitchEditor": 9,
                 "voiceChanger": 4,
             },
         )
@@ -972,7 +974,7 @@ class CliContractSelfTest(unittest.TestCase):
             for path, record in self.manifest["commands"].items()
             if record["classification"] == "shared"
         }
-        self.assertEqual(len(shared), 75)
+        self.assertEqual(len(shared), 76)
         self.assertEqual(set(self.manifest["inventory"]["expected_options"]), shared)
         for path in shared:
             self.assertEqual(
