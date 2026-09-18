@@ -1477,6 +1477,11 @@ if(BUILD_WASM)
     # intersample-peak limiter and the streaming phase vocoder each ran ~2.5%
     # faster, median of three, emsdk 5.0.2).
     -Oz
+    # Keep the conditional TextDecoder path, which -Oz would otherwise drop:
+    # TEXTDECODER defaults to 2 at that shrink level and emits an unguarded
+    # `new TextDecoder`, absent in AudioWorkletGlobalScope, so calling the
+    # module factory inside a worklet throws before embind is reached.
+    -sTEXTDECODER=1
     # Enable classic (JS-based) C++ exception support so a native throw
     # propagates to JS as a catchable CppException carrying the exception
     # pointer, instead of aborting. emscripten disables exception catching by
