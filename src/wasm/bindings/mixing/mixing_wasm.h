@@ -84,6 +84,11 @@ class MixerWasm {
   // Sets the strip's stereo width.
   void setWidth(const val& strip_index_val, const val& width_val);
 
+  // Snaps the strip's input-trim, fader, pan and width smoothers to the values
+  // already set on it, so the next processed block opens at those values
+  // instead of gliding to them. Clears nothing.
+  void settle(const val& strip_index_val);
+
   // Sets the strip's mute state.
   void setMuted(const val& strip_index_val, bool muted);
 

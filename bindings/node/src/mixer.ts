@@ -323,6 +323,29 @@ export class Mixer {
     this.native.setWidth(strip, width);
   }
 
+  /**
+   * Snap a strip's input-trim, fader, pan and width smoothers to the values
+   * already set on it, so the next processed block opens at those values
+   * instead of gliding to them over the smoothing window (~5 ms).
+   *
+   * Call it after configuring a strip and before rendering a finite buffer: a
+   * strip is smoothed for a live fader, and an offline render that does not
+   * settle carries that glide as a level and image sweep across the head of
+   * its output. Unlike a reset it clears nothing — automation, meters and
+   * insert state are untouched.
+   *
+   * @example
+   * ```ts
+   * mixer.setFaderDb('bass', -3);
+   * mixer.setPan('bass', 0.3);
+   * mixer.settle('bass');
+   * const { left, right } = mixer.processStereo([dryLeft], [dryRight]);
+   * ```
+   */
+  settle(strip: StripRef): void {
+    this.native.settle(strip);
+  }
+
   /** Set a strip's mute state. */
   setMuted(strip: StripRef, muted: boolean): void {
     this.native.setMuted(strip, muted);

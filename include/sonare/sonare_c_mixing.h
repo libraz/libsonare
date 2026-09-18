@@ -181,6 +181,18 @@ SonareError sonare_strip_set_channel_delay_samples(SonareStrip* strip, int delay
 // Sets the strip's live VCA gain offset in dB. VCA is a group concept with no
 // per-strip scene field, so this is not persisted to the scene JSON.
 SonareError sonare_strip_set_vca_offset_db(SonareStrip* strip, float offset_db);
+// Snaps the strip's input-trim, fader, pan and width smoothers to the values
+// already set on it, so the next processed block opens at those values instead
+// of gliding to them over the smoothing window (~5 ms by default).
+//
+// Call it after configuring a strip and before rendering a finite buffer: a
+// strip is smoothed for a live fader, and an offline render that does not
+// settle carries that glide as a level and image sweep across the head of its
+// output. Unlike a reset it clears nothing -- automation, meters and insert
+// state are untouched.
+//
+// Returns @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL.
+SonareError sonare_strip_settle(SonareStrip* strip);
 SonareError sonare_strip_add_send(SonareStrip* strip, const char* id,
                                   const char* destination_bus_id, float send_db, int timing,
                                   size_t* index_out);

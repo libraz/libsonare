@@ -53,6 +53,9 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
             lib.sonare_strip_set_channel_delay_samples.argtypes = [ctypes.c_void_p, ctypes.c_int]
             lib.sonare_strip_set_vca_offset_db.restype = ctypes.c_int32
             lib.sonare_strip_set_vca_offset_db.argtypes = [ctypes.c_void_p, ctypes.c_float]
+        if hasattr(lib, "sonare_strip_settle"):
+            lib.sonare_strip_settle.restype = ctypes.c_int32
+            lib.sonare_strip_settle.argtypes = [ctypes.c_void_p]
         lib.sonare_strip_add_send.restype = ctypes.c_int32
         lib.sonare_strip_add_send.argtypes = [
             ctypes.c_void_p,

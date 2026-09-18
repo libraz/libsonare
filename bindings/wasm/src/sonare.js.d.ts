@@ -3417,6 +3417,7 @@ export interface WasmMixer {
   setFaderDb: (stripIndex: number, db: number) => void;
   setPan: (stripIndex: number, pan: number, panMode: number) => void;
   setWidth: (stripIndex: number, width: number) => void;
+  settle: (stripIndex: number) => void;
   setMuted: (stripIndex: number, muted: boolean) => void;
   setSoloed: (stripIndex: number, soloed: boolean) => void;
   setSoloSafe: (stripIndex: number, soloSafe: boolean) => void;

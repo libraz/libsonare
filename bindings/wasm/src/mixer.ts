@@ -391,6 +391,31 @@ export class Mixer {
     this.mixer.setWidth(stripIndex, width);
   }
 
+  /**
+   * Snap the strip's input-trim, fader, pan and width smoothers to the values
+   * already set on it, so the next processed block opens at those values
+   * instead of gliding to them over the smoothing window (~5 ms).
+   *
+   * Call it after configuring a strip and before rendering a finite buffer: a
+   * strip is smoothed for a live fader, and an offline render that does not
+   * settle carries that glide as a level and image sweep across the head of
+   * its output. Unlike a reset it clears nothing — automation, meters and
+   * insert state are untouched.
+   *
+   * @param stripIndex - Strip index in `[0, stripCount())`
+   *
+   * @example
+   * ```typescript
+   * mixer.setFaderDb(0, -3);
+   * mixer.setPan(0, 0.3);
+   * mixer.settle(0);
+   * const { left, right } = mixer.processStereo([dryLeft], [dryRight]);
+   * ```
+   */
+  settle(stripIndex: number): void {
+    this.mixer.settle(stripIndex);
+  }
+
   /** Set the strip's mute state. */
   setMuted(stripIndex: number, muted: boolean): void {
     this.mixer.setMuted(stripIndex, muted);

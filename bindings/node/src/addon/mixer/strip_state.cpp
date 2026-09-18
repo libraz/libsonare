@@ -303,4 +303,23 @@ Napi::Value MixerWrap::SetSurroundPan(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value MixerWrap::Settle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Expected (strip)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareStrip* strip = ResolveStrip(info, info[0]);
+  if (strip == nullptr) {
+    return env.Undefined();
+  }
+  SonareError err = sonare_strip_settle(strip);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "failed to settle strip smoothers: ");
+  }
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
 }  // namespace sonare_node

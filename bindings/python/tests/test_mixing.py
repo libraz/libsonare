@@ -357,6 +357,98 @@ def test_asymmetric_strip_controls_round_trip_in_scene_json(mixer) -> None:
     assert vocal["dualPanRight"] == pytest.approx(-0.25)
 
 
+_SETTLE_SCENE = json.dumps(
+    {
+        "version": 1,
+        "buses": [{"id": "master", "role": "master", "inserts": []}],
+        "connections": [{"source": "s", "destination": "master"}],
+        "strips": [
+            {
+                "id": "s",
+                "inputTrimDb": 0,
+                "faderDb": -3,
+                "pan": 0.3,
+                "panMode": 0,
+                "panLaw": 0,
+                "width": 1.2,
+                "channelDelaySamples": 0,
+                "dualPanLeft": -1,
+                "dualPanRight": 1,
+                "inserts": [],
+                "muted": False,
+                "polarityInvertLeft": False,
+                "polarityInvertRight": False,
+                "sends": [],
+                "soloSafe": False,
+                "soloed": False,
+                "vcaOffsetDb": 0,
+            }
+        ],
+        "vcaGroups": [],
+    }
+)
+
+
+def _render_settle_scene(*, settle: bool, length: int = 4096) -> tuple[list[float], list[float]]:
+    """Render one block of steady asymmetric DC through the one-strip settle scene.
+
+    The input is constant and the two sides differ, so mid and side are both
+    steady and the converged output is a single well-defined number per side --
+    which pan (0.3) and width (1.2) both move away from their smoother's
+    starting point.
+    """
+    from libsonare import Mixer
+
+    mixer = Mixer.from_scene_json(_SETTLE_SCENE, sample_rate=48000, block_size=length)
+    try:
+        if settle:
+            mixer.settle("s")
+        result = mixer.process_stereo([[1.0] * length], [[0.5] * length])
+        return list(result.left), list(result.right)
+    finally:
+        mixer.close()
+
+
+def test_settle_opens_a_render_at_the_converged_gain() -> None:
+    """settle removes the head ramp an offline render otherwise carries.
+
+    Both directions are asserted, because either one alone is satisfied by a
+    settle that does nothing. The unsettled render must show the glide -- if it
+    did not, the scene would not be reaching the smoothers at all and the
+    settled assertions would pass over a strip that never ramps. The converged
+    value is taken from the unsettled render's own tail, so the settled head is
+    compared against an independently produced number rather than itself.
+    """
+    ramp_l, ramp_r = _render_settle_scene(settle=False)
+    settled_l, settled_r = _render_settle_scene(settle=True)
+    converged_l, converged_r = ramp_l[-1], ramp_r[-1]
+
+    # Without settle the block opens roughly 7 dB hot on the left and 3 dB on
+    # the right (measured 2.257x / 1.443x), and the image swings with it.
+    assert ramp_l[0] / converged_l > 2.0
+    assert ramp_r[0] / converged_r > 1.4
+
+    # With settle the first sample is already at that converged value, and the
+    # block holds it -- no glide anywhere in it.
+    assert settled_l[0] == pytest.approx(converged_l, rel=1e-3)
+    assert settled_r[0] == pytest.approx(converged_r, rel=1e-3)
+    assert max(abs(value - settled_l[0]) for value in settled_l) < 1e-6
+    assert max(abs(value - settled_r[0]) for value in settled_r) < 1e-6
+
+
+def test_settle_leaves_the_serialized_scene_unchanged() -> None:
+    """settle moves smoothers to values the scene already records, so it clears nothing."""
+    from libsonare import Mixer
+
+    mixer = Mixer.from_scene_json(_SETTLE_SCENE, sample_rate=48000, block_size=256)
+    try:
+        before = json.loads(mixer.to_scene_json())
+        mixer.settle("s")
+        assert json.loads(mixer.to_scene_json()) == before
+    finally:
+        mixer.close()
+
+
 def test_set_surround_pan_reflected_in_scene(mixer) -> None:
     """set_surround_pan stores azimuth/divergence/lfe on the strip's scene object."""
     mixer.set_surround_pan("vocal", azimuth=-45.0, divergence=0.25, lfe=0.5)
@@ -474,6 +566,8 @@ def test_methods_after_close_raise(mixer) -> None:
         mixer.strip_count()
     with pytest.raises(RuntimeError):
         mixer.set_soloed("vocal", True)
+    with pytest.raises(RuntimeError):
+        mixer.settle("vocal")
     with pytest.raises(RuntimeError):
         mixer.strip_non_finite_discard_count("vocal")
     with pytest.raises(RuntimeError):

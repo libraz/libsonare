@@ -39,6 +39,14 @@ void MixerWasm::setWidth(const val& strip_index_val, const val& width_val) {
   checkStripError(sonare_strip_set_width(stripAt(strip_index), width), "failed to set width");
 }
 
+// Snaps the strip's input-trim, fader, pan and width smoothers to the values
+// already set on it, so the next processed block opens at those values instead
+// of gliding to them. Clears nothing.
+void MixerWasm::settle(const val& strip_index_val) {
+  const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
+  checkStripError(sonare_strip_settle(stripAt(strip_index)), "failed to settle strip smoothers");
+}
+
 // Sets the strip's mute state.
 void MixerWasm::setMuted(const val& strip_index_val, bool muted) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
@@ -163,6 +171,7 @@ void registerMixerStripControls(class_<MixerWasm>& cls) {
       .function("setFaderDb", &MixerWasm::setFaderDb)
       .function("setPan", &MixerWasm::setPan)
       .function("setWidth", &MixerWasm::setWidth)
+      .function("settle", &MixerWasm::settle)
       .function("setMuted", &MixerWasm::setMuted)
       .function("setSoloed", &MixerWasm::setSoloed)
       .function("setSoloSafe", &MixerWasm::setSoloSafe)

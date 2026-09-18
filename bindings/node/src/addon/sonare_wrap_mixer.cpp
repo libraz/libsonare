@@ -37,6 +37,7 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::SetVcaOffsetDb>("setVcaOffsetDb"),
           InstanceMethod<&MixerWrap::SetDualPan>("setDualPan"),
           InstanceMethod<&MixerWrap::SetSurroundPan>("setSurroundPan"),
+          InstanceMethod<&MixerWrap::Settle>("settle"),
           InstanceMethod<&MixerWrap::AddSend>("addSend"),
           InstanceMethod<&MixerWrap::SetSendDb>("setSendDb"),
           InstanceMethod<&MixerWrap::RemoveSend>("removeSend"),

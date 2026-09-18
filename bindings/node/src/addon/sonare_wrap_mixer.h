@@ -64,6 +64,8 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   Napi::Value SetVcaOffsetDb(const Napi::CallbackInfo& info);
   Napi::Value SetDualPan(const Napi::CallbackInfo& info);
   Napi::Value SetSurroundPan(const Napi::CallbackInfo& info);
+  // Snaps a strip's trim/fader/pan/width smoothers to their current targets.
+  Napi::Value Settle(const Napi::CallbackInfo& info);
 
   // Sends.
   Napi::Value AddSend(const Napi::CallbackInfo& info);

@@ -447,6 +447,35 @@ class Mixer:
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_muted(handle, ctypes.c_int(1 if muted else 0)))
 
+    def settle(self, strip: StripRef) -> None:
+        """Snap a strip's gain smoothers to the values already set on it.
+
+        Input trim, fader, pan and width are smoothed over roughly 5 ms so a
+        live fader move does not click. That smoothing is wrong for an offline
+        render of a finite buffer: the strip opens at its previous values and
+        glides to the configured ones, so the head of the output carries a
+        level and image sweep that a caller who only set a fader and a pan
+        never asked for. Calling ``settle`` after configuring a strip and
+        before the first :meth:`process_stereo` makes the very first output
+        sample already sit at the converged value.
+
+        Unlike a reset it clears nothing -- scheduled automation, meters and
+        insert state are untouched, and the serialized scene is unchanged,
+        because settling only moves the smoothers to values the scene already
+        records.
+
+        Args:
+            strip: Strip index or id.
+
+        Example:
+            >>> mixer.set_fader_db("vocal", -3.0)  # doctest: +SKIP
+            >>> mixer.set_width("vocal", 1.2)  # doctest: +SKIP
+            >>> mixer.settle("vocal")  # doctest: +SKIP
+            >>> mix = mixer.process_stereo(left, right)  # doctest: +SKIP
+        """
+        handle = self._strip_handle(strip)
+        _check(_get_lib().sonare_strip_settle(handle))
+
     def add_send(
         self,
         strip: StripRef,

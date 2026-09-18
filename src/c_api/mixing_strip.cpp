@@ -292,6 +292,19 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       SONARE_C_CATCH
     }
 
+    SonareError sonare_strip_settle(SonareStrip * strip) {
+      SONARE_C_API_ENTRY;
+      if (!strip) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+      SONARE_C_TRY
+      // Nothing is mirrored into scene_strip: settling moves the smoothers to
+      // the values the scene already records, so the scene is unchanged by it.
+      strip->strip.settle();
+      return SONARE_OK;
+      SONARE_C_CATCH
+    }
+
     SonareError sonare_strip_add_send(SonareStrip * strip, const char* id,
                                       const char* destination_bus_id, float send_db, int timing,
                                       size_t* index_out) {
