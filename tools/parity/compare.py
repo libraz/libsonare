@@ -265,6 +265,15 @@ _ALIAS_COVERAGE = {
     # so the credit lapses if one of them is removed.
     "mixing_assistant_suggest": ("suggest_mix_scene",),
     "mixing_assistant_suggest_scene_json": ("suggest_mix_scene_json",),
+    # The C entry writes the chain config as its canonical JSON text because a C
+    # entry can only hand back a string; every facade parses that text and
+    # returns the params mapping the mastering entry points accept as overrides,
+    # so the facade carries no `_json` in its name. Anchored to the facade
+    # members that deliver it, so the credit lapses if one is removed.
+    "mastering_assistant_suggest_chain_json": ("mastering_assistant_suggest_chain",),
+    "mastering_assistant_suggest_chain_json_stereo": (
+        "mastering_assistant_suggest_chain_stereo",
+    ),
     "mixing_assistant_source_class_names": ("mix_source_class_names",),
     "mixing_assistant_source_class_from_name": ("mix_source_class_from_name",),
     "master_audio_stereo_with_progress": ("master_audio_stereo",),
