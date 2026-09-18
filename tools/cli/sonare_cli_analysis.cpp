@@ -481,10 +481,19 @@ int cmd_melody(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_boundaries(const CliArgs& args, const Audio& audio) {
+  // Each fallback is the field's own initializer rather than a literal, so an
+  // omitted option takes the value every other surface takes. The registry
+  // declares the same numbers for `--help`; these are the ones that reach the
+  // detector.
   BoundaryConfig config;
-  config.threshold = args.get_float("threshold", 0.3f);
-  config.kernel_size = args.get_int("kernel-size", 64);
-  config.peak_distance = args.get_float("min-distance", 2.0f);
+  config.threshold = args.get_float("threshold", config.threshold);
+  config.absolute_threshold = args.get_float("absolute-threshold", config.absolute_threshold);
+  config.kernel_size = args.get_int("kernel-size", config.kernel_size);
+  config.n_mfcc = args.get_int("n-mfcc", config.n_mfcc);
+  config.n_chroma = args.get_int("n-chroma", config.n_chroma);
+  config.peak_distance = args.get_float("peak-distance", config.peak_distance);
+  config.use_mfcc = !args.has("no-mfcc");
+  config.use_chroma = !args.has("no-chroma");
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
 

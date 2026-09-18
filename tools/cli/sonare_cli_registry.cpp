@@ -317,6 +317,17 @@ CliValidationError validate_pitch_frequency_order(const CliArgs& args) {
   return {message.str(), false};
 }
 
+// The detector combines the MFCC and chroma streams frame-for-frame, so with
+// neither enabled there is nothing to combine and the novelty curve is
+// undefined. A per-option domain cannot express it: either flag is legal alone.
+CliValidationError validate_boundary_feature_streams(const CliArgs& args) {
+  if (!args.has("no-mfcc") || !args.has("no-chroma")) return {};
+  return {
+      "--no-mfcc and --no-chroma cannot both be given: boundary detection "
+      "needs at least one feature stream",
+      true};
+}
+
 #ifdef SONARE_WITH_ARRANGEMENT
 // The project bounce renders a stereo master and writes either that pair or its
 // mono downmix, so the C ABI accepts a channel count of 1 or 2 and refuses any
@@ -435,10 +446,29 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "melody", true,
                 {number_value("threshold", 0.1), global_int("hop-length", 512),
                  global_number("fmin", 80.0), global_number("fmax", 1000.0)});
-    add_command(commands, "boundaries", true,
-                {number_value("threshold", 0.3), int_value("kernel-size", 64),
-                 number_value("min-distance", 2.0), global_int("n-fft", 2048),
-                 global_int("hop-length", 512)});
+    // The whole of BoundaryConfig, so a command line can reach the same detector
+    // the other surfaces do. `absolute-threshold` is the one that was missing and
+    // mattered: `threshold` is relative to the curve's own maximum, so it cannot
+    // ask whether anything changed at all, and without the floor stationary
+    // material segments every few seconds. The two feature streams are on by
+    // default and so are spelled as negations. Each size is refused at zero
+    // because the detector has no behaviour there, and the C entry the other
+    // surfaces reach refuses the same values with the same class.
+    add_command(
+        commands, "boundaries", true,
+        {with_domain(number_value("threshold", 0.3),
+                     at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("absolute-threshold", 0.005),
+                     at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(int_value("kernel-size", 64),
+                     greater_than(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(int_value("n-mfcc", 13), greater_than(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(int_value("n-chroma", 12), greater_than(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(number_value("peak-distance", 2.0),
+                     at_least(0.0, CliOptionDomainStage::Parameter)),
+         flag("no-mfcc"), flag("no-chroma"), global_int("n-fft", 2048),
+         global_int("hop-length", 512)},
+        {}, validate_boundary_feature_streams);
 
     // Processing leaves.
     add_command(commands, "pitch-shift", true,
