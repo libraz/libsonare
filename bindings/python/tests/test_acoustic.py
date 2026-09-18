@@ -121,8 +121,8 @@ def test_room_morph_adds_a_target_tail_and_is_deterministic() -> None:
     # A short impulse-like recording morphed toward a live target room.
     samples = [0.0] * 4000
     samples[0] = 1.0
-    out_a = libsonare.room_morph(samples, 48000, 12.0, 9.0, 5.0, absorption=0.08, wet=0.7)
-    out_b = libsonare.room_morph(samples, 48000, 12.0, 9.0, 5.0, absorption=0.08, wet=0.7)
+    out_a = libsonare.room_morph(samples, 48000, 12.0, 9.0, 5.0, absorption=0.08, wet=0.7).audio
+    out_b = libsonare.room_morph(samples, 48000, 12.0, 9.0, 5.0, absorption=0.08, wet=0.7).audio
     assert len(out_a) > len(samples)  # target reverb tail appended
     assert out_a == out_b  # deterministic for a fixed seed
     assert all(math.isfinite(s) for s in out_a)
@@ -265,7 +265,7 @@ def test_room_morph_routes_air_absorption_and_rejects_a_bad_climate() -> None:
         ism_order=2,
         seed=3,
     )
-    off = libsonare.room_morph(samples, 48000, 30.0, 24.0, 15.0, **target)
+    off = libsonare.room_morph(samples, 48000, 30.0, 24.0, 15.0, **target).audio
     on = libsonare.room_morph(
         samples,
         48000,
@@ -276,7 +276,7 @@ def test_room_morph_routes_air_absorption_and_rejects_a_bad_climate() -> None:
         air_absorption_enabled=True,
         air_temperature_c=20.0,
         air_humidity_percent=50.0,
-    )
+    ).audio
     assert len(off) == len(on)
     assert off != on
     # The morph validates its config rather than diagnosing, so this raises.
@@ -369,20 +369,25 @@ def test_a_malformed_band_array_is_rejected_naming_the_parameter() -> None:
 def test_room_morph_accepts_numpy_band_arrays() -> None:
     samples = [math.sin(2.0 * math.pi * 220.0 * i / 22050.0) for i in range(4410)]
     room = dict(sample_rate=22050, length_m=7.0, width_m=5.0, height_m=3.0, max_seconds=0.2)
-    default = libsonare.room_morph(samples, **room)
+    default = libsonare.room_morph(samples, **room).audio
     assert max(abs(s) for s in default) > 1e-4
 
     zero_band = libsonare.room_morph(
         samples, absorption_bands=np.array([0.0], dtype=np.float32), **room
-    )
+    ).audio
     assert zero_band != default
-    assert libsonare.room_morph(
-        samples, absorption_bands=np.array([0.0], dtype=np.float32), **room
-    ) == libsonare.room_morph(samples, absorption_bands=[0.0], **room)
+    assert (
+        libsonare.room_morph(
+            samples, absorption_bands=np.array([0.0], dtype=np.float32), **room
+        ).audio
+        == libsonare.room_morph(samples, absorption_bands=[0.0], **room).audio
+    )
     scattered = libsonare.room_morph(
         samples, scattering_bands=np.array([0.3, 0.4, 0.5], dtype=np.float32), **room
+    ).audio
+    assert (
+        scattered == libsonare.room_morph(samples, scattering_bands=[0.3, 0.4, 0.5], **room).audio
     )
-    assert scattered == libsonare.room_morph(samples, scattering_bands=[0.3, 0.4, 0.5], **room)
 
 
 @acoustic
@@ -400,3 +405,24 @@ def test_a_seed_the_c_field_cannot_express_is_rejected_rather_than_folded() -> N
     # The whole uint32 range stays reachable, and 0 keeps the library default.
     assert len(libsonare.synthesize_rir(seed=0xFFFF_FFFF, **room).rir) > 0
     assert libsonare.synthesize_rir(seed=0, **room).rir == libsonare.synthesize_rir(**room).rir
+
+
+@acoustic
+def test_room_morph_reports_the_target_synthesis_warnings() -> None:
+    # The morph synthesizes its target RIR with the code synthesize_rir uses, so
+    # the same clamp fires. It used to be dropped, leaving a morph through a room
+    # the caller did not ask for indistinguishable from one through the room they
+    # did.
+    samples = [0.0] * 4000
+    samples[0] = 1.0
+    room = dict(sample_rate=48000, length_m=12.0, width_m=9.0, height_m=5.0, max_seconds=2.0)
+
+    clamped = libsonare.room_morph(samples, ism_order=99, **room)
+    assert "acoustic.ism_order_clamped" in clamped.warning_message
+    assert clamped.warningMessage == clamped.warning_message
+    assert len(clamped.audio) > len(samples)
+
+    # An order the synthesizer honours leaves the channel clear, so the message
+    # above is that run's rather than a slot nothing ever resets.
+    quiet = libsonare.room_morph(samples, ism_order=2, **room)
+    assert "acoustic.ism_order_clamped" not in quiet.warning_message

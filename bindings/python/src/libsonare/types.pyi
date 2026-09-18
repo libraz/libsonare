@@ -562,6 +562,21 @@ class AcousticResult:
     @property
     def isBlind(self) -> bool: ...
 
+class RoomMorphResult:
+    audio: list[float]
+    sample_rate: int
+    warning_message: str
+    def __init__(
+        self,
+        audio: list[float],
+        sample_rate: int,
+        warning_message: str = "",
+    ) -> None: ...
+    @property
+    def sampleRate(self) -> int: ...
+    @property
+    def warningMessage(self) -> str: ...
+
 class RirResult:
     rir: list[float]
     sample_rate: int

@@ -978,9 +978,15 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
         max_seconds=args.max_seconds,
         prefer_eyring=not args.sabine,
     )
-    _write_wav(args.output, result, sr)
+    # The target RIR is synthesized by the code synthesize-rir uses, so the same
+    # clamps fire and each one says the morph went through a room the caller did
+    # not ask for. stderr in every mode, so the JSON document on stdout stays
+    # exactly the payload both CLIs publish.
+    if result.warning_message:
+        print(f"warning: {result.warning_message}", file=sys.stderr)
+    _write_wav(args.output, result.audio, sr)
     if args.json:
-        print(_strict_json_dumps({"output": args.output, "samples": len(result)}))
+        print(_strict_json_dumps({"output": args.output, "samples": len(result.audio)}))
     else:
-        print(f"  Saved morphed audio ({len(result)} samples) to {args.output}")
+        print(f"  Saved morphed audio ({len(result.audio)} samples) to {args.output}")
     return 0

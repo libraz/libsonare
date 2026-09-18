@@ -806,6 +806,34 @@ class RirResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RoomMorphResult:
+    """Morphed audio and what the target-room synthesis had to change to make it.
+
+    Shaped like :class:`RirResult` because the same synthesis runs underneath.
+    There is no ``has_error`` counterpart: an invalid morph raises, so
+    ``warning_message`` is the whole diagnostic channel. It carries the same
+    non-fatal codes the RIR path publishes — an image-source order reduced to the
+    safe maximum (``acoustic.ism_order_clamped``), a tail cut against
+    ``max_seconds`` (``acoustic.rir_length_clamped``), a request that produced no
+    diffuse tail (``acoustic.no_late_tail``) — each of which says the morph went
+    through a room other than the one requested. Several arrive joined with
+    ``"; "``, in the order the synthesizer reported them.
+    """
+
+    audio: list[float]
+    sample_rate: int
+    warning_message: str = ""
+
+    @property
+    def sampleRate(self) -> int:  # noqa: N802
+        return self.sample_rate
+
+    @property
+    def warningMessage(self) -> str:  # noqa: N802
+        return self.warning_message
+
+
+@dataclass(frozen=True, slots=True)
 class RoomEstimate:
     """Blind equivalent-room estimate (volume/dimensions/absorption/DRR)."""
 

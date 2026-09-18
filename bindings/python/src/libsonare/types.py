@@ -256,6 +256,9 @@ from ._types_analysis import (
     RoomEstimate as RoomEstimate,
 )
 from ._types_analysis import (
+    RoomMorphResult as RoomMorphResult,
+)
+from ._types_analysis import (
     SectionType as SectionType,
 )
 from ._types_analysis import (

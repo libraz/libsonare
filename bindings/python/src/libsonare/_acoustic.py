@@ -30,7 +30,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_size_t,
 )
-from .types import RirResult, RoomEstimate
+from .types import RirResult, RoomEstimate, RoomMorphResult
 
 # SONARE_REVERB_MODEL_* selectors (sonare_c_acoustic.h). DEFAULT (0) resolves to
 # the library default (Eyring); only SABINE selects Sabine explicitly.
@@ -317,12 +317,14 @@ def room_morph(
     air_absorption_enabled: bool = False,
     air_temperature_c: float = 0.0,
     air_humidity_percent: float = 0.0,
-) -> list[float]:
+) -> RoomMorphResult:
     """Morph a recording's reverberation toward a target room (creative FX).
 
     Returns the morphed mono samples (the input length plus the target room's
-    reverb tail). This is not dereverberation: the source reverb is only gently
-    suppressed before the target room is added.
+    reverb tail) together with the target-RIR synthesis warnings, the way
+    :func:`synthesize_rir` returns the RIR with its own. This is not
+    dereverberation: the source reverb is only gently suppressed before the
+    target room is added.
 
     Args:
         absorption_bands: Optional per-octave-band target-wall absorption; when
@@ -396,7 +398,18 @@ def room_morph(
     )
     _check(rc)
     try:
-        return _float_array_result(out, out_length.value)
+        # Read before any later C ABI call can overwrite the thread-local slot,
+        # exactly as synthesize_rir does.
+        warning_message = ""
+        if hasattr(lib, "sonare_last_warning_message"):
+            raw_warning = lib.sonare_last_warning_message()
+            if raw_warning:
+                warning_message = raw_warning.decode("utf-8")
+        return RoomMorphResult(
+            audio=_float_array_result(out, out_length.value),
+            sample_rate=sample_rate,
+            warning_message=warning_message,
+        )
     finally:
         if out and out_length.value > 0:
             lib.sonare_free_floats(out)
