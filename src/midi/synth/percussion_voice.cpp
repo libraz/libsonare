@@ -57,6 +57,7 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   // Membrane modes: harder hits excite the upper ring modes a bit more.
   num_modes_ = std::clamp(params.num_modes, 0, kMaxPercussionModes);
   tone_gain_ = std::max(0.0f, params.tone_gain);
+  tone_peak_ = 0.0f;
   const float nyquist_limit = 0.45f * static_cast<float>(sr);
   for (int k = 0; k < num_modes_; ++k) {
     Mode& mode = modes_[static_cast<size_t>(k)];
@@ -83,6 +84,12 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
           std::abs(bessel_j(m, arg) * std::cos(static_cast<float>(m) * params.strike_theta));
     }
     mode.gain = strike * std::sin(mode.omega) * strike_pos;
+    // The head's own peak swing at unit excitation. Every mode is impulse-
+    // excited in phase, so the in-phase sum of the two-pole peaks (gain/sin w,
+    // read at the frequency the strike starts on) is the bound the membrane
+    // cannot exceed. It is what the wire gate measures its threshold against.
+    const float w0 = std::min(mode.omega * (1.0f + std::max(0.0f, params.pitch_drop)), 0.95f * kPi);
+    tone_peak_ += mode.gain / std::max(1.0e-6f, std::sin(w0));
   }
   for (int k = num_modes_; k < kMaxPercussionModes; ++k) modes_[static_cast<size_t>(k)] = Mode{};
 
@@ -170,10 +177,16 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   }
 
   // Snare wire rattle: gated noise driven by the membrane crossing the wire
-  // contact threshold. Voiced through a dedicated high-pass.
+  // contact threshold. Voiced through a dedicated high-pass. The threshold is
+  // read against the head's swing as a fraction of a full-velocity strike, so
+  // velocity enters here and nowhere else in the rattle.
   wire_buzz_ = std::max(0.0f, params.wire_buzz);
   wire_threshold_ = std::max(0.0f, params.wire_threshold);
-  wire_vel01_ = vel01;
+  wire_scale_ = tone_peak_ > 0.0f ? vel01 / tone_peak_ : 0.0f;
+  wire_env_ = 0.0f;
+  wire_release_ = params.wire_decay_ms > 0.0f
+                      ? std::exp(-1.0f / (params.wire_decay_ms * 0.001f * static_cast<float>(sr)))
+                      : 0.0f;
   wire_index_ = 0;
   wire_filter_.prepare(sr);
   wire_filter_.set(params.wire_cutoff_hz, 0.9f);
@@ -277,15 +290,17 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
     plate_drive = voiced_tone * (1.0f - tone_direct_);
 
     // Snare wire rattle: while the membrane swing exceeds the contact
-    // threshold the wires buzz against the bottom head. The gate scales with
-    // how far the head is over threshold and with strike velocity, so harder
-    // hits rattle louder and (because the membrane stays over threshold
-    // longer) longer.
+    // threshold the wires buzz against the bottom head. The swing is measured
+    // as a fraction of what a full-velocity strike on this piece reaches, so a
+    // soft hit can stay under the threshold for its whole length and read as a
+    // drum with the strainer off — which is the nonlinearity the wires are.
     if (wire_buzz_ > 0.0f) {
-      const float contact = std::abs(tone) - wire_threshold_;
+      const float contact = std::abs(tone) * wire_scale_ - wire_threshold_;
       const float gate = contact > 0.0f ? std::min(contact * 8.0f, 1.0f) : 0.0f;
-      const float n =
-          noise_.bipolar_at(kWireIndexBase + wire_index_++) * gate * wire_vel01_ * wire_buzz_;
+      // The head opens the gate; the wires then ring on their own damping. With
+      // `wire_decay_ms` at 0 the release coefficient is 0 and this is the gate.
+      wire_env_ = std::max(gate, wire_env_ * wire_release_);
+      const float n = noise_.bipolar_at(kWireIndexBase + wire_index_++) * wire_env_ * wire_buzz_;
       const float wire = wire_filter_.process(n).hp;
       mix += noise_air_hz_ > 0.0f ? wire_air_.process(wire).lp : wire;
     }
@@ -411,6 +426,7 @@ void PercussionVoiceCore::kill() noexcept {
   contact_len_ = 0;
   contact_i_ = 0;
   wire_buzz_ = 0.0f;
+  wire_env_ = 0.0f;
   wire_filter_.reset();
   shimmer_ = 0.0f;
   shimmer_env_ = 0.0f;

@@ -148,6 +148,7 @@ constexpr PercussionPatchParams blank_percussion() noexcept {
   z.wire_buzz = 0.0f;
   z.wire_threshold = 0.0f;
   z.wire_cutoff_hz = 0.0f;
+  z.wire_decay_ms = 0.0f;
   z.shimmer = 0.0f;
   z.shimmer_attack_ms = 0.0f;
   z.shimmer_cutoff_hz = 0.0f;

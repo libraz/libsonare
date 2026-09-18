@@ -162,13 +162,34 @@ struct PercussionPatchParams {
   /// Wire-against-head buzz amount (0 = off, no rattle). While the membrane
   /// displacement exceeds wire_threshold the snare wires contact the bottom
   /// head and rattle: a high-passed noise burst gated by how far the head is
-  /// over the threshold and scaled by strike velocity, so hard hits buzz
-  /// louder and longer. Couples to the tone layer (no membrane => no rattle).
+  /// over the threshold. Couples to the tone layer (no membrane => no rattle).
   float wire_buzz = 0.0f;
-  /// Membrane level at which the wires start contacting the head.
+  /// Where the wires start contacting, as a fraction of the swing a
+  /// full-velocity strike on this piece reaches: 0 = always in contact,
+  /// 1 = never. Velocity enters through the same comparison, so a soft hit can
+  /// stay under the threshold for its whole length — the strainer's whole
+  /// character is that it is not there until the head is driven hard enough.
+  ///
+  /// A fraction rather than a membrane level, because a level is in resonator
+  /// units that `num_modes`, `strike_r`, `mode_ratios`, `mode_decay_s` and the
+  /// pitch drop all scale: one value meant a wide-open gate on one piece and a
+  /// welded-shut one on the next, and the accepted interval ran to 4 while the
+  /// head swings around a tenth of that. 30 of the 33 kit notes carrying a
+  /// fitted `wire_buzz` rendered no rattle at all.
   float wire_threshold = 0.1f;
   /// Cutoff of the high-pass through which the rattle is voiced.
   float wire_cutoff_hz = 4000.0f;
+  /// How long the wires keep rattling once the head has stopped driving them
+  /// (1/e, ms). 0 = the rattle is the gate, which is the voicing that predates
+  /// this field and what every piece without a strainer keeps.
+  ///
+  /// The wire bed is its own mechanical system: the head starts it and the
+  /// wires then ring on their own damping, which is why a snare's tail is
+  /// broadband where its head tone has already gone. With the rattle slaved to
+  /// the membrane the two could only decay together, and the only way to reach
+  /// the reference's 327 ms was to ring the fundamental for a second — which
+  /// buys the decay by turning the drum into a sine.
+  float wire_decay_ms = 0.0f;
 
   // --- nonlinear shimmer (cymbal/gong) ---
   /// Weakly-nonlinear energy transfer to a high shimmer band: the membrane
@@ -327,6 +348,10 @@ class PercussionVoiceCore {
   int num_modes_ = 0;
   float tone_gain_ = 1.0f;
   float tone_direct_ = 1.0f;
+  /// In-phase sum of the modes' peak swings at unit excitation, so a layer that
+  /// reads the membrane can state its threshold as a fraction of the head's own
+  /// reach rather than in resonator units nothing else shares.
+  float tone_peak_ = 0.0f;
   // Descending pitch envelope: ratio = 1 + drop_state_ (one-pole decay).
   float drop_state_ = 0.0f;
   float drop_coeff_ = 0.0f;
@@ -377,11 +402,16 @@ class PercussionVoiceCore {
   float plate_gain_ = 0.0f;
   FdnPlate plate_;
 
-  // Snare wire rattle: gated, velocity-scaled high-passed noise driven by the
-  // membrane displacement crossing wire_threshold_.
+  // Snare wire rattle: gated high-passed noise driven by the membrane
+  // displacement crossing wire_threshold_. `wire_scale_` turns that
+  // displacement into a fraction of a full-velocity strike's peak swing —
+  // velocity over the head's own reach — so the threshold means one thing on
+  // every piece.
   float wire_buzz_ = 0.0f;
   float wire_threshold_ = 0.1f;
-  float wire_vel01_ = 0.0f;
+  float wire_scale_ = 0.0f;
+  float wire_env_ = 0.0f;
+  float wire_release_ = 0.0f;
   uint64_t wire_index_ = 0;
   TptSvf wire_filter_;
 

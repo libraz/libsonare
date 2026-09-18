@@ -439,11 +439,23 @@ TEST_CASE("the GM snare layers shell modes under the wire band", "[midi][synth][
   REQUIRE(snare.mode == SynthEngineMode::kPercussion);
   const std::vector<float> hit = render_patch(snare, 38, 127, 16384, /*channel=*/9);
   const std::vector<double> power = power_spectrum(hit, 0);
-  // Shell fundamental at the pinned 185 Hz shows up against the noise floor
-  // (the pitch drop has settled within the analysis window)...
-  REQUIRE(band_power(power, 185.0) > 4.0 * band_power(power, 120.0));
-  // ...and the wire crack carries broadband energy around its band centre.
-  REQUIRE(high_band_fraction(hit, 0, 1000.0) > 0.3);
+  // The batter head's pinned fundamental shows up against the noise floor (the
+  // pitch drop has settled within the analysis window)...
+  REQUIRE(band_power(power, 250.0) > 4.0 * band_power(power, 120.0));
+
+  // ...and the wires are the piece's own high band, asserted by taking them
+  // away rather than against a number.
+  //
+  // This half used to read `high_band_fraction(hit, 0, 1000.0) > 0.3`, which
+  // could not fail for the reason it was written: it is satisfied by any bright
+  // snare, and the wire gate was shut on every kit note that carried one — 30 of
+  // 33 — while the assertion stayed green on the noise burst alone. The two
+  // reference kits put that fraction at 0.13 and 0.44 on the same hit, so no
+  // threshold on it states a property of a snare rather than of one recording.
+  NativeSynthPatch unstrung = snare;
+  unstrung.percussion.wire_buzz = 0.0f;
+  const std::vector<float> dry = render_patch(unstrung, 38, 127, 16384, /*channel=*/9);
+  REQUIRE(high_band_fraction(hit, 0, 1000.0) > 1.3 * high_band_fraction(dry, 0, 1000.0));
 }
 
 TEST_CASE("GM drum strikes are one-shot and deterministic", "[midi][synth][percussion]") {

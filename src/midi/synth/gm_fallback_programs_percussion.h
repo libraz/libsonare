@@ -140,7 +140,6 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   wb.percussion.plate_low_hz = 798.233f;
   wb.percussion.plate_t60_s = 8.16114f;
   wb.percussion.tone_direct = 0.23688f;
-  wb.percussion.wire_threshold = 2.58015f;
   wb.resonance_q = 3.36119f;
 
   // Taiko (GM 116): a large struck membrane — the full Rayleigh mode set, a
@@ -181,7 +180,6 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   ti.percussion.shell_t60_s[0] = 0.111498f;
   ti.percussion.shell_weight[0] = 2.42255f;
   ti.percussion.tone_direct = 0.692916f;
-  ti.percussion.wire_threshold = 2.85629f;
   ti.resonance_q = 1.09065f;
 
   // Melodic Tom (GM 117): a pitched tom — note-tracked membrane with a pitch
@@ -271,7 +269,6 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   rc.percussion.shell_weight[2] = 0.781797f;
   rc.percussion.shell_weight[3] = 1.52081f;
   rc.percussion.tone_direct = 0.854284f;
-  rc.percussion.wire_threshold = 0.0268937f;
   rc.resonance_q = 0.765824f;
 }
 

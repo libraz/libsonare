@@ -265,6 +265,114 @@ TEST_CASE("the snare wire rattle is velocity-dependent and couples to the membra
   }
 }
 
+TEST_CASE("the wire threshold means the same thing whatever scales the membrane",
+          "[midi][synth][percussion]") {
+  /// The defect this exists for: the threshold used to be read against the raw
+  /// modal sum, whose scale `num_modes`, `strike_r`, `mode_ratios`,
+  /// `mode_decay_s`, `base_freq_hz` and the pitch drop all move — so one value
+  /// was a wide-open gate on one piece and a welded-shut one on the next, and
+  /// 30 of the 33 kit notes carrying a fitted `wire_buzz` rendered no rattle at
+  /// all. Read as a fraction of the head's own peak swing, 0.95 is off and 0.02
+  /// is on for every piece, which is what makes the knob fittable.
+  struct Variant {
+    const char* what;
+    float base_hz;
+    int num_modes;
+    float strike_r;
+  };
+  const Variant variants[] = {{"the snare as voiced", 185.0f, 5, 0.55f},
+                              {"an octave down", 92.5f, 5, 0.55f},
+                              {"one mode", 185.0f, 1, 0.55f},
+                              {"struck at the centre", 185.0f, 5, 0.0f}};
+  for (const Variant& v : variants) {
+    INFO(v.what);
+    NativeSynthPatch p = snare_patch();
+    p.percussion.base_freq_hz = v.base_hz;
+    p.percussion.num_modes = v.num_modes;
+    p.percussion.strike_r = v.strike_r;
+    p.percussion.wire_buzz = 1.0f;
+    p.percussion.wire_cutoff_hz = 4500.0f;
+
+    NativeSynthPatch off = p;
+    off.percussion.wire_buzz = 0.0f;
+    NativeSynthPatch shut = p;
+    shut.percussion.wire_threshold = 0.95f;
+    NativeSynthPatch open = p;
+    open.percussion.wire_threshold = 0.02f;
+
+    const std::vector<float> silent = render_patch(off, 38, 127, 8192);
+    const std::vector<float> a = render_patch(shut, 38, 127, 8192);
+    const std::vector<float> b = render_patch(open, 38, 127, 8192);
+    for (size_t i = 0; i < silent.size(); ++i) {
+      REQUIRE(a[i] == silent[i]);
+    }
+    REQUIRE(hf_energy(b) > 4.0 * hf_energy(silent));
+  }
+}
+
+TEST_CASE("a soft enough hit never reaches the wires at all", "[midi][synth][percussion]") {
+  /// The strainer is a nonlinearity and not a level: below the contact
+  /// threshold the wires are simply not in the sound, which is why a brushed
+  /// or ghosted snare reads as a small tom. Velocity used to be a multiplier on
+  /// the rattle, so a soft hit was a quieter rattle and never an absent one.
+  NativeSynthPatch p = snare_patch();
+  p.percussion.wire_buzz = 1.0f;
+  p.percussion.wire_cutoff_hz = 4500.0f;
+  p.percussion.wire_threshold = 0.3f;
+  NativeSynthPatch off = p;
+  off.percussion.wire_buzz = 0.0f;
+
+  const std::vector<float> soft = render_patch(p, 38, 30, 8192);
+  const std::vector<float> soft_off = render_patch(off, 38, 30, 8192);
+  for (size_t i = 0; i < soft.size(); ++i) {
+    REQUIRE(soft[i] == soft_off[i]);
+  }
+  const std::vector<float> hard = render_patch(p, 38, 127, 8192);
+  const std::vector<float> hard_off = render_patch(off, 38, 127, 8192);
+  REQUIRE(hf_energy(hard) > 4.0 * hf_energy(hard_off));
+}
+
+TEST_CASE("wire_decay_ms == 0 reproduces the gated rattle bit-for-bit",
+          "[midi][synth][percussion]") {
+  NativeSynthPatch slaved = snare_patch();  // wire_decay_ms defaults to 0
+  slaved.percussion.wire_buzz = 1.0f;
+  slaved.percussion.wire_cutoff_hz = 4500.0f;
+  NativeSynthPatch explicit_off = slaved;
+  explicit_off.percussion.wire_decay_ms = 0.0f;
+
+  const std::vector<float> a = render_patch(slaved, 38, 110, 8192);
+  const std::vector<float> b = render_patch(explicit_off, 38, 110, 8192);
+  REQUIRE(a.size() == b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    REQUIRE(a[i] == b[i]);
+  }
+}
+
+TEST_CASE("the wires keep rattling after the head has stopped driving them",
+          "[midi][synth][percussion]") {
+  /// The wire bed is its own mechanical system, so a snare's tail is broadband
+  /// where its head tone has already gone. Slaved to the membrane the two could
+  /// only decay together, and the only way to reach a reference's tail was to
+  /// ring the fundamental for a second — which buys the decay by turning the
+  /// drum into a sine.
+  NativeSynthPatch slaved = snare_patch();
+  slaved.percussion.wire_buzz = 1.0f;
+  slaved.percussion.wire_cutoff_hz = 4500.0f;
+  slaved.percussion.wire_threshold = 0.2f;
+  NativeSynthPatch ringing = slaved;
+  ringing.percussion.wire_decay_ms = 120.0f;
+
+  const int kLen = 16384;
+  const std::vector<float> a = render_patch(slaved, 38, 127, kLen);
+  const std::vector<float> b = render_patch(ringing, 38, 127, kLen);
+  // The strike itself is the gate on both sides, so the difference has to show
+  // up in the tail rather than in the sum over the whole hit.
+  const size_t tail = static_cast<size_t>(kLen) / 2;
+  const std::vector<float> a_tail(a.begin() + static_cast<long>(tail), a.end());
+  const std::vector<float> b_tail(b.begin() + static_cast<long>(tail), b.end());
+  REQUIRE(hf_energy(b_tail) > 4.0 * hf_energy(a_tail));
+}
+
 namespace {
 
 NativeSynthPatch cymbal_patch() {

@@ -508,6 +508,7 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   F(percussion.wire_buzz);
   F(percussion.wire_threshold);
   F(percussion.wire_cutoff_hz);
+  F(percussion.wire_decay_ms);
   F(percussion.shimmer);
   F(percussion.shimmer_attack_ms);
   F(percussion.shimmer_cutoff_hz);

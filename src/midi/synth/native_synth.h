@@ -923,10 +923,16 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.percussion.noise_air_hz, 0.0f), 0.0f, 20000.0f);
   p.percussion.wire_buzz =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.wire_buzz, 0.0f), 0.0f, 4.0f);
+  // A fraction of the head's own peak swing, so the whole interval means
+  // something: 0 is always in contact and 1 is never. It read [0, 4] while the
+  // membrane swung around a tenth of that, which left most of the sweep range
+  // in a dead zone and every other wire knob free once a fit landed there.
   p.percussion.wire_threshold =
-      std::clamp(patch_clamp_detail::sanitize(p.percussion.wire_threshold, 0.1f), 0.0f, 4.0f);
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.wire_threshold, 0.1f), 0.0f, 1.0f);
   p.percussion.wire_cutoff_hz = std::clamp(
       patch_clamp_detail::sanitize(p.percussion.wire_cutoff_hz, 4000.0f), 20.0f, 20000.0f);
+  p.percussion.wire_decay_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.wire_decay_ms, 0.0f), 0.0f, 2000.0f);
   p.percussion.shimmer =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.shimmer, 0.0f), 0.0f, 16.0f);
   p.percussion.shimmer_attack_ms = std::clamp(
