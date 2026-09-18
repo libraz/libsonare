@@ -48,6 +48,7 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::StripNonFiniteDiscardCount>("stripNonFiniteDiscardCount"),
           InstanceMethod<&MixerWrap::BusNonFiniteDiscardCount>("busNonFiniteDiscardCount"),
           InstanceMethod<&MixerWrap::StripById>("stripById"),
+          InstanceMethod<&MixerWrap::AddStrip>("addStrip"),
           InstanceMethod<&MixerWrap::AddBus>("addBus"),
           InstanceMethod<&MixerWrap::RemoveBus>("removeBus"),
           InstanceMethod<&MixerWrap::BusCount>("busCount"),

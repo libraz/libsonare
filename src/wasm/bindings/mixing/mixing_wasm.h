@@ -182,6 +182,12 @@ class MixerWasm {
   // number | null).
   int stripById(std::string id);
 
+  // Adds a channel strip to the mixer topology. metering is the strip's optional
+  // scene-JSON "metering" object (enabled / lufs / truePeak /
+  // truePeakOversample); truePeakOversample 0 selects the library default (4x).
+  // Marks the routing graph dirty; call compile (or process) to rebuild.
+  void addStrip(std::string id, val metering);
+
   // Adds a bus to the mixer topology. role is one of "master", "aux", "submix"
   // (empty defaults to "aux"). Marks the routing graph dirty; call compile (or
   // process) to rebuild.

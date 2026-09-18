@@ -7,6 +7,36 @@
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
+// Adds a channel strip to the mixer topology. metering is the strip's optional
+// scene-JSON "metering" object; its field names and defaults are the document's,
+// so a strip added here and one declared in a scene describe the same thing.
+// Marks the routing graph dirty; call compile (or process) to rebuild.
+void MixerWasm::addStrip(std::string id, val metering) {
+  // Refuse a wrong-typed bag the way the typed*Property readers below refuse a
+  // wrong-typed field. Absent is the omitted default; an array is excluded by
+  // name because `typeof []` is "object" and would otherwise read as a bag.
+  if (!metering.isUndefined() && !metering.isNull() &&
+      (metering.typeOf().as<std::string>() != "object" ||
+       val::global("Array").call<bool>("isArray", metering))) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "addStrip: metering must be a plain object");
+  }
+  const bool enabled = typedBoolProperty(metering, "enabled", true);
+  const bool lufs = typedBoolProperty(metering, "lufs", true);
+  const bool true_peak = typedBoolProperty(metering, "truePeak", true);
+  // 0 selects the library default (4x), the sentinel the C ABI documents.
+  const int true_peak_oversample = typedIntProperty(metering, "truePeakOversample", 0);
+  // Returns the strip pointer rather than a SonareError, so NULL is the whole
+  // failure signal and the detail is in the thread-local error slot. The pointer
+  // is mixer-owned and never reaches JS: strips are addressed by index or id.
+  if (sonare_mixer_add_strip_ex(mixer_, id.c_str(), enabled ? 1 : 0, lufs ? 1 : 0,
+                                true_peak ? 1 : 0, true_peak_oversample) == nullptr) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidState,
+        std::string("failed to add strip: ") + sonare_last_error_message());
+  }
+}
+
 // Adds a bus to the mixer topology. role is one of "master", "aux", "submix"
 // (empty defaults to "aux"). Marks the routing graph dirty; call compile (or
 // process) to rebuild.
@@ -126,7 +156,8 @@ std::string MixerWasm::toSceneJson() const {
 }
 
 void registerMixerTopology(class_<MixerWasm>& cls) {
-  cls.function("addBus", &MixerWasm::addBus)
+  cls.function("addStrip", &MixerWasm::addStrip)
+      .function("addBus", &MixerWasm::addBus)
       .function("removeBus", &MixerWasm::removeBus)
       .function("busCount", &MixerWasm::busCount)
       .function("addVcaGroup", &MixerWasm::addVcaGroup)

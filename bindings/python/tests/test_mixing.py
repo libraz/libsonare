@@ -508,6 +508,36 @@ def test_add_send_accepts_send_timing_enum_name_and_int(mixer) -> None:
         mixer.add_send("vocal", "send-bad", "vocal-verb", timing="sideways")
 
 
+def test_strip_can_be_added_to_a_live_mixer(mixer) -> None:
+    """add_strip grows the strip set after construction, as add_bus does for buses.
+
+    The strip set used to be fixed at whatever the scene document declared: the
+    only way to reach a new strip was to serialize, edit the JSON and build a
+    DIFFERENT mixer, which drops the automation position and queued events
+    compile() exists to preserve.
+    """
+    before = mixer.strip_count()
+    mixer.add_strip("py-live-strip")
+    assert mixer.strip_count() == before + 1
+    mixer.compile()
+
+    # The metering keywords are the scene's own "metering" object, so a strip
+    # added here and one declared in the document describe the same thing.
+    mixer.add_strip("py-quiet-strip", enabled=False)
+    scene = json.loads(mixer.to_scene_json())
+    ids = [strip["id"] for strip in scene["strips"]]
+    assert "py-live-strip" in ids
+    quiet = next(strip for strip in scene["strips"] if strip["id"] == "py-quiet-strip")
+    assert quiet["metering"]["enabled"] is False
+
+    # The C entry point reports failure by returning NULL, not an error code, so
+    # a facade that forgot to check it would report success on both of these.
+    with pytest.raises(RuntimeError):
+        mixer.add_strip("py-live-strip")
+    with pytest.raises(RuntimeError):
+        mixer.add_strip("py-oversampled", true_peak_oversample=99)
+
+
 def test_bus_add_remove_and_count(mixer) -> None:
     """add_bus / bus_count / remove_bus manage the mixer bus topology."""
     before = mixer.bus_count()

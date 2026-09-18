@@ -8,6 +8,48 @@
 
 namespace sonare_node {
 
+Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (mixer_ == nullptr) {
+    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (id: string, metering?: object)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  // Refuse a wrong-typed bag by name, the way the *Property readers below refuse
+  // a wrong-typed field. Accepting it and reading nothing out of it would put
+  // the caller on the full default metering with nothing to say otherwise.
+  Napi::Object metering = Napi::Object::New(env);
+  if (info.Length() >= 2 && !info[1].IsUndefined() && !info[1].IsNull()) {
+    if (!info[1].IsObject() || info[1].IsArray()) {
+      Napi::TypeError::New(env, "addStrip: metering must be a plain object")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    metering = info[1].As<Napi::Object>();
+  }
+  const bool enabled = BoolProperty(metering, "enabled", true);
+  const bool lufs = BoolProperty(metering, "lufs", true);
+  const bool true_peak = BoolProperty(metering, "truePeak", true);
+  const int true_peak_oversample = IntProperty(metering, "truePeakOversample", kZeroIsSentinel);
+  if (env.IsExceptionPending()) return env.Undefined();
+  // Returns the strip pointer rather than a SonareError, so NULL is the whole
+  // failure signal and the detail is in the thread-local error slot. The pointer
+  // is mixer-owned and never reaches JS: strips are addressed by index or id.
+  if (sonare_mixer_add_strip_ex(mixer_, id.c_str(), enabled ? 1 : 0, lufs ? 1 : 0,
+                                true_peak ? 1 : 0, true_peak_oversample) == nullptr) {
+    Napi::Error::New(env, std::string("failed to add strip: ") + sonare_last_error_message())
+        .ThrowAsJavaScriptException();
+  }
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

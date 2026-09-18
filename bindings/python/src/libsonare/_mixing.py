@@ -169,6 +169,57 @@ class Mixer:
             raise RuntimeError("libsonare was built without insert-automation support")
         return int(lib.sonare_mixer_strip_count(self._handle))
 
+    def add_strip(
+        self,
+        strip_id: str,
+        *,
+        enabled: bool = True,
+        lufs: bool = True,
+        true_peak: bool = True,
+        true_peak_oversample: int = 0,
+    ) -> None:
+        """Add a channel strip to the mixer topology.
+
+        The metering keywords are the strip's ``"metering"`` object from scene
+        JSON under their Python spelling, and the defaults are the full
+        configuration :meth:`from_scene_json` applies to a strip that omits it
+        (LUFS + true peak at 4x, about 1.4 MB per strip at 48 kHz).
+        ``enabled=False`` drops both meters for a strip whose snapshots are never
+        read. ``true_peak_oversample`` is the requested factor; 0 selects the
+        library default (4), and the realtime meter resolves it to the nearest
+        factor it implements (2x, 4x, 8x).
+
+        The routing graph is marked dirty; call :meth:`compile` (or
+        :meth:`process_stereo`) to rebuild.
+
+        Raises:
+            RuntimeError: the id is already taken, or ``true_peak_oversample``
+                is outside [0, 16].
+        """
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_add_strip_ex"):
+            raise RuntimeError("libsonare was built without mixing support")
+        # Returns the strip pointer rather than a SonareError, and NULL is the
+        # whole failure signal -- the detail is in the thread-local error slot.
+        # The pointer itself is mixer-owned and never surfaces: every strip op on
+        # this facade addresses a strip by index or id.
+        handle = lib.sonare_mixer_add_strip_ex(
+            self._handle,
+            strip_id.encode("utf-8"),
+            1 if enabled else 0,
+            1 if lufs else 0,
+            1 if true_peak else 0,
+            _to_c_int(true_peak_oversample, "true_peak_oversample"),
+        )
+        if not handle:
+            detail = ""
+            if hasattr(lib, "sonare_last_error_message"):
+                raw = lib.sonare_last_error_message()
+                if raw:
+                    detail = raw.decode("utf-8")
+            raise RuntimeError(detail or f"failed to add strip {strip_id!r}")
+
     def add_bus(self, bus_id: str, role: str = "aux") -> None:
         """Add a bus to the mixer topology.
 

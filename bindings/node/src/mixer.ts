@@ -128,6 +128,29 @@ export function mixingScenePresetJson(presetName: string): string {
 }
 
 /**
+ * Meter configuration for a strip added with {@link Mixer.addStrip}.
+ *
+ * The field names and defaults are the scene document's `strips[].metering`
+ * object, so a strip added imperatively and one declared in a scene describe the
+ * same thing. A strip's meters size their buffers when the strip is built, so
+ * this is the only place the configuration can be chosen — there is no setter.
+ * A full meter costs about 646 KB at 48 kHz and a strip carries two of them.
+ */
+export interface StripMeteringOptions {
+  /** Both meters; `false` drops them (about 145 KB for the strip instead of 1.4 MB). Default `true`. */
+  enabled?: boolean;
+  /** LUFS measurement; `false` takes one meter to about 83 KB. Default `true`. */
+  lufs?: boolean;
+  /** Inter-sample (true) peak measurement. Default `true`. */
+  truePeak?: boolean;
+  /**
+   * Requested true-peak oversampling factor in `[0, 16]`; the meter resolves it
+   * to the nearest of 2x / 4x / 8x. `0` selects the library default (4x).
+   */
+  truePeakOversample?: number;
+}
+
+/**
  * Scene-based persistent stereo mixer. Built from a scene JSON string, it routes
  * per-strip stereo blocks through a compiled routing graph (sends, buses,
  * inserts) into a stereo master. Strips are addressed by 0-based index or by
@@ -240,6 +263,22 @@ export class Mixer {
   /** Resolve a strip id to its 0-based index, or `null` if not found. */
   stripById(id: string): number | null {
     return this.native.stripById(id);
+  }
+
+  /**
+   * Add a channel strip to the mixer topology.
+   *
+   * @param id - Unique strip id
+   * @param metering - Meter configuration for the strip's pre/post taps; omitted
+   *   keeps the full default (LUFS + true peak at 4x, about 1.4 MB per strip at
+   *   48 kHz)
+   *
+   * Marks the routing graph dirty; call {@link compile} (or process) to rebuild.
+   *
+   * @throws If the id is already taken, or `truePeakOversample` is outside `[0, 16]`
+   */
+  addStrip(id: string, metering?: StripMeteringOptions): void {
+    this.native.addStrip(id, metering);
   }
 
   /**

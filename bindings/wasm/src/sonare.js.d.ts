@@ -7,6 +7,7 @@
  * rather than a stale artifact waiting on a rebuild.
  */
 
+import type { StripMeteringOptions } from './mixer';
 import type {
   NoteEditInput,
   NoteObject,
@@ -3498,6 +3499,7 @@ export interface WasmMixer {
     curve: number,
   ) => void;
   readGoniometerLatest: (stripIndex: number, maxPoints: number) => WasmGoniometerPoint[];
+  addStrip: (id: string, metering: StripMeteringOptions) => void;
   addBus: (id: string, role: string) => void;
   removeBus: (id: string) => void;
   busCount: () => number;

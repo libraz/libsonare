@@ -441,6 +441,87 @@ describe('Mixer runtime controls (WASM)', () => {
     });
   });
 
+  describe('imperative strip topology', () => {
+    it('adds a strip to a live mixer', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
+      try {
+        const before = mixer.stripCount();
+        mixer.addStrip('late-arrival');
+        expect(mixer.stripCount()).toBe(before + 1);
+        expect(mixer.stripById('late-arrival')).toBe(before);
+        expect(() => mixer.compile()).not.toThrow();
+        // The C call answers a failure with a NULL strip rather than an error
+        // code, so a facade that skipped the null check would report both of
+        // these as a successful add.
+        expect(() => mixer.addStrip('late-arrival')).toThrow(/duplicate strip id/);
+        expect(() => mixer.addStrip('over-sampled', { truePeakOversample: 32 })).toThrow(
+          /truePeakOversample must be in \[0, 16\]/,
+        );
+        // A wrong-typed metering field is refused by name rather than substituted.
+        expect(() => mixer.addStrip('wrong-type', { lufs: 'yes' as unknown as boolean })).toThrow(
+          /lufs/,
+        );
+        expect(mixer.stripCount()).toBe(before + 1);
+      } finally {
+        mixer.delete();
+      }
+    });
+
+    it('refuses a metering argument that is not a plain object', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
+      try {
+        const before = mixer.stripCount();
+        // A wrong-typed BAG would otherwise read as an empty one and put the
+        // caller on the full default metering, the field readers' failure mode
+        // one level up.
+        // @ts-expect-error a non-object metering bag is rejected at runtime
+        expect(() => mixer.addStrip('number-bag', 5)).toThrow(/metering must be a plain object/);
+        // @ts-expect-error an array is not a plain object, though `typeof []` is 'object'
+        expect(() => mixer.addStrip('array-bag', [])).toThrow(/metering must be a plain object/);
+        expect(mixer.stripCount()).toBe(before);
+
+        // Absent and explicit undefined are the omitted default, which the scene
+        // document spells by carrying no metering object at all.
+        mixer.addStrip('omitted');
+        mixer.addStrip('explicit-undefined', undefined);
+        expect(mixer.stripCount()).toBe(before + 2);
+        const strips = (
+          JSON.parse(mixer.toSceneJson()) as {
+            strips: Array<{ id: string; metering?: Record<string, unknown> }>;
+          }
+        ).strips;
+        expect(strips.find((entry) => entry.id === 'omitted')?.metering).toBeUndefined();
+        expect(strips.find((entry) => entry.id === 'explicit-undefined')?.metering).toBeUndefined();
+      } finally {
+        mixer.delete();
+      }
+    });
+
+    it('round-trips an added strip metering configuration through the scene', () => {
+      const mixer = Mixer.fromSceneJson(mixingScenePresetJson('commentaryDucking'), SR, BLOCK);
+      try {
+        mixer.addStrip('metered', { lufs: false, truePeakOversample: 8 });
+        // The document omits the object at the full default, so a strip added
+        // with no metering argument carries none and only the opted-out one shows.
+        mixer.addStrip('plain');
+        const strips = (
+          JSON.parse(mixer.toSceneJson()) as {
+            strips: Array<{ id: string; metering?: Record<string, unknown> }>;
+          }
+        ).strips;
+        expect(strips.find((entry) => entry.id === 'metered')?.metering).toEqual({
+          enabled: true,
+          lufs: false,
+          truePeak: true,
+          truePeakOversample: 8,
+        });
+        expect(strips.find((entry) => entry.id === 'plain')?.metering).toBeUndefined();
+      } finally {
+        mixer.delete();
+      }
+    });
+  });
+
   describe('solo and solo-safe', () => {
     // The drum strips all route through a shared bus whose inserts (parallel
     // compressor + tape) carry internal state. To compare energy between two

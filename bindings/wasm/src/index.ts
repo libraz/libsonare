@@ -865,6 +865,7 @@ export type {
   RealtimeVoiceChangerInterleavedBuffer,
   RealtimeVoiceChangerMonoBuffer,
   RealtimeVoiceChangerPlanarBuffer,
+  StripMeteringOptions,
 } from './streaming_mixing';
 export {
   Mixer,
