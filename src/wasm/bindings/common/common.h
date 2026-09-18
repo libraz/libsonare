@@ -241,8 +241,9 @@ val objectProperty(val object, const char* key);
 ///          documented "non-finite means unspecified" convention.
 /// @throws SonareException(InvalidParameter) naming @p key.
 float floatProperty(val object, const char* key, float default_value);
-/// @brief Presence- AND type-checked float reader: an absent field takes @p
-///        default_value, a present one must be a JS number.
+/// @brief Presence- AND type-checked float reader: an absent field -- omitted,
+///        `undefined` or `null` -- takes @p default_value, a present one must be
+///        a JS number.
 /// @details The addon's FloatProperty spelled for this surface, for a field that
 ///          is a QUANTITY -- it has no value meaning "unspecified", so omitting
 ///          the key is the only way to ask for the default. @ref floatProperty
@@ -293,8 +294,9 @@ void requireIntegral(double number, const char* key);
 /// @throws SonareException(InvalidParameter) naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
 int intProperty(val object, const char* key, int default_value);
-/// @brief Presence- AND type-checked int reader: an absent field takes @p
-///        default_value, a present one must be a JS number.
+/// @brief Presence- AND type-checked int reader: an absent field -- omitted,
+///        `undefined` or `null` -- takes @p default_value, a present one must be
+///        a JS number.
 /// @details The addon's IntProperty spelled for this surface, and @ref
 ///          typedFloatProperty's integer sibling: for a COUNT or a SIZE, which
 ///          has no value meaning "unspecified", so omitting the key is the only
@@ -369,8 +371,9 @@ double doubleProperty(val object, const char* key, double default_value);
 /// @throws SonareException(InvalidParameter) for any value outside the set.
 int builtinWaveformFromVal(const val& value);
 bool boolProperty(val object, const char* key, bool default_value);
-/// @brief Presence- AND type-checked bool reader: an absent field takes @p
-///        default_value, a present one must be a JS boolean.
+/// @brief Presence- AND type-checked bool reader: an absent field -- omitted,
+///        `undefined` or `null` -- takes @p default_value, a present one must be
+///        a JS boolean.
 /// @details The addon's BoolProperty spelled for this surface, for a FLAG, whose
 ///          two values are the whole domain -- there is no third one meaning
 ///          "unspecified". @ref boolProperty reaches the same field through

@@ -315,7 +315,7 @@ float floatProperty(val object, const char* key, float default_value) {
 
 float typedFloatProperty(val object, const char* key, float default_value) {
   val value = objectProperty(object, key);
-  if (value.isUndefined()) return default_value;
+  if (value.isUndefined() || value.isNull()) return default_value;
   if (value.typeOf().as<std::string>() != "number") {
     throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
   }
@@ -400,7 +400,7 @@ int intProperty(val object, const char* key, int default_value) {
 
 int typedIntProperty(val object, const char* key, int default_value) {
   val value = objectProperty(object, key);
-  if (value.isUndefined()) return default_value;
+  if (value.isUndefined() || value.isNull()) return default_value;
   if (value.typeOf().as<std::string>() != "number") {
     throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
   }
@@ -532,7 +532,7 @@ bool boolProperty(val object, const char* key, bool default_value) {
 
 bool typedBoolProperty(val object, const char* key, bool default_value) {
   val value = objectProperty(object, key);
-  if (value.isUndefined()) return default_value;
+  if (value.isUndefined() || value.isNull()) return default_value;
   if (value.typeOf().as<std::string>() != "boolean") {
     throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a boolean");
   }

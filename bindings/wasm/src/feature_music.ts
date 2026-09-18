@@ -1,3 +1,4 @@
+import { validatePositiveIntegers } from './_feature_validation';
 import { resolveFftOptions } from './_fft_options';
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
@@ -124,12 +125,6 @@ function validateMusicSamples(
 ): void {
   assertSampleRate(fnName, sampleRate);
   assertSamples(fnName, samples, options.validate !== false);
-}
-
-function validatePositiveIntegers(fnName: string, values: Record<string, number>): void {
-  for (const [name, value] of Object.entries(values)) {
-    assertPositiveInteger(fnName, value, name);
-  }
 }
 
 function validateFrequencyBounds(fnName: string, fmin: number, fmax?: number): void {
@@ -614,39 +609,34 @@ export function analyzeSections(
 export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult {
   const { samples, sampleRate = 22050 } = request;
   validateMusicSamples('detectBoundaries', samples, sampleRate, request);
-  const options = {
-    nFft: request.nFft ?? 2048,
-    hopLength: request.hopLength ?? 512,
-    kernelSize: request.kernelSize ?? 64,
-    threshold: request.threshold ?? 0.3,
-    absoluteThreshold: request.absoluteThreshold ?? 0.005,
-    nMfcc: request.nMfcc ?? 13,
-    nChroma: request.nChroma ?? 12,
-    peakDistance: request.peakDistance ?? 2.0,
-    useMfcc: request.useMfcc ?? true,
-    useChroma: request.useChroma ?? true,
-  };
-  validatePositiveIntegers('detectBoundaries', {
-    nFft: options.nFft,
-    hopLength: options.hopLength,
-    kernelSize: options.kernelSize,
-    nMfcc: options.nMfcc,
-    nChroma: options.nChroma,
-  });
+  // The request IS the options bag: every field is read straight off it, so an
+  // omitted one reaches the embind wrapper absent and takes BoundaryConfig's own
+  // default. Restating the ten defaults here would make them the effective ones
+  // on npm and leave the core's unreachable, and nothing compares the two.
+  const sizes: Record<string, number> = {};
+  for (const name of ['nFft', 'hopLength', 'kernelSize', 'nMfcc', 'nChroma'] as const) {
+    const value = request[name];
+    if (value != null) sizes[name] = value;
+  }
+  validatePositiveIntegers('detectBoundaries', sizes);
   for (const name of ['threshold', 'absoluteThreshold', 'peakDistance'] as const) {
-    assertFiniteScalar('detectBoundaries', options[name], name);
-    if (options[name] < 0) {
+    const value = request[name];
+    if (value == null) continue;
+    assertFiniteScalar('detectBoundaries', value, name);
+    if (value < 0) {
       throw new RangeError(`detectBoundaries: ${name} must be non-negative`);
     }
   }
-  if (!options.useMfcc && !options.useChroma) {
+  // Only an explicit pair of falses; either one omitted leaves the other stream
+  // on, so there is still something to combine.
+  if (request.useMfcc === false && request.useChroma === false) {
     throw new SonareError(
       ErrorCode.InvalidParameter,
       'InvalidParameter',
       'detectBoundaries: require useMfcc or useChroma',
     );
   }
-  const result = requireModule().detectBoundaries(samples, sampleRate, options);
+  const result = requireModule().detectBoundaries(samples, sampleRate, request);
   // Re-root the embind array as a plain Array, for the reason analyzeSections
   // spells out: chaining onto it propagates a constructor structuredClone
   // rejects, so a result posted from a Worker would fail to clone.

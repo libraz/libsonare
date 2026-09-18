@@ -706,21 +706,29 @@ export interface WasmMelodyPoint {
 }
 
 /**
- * Fully resolved boundary options. Every field is required: the facade spells
- * each default before the call, so a field name that drifts from the embind
- * reader fails here rather than falling back to the core default in silence.
+ * Boundary options as the embind wrapper reads them. Every field is optional
+ * because the wrapper seeds the bag from `BoundaryConfig`, so an omitted one
+ * takes the core's own default.
+ *
+ * Declaring them required is what obliged the facade to spell all ten defaults
+ * before the call, which made those literals the effective defaults on npm and
+ * put the core's out of reach. That shape did buy one thing — a field name
+ * drifting from the embind reader failed to compile instead of falling back in
+ * silence — and the typed-options test carries it instead: it sends a
+ * wrong-typed value for each of the ten keys and requires the module to refuse,
+ * which stops happening the moment the reader stops reading one of them.
  */
 export interface WasmBoundaryOptions {
-  nFft: number;
-  hopLength: number;
-  kernelSize: number;
-  threshold: number;
-  absoluteThreshold: number;
-  nMfcc: number;
-  nChroma: number;
-  peakDistance: number;
-  useMfcc: boolean;
-  useChroma: boolean;
+  nFft?: number;
+  hopLength?: number;
+  kernelSize?: number;
+  threshold?: number;
+  absoluteThreshold?: number;
+  nMfcc?: number;
+  nChroma?: number;
+  peakDistance?: number;
+  useMfcc?: boolean;
+  useChroma?: boolean;
 }
 
 export interface WasmBoundary {
