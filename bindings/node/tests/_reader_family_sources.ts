@@ -130,6 +130,7 @@ export const READER_FAMILIES: Readonly<
     enumProperty: 'refuse',
     floatOption: 'refuse',
     typedBoolProperty: 'refuse',
+    typedDoubleProperty: 'refuse',
     typedFloatProperty: 'refuse',
     typedIntProperty: 'refuse',
     // Type-checked fallback, the mirror of the addon's node_*_option family.
