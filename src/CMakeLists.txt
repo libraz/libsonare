@@ -346,6 +346,16 @@ if(NOT BUILD_WASM)
   target_link_libraries(sonare_core PUBLIC Threads::Threads)
 endif()
 
+# Two C-ABI translation units in the core source list call the pitch editor
+# (sonare_c_editing.cpp's scale entries and features_spectral_pitch.cpp's note
+# segmenter). Their gate has to be answered here rather than only on
+# sonare_shared: those files are compiled by this target, so without it they read
+# the macro as undefined and compile their NOT_SUPPORTED stub in a full build.
+if(BUILD_PITCH_EDITOR)
+  target_compile_definitions(sonare_core_objects PUBLIC SONARE_WITH_PITCH_EDITOR=1)
+  target_compile_definitions(sonare_core PUBLIC SONARE_WITH_PITCH_EDITOR=1)
+endif()
+
 if(SONARE_FFMPEG_ENABLED)
   target_link_libraries(sonare_core_objects PUBLIC PkgConfig::FFMPEG)
   target_link_libraries(sonare_core PUBLIC PkgConfig::FFMPEG)

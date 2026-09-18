@@ -16,7 +16,9 @@
 #include <vector>
 
 #include "core/audio.h"
+#if defined(SONARE_WITH_PITCH_EDITOR)
 #include "editing/pitch_editor/scale_quantizer.h"
+#endif
 #include "metering/basic.h"
 #include "metering/clipping.h"
 #include "metering/dynamic_range.h"
@@ -704,6 +706,7 @@ void sonare_free_waveform_peak_pyramid_result(SonareWaveformPeakPyramidResult* r
 
 namespace {
 
+#if defined(SONARE_WITH_PITCH_EDITOR)
 editing::pitch_editor::ScaleQuantizerConfig make_scale_config(int root, uint16_t mode_mask,
                                                               float reference_midi) {
   editing::pitch_editor::ScaleQuantizerConfig cfg;
@@ -714,14 +717,19 @@ editing::pitch_editor::ScaleQuantizerConfig make_scale_config(int root, uint16_t
                                     editing::pitch_editor::kMaxReferenceMidi, "reference_midi");
   return cfg;
 }
+#endif
 
 }  // namespace
 
 SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float reference_midi,
                                        float midi, float* out_quantized_midi) {
   SONARE_C_API_ENTRY;
+  // Refused and zeroed before the gate: the stub below returns without reaching
+  // the real body, and a caller that frees or reads the slot on a failure code
+  // would otherwise see whatever was there.
   if (!out_quantized_midi) return SONARE_ERROR_INVALID_PARAMETER;
   *out_quantized_midi = 0.0f;
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (!editing::pitch_editor::valid_scale_args(root, mode_mask) || !std::isfinite(midi)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -730,13 +738,20 @@ SonareError sonare_scale_quantize_midi(int root, uint16_t mode_mask, float refer
   *out_quantized_midi = q.quantize_midi(midi);
   return SONARE_OK;
   SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, reference_midi, midi, out_quantized_midi);
+#endif
 }
 
 SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, float reference_midi,
                                               float midi, float* out_semitones) {
   SONARE_C_API_ENTRY;
+  // Refused and zeroed before the gate: the stub below returns without reaching
+  // the real body, and a caller that frees or reads the slot on a failure code
+  // would otherwise see whatever was there.
   if (!out_semitones) return SONARE_ERROR_INVALID_PARAMETER;
   *out_semitones = 0.0f;
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (!editing::pitch_editor::valid_scale_args(root, mode_mask) || !std::isfinite(midi)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -745,13 +760,20 @@ SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, floa
   *out_semitones = q.correction_semitones(midi);
   return SONARE_OK;
   SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, reference_midi, midi, out_semitones);
+#endif
 }
 
 SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int pitch_class,
                                              int* out_enabled) {
   SONARE_C_API_ENTRY;
+  // Refused and zeroed before the gate: the stub below returns without reaching
+  // the real body, and a caller that frees or reads the slot on a failure code
+  // would otherwise see whatever was there.
   if (!out_enabled) return SONARE_ERROR_INVALID_PARAMETER;
   *out_enabled = 0;
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (pitch_class < 0 || pitch_class > 11) return SONARE_ERROR_INVALID_PARAMETER;
   if (!editing::pitch_editor::valid_scale_args(root, mode_mask)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -761,4 +783,7 @@ SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int p
   *out_enabled = q.pitch_class_enabled(pitch_class) ? 1 : 0;
   return SONARE_OK;
   SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, pitch_class, out_enabled);
+#endif
 }

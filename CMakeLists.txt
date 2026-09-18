@@ -151,11 +151,6 @@ if(BUILD_MIXING AND NOT BUILD_GRAPH)
   set(BUILD_GRAPH ON CACHE BOOL "Build the routing graph library" FORCE)
 endif()
 
-if(NOT BUILD_PITCH_EDITOR)
-  message(STATUS "libsonare: C editing API requires BUILD_PITCH_EDITOR; enabling BUILD_PITCH_EDITOR")
-  set(BUILD_PITCH_EDITOR ON CACHE BOOL "Build monophonic pitch editor primitives" FORCE)
-endif()
-
 if(BUILD_VOICE_CHANGER AND NOT BUILD_MASTERING)
   message(STATUS "libsonare: BUILD_VOICE_CHANGER requires BUILD_MASTERING; disabling BUILD_VOICE_CHANGER")
   set(BUILD_VOICE_CHANGER OFF CACHE BOOL "Build realtime voice changer primitives" FORCE)

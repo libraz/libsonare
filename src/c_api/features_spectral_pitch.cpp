@@ -517,9 +517,13 @@ SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const floa
                                  const SonareNoteSegmenterConfig* config,
                                  SonareNoteSegmentsResult* out) {
   SONARE_C_API_ENTRY;
+  // Refused and zeroed before the gate, so sonare_free_note_segments on a
+  // NOT_SUPPORTED result deletes a null pointer rather than whatever the
+  // caller's stack held.
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   out->segments = nullptr;
   out->count = 0;
+#if defined(SONARE_WITH_PITCH_EDITOR)
   if (f0_hz == nullptr || voiced_prob == nullptr || f0_count == 0 ||
       f0_count != voiced_prob_count ||
       f0_count > static_cast<size_t>(std::numeric_limits<int>::max()) ||
@@ -588,6 +592,10 @@ SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const floa
   out->segments = segments.release();
   return SONARE_OK;
   SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(f0_hz, f0_count, voiced_prob, voiced_prob_count, frame_rate, config,
+                              out);
+#endif
 }
 
 void sonare_free_note_segments(SonareNoteSegmentsResult* result) {
