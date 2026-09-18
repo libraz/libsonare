@@ -10,6 +10,7 @@
 
 #include "analysis/acoustic_analyzer.h"
 #include "analysis/beat_analyzer.h"
+#include "analysis/boundary_detector.h"
 #include "analysis/bpm_analyzer.h"
 #include "analysis/chord_analyzer.h"
 #include "analysis/dynamics_analyzer.h"

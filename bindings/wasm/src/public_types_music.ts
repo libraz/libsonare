@@ -334,6 +334,94 @@ export interface Section {
   name: string;
 }
 
+/** Options for `detectBoundaries`. All fields are optional. */
+export interface BoundaryOptions {
+  /** FFT size used for the structural features. Default 2048. */
+  nFft?: number;
+  /** Hop length in samples. Default 512. */
+  hopLength?: number;
+  /** Checkerboard kernel size in frames. Default 64. */
+  kernelSize?: number;
+  /**
+   * Relative novelty threshold, applied to the curve after it has been scaled by
+   * its own maximum. Selects how prominent a peak must be *within this track*; it
+   * says nothing about how much the features actually changed. Default 0.3.
+   */
+  threshold?: number;
+  /**
+   * Novelty floor applied to the raw response before that scaling, asking whether
+   * anything changed at all. Default 0.005. Set to 0 to gate on {@link threshold}
+   * alone -- but self-scaling turns residual fluctuation into peaks of 1.0, so a
+   * stationary input then segments anyway. Lowering the floor does not recover
+   * level-only structure: a level change turns the feature vector about five times
+   * less than a comparable pitch change, landing below what steady noise produces,
+   * so the noise is admitted first.
+   */
+  absoluteThreshold?: number;
+  /** Number of MFCC coefficients. Default 13. */
+  nMfcc?: number;
+  /** Number of chroma bins. Default 12. */
+  nChroma?: number;
+  /** Minimum spacing between peaks, in seconds. Default 2. */
+  peakDistance?: number;
+  /** Use MFCC features. Default `true`. */
+  useMfcc?: boolean;
+  /** Use chroma features. Default `true`. */
+  useChroma?: boolean;
+}
+
+/**
+ * A single detected structural boundary (mirrors the C `SonareBoundary`).
+ */
+export interface Boundary {
+  /** Boundary time in seconds (the authoritative output). */
+  time: number;
+  /**
+   * Index into the analysis grid, on {@link BoundaryResult.sampleRate}'s time
+   * base rather than the source's. For a long-form input the feature grid is
+   * additionally mean-pooled, so this indexes the pooled grid; use `time` for
+   * sample/second mapping either way.
+   */
+  frame: number;
+  /** Boundary strength (novelty score). */
+  strength: number;
+}
+
+/**
+ * Result of `detectBoundaries` (mirrors the C `SonareBoundaryResult`).
+ */
+export interface BoundaryResult {
+  /** Detected transitions, in time order. */
+  boundaries: Boundary[];
+  /**
+   * Novelty curve scaled by its own maximum, one value per analysis frame. A
+   * peak of 1 means "the most novel frame here", not "a large change"; multiply
+   * by {@link noveltyPeak} to recover the raw response
+   * {@link BoundaryOptions.absoluteThreshold} is compared against.
+   */
+  noveltyCurve: Float32Array;
+  /**
+   * The largest raw checkerboard response, before normalization. Zero when the
+   * curve was left unnormalized because nothing rose above the numerical floor.
+   */
+  noveltyPeak: number;
+  /**
+   * The rate the analysis ran at, not the input's: a source above 22050 Hz is
+   * resampled to 22050 Hz before any feature is computed, which is what makes
+   * {@link Boundary.frame} interpretable.
+   */
+  sampleRate: number;
+  /** Hop length the analysis grid was built on. */
+  hopLength: number;
+  /** Analysis frame count, pooled for a long-form input. */
+  nFrames: number;
+  /**
+   * Feature pooling stride: 1 for every realistic input length, otherwise the
+   * number of raw STFT frames averaged into each analysis frame.
+   */
+  frameStride: number;
+}
+
 /**
  * A single melody contour point (mirrors the C `SonareMelodyPoint`).
  */

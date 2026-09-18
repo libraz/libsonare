@@ -9,6 +9,7 @@ from .types import (
     AcousticResult,
     AnalysisResult,
     AutomationCurve,
+    BoundaryResult,
     BpmAnalysisResult,
     Capabilities,
     CapabilityCatalog,
@@ -479,6 +480,21 @@ def analyze_sections(
     hop_length: int = 512,
     min_section_sec: float = 4.0,
 ) -> SectionResult: ...
+def detect_boundaries(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    kernel_size: int = 64,
+    threshold: float = 0.3,
+    absolute_threshold: float = 0.005,
+    n_mfcc: int = 13,
+    n_chroma: int = 12,
+    peak_distance: float = 2.0,
+    use_mfcc: bool = True,
+    use_chroma: bool = True,
+) -> BoundaryResult: ...
 def analyze_melody(
     samples: FloatSamples,
     sample_rate: int = 22050,

@@ -160,6 +160,9 @@ from .analyzer import (
     detect_beats as detect_beats,
 )
 from .analyzer import (
+    detect_boundaries as detect_boundaries,
+)
+from .analyzer import (
     detect_bpm as detect_bpm,
 )
 from .analyzer import (

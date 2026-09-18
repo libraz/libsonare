@@ -271,6 +271,55 @@ typedef struct {
   size_t section_count;
 } SonareSectionResult;
 
+/* Structural boundary detection. This is the layer sonare_analyze_sections is
+ * built on and is not a coarser view of it: sections are labelled spans, these
+ * are the unlabelled transitions plus the continuous novelty curve they were
+ * picked from, so a caller that wants its own threshold needs this and cannot
+ * derive it from the section list. */
+typedef struct {
+  float time; /* seconds; the authoritative output */
+  /* Index into the ANALYSIS grid, which is not the source's STFT grid: input
+   * above 22.05 kHz is resampled before any feature is computed, and a long
+   * input is additionally mean-pooled (see frame_stride). Use `time` for any
+   * sample or second mapping. */
+  int frame;
+  float strength; /* novelty score */
+} SonareBoundary;
+
+typedef struct {
+  SonareBoundary* boundaries; /* free with sonare_free_boundary_result */
+  size_t boundary_count;
+  /* The novelty curve scaled by its own maximum, so values are in [0, 1] and a
+   * peak of 1.0 means "the most novel frame here" rather than "a large change".
+   * Multiply by novelty_peak to recover the raw response `absolute_threshold`
+   * is compared against. Freed by the same call as `boundaries`. */
+  float* novelty_curve;
+  size_t novelty_length;
+  float novelty_peak; /* 0 when nothing rose above the numerical floor */
+  int sample_rate;    /* the rate the ANALYSIS ran at, not the input's */
+  int hop_length;
+  int n_frames;     /* analysis frames the similarity band was built on */
+  int frame_stride; /* raw frames averaged per analysis frame; 1 unless pooled */
+} SonareBoundaryResult;
+
+/* Zeroing this struct is NOT equivalent to the defaults and changes what is
+ * detected: `absolute_threshold` 0 disables the floor that asks whether the
+ * features changed at all, and without it a stationary input segments anyway,
+ * because the relative threshold is applied to a curve scaled by its own
+ * maximum. Start from sonare_boundary_options_default(). */
+typedef struct {
+  int n_fft;
+  int hop_length;
+  int kernel_size;          /* checkerboard kernel, in frames */
+  float threshold;          /* relative, applied to the self-scaled curve */
+  float absolute_threshold; /* applied to the raw response, before scaling */
+  int n_mfcc;
+  int n_chroma;
+  float peak_distance; /* minimum spacing between peaks, in seconds */
+  int use_mfcc;
+  int use_chroma;
+} SonareBoundaryOptions;
+
 typedef struct {
   float time;       /* seconds */
   float frequency;  /* Hz (0 if unvoiced) */

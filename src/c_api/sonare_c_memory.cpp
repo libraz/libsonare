@@ -349,6 +349,17 @@ void sonare_free_section_result(SonareSectionResult* result) {
   }
 }
 
+void sonare_free_boundary_result(SonareBoundaryResult* result) {
+  if (result) {
+    delete[] result->boundaries;
+    result->boundaries = nullptr;
+    result->boundary_count = 0;
+    delete[] result->novelty_curve;
+    result->novelty_curve = nullptr;
+    result->novelty_length = 0;
+  }
+}
+
 void sonare_free_melody_result(SonareMelodyResult* result) {
   if (result) {
     delete[] result->points;

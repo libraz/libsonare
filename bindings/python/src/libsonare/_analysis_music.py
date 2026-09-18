@@ -8,6 +8,8 @@ from collections.abc import Sequence
 from typing import cast
 
 from ._ffi import (
+    SonareBoundaryOptions,
+    SonareBoundaryResult,
     SonareChordAnalysisResult,
     SonareChordDetectionOptions,
     SonareMelodyResult,
@@ -26,6 +28,8 @@ from ._runtime import (
     _to_c_size_t,
 )
 from .types import (
+    Boundary,
+    BoundaryResult,
     Capabilities,
     Chord,
     ChordAnalysisResult,
@@ -262,6 +266,109 @@ def analyze_sections(
         )
     finally:
         lib.sonare_free_section_result(ctypes.byref(out))
+
+
+@_guard_buffer("samples")
+def detect_boundaries(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    *,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    kernel_size: int = 64,
+    threshold: float = 0.3,
+    absolute_threshold: float = 0.005,
+    n_mfcc: int = 13,
+    n_chroma: int = 12,
+    peak_distance: float = 2.0,
+    use_mfcc: bool = True,
+    use_chroma: bool = True,
+) -> BoundaryResult:
+    """Detect structural boundaries and return the novelty curve behind them.
+
+    This is the unlabelled layer :func:`analyze_sections` is built on, not a
+    coarser view of its output: sections are labelled spans, these are the
+    transitions plus the continuous curve they were picked from, so a caller
+    applying its own threshold needs this and cannot derive it from a section
+    list.
+
+    Args:
+        samples: Mono audio samples (1D float).
+        sample_rate: Sample rate in Hz (default 22050). Rates above 22050 are
+            analyzed at 22050, so boundary times are stable across source rates.
+        n_fft: FFT window size used for the structural features.
+        hop_length: Hop length in samples.
+        kernel_size: Checkerboard kernel size in frames.
+        threshold: Relative novelty threshold, applied to the curve after it has
+            been scaled by its own maximum. Selects how prominent a peak must be
+            *within this track*; it says nothing about how much the features
+            actually changed.
+        absolute_threshold: Novelty floor applied to the raw response before that
+            scaling, asking whether anything changed at all. Set to 0 to gate on
+            ``threshold`` alone -- but note that self-scaling turns residual
+            fluctuation into peaks of 1.0, so a stationary input then segments
+            anyway. Lowering the floor does not recover level-only structure; a
+            level change turns the feature vector about five times less than a
+            comparable pitch change, landing below what steady noise produces, so
+            the noise is admitted first.
+        n_mfcc: Number of MFCC coefficients.
+        n_chroma: Number of chroma bins.
+        peak_distance: Minimum spacing between peaks, in seconds.
+        use_mfcc: Use MFCC features.
+        use_chroma: Use chroma features.
+
+    Returns:
+        A :class:`BoundaryResult`.
+
+    Raises:
+        SonareValueError: If both ``use_mfcc`` and ``use_chroma`` are false --
+            the two streams are combined frame-for-frame, so with neither enabled
+            there is nothing to combine.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_detect_boundaries"):
+        raise RuntimeError("libsonare was built without boundary-detection support")
+    c_array, length = _to_c_float_array(samples)
+    options = SonareBoundaryOptions(
+        n_fft=_to_c_int(n_fft, "n_fft"),
+        hop_length=_to_c_int(hop_length, "hop_length"),
+        kernel_size=_to_c_int(kernel_size, "kernel_size"),
+        threshold=_to_c_float(threshold, "threshold"),
+        absolute_threshold=_to_c_float(absolute_threshold, "absolute_threshold"),
+        n_mfcc=_to_c_int(n_mfcc, "n_mfcc"),
+        n_chroma=_to_c_int(n_chroma, "n_chroma"),
+        peak_distance=_to_c_float(peak_distance, "peak_distance"),
+        use_mfcc=1 if use_mfcc else 0,
+        use_chroma=1 if use_chroma else 0,
+    )
+    out = SonareBoundaryResult()
+    rc = lib.sonare_detect_boundaries(
+        c_array,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(options),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return BoundaryResult(
+            boundaries=[
+                Boundary(
+                    time=float(out.boundaries[i].time),
+                    frame=int(out.boundaries[i].frame),
+                    strength=float(out.boundaries[i].strength),
+                )
+                for i in range(out.boundary_count)
+            ],
+            novelty_curve=[float(out.novelty_curve[i]) for i in range(out.novelty_length)],
+            novelty_peak=float(out.novelty_peak),
+            sample_rate=int(out.sample_rate),
+            hop_length=int(out.hop_length),
+            n_frames=int(out.n_frames),
+            frame_stride=int(out.frame_stride),
+        )
+    finally:
+        lib.sonare_free_boundary_result(ctypes.byref(out))
 
 
 @_guard_buffer("samples")

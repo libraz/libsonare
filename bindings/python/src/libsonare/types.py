@@ -301,6 +301,12 @@ from ._types_engine import (
     AutomationPoint as AutomationPoint,
 )
 from ._types_engine import (
+    Boundary as Boundary,
+)
+from ._types_engine import (
+    BoundaryResult as BoundaryResult,
+)
+from ._types_engine import (
     ClipPageRequest as ClipPageRequest,
 )
 from ._types_engine import (

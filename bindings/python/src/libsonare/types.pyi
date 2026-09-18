@@ -2188,6 +2188,31 @@ class SectionResult:
     sections: list[Section]
     def __init__(self, sections: list[Section]) -> None: ...
 
+class Boundary:
+    time: float
+    frame: int
+    strength: float
+    def __init__(self, time: float, frame: int, strength: float) -> None: ...
+
+class BoundaryResult:
+    boundaries: list[Boundary]
+    novelty_curve: list[float]
+    novelty_peak: float
+    sample_rate: int
+    hop_length: int
+    n_frames: int
+    frame_stride: int
+    def __init__(
+        self,
+        boundaries: list[Boundary],
+        novelty_curve: list[float],
+        novelty_peak: float,
+        sample_rate: int,
+        hop_length: int,
+        n_frames: int,
+        frame_stride: int,
+    ) -> None: ...
+
 class MelodyPoint:
     time: float
     frequency: float

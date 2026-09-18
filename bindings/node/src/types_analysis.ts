@@ -405,6 +405,71 @@ export interface AnalyzeSectionsOptions {
   minSectionSec?: number;
 }
 
+/** Options for {@link detectBoundaries}. All fields are optional. */
+export interface BoundaryOptions {
+  /** FFT size. Default 2048. */
+  nFft?: number;
+  /** Hop length in samples. Default 512. */
+  hopLength?: number;
+  /** Checkerboard kernel size in frames. Default 64. */
+  kernelSize?: number;
+  /** Relative threshold, applied to the self-scaled novelty curve. Default 0.3. */
+  threshold?: number;
+  /**
+   * Absolute threshold, applied to the raw novelty response before it is scaled.
+   * This is the floor that asks whether the features changed at all; at 0 a
+   * stationary input segments anyway, because the relative threshold above is
+   * applied to a curve scaled by its own maximum. Default 0.005.
+   */
+  absoluteThreshold?: number;
+  /** Number of MFCC coefficients. Default 13. */
+  nMfcc?: number;
+  /** Number of chroma bins. Default 12. */
+  nChroma?: number;
+  /** Minimum spacing between peaks in seconds. Default 2. */
+  peakDistance?: number;
+  /** Include MFCC in the similarity features. Default true. */
+  useMfcc?: boolean;
+  /** Include chroma in the similarity features. Default true. */
+  useChroma?: boolean;
+}
+
+/** One detected structural transition. */
+export interface Boundary {
+  /** Boundary time in seconds; the authoritative output. */
+  time: number;
+  /**
+   * Index into the ANALYSIS grid, which is not the source's STFT grid: input
+   * above 22.05 kHz is resampled before any feature is computed, and a long
+   * input is additionally mean-pooled (see `frameStride` on the result). Use
+   * `time` for any sample or second mapping.
+   */
+  frame: number;
+  /** Novelty score at the boundary. */
+  strength: number;
+}
+
+export interface BoundaryResult {
+  boundaries: Boundary[];
+  /**
+   * The novelty curve scaled by its own maximum, so values are in `[0, 1]` and
+   * a peak of 1 means "the most novel frame here" rather than "a large change".
+   * Multiply by `noveltyPeak` to recover the raw response `absoluteThreshold`
+   * is compared against.
+   */
+  noveltyCurve: Float32Array;
+  /** Maximum of the raw novelty response; 0 when nothing rose above the numerical floor. */
+  noveltyPeak: number;
+  /** The rate the ANALYSIS ran at, not the input's. */
+  sampleRate: number;
+  /** The hop length the analysis ran at. */
+  hopLength: number;
+  /** Analysis frames the similarity band was built on. */
+  nFrames: number;
+  /** Raw frames averaged per analysis frame; 1 unless pooled. */
+  frameStride: number;
+}
+
 /**
  * Song-structure section type ordinal (mirrors the C `SonareSectionType`).
  *

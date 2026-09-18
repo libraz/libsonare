@@ -63,6 +63,7 @@ export {
   analyzeSections,
   cqt,
   cqtToAudio,
+  detectBoundaries,
   fourierTempogram,
   hybridCqt,
   lufs,

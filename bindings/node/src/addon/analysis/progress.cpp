@@ -170,6 +170,73 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::DetectBoundaries(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected Float32Array argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sample_rate = node_arg_int(info, 1, 22050);
+
+  // Seeded from the C ABI rather than restated, so the facade cannot drift from
+  // the core's BoundaryConfig. No field here takes ZeroIsSentinel: the C entry
+  // refuses a zero size and reads a zero threshold as "accept every peak".
+  SonareBoundaryOptions options = sonare_boundary_options_default();
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object bag = info[2].As<Napi::Object>();
+    options.n_fft = IntProperty(bag, "nFft", options.n_fft);
+    options.hop_length = IntProperty(bag, "hopLength", options.hop_length);
+    options.kernel_size = IntProperty(bag, "kernelSize", options.kernel_size);
+    options.threshold = FiniteFloatProperty(bag, "threshold", options.threshold);
+    options.absolute_threshold =
+        FiniteFloatProperty(bag, "absoluteThreshold", options.absolute_threshold);
+    options.n_mfcc = IntProperty(bag, "nMfcc", options.n_mfcc);
+    options.n_chroma = IntProperty(bag, "nChroma", options.n_chroma);
+    options.peak_distance = FiniteFloatProperty(bag, "peakDistance", options.peak_distance);
+    options.use_mfcc = BoolProperty(bag, "useMfcc", options.use_mfcc != 0) ? 1 : 0;
+    options.use_chroma = BoolProperty(bag, "useChroma", options.use_chroma != 0) ? 1 : 0;
+  }
+
+  SonareBoundaryResult result{};
+  SonareError err =
+      sonare_detect_boundaries(typed.Data(), typed.ElementLength(), sample_rate, &options, &result);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+
+  Napi::Array boundaries = Napi::Array::New(env, result.boundary_count);
+  for (size_t i = 0; i < result.boundary_count; ++i) {
+    const SonareBoundary& boundary = result.boundaries[i];
+    Napi::Object obj = Napi::Object::New(env);
+    obj.Set("time", Napi::Number::New(env, boundary.time));
+    obj.Set("frame", Napi::Number::New(env, boundary.frame));
+    obj.Set("strength", Napi::Number::New(env, boundary.strength));
+    boundaries.Set(static_cast<uint32_t>(i), obj);
+  }
+
+  auto novelty = Napi::Float32Array::New(env, result.novelty_length);
+  if (result.novelty_length > 0 && result.novelty_curve != nullptr) {
+    std::memcpy(novelty.Data(), result.novelty_curve, result.novelty_length * sizeof(float));
+  }
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("boundaries", boundaries);
+  out.Set("noveltyCurve", novelty);
+  out.Set("noveltyPeak", Napi::Number::New(env, result.novelty_peak));
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("hopLength", Napi::Number::New(env, result.hop_length));
+  out.Set("nFrames", Napi::Number::New(env, result.n_frames));
+  out.Set("frameStride", Napi::Number::New(env, result.frame_stride));
+  sonare_free_boundary_result(&result);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

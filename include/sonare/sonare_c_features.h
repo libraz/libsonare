@@ -91,6 +91,22 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,
                                     int hop_length, float min_section_sec,
                                     SonareSectionResult* out);
+
+/// @brief Returns a fully-initialized @ref SonareBoundaryOptions.
+/// @details Zeroing the struct is not the same thing and changes what is
+///   detected; see the note on the struct.
+SonareBoundaryOptions sonare_boundary_options_default(void);
+
+/// @brief Detects structural boundaries and returns the novelty curve they came
+///   from.
+/// @details The unlabelled layer under @ref sonare_analyze_sections, not a view
+///   of its output: a caller applying its own threshold needs the curve, which a
+///   section list cannot supply.
+/// @param options Must be non-NULL; start from @ref sonare_boundary_options_default.
+/// @param out Receives heap-owned arrays; free with sonare_free_boundary_result.
+SonareError sonare_detect_boundaries(const float* samples, size_t length, int sample_rate,
+                                     const SonareBoundaryOptions* options,
+                                     SonareBoundaryResult* out);
 /// @brief Extracts the melody contour from monophonic audio via plain YIN
 ///   (left-aligned, no Viterbi smoothing). Shorthand for sonare_analyze_melody_ex
 ///   with use_pyin=0.
@@ -134,6 +150,7 @@ void sonare_free_timbre_result(SonareTimbreResult* result);
 void sonare_free_chord_analysis_result(SonareChordAnalysisResult* result);
 void sonare_free_string_array(SonareStringArray* result);
 void sonare_free_section_result(SonareSectionResult* result);
+void sonare_free_boundary_result(SonareBoundaryResult* result);
 void sonare_free_melody_result(SonareMelodyResult* result);
 
 // ============================================================================

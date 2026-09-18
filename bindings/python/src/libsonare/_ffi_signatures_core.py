@@ -514,6 +514,20 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_free_section_result.restype = None
         lib.sonare_free_section_result.argtypes = [ctypes.POINTER(SonareSectionResult)]
 
+    if hasattr(lib, "sonare_detect_boundaries"):
+        lib.sonare_boundary_options_default.restype = SonareBoundaryOptions
+        lib.sonare_boundary_options_default.argtypes = []
+        lib.sonare_detect_boundaries.restype = ctypes.c_int32
+        lib.sonare_detect_boundaries.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareBoundaryOptions),
+            ctypes.POINTER(SonareBoundaryResult),
+        ]
+        lib.sonare_free_boundary_result.restype = None
+        lib.sonare_free_boundary_result.argtypes = [ctypes.POINTER(SonareBoundaryResult)]
+
     if hasattr(lib, "sonare_analyze_melody"):
         lib.sonare_analyze_melody.restype = ctypes.c_int32
         lib.sonare_analyze_melody.argtypes = [

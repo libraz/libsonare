@@ -705,6 +705,40 @@ export interface WasmMelodyPoint {
   confidence: number;
 }
 
+/**
+ * Fully resolved boundary options. Every field is required: the facade spells
+ * each default before the call, so a field name that drifts from the embind
+ * reader fails here rather than falling back to the core default in silence.
+ */
+export interface WasmBoundaryOptions {
+  nFft: number;
+  hopLength: number;
+  kernelSize: number;
+  threshold: number;
+  absoluteThreshold: number;
+  nMfcc: number;
+  nChroma: number;
+  peakDistance: number;
+  useMfcc: boolean;
+  useChroma: boolean;
+}
+
+export interface WasmBoundary {
+  time: number;
+  frame: number;
+  strength: number;
+}
+
+export interface WasmBoundaryResult {
+  boundaries: WasmBoundary[];
+  noveltyCurve: Float32Array;
+  noveltyPeak: number;
+  sampleRate: number;
+  hopLength: number;
+  nFrames: number;
+  frameStride: number;
+}
+
 export interface WasmMelodyResult {
   points: WasmMelodyPoint[];
   pitchRangeOctaves: number;
@@ -3033,6 +3067,11 @@ export interface SonareModule {
     hopLength: number,
     minSectionSec: number,
   ) => WasmSectionResult[];
+  detectBoundaries: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: WasmBoundaryOptions,
+  ) => WasmBoundaryResult;
   analyzeMelody: (
     samples: Float32Array,
     sampleRate: number,

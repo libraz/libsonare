@@ -167,6 +167,49 @@ class SonareSectionResult(CStruct):
     ]
 
 
+class SonareBoundary(CStruct):
+    """Maps to SonareBoundary in sonare_c.h."""
+
+    _fields_ = [
+        ("time", ctypes.c_float),
+        ("frame", ctypes.c_int32),
+        ("strength", ctypes.c_float),
+    ]
+
+
+class SonareBoundaryResult(CStruct):
+    """Maps to SonareBoundaryResult in sonare_c.h."""
+
+    _fields_ = [
+        ("boundaries", ctypes.POINTER(SonareBoundary)),
+        ("boundary_count", ctypes.c_size_t),
+        ("novelty_curve", ctypes.POINTER(ctypes.c_float)),
+        ("novelty_length", ctypes.c_size_t),
+        ("novelty_peak", ctypes.c_float),
+        ("sample_rate", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("n_frames", ctypes.c_int32),
+        ("frame_stride", ctypes.c_int32),
+    ]
+
+
+class SonareBoundaryOptions(CStruct):
+    """Maps to SonareBoundaryOptions in sonare_c.h."""
+
+    _fields_ = [
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("kernel_size", ctypes.c_int32),
+        ("threshold", ctypes.c_float),
+        ("absolute_threshold", ctypes.c_float),
+        ("n_mfcc", ctypes.c_int32),
+        ("n_chroma", ctypes.c_int32),
+        ("peak_distance", ctypes.c_float),
+        ("use_mfcc", ctypes.c_int32),
+        ("use_chroma", ctypes.c_int32),
+    ]
+
+
 class SonareMelodyPoint(CStruct):
     """Maps to SonareMelodyPoint in sonare_c.h."""
 

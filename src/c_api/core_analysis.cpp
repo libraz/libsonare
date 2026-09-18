@@ -484,6 +484,101 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
   });
 }
 
+SonareBoundaryOptions sonare_boundary_options_default(void) {
+  // Copied from the core defaults rather than restated, so the two cannot part.
+  const BoundaryConfig config;
+  SonareBoundaryOptions options;
+  options.n_fft = config.n_fft;
+  options.hop_length = config.hop_length;
+  options.kernel_size = config.kernel_size;
+  options.threshold = config.threshold;
+  options.absolute_threshold = config.absolute_threshold;
+  options.n_mfcc = config.n_mfcc;
+  options.n_chroma = config.n_chroma;
+  options.peak_distance = config.peak_distance;
+  options.use_mfcc = config.use_mfcc ? 1 : 0;
+  options.use_chroma = config.use_chroma ? 1 : 0;
+  return options;
+}
+
+SonareError sonare_detect_boundaries(const float* samples, size_t length, int sample_rate,
+                                     const SonareBoundaryOptions* options,
+                                     SonareBoundaryResult* out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+
+  // Zero the owned out-pointers BEFORE any validating early-return so a rejected
+  // input always leaves NULL owned pointers; otherwise
+  // sonare_free_boundary_result(&r) would delete[] uninitialised pointers.
+  out->boundaries = nullptr;
+  out->boundary_count = 0;
+  out->novelty_curve = nullptr;
+  out->novelty_length = 0;
+  out->novelty_peak = 0.0f;
+  out->sample_rate = 0;
+  out->hop_length = 0;
+  out->n_frames = 0;
+  out->frame_stride = 0;
+  if (!options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (options->n_fft <= 0 || options->hop_length <= 0 || options->kernel_size <= 0 ||
+      options->n_mfcc <= 0 || options->n_chroma <= 0) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // Both thresholds and the peak spacing are compared against measured values,
+  // so a non-finite one silently accepts or rejects every peak instead of
+  // failing.
+  if (!numeric::finite_non_negative(options->threshold) ||
+      !numeric::finite_non_negative(options->absolute_threshold) ||
+      !numeric::finite_non_negative(options->peak_distance)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // The detector combines the two feature streams frame-for-frame; with neither
+  // enabled there is nothing to combine and the novelty curve is undefined.
+  if (!options->use_mfcc && !options->use_chroma) return SONARE_ERROR_INVALID_PARAMETER;
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    BoundaryConfig config;
+    config.n_fft = options->n_fft;
+    config.hop_length = options->hop_length;
+    config.kernel_size = options->kernel_size;
+    config.threshold = options->threshold;
+    config.absolute_threshold = options->absolute_threshold;
+    config.n_mfcc = options->n_mfcc;
+    config.n_chroma = options->n_chroma;
+    config.peak_distance = options->peak_distance;
+    config.use_mfcc = options->use_mfcc != 0;
+    config.use_chroma = options->use_chroma != 0;
+
+    BoundaryDetector detector(audio, config);
+    const std::vector<Boundary>& boundaries = detector.boundaries();
+    if (!boundaries.empty()) {
+      auto data = std::make_unique<SonareBoundary[]>(boundaries.size());
+      for (size_t i = 0; i < boundaries.size(); ++i) {
+        data[i].time = boundaries[i].time;
+        data[i].frame = boundaries[i].frame;
+        data[i].strength = boundaries[i].strength;
+      }
+      out->boundaries = release_array(data);
+      out->boundary_count = boundaries.size();
+    }
+    const std::vector<float>& novelty = detector.novelty_curve();
+    if (!novelty.empty()) {
+      auto curve = std::make_unique<float[]>(novelty.size());
+      std::copy(novelty.begin(), novelty.end(), curve.get());
+      out->novelty_curve = release_array(curve);
+      out->novelty_length = novelty.size();
+    }
+    out->novelty_peak = detector.novelty_peak();
+    // The analysis rate, not the caller's: input above 22.05 kHz is resampled
+    // before any feature is computed, and `frame` indexes that grid.
+    out->sample_rate = detector.sample_rate();
+    out->hop_length = detector.hop_length();
+    out->n_frames = detector.n_frames();
+    out->frame_stride = detector.frame_stride();
+    return SONARE_OK;
+  });
+}
+
 SonareError sonare_analyze_melody(const float* samples, size_t length, int sample_rate, float fmin,
                                   float fmax, int frame_length, int hop_length, float threshold,
                                   SonareMelodyResult* out) {

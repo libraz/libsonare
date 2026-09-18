@@ -28,6 +28,7 @@ import {
   analyze,
   analyzePolyphonic,
   decomposeStems,
+  detectBoundaries,
   estimateMeter,
   extractNotes,
   extractPercussiveEvents,
@@ -230,6 +231,16 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
 }> = [
   { jsName: 'pcen', invoke: (o) => Array.from(pcen(sine(32), 4, 8, o)) },
   { jsName: 'analyze', invoke: (o) => analyze(sine(8192), SR, o) },
+  {
+    // Long enough for the detector's kernel; the novelty curve is compared as
+    // well as the boundary list, so two runs that both found nothing still
+    // separate on the curve.
+    jsName: 'detectBoundaries',
+    invoke: (o) => {
+      const result = detectBoundaries({ ...o, samples: sine(SR * 6), sampleRate: SR });
+      return [result.boundaries, Array.from(result.noveltyCurve), result.noveltyPeak];
+    },
+  },
   {
     jsName: 'estimateMeter',
     invoke: (o) =>

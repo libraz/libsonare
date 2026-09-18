@@ -3,6 +3,8 @@ import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type {
   AnalyzeSectionsOptions,
+  BoundaryOptions,
+  BoundaryResult,
   CqtResult,
   LufsResult,
   MelodyResult,
@@ -26,6 +28,7 @@ function requireModule() {
 
 type GuardedOptions = ValidateOptions;
 type AnalyzeSectionsGuardedOptions = AnalyzeSectionsOptions & ValidateOptions;
+type BoundaryGuardedOptions = BoundaryOptions & ValidateOptions;
 type MelodyGuardedOptions = MelodyOptions & ValidateOptions;
 
 /** Canonical request form shared by the Constant-Q transform variants. */
@@ -88,6 +91,11 @@ export interface VqtToAudioRequest extends CqtToAudioRequest {
 }
 
 export interface AnalyzeSectionsRequest extends AnalyzeSectionsGuardedOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+/** Canonical (and only) call form for {@link detectBoundaries}. */
+export interface DetectBoundariesRequest extends BoundaryGuardedOptions {
   samples: Float32Array;
   sampleRate?: number;
 }
@@ -575,6 +583,86 @@ export function analyzeSections(
     options.minSectionSec ?? 4.0,
   );
   return Array.from(sections, (s) => ({ ...s, type: s.type as SectionType }));
+}
+
+/**
+ * Detect structural boundaries and return the novelty curve behind them.
+ *
+ * This is the unlabelled layer {@link analyzeSections} is built on, not a
+ * coarser view of its output: sections are labelled spans, these are the
+ * transitions plus the continuous curve they were picked from, so a caller
+ * applying its own threshold needs this and cannot derive it from a section
+ * list.
+ *
+ * @param request - Samples, sample rate and {@link BoundaryOptions}
+ * @returns The boundaries, the novelty curve, and the analysis grid they live on
+ * @throws {@link SonareError} with `InvalidParameter` when both `useMfcc` and
+ * `useChroma` are `false`: the two feature streams are combined frame-for-frame,
+ * so with neither enabled there is nothing to combine.
+ *
+ * @example
+ * ```ts
+ * const { boundaries, noveltyCurve, noveltyPeak } = detectBoundaries({
+ *   samples,
+ *   sampleRate: 44100,
+ *   absoluteThreshold: 0.01,
+ * });
+ * // `noveltyCurve` is scaled by its own maximum; recover the raw response with
+ * // `noveltyCurve[i] * noveltyPeak`.
+ * ```
+ */
+export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult {
+  const { samples, sampleRate = 22050 } = request;
+  validateMusicSamples('detectBoundaries', samples, sampleRate, request);
+  const options = {
+    nFft: request.nFft ?? 2048,
+    hopLength: request.hopLength ?? 512,
+    kernelSize: request.kernelSize ?? 64,
+    threshold: request.threshold ?? 0.3,
+    absoluteThreshold: request.absoluteThreshold ?? 0.005,
+    nMfcc: request.nMfcc ?? 13,
+    nChroma: request.nChroma ?? 12,
+    peakDistance: request.peakDistance ?? 2.0,
+    useMfcc: request.useMfcc ?? true,
+    useChroma: request.useChroma ?? true,
+  };
+  validatePositiveIntegers('detectBoundaries', {
+    nFft: options.nFft,
+    hopLength: options.hopLength,
+    kernelSize: options.kernelSize,
+    nMfcc: options.nMfcc,
+    nChroma: options.nChroma,
+  });
+  for (const name of ['threshold', 'absoluteThreshold', 'peakDistance'] as const) {
+    assertFiniteScalar('detectBoundaries', options[name], name);
+    if (options[name] < 0) {
+      throw new RangeError(`detectBoundaries: ${name} must be non-negative`);
+    }
+  }
+  if (!options.useMfcc && !options.useChroma) {
+    throw new SonareError(
+      ErrorCode.InvalidParameter,
+      'InvalidParameter',
+      'detectBoundaries: require useMfcc or useChroma',
+    );
+  }
+  const result = requireModule().detectBoundaries(samples, sampleRate, options);
+  // Re-root the embind array as a plain Array, for the reason analyzeSections
+  // spells out: chaining onto it propagates a constructor structuredClone
+  // rejects, so a result posted from a Worker would fail to clone.
+  return {
+    boundaries: Array.from(result.boundaries, (b) => ({
+      time: b.time,
+      frame: b.frame,
+      strength: b.strength,
+    })),
+    noveltyCurve: result.noveltyCurve,
+    noveltyPeak: result.noveltyPeak,
+    sampleRate: result.sampleRate,
+    hopLength: result.hopLength,
+    nFrames: result.nFrames,
+    frameStride: result.frameStride,
+  };
 }
 
 /** Options for {@link analyzeMelody}. All fields are optional. */

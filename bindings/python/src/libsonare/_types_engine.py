@@ -590,6 +590,41 @@ class SectionResult:
 
 
 @dataclass(frozen=True, slots=True)
+class Boundary:
+    """A detected structural transition."""
+
+    time: float
+    """Seconds. The authoritative output."""
+    frame: int
+    """Index into the analysis grid, which is not the source's STFT grid: input
+    above 22.05 kHz is resampled before any feature is computed, and a long input
+    is additionally mean-pooled (see :attr:`BoundaryResult.frame_stride`). Use
+    :attr:`time` for any sample or second mapping."""
+    strength: float
+    """Novelty score at the boundary."""
+
+
+@dataclass(frozen=True, slots=True)
+class BoundaryResult:
+    """Structural boundaries and the novelty curve they were picked from."""
+
+    boundaries: list[Boundary]
+    novelty_curve: list[float]
+    """Scaled by its own maximum, so values are in [0, 1] and a peak of 1.0 means
+    "the most novel frame here" rather than "a large change". Multiply by
+    :attr:`novelty_peak` to recover the raw response ``absolute_threshold`` is
+    compared against."""
+    novelty_peak: float
+    """0 when nothing rose above the numerical floor."""
+    sample_rate: int
+    """The rate the analysis ran at, not the input's."""
+    hop_length: int
+    n_frames: int
+    frame_stride: int
+    """Raw frames averaged per analysis frame; 1 unless the input was pooled."""
+
+
+@dataclass(frozen=True, slots=True)
 class MelodyPoint:
     """A single point on a melody contour."""
 

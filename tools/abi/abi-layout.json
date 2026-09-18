@@ -245,6 +245,156 @@
     ],
     "size": 16
   },
+  "SonareBoundary": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "time",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "frame",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "strength",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
+  "SonareBoundaryOptions": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "n_fft",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hop_length",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "kernel_size",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "threshold",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "absolute_threshold",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_mfcc",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_chroma",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "peak_distance",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_mfcc",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_chroma",
+        "offset": 36,
+        "size": 4
+      }
+    ],
+    "size": 40
+  },
+  "SonareBoundaryResult": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "boundaries",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "boundary_count",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "novelty_curve",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "novelty_length",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "kind": "float",
+        "name": "novelty_peak",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "sample_rate",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hop_length",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_frames",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "frame_stride",
+        "offset": 48,
+        "size": 4
+      }
+    ],
+    "size": 56
+  },
   "SonareBpmAnalysisResult": {
     "align": 8,
     "fields": [

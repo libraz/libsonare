@@ -176,6 +176,78 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
   return sections;
 }
 
+// Mirrors sonare_detect_boundaries / SonareBoundaryResult and the Python
+// detect_boundaries: the unlabelled layer analyzeSections is built on, returning
+// the transitions plus the novelty curve they were picked from.
+// The options bag seeds itself from BoundaryConfig, so an omitted field takes
+// the core's own default rather than a restated copy of it.
+val js_detect_boundaries(val samples, const val& sample_rate, val options) {
+  const int sr = checkedIntFromVal(sample_rate, "sampleRate");
+
+  BoundaryConfig config;
+  if (!options.isUndefined() && !options.isNull()) {
+    config.n_fft = intProperty(options, "nFft", config.n_fft);
+    config.hop_length = intProperty(options, "hopLength", config.hop_length);
+    config.kernel_size = intProperty(options, "kernelSize", config.kernel_size);
+    config.threshold = floatProperty(options, "threshold", config.threshold);
+    config.absolute_threshold =
+        floatProperty(options, "absoluteThreshold", config.absolute_threshold);
+    config.n_mfcc = intProperty(options, "nMfcc", config.n_mfcc);
+    config.n_chroma = intProperty(options, "nChroma", config.n_chroma);
+    config.peak_distance = floatProperty(options, "peakDistance", config.peak_distance);
+    config.use_mfcc = boolProperty(options, "useMfcc", config.use_mfcc);
+    config.use_chroma = boolProperty(options, "useChroma", config.use_chroma);
+  }
+  // This facade calls the detector directly, so it carries the C ABI's guards
+  // (sonare_detect_boundaries) itself; nothing below would refuse these. They
+  // run before the audio is loaded, in the order the C ABI applies them.
+  if (config.n_fft <= 0 || config.hop_length <= 0 || config.kernel_size <= 0 ||
+      config.n_mfcc <= 0 || config.n_chroma <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "detectBoundaries: require nFft > 0, hopLength > 0, kernelSize > 0, "
+                          "nMfcc > 0, nChroma > 0");
+  }
+  // Both thresholds and the peak spacing are compared against measured values,
+  // so a non-finite one silently accepts or rejects every peak instead of failing.
+  if (!numeric::finite_non_negative(config.threshold) ||
+      !numeric::finite_non_negative(config.absolute_threshold) ||
+      !numeric::finite_non_negative(config.peak_distance)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "detectBoundaries: threshold, absoluteThreshold and peakDistance must be "
+                          "finite and non-negative");
+  }
+  // The detector combines the two feature streams frame-for-frame; with neither
+  // enabled there is nothing to combine and the novelty curve is undefined.
+  if (!config.use_mfcc && !config.use_chroma) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "detectBoundaries: require useMfcc or useChroma");
+  }
+
+  Audio audio = loadValidatedAudio(samples, sr);
+  BoundaryDetector detector(audio, config);
+
+  val boundaries = val::array();
+  for (const Boundary& boundary : detector.boundaries()) {
+    val item = val::object();
+    item.set("time", boundary.time);
+    item.set("frame", boundary.frame);
+    item.set("strength", boundary.strength);
+    boundaries.call<void>("push", item);
+  }
+
+  val out = val::object();
+  out.set("boundaries", boundaries);
+  out.set("noveltyCurve", vectorToFloat32Array(detector.novelty_curve()));
+  out.set("noveltyPeak", detector.novelty_peak());
+  // The analysis rate, not the caller's: input above 22.05 kHz is resampled
+  // before any feature is computed, and `frame` indexes that grid.
+  out.set("sampleRate", detector.sample_rate());
+  out.set("hopLength", detector.hop_length());
+  out.set("nFrames", detector.n_frames());
+  out.set("frameStride", detector.frame_stride());
+  return out;
+}
+
 // Mirrors sonare_analyze_melody / SonareMelodyResult: extracts the melody
 // contour via YIN and returns { points: [{ time, frequency, confidence }],
 // pitchRangeOctaves, pitchStability, meanFrequency, vibratoRate }.
@@ -326,6 +398,7 @@ void registerFeatureMusicBindings() {
   function("hybridCqt", &js_hybrid_cqt);
   function("vqt", &js_vqt);
   function("analyzeSections", &js_analyze_sections);
+  function("detectBoundaries", &js_detect_boundaries);
   function("analyzeMelody", &js_analyze_melody);
 }
 

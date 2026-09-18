@@ -102,6 +102,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::AnalyzeWithProgress, "analyzeWithProgress"));
   exports.Set("analyzeSections",
               Napi::Function::New(env, &SonareWrap::AnalyzeSections, "analyzeSections"));
+  exports.Set("detectBoundaries",
+              Napi::Function::New(env, &SonareWrap::DetectBoundaries, "detectBoundaries"));
   exports.Set("analyzeMelody",
               Napi::Function::New(env, &SonareWrap::AnalyzeMelody, "analyzeMelody"));
   exports.Set("analyzeBpm", Napi::Function::New(env, &SonareWrap::AnalyzeBpm, "analyzeBpm"));

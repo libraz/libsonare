@@ -10,6 +10,8 @@ import type {
   AnalyzeRhythmOptions,
   AnalyzeSectionsOptions,
   AnalyzeTimbreOptions,
+  BoundaryOptions,
+  BoundaryResult,
   BpmAnalysisResult,
   ChordAnalysisResult,
   ChordChromaMethod,
@@ -182,6 +184,7 @@ export interface EstimateMeterRequest {
 }
 
 export interface AnalyzeSectionsRequest extends AnalyzeSectionsOptions, SamplesRequest {}
+export interface DetectBoundariesRequest extends BoundaryOptions, SamplesRequest {}
 export interface AnalyzeMelodyRequest extends MelodyOptions, SamplesRequest {}
 export interface AnalyzeBpmRequest extends AnalyzeBpmOptions, SamplesRequest {}
 export interface AnalyzeRhythmRequest extends AnalyzeRhythmOptions, SamplesRequest {}
@@ -464,6 +467,44 @@ export function analyzeSections(
     fft.hopLength,
     request.minSectionSec ?? 4.0,
   );
+}
+
+/**
+ * Detect structural boundaries and return the novelty curve they came from.
+ *
+ * This is the layer {@link analyzeSections} is built on, not a coarser view of
+ * it: sections are labelled spans, these are the unlabelled transitions plus
+ * the continuous curve they were picked from, so a caller that wants its own
+ * threshold needs this and cannot derive it from the section list.
+ *
+ * Two thresholds decide what is returned. `absoluteThreshold` is compared
+ * against the raw response and asks whether the features changed at all;
+ * `threshold` is relative and is applied to the curve after it has been scaled
+ * by its own maximum, so it cannot answer that question on its own.
+ *
+ * The analysis resamples anything above 22.05 kHz before computing a feature,
+ * so the result's `sampleRate`, `hopLength` and `frameStride` describe the
+ * analysis grid `frame` indexes rather than the input. `time` is the
+ * authoritative output.
+ *
+ * @example
+ * ```ts
+ * const { boundaries, noveltyCurve, noveltyPeak } = detectBoundaries({
+ *   samples,
+ *   sampleRate: 44100,
+ * });
+ * for (const boundary of boundaries) {
+ *   console.log(boundary.time, boundary.strength);
+ * }
+ * ```
+ */
+export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('detectBoundaries', resolvedSampleRate);
+  // Validation only: the addon seeds every default from the C ABI, so the
+  // resolved pair is deliberately not passed on.
+  resolveFftOptions('detectBoundaries', request.nFft, request.hopLength);
+  return addon.detectBoundaries(request.samples, resolvedSampleRate, request);
 }
 
 /**
