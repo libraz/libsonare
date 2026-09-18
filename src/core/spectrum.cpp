@@ -559,6 +559,19 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins == n_fft / 2 + 1, ErrorCode::InvalidParameter);
+  // This is an overlap-add reconstruction, so it owes the same geometry the other
+  // reconstructing paths check: past nFft/2 the windows stop summing to a constant
+  // and the result comes back amplitude-modulated at the frame rate.
+  validate_cola_geometry(n_fft, hop_length);
+  // Bounded here rather than at each binding, for the reason the finiteness check
+  // below gives: the iteration count is the caller's alone and nothing downstream
+  // narrows it. Zero is a real request -- the random-phase seed, reconstructed
+  // once -- while a negative runs the same empty loop under a different number.
+  SONARE_CHECK_MSG(config.n_iter >= 0 && config.n_iter <= resource::kMaxGriffinLimIterations,
+                   ErrorCode::InvalidParameter,
+                   "griffin_lim: nIter must be in [0, " +
+                       std::to_string(resource::kMaxGriffinLimIterations) + "], got " +
+                       std::to_string(config.n_iter));
 
   // Element count in size_t so the n_bins*n_frames multiply and the column-major
   // index cannot overflow int for large caller-supplied n_frames.

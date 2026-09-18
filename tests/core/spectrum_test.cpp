@@ -607,6 +607,44 @@ TEST_CASE("Griffin-Lim preserves inferred centered extent for non-multiple lengt
   REQUIRE(reconstructed.size() == expected);
 }
 
+TEST_CASE("Griffin-Lim refuses a geometry that cannot overlap-add and an unbounded iteration count",
+          "[spectrum]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 4096;
+  constexpr int n_fft = 512;
+  constexpr int hop_length = 128;
+  Audio audio = Audio::from_vector(generate_sine(samples, 440.0f, sr), sr);
+
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.center = true;
+  Spectrogram spec = Spectrogram::compute(audio, config);
+  const std::vector<float>& mag = spec.magnitude();
+  const int n_bins = spec.n_bins();
+  const int n_frames = spec.n_frames();
+
+  const auto run = [&](int hop, int n_iter) {
+    GriffinLimConfig gl;
+    gl.n_iter = n_iter;
+    return griffin_lim(mag, n_bins, n_frames, n_fft, hop, sr, gl);
+  };
+
+  // Past nFft/2 the analysis windows stop summing to a constant, so the
+  // reconstruction comes back amplitude-modulated at the frame rate under a
+  // successful return. nFft/2 itself still overlaps and is accepted.
+  REQUIRE_NOTHROW(run(n_fft / 2, 1));
+  REQUIRE_THROWS_AS(run(n_fft / 2 + 1, 1), SonareException);
+  REQUIRE_THROWS_AS(run(n_fft, 1), SonareException);
+
+  // Zero iterations is a real request -- the random-phase seed, reconstructed
+  // once -- and librosa spells it the same way, so only a negative is refused.
+  REQUIRE_NOTHROW(run(hop_length, 0));
+  REQUIRE_THROWS_AS(run(hop_length, -1), SonareException);
+  REQUIRE_NOTHROW(run(hop_length, resource::kMaxGriffinLimIterations));
+  REQUIRE_THROWS_AS(run(hop_length, resource::kMaxGriffinLimIterations + 1), SonareException);
+}
+
 TEST_CASE("Spectrogram from_complex", "[spectrum]") {
   constexpr int n_bins = 5;
   constexpr int n_frames = 3;
