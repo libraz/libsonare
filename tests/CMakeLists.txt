@@ -152,6 +152,7 @@ add_executable(sonare_tests
   api/sonare_c_effects_extra_test.cpp
   api/sonare_c_note_objects_test.cpp
   api/sonare_c_note_split_merge_test.cpp
+  api/sonare_c_note_targets_test.cpp
   api/sonare_c_polyphony_test.cpp
   api/sonare_c_percussive_events_test.cpp
   api/sonare_c_transcribe_test.cpp

@@ -10,9 +10,16 @@
 #include "editing/note_model/note_extractor.h"
 #include "editing/note_model/note_renderer.h"
 #include "editing/note_model/note_split_merge.h"
+#include "editing/note_model/note_target.h"
 #include "editing/note_model/pitch_decomposition.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
+#endif
+// The SMF reader lives in the MIDI library rather than beside the assignment
+// rule it feeds, so it carries the arrangement gate and not the pitch-editor
+// one: a build with one and not the other ships exactly the half it linked.
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "midi/note_targets.h"
 #endif
 #include <sonare/sonare_c.h>
 
@@ -325,6 +332,41 @@ SonareError run_note_set_edit(const float* samples, size_t length, int sample_ra
     }
     return fill_note_objects_result(apply(audio, track, core_notes, extractor_config), out);
   });
+}
+
+// The C ordinals are the core enumeration's, so the two cannot drift apart
+// without this failing to compile.
+static_assert(static_cast<int>(editing::note_model::UnmatchedTargetPolicy::Leave) ==
+                  SONARE_NOTE_TARGET_UNMATCHED_LEAVE,
+              "UnmatchedTargetPolicy::Leave must match its C ordinal");
+static_assert(static_cast<int>(editing::note_model::UnmatchedTargetPolicy::Mute) ==
+                  SONARE_NOTE_TARGET_UNMATCHED_MUTE,
+              "UnmatchedTargetPolicy::Mute must match its C ordinal");
+static_assert(static_cast<int>(editing::note_model::UnmatchedTargetPolicy::Nearest) ==
+                  SONARE_NOTE_TARGET_UNMATCHED_NEAREST,
+              "UnmatchedTargetPolicy::Nearest must match its C ordinal");
+
+/// Resolves a note-target assign config onto the core defaults. Unlike the
+/// note-extractor configs, 0 is a legal value for both floats, so a non-NULL
+/// config is taken field by field rather than read as "0 means default".
+SonareError resolve_note_target_config(const SonareNoteTargetAssignConfig* config,
+                                       editing::note_model::NoteTargetAssignConfig& out) {
+  if (config == nullptr) return SONARE_OK;
+  if (config->unmatched_policy != SONARE_NOTE_TARGET_UNMATCHED_LEAVE &&
+      config->unmatched_policy != SONARE_NOTE_TARGET_UNMATCHED_MUTE &&
+      config->unmatched_policy != SONARE_NOTE_TARGET_UNMATCHED_NEAREST) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!std::isfinite(config->min_overlap_ratio) || config->min_overlap_ratio < 0.0f ||
+      config->min_overlap_ratio > 1.0f || !std::isfinite(config->max_correction_semitones) ||
+      config->max_correction_semitones < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  out.unmatched_policy =
+      static_cast<editing::note_model::UnmatchedTargetPolicy>(config->unmatched_policy);
+  out.min_overlap_ratio = config->min_overlap_ratio;
+  out.max_correction_semitones = config->max_correction_semitones;
+  return SONARE_OK;
 }
 
 #endif
@@ -736,6 +778,109 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
                               frame_rate, config, notes, note_count, envelopes, envelope_count,
                               first, last, out);
+#endif
+}
+
+SonareError sonare_note_target_assign_config_default(SonareNoteTargetAssignConfig* config) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  const editing::note_model::NoteTargetAssignConfig defaults{};
+  config->unmatched_policy = static_cast<int32_t>(defaults.unmatched_policy);
+  config->min_overlap_ratio = defaults.min_overlap_ratio;
+  config->max_correction_semitones = defaults.max_correction_semitones;
+  return SONARE_OK;
+#else
+  if (config) *config = {};
+  SONARE_C_STUB_NOT_SUPPORTED(config);
+#endif
+}
+
+SonareError sonare_note_targets_from_smf(const uint8_t* bytes, size_t len, int track_index,
+                                         SonareNoteTarget** out, size_t* out_count) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_count = 0;
+
+  SONARE_C_TRY
+  const std::vector<editing::note_model::NoteTarget> targets =
+      midi::note_targets_from_smf(bytes, len, track_index);
+  if (targets.empty()) return SONARE_OK;
+  auto rows = std::make_unique<SonareNoteTarget[]>(targets.size());
+  for (size_t i = 0; i < targets.size(); ++i) {
+    rows[i].start_sec = targets[i].start_sec;
+    rows[i].end_sec = targets[i].end_sec;
+    rows[i].target_midi = targets[i].target_midi;
+  }
+  *out_count = targets.size();
+  *out = rows.release();
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  if (out) *out = nullptr;
+  if (out_count) *out_count = 0;
+  SONARE_C_STUB_NOT_SUPPORTED(bytes, len, track_index, out, out_count);
+#endif
+}
+
+void sonare_free_note_targets(SonareNoteTarget* targets) { delete[] targets; }
+
+SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_count, int sample_rate,
+                                       const SonareNoteTarget* targets, size_t target_count,
+                                       const SonareNoteTargetAssignConfig* config,
+                                       size_t* out_assigned_count) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  if (out_assigned_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_assigned_count = 0;
+  if (notes == nullptr && note_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (targets == nullptr && target_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  editing::note_model::NoteTargetAssignConfig assign_config;
+  const SonareError config_error = resolve_note_target_config(config, assign_config);
+  if (config_error != SONARE_OK) return config_error;
+
+  std::vector<editing::note_model::NoteTarget> core_targets(target_count);
+  for (size_t i = 0; i < target_count; ++i) {
+    // Rejected here rather than downstream: every overlap comparison is false for
+    // a NaN, so a non-finite target would be selected and then written into
+    // pitch_shift_semitones with nothing left to catch it.
+    if (!std::isfinite(targets[i].start_sec) || !std::isfinite(targets[i].end_sec) ||
+        !std::isfinite(targets[i].target_midi)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    core_targets[i].start_sec = targets[i].start_sec;
+    core_targets[i].end_sec = targets[i].end_sec;
+    core_targets[i].target_midi = targets[i].target_midi;
+  }
+
+  SONARE_C_TRY
+  // Only the fields the rule reads go across, and only the two it writes come
+  // back, so a note's amplitude slice and its other edits survive the call
+  // untouched -- which is what editing in place has to mean here.
+  std::vector<editing::note_model::NoteObject> core_notes(note_count);
+  for (size_t i = 0; i < note_count; ++i) {
+    core_notes[i].onset_sample = notes[i].onset_sample;
+    core_notes[i].offset_sample = notes[i].offset_sample;
+    core_notes[i].median_hz = notes[i].median_hz;
+    core_notes[i].edit.pitch_shift_semitones = notes[i].edit.pitch_shift_semitones;
+    core_notes[i].edit.muted = notes[i].edit.muted != 0;
+  }
+  const size_t assigned = editing::note_model::assign_note_targets(core_notes, sample_rate,
+                                                                   core_targets, assign_config);
+  for (size_t i = 0; i < note_count; ++i) {
+    notes[i].edit.pitch_shift_semitones = core_notes[i].edit.pitch_shift_semitones;
+    notes[i].edit.muted = core_notes[i].edit.muted ? 1 : 0;
+  }
+  *out_assigned_count = assigned;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(notes, note_count, sample_rate, targets, target_count, config,
+                              out_assigned_count);
 #endif
 }
 

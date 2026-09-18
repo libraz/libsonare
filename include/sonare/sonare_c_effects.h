@@ -496,6 +496,105 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
                                size_t last, SonareNoteObjectsResult* out);
 
 // ============================================================================
+// Effects - Note targets
+// ============================================================================
+
+/// One note of a reference melody. Times are seconds from the start of the audio
+/// the notes were extracted from.
+typedef struct {
+  double start_sec;
+  double end_sec;
+  float target_midi;
+} SonareNoteTarget;
+
+/// @brief What to do with a note that has a measurable pitch but no target.
+typedef enum SONARE_ENUM_BASE {
+  SONARE_NOTE_TARGET_UNMATCHED_LEAVE = 0,  ///< Leave the edit alone; the note renders as recorded.
+  SONARE_NOTE_TARGET_UNMATCHED_MUTE = 1,   ///< Mute the note's span.
+  SONARE_NOTE_TARGET_UNMATCHED_NEAREST = 2,  ///< Take the nearest target in time, however far away.
+} SonareNoteTargetUnmatchedPolicy;
+
+/// @brief Tunable configuration for @ref sonare_assign_note_targets.
+/// @details Zero-initialising this struct is NOT a valid default -- a zeroed
+///          @c max_correction_semitones saturates every correction to nothing,
+///          so the call would assign targets and move no note. Populate it via
+///          @ref sonare_note_target_assign_config_default, or pass NULL to take
+///          the library defaults.
+typedef struct {
+  int32_t unmatched_policy;  ///< @ref SonareNoteTargetUnmatchedPolicy.
+  /// Fraction of the note that must overlap a target for it to count. 0 is its
+  /// own meaning -- any overlap at all counts -- not a request for the default.
+  float min_overlap_ratio;
+  /// The assigned shift saturates here rather than being refused, matching
+  /// @c SonareNoteEdit::formant_shift_semitones: a reference an octave out is a
+  /// wrong reference, and a rejected call tells the caller less than a bounded
+  /// correction does. 0 is its own meaning, as above.
+  float max_correction_semitones;
+} SonareNoteTargetAssignConfig;
+
+/// @brief Fills @p config with the library defaults (unmatched notes left alone,
+///        half the note must overlap, corrections saturate at an octave).
+SonareError sonare_note_target_assign_config_default(SonareNoteTargetAssignConfig* config);
+
+/// @brief Reads one track of an in-memory Standard MIDI File as a reference melody.
+/// @details Each note-on is paired with the next note-off of the same note number
+///          on the same channel, and the pair becomes one target at the note's own
+///          pitch. A note-on the track never closes is dropped: it has no end, and
+///          the track's end is not a substitute for one -- the file's length is
+///          derived from its last event, which is the open note-on itself when the
+///          file stops there. With events after it, the note would instead span the
+///          whole remainder and, being the longest overlap everywhere, take the
+///          assignment away from every note that follows.
+///
+///          Times follow the file's tempo map, so a tempo change or a tempo ramp
+///          inside it is honoured rather than the initial tempo being scaled.
+///          Zero-length notes are skipped -- they overlap nothing, so they could
+///          never be assigned.
+/// @param track_index Index into the tracks that carried MIDI events, NOT the
+///        SMF's own track numbering: a track holding only meta events -- a
+///        conductor track carrying the tempo map is the usual one -- is not
+///        counted here. A file whose first track is a conductor track therefore
+///        has its melody at index 0, not 1.
+/// @param out Receives a heap-owned array of @p out_count targets, sorted by
+///        @c start_sec. A track with no closed note is reported as NULL and 0
+///        rather than as an error.
+/// @note The returned array MUST be released with @ref sonare_free_note_targets.
+SonareError sonare_note_targets_from_smf(const uint8_t* bytes, size_t len, int track_index,
+                                         SonareNoteTarget** out, size_t* out_count);
+void sonare_free_note_targets(SonareNoteTarget* targets);
+
+/// @brief Writes each note's @c pitch_shift_semitones from the target it overlaps.
+/// @details Rewrites @p notes in place, so @c edit means the same field going in
+///          and coming out and no second note-object result is produced.
+///
+///          A note is matched to the target it overlaps longest, provided that
+///          overlap is at least @c min_overlap_ratio of the note's own span; ties
+///          go to the target that starts first. The shift is
+///          @c target_midi minus the note's own @c median_hz as a MIDI number,
+///          saturated at @c max_correction_semitones.
+///
+///          A note whose @c median_hz is not finite and positive is never assigned
+///          and never edited, whatever the policy says. Such a note has no
+///          measured pitch to correct from -- the extractor spells that the way an
+///          F0 track spells an unvoiced frame -- so NEAREST would compute a shift
+///          from a pitch that does not exist. The policy governs notes that have a
+///          pitch and no target, which is a different thing from having no pitch.
+/// @param notes The note set to edit, in place. May be NULL when @p note_count
+///        is 0. Only @c median_hz, the sample bounds and @c edit are read.
+/// @param sample_rate Converts each note's sample span to seconds; must be > 0.
+/// @param targets May be NULL when @p target_count is 0, which assigns nothing
+///        and applies the policy to every note carrying a pitch.
+/// @param config Optional configuration; NULL selects the library defaults.
+/// @param out_assigned_count Receives how many notes got a target. Zero is a
+///        legitimate answer -- a reference that does not line up with the take --
+///        and the caller has to be able to see it, which is why it is reported
+///        rather than left implicit in the notes.
+SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_count, int sample_rate,
+                                       const SonareNoteTarget* targets, size_t target_count,
+                                       const SonareNoteTargetAssignConfig* config,
+                                       size_t* out_assigned_count);
+
+// ============================================================================
 // Effects - Percussive events
 // ============================================================================
 
