@@ -105,9 +105,7 @@ describe('detectBoundaries', () => {
     expect(() =>
       detectBoundaries({ samples, sampleRate: SR, useMfcc: false, useChroma: false }),
     ).toThrow();
-    expect(() =>
-      detectBoundaries({ samples, sampleRate: SR, absoluteThreshold: -1 }),
-    ).toThrow();
+    expect(() => detectBoundaries({ samples, sampleRate: SR, absoluteThreshold: -1 })).toThrow();
   });
 
   it('refuses a wrong-typed option by name rather than substituting a default', () => {

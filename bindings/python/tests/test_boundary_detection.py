@@ -102,9 +102,7 @@ def test_the_absolute_threshold_is_what_keeps_stationary_input_unsegmented(stati
     with_floor = libsonare.detect_boundaries(stationary, sample_rate=_SR)
     assert with_floor.boundaries == []
 
-    without_floor = libsonare.detect_boundaries(
-        stationary, sample_rate=_SR, absolute_threshold=0.0
-    )
+    without_floor = libsonare.detect_boundaries(stationary, sample_rate=_SR, absolute_threshold=0.0)
     assert len(without_floor.boundaries) > 0
 
 
@@ -137,15 +135,13 @@ def test_disabling_both_feature_streams_is_refused(three_sections) -> None:
         )
 
     # Either one alone is accepted, so the refusal is about the combination.
-    assert libsonare.detect_boundaries(
-        three_sections, sample_rate=_SR, use_chroma=False
-    ).n_frames > 0
-    assert libsonare.detect_boundaries(
-        three_sections, sample_rate=_SR, use_mfcc=False
-    ).n_frames > 0
+    assert (
+        libsonare.detect_boundaries(three_sections, sample_rate=_SR, use_chroma=False).n_frames > 0
+    )
+    assert libsonare.detect_boundaries(three_sections, sample_rate=_SR, use_mfcc=False).n_frames > 0
 
 
 @pytest.mark.parametrize("option", ["n_fft", "hop_length", "kernel_size", "n_mfcc", "n_chroma"])
 def test_non_positive_grid_options_are_refused(three_sections, option) -> None:
     with pytest.raises(libsonare.SonareError):
-        libsonare.detect_boundaries(three_sections[: _SR], sample_rate=_SR, **{option: 0})
+        libsonare.detect_boundaries(three_sections[:_SR], sample_rate=_SR, **{option: 0})
