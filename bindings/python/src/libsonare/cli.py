@@ -630,11 +630,16 @@ def _build_parser() -> _ContractArgumentParser:
     chords_p.add_argument(
         "--min-duration", type=_finite_float, default=0.3, help="Minimum chord duration in seconds"
     )
-    chords_p.add_argument(
-        "--smoothing-window",
-        type=_finite_float,
-        default=2.0,
-        help="Chroma smoothing window in seconds",
+    _cli_domain(
+        chords_p.add_argument(
+            "--smoothing-window",
+            type=_finite_float,
+            default=2.0,
+            help="Chroma smoothing window in seconds",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+        reject_exit="invalid_parameter",
     )
     chords_p.add_argument(
         "--threshold", type=_finite_float, default=0.5, help="Chord detection confidence threshold"
@@ -651,7 +656,15 @@ def _build_parser() -> _ContractArgumentParser:
     chords_p.add_argument(
         "--use-hmm", action="store_true", help="Decode the chord sequence with an HMM"
     )
-    chords_p.add_argument("--hmm-beam-width", type=int, default=24, help="HMM decoder beam width")
+    # 0 keeps the full search rather than disabling the decoder, so the range is
+    # closed at the bottom and only a negative width is refused.
+    _cli_domain(
+        chords_p.add_argument(
+            "--hmm-beam-width", type=int, default=24, help="HMM decoder beam width"
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
     chords_p.add_argument(
         "--key-context", action="store_true", help="Bias detection with a key context"
     )
@@ -701,14 +714,27 @@ def _build_parser() -> _ContractArgumentParser:
         help="Beat unit reported for the detected meter (default: 4)",
     )
     mel_p = sub.add_parser("mel", parents=[mel_options], help="Compute mel spectrogram")
-    mel_p.add_argument(
-        "--fmin", type=_finite_float, default=0.0, help="Lowest mel band frequency in Hz"
+    # 0 is the librosa default both bounds are spelled with, so the range is
+    # closed at the bottom rather than starting above it. Declared on the action
+    # rather than on the type callable: argparse takes any finite number here and
+    # the filterbank is what refuses a negative, so the refusal is the
+    # invalid-parameter class, not the usage one.
+    _cli_domain(
+        mel_p.add_argument(
+            "--fmin", type=_finite_float, default=0.0, help="Lowest mel band frequency in Hz"
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
     )
-    mel_p.add_argument(
-        "--fmax",
-        type=_finite_float,
-        default=0.0,
-        help="Highest mel band frequency in Hz (0 = Nyquist)",
+    _cli_domain(
+        mel_p.add_argument(
+            "--fmax",
+            type=_finite_float,
+            default=0.0,
+            help="Highest mel band frequency in Hz (0 = Nyquist)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
     )
     mel_p.add_argument(
         "--htk", action="store_true", help="Use the HTK mel formula instead of Slaney"
@@ -937,16 +963,29 @@ def _build_parser() -> _ContractArgumentParser:
     pitch_shift_p.add_argument(
         "--semitones", type=_finite_float, help="Semitones to shift (positive = up)"
     )
-    pitch_shift_p.add_argument("--n-fft", type=int, default=2048)
-    pitch_shift_p.add_argument("--hop-length", type=int, default=512)
+    # The spectral backend repairs a non-positive geometry into the librosa
+    # defaults instead of refusing it, so the refusal a caller gets is the
+    # handler's; these two commands are where it is reachable from a command line.
+    for _geometry_option, _geometry_default in (("--n-fft", 2048), ("--hop-length", 512)):
+        _cli_domain(
+            pitch_shift_p.add_argument(_geometry_option, type=int, default=_geometry_default),
+            minimum=0,
+            exclusive_minimum=True,
+            reject_exit="invalid_parameter",
+        )
     time_stretch_p = sub.add_parser(
         "time-stretch", parents=[common], help="Time-stretch without changing pitch"
     )
     time_stretch_p.add_argument(
         "--rate", type=_finite_float, help="Stretch factor (>1 speeds up, <1 slows down)"
     )
-    time_stretch_p.add_argument("--n-fft", type=int, default=2048)
-    time_stretch_p.add_argument("--hop-length", type=int, default=512)
+    for _geometry_option, _geometry_default in (("--n-fft", 2048), ("--hop-length", 512)):
+        _cli_domain(
+            time_stretch_p.add_argument(_geometry_option, type=int, default=_geometry_default),
+            minimum=0,
+            exclusive_minimum=True,
+            reject_exit="invalid_parameter",
+        )
     normalize_p = sub.add_parser(
         "normalize", parents=[common], help="Peak-normalize audio to a target dB level"
     )
@@ -1049,8 +1088,15 @@ def _build_parser() -> _ContractArgumentParser:
         p.add_argument("--length", type=_finite_float, default=7.0, help="Room length (m)")
         p.add_argument("--width", type=_finite_float, default=5.0, help="Room width (m)")
         p.add_argument("--height", type=_finite_float, default=3.0, help="Room height (m)")
-        p.add_argument(
-            "--absorption", type=_finite_float, default=0.2, help="Uniform wall absorption"
+        # The room builder clamps rather than validates, so the refusal comes from
+        # the material check beside it -- an invalid parameter, not a usage error.
+        _cli_domain(
+            p.add_argument(
+                "--absorption", type=_finite_float, default=0.2, help="Uniform wall absorption"
+            ),
+            minimum=0,
+            maximum=1,
+            reject_exit="invalid_parameter",
         )
         p.add_argument("--source-x", type=_finite_float, default=1.0)
         p.add_argument("--source-y", type=_finite_float, default=1.0)
@@ -1059,7 +1105,14 @@ def _build_parser() -> _ContractArgumentParser:
         p.add_argument("--listener-y", type=_finite_float, default=4.0)
         p.add_argument("--listener-z", type=_finite_float, default=1.7)
         p.add_argument("--ism-order", type=int, default=3, help="Image-source reflection order")
-        p.add_argument("--seed", type=int, default=1, help="Deterministic late-tail seed")
+        # The C field is a uint32 and 0 is its library-default sentinel, so the
+        # range is closed at both ends rather than refusing only a negative.
+        _cli_domain(
+            p.add_argument("--seed", type=int, default=1, help="Deterministic late-tail seed"),
+            minimum=0,
+            maximum=0xFFFFFFFF,
+            reject_exit="invalid_parameter",
+        )
         p.add_argument(
             "--max-seconds",
             type=_finite_float,
@@ -1117,13 +1170,26 @@ def _build_parser() -> _ContractArgumentParser:
     rhythm_p = sub.add_parser(
         "rhythm", parents=[fft_stdout_options], help="Analyze rhythm primitives"
     )
-    rhythm_p.add_argument("--start-bpm", type=_finite_float, default=120.0)
-    rhythm_p.add_argument("--bpm-min", type=_finite_float, default=60.0)
-    rhythm_p.add_argument("--bpm-max", type=_finite_float, default=200.0)
+    for _tempo_option, _tempo_default in (
+        ("--start-bpm", 120.0),
+        ("--bpm-min", 60.0),
+        ("--bpm-max", 200.0),
+    ):
+        _cli_domain(
+            rhythm_p.add_argument(_tempo_option, type=_finite_float, default=_tempo_default),
+            minimum=0,
+            exclusive_minimum=True,
+            reject_exit="invalid_parameter",
+        )
     dynamics_p = sub.add_parser(
         "dynamics", parents=[stdout_options], help="Analyze dynamics/loudness"
     )
-    dynamics_p.add_argument("--window-sec", type=_finite_float, default=0.4)
+    _cli_domain(
+        dynamics_p.add_argument("--window-sec", type=_finite_float, default=0.4),
+        minimum=0,
+        exclusive_minimum=True,
+        reject_exit="invalid_parameter",
+    )
     # Dynamics windows the loudness series but runs no FFT, so it takes the hop
     # control without the matching --n-fft.
     dynamics_p.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
