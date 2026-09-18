@@ -70,6 +70,9 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
   SONARE_CHECK(sr > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_fft > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.n_mels > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(config.n_mels <= kMaxMelBands, ErrorCode::InvalidParameter,
+                   "MelFilterConfig: nMels must not exceed " + std::to_string(kMaxMelBands) +
+                       ", got " + std::to_string(config.n_mels));
 
   int n_bins = n_fft / 2 + 1;
   const float nyquist = static_cast<float>(sr) / 2.0f;
@@ -99,7 +102,10 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
   }
 
   /// Create filterbank matrix [n_mels x n_bins]
-  std::vector<float> filterbank(config.n_mels * n_bins, 0.0f);
+  // size_t operands: the int product wraps for a large band count, and a wrapped
+  // extent sizes the buffer while the loop below still writes n_mels * n_bins.
+  std::vector<float> filterbank(static_cast<size_t>(config.n_mels) * static_cast<size_t>(n_bins),
+                                0.0f);
 
   for (int m = 0; m < config.n_mels; ++m) {
     float left = bin_freqs[m];
@@ -160,9 +166,10 @@ std::vector<float> apply_mel_filterbank(const float* power, int n_bins, int n_fr
                                         const float* filterbank, int n_mels) {
   SONARE_CHECK(power != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(filterbank != nullptr, ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_bins > 0 && n_frames > 0 && n_mels > 0, ErrorCode::InvalidParameter);
 
-  // Output: [n_mels x n_frames]
-  std::vector<float> mel_spec(n_mels * n_frames);
+  // Output: [n_mels x n_frames], extent in size_t so a long signal cannot wrap it.
+  std::vector<float> mel_spec(static_cast<size_t>(n_mels) * static_cast<size_t>(n_frames));
 
   // Use Eigen for optimized matrix multiplication
   // filterbank: [n_mels x n_bins] (row-major)

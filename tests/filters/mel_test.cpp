@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <numeric>
 
 #include "util/exception.h"
@@ -69,6 +70,26 @@ TEST_CASE("create_mel_filterbank dimensions", "[mel]") {
 
   int n_bins = n_fft / 2 + 1;
   REQUIRE(fb.size() == static_cast<size_t>(config.n_mels * n_bins));
+}
+
+TEST_CASE("create_mel_filterbank refuses a band count whose extent wraps", "[mel]") {
+  const int sr = 22050;
+  const int n_fft = 2048;
+  MelFilterConfig config;
+
+  // The ceiling itself, and one band past it.
+  config.n_mels = kMaxMelBands;
+  REQUIRE_NOTHROW(create_mel_filterbank(sr, n_fft, config));
+  config.n_mels = kMaxMelBands + 1;
+  REQUIRE_THROWS_AS(create_mel_filterbank(sr, n_fft, config), SonareException);
+
+  // 4190212 * (2048 / 2 + 1) is 4294967300, which truncates to 4 in an int: the
+  // buffer came out four floats long while the filling loop still wrote every
+  // band. Named here so the case fails for the arithmetic rather than for
+  // being merely large.
+  config.n_mels = 4190212;
+  REQUIRE(static_cast<std::uint32_t>(static_cast<size_t>(config.n_mels) * (n_fft / 2 + 1)) == 4u);
+  REQUIRE_THROWS_AS(create_mel_filterbank(sr, n_fft, config), SonareException);
 }
 
 TEST_CASE("create_mel_filterbank triangular", "[mel]") {

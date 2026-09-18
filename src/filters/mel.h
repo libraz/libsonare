@@ -14,9 +14,17 @@ enum class MelNorm {
   Slaney  ///< Slaney-style area normalization
 };
 
+/// @brief Largest accepted @ref MelFilterConfig::n_mels, counted in bands.
+/// @details A backstop rather than a domain bound: 32 times the 128-band default, so it
+/// sits above every consumer's useful maximum instead of binding one. The band count
+/// multiplies the FFT bin count into the filterbank's extent, so an unbounded one asks
+/// for an allocation no machine can serve. The extent is computed in `size_t` so the
+/// product cannot wrap before this ceiling sees it.
+inline constexpr int kMaxMelBands = 4096;
+
 /// @brief Configuration for Mel filterbank.
 struct MelFilterConfig {
-  int n_mels = 128;                ///< Number of Mel bands
+  int n_mels = 128;                ///< Number of Mel bands; in [1, @ref kMaxMelBands]
   float fmin = 0.0f;               ///< Minimum frequency in Hz
   float fmax = 0.0f;               ///< Maximum frequency in Hz (0 = sr/2)
   bool htk = false;                ///< Use HTK formula instead of Slaney
