@@ -536,22 +536,6 @@ def _validate_scene(surface: str, case: str, scene: str, tracks: list[Track]) ->
     # scene on every surface.
 
 
-def _nested_document(value: str) -> Any:
-    """Parse a scene field that carries a whole JSON document inside a string.
-
-    A processor insert keeps its parameters in ``params`` as serialized JSON
-    text, so comparing that field as an opaque string would hide every numeric
-    difference inside it behind one unreadable "these two long strings differ".
-    """
-    text = value.strip()
-    if not text or text[0] not in "{[":
-        return None
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return None
-
-
 def _diff_json(left: Any, right: Any, rtol: float, path: str = "$") -> list[str]:
     """Collect the paths at which two parsed scenes disagree.
 
@@ -589,11 +573,6 @@ def _diff_json(left: Any, right: Any, rtol: float, path: str = "$") -> list[str]
         for index, (item, other) in enumerate(zip(left, right)):
             differences.extend(_diff_json(item, other, rtol, f"{path}[{index}]"))
         return differences
-    if isinstance(left, str) and left != right:
-        nested_left = _nested_document(left)
-        nested_right = _nested_document(right)
-        if nested_left is not None and nested_right is not None:
-            return _diff_json(nested_left, nested_right, rtol, f"{path}(json)")
     if left != right:
         return [f"{path}: {left!r} vs {right!r}"]
     return []

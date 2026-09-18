@@ -8,6 +8,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "util/exception.h"
+#include "util/json.h"
 
 // The vocalReverbSend preset routes through a plate reverb return strip, so
 // this case additionally needs the FX suite.
@@ -768,6 +769,88 @@ TEST_CASE("Scene JSON rejects non-string insert slot and send timing", "[mixing]
   REQUIRE(scene.strips.size() == 1);
   REQUIRE(scene.strips[0].inserts.size() == 1);
   REQUIRE(scene.strips[0].inserts[0].slot == sonare::mixing::api::InsertSlot::PostFader);
+}
+
+TEST_CASE("Scene insert params load the same from an object and from a string",
+          "[mixing][routing]") {
+  // The writer embeds the bag as an object; every project file saved before it
+  // did carries the same bag as escaped text. Both must reach Insert identically,
+  // or loading an existing project would silently change what the insert runs.
+  const std::string embedded = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master"}],
+    "strips": [{"id": "vocal", "inserts": [
+      {"slot": "pre", "processor": "dynamics.compressor",
+       "params": {"ratio": 3.25, "thresholdDb": -22}}
+    ]}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+  const std::string stringified = R"({
+    "version": 1,
+    "buses": [{"id": "master", "role": "master"}],
+    "strips": [{"id": "vocal", "inserts": [
+      {"slot": "pre", "processor": "dynamics.compressor",
+       "params": "{\"ratio\":3.25,\"thresholdDb\":-22}"}
+    ]}],
+    "connections": [{"source": "vocal", "destination": "master"}]
+  })";
+
+  const auto from_object = sonare::mixing::api::scene_from_json(embedded);
+  const auto from_string = sonare::mixing::api::scene_from_json(stringified);
+  REQUIRE(from_object.strips.size() == 1);
+  REQUIRE(from_object.strips[0].inserts.size() == 1);
+  REQUIRE(from_string.strips.size() == 1);
+  REQUIRE(from_string.strips[0].inserts.size() == 1);
+  CHECK(from_object.strips[0].inserts[0].params_json ==
+        from_string.strips[0].inserts[0].params_json);
+  CHECK(from_object.strips[0].inserts[0].params_json == "{\"ratio\":3.25,\"thresholdDb\":-22}");
+
+  // And the writer emits the bag as a real object, so a consumer reads one
+  // document rather than parsing a field out of it a second time.
+  const auto written = sonare::util::json::parse(sonare::mixing::api::scene_to_json(from_object));
+  const auto& params = written["strips"].as_array()[0]["inserts"].as_array()[0]["params"];
+  REQUIRE(params.is_object());
+  CHECK(params["ratio"].as_number() == 3.25);
+
+  // An insert that never carried params still writes a bag, so the field has one
+  // type on every document.
+  const auto bare = sonare::mixing::api::scene_from_json(R"({
+    "version": 1,
+    "strips": [{"id": "vocal", "inserts": [{"slot": "pre", "processor": "eq.tilt"}]}]
+  })");
+  const auto bare_written = sonare::util::json::parse(sonare::mixing::api::scene_to_json(bare));
+  CHECK(bare_written["strips"].as_array()[0]["inserts"].as_array()[0]["params"].is_object());
+}
+
+TEST_CASE("Scene JSON refuses an insert params bag that is not an object", "[mixing][routing]") {
+  // A number where the bag belongs is neither of the two accepted forms.
+  REQUIRE_THROWS_AS(sonare::mixing::api::scene_from_json(R"({
+    "version": 1,
+    "strips": [{"id": "vocal", "inserts": [
+      {"slot": "pre", "processor": "eq.tilt", "params": 4}
+    ]}]
+  })"),
+                    sonare::SonareException);
+
+  // Text that does not parse, and text that parses to something other than an
+  // object, are both refused where the scene is written -- the point of the
+  // embedded form is that such a blob cannot reach insert construction.
+  sonare::mixing::api::Scene malformed;
+  sonare::mixing::api::Strip strip;
+  strip.id = "vocal";
+  strip.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "dynamics.compressor", "{\"ratio\":"});
+  malformed.strips.push_back(strip);
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_to_json(malformed),
+                      Catch::Matchers::ContainsSubstring("dynamics.compressor"));
+
+  sonare::mixing::api::Scene not_an_object;
+  sonare::mixing::api::Strip array_strip;
+  array_strip.id = "vocal";
+  array_strip.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "dynamics.compressor", "[1,2]"});
+  not_an_object.strips.push_back(array_strip);
+  REQUIRE_THROWS_AS(sonare::mixing::api::scene_to_json(not_an_object), sonare::SonareException);
 }
 
 TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",

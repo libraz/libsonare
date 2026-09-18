@@ -1416,6 +1416,7 @@ if(BUILD_WASM)
       c_api/sonare_c_internal.cpp
       c_api/sonare_c_memory.cpp
       core/convert.cpp
+      mixing/api/scene_json.cpp
       TARGET_DIRECTORY sonare_core_objects
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()

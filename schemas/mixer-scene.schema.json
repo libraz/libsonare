@@ -49,8 +49,8 @@
           "minLength": 1
         },
         "params": {
-          "description": "The processor's parameters as a JSON **string**, not as an object - the value is a nested document that the mixer parses separately, so it is written as text (\"{\\\"ratio\\\":4}\"). Each processor's parameter names, ranges and defaults are the catalog's `processors[].params[]`.",
-          "type": "string"
+          "description": "The processor's parameters, as an object keyed by parameter name ({\"ratio\": 4}). Each processor's parameter names, ranges and defaults are the catalog's `processors[].params[]`; a name outside that set is ignored by the processor and reported on the load warning channel, not refused here. Values are numbers or booleans, with two narrow exceptions the processor that owns the key reads itself: a string for a named rig or an embedded impulse response, and a per-band array for the acoustic room morph.",
+          "type": "object"
         },
         "sidechainKey": {
           "description": "Names the signal this insert keys off, for the processors that take one. Empty means no sidechain.",

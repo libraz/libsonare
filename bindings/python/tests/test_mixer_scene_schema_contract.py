@@ -126,6 +126,10 @@ def test_a_suggested_scene_satisfies_the_shipped_schema() -> None:
             "outside ['pre', 'post']",
         ),
         (lambda s: s["strips"][0]["inserts"].append({"slot": "pre"}), "required but absent"),
+        (
+            lambda s: s["strips"][0]["inserts"][0].update(params=json.dumps({"ratio": 4})),
+            "is not object",
+        ),
     ],
 )
 def test_the_schema_refuses_what_it_is_written_to_refuse(mutate, expected: str) -> None:

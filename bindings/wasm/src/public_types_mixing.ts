@@ -235,8 +235,13 @@ export interface MixAssistantOptions {
 export interface MixSceneInsert {
   slot: string;
   processor: string;
-  /** Processor parameters, as a nested JSON string. */
-  params: string;
+  /**
+   * Processor parameters, keyed by the parameter name the processor's catalog
+   * entry declares. Numbers and booleans throughout, except for the two keys a
+   * processor reads itself: a string for a named rig or an embedded impulse
+   * response, and a per-band array for the acoustic room morph.
+   */
+  params: Record<string, number | boolean | string | number[]>;
   /** Present only when the insert is keyed off another strip. */
   sidechainKey?: string;
 }

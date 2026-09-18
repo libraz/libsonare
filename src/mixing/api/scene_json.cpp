@@ -149,7 +149,18 @@ Insert insert_from_value(const JsonValue& object) {
   }
   insert.processor_name =
       string_or_legacy(object, "processor", "processor_name", insert.processor_name);
-  insert.params_json = string_or_legacy(object, "params", "params_json", insert.params_json);
+  // The writer embeds the params bag as an object; the string form is what every
+  // project file saved before that carries, so both load into the same text.
+  if (const auto* params = value_or_legacy(object, "params", "params_json")) {
+    if (params->is_object()) {
+      insert.params_json = sonare::util::json::dump(*params);
+    } else if (params->is_string()) {
+      insert.params_json = params->as_string();
+    } else {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "insert params must be a JSON object (or the legacy JSON string)");
+    }
+  }
   insert.sidechain_key =
       string_or_legacy(object, "sidechainKey", "sidechain_key", insert.sidechain_key);
   return insert;
@@ -375,11 +386,30 @@ std::vector<Connection> connections_from_value(const JsonValue& array) {
 // without coefficient drift.
 // ---------------------------------------------------------------------------
 
+// The params bag is embedded as an object, so a blob that is not one is refused
+// here rather than travelling to insert construction as unparsed text.
+JsonValue insert_params_to_value(const Insert& insert) {
+  if (insert.params_json.empty()) return JsonValue(sonare::util::json::Object());
+  JsonValue params;
+  try {
+    params = sonare::util::json::parse(insert.params_json);
+  } catch (const sonare::util::json::JsonError& error) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "insert params are not valid JSON (" + insert.processor_name + "): " + error.what());
+  }
+  if (!params.is_object()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "insert params must be a JSON object: " + insert.processor_name);
+  }
+  return params;
+}
+
 JsonValue insert_to_value(const Insert& insert) {
   sonare::util::json::Object object;
   object.emplace("slot", JsonValue(to_string(insert.slot)));
   object.emplace("processor", JsonValue(insert.processor_name));
-  object.emplace("params", JsonValue(insert.params_json));
+  object.emplace("params", insert_params_to_value(insert));
   // Omit `sidechainKey` when empty: the walker treats a missing field and an
   // empty string identically, but the legacy serializer also dropped the field
   // so existing snapshots can still byte-compare against new output.
