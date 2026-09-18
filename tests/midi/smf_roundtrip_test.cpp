@@ -7,13 +7,16 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "midi/midi_clip.h"
+#include "midi/note_targets.h"
 #include "midi/program_map.h"
 #include "midi/smf.h"
 #include "midi/ump.h"
 #include "transport/tempo_map.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -1198,4 +1201,133 @@ TEST_CASE("SMF import rejects malformed and truncated input without crashing", "
     }
     SUCCEED();
   }
+}
+
+// ============================================================================
+// Reading a track as a reference melody
+// ============================================================================
+
+namespace {
+
+using sonare::editing::note_model::NoteTarget;
+using sonare::midi::note_targets_from_smf;
+
+/// A melody clip: one note per (note number, start ppq, length ppq) entry.
+MidiClip melody_clip(const std::vector<std::tuple<uint8_t, double, double>>& notes) {
+  MidiClip clip;
+  for (const auto& [note, start_ppq, length_ppq] : notes) {
+    clip.add_event({start_ppq, sonare::midi::make_midi1_note_on(0, 0, note, 100), nullptr, 0});
+    if (length_ppq > 0.0) {
+      clip.add_event(
+          {start_ppq + length_ppq, sonare::midi::make_midi1_note_off(0, 0, note, 0), nullptr, 0});
+    }
+  }
+  return clip;
+}
+
+std::vector<uint8_t> melody_smf(const MidiClip& clip,
+                                const std::vector<sonare::transport::TempoSegment>& tempo) {
+  const auto exported = export_smf({clip}, tempo, {}, {}, {});
+  REQUIRE(exported.ok());
+  return exported.bytes;
+}
+
+sonare::transport::TempoSegment tempo_at(double start_ppq, double bpm) {
+  sonare::transport::TempoSegment segment;
+  segment.start_ppq = start_ppq;
+  segment.bpm = bpm;
+  return segment;
+}
+
+}  // namespace
+
+TEST_CASE("note_targets_from_smf indexes the MIDI-bearing tracks, not the SMF's own",
+          "[midi][smf][note_target]") {
+  // export_smf writes the tempo map as track 0 and each clip as its own MTrk, so
+  // the file's melody is its second track -- and the importer produces no clip
+  // for a track that held only meta events. Index 0 therefore has to be the
+  // melody: a caller counting SMF tracks would be one off for every file with a
+  // conductor track, which is every file this exporter writes.
+  const std::vector<uint8_t> bytes =
+      melody_smf(melody_clip({{60, 0.0, 1.0}}), {tempo_at(0.0, 120.0)});
+
+  const std::vector<NoteTarget> targets = note_targets_from_smf(bytes.data(), bytes.size(), 0);
+  REQUIRE(targets.size() == 1);
+  REQUIRE(targets[0].target_midi == 60.0f);
+
+  // One MIDI-bearing track, so index 1 names nothing.
+  REQUIRE_THROWS_AS(note_targets_from_smf(bytes.data(), bytes.size(), 1), sonare::SonareException);
+  REQUIRE_THROWS_AS(note_targets_from_smf(bytes.data(), bytes.size(), -1), sonare::SonareException);
+}
+
+TEST_CASE("note_targets_from_smf converts quarter notes to seconds at the file's tempo",
+          "[midi][smf][note_target]") {
+  // Two quarter notes back to back. At 120 BPM a quarter is 0.5 s.
+  const std::vector<uint8_t> bytes =
+      melody_smf(melody_clip({{60, 0.0, 1.0}, {67, 1.0, 1.0}}), {tempo_at(0.0, 120.0)});
+
+  const std::vector<NoteTarget> targets = note_targets_from_smf(bytes.data(), bytes.size(), 0);
+  REQUIRE(targets.size() == 2);
+  REQUIRE(targets[0].start_sec == Catch::Approx(0.0).margin(1e-4));
+  REQUIRE(targets[0].end_sec == Catch::Approx(0.5).margin(1e-4));
+  REQUIRE(targets[1].start_sec == Catch::Approx(0.5).margin(1e-4));
+  REQUIRE(targets[1].end_sec == Catch::Approx(1.0).margin(1e-4));
+  REQUIRE(targets[0].target_midi == 60.0f);
+  REQUIRE(targets[1].target_midi == 67.0f);
+}
+
+TEST_CASE("note_targets_from_smf follows a tempo change inside the file",
+          "[midi][smf][note_target]") {
+  // Same two quarter notes, but the tempo doubles at the second one. Reading
+  // only the file's initial tempo puts the second note at 0.5-1.0 s; following
+  // the map puts it at 0.5-0.75 s.
+  const std::vector<uint8_t> bytes = melody_smf(melody_clip({{60, 0.0, 1.0}, {67, 1.0, 1.0}}),
+                                                {tempo_at(0.0, 120.0), tempo_at(1.0, 240.0)});
+
+  const std::vector<NoteTarget> targets = note_targets_from_smf(bytes.data(), bytes.size(), 0);
+  REQUIRE(targets.size() == 2);
+  REQUIRE(targets[0].end_sec == Catch::Approx(0.5).margin(1e-3));
+  REQUIRE(targets[1].start_sec == Catch::Approx(0.5).margin(1e-3));
+  REQUIRE(targets[1].end_sec == Catch::Approx(0.75).margin(1e-3));
+}
+
+TEST_CASE("note_targets_from_smf drops a note the track never ends", "[midi][smf][note_target]") {
+  // A note-on with no note-off has no end, and the track's end is not one: the
+  // importer derives that from the last event, which is the open note-on itself
+  // when the file stops there, so the note would return with zero length.
+  MidiClip clip = melody_clip({{60, 0.0, 1.0}});
+  clip.add_event({1.0, sonare::midi::make_midi1_note_on(0, 0, 67, 100), nullptr, 0});
+  const std::vector<uint8_t> bytes = melody_smf(clip, {tempo_at(0.0, 120.0)});
+
+  const std::vector<NoteTarget> targets = note_targets_from_smf(bytes.data(), bytes.size(), 0);
+  REQUIRE(targets.size() == 1);
+  // The closed note is unaffected by its open neighbour.
+  REQUIRE(targets[0].target_midi == 60.0f);
+  REQUIRE(targets[0].end_sec == Catch::Approx(0.5).margin(1e-3));
+}
+
+TEST_CASE("note_targets_from_smf keeps an open note-on from swallowing the melody after it",
+          "[midi][smf][note_target]") {
+  // The harmful half of the same decision, as its own measurement: an open
+  // note-on with three closed notes after it. Closing it at the track's end
+  // would give it a span covering all three, and the longest overlap wins, so
+  // every one of them would take its pitch instead of their own.
+  MidiClip clip = melody_clip({{62, 1.0, 1.0}, {64, 2.0, 1.0}, {65, 3.0, 1.0}});
+  clip.add_event({0.0, sonare::midi::make_midi1_note_on(0, 0, 40, 100), nullptr, 0});
+  const std::vector<uint8_t> bytes = melody_smf(clip, {tempo_at(0.0, 120.0)});
+
+  const std::vector<NoteTarget> targets = note_targets_from_smf(bytes.data(), bytes.size(), 0);
+  REQUIRE(targets.size() == 3);
+  for (const NoteTarget& target : targets) {
+    REQUIRE(target.target_midi != 40.0f);
+    // None of them spans more than its own quarter note.
+    REQUIRE(target.end_sec - target.start_sec == Catch::Approx(0.5).margin(1e-3));
+  }
+}
+
+TEST_CASE("note_targets_from_smf refuses bytes that are not an SMF", "[midi][smf][note_target]") {
+  const std::vector<uint8_t> garbage(64, 0x7F);
+  REQUIRE_THROWS_AS(note_targets_from_smf(garbage.data(), garbage.size(), 0),
+                    sonare::SonareException);
+  REQUIRE_THROWS_AS(note_targets_from_smf(nullptr, 32, 0), sonare::SonareException);
 }

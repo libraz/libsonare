@@ -774,6 +774,7 @@ if(BUILD_ARRANGEMENT)
   add_library(sonare_midi STATIC
     midi/ump.cpp
     midi/midi_clip.cpp
+    midi/note_targets.cpp
     midi/sequencer.cpp
     midi/smf.cpp
     midi/smf2.cpp
