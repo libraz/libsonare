@@ -408,10 +408,15 @@ size_t sonare_last_diagnostic_count(void);
 ///        "acoustic.rir_length_clamped".
 /// @details Never NULL: an @p index at or past sonare_last_diagnostic_count()
 ///   returns "", so a caller that reads past the end gets an empty entry rather
-///   than a fault. The pointer follows the same lifetime as the count.
+///   than a fault. The pointer is owned by libsonare and valid until the next
+///   API call that records or clears a diagnostic on the same thread, the same
+///   lifetime as the count.
 const char* sonare_last_diagnostic_code(size_t index);
 
 /// @brief Human-readable detail of diagnostic @p index, "" when out of range.
+/// @details Never NULL, owned by libsonare, and valid until the next API call
+///   that records or clears a diagnostic on the same thread -- the lifetime
+///   @ref sonare_last_diagnostic_code documents.
 const char* sonare_last_diagnostic_message(size_t index);
 
 /// @brief Severity of diagnostic @p index. An out-of-range index reports
