@@ -440,6 +440,12 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => native.splitSilence(GATED, v, 2048, 512).length,
   },
   {
+    name: 'splitSilenceCommon topDb',
+    site: 'features/signal.cpp SplitSilenceCommon topDb',
+    control: [60, 20],
+    call: (v) => native.splitSilenceCommon([GATED], v, 2048, 512).length,
+  },
+  {
     name: 'padCenter padValue',
     site: 'features/signal.cpp PadCenter padValue',
     control: [0, 7],

@@ -26,6 +26,7 @@ export {
   preemphasis,
   samplesToFrames,
   splitSilence,
+  splitSilenceCommon,
   tempogram,
   timeToFrames,
   tone,

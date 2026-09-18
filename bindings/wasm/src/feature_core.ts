@@ -104,6 +104,14 @@ export interface SilenceRequest {
   hopLength?: number;
 }
 
+/** Canonical request form for the common-silence union of several signals. */
+export interface SplitSilenceCommonRequest {
+  signals: Float32Array[];
+  topDb?: number;
+  frameLength?: number;
+  hopLength?: number;
+}
+
 export interface FrameSignalRequest {
   samples: Float32Array;
   frameLength: number;
@@ -443,6 +451,24 @@ export function splitSilence(
     return splitSilence(samples.samples, samples.topDb, samples.frameLength, samples.hopLength);
   }
   return requireModule().splitSilence(samples, topDb, frameLength, hopLength);
+}
+
+/**
+ * Lists the intervals where ANY of `signals` is sounding, so every gap
+ * between them is silent in all of them -- what several takes of one part
+ * share is their silence, not their sound.
+ *
+ * @returns The union of {@link splitSilence}'s per-signal intervals, merged
+ *   where they touch. A single signal returns exactly what `splitSilence`
+ *   does for it.
+ */
+export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array {
+  return requireModule().splitSilenceCommon(
+    request.signals,
+    request.topDb ?? 60.0,
+    request.frameLength ?? 2048,
+    request.hopLength ?? 512,
+  );
 }
 
 export function frameSignal(request: FrameSignalRequest): WasmFrameResult;

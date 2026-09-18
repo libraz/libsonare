@@ -10,6 +10,13 @@ export interface TrimSilenceRequest {
   frameLength?: number;
   hopLength?: number;
 }
+
+export interface SplitSilenceCommonRequest {
+  signals: Float32Array[];
+  topDb?: number;
+  frameLength?: number;
+  hopLength?: number;
+}
 export interface FrameSignalRequest {
   samples: Float32Array;
   frameLength: number;
@@ -171,6 +178,46 @@ export function splitSilence(
   );
   return addon.splitSilence(
     request.samples,
+    request.topDb ?? 60,
+    resolvedFrameLength,
+    resolvedHopLength,
+  );
+}
+
+/**
+ * Lists the intervals where any of `request.signals` is sounding, merged
+ * where they touch, so every gap between the returned intervals is silent in
+ * every signal at once. What several takes of one phrase share is the
+ * silence, not the sound: the result is the union of each signal's own
+ * {@link splitSilence} intervals, never their intersection, so a cut placed
+ * in a gap never lands mid-phrase in any one of them.
+ *
+ * A signal shorter than the longest contributes nothing past its own end,
+ * the same as being silent there, so takes of unequal length need no padding.
+ * Passing a single signal returns exactly what {@link splitSilence} would.
+ *
+ * @param request - The signals to compare and the shared threshold/framing,
+ *   matching {@link splitSilence}'s field names and defaults.
+ * @throws {TypeError} `request.signals` is empty, or one of its elements is
+ *   not a `Float32Array`.
+ */
+export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array {
+  // Both positive, as splitSilence: `split_silence_common` applies the same
+  // framing rule to every signal.
+  const resolvedFrameLength = resolvePositiveIntegerOption(
+    'splitSilenceCommon',
+    'frameLength',
+    request.frameLength,
+    2048,
+  );
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'splitSilenceCommon',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
+  return addon.splitSilenceCommon(
+    request.signals,
     request.topDb ?? 60,
     resolvedFrameLength,
     resolvedHopLength,

@@ -121,6 +121,53 @@ Napi::Value SonareWrap::SplitSilence(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 1 || !info[0].IsArray()) {
+    Napi::TypeError::New(env, "Expected signals: Float32Array[]").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Array signals_input = info[0].As<Napi::Array>();
+  const size_t count = signals_input.Length();
+  if (count == 0) {
+    Napi::TypeError::New(env, "signals must not be empty").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  // Reserved up front: the loop below takes each element's Data() pointer, and
+  // a reallocation mid-loop would invalidate the ones already taken.
+  std::vector<Napi::Float32Array> signal_arrays;
+  std::vector<const float*> signal_ptrs;
+  std::vector<size_t> lengths;
+  signal_arrays.reserve(count);
+  signal_ptrs.reserve(count);
+  lengths.reserve(count);
+  for (size_t index = 0; index < count; ++index) {
+    Napi::Value value = signals_input.Get(index);
+    if (!IsFloat32Array(value)) {
+      Napi::TypeError::New(env, "signals must contain only Float32Array elements")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    signal_arrays.push_back(value.As<Napi::Float32Array>());
+    signal_ptrs.push_back(signal_arrays.back().Data());
+    lengths.push_back(signal_arrays.back().ElementLength());
+  }
+
+  float top_db = node_arg_finite_float(info, 1, 60.0f);
+  int frame_length = node_arg_int(info, 2, 2048);
+  int hop_length = node_arg_int(info, 3, 512);
+  int* out = nullptr;
+  size_t out_count = 0;
+  SonareError err =
+      sonare_split_silence_common(signal_ptrs.data(), signal_ptrs.size(), lengths.data(), top_db,
+                                  frame_length, hop_length, &out, &out_count);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return IntResult(env, out, out_count);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::FrameSignal(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

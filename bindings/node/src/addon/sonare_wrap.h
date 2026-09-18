@@ -302,6 +302,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value Chirp(const Napi::CallbackInfo& info);
   static Napi::Value Clicks(const Napi::CallbackInfo& info);
   static Napi::Value SplitSilence(const Napi::CallbackInfo& info);
+  static Napi::Value SplitSilenceCommon(const Napi::CallbackInfo& info);
   static Napi::Value FrameSignal(const Napi::CallbackInfo& info);
   static Napi::Value PadCenter(const Napi::CallbackInfo& info);
   static Napi::Value FixLength(const Napi::CallbackInfo& info);

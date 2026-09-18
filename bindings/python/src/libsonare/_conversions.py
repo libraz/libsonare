@@ -26,6 +26,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _validate_samples,
 )
 
 
@@ -237,6 +238,52 @@ def split_silence(
         rc = lib.sonare_split_silence(
             c_array,
             _to_c_size_t(length, "length"),
+            _to_c_float(top_db, "top_db"),
+            _to_c_int(frame_length, "frame_length"),
+            _to_c_int(hop_length, "hop_length"),
+            ctypes.byref(out),
+            ctypes.byref(out_count),
+        )
+        _check(rc)
+        flat = _int_array_result(out, out_count.value)
+        return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
+
+
+def split_silence_common(
+    signals: Sequence[Sequence[float]],
+    top_db: float = 60.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+) -> list[tuple[int, int]]:
+    """Return the intervals where any of several takes of one part is sounding.
+
+    What several takes have in common is the silence, not the sound: the
+    result is the union of what :func:`split_silence` reports for each
+    signal (merged where intervals touch), so a cut always falls where every
+    signal is quiet, never mid-phrase in one of them. A single signal returns
+    exactly what :func:`split_silence` does.
+    """
+    fn_name = "split_silence_common"
+    if len(signals) == 0:
+        raise SonareValueError(f"{fn_name}: signals must not be empty")
+    lib = _get_lib()
+    c_arrays: list[ctypes.Array[ctypes.c_float]] = []
+    lengths: list[int] = []
+    for index, signal in enumerate(signals):
+        coerced = _validate_samples(fn_name, signal, arg_name=f"signals[{index}]")
+        c_array, length = _to_c_float_array(coerced, fn_name=fn_name, arg_name=f"signals[{index}]")
+        c_arrays.append(c_array)
+        lengths.append(length)
+    float_ptr = ctypes.POINTER(ctypes.c_float)
+    signal_ptrs = (float_ptr * len(c_arrays))(
+        *[ctypes.cast(array, float_ptr) for array in c_arrays]
+    )
+    length_array = (ctypes.c_size_t * len(lengths))(*lengths)
+    with _out_int_array(lib) as (out, out_count):
+        rc = lib.sonare_split_silence_common(
+            signal_ptrs,
+            _to_c_size_t(len(c_arrays), "signal_count"),
+            length_array,
             _to_c_float(top_db, "top_db"),
             _to_c_int(frame_length, "frame_length"),
             _to_c_int(hop_length, "hop_length"),

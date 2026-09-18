@@ -4,6 +4,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -464,6 +465,72 @@ TEST_CASE("sonare_trim_silence and sonare_split_silence reject an empty input",
     REQUIRE(sonare_split_silence(nullptr, 0, 60.0f, 2048, 512, &intervals, &interval_count) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(std::string(sonare_last_error_message()).find("empty") != std::string::npos);
+  }
+}
+
+TEST_CASE("sonare_split_silence_common keeps what any one signal sounds through",
+          "[c_api][features]") {
+  // Two takes of one part sounding in disjoint halves. What they share is the
+  // silence outside both, so neither sounding region may be cut.
+  const size_t tenth = static_cast<size_t>(kSampleRate) / 10;
+  const auto tone = sonare::test::generate_sine_samples(440.0f, kSampleRate, tenth, 1.0f);
+  std::vector<float> early(static_cast<size_t>(kSampleRate), 0.0f);
+  std::vector<float> late(static_cast<size_t>(kSampleRate), 0.0f);
+  std::copy(tone.begin(), tone.end(), early.begin());
+  std::copy(tone.begin(), tone.end(), late.begin() + static_cast<long>(5 * tenth));
+
+  const auto intervals_of = [](const std::vector<const float*>& signals,
+                               const std::vector<size_t>& lengths) {
+    int* flat = nullptr;
+    size_t count = 7;
+    REQUIRE(sonare_split_silence_common(signals.data(), signals.size(), lengths.data(), 60.0f, 2048,
+                                        512, &flat, &count) == SONARE_OK);
+    std::vector<int> out(flat, flat + count);
+    if (flat != nullptr) sonare_free_ints(flat);
+    return out;
+  };
+
+  SECTION("one signal answers exactly as sonare_split_silence does") {
+    int* single = nullptr;
+    size_t single_count = 0;
+    REQUIRE(sonare_split_silence(early.data(), early.size(), 60.0f, 2048, 512, &single,
+                                 &single_count) == SONARE_OK);
+    const std::vector<int> expected(single, single + single_count);
+    sonare_free_ints(single);
+
+    REQUIRE(intervals_of({early.data()}, {early.size()}) == expected);
+  }
+
+  SECTION("the union is kept, and the order of the signals does not change it") {
+    const std::vector<int> ab =
+        intervals_of({early.data(), late.data()}, {early.size(), late.size()});
+    const std::vector<int> ba =
+        intervals_of({late.data(), early.data()}, {late.size(), early.size()});
+    REQUIRE(ab == ba);
+
+    // Two intervals, one per take: an intersection would have produced none.
+    REQUIRE(ab.size() == 4);
+    REQUIRE(ab[0] < ab[1]);
+    REQUIRE(ab[1] < ab[2]);
+    REQUIRE(ab[2] < ab[3]);
+    REQUIRE(static_cast<size_t>(ab[2]) > 4 * tenth);
+  }
+
+  SECTION("all-silent and empty stay the two distinct outcomes they are alone") {
+    const std::vector<float> silence(static_cast<size_t>(kSampleRate), 0.0f);
+    REQUIRE(
+        intervals_of({silence.data(), silence.data()}, {silence.size(), silence.size()}).empty());
+
+    const std::vector<const float*> with_empty{early.data(), nullptr};
+    const std::vector<size_t> lengths{early.size(), 0};
+    int* flat = nullptr;
+    size_t count = 7;
+    REQUIRE(sonare_split_silence_common(with_empty.data(), with_empty.size(), lengths.data(), 60.0f,
+                                        2048, 512, &flat,
+                                        &count) == SONARE_ERROR_INVALID_PARAMETER);
+
+    REQUIRE(sonare_split_silence_common(nullptr, 0, nullptr, 60.0f, 2048, 512, &flat, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
 }
 

@@ -888,6 +888,25 @@ SonareError sonare_split_silence(const float* samples, size_t length, float top_
                                  int frame_length, int hop_length, int** out_intervals,
                                  size_t* out_interval_count);
 
+/// @brief Lists the intervals where ANY of @p signals is sounding, so every gap
+///        between them is silent in all of them.
+/// @details What several takes of one part share is the silence, not the sound,
+///   and a cut has to fall where every take is quiet or it lands mid-phrase in
+///   one of them. The result is therefore the union of what
+///   @ref sonare_split_silence reports for each signal, merged where the
+///   intervals touch, with each signal judged by that same rule. A signal
+///   shorter than the longest contributes nothing past its end, which is the
+///   same as being silent there, so takes of unequal length need no padding.
+///   @p signal_count == 1 returns exactly what @ref sonare_split_silence does.
+///   Signals that are all silent succeed with zero intervals
+///   (@c *out_intervals == NULL, @c *out_interval_count == 0); an EMPTY signal
+///   is rejected, as there.
+/// @note Free @p out_intervals with @ref sonare_free_ints.
+SonareError sonare_split_silence_common(const float* const* signals, size_t signal_count,
+                                        const size_t* lengths, float top_db, int frame_length,
+                                        int hop_length, int** out_intervals,
+                                        size_t* out_interval_count);
+
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_frame_signal(const float* samples, size_t length, int frame_length,
                                 int hop_length, float** out, size_t* out_length, int* out_n_frames);

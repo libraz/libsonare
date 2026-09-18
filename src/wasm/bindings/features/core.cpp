@@ -160,6 +160,55 @@ val js_split_silence(val samples, const val& top_db_val, const val& frame_length
   return vectorToInt32Array(flat);
 }
 
+val js_split_silence_common(val signals, const val& top_db_val, const val& frame_length_val,
+                            const val& hop_length_val) {
+  const float top_db = checkedFloatFromVal(top_db_val, "topDb");
+  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+
+  const std::size_t signal_count = wasmArrayLikeLength(signals, "signals");
+  if (signal_count == 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "splitSilenceCommon: signals must not be empty");
+  }
+
+  std::vector<std::vector<float>> buffers(signal_count);
+  std::size_t budget = 0;
+  for (std::size_t index = 0; index < signal_count; ++index) {
+    const val signal = signals[index];
+    if (signal.isUndefined() || signal.isNull()) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "signals[" + std::to_string(index) + "] must be a Float32Array");
+    }
+    accumulateWasmFloat32ArrayLength(signal, "signals entry", "splitSilenceCommon input", &budget);
+    buffers[index] = float32ArrayToVector(signal);
+    validateFiniteVector(buffers[index], "splitSilenceCommon");
+  }
+
+  // What several signals share is their silence, not their sound: collect each
+  // signal's own non-silent ranges (the same split() js_split_silence uses),
+  // then sort and merge where they touch -- mirroring
+  // sonare_split_silence_common's union rule so a cut between merged ranges is
+  // silent in every signal.
+  std::vector<std::pair<int, int>> merged;
+  for (const auto& buffer : buffers) {
+    auto ranges = split(buffer, top_db, frame_length, hop_length);
+    merged.insert(merged.end(), ranges.begin(), ranges.end());
+  }
+  std::sort(merged.begin(), merged.end());
+  std::vector<int> flat;
+  flat.reserve(merged.size() * 2);
+  for (const auto& range : merged) {
+    if (!flat.empty() && range.first <= flat.back()) {
+      flat.back() = std::max(flat.back(), range.second);
+      continue;
+    }
+    flat.push_back(range.first);
+    flat.push_back(range.second);
+  }
+  return vectorToInt32Array(flat);
+}
+
 val js_frame_signal(val samples, const val& frame_length_val, const val& hop_length_val) {
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
@@ -490,6 +539,7 @@ void registerFeatureCoreBindings() {
   function("deemphasis", &js_deemphasis);
   function("trimSilence", &js_trim_silence);
   function("splitSilence", &js_split_silence);
+  function("splitSilenceCommon", &js_split_silence_common);
   function("frameSignal", &js_frame_signal);
   function("tone", &js_tone);
   function("chirp", &js_chirp);

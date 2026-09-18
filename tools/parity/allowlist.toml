@@ -501,6 +501,13 @@ python = [
 # matches. There is no pooled array here -- an event carries three scalars and no
 # per-frame curve -- so the envelope fold the note set needed has no counterpart.
 # Remapped to C order in the ctypes wrapper. Not order drift.
+# split_silence_common (python): C is (signals, signal_count, lengths, top_db,
+# frame_length, hop_length). The facade takes one sequence of sequences and
+# DERIVES both the count and the per-signal `lengths` array from it — a Python
+# caller holding a list of takes has no second place to state their lengths, and
+# passing one alongside would let the two disagree. Same array-length derivation
+# as lufs_interleaved, on a ragged input. Node and WASM carry no entry: their
+# request object declares no order, so nothing reaches the comparison.
 node = [
   "scale_quantize_midi",
   "scale_correction_semitones",
@@ -543,6 +550,7 @@ python = [
   "split_note",
   "merge_notes",
   "render_percussive_events",
+  "split_silence_common",
   "mel_to_stft",  # Python facade derives matrix extents from sequences; C requires explicit dims
   "mel_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims
   "mfcc_to_audio", # Python facade derives matrix extents from sequences; C requires explicit dims

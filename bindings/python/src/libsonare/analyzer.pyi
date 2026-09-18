@@ -1694,6 +1694,12 @@ def trim_silence(
 def split_silence(
     samples: FloatSamples, top_db: float = 60.0, frame_length: int = 2048, hop_length: int = 512
 ) -> list[tuple[int, int]]: ...
+def split_silence_common(
+    signals: Sequence[Sequence[float]],
+    top_db: float = 60.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+) -> list[tuple[int, int]]: ...
 def frame_signal(
     samples: FloatSamples, frame_length: int, hop_length: int
 ) -> tuple[int, list[float]]: ...

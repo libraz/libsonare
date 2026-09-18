@@ -1,9 +1,11 @@
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
@@ -179,6 +181,40 @@ SonareError sonare_split_silence(const float* samples, size_t length, float top_
   std::vector<int> flat;
   flat.reserve(ranges.size() * 2);
   for (const auto& range : ranges) {
+    flat.push_back(range.first);
+    flat.push_back(range.second);
+  }
+  return copy_vector(flat, out_intervals, out_interval_count);
+  SONARE_C_CATCH
+}
+
+SonareError sonare_split_silence_common(const float* const* signals, size_t signal_count,
+                                        const size_t* lengths, float top_db, int frame_length,
+                                        int hop_length, int** out_intervals,
+                                        size_t* out_interval_count) {
+  SONARE_C_API_ENTRY;
+  if (!signals || !lengths || signal_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t index = 0; index < signal_count; ++index) {
+    if (validate_buffer(signals[index], lengths[index]) != SONARE_OK) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+  }
+  SONARE_C_TRY
+  std::vector<std::pair<int, int>> merged;
+  for (size_t index = 0; index < signal_count; ++index) {
+    auto ranges = split(signals[index], lengths[index], top_db, frame_length, hop_length);
+    merged.insert(merged.end(), ranges.begin(), ranges.end());
+  }
+  std::sort(merged.begin(), merged.end());
+  std::vector<int> flat;
+  flat.reserve(merged.size() * 2);
+  for (const auto& range : merged) {
+    // Touching counts as overlapping: two takes whose intervals meet exactly
+    // leave no silent sample between them, so a cut there would be mid-phrase.
+    if (!flat.empty() && range.first <= flat.back()) {
+      flat.back() = std::max(flat.back(), range.second);
+      continue;
+    }
     flat.push_back(range.first);
     flat.push_back(range.second);
   }

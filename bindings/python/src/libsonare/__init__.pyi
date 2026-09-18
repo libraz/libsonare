@@ -648,6 +648,9 @@ from .analyzer import (
     split_silence as split_silence,
 )
 from .analyzer import (
+    split_silence_common as split_silence_common,
+)
+from .analyzer import (
     stft as stft,
 )
 from .analyzer import (
