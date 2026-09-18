@@ -85,6 +85,13 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+// Every command below up to the #else stays registered in the CLI's command
+// table regardless of BUILD_PITCH_EDITOR (see get_commands() in
+// tools/cli/sonare_cli.cpp), so a build without the pitch editor must still
+// answer the subcommand -- with a NotImplemented diagnostic mapped to the CLI's
+// not-supported exit code -- instead of failing to link.
+#if defined(SONARE_WITH_PITCH_EDITOR)
+
 int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
   const float current_midi = args.get_float("current-midi", 69.0f);
   const float target_midi = args.get_float("target-midi", 69.0f);
@@ -265,13 +272,6 @@ int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
-// The two polyphonic commands below stay registered in the CLI's command table
-// regardless of BUILD_PITCH_EDITOR (see get_commands() in
-// tools/cli/sonare_cli.cpp), so a build without the pitch editor must still
-// answer the subcommand -- with a NotImplemented diagnostic mapped to the CLI's
-// not-supported exit code -- instead of failing to link.
-#if defined(SONARE_WITH_PITCH_EDITOR)
-
 namespace {
 
 // The ridge's salience, not the note's: read through the ridge's own start, so a
@@ -451,6 +451,31 @@ int cmd_polyphonic_render(const CliArgs& args, const Audio& audio) {
 }
 
 #else  // !SONARE_WITH_PITCH_EDITOR
+
+int cmd_pitch_correct(const CliArgs&, const Audio&) {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "pitch editor support is not compiled in");
+}
+
+int cmd_scale_quantize(const CliArgs&, const Audio&) {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "pitch editor support is not compiled in");
+}
+
+int cmd_pitch_correct_timevarying(const CliArgs&, const Audio&) {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "pitch editor support is not compiled in");
+}
+
+int cmd_note_move(const CliArgs&, const Audio&) {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "pitch editor support is not compiled in");
+}
+
+int cmd_note_stretch(const CliArgs&, const Audio&) {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "pitch editor support is not compiled in");
+}
 
 int cmd_polyphonic_notes(const CliArgs&, const Audio&) {
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
