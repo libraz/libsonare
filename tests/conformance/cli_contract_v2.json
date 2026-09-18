@@ -4122,8 +4122,8 @@
       "classification": "native_only",
       "status": "native_only",
       "option_status": "pending",
-      "reason_kind": "unported",
-      "reason": "BoundaryDetector is core C++ with no C ABI entry, so no binding reaches it and porting this is a four-surface addition rather than a CLI change; the nearest Python route, analyze_sections(), returns labelled sections rather than raw boundary times"
+      "reason_kind": "by_design",
+      "reason": "the measurement is already a Python entry point, libsonare.detect_boundaries(), so the CLI would only add a JSON round trip; the C ABI entry it needed now exists, which is what closed the gap the row previously recorded"
     },
     "meter": {
       "classification": "native_only",

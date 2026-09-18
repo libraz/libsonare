@@ -833,10 +833,7 @@ class CliContractSelfTest(unittest.TestCase):
         }
         self.assertEqual(
             unported,
-            {
-                "boundaries",
-                "mix-strip",
-            },
+            {"mix-strip"},
         )
 
     def test_a_missing_reason_is_rejected(self) -> None:
