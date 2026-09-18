@@ -2307,6 +2307,11 @@ export interface SonareModule {
     sampleRate: number,
     params: Record<string, number | boolean | string>,
   ) => string;
+  masteringAssistantSuggestChain: (
+    samples: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean | string>,
+  ) => Record<string, number | boolean>;
   masteringAudioProfile: (
     samples: Float32Array,
     sampleRate: number,
@@ -2323,6 +2328,12 @@ export interface SonareModule {
     sampleRate: number,
     params: Record<string, number | boolean | string>,
   ) => string;
+  masteringAssistantSuggestChainStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean | string>,
+  ) => Record<string, number | boolean>;
   masteringAudioProfileStereo: (
     left: Float32Array,
     right: Float32Array,

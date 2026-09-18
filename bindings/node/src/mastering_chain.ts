@@ -1089,6 +1089,29 @@ export function masteringAssistantSuggest(
   return addon.masteringAssistantSuggest(request.samples, resolvedSampleRate, request.params ?? {});
 }
 
+/**
+ * Suggest a mastering chain and return only its flat `{ "module.param": value }`
+ * params -- the same values {@link masteringAssistantSuggest}'s parsed
+ * `chainConfig.params` carries, without having to dig them out of the full
+ * assistant document (explanation, profile, genre candidates) first. The
+ * result can be passed directly as {@link masterAudio}'s `overrides`.
+ *
+ * @throws Error if a suggested param is not a number or boolean (a v2
+ *   structured multiband stage); nothing the assistant produces today does
+ *   this, but a caller must never see it silently dropped.
+ */
+export function masteringAssistantSuggestChain(
+  request: MasteringAssistantSuggestRequest,
+): Record<string, number | boolean> {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringAssistantSuggestChain', resolvedSampleRate);
+  return addon.masteringAssistantSuggestChain(
+    request.samples,
+    resolvedSampleRate,
+    request.params ?? {},
+  );
+}
+
 export function masteringAudioProfile(request: MasteringAudioProfileRequest): string;
 export function masteringAudioProfile(
   samples: Float32Array,
@@ -1140,6 +1163,30 @@ export function masteringAssistantSuggestStereo(
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringAssistantSuggestStereo', resolvedSampleRate);
   return addon.masteringAssistantSuggestStereo(
+    request.left,
+    request.right,
+    resolvedSampleRate,
+    request.params ?? {},
+  );
+}
+
+/**
+ * Suggest a mastering chain for a stereo pair and return only its flat
+ * `{ "module.param": value }` params, the same values
+ * {@link masteringAssistantSuggestStereo}'s parsed `chainConfig.params`
+ * carries. The result can be passed directly as {@link masterAudioStereo}'s
+ * `overrides`.
+ *
+ * @throws Error if a suggested param is not a number or boolean (a v2
+ *   structured multiband stage); nothing the assistant produces today does
+ *   this, but a caller must never see it silently dropped.
+ */
+export function masteringAssistantSuggestChainStereo(
+  request: MasteringAssistantSuggestStereoRequest,
+): Record<string, number | boolean> {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('masteringAssistantSuggestChainStereo', resolvedSampleRate);
+  return addon.masteringAssistantSuggestChainStereo(
     request.left,
     request.right,
     resolvedSampleRate,

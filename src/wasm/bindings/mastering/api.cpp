@@ -4,6 +4,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
@@ -400,6 +401,45 @@ std::string js_mastering_assistant_suggest(val samples, const val& sample_rate_v
   return mastering::assistant::assistant_result_to_json(result);
 }
 
+// Flattens a suggested chain config to the {key: number|boolean} map the JS
+// facade hands straight to `overrides`, unwrapping the {"version","params"}
+// envelope chain_config_to_json writes. Throws by key name rather than
+// dropping silently if a param is a schema v2 nested object (e.g. a structured
+// multibandComp), since a silently dropped override reads as "applied" when it
+// was not. An empty params block is refused for the same reason: an empty
+// overrides map applies the preset unchanged.
+val chainConfigParamsToVal(const mastering::api::MasteringChainConfig& config) {
+  namespace json = sonare::util::json;
+  const json::Value parsed = json::parse_strict(mastering::api::chain_config_to_json(config));
+  const json::Object& params = parsed["params"].as_object();
+  if (params.empty()) {
+    throw SonareException(ErrorCode::InvalidParameter, "chain config carries no params block");
+  }
+  val out = val::object();
+  for (const auto& [key, value] : params) {
+    if (value.is_number()) {
+      out.set(key, value.as_number());
+    } else if (value.is_bool()) {
+      out.set(key, value.as_bool());
+    } else {
+      throw SonareException(
+          ErrorCode::InvalidParameter,
+          "chain config param '" + key + "' is not a number or boolean (schema v2 nested value)");
+    }
+  }
+  return out;
+}
+
+val js_mastering_assistant_suggest_chain(val samples, const val& sample_rate_val, val params_obj) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
+  const auto result =
+      mastering::assistant::suggest_chain(data.data(), data.size(), sample_rate, config);
+  return chainConfigParamsToVal(result.config);
+}
+
 std::string js_mastering_audio_profile(val samples, const val& sample_rate_val, val params_obj) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
@@ -421,6 +461,17 @@ std::string js_mastering_assistant_suggest_stereo(val left_samples, val right_sa
   const auto result = mastering::assistant::suggest_chain_interleaved(
       interleaved.data(), interleaved.size() / 2, 2, sample_rate, config);
   return mastering::assistant::assistant_result_to_json(result);
+}
+
+val js_mastering_assistant_suggest_chain_stereo(val left_samples, val right_samples,
+                                                const val& sample_rate_val, val params_obj) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const std::vector<float> interleaved = interleaveValidatedPair(
+      left_samples, right_samples, sample_rate, "masteringAssistantSuggestChainStereo input");
+  const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
+  const auto result = mastering::assistant::suggest_chain_interleaved(
+      interleaved.data(), interleaved.size() / 2, 2, sample_rate, config);
+  return chainConfigParamsToVal(result.config);
 }
 
 std::string js_mastering_audio_profile_stereo(val left_samples, val right_samples,
@@ -499,9 +550,11 @@ void registerMasteringApiBindings() {
   function("masteringAbMatchLoudness", &js_mastering_ab_match_loudness);
   function("masteringStereoAnalyze", &js_mastering_stereo_analyze);
   function("masteringAssistantSuggest", &js_mastering_assistant_suggest);
+  function("masteringAssistantSuggestChain", &js_mastering_assistant_suggest_chain);
   function("masteringAudioProfile", &js_mastering_audio_profile);
   function("masteringStreamingPreview", &js_mastering_streaming_preview);
   function("masteringAssistantSuggestStereo", &js_mastering_assistant_suggest_stereo);
+  function("masteringAssistantSuggestChainStereo", &js_mastering_assistant_suggest_chain_stereo);
   function("masteringAudioProfileStereo", &js_mastering_audio_profile_stereo);
   function("masteringStreamingPreviewStereo", &js_mastering_streaming_preview_stereo);
   function("masteringPresetNames", &js_mastering_preset_names);

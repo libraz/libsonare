@@ -155,6 +155,16 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_size_t,
                 ctypes.POINTER(ctypes.c_char_p),
             ]
+        if hasattr(lib, "sonare_mastering_assistant_suggest_chain_json"):
+            lib.sonare_mastering_assistant_suggest_chain_json.restype = ctypes.c_int32
+            lib.sonare_mastering_assistant_suggest_chain_json.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_char_p),
+            ]
         if hasattr(lib, "sonare_mastering_audio_profile"):
             lib.sonare_mastering_audio_profile.restype = ctypes.c_int32
             lib.sonare_mastering_audio_profile.argtypes = [
@@ -179,6 +189,17 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
         if hasattr(lib, "sonare_mastering_assistant_suggest_stereo"):
             lib.sonare_mastering_assistant_suggest_stereo.restype = ctypes.c_int32
             lib.sonare_mastering_assistant_suggest_stereo.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_char_p),
+            ]
+        if hasattr(lib, "sonare_mastering_assistant_suggest_chain_json_stereo"):
+            lib.sonare_mastering_assistant_suggest_chain_json_stereo.restype = ctypes.c_int32
+            lib.sonare_mastering_assistant_suggest_chain_json_stereo.argtypes = [
                 ctypes.POINTER(ctypes.c_float),
                 ctypes.POINTER(ctypes.c_float),
                 ctypes.c_size_t,

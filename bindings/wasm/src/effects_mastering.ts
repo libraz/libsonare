@@ -61,6 +61,8 @@ export {
   mastering,
   masteringAbMatchLoudness,
   masteringAssistantSuggest,
+  masteringAssistantSuggestChain,
+  masteringAssistantSuggestChainStereo,
   masteringAssistantSuggestStereo,
   masteringAudioProfile,
   masteringAudioProfileStereo,

@@ -598,6 +598,31 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
                                                       const SonareMasteringParam* params,
                                                       size_t param_count, char** json_out);
 
+/// @brief As @ref sonare_mastering_assistant_suggest, but writes only the chain
+///        configuration the mastering chain consumes.
+/// @details The fuller document carries an explanation, genre candidates and a
+/// profile alongside the configuration, so a caller that wants to apply a
+/// suggestion has to dig the configuration out of it. This writes that
+/// configuration alone, in the core's own canonical serialization. The document's
+/// @c chainConfig block nests the same configuration as a parsed object rather
+/// than this text, so the two agree as JSON and not as bytes.
+/// @p params accepts the same keys as
+/// @ref sonare_mastering_assistant_suggest. One analysis pass, as there.
+/// The returned string must be released with sonare_free_string().
+SonareError sonare_mastering_assistant_suggest_chain_json(const float* samples, size_t length,
+                                                          int sample_rate,
+                                                          const SonareMasteringParam* params,
+                                                          size_t param_count, char** json_out);
+
+/// @brief Stereo counterpart of @ref sonare_mastering_assistant_suggest_chain_json.
+/// @details Profiles the pair the way @ref sonare_mastering_assistant_suggest_stereo
+/// does, so the loudness stage of the suggested chain is built on the
+/// channel-summed program rather than a downmix that reads roughly 6 dB low.
+/// The returned string must be released with sonare_free_string().
+SonareError sonare_mastering_assistant_suggest_chain_json_stereo(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, char** json_out);
+
 /// @brief Analyze audio and return mastering assistant profile JSON.
 /// @details @p params accepts nFft, hopLength, truePeakOversample, and
 /// detectDefects. The last runs the six repair detectors and fills the

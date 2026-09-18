@@ -546,6 +546,22 @@ export function masteringAssistantSuggest(
   );
 }
 
+/**
+ * Suggest a mastering chain, as the flat `{key: number|boolean}` params map
+ * {@link masteringAssistantSuggest}'s `chainConfig` carries, without needing to
+ * pull it out of the full assistant document. The returned map can be passed
+ * straight through as `overrides` to {@link mastering} / {@link masterAudio}.
+ */
+export function masteringAssistantSuggestChain(
+  request: MasteringAssistantParamsRequest,
+): Record<string, number | boolean> {
+  return requireModule().masteringAssistantSuggestChain(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
+}
+
 /** One entry of {@link MasteringAudioProfile.genreCandidates}. */
 export interface MasteringGenreCandidate {
   name: string;
@@ -671,6 +687,22 @@ export function masteringAssistantSuggestStereo(
   request: MasteringAssistantStereoParamsRequest,
 ): string {
   return requireModule().masteringAssistantSuggestStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
+}
+
+/**
+ * Stereo counterpart of {@link masteringAssistantSuggestChain}: the flat
+ * `{key: number|boolean}` params map without the surrounding assistant
+ * document, ready to pass through as `overrides` to {@link masterAudioStereo}.
+ */
+export function masteringAssistantSuggestChainStereo(
+  request: MasteringAssistantStereoParamsRequest,
+): Record<string, number | boolean> {
+  return requireModule().masteringAssistantSuggestChainStereo(
     request.left,
     request.right,
     request.sampleRate ?? 22050,

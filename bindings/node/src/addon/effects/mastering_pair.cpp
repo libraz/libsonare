@@ -15,6 +15,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/json.h"
 
 using namespace sonare_node;
 
@@ -82,6 +83,34 @@ sonare::mastering::assistant::AssistantConfig AssistantConfigFromParams(
       sonare::mastering::assistant::assistant_config_from_params(params.data(), params.size());
   if (has_platform) sonare::mastering::assistant::set_target_platform(config, platform);
   return config;
+}
+
+// Converts the "params" object of a chain_config_to_json() string into a flat
+// JS object. Throws by key name if a leaf is not a number or boolean -- the
+// only way that happens today is a v2 structured multiband stage, which a
+// silent drop would let a caller apply as if it were the whole suggestion. An
+// absent or empty params block is refused for the same reason: an empty
+// overrides object applies the preset unchanged.
+Napi::Object ChainConfigParamsToObject(Napi::Env env, const std::string& chain_config_json) {
+  namespace json = sonare::util::json;
+  const json::Value root = json::parse(chain_config_json);
+  Napi::Object result = Napi::Object::New(env);
+  const json::Value* params = root.find("params");
+  if (!params || !params->is_object() || params->as_object().empty()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "chain config carries no params block");
+  }
+  for (const auto& [key, value] : params->as_object()) {
+    if (value.is_number()) {
+      result.Set(key, Napi::Number::New(env, value.as_number()));
+    } else if (value.is_bool()) {
+      result.Set(key, Napi::Boolean::New(env, value.as_bool()));
+    } else {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "chain config param '" + key + "' is not a number or boolean");
+    }
+  }
+  return result;
 }
 
 }  // namespace
@@ -243,6 +272,27 @@ Napi::Value SonareWrap::MasteringAssistantSuggest(const Napi::CallbackInfo& info
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::MasteringAssistantSuggestChain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (samples, sampleRate, params?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto samples = info[0].As<Napi::Float32Array>();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(samples.Data(), samples.ElementLength(),
+                                       node_narrow_int(env, info[1], node_arg_label(1).c_str()));
+  const sonare::mastering::assistant::AssistantConfig config = AssistantConfigFromParams(info, 2);
+  const auto result = sonare::mastering::assistant::suggest_chain(
+      samples.Data(), samples.ElementLength(),
+      node_narrow_int(env, info[1], node_arg_label(1).c_str()), config);
+  return ChainConfigParamsToObject(env,
+                                   sonare::mastering::api::chain_config_to_json(result.config));
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringAudioProfile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
@@ -325,6 +375,24 @@ Napi::Value SonareWrap::MasteringAssistantSuggestStereo(const Napi::CallbackInfo
   const auto result = sonare::mastering::assistant::suggest_chain_interleaved(
       interleaved.data(), frames, 2, sample_rate, config);
   return Napi::String::New(env, sonare::mastering::assistant::assistant_result_to_json(result));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringAssistantSuggestChainStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  std::vector<float> interleaved;
+  size_t frames = 0;
+  int sample_rate = 0;
+  if (!ReadStereoPair(info, "Expected (left, right, sampleRate, params?)", &interleaved, &frames,
+                      &sample_rate)) {
+    return env.Undefined();
+  }
+  const sonare::mastering::assistant::AssistantConfig config = AssistantConfigFromParams(info, 3);
+  const auto result = sonare::mastering::assistant::suggest_chain_interleaved(
+      interleaved.data(), frames, 2, sample_rate, config);
+  return ChainConfigParamsToObject(env,
+                                   sonare::mastering::api::chain_config_to_json(result.config));
   SONARE_NODE_CATCH(env)
 }
 

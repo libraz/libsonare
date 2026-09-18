@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import json
 from collections.abc import Sequence
 from typing import Any
 
@@ -301,6 +302,60 @@ def mastering_assistant_suggest(
             lib.sonare_free_string(json_ptr)
 
 
+def _unwrap_chain_params(json_text: str) -> dict[str, float | bool]:
+    """Strip the ``{"version": ..., "params": {...}}`` envelope from a chain config.
+
+    Raises rather than silently dropping a non-scalar value: a schema v2 chain
+    config nests some keys (``dynamics.multibandComp``) as objects, and a
+    mapping that quietly lost one would read as "applied as suggested" when
+    it was not. An absent or empty ``params`` block is refused for the same
+    reason: an empty overrides mapping applies the preset unchanged.
+    """
+    raw: Any = json.loads(json_text).get("params")
+    if not raw:
+        raise SonareValueError("chain config carries no params block")
+    unwrapped: dict[str, float | bool] = {}
+    for key, value in raw.items():
+        if not isinstance(value, (int, float, bool)):
+            raise SonareValueError(f"chain config param {key!r} is not a scalar value")
+        unwrapped[str(key)] = value
+    return unwrapped
+
+
+@_guard_buffer("samples")
+def mastering_assistant_suggest_chain(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool | str] | None = None,
+) -> dict[str, float | bool]:
+    """Suggest a mastering chain as a :func:`master_audio` overrides mapping.
+
+    Skips parsing the full profile+chain document :func:`mastering_assistant_suggest`
+    returns down to the chain config it already carries.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_assistant_suggest_chain_json"):
+        raise RuntimeError("libsonare was built without mastering assistant support")
+    c_array, length = _to_c_float_array(samples)
+    param_array, param_count = _assistant_params(params)
+    json_ptr = ctypes.c_char_p()
+    rc = lib.sonare_mastering_assistant_suggest_chain_json(
+        c_array,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        param_array,
+        _to_c_size_t(param_count, "param_count"),
+        ctypes.byref(json_ptr),
+    )
+    _check(rc)
+    try:
+        json_text = ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
+    return _unwrap_chain_params(json_text)
+
+
 @_guard_buffer("samples")
 def mastering_audio_profile(
     samples: Sequence[float] | list[float],
@@ -422,6 +477,27 @@ def mastering_assistant_suggest_stereo(
         param_array,
         param_count,
     )
+
+
+@_guard_buffer("left", "right")
+def mastering_assistant_suggest_chain_stereo(
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    params: dict[str, float | int | bool | str] | None = None,
+) -> dict[str, float | bool]:
+    """Stereo counterpart of :func:`mastering_assistant_suggest_chain`."""
+    param_array, param_count = _assistant_params(params)
+    json_text = _stereo_analysis_json(
+        "sonare_mastering_assistant_suggest_chain_json_stereo",
+        "libsonare was built without mastering assistant support",
+        left,
+        right,
+        sample_rate,
+        param_array,
+        param_count,
+    )
+    return _unwrap_chain_params(json_text)
 
 
 @_guard_buffer("left", "right")

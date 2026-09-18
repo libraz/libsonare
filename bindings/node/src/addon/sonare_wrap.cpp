@@ -328,6 +328,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringAssistantSuggest",
               Napi::Function::New(env, &SonareWrap::MasteringAssistantSuggest,
                                   "masteringAssistantSuggest"));
+  exports.Set("masteringAssistantSuggestChain",
+              Napi::Function::New(env, &SonareWrap::MasteringAssistantSuggestChain,
+                                  "masteringAssistantSuggestChain"));
   exports.Set("masteringAudioProfile", Napi::Function::New(env, &SonareWrap::MasteringAudioProfile,
                                                            "masteringAudioProfile"));
   exports.Set("masteringStreamingPreview",
@@ -336,6 +339,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringAssistantSuggestStereo",
               Napi::Function::New(env, &SonareWrap::MasteringAssistantSuggestStereo,
                                   "masteringAssistantSuggestStereo"));
+  exports.Set("masteringAssistantSuggestChainStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringAssistantSuggestChainStereo,
+                                  "masteringAssistantSuggestChainStereo"));
   exports.Set("masteringAudioProfileStereo",
               Napi::Function::New(env, &SonareWrap::MasteringAudioProfileStereo,
                                   "masteringAudioProfileStereo"));

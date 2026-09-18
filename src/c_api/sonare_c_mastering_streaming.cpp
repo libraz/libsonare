@@ -63,6 +63,26 @@ SonareError sonare_mastering_assistant_suggest(const float* samples, size_t leng
   SONARE_C_CATCH
 }
 
+SonareError sonare_mastering_assistant_suggest_chain_json(const float* samples, size_t length,
+                                                          int sample_rate,
+                                                          const SonareMasteringParam* params,
+                                                          size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SONARE_C_TRY
+  const auto config = to_assistant_config(params, param_count);
+  const auto result =
+      sonare::mastering::assistant::suggest_chain(samples, length, sample_rate, config);
+  *json_out = copy_string(sonare::mastering::api::chain_config_to_json(result.config));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_mastering_audio_profile(const float* samples, size_t length, int sample_rate,
                                            const SonareMasteringParam* params, size_t param_count,
                                            char** json_out) {
@@ -154,6 +174,26 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
   const auto result = sonare::mastering::assistant::suggest_chain_interleaved(
       interleaved.data(), length, 2, sample_rate, config);
   *json_out = copy_string(sonare::mastering::assistant::assistant_result_to_json(result));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_assistant_suggest_chain_json_stereo(
+    const float* left, const float* right, size_t length, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+  SonareError err = validate_stereo_params(left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SONARE_C_TRY
+  const auto config = to_assistant_config(params, param_count);
+  const std::vector<float> interleaved = interleave_pair(left, right, length);
+  const auto result = sonare::mastering::assistant::suggest_chain_interleaved(
+      interleaved.data(), length, 2, sample_rate, config);
+  *json_out = copy_string(sonare::mastering::api::chain_config_to_json(result.config));
   return SONARE_OK;
   SONARE_C_CATCH
 }
