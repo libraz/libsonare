@@ -201,11 +201,14 @@ bool write_binary_file(const std::string& path, const uint8_t* data, size_t len)
 // all of which declare --in as required. They are kept as a guard for a future
 // subcommand that does not, which would otherwise read its own subcommand name
 // as a file path.
+std::string project_input_path(const CliArgs& args) {
+  return args.has("in") ? args.get_string("in") : args.get_string("project", args.input_file);
+}
+
 bool load_project_from_args(const CliArgs& args, ProjectHandle* handle,
                             std::string* diagnostics = nullptr, SonareError* load_error = nullptr) {
   if (load_error != nullptr) *load_error = SONARE_OK;
-  const std::string in_path =
-      args.has("in") ? args.get_string("in") : args.get_string("project", args.input_file);
+  const std::string in_path = project_input_path(args);
   if (in_path.empty()) {
     if (load_error != nullptr) *load_error = SONARE_ERROR_INVALID_PARAMETER;
     std::cerr << color::red << "Error: missing project JSON (use --in <project.json>)"
@@ -452,12 +455,234 @@ int cmd_project_compile(const CliArgs& args) {
   return has_timeline ? 0 : kExitInvalidState;
 }
 
+// A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
+// audio source carries a `uri`, so the kind decides which entries are
+// addressable by --audio at all.
+constexpr int kProjectSourceKindAudio = 0;
+
+// The only URI scheme --resolve-audio opens. The core never opens a URI itself,
+// so resolving one is this front-end's own file I/O, and it has no business
+// fetching over a network to feed a render.
+constexpr char kFileUriPrefix[] = "file://";
+
+// Percent-decodes a URI path. A malformed escape is kept verbatim, so a path
+// containing a bare '%' stays openable instead of being mangled.
+std::string percent_decode(const std::string& text) {
+  const auto hex_value = [](char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  };
+  std::string out;
+  out.reserve(text.size());
+  for (size_t i = 0; i < text.size(); ++i) {
+    const int high = (text[i] == '%' && i + 2 < text.size()) ? hex_value(text[i + 1]) : -1;
+    const int low = high >= 0 ? hex_value(text[i + 2]) : -1;
+    if (low >= 0) {
+      out.push_back(static_cast<char>((high << 4) | low));
+      i += 2;
+    } else {
+      out.push_back(text[i]);
+    }
+  }
+  return out;
+}
+
+// Resolves a file:// URI to a local path. Returns false for any other scheme
+// and for an authority naming another host, neither of which this front-end can
+// open. The POSIX decoding is percent-decoding alone, which is what the other
+// front-end's url2pathname does on the same platforms.
+bool path_from_file_uri(const std::string& uri, std::string* out) {
+  const std::string prefix(kFileUriPrefix);
+  if (uri.compare(0, prefix.size(), prefix) != 0) return false;
+  const std::string rest = uri.substr(prefix.size());
+  const size_t slash = rest.find('/');
+  if (slash == std::string::npos) return false;
+  const std::string authority = rest.substr(0, slash);
+  if (!authority.empty() && authority != "localhost") return false;
+  *out = percent_decode(rest.substr(slash));
+  return true;
+}
+
+// Maps each audio source id in the document to the URI it references.
+//
+// Read from the document rather than from the loaded handle: the flat source
+// descriptor carries the URI in a fixed-width field, so anything longer arrives
+// truncated, and a truncated URI is one --resolve-audio would then try to open.
+// The document is the only place the whole string survives.
+std::map<uint32_t, std::string> project_audio_source_uris(const std::string& document) {
+  std::map<uint32_t, std::string> uris;
+  const auto root = sonare::util::json::parse(document);
+  const auto* sources = root.find("sources");
+  if (sources == nullptr || !sources->is_array()) return uris;
+  for (const auto& source : sources->as_array()) {
+    const auto* kind = source.find("kind");
+    const auto* id = source.find("id");
+    const auto* uri = source.find("uri");
+    if (kind == nullptr || !kind->is_number() || kind->as_int() != kProjectSourceKindAudio)
+      continue;
+    if (id == nullptr || !id->is_number()) continue;
+    uris.emplace(static_cast<uint32_t>(id->as_number()),
+                 uri != nullptr && uri->is_string() ? uri->as_string() : std::string());
+  }
+  return uris;
+}
+
+// Every audio source the loaded document has no PCM for, in the order the C ABI
+// reports them. @p err carries the first failed C call, so a read that could not
+// happen is not reported as an empty list.
+std::vector<uint32_t> project_unresolved_audio_source_ids(const SonareProject* project,
+                                                          SonareError* err) {
+  std::vector<uint32_t> ids;
+  size_t count = 0;
+  *err = sonare_project_unresolved_audio_source_count(project, &count);
+  if (*err != SONARE_OK) return ids;
+  for (size_t index = 0; index < count; ++index) {
+    uint32_t source_id = 0;
+    *err = sonare_project_unresolved_audio_source_id_by_index(project, index, &source_id);
+    if (*err != SONARE_OK) return {};
+    ids.push_back(source_id);
+  }
+  return ids;
+}
+
+// Splits one `--audio <source_id>=FILE` assignment at the FIRST '=', so a path
+// containing one stays intact. A source is addressed by id alone: its URI is
+// unique too, but accepting either spelling would put two addresses on one
+// binding, and the id is what the unresolved-source report already names.
+void parse_audio_binding(const std::string& assignment, uint32_t* out_source_id,
+                         std::string* out_path) {
+  const size_t separator = assignment.find('=');
+  if (separator == 0 || separator == std::string::npos || separator + 1 >= assignment.size()) {
+    throw std::invalid_argument("--audio expects <source_id>=FILE, got '" + assignment + "'");
+  }
+  const long long source_id = parse_int64_strict("audio", assignment.substr(0, separator));
+  if (source_id <= 0 || source_id > static_cast<long long>(UINT32_MAX)) {
+    throw std::invalid_argument("--audio source id out of range: " +
+                                assignment.substr(0, separator));
+  }
+  *out_source_id = static_cast<uint32_t>(source_id);
+  *out_path = assignment.substr(separator + 1);
+}
+
+// Decodes an audio file and registers its PCM against one audio source.
+SonareError bind_source_audio(SonareProject* project, uint32_t source_id, const std::string& path) {
+  auto [interleaved, sample_rate, channels] = load_audio_interleaved(path);
+  if (channels <= 0 || interleaved.empty()) {
+    throw std::invalid_argument("--audio " + std::to_string(source_id) + "=" + path +
+                                " decoded no samples");
+  }
+  const int64_t frames = static_cast<int64_t>(interleaved.size() / static_cast<size_t>(channels));
+  return sonare_project_set_source_audio(project, source_id, interleaved.data(), frames, channels,
+                                         sample_rate);
+}
+
+// Supplies the PCM a bounce needs for the document's audio sources.
+//
+// Project JSON references audio by URI / storage handle only and the core never
+// opens either, so a document whose clips reference audio has nothing to render
+// from until a host binds samples. This front-end is that host: `--audio` binds
+// one named source to a file and `--resolve-audio` opens the file:// URIs the
+// document already carries. Anything still unresolved is refused naming every
+// source and its URI, rather than reaching the render as a bare invalid-state
+// error that says nothing about what is missing.
+//
+// Returns 0 when the render may proceed, and the exit code to report otherwise.
+int resolve_bounce_audio_sources(const CliArgs& args, SonareProject* project) {
+  const std::vector<std::string> assignments = args.get_string_list("audio");
+  const bool resolve = args.has("resolve-audio");
+  SonareError unresolved_error = SONARE_OK;
+  const std::vector<uint32_t> initial =
+      project_unresolved_audio_source_ids(project, &unresolved_error);
+  if (unresolved_error != SONARE_OK) {
+    project_report_error("read unresolved audio sources", unresolved_error);
+    return project_exit_code(unresolved_error);
+  }
+  // A document with no audio sources at all -- every MIDI-only project -- has
+  // nothing to resolve and nothing to report, so it never pays for the second
+  // read the URI map costs.
+  if (assignments.empty() && !resolve && initial.empty()) return 0;
+
+  const std::string in_path = project_input_path(args);
+  std::vector<uint8_t> document;
+  if (!read_binary_file(in_path, &document)) {
+    std::cerr << color::red << "Error: cannot open project file: " << in_path << color::reset
+              << "\n";
+    return project_exit_code(SONARE_ERROR_FILE_NOT_FOUND);
+  }
+  const std::map<uint32_t, std::string> uris =
+      project_audio_source_uris(std::string(document.begin(), document.end()));
+
+  for (const auto& assignment : assignments) {
+    uint32_t source_id = 0;
+    std::string path;
+    parse_audio_binding(assignment, &source_id, &path);
+    if (uris.count(source_id) == 0) {
+      std::cerr << color::red << "Error: --audio " << assignment
+                << ": the project has no audio source " << source_id << color::reset << "\n";
+      return kExitInvalidParameter;
+    }
+    const SonareError err = bind_source_audio(project, source_id, path);
+    if (err != SONARE_OK) {
+      project_report_error("bind audio source " + std::to_string(source_id), err);
+      return project_exit_code(err);
+    }
+  }
+  if (args.has("resolve-audio")) {
+    SonareError err = SONARE_OK;
+    for (const uint32_t source_id : project_unresolved_audio_source_ids(project, &err)) {
+      const auto found = uris.find(source_id);
+      const std::string uri = found != uris.end() ? found->second : std::string();
+      std::string path;
+      if (!path_from_file_uri(uri, &path)) {
+        std::cerr << color::red << "Error: source " << source_id << " (" << uri
+                  << "): --resolve-audio opens file:// URIs only; pass --audio " << source_id
+                  << "=FILE" << color::reset << "\n";
+        return kExitInvalidParameter;
+      }
+      const SonareError bind_err = bind_source_audio(project, source_id, path);
+      if (bind_err != SONARE_OK) {
+        project_report_error("bind audio source " + std::to_string(source_id), bind_err);
+        return project_exit_code(bind_err);
+      }
+    }
+    if (err != SONARE_OK) {
+      project_report_error("read unresolved audio sources", err);
+      return project_exit_code(err);
+    }
+  }
+  SonareError err = SONARE_OK;
+  const std::vector<uint32_t> remaining = project_unresolved_audio_source_ids(project, &err);
+  if (err != SONARE_OK) {
+    project_report_error("read unresolved audio sources", err);
+    return project_exit_code(err);
+  }
+  if (remaining.empty()) return 0;
+  // One line per source, each carrying its own id, because the caller has to act
+  // on every one of them: stopping at the first turns a document with four
+  // missing takes into four runs.
+  for (const uint32_t source_id : remaining) {
+    const auto found = uris.find(source_id);
+    std::cerr << color::red << "Error: source " << source_id << " ("
+              << (found != uris.end() ? found->second : std::string())
+              << ") has no audio; pass --audio " << source_id << "=FILE or --resolve-audio"
+              << color::reset << "\n";
+  }
+  return kExitInvalidState;
+}
+
 // `project bounce --in in.json -o out.wav` — compile + render the project
 // offline to an interleaved WAV file. With `--synth [preset]` MIDI tracks are
 // rendered through the NativeSynth catalog. A named preset is a fixed patch;
 // the bare flag follows GM bank/program changes and routes channel 10 through
 // the GM drum-kit map. Without --synth MIDI tracks render silently.
-int project_bounce_impl(const CliArgs& args, bool use_synth) {
+//
+// `binds_source_audio` is false for `midi-render`, which declares neither
+// --audio nor --resolve-audio: it has no way to supply the PCM an unresolved
+// source needs, and naming those options in its refusal would advertise a flag
+// the command does not accept.
+int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_audio = true) {
   SonareSynthInstrumentBinding synth_binding{};
   if (use_synth) {
     const std::string requested = args.get_string("synth");
@@ -487,6 +712,11 @@ int project_bounce_impl(const CliArgs& args, bool use_synth) {
   SonareError load_error = SONARE_OK;
   if (!load_project_from_args(args, &handle, nullptr, &load_error))
     return project_exit_code(load_error);
+
+  if (binds_source_audio) {
+    const int audio_exit = resolve_bounce_audio_sources(args, handle.ptr);
+    if (audio_exit != 0) return audio_exit;
+  }
 
   double project_sample_rate = 0.0;
   SonareError sr_err = sonare_project_get_sample_rate(handle.ptr, &project_sample_rate);
@@ -573,7 +803,9 @@ int cmd_project_bounce(const CliArgs& args) { return project_bounce_impl(args, a
 // having to know it is a project bounce underneath. An empty `--synth` follows
 // GM bank/program changes, which is what makes the bare form useful on a
 // general-MIDI file.
-int cmd_midi_render(const CliArgs& args, const Audio&) { return project_bounce_impl(args, true); }
+int cmd_midi_render(const CliArgs& args, const Audio&) {
+  return project_bounce_impl(args, true, false);
+}
 
 // `transcribe in.wav -o out.mid` — audio to a Standard MIDI File. The notes
 // land on a PROJECT's tempo map, which is why an explicit --tempo-bpm is
@@ -894,6 +1126,10 @@ void print_project_usage(std::ostream& out) {
          "out.json])\n"
       << "  compile              Compile a project + report diagnostics (--in in.json)\n"
       << "  bounce               Render a project offline to WAV (--in in.json -o out.wav)\n"
+      << "                       Audio clips need their sources bound first: --audio "
+         "<id>=<file>\n"
+      << "                       per source, or --resolve-audio for file:// URIs in the "
+         "document\n"
       << "                       Use bare --synth for GM program/channel routing and drums;\n"
       << "                       --synth <preset> selects one fixed NativeSynth patch\n"
       << "                       SF2 and per-destination synth JSON are not exposed here; use the\n"
@@ -921,6 +1157,11 @@ void print_project_usage(std::ostream& out) {
       "  --frames <n>         Bounce length in frames\n"
       "  --channels <n>       Bounce channel count: 1 (mono downmix) or 2 (default 2)\n"
       "  --strict             Treat project load diagnostics as validation failures\n"
+      "  --audio <id>=<file>  Bind decoded PCM to project audio source <id> (bounce;\n"
+      "                       repeat once per source, since project JSON carries only a\n"
+      "                       URI reference and the core never opens one)\n"
+      "  --resolve-audio      Open the file:// URIs the document's unresolved audio\n"
+      "                       sources carry; any other scheme is refused by name\n"
       "  --synth [preset]     Bare flag: GM program/channel routing + channel-10 drums\n"
       "                       Value: fixed NativeSynth preset (see synth-presets)\n"
       "                       No --sf2/--synth-json CLI wiring in this command\n"

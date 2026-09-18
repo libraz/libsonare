@@ -2521,6 +2521,15 @@
       ],
       "project.bounce": [
         {
+          "name": "audio",
+          "type": "string",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "block-size",
           "type": "integer",
           "default": 0,
@@ -2581,6 +2590,15 @@
           "aliases": [
             "o"
           ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "resolve-audio",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
           "repeatable": false,
           "required": false,
           "domain": null
@@ -10466,6 +10484,15 @@
       "path": "project.bounce",
       "options": [
         {
+          "name": "audio",
+          "type": "string",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "block-size",
           "type": "integer",
           "default": 0,
@@ -10526,6 +10553,15 @@
           "aliases": [
             "o"
           ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "resolve-audio",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
           "repeatable": false,
           "required": false,
           "domain": null

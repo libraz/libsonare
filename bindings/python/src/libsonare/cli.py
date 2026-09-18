@@ -1452,6 +1452,28 @@ def _build_parser() -> _ContractArgumentParser:
     pbounce.add_argument("--block-size", type=int, default=0, help="Render block size")
     pbounce.add_argument("--channels", type=int, default=2, help="Render channel count")
     pbounce.add_argument("--instrument-latency", type=int, default=0)
+    # One assignment per occurrence, as --set / --edit / suggest-mix --input do:
+    # the id written with the path keeps the pairing in one token, so no second
+    # repeatable option has to be kept in step with this one.
+    pbounce.add_argument(
+        "--audio",
+        action="append",
+        default=[],
+        metavar="SOURCE_ID=WAV",
+        help=(
+            "Bind decoded PCM to one of the project's audio sources (repeat once per "
+            "source); project JSON carries a URI reference only, so a document with "
+            "audio clips renders from nothing until its sources are bound"
+        ),
+    )
+    pbounce.add_argument(
+        "--resolve-audio",
+        action="store_true",
+        help=(
+            "Open the file:// URIs the document's unresolved audio sources already "
+            "carry; any other scheme is refused by name"
+        ),
+    )
     pbounce.add_argument(
         "--synth",
         nargs="?",

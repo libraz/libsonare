@@ -969,11 +969,16 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_project_command("project.new", {int_value("sample-rate", 0), required_output()});
     add_project_command("project.validate", {flag("strict"), required_path("in"), output_value()});
     add_project_command("project.compile", {required_path("in")});
+    // `--audio` is one assignment per occurrence rather than a delimited list,
+    // as `--set` and `--edit` are: the source id written with the path keeps the
+    // pairing in one token, and a path may carry whatever separator a fold would
+    // have to pick. Its type is String rather than Path because the value is an
+    // assignment, not a bare path.
     add_project_command(
         "project.bounce",
         {required_path("in"), required_output(), int_value("sample-rate"), int_value("frames", 0),
          int_value("block-size", 0), int_value("channels", 2), int_value("instrument-latency", 0),
-         optional_string("synth")},
+         optional_string("synth"), string_value("audio", false, true), flag("resolve-audio")},
         &validate_project_bounce_channels);
     // `project bounce` with the synth pinned on, as a top-level leaf: it takes
     // no subcommand positional, and `--synth` is a plain value rather than an

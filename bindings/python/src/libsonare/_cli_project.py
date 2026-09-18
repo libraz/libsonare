@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import sys
+import urllib.parse
+import urllib.request
 from typing import Any, cast
 
 from ._cli_common import (
     EXIT_INVALID_STATE,
     _atomic_write_bytes,
     _legacy_exit_codes,
+    _load_audio_channels,
     _read_bounded,
     _strict_json_dumps,
     _write_project_bounce_wav,
@@ -21,6 +25,16 @@ from ._cli_common import (
 from ._runtime import ErrorCode, SonareError
 
 _MAX_PROJECT_OR_MIDI_BYTES = 64 * 1024 * 1024
+
+# A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
+# audio source carries a `uri`, so the kind decides which entries are addressable
+# by --audio at all.
+_SOURCE_KIND_AUDIO = 0
+
+# The only URI scheme --resolve-audio opens. The core never opens a URI itself,
+# so resolving one is this front-end's own file I/O, and it has no business
+# fetching over a network to feed a render.
+_FILE_URI_SCHEME = "file"
 
 # Subcommands whose result goes to stdout only; accepting -o would silently
 # discard the requested destination, so it is rejected instead.
@@ -54,13 +68,129 @@ def _write_project_json(project: object, path: str) -> int:
     return len(data)
 
 
+def _parse_audio_binding(assignment: str) -> tuple[int, str]:
+    """Split one ``--audio <source_id>=FILE`` assignment.
+
+    A source is addressed by id alone. Its URI is also unique in the document,
+    but accepting either spelling would put two addresses on one binding, and
+    the id is the one the unresolved-source report already names.
+
+    The split is on the first ``=``, so a path containing one stays intact.
+    """
+    source_id_text, separator, path = assignment.partition("=")
+    if not separator or not path:
+        raise ValueError(f"--audio expects <source_id>=FILE, got {assignment!r}")
+    try:
+        source_id = int(source_id_text.strip(), 10)
+    except ValueError:
+        raise ValueError(f"--audio source id must be an integer, got {source_id_text!r}") from None
+    if source_id <= 0:
+        raise ValueError(f"--audio source id must be positive, got {source_id}")
+    return source_id, path
+
+
+def _audio_source_uris(document: bytes) -> dict[int, str]:
+    """Map each audio source id in the document to the URI it references.
+
+    Read from the document rather than from the loaded handle: the flat source
+    descriptor carries the URI in a fixed-width field, so anything longer arrives
+    truncated, and a truncated URI is one ``--resolve-audio`` would then try to
+    open. The document is the only place the whole string survives.
+    """
+    sources = json.loads(document).get("sources", [])
+    uris: dict[int, str] = {}
+    for source in sources:
+        if int(source.get("kind", 0)) != _SOURCE_KIND_AUDIO:
+            continue
+        uris[int(source.get("id", 0))] = str(source.get("uri", ""))
+    return uris
+
+
+def _path_from_file_uri(uri: str) -> str | None:
+    """Resolve a ``file://`` URI to a local path, or None for anything else."""
+    parsed = urllib.parse.urlparse(uri)
+    if parsed.scheme != _FILE_URI_SCHEME:
+        return None
+    # An authority naming another host is a remote path this front-end cannot
+    # open; only the empty and localhost authorities address the local machine.
+    if parsed.netloc not in ("", "localhost"):
+        return None
+    return urllib.request.url2pathname(parsed.path)
+
+
+def _bind_source_audio(project: object, source_id: int, path: str) -> None:
+    """Decode an audio file and register its PCM against one audio source."""
+    planes, sample_rate = _load_audio_channels(path)
+    channels = len(planes)
+    frames = min((len(plane) for plane in planes), default=0)
+    if channels == 0 or frames == 0:
+        raise ValueError(f"--audio {source_id}={path} decoded no samples")
+    interleaved = [plane[frame] for frame in range(frames) for plane in planes]
+    cast(Any, project).set_source_audio(source_id, interleaved, channels, sample_rate)
+
+
+def _resolve_bounce_audio_sources(project: object, args: argparse.Namespace) -> None:
+    """Supply the PCM a bounce needs for the document's audio sources.
+
+    Project JSON references audio by URI / storage handle only and the core
+    never opens either, so a document whose clips reference audio has nothing to
+    render from until a host binds samples. This front-end is that host:
+    ``--audio`` binds one named source to a file and ``--resolve-audio`` opens
+    the ``file://`` URIs the document already carries. Anything still unresolved
+    is refused naming every source and its URI, rather than reaching the render
+    as a bare invalid-state error that says nothing about what is missing.
+    """
+    assignments = list(getattr(args, "audio", None) or [])
+    resolve = bool(getattr(args, "resolve_audio", False))
+    # A document with no audio sources at all -- every MIDI-only project -- has
+    # nothing to resolve and nothing to report, so it never pays for the second
+    # read the URI map costs.
+    if not assignments and not resolve and not cast(Any, project).unresolved_audio_source_ids():
+        return
+    uris = _audio_source_uris(_read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES))
+    for assignment in assignments:
+        source_id, path = _parse_audio_binding(assignment)
+        if source_id not in uris:
+            raise ValueError(f"--audio {assignment}: the project has no audio source {source_id}")
+        _bind_source_audio(project, source_id, path)
+    if resolve:
+        for source_id in cast(Any, project).unresolved_audio_source_ids():
+            uri = uris.get(source_id, "")
+            path = _path_from_file_uri(uri)
+            if path is None:
+                raise ValueError(
+                    f"source {source_id} ({uri}): --resolve-audio opens file:// URIs only; "
+                    f"pass --audio {source_id}=FILE"
+                )
+            _bind_source_audio(project, source_id, path)
+    remaining = cast(Any, project).unresolved_audio_source_ids()
+    if remaining:
+        # One line per source, each carrying its own id, because the caller has
+        # to act on every one of them: stopping at the first turns a document
+        # with four missing takes into four runs.
+        raise SonareError(
+            int(ErrorCode.INVALID_STATE),
+            "\n".join(
+                f"source {source_id} ({uris.get(source_id, '')}) has no audio; "
+                f"pass --audio {source_id}=FILE or --resolve-audio"
+                for source_id in remaining
+            ),
+        )
+
+
 def _project_bounce(
-    args: argparse.Namespace, *, force_synth: bool = False, command_name: str = "project bounce"
+    args: argparse.Namespace,
+    *,
+    force_synth: bool = False,
+    command_name: str = "project bounce",
+    binds_source_audio: bool = True,
 ) -> int:
     if not args.output:
         raise ValueError(f"{command_name} requires --output")
     project = _load_project(args.input)
     try:
+        if binds_source_audio:
+            _resolve_bounce_audio_sources(project, args)
         project_sample_rate = cast(Any, project).get_sample_rate()
         # Render at the project's own sample rate by default (args.sample_rate is
         # None unless the user passed --sample-rate); an explicit --sample-rate is
@@ -307,7 +437,13 @@ def cmd_project(args: argparse.Namespace) -> int:
 
 
 def cmd_midi_render(args: argparse.Namespace) -> int:
-    return _project_bounce(args, force_synth=True, command_name="midi-render")
+    # No audio-source binding here: `midi-render` declares neither --audio nor
+    # --resolve-audio, so it has no way to supply the PCM an unresolved source
+    # needs and naming those options in its refusal would advertise a flag the
+    # command does not accept.
+    return _project_bounce(
+        args, force_synth=True, command_name="midi-render", binds_source_audio=False
+    )
 
 
 def cmd_transcribe(args: argparse.Namespace) -> int:
