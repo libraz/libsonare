@@ -648,6 +648,30 @@ TEST_CASE("NoteEditor vacates a moved note span without a step at the seam", "[p
   REQUIRE(std::abs(moved[600] - moved[599]) < 0.05f);
 }
 
+TEST_CASE("NoteEditor refuses a move target with no room in the buffer", "[pitch_editor]") {
+  constexpr int sample_rate = 1000;
+  std::vector<float> samples(1000, 0.5f);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+
+  NoteRegion region;
+  region.onset_sample = 400;
+  region.offset_sample = 600;
+  NoteEditor editor({5.0f, sonare::StretchBackend::NativeSpectral});
+
+  // The vacated span is ramped out before the paste, so a target with nowhere to
+  // land used to erase the note and write it nowhere, under a successful return.
+  REQUIRE_THROWS_AS(editor.move_note(audio, region, 1000), sonare::SonareException);
+  REQUIRE_THROWS_AS(editor.move_note(audio, region, 99999999), sonare::SonareException);
+  // A negative folded into 0, making -1 and a deliberate 0 indistinguishable.
+  REQUIRE_THROWS_AS(editor.move_note(audio, region, -1), sonare::SonareException);
+
+  // A note landing near the end keeps the part that fits, which is the same
+  // clipping clamp_region applies to the source span.
+  const sonare::Audio clipped = editor.move_note(audio, region, 999);
+  REQUIRE(clipped.size() == audio.size());
+  REQUIRE(clipped[999] > audio[999]);
+}
+
 TEST_CASE("NoteEditor stretches note region to requested length ratio", "[pitch_editor]") {
   constexpr int sample_rate = 22050;
   auto samples = sine(440.0f, sample_rate, sample_rate / 2);

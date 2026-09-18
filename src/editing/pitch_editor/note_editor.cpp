@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <vector>
 
 #include "editing/note_model/note_renderer.h"
@@ -20,6 +21,13 @@ Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
   NoteRegion clipped = clamp_region(audio, region);
   const int length = clipped.offset_sample - clipped.onset_sample;
   SONARE_CHECK(length > 0, ErrorCode::InvalidParameter);
+  // The vacated span is ramped out whatever the target is, so a target outside the
+  // buffer would erase the note and paste it nowhere.
+  SONARE_CHECK_MSG(target_onset_sample >= 0 && target_onset_sample < static_cast<int>(audio.size()),
+                   ErrorCode::InvalidParameter,
+                   "NoteEditor::move_note: targetOnsetSample must fall inside the buffer, got " +
+                       std::to_string(target_onset_sample) + " for " +
+                       std::to_string(audio.size()) + " samples");
 
   const int fade = fade_samples(audio.sample_rate(), length);
   std::vector<float> output(audio.begin(), audio.end());
@@ -31,10 +39,11 @@ Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
   // vacates the same kind of span.
   note_model::erase_span(output, audio, clipped.onset_sample, clipped.offset_sample, fade);
 
-  const int target_start = std::clamp(target_onset_sample, 0, static_cast<int>(output.size()));
-  const int target_end = std::min(target_start + length, static_cast<int>(output.size()));
-  for (int i = target_start; i < target_end; ++i) {
-    output[static_cast<size_t>(i)] += segment[static_cast<size_t>(i - target_start)];
+  // A note landing near the end keeps the part that fits; only a target with no
+  // room at all is refused above.
+  const int target_end = std::min(target_onset_sample + length, static_cast<int>(output.size()));
+  for (int i = target_onset_sample; i < target_end; ++i) {
+    output[static_cast<size_t>(i)] += segment[static_cast<size_t>(i - target_onset_sample)];
   }
 
   return Audio::from_vector(std::move(output), audio.sample_rate());
