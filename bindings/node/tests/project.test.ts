@@ -718,6 +718,13 @@ describe('Project native binding', () => {
     const smf = project.exportSmf();
     expect(smf.includes(Buffer.from([0xc0, 42]))).toBe(true);
     expect(smf.includes(Buffer.from([0xc3, 24]))).toBe(true);
+    // Pressure and bend survive the export. Poly pressure carries the transposed
+    // note (60 + 12), because aftertouch left on the source note would address a
+    // note the shifted voice never played.
+    expect(smf.includes(Buffer.from([0xa0, 72, 70]))).toBe(true);
+    expect(smf.includes(Buffer.from([0xa0, 60, 70]))).toBe(false);
+    expect(smf.includes(Buffer.from([0xd0, 80]))).toBe(true);
+    expect(smf.includes(Buffer.from([0xe0, 0x00, 0x40]))).toBe(true);
     project.destroy();
 
     const sysexProject = Project.create();

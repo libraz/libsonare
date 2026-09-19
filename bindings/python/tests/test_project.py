@@ -1118,6 +1118,13 @@ def test_midi_helpers_program_midi_fx_and_sysex_smf_round_trip() -> None:
         assert exported[:4] == b"MThd"
         assert bytes([0xC0, 42]) in exported
         assert bytes([0xC3, 24]) in exported
+        # Pressure and bend survive the export. Poly pressure carries the
+        # transposed note (60 + 12), because aftertouch left on the source note
+        # would address a note the shifted voice never played.
+        assert bytes([0xA0, 72, 70]) in exported
+        assert bytes([0xA0, 60, 70]) not in exported
+        assert bytes([0xD0, 80]) in exported
+        assert bytes([0xE0, 0x00, 0x40]) in exported
 
         sysex_project = Project()
         try:

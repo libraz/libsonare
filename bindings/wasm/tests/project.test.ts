@@ -834,8 +834,16 @@ describe('Sonare WASM Project', () => {
       project.setProgramOnChannel(clipId, 0, 3, 24, 0x0123);
       const smf = project.exportSmf();
       expect(smf[0]).toBe(0x4d);
-      expect(Array.from(smf).join(',')).toContain('192,42');
-      expect(Array.from(smf).join(',')).toContain('195,24');
+      const bytes = Array.from(smf).join(',');
+      expect(bytes).toContain('192,42');
+      expect(bytes).toContain('195,24');
+      // Pressure and bend survive the export. Poly pressure carries the
+      // transposed note (60 + 12), because aftertouch left on the source note
+      // would address a note the shifted voice never played.
+      expect(bytes).toContain('160,72,70');
+      expect(bytes).not.toContain('160,60,70');
+      expect(bytes).toContain('208,80');
+      expect(bytes).toContain('224,0,64');
     } finally {
       project.delete();
     }
