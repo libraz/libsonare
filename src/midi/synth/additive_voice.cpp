@@ -78,6 +78,7 @@ void AdditiveVoiceCore::start(const AdditivePatchParams& params, double sample_r
   morph_base_ = std::clamp(params.morph, 0.0f, 1.0f);
   morph_ = morph_base_;
   morph_target_ = morph_base_;
+  morph_mod_ = 0.0f;
   morph_coeff_ = ramp_coeff(kControlSmoothMs, sr);
   morph_live_ = false;
   apply_morph();
@@ -113,9 +114,28 @@ void AdditiveVoiceCore::apply_morph() noexcept {
   }
 }
 
-void AdditiveVoiceCore::set_spectrum_mod(float morph_offset) noexcept {
-  morph_target_ = std::clamp(morph_base_ + morph_offset, 0.0f, 1.0f);
+void AdditiveVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
+  if ((present & kAxisMorph) != 0u) {
+    morph_base_ = std::clamp(base.morph, 0.0f, 1.0f);
+  }
+  refresh_morph_target();
+}
+
+void AdditiveVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
+  morph_mod_ = offsets.morph;
+  refresh_morph_target();
+}
+
+void AdditiveVoiceCore::refresh_morph_target() noexcept {
+  morph_target_ = std::clamp(morph_base_ + morph_mod_, 0.0f, 1.0f);
   if (morph_target_ != morph_) morph_live_ = true;
+}
+
+void AdditiveVoiceCore::snap_excitation() noexcept {
+  if (morph_target_ == morph_) return;
+  morph_ = morph_target_;
+  morph_live_ = false;
+  apply_morph();
 }
 
 float AdditiveVoiceCore::render(float pitch_ratio) noexcept {

@@ -10,6 +10,59 @@ namespace sonare::midi::synth {
 
 namespace {
 
+/// Hands @p base to whichever engine the voice is running, optionally snapping
+/// the smoothing to it. The accept set is engine_axis_capability()
+/// (excitation_axes.h); no `default:` here either, so an engine added without a
+/// decision fails the exhaustiveness warning rather than silently declining.
+void apply_excitation_base(NativeSynthVoice& v, const ExcitationAxes& base, uint32_t present,
+                           bool snap) noexcept {
+  switch (v.patch->mode) {
+    // Declines every axis — see the same list in render().
+    case SynthEngineMode::kSubtractive:
+    case SynthEngineMode::kFm:
+    case SynthEngineMode::kKarplusStrong:
+    case SynthEngineMode::kModal:
+    case SynthEngineMode::kPercussion:
+    case SynthEngineMode::kPiano:
+    case SynthEngineMode::kPluckedString:
+    case SynthEngineMode::kHarpsichord:
+    case SynthEngineMode::kSample:
+      break;
+    case SynthEngineMode::kAdditive:
+      v.additive.set_excitation_base(base, present);
+      if (snap) v.additive.snap_excitation();
+      break;
+    case SynthEngineMode::kPipeOrgan:
+      v.pipe_organ.set_excitation_base(base, present);
+      if (snap) v.pipe_organ.snap_excitation();
+      break;
+    case SynthEngineMode::kBowedString:
+      v.bowed_string.set_excitation_base(base, present);
+      if (snap) v.bowed_string.snap_excitation();
+      break;
+    case SynthEngineMode::kReed:
+      v.reed.set_excitation_base(base, present);
+      if (snap) v.reed.snap_excitation();
+      break;
+    case SynthEngineMode::kBrass:
+      v.brass.set_excitation_base(base, present);
+      if (snap) v.brass.snap_excitation();
+      break;
+    case SynthEngineMode::kFlute:
+      v.flute.set_excitation_base(base, present);
+      if (snap) v.flute.snap_excitation();
+      break;
+    case SynthEngineMode::kVocal:
+      v.vocal.set_excitation_base(base, present);
+      if (snap) v.vocal.snap_excitation();
+      break;
+    case SynthEngineMode::kFreeReed:
+      v.free_reed.set_excitation_base(base, present);
+      if (snap) v.free_reed.snap_excitation();
+      break;
+  }
+}
+
 /// Exponent of the SoundFont velocity-to-amplitude curve, on the kit.
 ///
 /// The curve is `(v/127)^2` and every engine but the two below is voiced with
@@ -302,6 +355,16 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   cached_pan_units = 1.0e9f;  // force pan recompute on first render
 }
 
+void NativeSynthVoice::seed_excitation(const ExcitationAxes& base, uint32_t present) noexcept {
+  if (patch == nullptr) return;
+  apply_excitation_base(*this, base, present, true);
+}
+
+void NativeSynthVoice::push_excitation(const ExcitationAxes& base, uint32_t present) noexcept {
+  if (patch == nullptr) return;
+  apply_excitation_base(*this, base, present, false);
+}
+
 float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
                                float wind_gain) noexcept {
   if (!active || patch == nullptr) return 0.0f;
@@ -336,31 +399,52 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     values.pitch_bend = mod.pitch_bend01;
     offsets = evaluate_mod_matrix(patch->mod_matrix, values);
     matrix_lfo1_rate_scale = offsets.lfo1_rate_scale;
-    // Engine-owned axes: the offset is handed to the engine's own control
-    // setter, which composes it with the patch/CC base and clamps to its axis.
-    // Only the continuously-excited engines take the excitation ones — a struck
-    // or plucked exciter is finished by the time the second sample renders, so
-    // there is nothing per sample to reach; every other engine declines by
-    // falling through. The additive engine takes the morph instead: it has no
-    // exciter, and what a route moves there is the registration.
+    // Engine-owned axes: the offsets are handed to the engine's own control
+    // setter, which composes them with the patch/CC base and clamps to its own
+    // axis. Which engine reads which axis is engine_axis_capability()
+    // (excitation_axes.h) — this switch carries no `default:` so that the
+    // exhaustiveness warning stops an engine added without a decision, and an
+    // engine that accepts nothing says so with its own case.
     if (has_engine_control_routes) {
+      const ExcitationAxes axes{offsets.excitation_force, offsets.excitation_position,
+                                offsets.excitation_brightness, offsets.spectrum_morph};
       switch (patch->mode) {
+        // Struck, plucked or non-physical: the exciter is finished before the
+        // second sample renders, or there is no exciter at all and the matrix
+        // reaches the voice through the generic destinations instead.
+        case SynthEngineMode::kSubtractive:
+        case SynthEngineMode::kFm:
+        case SynthEngineMode::kKarplusStrong:
+        case SynthEngineMode::kModal:
+        case SynthEngineMode::kPercussion:
+        case SynthEngineMode::kPiano:
+        case SynthEngineMode::kPluckedString:
+        case SynthEngineMode::kHarpsichord:
+        case SynthEngineMode::kSample:
+          break;
         case SynthEngineMode::kAdditive:
-          additive.set_spectrum_mod(offsets.spectrum_morph);
+          additive.set_excitation_mod(axes);
+          break;
+        case SynthEngineMode::kPipeOrgan:
+          pipe_organ.set_excitation_mod(axes);
           break;
         case SynthEngineMode::kBowedString:
-          bowed_string.set_excitation_mod(offsets.excitation_force, offsets.excitation_position);
-          break;
-        case SynthEngineMode::kBrass:
-          brass.set_excitation_mod(offsets.excitation_force, offsets.excitation_brightness);
+          bowed_string.set_excitation_mod(axes);
           break;
         case SynthEngineMode::kReed:
-          reed.set_excitation_mod(offsets.excitation_force, offsets.excitation_brightness);
+          reed.set_excitation_mod(axes);
+          break;
+        case SynthEngineMode::kBrass:
+          brass.set_excitation_mod(axes);
           break;
         case SynthEngineMode::kFlute:
-          flute.set_excitation_mod(offsets.excitation_force, offsets.excitation_brightness);
+          flute.set_excitation_mod(axes);
           break;
-        default:
+        case SynthEngineMode::kVocal:
+          vocal.set_excitation_mod(axes);
+          break;
+        case SynthEngineMode::kFreeReed:
+          free_reed.set_excitation_mod(axes);
           break;
       }
     }

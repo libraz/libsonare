@@ -28,6 +28,7 @@
 #include <array>
 #include <cstdint>
 
+#include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 
 namespace sonare::midi::synth {
@@ -78,10 +79,21 @@ class AdditiveVoiceCore {
              uint64_t seed, bool percussion = false) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor.
   float render(float pitch_ratio) noexcept;
+  // --- live continuous control. The tonewheels are not excited, so the only
+  // axis here is the registration: what a route moves is which drawbars are
+  // out, which is why this engine declines the exciter axes. ---
+
+  /// Base morph position from the patch or a CC. @p present names the fields
+  /// the caller filled (ExcitationAxisMask); an axis it does not name keeps the
+  /// value the note started with.
+  void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
   /// Mod-matrix offset on the morph position, in the same normalized units as
-  /// the patch field. Composed with the patch base and clamped; the ramp below
-  /// owns the approach, so this sets a target rather than a value.
-  void set_spectrum_mod(float morph_offset) noexcept;
+  /// the patch field. Composed with the base and clamped; the ramp owns the
+  /// approach, so this sets a target rather than a value.
+  void set_excitation_mod(const ExcitationAxes& offsets) noexcept;
+  /// Jump the morph to its target (seed a fresh note at the host's current
+  /// controller positions without an audible glide).
+  void snap_excitation() noexcept;
   /// Immediate silence (note-off is the wrapper amp envelope's job — the
   /// tonewheels themselves do not decay).
   void kill() noexcept;
@@ -95,6 +107,8 @@ class AdditiveVoiceCore {
 
   /// Writes each partial's gain for the current morph position.
   void apply_morph() noexcept;
+  /// Recomposes the smoothing target from the base and the offset.
+  void refresh_morph_target() noexcept;
 
   std::array<Partial, kAdditivePartials> partials_{};
   // The two registrations as linear gains, plus each one's unnormalized sum.
@@ -105,6 +119,7 @@ class AdditiveVoiceCore {
   float sum_a_ = 0.0f;
   float sum_b_ = 0.0f;
   float morph_base_ = 0.0f;
+  float morph_mod_ = 0.0f;
   float morph_ = 0.0f;
   float morph_target_ = 0.0f;
   float morph_coeff_ = 0.0f;

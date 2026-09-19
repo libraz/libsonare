@@ -55,6 +55,15 @@ SONARE_TUNABLE(kOutputSpan, 0.5f);
 SONARE_TUNABLE(kSlotReturnWidth, 0.75f);
 SONARE_TUNABLE(kSlotMakeup, 0.55f);
 
+// Live-control glide (ms) toward a moved axis, matching the other
+// continuously-excited engines.
+SONARE_TUNABLE(kControlSmoothMs, 8.0f);
+
+// Gap at which the ramp is declared arrived and the per-sample re-cut stops.
+// Below an axis step no controller can express, so settling costs nothing
+// audible and buys back the pow()/exp() the re-cut spends.
+constexpr float kCtrlSettle = 1.0e-6f;
+
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
   const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
@@ -117,7 +126,8 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   // drive (stiffness plus bellows pressure) sets how hard the saturator works.
   const float stiffness = std::clamp(params.reed_stiffness, 0.0f, 1.0f);
   asymmetry_ = kAsymBase + kAsymSpan * stiffness;
-  drive_ = kDriveBase + kDriveStiffSpan * stiffness + kDriveBreathSpan * level;
+  drive_stiff_ = kDriveBase + kDriveStiffSpan * stiffness;
+  drive_ = drive_stiff_ + kDriveBreathSpan * level;
 
   // Body lowpass pole from brightness (log-swept corner, clamped under Nyquist).
   const float brightness = std::clamp(params.brightness, 0.0f, 1.0f);
@@ -147,14 +157,80 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   attack_coeff_ = ramp_coeff(params.attack_ms, sr);
   release_coeff_ = ramp_coeff(params.release_ms, sr);
   breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth;
-  output_scale_ = kOutputMin + kOutputSpan * level;
   // The radiated pair swings wider than the saturated saw it replaces, so the
   // patch gains stay comparable across the two shapers.
-  if (slot_duty_ > 0.0f) output_scale_ *= kSlotMakeup;
+  slot_makeup_ = slot_duty_ > 0.0f ? kSlotMakeup : 1.0f;
+  output_scale_ = (kOutputMin + kOutputSpan * level) * slot_makeup_;
+
+  // Live axes start where the note put them, so nothing is armed and the
+  // coefficients above stand until a control moves.
+  force01_base_ = level;
+  force01_mod_ = 0.0f;
+  force01_target_ = level;
+  force01_ = level;
+  bright01_base_ = brightness;
+  bright01_mod_ = 0.0f;
+  bright01_target_ = brightness;
+  bright01_ = brightness;
+  ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
+  excitation_live_ = false;
+}
+
+void FreeReedVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
+  if ((present & kAxisForce) != 0u) {
+    force01_base_ = std::clamp(base.force, 0.0f, 1.0f);
+  }
+  if ((present & kAxisBrightness) != 0u) {
+    bright01_base_ = std::clamp(base.brightness, 0.0f, 1.0f);
+  }
+  refresh_excitation_targets();
+}
+
+void FreeReedVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
+  force01_mod_ = offsets.force;
+  bright01_mod_ = offsets.brightness;
+  refresh_excitation_targets();
+}
+
+void FreeReedVoiceCore::refresh_excitation_targets() noexcept {
+  force01_target_ = std::clamp(force01_base_ + force01_mod_, 0.0f, 1.0f);
+  bright01_target_ = std::clamp(bright01_base_ + bright01_mod_, 0.0f, 1.0f);
+  if (force01_target_ != force01_ || bright01_target_ != bright01_) excitation_live_ = true;
+}
+
+void FreeReedVoiceCore::apply_excitation() noexcept {
+  drive_ = drive_stiff_ + kDriveBreathSpan * force01_;
+  output_scale_ = (kOutputMin + kOutputSpan * force01_) * slot_makeup_;
+  const float srf = static_cast<float>(sample_rate_);
+  const float corner =
+      std::min(kBodyMinHz * std::pow(kBodyMaxHz / kBodyMinHz, bright01_), 0.45f * srf);
+  body_alpha_ = 1.0f - std::exp(-kTwoPi * corner / srf);
+}
+
+void FreeReedVoiceCore::advance_excitation() noexcept {
+  force01_ += ctrl_coeff_ * (force01_target_ - force01_);
+  bright01_ += ctrl_coeff_ * (bright01_target_ - bright01_);
+  if (std::abs(force01_target_ - force01_) < kCtrlSettle &&
+      std::abs(bright01_target_ - bright01_) < kCtrlSettle) {
+    force01_ = force01_target_;
+    bright01_ = bright01_target_;
+    excitation_live_ = false;
+  }
+  apply_excitation();
+}
+
+void FreeReedVoiceCore::snap_excitation() noexcept {
+  if (force01_ == force01_target_ && bright01_ == bright01_target_) return;
+  force01_ = force01_target_;
+  bright01_ = bright01_target_;
+  excitation_live_ = false;
+  apply_excitation();
 }
 
 float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
+
+  if (excitation_live_) advance_excitation();
 
   // Bellows contour: one-pole ramp toward 1 while blowing, 0 once released.
   const float coeff = releasing_ ? release_coeff_ : attack_coeff_;

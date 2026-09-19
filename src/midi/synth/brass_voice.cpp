@@ -206,8 +206,6 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   const float vel_to_breath = std::clamp(params.vel_to_breath, 0.0f, 1.0f);
   const float level = std::clamp(
       (1.0f - vel_to_breath) * params.breath_pressure + vel_to_breath * vel01, 0.0f, 1.0f);
-  breath_target_ = kBreathBase + kBreathSpan * level;
-  breath_ctrl_target_ = breath_target_;
   // A fresh note starts unmodulated; the matrix re-sets the offsets on its
   // first render, and a voice with no excitation route never touches them.
   breath01_base_ = level;
@@ -234,12 +232,15 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   lip_couple_ = kLipCouple;
 
   // Bell loop lowpass: brightness -> pole a (y += (1-a)(x - y)); a conical brass
-  // reflects a touch darker. Live CC74 updates reuse the same mapping via
-  // set_brightness(), so remember the bore shape.
+  // reflects a touch darker, so the bore shape is remembered for the live
+  // mapping.
   conical_ = params.conical;
   bright01_base_ = params.brightness;
-  lp_alpha_ = bell_alpha_for_brightness(params.brightness);
-  lp_alpha_target_ = lp_alpha_;
+  // Both axes are derived here and nowhere else. A note-on copy of the mapping
+  // is free to drift from the control-rate one, and a single rounding apart is
+  // enough for the first CC to move a sound the host did not ask to move.
+  refresh_excitation_targets();
+  snap_excitation();
   loss_gain_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
                           kLossFloor, kLossCeil);
 
@@ -505,14 +506,20 @@ float BrassVoiceCore::lip_resonator2(float dp) noexcept {
   return y;
 }
 
-void BrassVoiceCore::set_breath(float breath01) noexcept {
-  breath01_base_ = breath01 < 0.0f ? 0.0f : (breath01 > 1.0f ? 1.0f : breath01);
+void BrassVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
+  if ((present & kAxisForce) != 0u) {
+    breath01_base_ = std::clamp(base.force, 0.0f, 1.0f);
+  }
+  if ((present & kAxisBrightness) != 0u) {
+    // bell_alpha_for_brightness clamps its own argument.
+    bright01_base_ = base.brightness;
+  }
   refresh_excitation_targets();
 }
 
-void BrassVoiceCore::set_excitation_mod(float force_offset01, float brightness_offset01) noexcept {
-  force_mod01_ = force_offset01;
-  bright_mod01_ = brightness_offset01;
+void BrassVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
+  force_mod01_ = offsets.force;
+  bright_mod01_ = offsets.brightness;
   refresh_excitation_targets();
 }
 
@@ -529,12 +536,7 @@ float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
   return 1.0f - a;
 }
 
-void BrassVoiceCore::set_brightness(float bright01) noexcept {
-  bright01_base_ = bright01;
-  refresh_excitation_targets();
-}
-
-void BrassVoiceCore::snap_brass_control() noexcept {
+void BrassVoiceCore::snap_excitation() noexcept {
   breath_target_ = breath_ctrl_target_;
   lp_alpha_ = lp_alpha_target_;
 }

@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 
 namespace sonare::midi::synth {
@@ -163,31 +164,30 @@ class FluteVoiceCore {
 
   // --- live continuous control (a flute is a continuous-control instrument; the
   // host drives these from MIDI CCs while the note sounds). Each sets a smoothing
-  // TARGET the render ramps toward (no zipper); call snap_flute_control() to jump
+  // TARGET the render ramps toward (no zipper); call snap_excitation() to jump
   // to the targets without a glide. Loudness/dynamics ride the voice's velocity /
   // expression VCA, not the breath (pushing the breath toward the jet threshold
   // would silence the tone). ---
 
-  /// Mouth pressure in [0,1] (CC2 breath): bounded to the jet's stable band, so
-  /// more breath colours the tone (brighter, breathier, closer to the overblow
-  /// edge) without crossing into the silent under-blown regime.
-  void set_breath(float breath01) noexcept;
-  /// Reflection-filter brightness in [0,1] (CC74): opens the open-end reflection
-  /// filter, the clean timbral brightness control.
-  void set_brightness(float bright01) noexcept;
+  /// Base axis positions in [0,1] from the patch or a CC. @p present names the
+  /// fields the caller filled (ExcitationAxisMask); an axis it does not name
+  /// keeps the value the note started with. Force is mouth pressure (CC2),
+  /// bounded to the jet's stable band so more breath colours the tone toward the
+  /// overblow edge without crossing into the silent under-blown regime;
+  /// brightness (CC74) opens the open-end reflection filter.
+  void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
   /// Vibrato depth in [0,1] (CC1 modulation wheel): the voice-local pitch/level
-  /// vibrato. 0 = off (the LFO is skipped).
+  /// vibrato. 0 = off (the LFO is skipped). Not an excitation axis — it is the
+  /// preset's own vibrato rather than anything the exciter does.
   void set_vibrato(float depth01) noexcept;
-  /// Mod-matrix offsets on the breath and brightness axes
-  /// (ModDestination::kExcitationForce and kExcitationBrightness), in
-  /// normalized axis units. Held apart from the base a patch or a CC set so the
-  /// two compose rather than overwrite, and applied through the same smoothing
-  /// ramp: this is a control-rate destination, not an audio-rate path into the
-  /// bore.
-  void set_excitation_mod(float force_offset01, float brightness_offset01) noexcept;
+  /// Mod-matrix offsets on the same axes, in the same normalized units. Held
+  /// apart from the base so the two compose rather than overwrite, and applied
+  /// through the same smoothing ramp: this is a control-rate destination, not an
+  /// audio-rate path into the bore.
+  void set_excitation_mod(const ExcitationAxes& offsets) noexcept;
   /// Jump the smoothed controls to their targets (seed a fresh note at the host's
   /// current CC positions without an audible glide).
-  void snap_flute_control() noexcept;
+  void snap_excitation() noexcept;
 
  private:
   // Recomposes the two smoothing targets from their bases and the offsets.

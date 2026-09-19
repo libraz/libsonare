@@ -24,6 +24,15 @@ using sonare::constants::kTwoPi;
 SONARE_TUNABLE(kBreathBase, 0.80f);
 SONARE_TUNABLE(kBreathSpan, 0.35f);
 
+// Live-control glide (ms) toward a moved axis, matching the other
+// continuously-excited engines.
+SONARE_TUNABLE(kControlSmoothMs, 8.0f);
+
+// Gap at which the ramp is declared arrived and the per-sample re-cut stops.
+// Below an axis step no controller can express, so settling costs nothing
+// audible and buys back the per-rank exp() the re-cut spends.
+constexpr float kCtrlSettle = 1.0e-6f;
+
 // Jet delay / bore-line ratio: ~0.5 drives an open pipe's fundamental (every
 // rank uses the open topology, so a single ratio serves the whole registration).
 SONARE_TUNABLE(kJetRatioOpen, 0.5f);
@@ -382,6 +391,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
 
     // Mouth/radiation high-shelf (post-loop, outside the loop).
     const float radiation = std::clamp(ranks[r].radiation, 0.0f, 1.0f);
+    pipe.rad_base = radiation;
     pipe.rad_gain = radiation * kRadiationLift;
     pipe.rad_alpha = std::clamp(1.0f - std::exp(-kTwoPi * kRadiationCornerHz / srf), 0.0f, 1.0f);
     pipe.rad_state = 0.0f;
@@ -411,6 +421,8 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     // closes toward the treble (small pipes are the purest, and their excess
     // upper partials are what beat audibly fast between detuned ranks).
     const float tone_mult = kToneCornerMult / (1.0f + kToneTrebleTaper * octaves_above);
+    pipe.tone_f0 = f0;
+    pipe.tone_mult = tone_mult;
     pipe.tone_alpha = std::clamp(
         1.0f - std::exp(-kTwoPi * tone_mult * (1.0f + kRadToneSpan * radiation) * f0 / srf), 0.01f,
         1.0f);
@@ -455,11 +467,87 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     }
   }
   drive_index_ = static_cast<uint64_t>(pipe_organ_buffer_capacity(sr));
+
+  // Live axes start where the note put them, so nothing is armed and the
+  // coefficients above stand until a control moves. Brightness is centred: 0.5
+  // is the registration as voiced.
+  srf_ = srf;
+  force01_base_ = level;
+  force01_mod_ = 0.0f;
+  force01_target_ = level;
+  force01_ = level;
+  bright01_base_ = 0.5f;
+  bright01_mod_ = 0.0f;
+  bright01_target_ = 0.5f;
+  bright01_ = 0.5f;
+  ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
+  excitation_live_ = false;
+}
+
+void PipeOrganVoiceCore::set_excitation_base(const ExcitationAxes& base,
+                                             uint32_t present) noexcept {
+  if ((present & kAxisForce) != 0u) {
+    force01_base_ = std::clamp(base.force, 0.0f, 1.0f);
+  }
+  if ((present & kAxisBrightness) != 0u) {
+    bright01_base_ = std::clamp(base.brightness, 0.0f, 1.0f);
+  }
+  refresh_excitation_targets();
+}
+
+void PipeOrganVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
+  force01_mod_ = offsets.force;
+  bright01_mod_ = offsets.brightness;
+  refresh_excitation_targets();
+}
+
+void PipeOrganVoiceCore::refresh_excitation_targets() noexcept {
+  force01_target_ = std::clamp(force01_base_ + force01_mod_, 0.0f, 1.0f);
+  bright01_target_ = std::clamp(bright01_base_ + bright01_mod_, 0.0f, 1.0f);
+  if (force01_target_ != force01_ || bright01_target_ != bright01_) excitation_live_ = true;
+}
+
+void PipeOrganVoiceCore::apply_excitation() noexcept {
+  const float mouth = kBreathBase + kBreathSpan * force01_;
+  // Centred: 0.5 leaves each rank at the radiation it was voiced with.
+  const float rad_shift = bright01_ - 0.5f;
+  for (int r = 0; r < rank_count_; ++r) {
+    Rank& pipe = ranks_[static_cast<size_t>(r)];
+    pipe.breath = mouth;
+    const float radiation = std::clamp(pipe.rad_base + rad_shift, 0.0f, 1.0f);
+    pipe.rad_gain = radiation * kRadiationLift;
+    pipe.tone_alpha =
+        std::clamp(1.0f - std::exp(-kTwoPi * pipe.tone_mult * (1.0f + kRadToneSpan * radiation) *
+                                   pipe.tone_f0 / srf_),
+                   0.01f, 1.0f);
+  }
+}
+
+void PipeOrganVoiceCore::advance_excitation() noexcept {
+  force01_ += ctrl_coeff_ * (force01_target_ - force01_);
+  bright01_ += ctrl_coeff_ * (bright01_target_ - bright01_);
+  if (std::abs(force01_target_ - force01_) < kCtrlSettle &&
+      std::abs(bright01_target_ - bright01_) < kCtrlSettle) {
+    force01_ = force01_target_;
+    bright01_ = bright01_target_;
+    excitation_live_ = false;
+  }
+  apply_excitation();
+}
+
+void PipeOrganVoiceCore::snap_excitation() noexcept {
+  if (force01_ == force01_target_ && bright01_ == bright01_target_) return;
+  force01_ = force01_target_;
+  bright01_ = bright01_target_;
+  excitation_live_ = false;
+  apply_excitation();
 }
 
 float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
   if (slab_ == nullptr) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
+
+  if (excitation_live_) advance_excitation();
 
   // Shared wind gate: ramp to 1 while blowing, to 0 once released.
   const float target = releasing_ ? 0.0f : 1.0f;

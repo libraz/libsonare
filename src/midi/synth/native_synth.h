@@ -37,6 +37,7 @@
 #include "midi/synth/brass_voice.h"
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/envelope.h"
+#include "midi/synth/excitation_axes.h"
 #include "midi/synth/filter_models.h"
 #include "midi/synth/flute_voice.h"
 #include "midi/synth/fm_voice.h"
@@ -59,27 +60,6 @@
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
-
-/// Synthesis method tag. Every mode is implemented.
-enum class SynthEngineMode : int {
-  kSubtractive = 0,
-  kFm = 1,              // operator-stack FM (fm_voice.h)
-  kKarplusStrong = 2,   // plucked-string waveguide (ks_voice.h)
-  kModal = 3,           // resonator-bank mallets/bells (modal_voice.h)
-  kAdditive = 4,        // drawbar organ (additive_voice.h)
-  kPercussion = 5,      // membrane modal + filtered noise (percussion_voice.h)
-  kPiano = 6,           // extended waveguide piano (piano_voice.h)
-  kPipeOrgan = 7,       // sustained waveguide flue pipe (pipe_organ_voice.h)
-  kBowedString = 8,     // sustained waveguide bowed string (bowed_string_voice.h)
-  kReed = 9,            // sustained waveguide reed woodwind (reed_voice.h)
-  kBrass = 10,          // sustained waveguide brass / lip reed (brass_voice.h)
-  kFlute = 11,          // sustained waveguide air-jet flute (flute_voice.h)
-  kPluckedString = 12,  // buzzing-bridge plucked string (plucked_string_voice.h)
-  kVocal = 13,          // source-filter glottal + formant voice (vocal_voice.h)
-  kFreeReed = 14,       // driven free-reed accordion / harmonica (free_reed_voice.h)
-  kHarpsichord = 15,    // jack-and-plectrum string choirs (harpsichord_voice.h)
-  kSample = 16,         // host-supplied PCM through the subtractive chain (sample_voice.h)
-};
 
 /// Maximum unison oscillators per voice (supersaw width).
 inline constexpr int kMaxUnisonOscs = 7;
@@ -406,6 +386,15 @@ struct NativeSynthVoice : VoiceState {
            patch->env_to_cutoff_cents == 0.0f && static_cutoff_cents >= 0.0f &&
            patch->resonance_q <= 0.71f;
   }
+  /// Hands the engine its excitation-axis bases and jumps the smoothing to
+  /// them, so a note struck mid-phrase starts at the host's live controller
+  /// positions rather than gliding in from the preset. @p present names the
+  /// axes the caller filled; an axis it omits keeps the patch's own value.
+  /// A mode that owns no axis is a no-op.
+  void seed_excitation(const ExcitationAxes& base, uint32_t present) noexcept;
+  /// Pushes live excitation-axis bases to a sounding voice (a CC arriving
+  /// mid-note), without the snap: the engine's own ramp owns the approach.
+  void push_excitation(const ExcitationAxes& base, uint32_t present) noexcept;
   /// Renders one mono sample. Deactivates when the amp envelope ends.
   /// @p wind_pitch / @p wind_gain carry the shared organ wind modulation
   /// (tremulant / wind sag); 1.0 leaves the voice unmodulated.
@@ -571,31 +560,20 @@ class NativeSynth final : public MidiInstrument {
     uint8_t bank_msb = 0;
     uint8_t bank_lsb = 0;
     uint16_t pitch_bend = 8192;
-    /// Bowed-string continuous controllers (255 = untouched, so the preset's
-    /// own bow force / position stands until the host sends the CC): CC2 breath
-    /// -> bow force, CC74 -> bow position. CC11 expression scales bow speed.
-    uint8_t bow_force = 255;
-    uint8_t bow_position = 255;
-    /// Reed-woodwind continuous controllers (255 = untouched, so the preset's
-    /// own breath / brightness stands until the host sends the CC): CC2 breath
-    /// -> mouth pressure, CC74 -> bell brightness. CC11 expression is the shared
-    /// loudness VCA (no reed-specific breath push — that would silence the reed).
-    uint8_t reed_breath = 255;
-    uint8_t reed_bright = 255;
-    /// Brass / lip-reed continuous controllers (255 = untouched, so the preset's
-    /// own breath / brightness stands until the host sends the CC): CC2 breath
-    /// -> mouth pressure, CC74 -> bell brightness. CC11 expression is the shared
-    /// loudness VCA (no brass-specific breath push — that would silence the lips).
-    uint8_t brass_breath = 255;
-    uint8_t brass_bright = 255;
-    /// Air-jet flute continuous controllers (255 = untouched, so the preset's
-    /// own breath / brightness stands until the host sends the CC): CC2 breath ->
-    /// mouth pressure, CC74 -> reflection brightness. CC11 expression is the
-    /// shared loudness VCA (no flute-specific breath push — that would silence the
-    /// jet); CC1 vibrato rides the shared mod-wheel LFO like every voice (the
-    /// core's own vibrato is the preset's intrinsic, per-voice vibrato).
-    uint8_t flute_breath = 255;
-    uint8_t flute_bright = 255;
+    /// Excitation-axis controllers (255 = untouched, so the preset's own
+    /// voicing stands until the host sends the CC). CC2 breath reaches the force
+    /// axis — bow force, mouth pressure, bellows pressure, jet drive — and CC74
+    /// reaches the second axis, which is bow position on a bowed string and
+    /// radiating brightness everywhere else. One pair rather than one per
+    /// engine: the two CCs always carried the same value into all of them, and
+    /// which axis an engine reads is engine_axis_capability()'s to say.
+    ///
+    /// Loudness is deliberately not here — it is the shared expression VCA,
+    /// because pushing the breath toward the beating / buzzing / overblow
+    /// threshold would silence the exciter rather than soften it. CC11 does
+    /// additionally scale bow speed, which on a bowed string IS the loudness.
+    uint8_t excitation_force = 255;
+    uint8_t excitation_bright = 255;
     ChannelParamState params;
     float bend_range_cents = 200.0f;
     /// MODULATION LFO1 PITCH DEPTH (40 2x 04), the depth CC1 reaches at full.
@@ -617,18 +595,12 @@ class NativeSynth final : public MidiInstrument {
   void all_sound_off(uint8_t channel) noexcept;
   /// Recharges the channel's drawbar-organ percussion if no key is still held.
   void recharge_percussion(uint8_t channel) noexcept;
-  /// Pushes the channel's live bowed-string controllers (CC11 bow speed, CC2
-  /// bow force, CC74 bow position) to its sounding bowed voices.
-  void push_bow_control(uint8_t channel) noexcept;
-  /// Pushes the channel's live reed controllers (CC2 breath, CC74 bell
-  /// brightness) to its sounding reed voices.
-  void push_reed_control(uint8_t channel) noexcept;
-  /// Pushes the channel's live brass controllers (CC2 breath, CC74 bell
-  /// brightness) to its sounding brass voices.
-  void push_brass_control(uint8_t channel) noexcept;
-  /// Pushes the channel's live flute controllers (CC2 breath, CC74 reflection
-  /// brightness, CC1 vibrato depth) to its sounding flute voices.
-  void push_flute_control(uint8_t channel) noexcept;
+  /// The channel's excitation-axis controllers as an axis set; @p present comes
+  /// back naming the axes the host has actually sent.
+  static ExcitationAxes channel_excitation(const ChannelState& st, uint32_t& present) noexcept;
+  /// Pushes the channel's live excitation controllers (CC2 force, CC74 the
+  /// second axis, CC11 bow speed) to its sounding voices.
+  void push_excitation_control(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
 

@@ -332,52 +332,17 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   if (organ_percussion) channels_[ch].percussion_armed = false;
   voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, st.una_corda, drum_kit,
                DrumVoiceMod{}, organ_percussion);
-  // Seed a bowed voice at the channel's current bow controllers (no glide on the
-  // first sample) so a note struck mid-phrase starts at the live bow position /
-  // force / expression rather than gliding in from the preset.
+  // Seed the engine's excitation axes at the channel's current controllers (no
+  // glide on the first sample) so a note struck mid-phrase starts at the live
+  // breath / brightness rather than gliding in from the preset. An engine reads
+  // only the axes it declares, and one that declares none is untouched.
   if (patch->mode == SynthEngineMode::kBowedString) {
     voice->bowed_string.set_bow_speed_scale(static_cast<float>(st.expression) / 127.0f);
-    if (st.bow_force != 255) {
-      voice->bowed_string.set_bow_force(static_cast<float>(st.bow_force) / 127.0f);
-    }
-    if (st.bow_position != 255) {
-      voice->bowed_string.set_bow_position(static_cast<float>(st.bow_position) / 127.0f);
-    }
-    voice->bowed_string.snap_bow_control();
   }
-  // Seed a reed voice at the channel's current reed controllers (no glide on the
-  // first sample) so a note struck mid-phrase starts at the live breath /
-  // brightness rather than gliding in from the preset.
-  if (patch->mode == SynthEngineMode::kReed) {
-    if (st.reed_breath != 255) voice->reed.set_breath(static_cast<float>(st.reed_breath) / 127.0f);
-    if (st.reed_bright != 255) {
-      voice->reed.set_brightness(static_cast<float>(st.reed_bright) / 127.0f);
-    }
-    voice->reed.snap_reed_control();
-  }
-  // Seed a brass voice at the channel's current brass controllers (no glide on
-  // the first sample) so a note struck mid-phrase starts at the live breath /
-  // brightness rather than gliding in from the preset.
-  if (patch->mode == SynthEngineMode::kBrass) {
-    if (st.brass_breath != 255) {
-      voice->brass.set_breath(static_cast<float>(st.brass_breath) / 127.0f);
-    }
-    if (st.brass_bright != 255) {
-      voice->brass.set_brightness(static_cast<float>(st.brass_bright) / 127.0f);
-    }
-    voice->brass.snap_brass_control();
-  }
-  // Seed a flute voice at the channel's current flute controllers (no glide on
-  // the first sample) so a note struck mid-phrase starts at the live breath /
-  // brightness rather than gliding in from the preset.
-  if (patch->mode == SynthEngineMode::kFlute) {
-    if (st.flute_breath != 255) {
-      voice->flute.set_breath(static_cast<float>(st.flute_breath) / 127.0f);
-    }
-    if (st.flute_bright != 255) {
-      voice->flute.set_brightness(static_cast<float>(st.flute_bright) / 127.0f);
-    }
-    voice->flute.snap_flute_control();
+  {
+    uint32_t present = kAxisNone;
+    const ExcitationAxes base = channel_excitation(st, present);
+    voice->seed_excitation(base, present);
   }
   // Bus-level piano body (the direct-share attenuation, the modal soundboard
   // and the pedal-gated sympathetic bank). In GM mode the engine is resolved
@@ -551,23 +516,14 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   for (NativeSynthVoice& v : pool_) {
     if (v.channel == ch) v.poly_pressure01 = 0.0f;
   }
-  st.bow_force = 255;
-  st.bow_position = 255;
-  st.reed_breath = 255;
-  st.reed_bright = 255;
-  st.brass_breath = 255;
-  st.brass_bright = 255;
-  st.flute_breath = 255;
-  st.flute_bright = 255;
+  st.excitation_force = 255;
+  st.excitation_bright = 255;
   st.params.reset();
   sustain_cc(ch, 0);
   sostenuto_pedal(ch, false);
   st.una_corda = false;
   refresh_channel_mod(ch);
-  push_bow_control(ch);
-  push_reed_control(ch);
-  push_brass_control(ch);
-  push_flute_control(ch);
+  push_excitation_control(ch);
 }
 
 void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept {
@@ -590,35 +546,26 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       refresh_channel_mod(ch);
       break;
     case 2:
-      st.breath = value;        // the generic axis every engine can route from
-      st.bow_force = value;     // breath -> bowed-string bow force
-      st.reed_breath = value;   // breath -> reed mouth pressure
-      st.brass_breath = value;  // breath -> brass mouth pressure
-      st.flute_breath = value;  // breath -> flute mouth pressure
+      st.breath = value;            // the generic axis every engine can route from
+      st.excitation_force = value;  // breath -> the engines' own force axis
       refresh_channel_mod(ch);
-      push_bow_control(ch);
-      push_reed_control(ch);
-      push_brass_control(ch);
-      push_flute_control(ch);
+      push_excitation_control(ch);
       break;
     case 11:
       st.expression = value;
       refresh_channel_mod(ch);
-      push_bow_control(ch);  // expression scales bowed-string bow speed (reed /
-                             // brass loudness rides the shared expression VCA)
+      push_excitation_control(ch);  // expression scales bowed-string bow speed
+                                    // (every other engine's loudness rides the
+                                    // shared expression VCA)
       break;
     case 32:
       st.bank_lsb = value;
       break;
     case 74:
-      st.bow_position = value;  // brightness/SC5 -> bowed-string bow position
-      st.reed_bright = value;   // brightness/SC5 -> reed bell brightness
-      st.brass_bright = value;  // brightness/SC5 -> brass bell brightness
-      st.flute_bright = value;  // brightness/SC5 -> flute reflection brightness
-      push_bow_control(ch);
-      push_reed_control(ch);
-      push_brass_control(ch);
-      push_flute_control(ch);
+      // brightness/SC5 -> the engines' own second axis (bow position on a bowed
+      // string, radiating brightness everywhere else)
+      st.excitation_bright = value;
+      push_excitation_control(ch);
       break;
     case 6:
       if (st.params.selected_rpn(0, 0)) {

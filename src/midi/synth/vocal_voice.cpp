@@ -84,6 +84,15 @@ SONARE_TUNABLE(kVibratoMaxFrac, 0.03f);
 SONARE_TUNABLE(kOutputScale, 2.0f);
 SONARE_TUNABLE(kVelFloor, 0.4f);
 
+// Live-control glide (ms) toward a moved axis, matching the other
+// continuously-excited engines.
+SONARE_TUNABLE(kControlSmoothMs, 8.0f);
+
+// Gap at which the ramp is declared arrived and the per-sample re-cut stops.
+// Below a brightness step any controller can express, so settling costs nothing
+// audible and buys back the six transcendentals the re-cut spends.
+constexpr float kCtrlSettle = 1.0e-6f;
+
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
   const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
@@ -133,10 +142,20 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
     // Brightness opens the upper formants; F1 (the vowel anchor) stays put.
     const float open_db = (bright - 0.5f) * kBrightFormantSpanDb *
                           (static_cast<float>(i) / static_cast<float>(kVocalFormants - 1));
+    form_amp_db_[i] = fm.amp_db;
     form_gain_[i] = std::pow(10.0f, (fm.amp_db + open_db) / 20.0f);
     form_z1_[i] = 0.0f;
     form_z2_[i] = 0.0f;
   }
+
+  // The live axis starts where the note put it, so nothing is armed and the
+  // coefficients above stand until a control moves.
+  bright01_base_ = bright;
+  bright01_mod_ = 0.0f;
+  bright01_target_ = bright;
+  bright01_ = bright;
+  ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
+  excitation_live_ = false;
 
   // Aspiration and vibrato.
   breath_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathDepth;
@@ -157,8 +176,55 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
   output_scale_ = kOutputScale * (kVelFloor + (1.0f - kVelFloor) * vel01);
 }
 
+void VocalVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
+  if ((present & kAxisBrightness) != 0u) {
+    bright01_base_ = std::clamp(base.brightness, 0.0f, 1.0f);
+  }
+  refresh_excitation_targets();
+}
+
+void VocalVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
+  bright01_mod_ = offsets.brightness;
+  refresh_excitation_targets();
+}
+
+void VocalVoiceCore::refresh_excitation_targets() noexcept {
+  bright01_target_ = std::clamp(bright01_base_ + bright01_mod_, 0.0f, 1.0f);
+  if (bright01_target_ != bright01_) excitation_live_ = true;
+}
+
+void VocalVoiceCore::apply_excitation() noexcept {
+  const float srf = static_cast<float>(sample_rate_);
+  const float corner =
+      std::min(kTiltCornerBaseHz * std::exp2(kTiltCornerOctSpan * bright01_), 0.45f * srf);
+  tilt_alpha_ = 1.0f - std::exp(-kTwoPi * corner / srf);
+  for (int i = 0; i < num_formants_; ++i) {
+    const float open_db = (bright01_ - 0.5f) * kBrightFormantSpanDb *
+                          (static_cast<float>(i) / static_cast<float>(kVocalFormants - 1));
+    form_gain_[i] = std::pow(10.0f, (form_amp_db_[i] + open_db) / 20.0f);
+  }
+}
+
+void VocalVoiceCore::advance_excitation() noexcept {
+  bright01_ += ctrl_coeff_ * (bright01_target_ - bright01_);
+  if (std::abs(bright01_target_ - bright01_) < kCtrlSettle) {
+    bright01_ = bright01_target_;
+    excitation_live_ = false;
+  }
+  apply_excitation();
+}
+
+void VocalVoiceCore::snap_excitation() noexcept {
+  if (bright01_ == bright01_target_) return;
+  bright01_ = bright01_target_;
+  excitation_live_ = false;
+  apply_excitation();
+}
+
 float VocalVoiceCore::render(float pitch_ratio) noexcept {
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
+
+  if (excitation_live_) advance_excitation();
 
   // Level contour: one-pole ramp toward 1 while singing, 0 once released.
   const float coeff = releasing_ ? release_coeff_ : attack_coeff_;

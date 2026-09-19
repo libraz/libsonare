@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 
 namespace sonare::midi::synth {
@@ -183,7 +184,48 @@ class PipeOrganVoiceCore {
   /// Immediate silence.
   void kill() noexcept;
 
+  // --- live continuous control. The jet is blown for as long as the key is
+  // down, so both axes reach the sound mid-note. Each call sets a smoothing
+  // TARGET the render ramps toward (no zipper); snap_excitation() jumps to it.
+  //
+  // On a real organ the wind is an instrument-level quantity — one chest feeds
+  // every speaking pipe, which is why the tremulant and the wind sag live on
+  // the shared supply rather than here. A channel CC matches that granularity;
+  // a per-voice mod route does not, and what it produces is a synthesis control
+  // rather than an organ technique. It is accepted anyway because the same
+  // engine voices recorders and flue flutes, where per-note wind is exactly the
+  // technique. ---
+
+  /// Base axis positions in [0,1] from the patch or a CC. @p present names the
+  /// fields the caller filled (ExcitationAxisMask); an axis it does not name
+  /// keeps the value the note started with. Force is mouth pressure (CC2), the
+  /// jet drive every rank shares. Brightness (CC74) is centred rather than
+  /// absolute — 0.5 is the registration as voiced, and the axis shifts every
+  /// rank's radiation correction from there — because a registration has one
+  /// radiation per rank and no single value an absolute control could take.
+  void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
+  /// Mod-matrix offsets on the same axes, in the same normalized units. Held
+  /// apart from the base so the two compose rather than overwrite, and applied
+  /// through the same smoothing ramp: this is a control-rate destination, not
+  /// an audio-rate path into the bore. The reflection pole is deliberately out
+  /// of reach — it sits inside the feedback loop, where moving it live would
+  /// drag the pitch and the stability with it.
+  void set_excitation_mod(const ExcitationAxes& offsets) noexcept;
+  /// Jump the smoothed controls to their targets (seed a fresh note at the
+  /// host's current CC positions without an audible glide).
+  void snap_excitation() noexcept;
+
  private:
+  /// Recomposes the two smoothing targets from their bases and the offsets, and
+  /// arms the ramp if either moved.
+  void refresh_excitation_targets() noexcept;
+  /// Advances the ramp one sample and re-cuts the derived coefficients. Called
+  /// only while a control is moving: the tone corner costs an exp() per rank,
+  /// so a voice nobody modulates keeps exactly the coefficients start() wrote.
+  void advance_excitation() noexcept;
+  /// Re-derives each rank's breath, rad_gain and tone_alpha from the live axes.
+  void apply_excitation() noexcept;
+
   /// One flue pipe (one rank): a self-oscillating jet + bore waveguide. All
   /// per-pipe state lives here so the core can sum kMaxPipeRanks of them.
   struct Rank {
@@ -255,6 +297,12 @@ class PipeOrganVoiceCore {
     float rad_gain = 0.0f;
     float rad_alpha = 0.0f;
     float rad_state = 0.0f;
+    /// The rank's own radiation as voiced, its sounding fundamental and its
+    /// tone-corner multiplier: what a live brightness re-cuts rad_gain and
+    /// tone_alpha from.
+    float rad_base = 0.0f;
+    float tone_f0 = 0.0f;
+    float tone_mult = 0.0f;
     /// Rank mix gain (level * chorus norm * output trim) and noise offset.
     float mix = 0.0f;
     float output_scale = 1.0f;
@@ -273,6 +321,21 @@ class PipeOrganVoiceCore {
   float attack_coeff_ = 0.0f;
   float release_coeff_ = 0.0f;
   bool releasing_ = false;
+
+  // Live excitation axes (jet drive, radiation brightness): base from the patch
+  // or a CC, matrix offset, the composed target and the ramped value. The
+  // brightness pair is centred on 0.5, which is the registration as voiced.
+  float srf_ = 48000.0f;
+  float force01_base_ = 0.0f;
+  float force01_mod_ = 0.0f;
+  float force01_target_ = 0.0f;
+  float force01_ = 0.0f;
+  float bright01_base_ = 0.5f;
+  float bright01_mod_ = 0.0f;
+  float bright01_target_ = 0.5f;
+  float bright01_ = 0.5f;
+  float ctrl_coeff_ = 0.0f;
+  bool excitation_live_ = false;
 
   // Determinism: one seeded stream, drawn per rank at a high-bit offset so the
   // ranks never reuse each other's chiff draws.

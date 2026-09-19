@@ -147,8 +147,6 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   const float vel_to_breath = std::clamp(params.vel_to_breath, 0.0f, 1.0f);
   const float level = std::clamp(
       (1.0f - vel_to_breath) * params.breath_pressure + vel_to_breath * vel01, 0.0f, 1.0f);
-  breath_target_ = kBreathBase + kBreathSpan * level;
-  breath_ctrl_target_ = breath_target_;
   // A fresh note starts unmodulated; the matrix re-sets the offsets on its
   // first render, and a voice with no excitation route never touches them.
   breath01_base_ = level;
@@ -162,9 +160,11 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   // Open-end reflection lowpass: brightness -> pole a (y += (1-a)(x - y)). A
   // brighter end reflects more upper partials (a smaller pole).
   bright01_base_ = std::clamp(params.brightness, 0.0f, 1.0f);
-  const float a = std::clamp(kBellPoleBase - kBellPoleSpan * bright01_base_, 0.0f, 0.95f);
-  lp_alpha_ = 1.0f - a;
-  lp_alpha_target_ = lp_alpha_;
+  // Both axes are derived here and nowhere else. A note-on copy of the mapping
+  // is free to drift from the control-rate one, and a single rounding apart is
+  // enough for the first CC to move a sound the host did not ask to move.
+  refresh_excitation_targets();
+  snap_excitation();
   loss_gain_ = std::clamp(1.0f - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f), 0.5f, 1.0f);
 
   // In-loop DC blocker pole (on the jet output).
@@ -179,7 +179,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   // Tuning compensation: one feedback register (bore_out_ is consumed one sample
   // after it is produced) plus the reflection lowpass's phase delay at f0.
   const float omega = kTwoPi * f0 / srf;
-  const float tau_lp = onepole_group_delay_samples(a, omega);
+  const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, omega);
   comp_ = 1.0f + tau_lp;
 
   // Circular spans sized for the whole loop period plus bend-down headroom and
@@ -339,19 +339,19 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
   return output_scale_ * vib_gain * bore_out_;
 }
 
-void FluteVoiceCore::set_breath(float breath01) noexcept {
-  breath01_base_ = breath01 < 0.0f ? 0.0f : (breath01 > 1.0f ? 1.0f : breath01);
+void FluteVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
+  if ((present & kAxisForce) != 0u) {
+    breath01_base_ = std::clamp(base.force, 0.0f, 1.0f);
+  }
+  if ((present & kAxisBrightness) != 0u) {
+    bright01_base_ = std::clamp(base.brightness, 0.0f, 1.0f);
+  }
   refresh_excitation_targets();
 }
 
-void FluteVoiceCore::set_brightness(float bright01) noexcept {
-  bright01_base_ = bright01 < 0.0f ? 0.0f : (bright01 > 1.0f ? 1.0f : bright01);
-  refresh_excitation_targets();
-}
-
-void FluteVoiceCore::set_excitation_mod(float force_offset01, float brightness_offset01) noexcept {
-  force_mod01_ = force_offset01;
-  bright_mod01_ = brightness_offset01;
+void FluteVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
+  force_mod01_ = offsets.force;
+  bright_mod01_ = offsets.brightness;
   refresh_excitation_targets();
 }
 
@@ -367,7 +367,7 @@ void FluteVoiceCore::set_vibrato(float depth01) noexcept {
   vib_depth_target_ = depth01 < 0.0f ? 0.0f : (depth01 > 1.0f ? 1.0f : depth01);
 }
 
-void FluteVoiceCore::snap_flute_control() noexcept {
+void FluteVoiceCore::snap_excitation() noexcept {
   breath_target_ = breath_ctrl_target_;
   lp_alpha_ = lp_alpha_target_;
   vib_depth_ = vib_depth_target_;

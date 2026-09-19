@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 
 namespace sonare::midi::synth {
@@ -150,43 +151,48 @@ class BowedStringVoiceCore {
   // --- live continuous control (bowed strings are a continuous-control
   // instrument; the host drives these from MIDI CCs while the note sounds).
   // Each sets a smoothing TARGET the render ramps toward (no zipper); call
-  // snap_bow_control() to jump to the targets without a glide. ---
+  // snap_excitation() to jump to the targets without a glide. ---
 
   /// Bow speed / dynamic level as a scale in [0, ~2] of the note-on bow speed
-  /// (1 = the struck level). The expression pedal's crescendo/swell.
+  /// (1 = the struck level). The expression pedal's crescendo/swell. Not an
+  /// excitation axis: it is the loudness every engine takes through the shared
+  /// expression VCA, which on a bowed string happens to be the bow's own speed.
   void set_bow_speed_scale(float scale) noexcept {
     const float s = scale < 0.0f ? 0.0f : (scale > 2.0f ? 2.0f : scale);
     bow_speed_target_ = base_bow_velocity_ * s;
   }
-  /// Bow force / downward pressure in [0,1] (friction-curve slope): light,
-  /// whistly bow through firm, rich, rougher tone.
-  void set_bow_force(float force01) noexcept {
-    const float f = force01 < 0.0f ? 0.0f : (force01 > 1.0f ? 1.0f : force01);
-    slope_base_ = kBowSlopeMax_ - kBowSlopeSpan_ * f;
+  /// Base axis positions in [0,1] from the patch or a CC. @p present names the
+  /// fields the caller filled (ExcitationAxisMask); an axis it does not name
+  /// keeps the value the note started with. Force is downward bow pressure
+  /// (CC2) through the friction-curve slope — light and whistly through firm,
+  /// rich and rougher; position (CC74) is the contact point, 0 at the bridge
+  /// (bright, sul ponticello) and 1 over the fingerboard (soft, sul tasto).
+  void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
+    if ((present & kAxisForce) != 0u) {
+      const float f = base.force < 0.0f ? 0.0f : (base.force > 1.0f ? 1.0f : base.force);
+      slope_base_ = kBowSlopeMax_ - kBowSlopeSpan_ * f;
+    }
+    if ((present & kAxisPosition) != 0u) {
+      const float p = base.position < 0.0f ? 0.0f : (base.position > 1.0f ? 1.0f : base.position);
+      // Map across the natural playing range (bridge .. fingerboard); beta at
+      // the string's centre is an unusual, non-monotone extreme, so the CC
+      // stops short.
+      beta_base_ = 0.02f + kBowPositionSpan_ * p;
+    }
     refresh_bow_targets();
   }
-  /// Bow contact point in [0,1]: 0 = at the bridge (bright, sul ponticello),
-  /// 1 = over the fingerboard (soft, sul tasto). Maps to the delay-line split.
-  void set_bow_position(float pos01) noexcept {
-    const float p = pos01 < 0.0f ? 0.0f : (pos01 > 1.0f ? 1.0f : pos01);
-    // Map across the natural playing range (bridge .. fingerboard); beta at the
-    // string's centre is an unusual, non-monotone extreme, so the CC stops short.
-    beta_base_ = 0.02f + kBowPositionSpan_ * p;
-    refresh_bow_targets();
-  }
-  /// Mod-matrix offsets on the same two axes (ModDestination::kExcitationForce
-  /// and kExcitationPosition), in normalized axis units. Held apart from the
-  /// base a patch or a CC set so the two compose rather than overwrite, and
-  /// applied through the same smoothing ramp: this is a control-rate
-  /// destination, not an audio-rate path into the string.
-  void set_excitation_mod(float force_offset01, float position_offset01) noexcept {
-    force_mod01_ = force_offset01;
-    position_mod01_ = position_offset01;
+  /// Mod-matrix offsets on the same axes, in the same normalized units. Held
+  /// apart from the base so the two compose rather than overwrite, and applied
+  /// through the same smoothing ramp: this is a control-rate destination, not an
+  /// audio-rate path into the string.
+  void set_excitation_mod(const ExcitationAxes& offsets) noexcept {
+    force_mod01_ = offsets.force;
+    position_mod01_ = offsets.position;
     refresh_bow_targets();
   }
   /// Jump the smoothed controls to their targets (seed a fresh note at the
   /// host's current CC positions without an audible glide).
-  void snap_bow_control() noexcept {
+  void snap_excitation() noexcept {
     max_bow_velocity_ = bow_speed_target_;
     bow_slope_ = slope_target_;
     beta_ = beta_target_;

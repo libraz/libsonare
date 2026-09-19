@@ -31,6 +31,7 @@
 
 #include <cstdint>
 
+#include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 
 namespace sonare::midi::synth {
@@ -98,7 +99,39 @@ class FreeReedVoiceCore {
   /// Immediate silence.
   void kill() noexcept;
 
+  // --- live continuous control (a free reed is driven for as long as the
+  // bellows moves; the host drives these from MIDI CCs while the note sounds).
+  // Each sets a smoothing TARGET the render ramps toward (no zipper); call
+  // snap_excitation() to jump to the targets without a glide. ---
+
+  /// Base axis positions in [0,1] from the patch or a CC. @p present names the
+  /// fields the caller filled (ExcitationAxisMask); an axis it does not name
+  /// keeps the value the note started with. Force is bellows pressure (CC2),
+  /// which re-derives the saturator drive as well as the output trim — the two
+  /// the note-on level set together — so leaning on the bellows buzzes the reed
+  /// rather than only loudening it; brightness (CC74) opens the reed-plate body
+  /// filter.
+  void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
+  /// Mod-matrix offsets on the same axes, in the same normalized units. Held
+  /// apart from the base so the two compose rather than overwrite, and applied
+  /// through the same smoothing ramp: this is a control-rate destination, not an
+  /// audio-rate path into the tongue.
+  void set_excitation_mod(const ExcitationAxes& offsets) noexcept;
+  /// Jump the smoothed controls to their targets (seed a fresh note at the
+  /// host's current CC positions without an audible glide).
+  void snap_excitation() noexcept;
+
  private:
+  /// Recomposes the two smoothing targets from their bases and the offsets, and
+  /// arms the ramp if either moved.
+  void refresh_excitation_targets() noexcept;
+  /// Advances the ramp one sample and re-cuts the derived coefficients. Called
+  /// only while a control is moving: the body pole costs a pow() and an exp(),
+  /// so a voice nobody modulates keeps exactly the coefficients start() wrote.
+  void advance_excitation() noexcept;
+  /// Re-derives drive_, output_scale_ and body_alpha_ from the live axes.
+  void apply_excitation() noexcept;
+
   double sample_rate_ = 48000.0;
   float base_freq_hz_ = 220.0f;
 
@@ -113,6 +146,23 @@ class FreeReedVoiceCore {
   // Tongue nonlinearity shaping (asymmetry from reed_stiffness).
   float asymmetry_ = 0.0f;
   float drive_ = 1.0f;
+  // The stiffness half of drive_, held apart so the bellows half can be re-cut
+  // live; likewise the slot shaper's output makeup.
+  float drive_stiff_ = 1.0f;
+  float slot_makeup_ = 1.0f;
+
+  // Live excitation axes (bellows pressure, body brightness): base from the
+  // patch or a CC, matrix offset, the composed target and the ramped value.
+  float force01_base_ = 0.0f;
+  float force01_mod_ = 0.0f;
+  float force01_target_ = 0.0f;
+  float force01_ = 0.0f;
+  float bright01_base_ = 0.0f;
+  float bright01_mod_ = 0.0f;
+  float bright01_target_ = 0.0f;
+  float bright01_ = 0.0f;
+  float ctrl_coeff_ = 0.0f;
+  bool excitation_live_ = false;
 
   // Slot flow (gated): 0 duty keeps the asymmetric saw above.
   float slot_duty_ = 0.0f;
