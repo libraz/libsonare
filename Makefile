@@ -9,6 +9,7 @@
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
        voicematch-substitution voicematch-substitution-all voicematch-determinism \
+       voicematch-reextract-check \
        spec-liveness spec-liveness-census spec-liveness-census-check \
        excerpts excerpts-check test-voicematch \
        check-c-api-out-param-init check-c-api-pointer-contracts check-c-api-header-self-contained \
@@ -706,6 +707,20 @@ voicematch-substitution-all:
 voicematch-determinism:
 	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
 		tools/voicematch/determinism_check.py
+
+# Re-measures every committed reference from its cached corpus and diffs the
+# result against `reference/<id>.json` (its `measured_utc` stamp excluded --
+# see the module docstring for why that field always changes). Answers
+# whether the tree a measurement-code change is about to touch already
+# disagrees with the code sitting in it today, before the change lands and
+# takes the blame for drift that predates it. Needs the cached corpus under
+# `.cache/voicematch/` (or `SONARE_VOICEMATCH_ROOT`), so an id with none is
+# reported rather than measured. Read-only over `reference/` and `capture/` --
+# every measurement goes to a scratch `--profile` path. Exits 0 whatever it
+# finds, on the same terms as `voicematch-substitution`, and stays out of CI.
+voicematch-reextract-check:
+	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+		tools/voicematch/reextract_check.py
 
 # Regenerate the bank view. Needs the tuning build, because the engine voicing
 # each patch is reported by the library rather than parsed out of it — the same
