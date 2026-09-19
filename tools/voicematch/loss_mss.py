@@ -43,6 +43,53 @@ def _log_bin_weights(n_fft: int, sr: float = 48000.0) -> np.ndarray:
     return w / w.sum()
 
 
+# How far under ITS OWN loudest bin a side still carries signal, and how many
+# bins clearing that on both sides the gain below needs before it is a
+# measurement. A bin one side has fallen silent in IS the duration difference,
+# so reading the gain there would put that difference straight back into the
+# quantity the gain exists to separate from it. Sixty dB is the span the band
+# metrics already treat as the reference's usable range; sixty-four bins is a
+# handful of frames at the smallest scale, under which a median is a guess.
+#
+# Each side against its own peak rather than both against the pair's, because a
+# floor set by the louder side moves when either side's gain does — which would
+# make the set the median is taken over depend on the gain, and so make the
+# correction only approximately undo it. Measured on a spectrum against a
+# brighter one, a 4x gain then moved the term from 326 to 1299.
+MSS_GAIN_FLOOR_DB = 60.0
+MSS_GAIN_MIN_BINS = 64
+
+
+def _common_gain(model_mag: np.ndarray, oracle_mag: np.ndarray) -> float:
+    """What the model must be multiplied by to sit at the oracle's level.
+
+    Both renders reach this term already scaled to a common RMS over the whole
+    timeline, and that is a duration weighting rather than a level match: a
+    model that decays faster than its reference holds less total energy, so
+    equalising the total lifts the part of it that is still sounding above the
+    reference's. The harmonic and band terms are ratios against each side's own
+    reference bin and cancel that lift; this one does not — a gain `g` adds
+    `|log g|` to every bin of the log term, and the linear term's division by
+    the oracle's mean scales the oracle rather than matching the two.
+
+    So the lift is estimated where both sides still sound and divided out,
+    which leaves the shape difference — the thing this term is for — and takes
+    out the level difference, which `level` already scores on its own.
+
+    The median rather than the mean because the term is an L1 distance, whose
+    minimiser over a constant offset is the median of the offsets.
+    """
+    span = 10.0 ** (-MSS_GAIN_FLOOR_DB / 20.0)
+    model_floor = float(model_mag.max(initial=0.0)) * span
+    oracle_floor = float(oracle_mag.max(initial=0.0)) * span
+    if model_floor <= 0.0 or oracle_floor <= 0.0:
+        return 1.0
+    both = (model_mag > model_floor) & (oracle_mag > oracle_floor)
+    if int(both.sum()) < MSS_GAIN_MIN_BINS:
+        return 1.0
+    return float(np.exp(np.median(np.log(oracle_mag[both]) - np.log(model_mag[both]))))
+
+
 def mss_distance(model: np.ndarray, oracle: np.ndarray) -> float:
     """Multi-scale STFT distance between two mono renders.
 
@@ -53,6 +100,11 @@ def mss_distance(model: np.ndarray, oracle: np.ndarray) -> float:
     both summed at each scale, the linear term normalised by the oracle's own
     mean so the scales stay comparable. Phase is deliberately ignored — two
     renders of the same note are never phase-aligned.
+
+    Level is ignored too, which it was not before `_common_gain`: measured on
+    two renders separated by nothing but a gain, this term charged 0.80 at 1.5x
+    and 4.06 at 4x, and now charges zero at both, while a spectral difference
+    taken at matched level reads what it read.
     """
     n = min(len(model), len(oracle))
     if n < MSS_FFT_SIZES[-1]:
@@ -65,6 +117,10 @@ def mss_distance(model: np.ndarray, oracle: np.ndarray) -> float:
         sb = _stft_mag(b, n_fft, n_fft // 4)
         m = min(len(sa), len(sb))
         sa, sb = sa[:m], sb[:m]
+        # The RMS normalisation upstream equalises total energy, which weights
+        # by duration. Taken out here, at this scale's own resolution, so what
+        # is left is the spectral shape. See `_common_gain`.
+        sa = sa * _common_gain(sa, sb)
         # Each octave weighted equally rather than each bin — see
         # MSS_LOG_WEIGHTING. `np.average` over the bin axis, then a plain mean
         # over frames, so the weighting changes which frequencies count and not

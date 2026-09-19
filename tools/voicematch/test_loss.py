@@ -33,12 +33,31 @@ def test_a_signal_against_itself_scores_zero():
     assert mss_distance(x, x) == pytest.approx(0.0, abs=1e-12)
 
 
-def test_a_louder_copy_scores_above_an_identical_one():
-    """The linear half is normalised by the oracle's own weighted magnitude, so
-    a gain difference has to survive that normalisation to be visible."""
+def test_a_louder_copy_scores_the_same_as_an_identical_one():
+    """Level is not this term's business, and it used to be half of it.
+
+    Both sides arrive scaled to a common RMS over the whole timeline, which
+    equalises total energy rather than level: a model that decays faster than
+    its reference holds less of it and is lifted by exactly that ratio. Every
+    other term is a ratio against its own reference bin and cancels the lift;
+    this one charged for it — 0.80 at 1.5x and 4.06 at 4x on renders that
+    differed in nothing else — so the term that exists to see what the metric
+    set does not model was partly reporting the normalisation.
+    """
     n = MSS_FFT_SIZES[-1] * 8
     x = _noise(n, 4)
-    assert mss_distance(x * 2.0, x) > mss_distance(x, x)
+    for gain in (1.5, 2.0, 4.0):
+        assert mss_distance(x * gain, x) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_a_spectral_difference_survives_the_gain_it_is_measured_through():
+    """Taking the level out must not take the shape out with it."""
+    n = MSS_FFT_SIZES[-1] * 8
+    dull = np.cumsum(_noise(n, 6))          # -6 dB/octave against the source
+    bright = _noise(n, 6)
+    assert mss_distance(dull, bright) > 0.5
+    assert mss_distance(dull * 4.0, bright) == pytest.approx(
+        mss_distance(dull, bright), abs=1e-9)
 
 
 def test_a_render_shorter_than_the_largest_window_is_not_scored():
