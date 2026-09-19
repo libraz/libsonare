@@ -1011,7 +1011,7 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   for (const auto& command : registry) {
     if (command.path.rfind("project.", 0) == 0) ++project_leaf_count;
   }
-  REQUIRE(project_leaf_count == 10);
+  REQUIRE(project_leaf_count == 11);
   REQUIRE(cli_command_spec_for_path("project") == nullptr);
   const auto* project_input = cli_option_spec_for_command("project.validate", "in");
   REQUIRE(project_input != nullptr);
