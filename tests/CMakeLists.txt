@@ -147,6 +147,7 @@ add_executable(sonare_tests
   api/sonare_c_features_metering_test.cpp
   api/sonare_c_abi_version_test.cpp
   api/sonare_c_engine_voice_test.cpp
+  api/sonare_c_engine_controller_test.cpp
   api/sonare_c_mixing_features_test.cpp
   api/sonare_c_features_extra_test.cpp
   api/sonare_c_effects_extra_test.cpp
@@ -433,6 +434,8 @@ target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_daw
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_polyphony.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_midi.cpp)
+target_sources(sonare_tests PRIVATE
+               ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_controller.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_clips.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_mixing.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_capture.cpp)

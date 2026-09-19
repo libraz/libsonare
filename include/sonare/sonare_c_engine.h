@@ -833,6 +833,128 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
 SonareError sonare_engine_clear_midi_instrument(SonareRealtimeEngine* engine,
                                                 uint32_t destination_id);
 SonareError sonare_engine_midi_instrument_count(SonareRealtimeEngine* engine, size_t* out_count);
+
+/// @brief Controller-profile input ordinals. Mirrors midi::ControllerInput.
+/// @details Aftertouch, velocity and bend sit in the same enumeration as a
+///          controller number because a device assigns them to the slot a CC
+///          would take.
+typedef enum SONARE_ENUM_BASE {
+  SONARE_CONTROLLER_INPUT_CONTROL_CHANGE = 0,
+  SONARE_CONTROLLER_INPUT_CHANNEL_PRESSURE = 1,
+  SONARE_CONTROLLER_INPUT_POLY_PRESSURE = 2,
+  SONARE_CONTROLLER_INPUT_PITCH_BEND = 3,
+  SONARE_CONTROLLER_INPUT_VELOCITY = 4
+} SonareControllerInput;
+
+/// @brief Controller-profile axis ordinals. Mirrors midi::ControllerAxis.
+/// @details What a gesture MEANS, so an engine is reached by the meaning rather
+///          than by the controller number that carried it. The first four are
+///          the engine's own exciter; the last three are channel-level state.
+typedef enum SONARE_ENUM_BASE {
+  SONARE_CONTROLLER_AXIS_NONE = 0,
+  SONARE_CONTROLLER_AXIS_EXCITATION = 1,
+  SONARE_CONTROLLER_AXIS_POSITION = 2,
+  SONARE_CONTROLLER_AXIS_BRIGHTNESS = 3,
+  SONARE_CONTROLLER_AXIS_MORPH = 4,
+  SONARE_CONTROLLER_AXIS_LOUDNESS = 5,
+  SONARE_CONTROLLER_AXIS_PITCH_CENTS = 6,
+  SONARE_CONTROLLER_AXIS_VIBRATO_DEPTH = 7
+} SonareControllerAxis;
+
+/// @brief Values in @ref SonareControllerInput and @ref SonareControllerAxis.
+#define SONARE_CONTROLLER_INPUT_COUNT 5
+#define SONARE_CONTROLLER_AXIS_COUNT 8
+/// @brief Bindings one profile holds. Binding past it is refused rather than
+///        grown, so the audio thread scans a fixed table.
+#define SONARE_MAX_CONTROLLER_BINDINGS 32
+
+/// @brief One device gesture bound to one expression axis.
+/// @details Binding the same input twice with different axes is how a single
+///          gesture reaches two of them, which is what a breath controller
+///          driving both excitation and loudness needs.
+typedef struct {
+  /// One of @ref SonareControllerInput.
+  uint8_t input;
+  /// CC number 0-127 for SONARE_CONTROLLER_INPUT_CONTROL_CHANGE. Every other
+  /// input is identified by its message status alone and ignores this.
+  uint8_t index;
+  /// One of @ref SonareControllerAxis. SONARE_CONTROLLER_AXIS_NONE is refused:
+  /// a binding that means nothing is a caller mistake, not an empty slot.
+  uint8_t axis;
+  uint8_t reserved;
+  /// Axis value at zero deflection, in the axis's own unit — normalized [0,1]
+  /// for the excitation axes and loudness, cents for pitch and vibrato depth.
+  float lo;
+  /// Axis value at full deflection. lo > hi inverts the gesture.
+  float hi;
+  /// Exponent applied to the normalized input before the range maps it. 1 is
+  /// linear and is the default a caller should keep: a wind controller has
+  /// already applied the curve its player chose, and a second one on this side
+  /// bends a gesture that was already shaped.
+  float curve;
+} SonareControllerBinding;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareControllerBinding, input) == 0, "ControllerBinding.input offset");
+static_assert(offsetof(SonareControllerBinding, index) == 1, "ControllerBinding.index offset");
+static_assert(offsetof(SonareControllerBinding, axis) == 2, "ControllerBinding.axis offset");
+static_assert(offsetof(SonareControllerBinding, lo) == 4, "ControllerBinding.lo offset");
+static_assert(offsetof(SonareControllerBinding, hi) == 8, "ControllerBinding.hi offset");
+static_assert(offsetof(SonareControllerBinding, curve) == 12, "ControllerBinding.curve offset");
+static_assert(sizeof(SonareControllerBinding) == 16, "SonareControllerBinding layout drift");
+#endif
+
+/// @brief Returns the controller-profile preset names separated by '\n'.
+/// @details Pointer is owned by libsonare and valid for the program lifetime;
+///          the caller must NOT free it. Never NULL.
+const char* sonare_controller_profile_names(void);
+
+/// @brief Replaces the instrument's controller profile with a named preset.
+/// @details Control-thread API. An unknown name is refused rather than resolved
+///          to a default, because a default that silently replaced the device's
+///          spelling would still play — just not the gestures that were sent.
+///          Replacing the profile drops every channel's accumulated axis value:
+///          the new bindings say nothing about what the old ones had reached.
+///          Returns SONARE_ERROR_NOT_SUPPORTED for a destination whose
+///          instrument has nowhere to put a profile.
+SonareError sonare_engine_set_controller_profile(SonareRealtimeEngine* engine,
+                                                 uint32_t destination_id, const char* preset_name);
+
+/// @brief Adds one binding on top of the instrument's current profile.
+/// @details Control-thread API. Refused, adding nothing, when the table is
+///          full, when the axis is SONARE_CONTROLLER_AXIS_NONE, or when a
+///          poly-pressure binding names an axis that is not one of the four
+///          excitation axes: loudness, pitch and vibrato depth are channel-level
+///          state here, and applying a per-note value to them channel-wide would
+///          be indistinguishable to the caller from a binding that took.
+SonareError sonare_engine_bind_controller(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                          const SonareControllerBinding* binding);
+
+/// @brief Drops every binding of the instrument's controller profile.
+/// @details Control-thread API. The instrument keeps a profile; it resolves
+///          nothing until something is bound again.
+SonareError sonare_engine_clear_controller_bindings(SonareRealtimeEngine* engine,
+                                                    uint32_t destination_id);
+
+/// @brief Bindings the instrument's controller profile currently holds.
+SonareError sonare_engine_controller_binding_count(SonareRealtimeEngine* engine,
+                                                   uint32_t destination_id, size_t* out_count);
+
+/// @brief Whether note-on velocity is expression for this instrument.
+/// @details No fixed default is possible: a wind controller ships sending
+///          breath-derived velocity on one model and a constant on the next, so
+///          each preset states it and a host building its own profile sets it.
+///          When zero the synth takes every note at full scale and the bound
+///          axes carry the dynamics alone.
+SonareError sonare_engine_set_controller_velocity_meaningful(SonareRealtimeEngine* engine,
+                                                             uint32_t destination_id,
+                                                             int meaningful);
+
+/// @brief Reads back @ref sonare_engine_set_controller_velocity_meaningful.
+SonareError sonare_engine_controller_velocity_meaningful(SonareRealtimeEngine* engine,
+                                                         uint32_t destination_id,
+                                                         int* out_meaningful);
+
 /// @brief Binds a live MIDI CC to an engine automation parameter.
 /// @details Control-thread API. After binding, @ref sonare_engine_push_midi_cc
 ///          still routes the MIDI event to the destination instrument, and also

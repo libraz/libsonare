@@ -67,6 +67,10 @@ const char* sonare_synth_enum_names(int kind) {
   // carries "sawtooth" as a second spelling of "saw", so its entry count is
   // deliberately one more than the enum's.
   constexpr const char* kBuiltinWaveforms = "sine\nsaw\nsawtooth\nsquare\ntriangle";
+  constexpr const char* kControllerInputs =
+      "control-change\nchannel-pressure\npoly-pressure\npitch-bend\nvelocity";
+  constexpr const char* kControllerAxes =
+      "none\nexcitation\nposition\nbrightness\nmorph\nloudness\npitch-cents\nvibrato-depth";
 
   static_assert(name_count(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
                 "engine mode names out of step with the enum");
@@ -82,6 +86,10 @@ const char* sonare_synth_enum_names(int kind) {
                 "mod source names out of step with the enum");
   static_assert(name_count(kModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
                 "mod destination names out of step with the enum");
+  static_assert(name_count(kControllerInputs) == SONARE_CONTROLLER_INPUT_COUNT,
+                "controller input names out of step with the enum");
+  static_assert(name_count(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
+                "controller axis names out of step with the enum");
 
   switch (kind) {
     case SONARE_SYNTH_ENUM_ENGINE_MODE:
@@ -98,6 +106,10 @@ const char* sonare_synth_enum_names(int kind) {
       return kModSources;
     case SONARE_SYNTH_ENUM_MOD_DESTINATION:
       return kModDestinations;
+    case SONARE_SYNTH_ENUM_CONTROLLER_INPUT:
+      return kControllerInputs;
+    case SONARE_SYNTH_ENUM_CONTROLLER_AXIS:
+      return kControllerAxes;
     case SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM:
       return kBuiltinWaveforms;
     default:

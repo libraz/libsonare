@@ -188,11 +188,15 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_ENUM_MOD_SOURCE = 5,
   SONARE_SYNTH_ENUM_MOD_DESTINATION = 6,
   /// Built-in oscillator synth names, including the ``sawtooth`` alias.
-  SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM = 7
+  SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM = 7,
+  /// How a device spells a gesture (@ref SonareControllerInput).
+  SONARE_SYNTH_ENUM_CONTROLLER_INPUT = 8,
+  /// What a gesture means (@ref SonareControllerAxis).
+  SONARE_SYNTH_ENUM_CONTROLLER_AXIS = 9
 } SonareSynthEnumKind;
 
-/// @brief Returns the canonical names for a @ref SonareSynthPatch enum
-///        separated by '\n'. Unknown @p kind returns an empty string.
+/// @brief Returns the canonical names for one synth enum separated by '\n'.
+///        Unknown @p kind returns an empty string.
 /// @details Pointer is owned by libsonare and remains valid for the program
 ///          lifetime; the caller must NOT free it. Never NULL: an unknown
 ///          @p kind returns the empty string.
