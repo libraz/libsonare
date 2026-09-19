@@ -29,7 +29,7 @@ import {
   startAt, stopSources, hitAt, conditions,
 } from './player.js';
 import { dotEl, stageBar } from './bank.js';
-import { loadFeedback, recordBlind } from './feedback.js';
+import { loadFeedback, recordBlind, recordPreference } from './feedback.js';
 
 /* ----------------------------------------------------------------- route */
 
@@ -342,8 +342,39 @@ function buildVersionButtons() {
     b.addEventListener('click', () => setVersion(slot));
     row.append(b);
   });
+  // A voice with a set of recorded candidates puts eleven buttons in one row,
+  // and equal segments across eleven ellipsise every label into uselessness —
+  // `foundati…` beside `mixtures…` names neither. Past the point where a name
+  // survives, the block wraps instead of narrowing; the segments stay equal,
+  // which is the part that matters.
+  for (const seg of box.querySelectorAll('.segmented')) {
+    seg.classList.toggle('many', seg.childElementCount > CROWDED);
+  }
+  /* A row of eleven buttons is a question the page was not asking out loud.
+   * They are recorded candidate settings and the point of them is to be chosen
+   * between, which nobody infers from a switch — and what each one is is in the
+   * banner above, one at a time, which nobody connects either. So the line says
+   * both, and carries the button that answers it.
+   *
+   * Blind mode has its own answer and it was never written down: whichever
+   * version a take is left on IS the vote for that take. */
+  if (state.display.length > 1) {
+    const hint = el('div', 'vhint');
+    hint.append(el('span', '', t(state.blind ? 'ver.hintBlind' : 'ver.hint')));
+    if (!state.blind) {
+      const pick = el('button', 'ghost', t('fb.prefer'));
+      pick.type = 'button';
+      pick.title = t('fb.preferTitle');
+      pick.addEventListener('click', recordPreference);
+      hint.append(pick);
+    }
+    box.append(hint);
+  }
   markVersion();
 }
+
+/// Buttons past which a label stops fitting in a shared row.
+const CROWDED = 6;
 
 /// Redraw the switch without touching the audio: blind mode going on or off, a
 /// reveal and a reshuffle all change what the buttons say and nothing about

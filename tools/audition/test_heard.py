@@ -200,6 +200,46 @@ def test_a_voice_nothing_can_be_dated_against_is_never_marked() -> None:
 
 
 @_with_scratch
+def test_the_versions_put_forward_to_keep_are_counted_apart_from_the_verdicts() -> None:
+    """A voice carrying recorded candidates asks which of them should ship.
+
+    A list of notes does not answer that however carefully each one is read, and
+    a preference is not a verdict: the best of a set can still be short of the
+    reference, which is the state a bank of candidates is usually in. Whether
+    the names were visible rides with the count, because that is what decides
+    what the count is worth.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p019-church-organ", "church_organ")
+        _bank(root, {"church_organ": ["2026-09-11"]})
+
+        def prefer(version: str, take: str, blind: bool = False) -> dict:
+            entry = _note("2026-09-19T10:00:00+00:00", "", "prefer")
+            entry["conditions"].update({"version": version, "take": take, "blind": blind})
+            return entry
+
+        _log(heard.FEEDBACK_ROOT, "p019-church-organ", [
+            prefer("hall", "single-long"),
+            prefer("hall", "music"),
+            prefer("chiff-strong", "tongued", blind=True),
+            # A verdict on the same voice, which is a different statement and
+            # must not be counted as a vote for anything.
+            _note("2026-09-19T11:00:00+00:00", "acceptable", "tone/dark"),
+        ])
+        voice = heard.collect([], "")[0]
+        kept = {p["version"]: p for p in voice["preferred"]}
+        assert [p["version"] for p in voice["preferred"]] == ["hall", "chiff-strong"], voice
+        assert kept["hall"]["n"] == 2 and kept["hall"]["sighted"] == 2, kept
+        assert kept["chiff-strong"]["sighted"] == 0, kept
+        assert kept["hall"]["takes"] == ["single-long", "music"], kept
+        # The verdict stays a verdict: a preference carries no grade and must
+        # not become the voice's headline.
+        assert voice["worst"] == "acceptable", voice
+
+
+@_with_scratch
 def test_a_log_survives_a_line_that_is_not_one() -> None:
     """What a crash mid-append leaves, and what a hand-edit leaves."""
     with tempfile.TemporaryDirectory() as tmp:

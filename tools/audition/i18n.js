@@ -80,6 +80,9 @@ const STRINGS = {
     'prov.offTarget': 'not what this slot is aimed at',
     'prov.unclassified': 'the capture does not say what answered it',
 
+    'ver.hint': 'Versions of the same take, to be chosen between — the line above says what the selected one is meant to sound like.',
+    'ver.hintBlind': 'Names hidden. Whichever version you leave a take on is your vote for that take.',
+
     'now.hidden': 'hidden',
     'now.copy': 'copy what I hear',
     'now.copied': 'copied',
@@ -121,6 +124,8 @@ const STRINGS = {
     'fb.commentPlaceholder': 'optional — what you actually heard',
     'fb.attach': 'attach what is sounding right now',
     'fb.attachWhat': 'take, version, playhead, which strike, and the options in force',
+    'fb.prefer': 'keep this one',
+    'fb.preferTitle': 'Record this version as the one to keep, with what is sounding and whatever is in the box below',
     'fb.send': 'send',
     'fb.sending': 'sending…',
     'fb.sent': 'sent',
@@ -278,6 +283,9 @@ const STRINGS = {
     'prov.offTarget': 'このスロットが目指している音源ではない',
     'prov.unclassified': 'キャプチャに音源の種別が書かれていない',
 
+    'ver.hint': '同じテイクの別バージョンです。聴き比べて良いものを選んでください — 選んだものが何を狙った設定かは上の行が説明します。',
+    'ver.hintBlind': '名前を伏せています。各テイクで最後に選んだものが、そのテイクの一票になります。',
+
     'now.hidden': '伏せ中',
     'now.copy': 'いま聴いている条件をコピー',
     'now.copied': 'コピーしました',
@@ -319,6 +327,8 @@ const STRINGS = {
     'fb.commentPlaceholder': '任意 — 実際に聞こえたこと',
     'fb.attach': 'いま鳴っている状態を添える',
     'fb.attachWhat': 'テイク・バージョン・再生位置・何打目か・設定',
+    'fb.prefer': 'これを推す',
+    'fb.preferTitle': 'いま鳴っているバージョンを「残すべきもの」として記録します。下の欄に書いたことも一緒に送ります',
     'fb.send': '送信',
     'fb.sending': '送信中…',
     'fb.sent': '送信しました',

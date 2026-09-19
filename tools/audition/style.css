@@ -608,6 +608,42 @@ nav .sub {
   font-weight: 600;
 }
 
+/* Wrapped rather than narrowed. `auto-fit` keeps every segment the same width
+   as its neighbours, which is the rule a segmented control is held to; what it
+   gives up is the single line, which was costing the labels.
+
+   The block stops drawing itself as one control once it wraps. A segmented
+   control's separators are its own background showing through the gaps, and a
+   last row that does not fill leaves that background standing where a button
+   would be — which reads as a twelfth version, greyed out. Bordered
+   individually, an incomplete row is just space. */
+.segmented.many {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 5px;
+  background: transparent;
+  border-color: transparent;
+  overflow: visible;
+}
+
+.segmented.many button {
+  border: 1px solid color-mix(in srgb, var(--role) 26%, var(--line));
+  border-radius: 5px;
+}
+
+/* The line that says what the switch is for, and the one action it asks for.
+   Together rather than apart: the instruction and the button that answers it
+   read as one thing, and the button alone would be a verb with no object. */
+.vhint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 1px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
 .segmented .key { font-family: var(--mono); opacity: 0.55; flex: none; }
 .segmented .vname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

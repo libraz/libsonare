@@ -203,6 +203,31 @@ export async function recordBlind(summary, picks) {
   }, 'fb.sent');
 }
 
+/* One version of one take, put forward as the one to keep.
+ *
+ * A voice with a set of recorded candidates is a question — which of these
+ * should the library ship — and the triage tree cannot ask it: the tree asks
+ * what is wrong with what is sounding, one version at a time, and a ranking is
+ * not a fault. Without this the answer had to be typed out, which means the
+ * version it names is whatever the typist remembered rather than what was
+ * playing.
+ *
+ * Sighted, and the log says so: `conditions.blind` rides with every note, so a
+ * preference formed while the names were visible can be read for what it is
+ * rather than weighed against a blind run's tally.
+ */
+export async function recordPreference() {
+  const text = $('fbComment').value.trim();
+  await post({
+    lang: currentLang(),
+    grade: '',
+    tag: 'prefer',
+    answers: [],
+    text,
+    conditions: conditions(),
+  }, 'fb.sent', () => { $('fbComment').value = ''; });
+}
+
 async function undo() {
   if (!fb.entries.length) return;
   await post({ op: 'undo', set: state.setId }, 'fb.undone');

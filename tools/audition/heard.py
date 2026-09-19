@@ -243,6 +243,11 @@ def digest(set_id: str, entries: list[dict]) -> dict:
     patch = "" if voice.get("kit") else (voice.get("patch") or "")
     return {
         "set": set_id,
+        # Which version was put forward as the one to keep, and how often. A
+        # voice carrying a set of recorded candidates is a question — which of
+        # these should ship — and a list of notes does not answer it however
+        # carefully each one is read.
+        "preferred": preferred(entries),
         # A kit has no patch unit of its own — the per-note units on each note
         # below are what it is versioned by — so this is empty for one, and the
         # header says so rather than reporting a voice-wide generation a kit
@@ -255,6 +260,38 @@ def digest(set_id: str, entries: list[dict]) -> dict:
         "worst_predates_last_move": bool(worst and stale),
         "notes": notes,
     }
+
+
+def preferred(entries: list[dict]) -> list[dict]:
+    """Each version put forward as the one to keep, most-backed first.
+
+    Kept apart from the verdicts rather than folded into them. A preference
+    ranks candidates against each other and a verdict measures one against the
+    reference, so a version can be both the best of a bad set and not good
+    enough — which is the state a bank of candidates is usually in.
+
+    `sighted` is carried because it decides what the count is worth: a
+    preference formed with the names visible is what somebody would ship, and a
+    blind run's tally is what the ear actually separated. Summing the two would
+    lose the distinction that makes the blind run worth doing.
+    """
+    tally: dict[str, dict] = {}
+    for entry in entries:
+        if entry.get("tag") != "prefer":
+            continue
+        cond = entry.get("conditions") or {}
+        version = cond.get("version")
+        if not version:
+            continue
+        seen = tally.setdefault(version, {"version": version, "n": 0,
+                                          "takes": [], "sighted": 0})
+        seen["n"] += 1
+        if not cond.get("blind"):
+            seen["sighted"] += 1
+        take = cond.get("take")
+        if take and take not in seen["takes"]:
+            seen["takes"].append(take)
+    return sorted(tally.values(), key=lambda v: (-v["n"], v["version"]))
 
 
 def _worst(notes: list[dict]) -> str:
@@ -300,6 +337,12 @@ def render(voices: list[dict], full: bool) -> str:
                 head += "  (nothing since the voice moved)"
         lines.append("")
         lines.append(head)
+        if voice["preferred"]:
+            kept = "   ".join(
+                f"{p['version']} {p['n']}" + ("" if p["sighted"] == p["n"] else
+                                              f" ({p['sighted']} sighted)")
+                for p in voice["preferred"])
+            lines.append(f"  put forward to keep:  {kept}")
         shown = voice["notes"] if full else voice["notes"][:4]
         for note in shown:
             mark = (f"  ·  taken before {'/'.join(note['units'])} last moved "
