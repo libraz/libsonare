@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <string>
 
+#include "midi/articulation_mode.h"
 #include "midi/controller_profile.h"
 #include "midi/sequencer.h"
 #include "rt/processor_base.h"
@@ -104,6 +105,45 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
   /// refuses one. Paired with the setter so a host can show the mapping it
   /// installed rather than the one it believes it installed.
   virtual const ControllerProfile* controller_profile() const noexcept { return nullptr; }
+
+  /// CONTROL thread: how @p channel treats a note-on while another note on that
+  /// channel is still held. Returns false when the instrument has no
+  /// articulation of its own, on the same terms as set_controller_profile: a
+  /// silent success is indistinguishable from a mode that took, and the next
+  /// overlapping pair of notes would be the only evidence. Default: refused.
+  ///
+  /// Not reachable from a MIDI stream. CC126 names a monophonic mode but not
+  /// kMonoLegato, and reading it as that one would change what a spec-compliant
+  /// file sounds like.
+  virtual bool set_articulation(uint8_t channel, ArticulationMode mode) noexcept {
+    (void)channel;
+    (void)mode;
+    return false;
+  }
+
+  /// CONTROL thread: reads back set_articulation. Paired with it so a host can
+  /// show the mode in force rather than the one it believes it installed.
+  virtual bool articulation(uint8_t channel, ArticulationMode* out) const noexcept {
+    (void)channel;
+    (void)out;
+    return false;
+  }
+
+  /// CONTROL thread: how many times a legato continuation was asked for and
+  /// refused, so the note started a voice of its own instead. Counted rather
+  /// than inferred: a refusal sounds like an ordinary note, so nothing in the
+  /// audio separates "this engine declines legato" from "the mode was never
+  /// set".
+  ///
+  /// Refused by the same instruments that refuse the two calls above, rather
+  /// than answering zero: an instrument that never had an articulation has
+  /// refused nothing, and a host reading that zero would read it as "every slur
+  /// took" — which is the reading this counter exists to prevent. Default:
+  /// refused.
+  virtual bool legato_fallback_count(uint64_t* out) const noexcept {
+    (void)out;
+    return false;
+  }
 
   /// AUDIO thread: render one block into source-track-specific output targets.
   /// Implementations must advance every voice and shared DSP state exactly once,

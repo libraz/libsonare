@@ -17,7 +17,9 @@
 #include "c_api/sample_bank_internal.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"
+#include "midi/articulation_mode.h"
 #include "midi/builtin_synth.h"
+#include "midi/instrument.h"
 #include "midi/midi_clip.h"
 #include "midi/midi_fx.h"
 #include "midi/synth/sf2_player.h"
@@ -329,6 +331,74 @@ SonareError sonare_engine_midi_instrument_count(SonareRealtimeEngine* engine, si
 #else
   *out_count = engine->engine.midi_instrument_count();
   return SONARE_OK;
+#endif
+}
+
+SonareError sonare_engine_set_articulation(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                           uint8_t channel, int articulation) {
+  SONARE_C_API_ENTRY;
+  // The ordinal is checked against the C surface alone, so a caller passing
+  // garbage is refused in every build rather than being told the feature is
+  // absent. An out-of-range mode is not clamped: kPoly substituted for a
+  // misspelled kMonoLegato plays every note and slurs none of them, which the
+  // caller cannot tell from a request that took.
+  if (!engine || channel > 15 || articulation < 0 || articulation >= SONARE_ARTICULATION_COUNT) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
+  if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  return instrument->set_articulation(channel,
+                                      static_cast<sonare::midi::ArticulationMode>(articulation))
+             ? SONARE_OK
+             : SONARE_ERROR_NOT_SUPPORTED;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_articulation(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                       uint8_t channel, int* out_articulation) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_articulation || channel > 15) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined on every exit path, so a feature-disabled build and an instrument
+  // without articulation both leave the caller a readable ordinal.
+  *out_articulation = SONARE_ARTICULATION_POLY;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
+  if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  sonare::midi::ArticulationMode mode = sonare::midi::ArticulationMode::kPoly;
+  if (!instrument->articulation(channel, &mode)) return SONARE_ERROR_NOT_SUPPORTED;
+  *out_articulation = static_cast<int>(mode);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_legato_fallback_count(SonareRealtimeEngine* engine,
+                                                uint32_t destination_id, uint32_t* out_count) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_count = 0;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
+  if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  uint64_t counted = 0;
+  if (!instrument->legato_fallback_count(&counted)) return SONARE_ERROR_NOT_SUPPORTED;
+  *out_count = counted > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(counted);
+  return SONARE_OK;
+  SONARE_C_CATCH
 #endif
 }
 

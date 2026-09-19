@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/builtin_synth.h"
+#include "midi/synth/articulation.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/voice_random.h"
 #include "midi/ump.h"

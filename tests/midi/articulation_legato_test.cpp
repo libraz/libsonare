@@ -29,7 +29,7 @@
 
 namespace {
 
-using sonare::midi::synth::ArticulationMode;
+using sonare::midi::ArticulationMode;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
@@ -79,7 +79,7 @@ Phrase play_slur(SynthEngineMode mode, ArticulationMode articulation) {
   synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, kFirst, 0)));
   const std::vector<float> tail = render_left(synth, kAfterSlur);
   out.audio.insert(out.audio.end(), tail.begin(), tail.end());
-  out.fallbacks = synth.legato_fallback_count();
+  REQUIRE(synth.legato_fallback_count(&out.fallbacks));
   return out;
 }
 

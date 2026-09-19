@@ -956,6 +956,60 @@ SonareError sonare_engine_controller_velocity_meaningful(SonareRealtimeEngine* e
                                                          uint32_t destination_id,
                                                          int* out_meaningful);
 
+/// @brief Articulation ordinals. Mirrors midi::ArticulationMode.
+/// @details What a channel does with a note-on while another note on the same
+///          channel is still held.
+typedef enum SONARE_ENUM_BASE {
+  /// Every note-on takes its own voice.
+  SONARE_ARTICULATION_POLY = 0,
+  /// One note at a time; a new note-on stops the previous note and starts over.
+  /// This is what GS MONO MODE and CC126 mean, and it is all they can reach.
+  SONARE_ARTICULATION_MONO_RETRIGGER = 1,
+  /// One note at a time, carried: a new note-on re-tunes the sounding voice
+  /// instead of starting one, so the exciter and the amplitude envelope never
+  /// restart. This is a wind player's slur, and it is deliberately unreachable
+  /// from a spec-compliant GS file — no standard names it, and reading CC126 as
+  /// this one would change what such a file sounds like.
+  SONARE_ARTICULATION_MONO_LEGATO = 2
+} SonareArticulation;
+
+/// @brief Values in @ref SonareArticulation.
+#define SONARE_ARTICULATION_COUNT 3
+
+/// @brief Sets how one channel of a destination's instrument treats a note-on
+///        while another note on that channel is still held.
+/// @details Control-thread API. Returns SONARE_ERROR_NOT_SUPPORTED for a
+///          destination whose instrument has no articulation of its own, rather
+///          than succeeding quietly: a discarded mode is indistinguishable from
+///          one that took until two notes overlap.
+///
+///          SONARE_ARTICULATION_MONO_LEGATO is a request, not a guarantee. An
+///          engine whose exciter is spent at the onset — anything struck or
+///          plucked — and a target pitch below what the engine's delay line can
+///          hold both fall back to an ordinary note, which
+///          @ref sonare_engine_legato_fallback_count counts.
+SonareError sonare_engine_set_articulation(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                           uint8_t channel, int articulation);
+
+/// @brief Reads back @ref sonare_engine_set_articulation.
+SonareError sonare_engine_articulation(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                       uint8_t channel, int* out_articulation);
+
+/// @brief How many times a legato continuation was asked for and refused, so
+///        the note started a voice of its own instead.
+/// @details Counted rather than inferred: a refusal sounds like an ordinary
+///          note, so nothing in the audio separates "this engine declines
+///          legato" from "the mode was never set". Saturates at UINT32_MAX
+///          rather than wrapping, so a large value stays readable as "at least
+///          this many".
+///
+///          Refuses on the same terms as the two calls above rather than
+///          answering zero: an instrument that never had an articulation has
+///          refused nothing, and a host reading that zero would read it as
+///          "every slur took" — the reading this counter exists to prevent.
+SonareError sonare_engine_legato_fallback_count(SonareRealtimeEngine* engine,
+                                                uint32_t destination_id, uint32_t* out_count);
+
 /// @brief Binds a live MIDI CC to an engine automation parameter.
 /// @details Control-thread API. After binding, @ref sonare_engine_push_midi_cc
 ///          still routes the MIDI event to the destination instrument, and also

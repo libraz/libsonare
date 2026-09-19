@@ -33,7 +33,6 @@
 #include "midi/controller_profile.h"
 #include "midi/instrument.h"
 #include "midi/synth/additive_voice.h"
-#include "midi/synth/articulation.h"
 #include "midi/synth/body_resonator.h"
 #include "midi/synth/bowed_string_voice.h"
 #include "midi/synth/brass_voice.h"
@@ -561,26 +560,26 @@ class NativeSynth final : public MidiInstrument {
     return &controller_profile_;
   }
 
-  /// Sets how @p channel treats a note-on while another note is still held.
-  ///
-  /// Not reachable from a MIDI stream: CC126 names a monophonic mode but not
-  /// this one, and reading it as kMonoLegato would change what a compliant file
-  /// sounds like. A host that wants a slurred wind part asks for it here.
-  void set_articulation(uint8_t channel, ArticulationMode mode) noexcept {
+  /// Always accepted — every engine here has an articulation, including the
+  /// ones that decline to be carried: those answer a slur by counting a
+  /// fallback and playing the note.
+  bool set_articulation(uint8_t channel, ArticulationMode mode) noexcept override {
     channels_[channel & 0x0Fu].articulation = mode;
+    return true;
   }
-  ArticulationMode articulation(uint8_t channel) const noexcept {
-    return channels_[channel & 0x0Fu].articulation;
+  bool articulation(uint8_t channel, ArticulationMode* out) const noexcept override {
+    if (out == nullptr) return false;
+    *out = channels_[channel & 0x0Fu].articulation;
+    return true;
   }
 
-  /// How many times a legato continuation was asked for and refused, so the
-  /// note started a voice of its own instead.
-  ///
-  /// Counted rather than inferred: a refusal sounds like an ordinary note, so
-  /// there is nothing in the audio that separates "the engine declines legato"
-  /// from "the mode was never set". Both a declining engine and a pitch below
-  /// the engine's delay line land here.
-  uint64_t legato_fallback_count() const noexcept { return legato_fallbacks_; }
+  /// Both a declining engine and a pitch below the engine's delay line land
+  /// here.
+  bool legato_fallback_count(uint64_t* out) const noexcept override {
+    if (out == nullptr) return false;
+    *out = legato_fallbacks_;
+    return true;
+  }
 
  private:
   struct ChannelState {

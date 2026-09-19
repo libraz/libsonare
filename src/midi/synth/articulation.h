@@ -1,8 +1,9 @@
 #pragma once
 
 /// @file articulation.h
-/// @brief How a channel treats a second note-on while the first is still held,
-///        and which engines can carry a sounding note into a new pitch.
+/// @brief Which engines can carry a sounding note into a new pitch, and how low
+///        each of them reaches. What a channel does with the second note-on is
+///        midi/articulation_mode.h.
 ///
 /// Legato here is voice continuation rather than an envelope shape: the voice
 /// keeps its exciter, its delay line and its amplitude envelope, and only its
@@ -33,22 +34,6 @@
 #include "midi/synth/reed_voice.h"
 
 namespace sonare::midi::synth {
-
-/// What a channel does with a note-on while another note on the same channel is
-/// still held.
-enum class ArticulationMode : uint8_t {
-  /// Every note-on takes its own voice.
-  kPoly = 0,
-  /// One note at a time; a new note-on stops the previous note and starts over.
-  /// This is what GS MONO MODE and CC126 mean, and it is all they can reach.
-  kMonoRetrigger = 1,
-  /// One note at a time, carried: a new note-on re-tunes the sounding voice
-  /// instead of starting one, so the exciter and the envelope never restart.
-  /// Unreachable from a GS file by design — it is not a mode that standard
-  /// names, and reading CC126 as this one would change what a compliant file
-  /// sounds like.
-  kMonoLegato = 2,
-};
 
 /// Whether an engine can be carried into a new note, and how low it reaches.
 struct EngineLegato {

@@ -192,7 +192,9 @@ typedef enum SONARE_ENUM_BASE {
   /// How a device spells a gesture (@ref SonareControllerInput).
   SONARE_SYNTH_ENUM_CONTROLLER_INPUT = 8,
   /// What a gesture means (@ref SonareControllerAxis).
-  SONARE_SYNTH_ENUM_CONTROLLER_AXIS = 9
+  SONARE_SYNTH_ENUM_CONTROLLER_AXIS = 9,
+  /// What a channel does with an overlapping note-on (@ref SonareArticulation).
+  SONARE_SYNTH_ENUM_ARTICULATION = 10
 } SonareSynthEnumKind;
 
 /// @brief Returns the canonical names for one synth enum separated by '\n'.
