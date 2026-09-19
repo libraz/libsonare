@@ -49,6 +49,11 @@ static_assert(std::size(kControllerInputs) == SONARE_CONTROLLER_INPUT_COUNT,
 static_assert(std::size(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
               "Node ControllerAxis table drifted from C");
 
+// Articulation spellings, shared with the Python and WASM facades.
+constexpr const char* kArticulations[] = {"poly", "mono-retrigger", "mono-legato"};
+static_assert(std::size(kArticulations) == SONARE_ARTICULATION_COUNT,
+              "Node Articulation table drifted from C");
+
 bool ReadControllerBinding(Napi::Env env, const Napi::Value& value, SonareControllerBinding* out) {
   if (!value.IsObject()) {
     Napi::TypeError::New(env, "controller binding must be an object").ThrowAsJavaScriptException();
@@ -274,6 +279,9 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
               "setControllerVelocityMeaningful"),
           InstanceMethod<&RealtimeEngineWrap::ControllerVelocityMeaningful>(
               "controllerVelocityMeaningful"),
+          InstanceMethod<&RealtimeEngineWrap::SetArticulation>("setArticulation"),
+          InstanceMethod<&RealtimeEngineWrap::Articulation>("articulation"),
+          InstanceMethod<&RealtimeEngineWrap::LegatoFallbackCount>("legatoFallbackCount"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiFx>("setMidiFx"),
           InstanceMethod<&RealtimeEngineWrap::ClearMidiFx>("clearMidiFx"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiInputSource>("setMidiInputSource"),
@@ -1161,6 +1169,50 @@ Napi::Value RealtimeEngineWrap::ControllerVelocityMeaningful(const Napi::Callbac
                sonare_engine_controller_velocity_meaningful(engine_, destination_id, &meaningful));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Boolean::New(env, meaningful != 0);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetArticulation(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  uint8_t channel = 0;
+  if (!OptionalMidiByteArg(env, info, 1, "channel", 0, &channel)) return env.Undefined();
+  // Required rather than defaulted, for the reason the C ABI refuses an ordinal
+  // past the enum instead of clamping it: poly substituted for a misspelled
+  // mono-legato plays every note and slurs none of them, which sounds exactly
+  // like a request that took.
+  int articulation = SONARE_ARTICULATION_POLY;
+  if (!sonare_node::SynthEnumValue(env, info[2], kArticulations, SONARE_ARTICULATION_COUNT,
+                                   "articulation", &articulation)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_articulation(engine_, destination_id, channel, articulation));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::Articulation(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  uint8_t channel = 0;
+  if (!OptionalMidiByteArg(env, info, 1, "channel", 0, &channel)) return env.Undefined();
+  int articulation = 0;
+  ThrowIfError(env, sonare_engine_articulation(engine_, destination_id, channel, &articulation));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return sonare_node::SynthEnumName(env, articulation, kArticulations, SONARE_ARTICULATION_COUNT);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::LegatoFallbackCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  uint32_t count = 0;
+  ThrowIfError(env, sonare_engine_legato_fallback_count(engine_, destination_id, &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(count));
   SONARE_NODE_CATCH(env)
 }
 

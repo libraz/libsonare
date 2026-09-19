@@ -36,6 +36,7 @@ export type {
   AnalyzeRhythmOptions,
   AnalyzeSectionsOptions,
   AnalyzeTimbreOptions,
+  Articulation,
   AssignNoteTargetsResult,
   AutomationCurve,
   BeatObservations,
@@ -324,6 +325,7 @@ export type {
   WarpMode,
 } from './types.js';
 export {
+  ARTICULATIONS,
   BUILTIN_SYNTH_WAVEFORMS,
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,

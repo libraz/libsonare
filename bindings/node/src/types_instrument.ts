@@ -190,6 +190,8 @@ export const CONTROLLER_AXES = [
   'vibrato-depth',
 ] as const;
 
+export const ARTICULATIONS = ['poly', 'mono-retrigger', 'mono-legato'] as const;
+
 export interface SynthEnumTables {
   engineModes: string[];
   waveforms: string[];
@@ -201,6 +203,7 @@ export interface SynthEnumTables {
   modDestinations: string[];
   controllerInputs: string[];
   controllerAxes: string[];
+  articulations: string[];
 }
 
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
@@ -379,6 +382,27 @@ export interface ControllerBinding {
   /** Positive exponent shaping the normalized input. Default 1 (linear). */
   curve?: number;
 }
+
+/**
+ * What one MIDI channel of an instrument does with a note-on while another note
+ * on that channel is still held, for {@link RealtimeEngine.setArticulation}.
+ *
+ * - `'poly'` — every note-on takes its own voice.
+ * - `'mono-retrigger'` — one note at a time; a new note-on stops the previous
+ *   note and starts over. This is what GS MONO MODE and CC126 mean, and it is
+ *   all they can reach.
+ * - `'mono-legato'` — one note at a time, carried: a new note-on re-tunes the
+ *   sounding voice instead of starting one, so the exciter and the amplitude
+ *   envelope never restart. This is a wind player's slur, and no MIDI message
+ *   reaches it by design — reading CC126 as this one would change what a
+ *   spec-compliant GS file sounds like.
+ *
+ * `'mono-legato'` is a request, not a guarantee: an engine whose exciter is
+ * spent at the onset — anything struck or plucked — and a target pitch below
+ * what the engine's delay line holds both fall back to an ordinary note, which
+ * {@link RealtimeEngine.legatoFallbackCount} counts.
+ */
+export type Articulation = (typeof ARTICULATIONS)[number];
 
 /**
  * Versioned NativeSynth patch for {@link Project.bounceWithSynthInstrument} /

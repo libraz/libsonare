@@ -126,6 +126,9 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value ControllerBindingCount(const Napi::CallbackInfo& info);
   Napi::Value SetControllerVelocityMeaningful(const Napi::CallbackInfo& info);
   Napi::Value ControllerVelocityMeaningful(const Napi::CallbackInfo& info);
+  Napi::Value SetArticulation(const Napi::CallbackInfo& info);
+  Napi::Value Articulation(const Napi::CallbackInfo& info);
+  Napi::Value LegatoFallbackCount(const Napi::CallbackInfo& info);
   Napi::Value SetMidiFx(const Napi::CallbackInfo& info);
   Napi::Value ClearMidiFx(const Napi::CallbackInfo& info);
   Napi::Value SetMidiInputSource(const Napi::CallbackInfo& info);

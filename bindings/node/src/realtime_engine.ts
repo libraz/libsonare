@@ -1,6 +1,7 @@
 import { closeSync, openSync, readSync } from 'node:fs';
 import { addon } from './native.js';
 import type {
+  Articulation,
   BuiltinSynthConfig,
   ClipPageRequest,
   ControllerBinding,
@@ -948,6 +949,55 @@ export class RealtimeEngine {
 
   controllerVelocityMeaningful(destinationId: number): boolean {
     return this.native.controllerVelocityMeaningful(destinationId);
+  }
+
+  /**
+   * Set how one MIDI channel of the destination's instrument treats a note-on
+   * while another note on that channel is still held (see {@link Articulation}).
+   * The mode is per channel, so slurring one part leaves the rest of the rack
+   * polyphonic.
+   *
+   * The mode is a name from {@link ARTICULATIONS} or its C ordinal, and is
+   * required: an omitted one would mean `'poly'`, which plays every note and
+   * slurs none of them — indistinguishable from a request that took. A channel
+   * above 15 and an out-of-range mode throw rather than being clamped. A
+   * destination with no instrument bound throws `InvalidParameter`; one whose
+   * instrument has no articulation of its own throws `NotSupported`, and the
+   * two are deliberately different answers.
+   */
+  setArticulation(
+    destinationId: number,
+    channel: number,
+    articulation: Articulation | number,
+  ): void {
+    this.native.setArticulation(destinationId, channel, articulation);
+  }
+
+  /**
+   * Read back {@link RealtimeEngine.setArticulation} for one channel. An
+   * ordinal this binding's name table does not cover comes back as the number
+   * itself rather than as a wrong name.
+   */
+  articulation(destinationId: number, channel: number): Articulation | number {
+    return this.native.articulation(destinationId, channel);
+  }
+
+  /**
+   * How many times a `'mono-legato'` continuation was asked for and refused, so
+   * the note started a voice of its own instead. Counted rather than inferred:
+   * a refusal sounds like an ordinary note, so nothing in the audio separates
+   * "this engine declines legato" from "the mode was never set". Saturates at
+   * 2^32 - 1 rather than wrapping.
+   *
+   * Refuses on the same terms as {@link RealtimeEngine.setArticulation} rather
+   * than answering zero: a destination with no instrument bound throws
+   * `InvalidParameter`, and one whose instrument has no articulation of its own
+   * throws `NotSupported`. An instrument that never had an articulation has
+   * refused nothing, and a zero here would read as "every slur took" — the
+   * reading this counter exists to prevent.
+   */
+  legatoFallbackCount(destinationId: number): number {
+    return this.native.legatoFallbackCount(destinationId);
   }
 
   /** Install/replace a live non-destructive MIDI-FX insert for one destination. */

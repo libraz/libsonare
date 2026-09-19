@@ -72,13 +72,11 @@ inline int SynthEnumFromName(const std::string& name, const char* const* names, 
   return -1;
 }
 
-// Reads an enum field that accepts the C ordinal or a name. Returns false with a
-// pending JS RangeError for an unknown name or an ordinal outside [0, count),
-// and a TypeError for a value that is neither a string nor a number.
-inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char* key,
-                              const char* const* names, int count, const char* what, int* out) {
-  Napi::Value value = obj.Get(key);
-  if (value.IsUndefined()) return true;
+// Resolves an enum value that accepts the C ordinal or a name. Returns false
+// with a pending JS RangeError for an unknown name or an ordinal outside
+// [0, count), and a TypeError for a value that is neither a string nor a number.
+inline bool SynthEnumValue(Napi::Env env, const Napi::Value& value, const char* const* names,
+                           int count, const char* what, int* out) {
   if (value.IsString()) {
     const std::string name = value.As<Napi::String>().Utf8Value();
     const int mapped = SynthEnumFromName(name, names, count);
@@ -109,6 +107,23 @@ inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char
   }
   *out = static_cast<int>(number);
   return true;
+}
+
+// Reads an enum field through SynthEnumValue. An absent field leaves @p out at
+// whatever the caller seeded it with.
+inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char* key,
+                              const char* const* names, int count, const char* what, int* out) {
+  const Napi::Value value = obj.Get(key);
+  if (value.IsUndefined()) return true;
+  return SynthEnumValue(env, value, names, count, what, out);
+}
+
+// Spells an enum ordinal as its canonical name, so a value read back out of the
+// C ABI can be handed straight back in. An ordinal past the table stays a number
+// rather than becoming a wrong name.
+inline Napi::Value SynthEnumName(Napi::Env env, int value, const char* const* names, int count) {
+  if (value >= 0 && value < count) return Napi::String::New(env, names[value]);
+  return Napi::Number::New(env, value);
 }
 
 // True when the descriptor carries the key with a usable value. JS absence and
@@ -266,8 +281,7 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
 // canonical names so the object can be passed back verbatim.
 inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& patch) {
   auto enum_name = [&env](int value, const char* const* names, int count) -> Napi::Value {
-    if (value >= 0 && value < count) return Napi::String::New(env, names[value]);
-    return Napi::Number::New(env, value);
+    return SynthEnumName(env, value, names, count);
   };
   Napi::Object out = Napi::Object::New(env);
   out.Set("preset", Napi::String::New(env, patch.preset));

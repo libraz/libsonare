@@ -285,6 +285,8 @@ interface NativeEngine {
     value: unknown,
     renderFrame?: unknown,
   ): void;
+  setArticulation(destinationId: unknown, channel: unknown, articulation: unknown): void;
+  articulation(destinationId: unknown, channel: unknown): unknown;
   pushMidiPanic(renderFrame?: unknown): void;
   pushMidiSysex(destinationId: unknown, bytes: unknown, renderFrame?: unknown): void;
   renderOffline(channels: unknown, blockSize?: unknown, finalize?: unknown): Float32Array[];
@@ -1344,6 +1346,37 @@ const CASES: AbortGuardCase[] = [
       },
       { argument: 'note', call: (e) => e.pushMidiNoteOn(0, 0, 0, 'x', 100) },
       { argument: 'renderFrame', call: (e) => e.pushMidiNoteOn(0, 0, 0, 60, 100, 'now') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setArticulation',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'channel out of byte range',
+        call: (e) => e.setArticulation(0, 300, 'poly'),
+        error: RangeError,
+      },
+      // An unknown NAME is the RangeError; a value that is neither a name nor
+      // an ordinal is the TypeError, and both must land before the C call —
+      // the dummy 0 a failed read yields spells 'poly', which is a mode.
+      {
+        argument: 'articulation name',
+        call: (e) => e.setArticulation(0, 0, 'legato'),
+        error: RangeError,
+      },
+      { argument: 'articulation', call: (e) => e.setArticulation(0, 0, {}) },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.articulation',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'channel out of byte range',
+        call: (e) => e.articulation(0, 300),
+        error: RangeError,
+      },
     ],
   },
   {
