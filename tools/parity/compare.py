@@ -240,6 +240,12 @@ _ALIAS_COVERAGE = {
     "mfcc_to_mel_ex": ("mfcc_to_mel",),
     "spectral_bandwidth_ex": ("spectral_bandwidth",),
     "nnls_chroma_ex": ("nnls_chroma",),
+    # The one _ex here that is NOT folded into its base facade, and deliberately
+    # so: the base returns the intervals alone and the report is a second return
+    # value rather than an option, so folding it would change what every existing
+    # caller of the base gets back. Anchored to the separate facade instead, which
+    # is where the capability is on all three surfaces.
+    "split_silence_common_ex": ("split_silence_common_with_report",),
     # Additive DSP-option variants remain the same public operation on every
     # facade.  The facade method owns the options bag and routes non-default
     # values to the extended C entry point.
