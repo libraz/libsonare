@@ -18,6 +18,17 @@ move between them. Each is a separate instrument or a separate experiment: a
 piano set and a harpsichord set have different takes and different references,
 so they are separate sets rather than one long list, and one server serves both.
 
+WHICH SIDE OF THE COMPARISON IS SOUNDING IS THE PAGE'S FIRST JOB. Each source
+role owns a colour — the library's renders in one, the reference in the other —
+and it holds on the switch, on the banner above the transport, on both pictures
+and on every note the page has taken. One key swaps between the two sides.
+
+WHAT WAS HEARD IS SAID ON THE PAGE. Two answers at a time, in a listener's own
+words rather than in the names of the parameters underneath, and "not sure" is
+always a third. Each note lands as a line of JSON under the scratch root next to
+what was sounding when it was written. Nothing has to be exported, found and
+pasted somewhere, which is the trip most of what gets heard never made.
+
 WHAT IS SOUNDING IS ADDRESSABLE. Every set, take and version has an address —
 `#<set>/<take>/<version>` — which the page rewrites as it is navigated, and the
 per-set form is printed below on startup. A listening report that names the
@@ -55,6 +66,7 @@ any interpreter without an environment.
 from __future__ import annotations
 
 import argparse
+import datetime
 import http.server
 import json
 import os
@@ -63,6 +75,7 @@ import socketserver
 import sys
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from pathlib import Path
@@ -90,6 +103,92 @@ FALLBACK_GLOBS = ("audition/*", "audition", "*/audition")
 #: `make voice-status-refresh` shows the new stages.
 BANK_PATH = REPO_ROOT / "tools" / "voice-status.json"
 
+#: Which slot of the map a page is of, and what its reference was allowed to be.
+#: Both tracked, both read per request and never written into a render: a page
+#: rendered in June is still the page of a slot whose policy moved in September,
+#: and a manifest carrying a copy would say the old answer until somebody spent
+#: an hour of plugin time re-rendering audio that did not change. Same reason
+#: the tier is resolved when `status.py` prints rather than baked into
+#: `voice-status.json`.
+POLICY_PATH = REPO_ROOT / "tools" / "voicematch" / "policy.json"
+CAPTURE_DIR = REPO_ROOT / "tools" / "voicematch" / "capture"
+
+#: The one source class a `machine` timbre axis can be answered by: a slot
+#: naming a sound the machine invented has nothing standing behind it for a
+#: recording to be made of. The rule belongs to
+#: `tests/conformance/check_bank_policy.py`, which counts the slots that break
+#: it; it is spelled again here because this server imports nothing outside the
+#: standard library and the tools tree needs numpy.
+MACHINE_SOURCE = "module"
+
+#: Where the page writes what a listener said, one file of JSON lines per voice.
+#: Under the scratch root rather than in the tree: a listening note is taken
+#: against renders that are themselves untracked, and a note whose subject no
+#: longer exists is worse than no note. Append-only, so two tabs open on two
+#: voices cannot lose each other's lines.
+FEEDBACK_ROOT = SCRATCH_ROOT / "feedback"
+
+#: A listener can hold down a key on a textarea; nothing here needs more room
+#: than a paragraph, and an unbounded read from a local socket is still a way to
+#: fill a disk by accident.
+MAX_FEEDBACK_BYTES = 64 * 1024
+
+
+def feedback_path(set_id: str) -> Path | None:
+    """The log file for a set, or None if the name could not be one.
+
+    Sanitised rather than looked up in `Sets`, because the page is usable
+    against any directory of renders and a set served by something else is still
+    entitled to a log. `..` and an empty name are the two spellings that would
+    escape the directory, and both come back as None.
+    """
+    name = re.sub(r"[^a-zA-Z0-9._-]+", "-", set_id or "").strip("-.")
+    if not name:
+        return None
+    return FEEDBACK_ROOT / f"{name}.jsonl"
+
+
+def read_feedback(path: Path) -> list[dict]:
+    """Every entry in a log, skipping any line that is not one.
+
+    A truncated final line is what a crash mid-append leaves, and dropping it is
+    the whole recovery: the file is a log rather than a document.
+    """
+    try:
+        text = path.read_text()
+    except OSError:
+        return []
+    out: list[dict] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except ValueError:
+            continue
+    return out
+
+
+def append_feedback(path: Path, entry: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def drop_last_feedback(path: Path) -> None:
+    """Undo, which is a rewrite of the file without its last valid entry.
+
+    Offered because a note is sent while the sound is still going and the wrong
+    version is one keystroke away; without it the only fix is editing a file by
+    hand, which nobody does mid-session.
+    """
+    entries = read_feedback(path)
+    if not entries:
+        return
+    body = "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in entries[:-1])
+    path.write_text(body, encoding="utf-8")
+
 
 def read_bank() -> dict:
     """Where every voice in the bank stands, or an empty bank if none is generated.
@@ -103,6 +202,154 @@ def read_bank() -> dict:
         return json.loads(BANK_PATH.read_text())
     except (OSError, ValueError):
         return {"voices": []}
+
+
+def drum_names() -> dict[str, str]:
+    """The GM drum map, note number to instrument name.
+
+    A kit is one part holding forty-odd instruments, so a kit page's "which
+    slot" has a second level the melodic pages do not: the note IS the
+    instrument. Imported from the table the rest of the harness names drums
+    from rather than mirrored here -- a second copy of a map is a copy that
+    disagrees — and empty where this is serving a directory outside the
+    repository, which costs the names and nothing else.
+    """
+    tools = REPO_ROOT / "tools" / "voicematch"
+    if str(tools) not in sys.path:
+        sys.path.append(str(tools))
+    try:
+        from gm_names import GM_DRUM_NAMES
+    except ImportError:
+        return {}
+    return {str(note): name for note, name in GM_DRUM_NAMES.items()}
+
+
+def _read_json(path: Path) -> dict:
+    """A JSON object, or an empty one wherever the file is missing or broken.
+
+    Every caller below is adding context to a page that works without it, so a
+    policy file somebody is midway through editing costs the context rather than
+    the page.
+    """
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def capture_facts(capture_id: str) -> dict:
+    """Where a reference came from, from the definition and its local overlay.
+
+    Two files and the split is deliberate: the tracked definition classifies the
+    source — module, dedicated instrument, or sample library — and the untracked
+    `<id>.local.json` names the product. The class is the fact a listener needs
+    and the identity is the one that may not be committed, so a clone without the
+    overlay still gets told what kind of thing it is hearing.
+    """
+    cfg = _read_json(CAPTURE_DIR / f"{capture_id}.json")
+    if not cfg:
+        return {}
+    local = _read_json(CAPTURE_DIR / f"{capture_id}.local.json")
+    return {
+        "id": capture_id,
+        "label": cfg.get("label") or capture_id,
+        "source_class": cfg.get("source_class") or "",
+        "product": local.get("label") or "",
+        "dry": bool(cfg.get("dry", True)),
+        "room": cfg.get("room") or "",
+    }
+
+
+def wanted_layer(policy: dict, program: int, kit: bool) -> dict:
+    """Which kind of reference this slot is aimed at, and why.
+
+    A kit takes the kit branch whatever its number, because a kit and a melodic
+    voice share the program space and nothing in the number tells them apart —
+    a kit selected by a program some branch also names would otherwise be
+    answered as that melodic voice. Otherwise a branch naming this program wins,
+    and `default` takes everything left.
+    """
+    branches = policy.get("reference_layer")
+    if not isinstance(branches, dict):
+        return {}
+    named = {k: v for k, v in branches.items()
+             if isinstance(v, dict) and not k.startswith("_")}
+    chosen = ""
+    if kit and "kits" in named:
+        chosen = "kits"
+    for name, branch in named.items():
+        if not chosen and program in (branch.get("programs") or []):
+            chosen = name
+    if not chosen:
+        chosen = "default"
+    branch = named.get(chosen)
+    if not branch:
+        return {}
+    return {
+        "branch": chosen,
+        "timbre": branch.get("timbre") or "",
+        "behaviour": branch.get("behaviour") or "",
+        "reason": branch.get("reason") or "",
+    }
+
+
+def provenance(voice: dict, ident: str) -> dict:
+    """Which slot of the map this page is of, and where its reference came from.
+
+    The two are one question. A page names a program and plays a reference, and
+    nothing on it used to say whether that reference is the kind of thing the
+    slot is supposed to be aimed at — so forty slots whose target is the module
+    are auditioned against a sample library's idea of the same sound, which
+    sounds like a finished voice and is a gap. `state` is that comparison:
+
+    `aimed`         the reference answers the layer the policy asks for
+    `off-target`    it cannot — the slot wants the module and this is not it
+    `unclassified`  the capture says nothing about what answered it
+    `declined`      the policy holds this address to have no usable reference
+    `uncaptured`    nothing covers this slot yet
+    """
+    if not isinstance(voice, dict):
+        return {}
+    policy = _read_json(POLICY_PATH)
+    program = voice.get("program")
+    if not isinstance(program, int):
+        return {}
+    kit = bool(voice.get("kit"))
+    want = wanted_layer(policy, program, kit)
+    declined = (policy.get("no_reference") or {}).get(ident)
+    capture = capture_facts(voice.get("capture") or "") if voice.get("capture") else {}
+
+    if capture:
+        cls = capture["source_class"]
+        if not cls:
+            state = "unclassified"
+        elif want.get("timbre") == "machine" and cls != MACHINE_SOURCE:
+            state = "off-target"
+        else:
+            state = "aimed"
+    elif isinstance(declined, dict):
+        state = "declined"
+    else:
+        state = "uncaptured"
+
+    out = {"state": state, "want": want}
+    if kit:
+        # A kit's unit of work is the drum note, not the kit: `bank-versions`
+        # versions each of `d000`-`d127` separately and a verdict on "the kit"
+        # cannot be attributed to any of them.
+        out["drum_names"] = drum_names()
+    if capture:
+        out["capture"] = capture
+    if isinstance(declined, dict):
+        # The address's own name on the machine, which is the one place the GS
+        # map is written down as data rather than as a comment beside a patch.
+        out["declined"] = {
+            "names": declined.get("names") or "",
+            "carries": declined.get("carries") or "",
+            "reason": declined.get("reason") or "",
+        }
+    return out
 
 
 def infer_manifest(root: Path) -> dict:
@@ -334,7 +581,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         if rel in ("", "index.html"):
             return self.app_dir / "index.html"
-        if rel in ("app.js", "style.css"):
+        # The page is ES modules, so its own files are a set rather than two
+        # names: a leaf name with no separator in it cannot leave this
+        # directory, and the file has to already be here.
+        if re.fullmatch(r"[a-z0-9_-]+\.(?:js|css)", rel) and (self.app_dir / rel).is_file():
             return self.app_dir / rel
         root, rest = self._set_and_rest(rel)
         if root is None or not rest:
@@ -358,6 +608,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _query(self) -> dict[str, list[str]]:
+        parts = self.path.split("?", 1)
+        return urllib.parse.parse_qs(parts[1]) if len(parts) > 1 else {}
+
     def do_GET(self) -> None:
         rel = self.path.split("?", 1)[0].lstrip("/")
         if rel == "sets.json":
@@ -369,14 +623,81 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if rel == "bank.json":
             self._json(read_bank())
             return
+        if rel == "feedback.json":
+            path = feedback_path((self._query().get("set") or [""])[0])
+            if path is None:
+                self._json({"entries": [], "path": ""})
+                return
+            self._json({"entries": read_feedback(path), "path": str(path)})
+            return
         root, rest = self._set_and_rest(rel)
         if root is not None and rest == "manifest.json":
-            self._json(read_manifest(root))
+            # Folded in here rather than at render time: what the policy asks of
+            # a slot is a tracked fact that moves on its own, and a manifest
+            # carrying a copy of it would have to be re-rendered to change its
+            # mind. A set served from outside this repository gets no block and
+            # the page drops the line.
+            manifest = read_manifest(root)
+            found = provenance(manifest.get("voice") or {}, rel[2:].split("/", 1)[0])
+            if found:
+                manifest["provenance"] = found
+            self._json(manifest)
             return
         if self._resolve(rel) is None:
             self.send_error(404, "not found")
             return
         super().do_GET()
+
+    def do_POST(self) -> None:
+        """Take one listening note, or undo the last one.
+
+        The page is the only client and it is served from this process, so the
+        body is trusted to be JSON and nothing else is accepted: the endpoint
+        exists so that what somebody heard reaches the tree while they are still
+        hearing it, and every field it stores came off the page's own readouts
+        rather than out of anyone's memory.
+        """
+        if self.path.split("?", 1)[0].lstrip("/") != "feedback":
+            self.send_error(404, "not found")
+            return
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0 or length > MAX_FEEDBACK_BYTES:
+            self.send_error(413, "too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length))
+        except ValueError:
+            self.send_error(400, "not JSON")
+            return
+        if not isinstance(payload, dict):
+            self.send_error(400, "not an object")
+            return
+
+        conditions = payload.get("conditions") or {}
+        set_id = payload.get("set") or conditions.get("set") or ""
+        path = feedback_path(set_id)
+        if path is None:
+            self.send_error(400, "no set")
+            return
+
+        if payload.get("op") == "undo":
+            drop_last_feedback(path)
+        else:
+            append_feedback(path, {
+                "at": datetime.datetime.now(datetime.timezone.utc)
+                      .replace(microsecond=0).isoformat(),
+                # The verdict is kept apart from the finer tag: "recognisably
+                # the instrument and I would still change it" and "this is a
+                # different instrument" are the same `onset/hard` underneath,
+                # and only one of them is a defect.
+                "grade": payload.get("grade") or "",
+                "tag": payload.get("tag") or "",
+                "answers": payload.get("answers") or [],
+                "text": payload.get("text") or "",
+                "lang": payload.get("lang") or "",
+                "conditions": conditions,
+            })
+        self._json({"entries": read_feedback(path), "path": str(path)})
 
     def end_headers(self) -> None:
         # A render is overwritten in place by the next tuning iteration, and a
@@ -445,6 +766,9 @@ def main() -> int:
 
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("127.0.0.1", args.port), Handler) as httpd:
+        # Where the listening notes land, printed whether or not any have been
+        # taken: a log nobody knows the path of is a log nobody reads back.
+        print(f"  notes  {FEEDBACK_ROOT}/<set>.jsonl")
         print(f"  {url}   (ctrl-c to stop)")
         if not args.no_open:
             threading.Timer(0.4, lambda: webbrowser.open(url)).start()

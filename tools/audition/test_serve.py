@@ -201,6 +201,269 @@ def test_an_ordinary_set_is_not_a_probe() -> None:
         assert serve.discover([str(ordinary)]) == [ordinary]
 
 
+def _feedback_in(tmp: str) -> Path:
+    """Point the feedback log at a scratch directory for one test."""
+    root = Path(tmp).resolve() / "feedback"
+    serve.FEEDBACK_ROOT = root
+    return root
+
+
+def _with_feedback_root(fn):
+    def run() -> None:
+        original = serve.FEEDBACK_ROOT
+        try:
+            fn()
+        finally:
+            serve.FEEDBACK_ROOT = original
+    run.__name__ = fn.__name__
+    run.__doc__ = fn.__doc__
+    return run
+
+
+@_with_feedback_root
+def test_feedback_is_one_append_only_file_per_set() -> None:
+    """Two tabs on two voices must not be able to lose each other's lines."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _feedback_in(tmp)
+        violin = serve.feedback_path("p040-violin")
+        flute = serve.feedback_path("p073-flute")
+        serve.append_feedback(violin, {"tag": "onset/hard", "text": "きつい"})
+        serve.append_feedback(flute, {"tag": "tone/dark"})
+        serve.append_feedback(violin, {"tag": "tail/short"})
+
+        got = serve.read_feedback(violin)
+        assert [e["tag"] for e in got] == ["onset/hard", "tail/short"], got
+        # Non-ASCII survives the round trip: the page is bilingual and a note
+        # written in Japanese is the common case rather than the exotic one.
+        assert got[0]["text"] == "きつい", got
+        assert [e["tag"] for e in serve.read_feedback(flute)] == ["tone/dark"]
+
+
+@_with_feedback_root
+def test_feedback_undo_drops_only_the_last_entry() -> None:
+    """A note is sent while the sound is still going and the wrong version is
+    one keystroke away, so undo has to be exact rather than a truncation."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _feedback_in(tmp)
+        path = serve.feedback_path("p040-violin")
+        for tag in ("off/unsure", "onset/hard", "tone/bright"):
+            serve.append_feedback(path, {"tag": tag})
+        serve.drop_last_feedback(path)
+        assert [e["tag"] for e in serve.read_feedback(path)] == ["off/unsure", "onset/hard"]
+        serve.drop_last_feedback(path)
+        serve.drop_last_feedback(path)
+        assert serve.read_feedback(path) == []
+        # An undo on an empty log is a no-op rather than an error: the button is
+        # on screen before anything has been sent.
+        serve.drop_last_feedback(path)
+        assert serve.read_feedback(path) == []
+
+
+@_with_feedback_root
+def test_a_set_name_cannot_write_outside_the_feedback_directory() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = _feedback_in(tmp)
+        # The invariant is containment, not refusal: a name that sanitises to
+        # something is written under the directory, and one that sanitises to
+        # nothing is refused. Either way nothing lands elsewhere.
+        for name in ("", "..", "../..", "/etc/passwd", "...", "./.",
+                     "../p040-violin", "p040-violin", "a/b/c"):
+            got = serve.feedback_path(name)
+            assert got is None or got.parent == root, (name, got)
+        for empty in ("", "..", "...", "./.", "///"):
+            assert serve.feedback_path(empty) is None, empty
+        assert serve.feedback_path("p040-violin") == root / "p040-violin.jsonl"
+
+
+@_with_feedback_root
+def test_a_truncated_line_does_not_take_the_log_down() -> None:
+    """What a crash mid-append leaves. The file is a log, not a document."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _feedback_in(tmp)
+        path = serve.feedback_path("p040-violin")
+        serve.append_feedback(path, {"tag": "onset/hard"})
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write('{"tag": "tone/br')
+        assert [e["tag"] for e in serve.read_feedback(path)] == ["onset/hard"]
+
+
+def test_every_module_the_page_loads_is_servable() -> None:
+    """The page is ES modules, so a file the resolver does not know about is a
+    blank page rather than a missing style: the import throws before anything
+    on it runs."""
+    handler = serve.Handler.__new__(serve.Handler)
+    modules = sorted(p.name for p in serve.APP_DIR.glob("*.js"))
+    assert len(modules) >= 4, modules
+    for name in modules + ["style.css", "index.html", ""]:
+        assert handler._resolve(name) == serve.APP_DIR / (name or "index.html"), name
+    for bad in ("../serve.py", "sub/dir.js", "serve.py", "nope.js"):
+        assert handler._resolve(bad) is None, bad
+
+
+def _with_bank_files(fn):
+    """Point the policy and the capture definitions at a scratch tree."""
+    def wrapped() -> None:
+        policy, captures = serve.POLICY_PATH, serve.CAPTURE_DIR
+        try:
+            fn()
+        finally:
+            serve.POLICY_PATH, serve.CAPTURE_DIR = policy, captures
+    wrapped.__name__ = fn.__name__
+    wrapped.__doc__ = fn.__doc__
+    return wrapped
+
+
+#: A policy with one machine-defined program, one kit branch and one declined
+#: address — the three branches that are not the default.
+_POLICY = {
+    "reference_layer": {
+        "_": "prose the reader skips",
+        "default": {"timbre": "instrument", "behaviour": "instrument",
+                    "reason": "names a real instrument"},
+        "machine_defined": {"timbre": "machine", "behaviour": "machine",
+                            "programs": [81], "reason": "the machine invented it"},
+        "kits": {"timbre": "instrument", "behaviour": "machine",
+                 "reason": "real drums, the machine's relations"},
+    },
+    "no_reference": {
+        "p000b016-acoustic-grand-piano": {
+            "names": "Piano 1d", "carries": "European Pf",
+            "reason": "the recordings hold a different instrument at this address"},
+    },
+}
+
+
+def _bank_files(tmp: Path, captures: dict[str, dict]) -> None:
+    """Write a policy and a capture directory, and point the server at them."""
+    serve.POLICY_PATH = tmp / "policy.json"
+    serve.POLICY_PATH.write_text(json.dumps(_POLICY), encoding="utf-8")
+    serve.CAPTURE_DIR = tmp / "capture"
+    serve.CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+    for name, body in captures.items():
+        (serve.CAPTURE_DIR / f"{name}.json").write_text(json.dumps(body), encoding="utf-8")
+
+
+@_with_bank_files
+def test_a_machine_defined_slot_wants_the_module_and_says_when_it_did_not_get_it() -> None:
+    """The gap this line exists for.
+
+    A slot naming a sound the machine invented has nothing outside the machine
+    to be recorded, so a sample library's idea of it is a substitute rather than
+    a target -- and it sounds exactly like a finished voice, which is why the
+    page has to say so rather than leave it to be remembered.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        _bank_files(Path(tmp), {
+            "lead_saw": {"label": "Lead 2", "source_class": "library"},
+            "lead_saw_hw": {"label": "Lead 2", "source_class": "module"},
+            "violin": {"label": "Violin", "source_class": "library"},
+        })
+        off = serve.provenance({"program": 81, "capture": "lead_saw"}, "p081-lead")
+        assert off["state"] == "off-target", off
+        assert off["want"]["timbre"] == "machine", off
+
+        module = serve.provenance({"program": 81, "capture": "lead_saw_hw"}, "p081-lead")
+        assert module["state"] == "aimed", module
+
+        # The same source class on a slot that names a real instrument is
+        # exactly what the policy asks for. Without this the test would pass on
+        # a resolver that called every library capture off-target.
+        instrument = serve.provenance({"program": 40, "capture": "violin"}, "p040-violin")
+        assert instrument["state"] == "aimed", instrument
+        assert instrument["want"]["timbre"] == "instrument", instrument
+
+
+@_with_bank_files
+def test_a_kit_takes_the_kit_branch_whatever_number_selects_it() -> None:
+    """A kit and a melodic voice share the program space.
+
+    Nothing in the number tells them apart, so a kit selected by a program some
+    other branch names would be answered as that melodic voice -- and a kit is
+    the one entry whose two axes differ, colour from a recording and ring from
+    the machine.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        _bank_files(Path(tmp), {"drums": {"label": "kit", "source_class": "library"}})
+        kit = serve.provenance({"program": 81, "kit": True, "capture": "drums"},
+                               "kit081-whatever")
+        assert kit["want"]["branch"] == "kits", kit
+        assert kit["state"] == "aimed", kit
+
+
+@_with_bank_files
+def test_an_address_held_to_have_no_reference_is_not_one_nobody_captured() -> None:
+    """Two silences that mean opposite things.
+
+    One is work nobody has done and the other is a decision: the recordings
+    hold a different instrument at that address, so there is nothing to capture
+    and the page should not read as though a capture is owed.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        _bank_files(Path(tmp), {})
+        declined = serve.provenance({"program": 0, "bank": 16},
+                                    "p000b016-acoustic-grand-piano")
+        assert declined["state"] == "declined", declined
+        assert declined["declined"]["names"] == "Piano 1d", declined
+
+        missing = serve.provenance({"program": 7}, "p007-clavi")
+        assert missing["state"] == "uncaptured", missing
+        assert "declined" not in missing, missing
+
+
+@_with_bank_files
+def test_the_product_is_read_from_the_overlay_and_the_class_from_the_definition() -> None:
+    """The split the capture files are in two halves for.
+
+    A clone without the untracked overlay has to be told what KIND of source it
+    is hearing -- that is the fact a listener needs -- while the product's name
+    is the one that may not be committed.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        _bank_files(tmp_path, {"violin": {"label": "Violin, sampled",
+                                          "source_class": "library", "room": "none"}})
+        bare = serve.capture_facts("violin")
+        assert bare["source_class"] == "library", bare
+        assert bare["product"] == "", bare
+        assert bare["room"] == "none", bare
+
+        (serve.CAPTURE_DIR / "violin.local.json").write_text(
+            json.dumps({"label": "Some Sampler 9"}), encoding="utf-8")
+        assert serve.capture_facts("violin")["product"] == "Some Sampler 9"
+
+        # An unclassified capture is its own state rather than a quiet pass:
+        # a definition that says nothing cannot be compared with the policy.
+        _bank_files(tmp_path, {"mystery": {"label": "?"}})
+        assert serve.provenance({"program": 81, "capture": "mystery"},
+                                "p081-lead")["state"] == "unclassified"
+
+
+def test_every_capture_this_tree_holds_resolves_to_a_state() -> None:
+    """Against the real policy and the real definitions, not a fixture.
+
+    The resolver reads two tracked files it does not own, and a key renamed in
+    either of them fails by returning nothing rather than by raising -- which
+    on the page is a line that quietly stops appearing.
+    """
+    states = {"aimed", "off-target", "unclassified", "declined", "uncaptured"}
+    seen = set()
+    definitions = sorted(p for p in serve.CAPTURE_DIR.glob("*.json")
+                         if not p.name.endswith(".local.json"))
+    assert len(definitions) >= 100, len(definitions)
+    for path in definitions:
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+        program = cfg.get("program")
+        if not isinstance(program, int):
+            continue
+        got = serve.provenance({"program": program, "capture": path.stem}, path.stem)
+        assert got.get("state") in states, (path.stem, got)
+        assert got.get("want", {}).get("timbre"), (path.stem, got)
+        seen.add(got["state"])
+    # Every capture landing in one bucket would satisfy the loop above while
+    # saying nothing, and the two that matter are the two that differ.
+    assert {"aimed", "off-target"} <= seen, seen
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
@@ -208,9 +471,13 @@ def _run_all() -> int:
         try:
             t()
             print(f"ok   {t.__name__}")
-        except AssertionError as e:
+        # Any exception, not just a failed assertion: a test that reaches for a
+        # key a file stopped carrying raises, and catching only AssertionError
+        # ends the whole run with no line saying which test it was.
+        except Exception as e:  # noqa: BLE001
             failed += 1
-            print(f"FAIL {t.__name__}: {e}")
+            print(f"FAIL {t.__name__}: {type(e).__name__}: {e}"
+                  if not isinstance(e, AssertionError) else f"FAIL {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     return 1 if failed else 0
 

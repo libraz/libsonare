@@ -1,21 +1,41 @@
-/* A measurement bench: hairlines and columns rather than boxes and cards, one
-   accent that means signal and one that means attention, and no decoration at
-   all. Data is set in the monospace so 188 rows align into columns the eye can
-   run down; the sans is for prose only. */
+/* A measurement bench: hairlines and columns rather than boxes and cards, no
+   decoration at all, and data set in the monospace so 188 rows align into
+   columns the eye can run down. The sans is for prose only.
+
+   ONE COLOUR PER ROLE, AND IT IS THE PAGE'S ONLY STRONG COLOUR. Teal is what
+   the library produced and amber is what it is being measured against, and the
+   pair holds everywhere: the dot on a button, the block a version sits in, the
+   trace on the waveform, the ramp the spectrogram is painted with, the banner
+   above the transport and the chip on a listening note. Nothing else on the
+   page may use either of them for anything else, which is why "needs
+   attention" is a red and not the sand it used to be — the sand became a
+   meaning. */
 
 :root {
   --bg: #101216;
   --panel: #171a20;
   --panel-2: #1e222a;
+  --panel-3: #232833;
   --line: #282d36;
   --line-soft: #1f232b;
   --ink: #dbe0e8;
   --ink-dim: #7f8899;
   --ink-faint: #59616e;
-  --accent: #64c0a4;
+
+  /* The two sides of every comparison. Kept as components as well as colours:
+     the canvases take numbers and everything else takes a custom property, and
+     two spellings of one colour is how they came to disagree. */
+  --role-model-rgb: 94 199 168;
+  --role-reference-rgb: 226 163 63;
+  --role-other-rgb: 133 141 155;
+  --role-model: rgb(94 199 168);
+  --role-reference: rgb(226 163 63);
+  --role-other: rgb(133 141 155);
+
+  --accent: var(--role-model);
   --accent-ink: #0c1512;
   --fm: #7fa3cc;
-  --warn: #d8a15f;
+  --warn: #e0795f;
 
   /* Ordered single hue, dark to bright: further along the ladder reads as
      brighter without asking anyone to decode a hue. */
@@ -23,11 +43,14 @@
   --s1: #3d5a56;
   --s2: #467a6b;
   --s3: #519c82;
-  --s4: #64c0a4;
+  --s4: #5ec7a8;
   --s5: #a9e4ce;
 
   --sans: "SF Pro Text", -apple-system, BlinkMacSystemFont,
           "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --sans-cjk: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+              "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI",
+              "Meiryo", system-ui, sans-serif;
   --mono: "SF Mono", ui-monospace, SFMono-Regular, "JetBrains Mono",
           "IBM Plex Mono", Menlo, Consolas, monospace;
 
@@ -35,7 +58,16 @@
   --tint-line: color-mix(in srgb, var(--accent) 28%, var(--line));
   --warn-tint: color-mix(in srgb, var(--warn) 11%, var(--panel));
   --warn-line: color-mix(in srgb, var(--warn) 34%, var(--line));
+
+  /* Whatever role the element is in. Anything that wants "this thing's colour"
+     reads these, so a block, its dot and its selected button cannot drift. */
+  --role: var(--role-other);
+  --role-rgb: var(--role-other-rgb);
 }
+
+.role-model { --role: var(--role-model); --role-rgb: var(--role-model-rgb); }
+.role-reference { --role: var(--role-reference); --role-rgb: var(--role-reference-rgb); }
+.role-other { --role: var(--role-other); --role-rgb: var(--role-other-rgb); }
 
 * { box-sizing: border-box; }
 
@@ -48,9 +80,13 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The column is clamped, not `auto`: an auto track is sized to its widest item's
-   max-content, so one long path in the identity strip widens the whole page and
-   the header stretches with it. */
+/* Japanese needs the looser leading and the CJK stack; the numbers stay in the
+   monospace either way, so a column does not move when the language does. */
+body.lang-ja { font-family: var(--sans-cjk); line-height: 1.7; }
+
+/* The column is clamped, not `auto`: an auto track is sized to its widest
+   item's max-content, so one long path in the identity strip widens the whole
+   page and the header stretches with it. */
 body {
   display: grid;
   grid-template-rows: auto auto 1fr;
@@ -74,19 +110,23 @@ body {
   color: var(--ink-faint);
 }
 
+body.lang-ja .lab { letter-spacing: 0.04em; text-transform: none; font-size: 11px; }
+
 .hint {
   margin: 0 0 8px;
   font-size: 12px;
   color: var(--ink-dim);
-  max-width: 72ch;
+  max-width: 78ch;
 }
+
+.hint:empty { display: none; }
 
 /* ---- header ---- */
 
 header {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   padding: 9px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
@@ -120,7 +160,10 @@ h1 {
   letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--ink-faint);
+  white-space: nowrap;
 }
+
+body.lang-ja .pick-lab { letter-spacing: 0.04em; text-transform: none; font-size: 11px; }
 
 select {
   padding: 5px 9px;
@@ -163,20 +206,22 @@ select:hover { border-color: var(--ink-faint); }
 
 .head-stage:empty { display: none; }
 
-/* ---- options ---- */
+/* ---- sheets: options and keys ---- */
 
-.options {
+/* Both drop out of the header and neither is part of the listening surface, so
+   they share one shape instead of each inventing a panel. */
+.sheet {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 10px 32px;
   padding: 15px 16px 17px;
   border-bottom: 1px solid var(--line);
   background: var(--panel-2);
 }
 
-.options[hidden] { display: none; }
+.sheet[hidden] { display: none; }
 
-.options h2 {
+.sheet h2 {
   margin: 0 0 8px;
   font-size: 10px;
   font-weight: 600;
@@ -184,6 +229,10 @@ select:hover { border-color: var(--ink-faint); }
   text-transform: uppercase;
   color: var(--ink-faint);
 }
+
+body.lang-ja .sheet h2 { letter-spacing: 0.04em; text-transform: none; font-size: 11px; }
+
+.sheet-close { display: flex; align-items: flex-start; justify-content: flex-end; }
 
 .opt-col { min-width: 0; }
 .opt-col.wide { grid-column: span 2; }
@@ -200,13 +249,12 @@ select:hover { border-color: var(--ink-faint); }
 }
 
 .opt-col input { accent-color: var(--accent); margin: 0; }
-.opt-col button { margin-top: 10px; }
 
 .keys {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 4px 10px;
-  margin: 0;
+  margin: 0 0 8px;
   font-size: 12px;
   color: var(--ink-dim);
 }
@@ -217,7 +265,7 @@ select:hover { border-color: var(--ink-faint); }
 
 main {
   display: grid;
-  grid-template-columns: 244px minmax(0, 1fr);
+  grid-template-columns: 252px minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -241,7 +289,10 @@ nav .group {
 }
 
 nav button {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 9px;
+  grid-template-rows: auto auto;
+  column-gap: 9px;
   width: 100%;
   text-align: left;
   padding: 6px 15px;
@@ -264,10 +315,20 @@ nav button[aria-current="true"] {
   font-weight: 600;
 }
 
+.take-name {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* One line, clipped. The id leads it because that is what a link carries; an
    entry that grows to three lines stops being a list you can scan. */
 nav .sub {
-  display: block;
+  grid-column: 1;
+  grid-row: 2;
   color: var(--ink-faint);
   font-size: 11px;
   font-family: var(--mono);
@@ -275,6 +336,19 @@ nav .sub {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A take that holds a reference is the one worth opening first, and on a voice
+   where only some takes were captured there is otherwise no way to see which. */
+.take-ref {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  justify-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--role-reference);
 }
 
 #stage {
@@ -285,8 +359,7 @@ nav .sub {
 }
 
 /* The console: what is sounding, the switch, and the transport, in one block
-   that stays put. The switch and the play button are the listening loop and
-   they were four hundred pixels apart with two canvases between them. */
+   that stays put. The switch and the play button are the listening loop. */
 .console {
   position: sticky;
   top: 0;
@@ -302,8 +375,109 @@ nav .sub {
 .stage-body {
   display: flex;
   flex-direction: column;
-  gap: 13px;
-  padding: 14px 16px 22px;
+  gap: 16px;
+  padding: 14px 16px 26px;
+}
+
+/* ---- which slot, and where its reference came from ---- */
+
+/* One quiet line above the banner. It is true of the whole page rather than of
+   what is sounding, so it is typographic rather than boxed: the banner below is
+   the only tinted block in the console and stays the thing the eye lands on. */
+.subject {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 18px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.subject:empty { display: none; }
+
+.subj {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.subj .dot { align-self: center; background: var(--role); }
+
+/* The one label on this line that is about a side of the comparison takes that
+   side's colour, so the reference half is recognisable before it is read. */
+.subj-ref .lab { color: var(--role); }
+
+.subj-key { color: var(--ink); }
+.subj-key.dim { color: var(--ink-dim); }
+
+.subj-more {
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The separator rides on the item rather than sitting between two of them, so a
+   wrapped line never starts with a dangling dot. */
+.subj-more::before {
+  content: "·";
+  margin-right: 7px;
+  color: var(--ink-faint);
+}
+
+.subj .badge { font-size: 10px; }
+
+/* Two facts in one badge when they disagree: what the slot is aimed at, and
+   that this is not it. Apart they read as two unrelated chips. */
+.badge-why {
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid var(--warn-line);
+}
+
+/* ---- what is sounding ---- */
+
+/* The banner. A full border plus a tint of the role's colour, never a stripe
+   down one side: the straight edge of a stripe fights the rounded corner. */
+.now-role {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--role) 34%, var(--line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--role) 9%, var(--panel));
+}
+
+.now-role:empty { display: none; }
+
+.now-role .dot {
+  align-self: center;
+  width: 9px;
+  height: 9px;
+  background: var(--role);
+}
+
+.now-what {
+  flex: none;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--role);
+}
+
+.now-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--ink-dim);
 }
 
 /* ---- identity strip ---- */
@@ -327,7 +501,7 @@ nav .sub {
 }
 
 .crumbs .sep { color: var(--ink-faint); }
-.crumbs .now { color: var(--accent); font-weight: 600; }
+.crumbs .now { color: var(--ink); font-weight: 600; }
 
 /* Yields long before the breadcrumbs do: the path is a detail anyone can widen
    the window for, and the crumbs are what says which render is sounding. */
@@ -344,6 +518,22 @@ nav .sub {
   text-align: left;
 }
 
+/* One key for the comparison the page exists for. Coloured for where it goes
+   rather than for where it is: it is the other side, offered. */
+.swap {
+  flex: none;
+  padding: 5px 12px;
+  border: 1px solid color-mix(in srgb, var(--role) 40%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--role) 12%, var(--panel));
+  color: var(--role);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.swap:hover { background: var(--role); color: var(--accent-ink); border-color: var(--role); }
+.swap[hidden] { display: none; }
+
 /* ---- version switch ---- */
 
 .versions {
@@ -354,7 +544,7 @@ nav .sub {
 
 .vrow {
   display: grid;
-  grid-template-columns: 68px 1fr;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -364,65 +554,62 @@ nav .sub {
 .vrow.unlabelled { grid-template-columns: minmax(0, 1fr); }
 
 .vrow > .role {
-  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  text-align: right;
+  color: var(--role);
+  white-space: nowrap;
+  overflow: hidden;
 }
 
+.vrow > .role .dot { background: var(--role); }
+
+/* Bordered in the role's own colour, so a block of buttons says which side of
+   the comparison it belongs to before any of them is pressed. */
 .segmented {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: 1px;
-  background: var(--line);
-  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--role) 26%, var(--line));
+  border: 1px solid color-mix(in srgb, var(--role) 26%, var(--line));
   border-radius: 5px;
   overflow: hidden;
   min-width: 0;
 }
 
 .segmented button {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 7px;
   padding: 7px 10px;
   border: 0;
   border-radius: 0;
-  background: var(--panel);
-  color: var(--ink-dim);
+  background: color-mix(in srgb, var(--role) 7%, var(--panel));
+  color: color-mix(in srgb, var(--role) 55%, var(--ink-dim));
   font: inherit;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   min-width: 0;
   transition: background 110ms ease, color 110ms ease;
 }
 
-.segmented button:hover { background: var(--panel-2); color: var(--ink); }
+.segmented button:hover {
+  background: color-mix(in srgb, var(--role) 16%, var(--panel));
+  color: var(--role);
+}
 
 .segmented button[aria-pressed="true"] {
-  background: var(--accent);
+  background: var(--role);
   color: var(--accent-ink);
   font-weight: 600;
 }
 
-.segmented .key {
-  font-family: var(--mono);
-  opacity: 0.55;
-  margin-right: 7px;
-}
-
-.detail {
-  margin: 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--ink-faint);
-  word-break: break-word;
-}
-
-.detail:empty { display: none; }
+.segmented .key { font-family: var(--mono); opacity: 0.55; flex: none; }
+.segmented .vname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- canvases ---- */
 
@@ -443,11 +630,19 @@ canvas {
 #wave { height: 142px; }
 #spec { height: 212px; }
 
-figcaption {
-  margin-top: 5px;
+.cap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
   font-size: 11px;
   color: var(--ink-faint);
 }
+
+.legend-row { display: flex; gap: 12px; }
+
+.wl { display: inline-flex; align-items: center; gap: 6px; color: var(--role); }
+.wl .dot { background: var(--role); }
 
 /* ---- transport ---- */
 
@@ -455,6 +650,7 @@ figcaption {
   display: flex;
   align-items: center;
   gap: 11px;
+  flex-wrap: wrap;
 }
 
 button {
@@ -469,6 +665,7 @@ button {
 }
 
 button:hover { border-color: var(--ink-faint); }
+button:disabled { opacity: 0.4; cursor: default; }
 
 button[aria-pressed="true"] {
   background: var(--accent);
@@ -487,44 +684,199 @@ button.ghost {
 
 button.ghost:hover { border-color: var(--line); color: var(--ink); }
 button.ghost[aria-expanded="true"] { background: var(--panel-2); color: var(--ink); }
+button.ghost[hidden] { display: none; }
 
-.play { min-width: 74px; font-weight: 600; }
+.play { min-width: 84px; font-weight: 600; }
 
 .mono { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+.mono:empty { display: none; }
 
-/* ---- per-take notes ---- */
+/* ---- feedback ---- */
 
-details {
+/* On the surface rather than behind a menu. A report that has to be remembered,
+   exported and pasted somewhere is a report that mostly does not get made. */
+.fb {
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--panel);
+  padding: 14px 16px 16px;
 }
 
-summary {
-  padding: 7px 12px;
+.fb-head h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fb-ask {
+  margin: 12px 0 14px;
+  padding: 13px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.fb-trail-row { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+
+.fb-trail {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.fb-step { color: var(--ink); }
+.fb-sep { color: var(--ink-faint); }
+
+.fb-q {
+  margin: 6px 0 12px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.fb-q[hidden] { display: none; }
+
+/* Equal width, always. Three answers with labels of different lengths read as
+   three different weights of answer, and "not sure" is not a lesser one. */
+.fb-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fb-choice {
+  padding: 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.fb-choice:hover { border-color: var(--accent); background: var(--tint); }
+.fb-unsure { color: var(--ink-dim); }
+.fb-unsure:hover { border-color: var(--ink-faint); background: var(--panel-2); }
+
+.fb-comment { display: block; }
+.fb-comment .lab { display: block; margin-bottom: 6px; }
+
+textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+.fb-send-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 11px;
+  flex-wrap: wrap;
+}
+
+.fb-attach {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-size: 12px;
   color: var(--ink-dim);
   cursor: pointer;
   user-select: none;
 }
 
-summary:hover { color: var(--ink); }
+.fb-attach input { accent-color: var(--accent); margin: 0; }
 
-textarea {
-  display: block;
-  width: 100%;
-  min-height: 72px;
-  resize: vertical;
-  padding: 9px 11px;
-  border: 0;
-  border-top: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
+.fb-status { font-size: 12px; color: var(--ink-dim); }
+.fb-status.bad { color: var(--warn); }
+
+.send {
+  min-width: 96px;
+  border-color: var(--tint-line);
+  background: var(--tint);
+  color: var(--accent);
+  font-weight: 600;
 }
 
+.send:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+.fb-log { margin-top: 18px; padding-top: 13px; border-top: 1px solid var(--line); }
+.fb-log-head { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+
+.fb-entry {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.fb-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.fb-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--role) 34%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--role) 10%, var(--panel));
+  color: var(--role);
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.fb-who .dot { background: var(--role); }
+
+/* The verdict, in the same three weights the rest of the page uses: the voice
+   is fine, the voice is liveable, the voice is a defect. */
+.fb-grade {
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex: none;
+}
+
+.fb-grade.good { color: var(--role-model); }
+.fb-grade.mid { color: var(--role-reference); }
+.fb-grade.bad { color: var(--warn); }
+
+.fb-take { font-family: var(--mono); }
+.fb-when { font-family: var(--mono); }
+
+.fb-said { margin: 6px 0 0; font-size: 13px; color: var(--ink); }
+.fb-text { margin: 4px 0 0; font-size: 13px; color: var(--ink-dim); white-space: pre-wrap; }
+
+.fb-tag {
+  display: inline-block;
+  margin-top: 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+
+.fb-where { margin: 10px 0 0; font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); }
+.fb-where:empty { display: none; }
+
 textarea:focus, button:focus-visible, nav button:focus-visible,
-select:focus-visible, summary:focus-visible, input:focus-visible {
+select:focus-visible, input:focus-visible, #bankRows:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
@@ -547,6 +899,10 @@ kbd {
    ordinary state for anyone without the commercial plugin the reference side
    is captured from, so it is a supported layout and not a degraded one. */
 body.no-compare .compare-only { display: none; }
+
+/* Blind mode is the page withholding an answer, so the legend that gives it
+   away comes off with the names. */
+body.blind-on .legend-row { display: none; }
 
 /* ---- view toggle ---- */
 
@@ -580,9 +936,11 @@ body.no-compare .compare-only { display: none; }
   font-weight: 600;
 }
 
+.lang button { font-size: 11.5px; padding: 4px 10px; }
+
 body.bank-view main,
 body.bank-view .listen-only,
-body.bank-view .options { display: none; }
+body.bank-view #options { display: none; }
 
 /* Two children left in flow, and the table takes the rest of the window: the
    toolbar has to stay put over 188 rows. */
@@ -684,13 +1042,7 @@ body:not(.bank-view) .bank { display: none; }
   color: var(--ink);
 }
 
-.skey .dot {
-  width: 7px;
-  height: 7px;
-  flex: none;
-  border-radius: 50%;
-  align-self: center;
-}
+.skey .dot { width: 7px; height: 7px; align-self: center; }
 
 .skey .n { font-family: var(--mono); font-weight: 600; color: var(--ink); }
 .skey .z { color: var(--ink-faint); font-weight: 400; }
@@ -712,14 +1064,16 @@ body:not(.bank-view) .bank { display: none; }
 .bank-bar .pick.grow { min-width: 13rem; }
 
 /* Four options and a primary picker, so the segments are equal-width: a
-   segmented control whose width tracks its labels reads as unfinished. */
+   segmented control whose width tracks its labels reads as unfinished, and the
+   labels are a different length in each language. */
 .seg4 {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: 1px;
-  width: 372px;
-  flex: none;
+  width: 100%;
+  max-width: 448px;
+  flex: 1 1 280px;
   background: var(--line);
   border: 1px solid var(--line);
   border-radius: 5px;
@@ -746,7 +1100,7 @@ body:not(.bank-view) .bank { display: none; }
   font-weight: 600;
 }
 
-.chips { display: flex; gap: 6px; flex: none; }
+.chips { display: flex; gap: 6px; flex: none; flex-wrap: wrap; }
 
 .chip {
   padding: 4px 10px;
@@ -780,8 +1134,6 @@ body:not(.bank-view) .bank { display: none; }
 
 /* ---- bank body: table beside an inspector that is always there ---- */
 
-/* The inspector holds the legend when nothing is selected, so selecting a row
-   never resizes the table beside it. */
 .bank-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 336px;
@@ -819,6 +1171,8 @@ body:not(.bank-view) .bank { display: none; }
   text-transform: uppercase;
   color: var(--ink-faint);
 }
+
+body.lang-ja .bank-cols { letter-spacing: 0.04em; text-transform: none; font-size: 11px; }
 
 /* The addresses are right-aligned so the three digits stack; the label follows
    them rather than the column's left edge. */
@@ -917,8 +1271,7 @@ body:not(.bank-view) .bank { display: none; }
 .dot.classic { background: var(--line); box-shadow: inset 0 0 0 1px var(--ink-faint); }
 
 /* Five segments, the shape the CLI table prints, so a number quoted from one is
-   recognisable in the other. The fill is the row's own stage colour, which is
-   what ties it to the chip it was filtered by. */
+   recognisable in the other. */
 .stage {
   display: flex;
   align-items: center;
@@ -945,7 +1298,7 @@ body:not(.bank-view) .bank { display: none; }
 .oracle {
   font-family: var(--mono);
   font-size: 11.5px;
-  color: var(--accent);
+  color: var(--role-reference);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1095,4 +1448,11 @@ body:not(.bank-view) .bank { display: none; }
   .bank-body { grid-template-columns: minmax(0, 1fr); }
   .inspect { display: none; }
   .bank-head { flex-wrap: wrap; gap: 16px 26px; }
+}
+
+@media (max-width: 860px) {
+  main { grid-template-columns: 200px minmax(0, 1fr); }
+  .fb-choices { grid-template-columns: minmax(0, 1fr); }
+  .vrow { grid-template-columns: minmax(0, 1fr); }
+  .vrow > .role { justify-content: flex-start; }
 }
