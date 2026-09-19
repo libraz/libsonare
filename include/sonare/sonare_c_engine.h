@@ -905,8 +905,9 @@ static_assert(sizeof(SonareControllerBinding) == 16, "SonareControllerBinding la
 #endif
 
 /// @brief Returns the controller-profile preset names separated by '\n'.
-/// @details Pointer is owned by libsonare and valid for the program lifetime;
-///          the caller must NOT free it. Never NULL.
+/// @details Pointer is owned by libsonare and remains valid for the program
+///          lifetime; the caller must NOT free it. Never NULL: a build without
+///          arrangement support returns the empty string.
 const char* sonare_controller_profile_names(void);
 
 /// @brief Replaces the instrument's controller profile with a named preset.
