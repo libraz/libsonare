@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -12,6 +13,7 @@
 #include "c_api/midi_fx_json.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"
+#include "midi/articulation_mode.h"
 #include "midi/controller_profile.h"
 #include "midi/midi_fx.h"
 #include "realtime_engine_wasm.h"
@@ -38,18 +40,26 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
-// The destination's current profile. WASM does not link the controller C-ABI
-// unit, so sonare_c_engine_controller.cpp's two failures are reproduced here:
-// InvalidParameter for a destination nothing is bound to, NotImplemented (the
-// C ABI's NOT_SUPPORTED) for a bound instrument that holds no profile.
-sonare::midi::ControllerProfile wasmControllerProfile(const sonare::engine::RealtimeEngine& engine,
-                                                      uint32_t destination_id) {
+// The destination's bound instrument. WASM links neither the controller nor the
+// engine-MIDI C-ABI unit, so their shared first refusal is reproduced here:
+// InvalidParameter for a destination nothing is bound to, which every entry
+// below has to keep apart from the instrument's own "no such capability".
+sonare::midi::MidiInstrument* wasmBoundInstrument(const sonare::engine::RealtimeEngine& engine,
+                                                  uint32_t destination_id) {
   sonare::midi::MidiInstrument* instrument = engine.midi_instrument(destination_id);
   if (instrument == nullptr) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "no MIDI instrument is bound to this destination");
   }
-  const sonare::midi::ControllerProfile* profile = instrument->controller_profile();
+  return instrument;
+}
+
+// The destination's current profile. NotImplemented (the C ABI's NOT_SUPPORTED)
+// for a bound instrument that holds no profile.
+sonare::midi::ControllerProfile wasmControllerProfile(const sonare::engine::RealtimeEngine& engine,
+                                                      uint32_t destination_id) {
+  const sonare::midi::ControllerProfile* profile =
+      wasmBoundInstrument(engine, destination_id)->controller_profile();
   if (profile == nullptr) {
     throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                   "the bound instrument holds no controller profile");
@@ -63,12 +73,7 @@ sonare::midi::ControllerProfile wasmControllerProfile(const sonare::engine::Real
 void wasmInstallControllerProfile(const sonare::engine::RealtimeEngine& engine,
                                   uint32_t destination_id,
                                   const sonare::midi::ControllerProfile& profile) {
-  sonare::midi::MidiInstrument* instrument = engine.midi_instrument(destination_id);
-  if (instrument == nullptr) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "no MIDI instrument is bound to this destination");
-  }
-  if (!instrument->set_controller_profile(profile)) {
+  if (!wasmBoundInstrument(engine, destination_id)->set_controller_profile(profile)) {
     throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                   "the bound instrument declined a controller profile");
   }
@@ -594,6 +599,89 @@ bool RealtimeEngineWasm::controllerVelocityMeaningful(const val& destination_id_
 #endif
 }
 
+// Sets how one channel of the destination's instrument treats a note-on while
+// another note on that channel is still held. `articulation` is a canonical
+// name ("poly" / "mono-retrigger" / "mono-legato") or its ordinal. Mirrors
+// sonare_engine_set_articulation, including which refusals stay apart: an
+// instrument with no articulation of its own reports NotImplemented (the C ABI's
+// NOT_SUPPORTED) rather than succeeding quietly, because a discarded mode is
+// indistinguishable from one that took until two notes overlap.
+void RealtimeEngineWasm::setArticulation(const val& destination_id_val, const val& channel_val,
+                                         val articulation) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  // Checked before the byte it narrows into: channel 256 would otherwise arrive
+  // as channel 0 and slur a part the caller never named. Out-of-range modes are
+  // refused rather than clamped by the shared enum reader, for the reason the C
+  // ABI gives -- poly substituted for a misspelled mono-legato plays every note
+  // and slurs none of them.
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  requireOrdinalInRange(channel, 0, 15, "channel");
+  const int mode = sonare_wasm_synth::enumFromVal(articulation, sonare_wasm_synth::kArticulations,
+                                                  SONARE_ARTICULATION_COUNT, "articulation");
+  if (!wasmBoundInstrument(engine_, destination_id)
+           ->set_articulation(static_cast<uint8_t>(channel),
+                              static_cast<sonare::midi::ArticulationMode>(mode))) {
+    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                  "the bound instrument has no articulation of its own");
+  }
+#else
+  (void)destination_id_val;
+  (void)channel_val;
+  (void)articulation;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
+// Reads back setArticulation, as the canonical name. Spelled the way every
+// other enum leaves this surface (synthPatchToVal), so a value handed back can
+// be passed straight to the setter.
+val RealtimeEngineWasm::articulation(const val& destination_id_val, const val& channel_val) const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const int channel = checkedIntFromVal(channel_val, "channel");
+  requireOrdinalInRange(channel, 0, 15, "channel");
+  sonare::midi::ArticulationMode mode = sonare::midi::ArticulationMode::kPoly;
+  if (!wasmBoundInstrument(engine_, destination_id)
+           ->articulation(static_cast<uint8_t>(channel), &mode)) {
+    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                  "the bound instrument has no articulation of its own");
+  }
+  return sonare_wasm_synth::enumNameVal(static_cast<int>(mode), sonare_wasm_synth::kArticulations,
+                                        SONARE_ARTICULATION_COUNT);
+#else
+  (void)destination_id_val;
+  (void)channel_val;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
+// How many times a legato continuation was asked for and refused, so the note
+// started a voice of its own instead. An instrument with no articulation of its
+// own reports NotImplemented on the same terms as the two entries above rather
+// than answering 0: this counter exists because a refusal sounds like an
+// ordinary note, and a 0 from an instrument that was never asked reads as
+// "every slur took" -- the exact reading it is here to prevent. Saturated at
+// UINT32_MAX rather than wrapped, matching sonare_engine_legato_fallback_count,
+// so the same phrase reports the same number on every surface.
+uint32_t RealtimeEngineWasm::legatoFallbackCount(const val& destination_id_val) const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  uint64_t counted = 0;
+  if (!wasmBoundInstrument(engine_, destination_id)->legato_fallback_count(&counted)) {
+    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                  "the bound instrument has no articulation of its own");
+  }
+  return counted > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(counted);
+#else
+  (void)destination_id_val;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
 void RealtimeEngineWasm::setMidiFx(const val& destination_id_val, const std::string& config_json) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
@@ -1052,6 +1140,13 @@ void registerRealtimeEngineMidi(class_<RealtimeEngineWasm>& cls) {
       .function("setControllerVelocityMeaningful",
                 &RealtimeEngineWasm::setControllerVelocityMeaningful)
       .function("controllerVelocityMeaningful", &RealtimeEngineWasm::controllerVelocityMeaningful)
+      // destinationId, channel, articulation -- the C ABI's own argument order
+      // minus the engine handle, checked against sonare_engine_set_articulation
+      // and the Python facade rather than assumed, since embind argument order
+      // on this surface has historically diverged from the siblings.
+      .function("setArticulation", &RealtimeEngineWasm::setArticulation)
+      .function("articulation", &RealtimeEngineWasm::articulation)
+      .function("legatoFallbackCount", &RealtimeEngineWasm::legatoFallbackCount)
       .function("setMidiFx", &RealtimeEngineWasm::setMidiFx)
       .function("clearMidiFx", &RealtimeEngineWasm::clearMidiFx)
       .function("setMidiInputSource", &RealtimeEngineWasm::setMidiInputSource)

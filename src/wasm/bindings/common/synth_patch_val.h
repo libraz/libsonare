@@ -59,6 +59,9 @@ inline constexpr const char* kControllerInputs[] = {"control-change", "channel-p
 inline constexpr const char* kControllerAxes[] = {"none",        "excitation",   "position",
                                                   "brightness",  "morph",        "loudness",
                                                   "pitch-cents", "vibrato-depth"};
+// What a channel does with an overlapping note-on. Also not a synth-patch
+// field, and here for the same reason as the two tables above.
+inline constexpr const char* kArticulations[] = {"poly", "mono-retrigger", "mono-legato"};
 
 static_assert(std::size(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "WASM SynthEngineMode table drifted from C");
@@ -82,6 +85,8 @@ static_assert(std::size(kControllerInputs) == SONARE_CONTROLLER_INPUT_COUNT,
               "WASM ControllerInput table drifted from C");
 static_assert(std::size(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
               "WASM ControllerAxis table drifted from C");
+static_assert(std::size(kArticulations) == SONARE_ARTICULATION_COUNT,
+              "WASM Articulation table drifted from C");
 
 inline emscripten::val synthEnumTablesToVal() {
   using emscripten::val;
@@ -116,6 +121,7 @@ inline emscripten::val synthEnumTablesToVal() {
   out.set("controllerInputs",
           array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_INPUT)));
   out.set("controllerAxes", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_AXIS)));
+  out.set("articulations", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_ARTICULATION)));
   return out;
 }
 
@@ -125,20 +131,16 @@ inline emscripten::val synthEnumTablesToVal() {
 inline void requiredEnumProperty(emscripten::val object, const char* key, const char* const* names,
                                  int count, const char* what, int* out);
 
-/// Reads an enum field accepting the C ordinal or a name; throws on an unknown
-/// name and on an ordinal outside [0, @p count). Absent fields keep @p out
-/// unchanged (0 = "keep base").
-inline void enumProperty(emscripten::val object, const char* key, const char* const* names,
-                         int count, const char* what, int* out) {
-  if (!hasProperty(object, key)) return;
-  emscripten::val value = object[key];
+/// Resolves an enum value accepting the C ordinal or a name; throws on an
+/// unknown name and on an ordinal outside [0, @p count). Shared with @ref
+/// enumProperty so a standalone argument and an object field read a spelling on
+/// identical terms.
+inline int enumFromVal(emscripten::val value, const char* const* names, int count,
+                       const char* what) {
   if (value.typeOf().as<std::string>() == "string") {
     const std::string name = value.as<std::string>();
     for (int i = 0; i < count; ++i) {
-      if (name == names[i]) {
-        *out = i;
-        return;
-      }
+      if (name == names[i]) return i;
     }
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   std::string("Unknown ") + what + " name: '" + name + "'");
@@ -154,7 +156,24 @@ inline void enumProperty(emscripten::val object, const char* key, const char* co
   // reads without re-checking, where 9, 10, 99 and -1 all render as "none".
   const int ordinal = checkedIntFromVal(value, what);
   requireOrdinalInRange(ordinal, 0, count - 1, what);
-  *out = ordinal;
+  return ordinal;
+}
+
+/// Spells an enum ordinal as its canonical name, or hands back the ordinal
+/// itself when the table cannot spell it. The surface's one reading of an enum
+/// value back out, so a patch field and a standalone getter agree.
+inline emscripten::val enumNameVal(int value, const char* const* names, int count) {
+  if (value >= 0 && value < count) return emscripten::val(std::string(names[value]));
+  return emscripten::val(value);
+}
+
+/// Reads an enum field accepting the C ordinal or a name; throws on an unknown
+/// name and on an ordinal outside [0, @p count). Absent fields keep @p out
+/// unchanged (0 = "keep base").
+inline void enumProperty(emscripten::val object, const char* key, const char* const* names,
+                         int count, const char* what, int* out) {
+  if (!hasProperty(object, key)) return;
+  *out = enumFromVal(object[key], names, count, what);
 }
 
 inline void requiredEnumProperty(emscripten::val object, const char* key, const char* const* names,
@@ -287,22 +306,19 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
 /// back verbatim).
 inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   using emscripten::val;
-  auto enum_name = [](int value, const char* const* names, int count) -> val {
-    if (value >= 0 && value < count) return val(std::string(names[value]));
-    return val(value);
-  };
   val out = val::object();
   out.set("preset", std::string(patch.preset));
-  out.set("engineMode", enum_name(patch.engine_mode, kEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT));
-  out.set("waveform", enum_name(patch.waveform, kWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT));
+  out.set("engineMode",
+          enumNameVal(patch.engine_mode, kEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT));
+  out.set("waveform", enumNameVal(patch.waveform, kWaveforms, SONARE_SYNTH_OSC_WAVEFORM_COUNT));
   out.set("unison", patch.unison);
   out.set("detuneCents", patch.detune_cents);
   out.set("driftCents", patch.drift_cents);
   out.set("drive", patch.drive);
   out.set("filterModel",
-          enum_name(patch.filter_model, kFilterModels, SONARE_SYNTH_FILTER_MODEL_COUNT));
+          enumNameVal(patch.filter_model, kFilterModels, SONARE_SYNTH_FILTER_MODEL_COUNT));
   out.set("filterOutput",
-          enum_name(patch.filter_output, kFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT));
+          enumNameVal(patch.filter_output, kFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT));
   out.set("cutoffHz", patch.cutoff_hz);
   out.set("hpCutoffHz", patch.hp_cutoff_hz);
   out.set("sampleHoldHz", patch.sample_hold_hz);
@@ -323,16 +339,16 @@ inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   out.set("lfoToPitchCents", patch.lfo_to_pitch_cents);
   out.set("lfo2RateHz", patch.lfo2_rate_hz);
   out.set("glideMs", patch.glide_ms);
-  out.set("body", enum_name(patch.body, kBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT));
+  out.set("body", enumNameVal(patch.body, kBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT));
   out.set("bodyMix", patch.body_mix);
   out.set("stereoSpread", patch.stereo_spread);
   val routings = val::array();
   for (int i = 0; i < patch.num_mod_routings && i < SONARE_SYNTH_PATCH_MOD_ROUTINGS; ++i) {
     val routing = val::object();
-    routing.set("source", enum_name(patch.mod_routings[i].source, kModSources,
-                                    SONARE_SYNTH_MOD_SOURCE_COUNT));
-    routing.set("destination", enum_name(patch.mod_routings[i].destination, kModDestinations,
-                                         SONARE_SYNTH_MOD_DESTINATION_COUNT));
+    routing.set("source", enumNameVal(patch.mod_routings[i].source, kModSources,
+                                      SONARE_SYNTH_MOD_SOURCE_COUNT));
+    routing.set("destination", enumNameVal(patch.mod_routings[i].destination, kModDestinations,
+                                           SONARE_SYNTH_MOD_DESTINATION_COUNT));
     routing.set("depth", patch.mod_routings[i].depth);
     routings.call<void>("push", routing);
   }
@@ -343,10 +359,10 @@ inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   out.set("sampleSet", patch.sample_set);
   out.set("sampleLevel", patch.sample_level);
   out.set("sampleLoop",
-          enum_name(patch.sample_loop, kSampleLoopModes, SONARE_SAMPLE_LOOP_MODE_COUNT));
+          enumNameVal(patch.sample_loop, kSampleLoopModes, SONARE_SAMPLE_LOOP_MODE_COUNT));
   out.set("sampleStartOffset", patch.sample_start_offset);
   out.set("sampleKeyTrack",
-          enum_name(patch.sample_key_track, kSampleKeyTracks, SONARE_SAMPLE_KEY_TRACK_COUNT));
+          enumNameVal(patch.sample_key_track, kSampleKeyTracks, SONARE_SAMPLE_KEY_TRACK_COUNT));
   return out;
 }
 

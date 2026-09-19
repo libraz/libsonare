@@ -1481,6 +1481,16 @@ export interface WasmRealtimeEngine {
   controllerBindingCount: (destinationId: number) => number;
   setControllerVelocityMeaningful: (destinationId: number, meaningful: boolean) => void;
   controllerVelocityMeaningful: (destinationId: number) => boolean;
+  setArticulation: (
+    destinationId: number,
+    channel: number,
+    articulation: import('./instrument_types').Articulation | number,
+  ) => void;
+  articulation: (
+    destinationId: number,
+    channel: number,
+  ) => import('./instrument_types').Articulation | number;
+  legatoFallbackCount: (destinationId: number) => number;
   setMidiFx: (destinationId: number, configJson: string) => void;
   clearMidiFx: (destinationId: number) => void;
   setMidiInputSource: (destinationId: number) => void;
@@ -1607,6 +1617,7 @@ export interface WasmSynthEnumTables {
   modDestinations: string[];
   controllerInputs: string[];
   controllerAxes: string[];
+  articulations: string[];
 }
 
 export interface SonareModule {

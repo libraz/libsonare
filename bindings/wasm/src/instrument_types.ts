@@ -200,6 +200,14 @@ export const CONTROLLER_AXES = [
   'vibrato-depth',
 ] as const;
 
+/**
+ * What a channel does with a note-on while another note on that channel is
+ * still held. `'mono-legato'` carries the sounding voice and only moves its
+ * pitch — a wind player's slur — and is deliberately out of reach of any MIDI
+ * message: CC126 names a monophonic mode but not this one.
+ */
+export const ARTICULATIONS = ['poly', 'mono-retrigger', 'mono-legato'] as const;
+
 export interface SynthEnumTables {
   engineModes: string[];
   waveforms: string[];
@@ -211,6 +219,7 @@ export interface SynthEnumTables {
   modDestinations: string[];
   controllerInputs: string[];
   controllerAxes: string[];
+  articulations: string[];
 }
 
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
@@ -323,6 +332,9 @@ export type ControllerInput = (typeof CONTROLLER_INPUTS)[number];
 
 /** Output side of a {@link ControllerBinding}: which expression axis it means. */
 export type ControllerAxis = (typeof CONTROLLER_AXES)[number];
+
+/** Per-channel note-overlap rule ({@link RealtimeEngine.setArticulation}). */
+export type Articulation = (typeof ARTICULATIONS)[number];
 
 /**
  * One device gesture bound to one expression axis

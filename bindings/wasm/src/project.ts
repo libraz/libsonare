@@ -1,4 +1,5 @@
 export type {
+  Articulation,
   BuiltinSynthBinding,
   BuiltinSynthConfig,
   BuiltinSynthWaveform,
@@ -25,6 +26,7 @@ export type {
   SynthPatch,
 } from './instrument_types';
 export {
+  ARTICULATIONS,
   BUILTIN_SYNTH_WAVEFORMS,
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,

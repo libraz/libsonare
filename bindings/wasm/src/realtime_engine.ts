@@ -1,7 +1,7 @@
 import { panLawCode, panModeCode, sendTimingCode, trackMonitorModeCode } from './codes';
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
-import type { ControllerBinding, ProjectMidiCcBinding, SynthPatch } from './project';
+import type { Articulation, ControllerBinding, ProjectMidiCcBinding, SynthPatch } from './project';
 import { normalizeSynthInstrument } from './project_internal';
 import type { EqBand, PanLawInput, PanMode, SendTiming } from './public_types';
 import type {
@@ -441,6 +441,57 @@ export class RealtimeEngine {
 
   controllerVelocityMeaningful(destinationId: number): boolean {
     return this.native.controllerVelocityMeaningful(destinationId);
+  }
+
+  /**
+   * Set how one MIDI channel (0–15) of a destination's instrument treats a
+   * note-on while another note on that channel is still held: `'poly'` takes a
+   * new voice each time, `'mono-retrigger'` stops and restarts the note (what
+   * GS MONO MODE and CC126 mean), `'mono-legato'` carries the sounding voice
+   * and only moves its pitch — a wind player's slur, which no MIDI message can
+   * reach by design.
+   *
+   * `'mono-legato'` is a request, not a guarantee: an engine whose exciter is
+   * spent at the onset — anything struck or plucked — and a target pitch below
+   * what the engine's delay line can hold both fall back to an ordinary note,
+   * which {@link legatoFallbackCount} counts. A channel outside [0,15] and an
+   * articulation outside the enum are refused rather than clamped, and so is a
+   * destination with no instrument or one whose instrument has no articulation
+   * of its own.
+   */
+  setArticulation(
+    destinationId: number,
+    channel: number,
+    articulation: Articulation | number,
+  ): void {
+    this.native.setArticulation(destinationId, channel, articulation);
+  }
+
+  /**
+   * Read back {@link setArticulation} as the canonical name. An ordinal this
+   * build cannot spell is handed back as the number, the way every other enum
+   * leaves this surface.
+   */
+  articulation(destinationId: number, channel: number): Articulation | number {
+    return this.native.articulation(destinationId, channel);
+  }
+
+  /**
+   * How many times a legato continuation was asked for on this destination and
+   * refused, so the note started a voice of its own instead. Counted rather
+   * than inferred: a refusal sounds like an ordinary note, so nothing in the
+   * audio separates "this engine declines legato" from "the mode was never
+   * set". Saturates at 4294967295 rather than wrapping — matching the C ABI, so
+   * the same phrase reports the same number on every surface — after which it
+   * reads as "at least this many".
+   *
+   * Throws on a destination with no instrument, and on one whose instrument has
+   * no articulation of its own — the same two refusals
+   * {@link setArticulation} keeps apart. Reporting 0 for the second would read
+   * as "every slur took", which is the reading this counter exists to prevent.
+   */
+  legatoFallbackCount(destinationId: number): number {
+    return this.native.legatoFallbackCount(destinationId);
   }
 
   /** Install/replace a live non-destructive MIDI-FX insert for one destination. */

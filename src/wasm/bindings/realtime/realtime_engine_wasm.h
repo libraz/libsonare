@@ -126,6 +126,11 @@ class RealtimeEngineWasm {
   size_t controllerBindingCount(const emscripten::val& destination_id_val) const;
   void setControllerVelocityMeaningful(const emscripten::val& destination_id_val, bool meaningful);
   bool controllerVelocityMeaningful(const emscripten::val& destination_id_val) const;
+  void setArticulation(const emscripten::val& destination_id_val,
+                       const emscripten::val& channel_val, emscripten::val articulation);
+  emscripten::val articulation(const emscripten::val& destination_id_val,
+                               const emscripten::val& channel_val) const;
+  uint32_t legatoFallbackCount(const emscripten::val& destination_id_val) const;
   void setMidiFx(const emscripten::val& destination_id_val, const std::string& config_json);
   void clearMidiFx(const emscripten::val& destination_id_val);
   void setMidiInputSource(const emscripten::val& destination_id_val);

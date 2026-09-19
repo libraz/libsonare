@@ -513,6 +513,7 @@ export { analyzePolyphonic, PolyphonicAnalysis } from './polyphony';
 export type {
   AlignTakeToReferenceRequest,
   AlignTakeToReferenceResult,
+  Articulation,
   BuiltinSynthBinding,
   BuiltinSynthConfig,
   BuiltinSynthWaveform,
@@ -583,6 +584,7 @@ export type {
   TranscribeResult,
 } from './project';
 export {
+  ARTICULATIONS,
   AutomationTargetKind,
   BUILTIN_SYNTH_WAVEFORMS,
   CONTROLLER_AXES,

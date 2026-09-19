@@ -6,6 +6,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  ARTICULATIONS,
   BUILTIN_SYNTH_WAVEFORMS,
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
@@ -98,6 +99,7 @@ describe('Sonare WASM NativeSynth', () => {
       modDestinations: [...SYNTH_MOD_DESTINATIONS],
       controllerInputs: [...CONTROLLER_INPUTS],
       controllerAxes: [...CONTROLLER_AXES],
+      articulations: [...ARTICULATIONS],
     });
 
     for (const [ordinal, name] of SYNTH_ENGINE_MODES.entries()) {
