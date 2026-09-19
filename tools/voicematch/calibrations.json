@@ -20,6 +20,46 @@
         "name": "tank-3.6",
         "overrides": "gs_effects.kReverbDecayScale=1.104",
         "note": "the organ's longer GS tank, on a voice that did not ask for it — the tank is host-wide, so this is what the organ's fix costs every other program"
+      },
+      {
+        "name": "felt-worn",
+        "overrides": "fam0.piano.brightness=0.30",
+        "note": "hammers felted flat: the tone should come back woolly and edgeless, with the attack gone out of it"
+      },
+      {
+        "name": "felt-hard",
+        "overrides": "fam0.piano.brightness=0.97,fam0.piano.hammer_exponent=3.4",
+        "note": "a freshly voiced hard hammer: glassy and aggressive, all attack and little body behind it"
+      },
+      {
+        "name": "decay-short",
+        "overrides": "fam0.piano.decay_fast_s=0.55,fam0.piano.decay_slow_s=9",
+        "note": "notes dying under the hand, which should read as a small upright rather than a concert grand"
+      },
+      {
+        "name": "decay-long",
+        "overrides": "fam0.piano.decay_fast_s=2.1,fam0.piano.decay_slow_s=42",
+        "note": "a note that hangs and blooms far longer; the risk is a sustaining organ tail where a piano should be letting go"
+      },
+      {
+        "name": "board-forward",
+        "overrides": "fam0.piano.soundboard=0.62",
+        "note": "more wood under every note: bigger and rounder, as if the lid were up and the microphone closer"
+      },
+      {
+        "name": "strike-eighth",
+        "overrides": "fam0.piano.strike_position=0.125",
+        "note": "the hammer landing further along the string, which should notch the eighth partial and leave the tone rounder and slightly hollow"
+      },
+      {
+        "name": "unison-wide",
+        "overrides": "fam0.piano.detune_cents=3.5",
+        "note": "the three unison strings pulled apart: more beating and chorus in the sustain, honky-tonk if it has gone too far"
+      },
+      {
+        "name": "treble-sings",
+        "overrides": "piano_voice.kTrebleDecayOct=3.2",
+        "note": "the top two octaves holding on instead of vanishing, which is what a concert grand does and what this voice may be under-doing"
       }
     ]
   },
@@ -39,6 +79,36 @@
         "name": "no-16",
         "overrides": "church_organ.pipe_organ.ranks0.level=0.02",
         "note": "the 16' rank all but silent — the registration question the three gated dimensions cannot settle"
+      },
+      {
+        "name": "foundations-only",
+        "overrides": "church_organ.pipe_organ.ranks3.level=0.05,church_organ.pipe_organ.ranks4.level=0.03,church_organ.pipe_organ.ranks5.level=0.02",
+        "note": "the mixture ranks drawn out and only 16', 8' and 4' left standing: dark and plain, a foundation registration rather than a plenum"
+      },
+      {
+        "name": "mixtures-forward",
+        "overrides": "church_organ.pipe_organ.ranks0.level=0.15,church_organ.pipe_organ.ranks1.level=0.55,church_organ.pipe_organ.ranks4.level=1,church_organ.pipe_organ.ranks5.level=1",
+        "note": "the foundations pulled back under a full mixture: thin at the bottom and brilliant to the point of shrill at the top, which is the opposite registration error to foundations-only"
+      },
+      {
+        "name": "chiff-strong",
+        "overrides": "church_organ.pipe_organ.chiff=0.85,church_organ.pipe_organ.chiff_ms=30",
+        "note": "a pronounced cough as each pipe speaks, which should be unmistakable on the tongued take and should articulate the scale"
+      },
+      {
+        "name": "chiff-none",
+        "overrides": "church_organ.pipe_organ.chiff=0",
+        "note": "no speech transient at all: notes appearing out of nothing, which should read as synthetic and unarticulated"
+      },
+      {
+        "name": "slow-speech",
+        "overrides": "church_organ.amp_env.attack_ms=320",
+        "note": "each note winding up far more slowly, which should feel sluggish and late through the scale and the leap"
+      },
+      {
+        "name": "wind-unsteady",
+        "overrides": "church_organ.pipe_organ.wind_sag=0.7,church_organ.pipe_organ.tremulant_depth=0.32",
+        "note": "a weaker wind supply sagging under a chord: more alive, or seasick, depending on what the ear makes of the movement"
       }
     ]
   },
@@ -159,6 +229,46 @@
         "name": "ring-2.3x",
         "overrides": "marimba.modal.decay_s=1.02,marimba.modal.decay_stretch=0.78",
         "note": "a longer ring than the one now shipped, fitted to the first 0.25 s rather than to the 60 dB span the table was set from. The two references are not one envelope over two slots, which is what held this back: at the one note their grids share they agree on ring (0.66 against 0.68 s) and on centroid (443 against 440 Hz) and part company everywhere else - h2-h5 sit 25 to 60 dB apart and the attack is 20 ms against 5 - so a rosewood bar of either kind rings about the same at the same pitch and what separates the two instruments is spectrum and strike, both of which each patch voices on its own. One shared note is thin evidence for a library's provenance, so this is a candidate still and the ear still decides."
+      },
+      {
+        "name": "tube-open",
+        "overrides": "marimba.body_mix=0.75",
+        "note": "more resonator tube under every bar: the fundamental should bloom and the wood of the bar itself recede"
+      },
+      {
+        "name": "tube-off",
+        "overrides": "marimba.body_mix=0",
+        "note": "the bars with their tubes taken away, which should come back thin and dry, much closer to a xylophone"
+      },
+      {
+        "name": "hard-mallet",
+        "overrides": "marimba.modal.strike_brightness=0.95,marimba.modal.vel_to_brightness=0.9",
+        "note": "a hard rubber mallet: more click at the strike, and far more difference between a soft and a hard stroke"
+      },
+      {
+        "name": "soft-mallet",
+        "overrides": "marimba.modal.strike_brightness=0.32",
+        "note": "a heavy yarn mallet: almost nothing but fundamental, thud without articulation"
+      },
+      {
+        "name": "modes-two",
+        "overrides": "marimba.modal.num_modes=2",
+        "note": "the third tuned partial dropped, so the bar loses part of what makes a marimba recognisable — duller and less characterful"
+      },
+      {
+        "name": "modes-four",
+        "overrides": "marimba.modal.num_modes=4,marimba.modal.modes3.ratio=20,marimba.modal.modes3.gain=0.18,marimba.modal.modes3.decay_scale=0.12",
+        "note": "a fourth, very short, high partial at the bar's next tuned mode: a little more wooden click at the strike with nothing ringing longer"
+      },
+      {
+        "name": "ring-short",
+        "overrides": "marimba.modal.decay_s=0.36",
+        "note": "bars damped much harder, which should sound like a player keeping a hand on them"
+      },
+      {
+        "name": "bar-even",
+        "overrides": "marimba.modal.decay_stretch=0.2",
+        "note": "the high bars ringing nearly as long as the low ones, which real bars do not do — the compass should sound uneven on the way up"
       }
     ]
   },
@@ -210,6 +320,36 @@
         "name": "crash2-and-china-reopened",
         "overrides": "d057.cutoff_hz=1752.96,d057.gain=0.964,d052.cutoff_hz=2464.29,d052.gain=3.27",
         "note": "the second crash and the china cymbal given back a filter corner. Both carry one under 600 Hz - 368 and 515 Hz against 3.0 to 5.2 kHz on the five cymbals the same factory call builds - and both measure 22 to 31 dB dark in band tilt and 35 to 67 percent low in brightness, against a reference whose two crashes sit within 2 percent of each other in centroid. The corner cannot be moved on its own: on these two voices it is also the level, so opening it raises the note about 31 dB and the level fence charges more for that move than the corrected spectrum is worth, which is why a search over the corner alone walks it further shut. Fitted with the corner and the gain together, then the gain set to bring the level back to the reference, which every other term is blind to - at a fixed corner the whole term set is bit-identical across the gain axis. Crash 2 goes from 28-31 dB dark to within 2.5 dB, brightness from -63/-67 percent to -13/-18, band shape 19.1 to 11.5 and level -16.5/-6.5 dB to -2.1/+1.0; the china from 22-25 dB dark to within 6 dB, brightness from -35/-41 percent to within 5, band shape 19.1 to 9.6 and level -18.4/-13.1 dB to -2.0/+1.3. Held-out velocities generalise on both. Two residuals are untouched and are not this: the crash still speaks 48 ms early at the softest hits, and the china's per-octave decay stays 11 dB/s off there. What this cannot settle is whether a crash opened this far is the one the kit wants - it is a wash the shipped values had removed, so there is nothing to compare it against by ear until it is heard"
+      },
+      {
+        "name": "snare-wires-open",
+        "overrides": "d038.percussion.wire_buzz=0.6,d038.percussion.wire_decay_ms=150,d038.percussion.wire_threshold=0.05",
+        "note": "the snares slackened and left rattling under the head, so the flam and the roll should smear into one sizzle"
+      },
+      {
+        "name": "snare-wires-off",
+        "overrides": "d038.percussion.wire_buzz=0",
+        "note": "the snares thrown off: the drum should read as a small tom and the flam as two separate pitched hits"
+      },
+      {
+        "name": "hats-tight",
+        "overrides": "d042.amp_env.decay_ms=95,d042.percussion.noise_decay_ms=280,d046.amp_env.decay_ms=420,d046.percussion.noise_decay_ms=180",
+        "note": "both hats clamped much tighter, so the sixteenths should come back dry and separated and the choke should barely register"
+      },
+      {
+        "name": "hats-washy",
+        "overrides": "d042.amp_env.decay_ms=320,d042.percussion.noise_decay_ms=950,d046.amp_env.decay_ms=1400,d046.percussion.noise_decay_ms=700",
+        "note": "a loose pair of hats, so the sixteenths should blur into one another and the open hat should dominate the choke"
+      },
+      {
+        "name": "toms-ring",
+        "overrides": "d041.amp_env.decay_ms=140,d043.amp_env.decay_ms=147,d045.amp_env.decay_ms=98,d047.amp_env.decay_ms=125,d048.amp_env.decay_ms=840,d050.amp_env.decay_ms=152",
+        "note": "every tom allowed to ring on into the next one: concert toms under the fill rather than gated studio toms"
+      },
+      {
+        "name": "kick-deep",
+        "overrides": "d036.percussion.pitch_drop=2.6,d036.percussion.pitch_drop_ms=70,d036.percussion.mode_decay_s=0.33,d036.percussion.shell_t60_s0=0.2",
+        "note": "a longer downward sweep with more shell behind it, so the kick should sit bigger and boomier under the groove"
       }
     ]
   }
