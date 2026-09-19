@@ -192,7 +192,20 @@ SonareError sonare_split_silence_common(const float* const* signals, size_t sign
                                         const size_t* lengths, float top_db, int frame_length,
                                         int hop_length, int** out_intervals,
                                         size_t* out_interval_count) {
+  return sonare_split_silence_common_ex(signals, signal_count, lengths, top_db, frame_length,
+                                        hop_length, out_intervals, out_interval_count, nullptr);
+}
+
+SonareError sonare_split_silence_common_ex(const float* const* signals, size_t signal_count,
+                                           const size_t* lengths, float top_db, int frame_length,
+                                           int hop_length, int** out_intervals,
+                                           size_t* out_interval_count,
+                                           SonareSilenceCommonReport* out_report) {
   SONARE_C_API_ENTRY;
+  // Before the validation rather than after it: a rejected call left the report
+  // holding whatever the caller's stack did, and a zeroed one is the honest
+  // answer for a call that measured nothing.
+  if (out_report != nullptr) *out_report = SonareSilenceCommonReport{};
   if (!signals || !lengths || signal_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
   for (size_t index = 0; index < signal_count; ++index) {
     if (validate_buffer(signals[index], lengths[index]) != SONARE_OK) {
@@ -201,9 +214,31 @@ SonareError sonare_split_silence_common(const float* const* signals, size_t sign
   }
   SONARE_C_TRY
   std::vector<std::pair<int, int>> merged;
+  // The union needs every signal quiet at the same place, so the binding
+  // constraint is the signal with the least headroom -- hence the minimum of the
+  // per-signal ceilings rather than the deepest dip anywhere.
+  float ceiling_db = 0.0f;
+  int32_t most = 0;
+  int32_t fewest = 0;
   for (size_t index = 0; index < signal_count; ++index) {
-    auto ranges = split(signals[index], lengths[index], top_db, frame_length, hop_length);
-    merged.insert(merged.end(), ranges.begin(), ranges.end());
+    sonare::SplitReport report =
+        sonare::split_with_report(signals[index], lengths[index], top_db, frame_length, hop_length);
+    const int32_t count = static_cast<int32_t>(report.intervals.size());
+    if (index == 0) {
+      ceiling_db = report.silence_ceiling_db;
+      most = count;
+      fewest = count;
+    } else {
+      ceiling_db = std::min(ceiling_db, report.silence_ceiling_db);
+      most = std::max(most, count);
+      fewest = std::min(fewest, count);
+    }
+    merged.insert(merged.end(), report.intervals.begin(), report.intervals.end());
+  }
+  if (out_report != nullptr) {
+    out_report->silence_ceiling_db = ceiling_db;
+    out_report->max_signal_intervals = most;
+    out_report->min_signal_intervals = fewest;
   }
   std::sort(merged.begin(), merged.end());
   std::vector<int> flat;
