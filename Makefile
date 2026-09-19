@@ -762,24 +762,44 @@ endif
 voice-gate:
 	$(CMAKE) -S . -B $(VOICE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON
 	$(CMAKE) --build $(VOICE_BUILD_DIR) --target sonare_shared $(BUILD_PARALLEL)
-	@found=0; failed=""; \
+	@attempted=0; compared=0; failed=""; unreached=""; log=$$(mktemp); \
 	for gate in tools/voicematch/reference/*_gate.json; do \
 		test -e "$$gate" || continue; \
-		found=1; \
+		attempted=$$((attempted + 1)); \
 		id=$$(basename "$$gate" _gate.json); \
 		timbre=$$($(RYE) run --pyproject bindings/python/pyproject.toml python -c \
-			"import json,sys; print(json.load(open(sys.argv[1]))['timbre'])" "$$gate"); \
+			"import json,sys; print(json.load(open(sys.argv[1]))['timbre'])" "$$gate" 2>/dev/null); \
+		if test -z "$$timbre"; then \
+			echo "=== $$id: its timbre could not be read"; \
+			unreached="$$unreached $$id"; continue; \
+		fi; \
 		echo "=== $$id (timbre $$timbre)"; \
 		SONARE_LIB_PATH=$(VOICE_SHARED_LIB) \
 		$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/profile.py \
 			compare --config tools/voicematch/capture/$$id.json \
-			--timbre "$$timbre" --gate "$$gate" || failed="$$failed $$id"; \
+			--timbre "$$timbre" --gate "$$gate" > "$$log" 2>&1; \
+		status=$$?; cat "$$log"; \
+		if grep -q '^gate: ' "$$log"; then \
+			compared=$$((compared + 1)); \
+			test "$$status" = 0 || failed="$$failed $$id"; \
+		else \
+			unreached="$$unreached $$id"; \
+		fi; \
 	done; \
-	test "$$found" = 1 || { echo "no *_gate.json under tools/voicematch/reference/"; exit 1; }; \
+	rm -f "$$log"; \
+	echo; echo "gates attempted: $$attempted, compared against their bounds: $$compared"; \
+	test "$$attempted" != 0 || { echo "no *_gate.json under tools/voicematch/reference/"; exit 1; }; \
+	if test -n "$$unreached"; then \
+		echo "never reached their bounds:$$unreached"; \
+		echo "  Not a verdict on these voices. A comparison that could not run exits"; \
+		echo "  non-zero for reasons that are not a voice -- a missing interpreter, an"; \
+		echo "  unreadable capture, a crash -- and the bound-exceeded line is the only"; \
+		echo "  thing that separates them."; \
+	fi; \
 	if test -n "$$failed"; then \
 		echo; echo "voices outside their recorded bounds:$$failed"; \
-		exit 1; \
 	fi; \
+	if test -n "$$unreached" || test -n "$$failed"; then exit 1; fi; \
 	echo; echo "every gated voice held its bounds"
 
 # Aggregate the fast, non-modifying mechanical gates so a pre-commit run can't
