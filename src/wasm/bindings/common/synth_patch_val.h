@@ -119,6 +119,12 @@ inline emscripten::val synthEnumTablesToVal() {
   return out;
 }
 
+/// enumProperty for a field that has no "keep base" reading, so absence is
+/// refused rather than defaulted: where ordinal 0 is itself a working value, a
+/// caller who omitted the key would get a selection they never asked for.
+inline void requiredEnumProperty(emscripten::val object, const char* key, const char* const* names,
+                                 int count, const char* what, int* out);
+
 /// Reads an enum field accepting the C ordinal or a name; throws on an unknown
 /// name and on an ordinal outside [0, @p count). Absent fields keep @p out
 /// unchanged (0 = "keep base").
@@ -149,6 +155,15 @@ inline void enumProperty(emscripten::val object, const char* key, const char* co
   const int ordinal = checkedIntFromVal(value, what);
   requireOrdinalInRange(ordinal, 0, count - 1, what);
   *out = ordinal;
+}
+
+inline void requiredEnumProperty(emscripten::val object, const char* key, const char* const* names,
+                                 int count, const char* what, int* out) {
+  if (!hasProperty(object, key)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string("Missing required ") + what + ": '" + key + "'");
+  }
+  enumProperty(object, key, names, count, what, out);
 }
 
 inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {

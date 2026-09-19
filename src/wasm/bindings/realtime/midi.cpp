@@ -74,21 +74,6 @@ void wasmInstallControllerProfile(const sonare::engine::RealtimeEngine& engine,
   }
 }
 
-// Reads a required controller enum field. Absence is refused rather than
-// defaulted: ordinal 0 is a working value on both enums (`control-change`,
-// `none`), so a caller who omitted the key would get a binding they did not ask
-// for instead of an error.
-int wasmRequiredControllerEnum(val object, const char* key, const char* const* names, int count,
-                               const char* what) {
-  if (!hasProperty(object, key)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string("controller binding requires ") + key);
-  }
-  int ordinal = 0;
-  sonare_wasm_synth::enumProperty(object, key, names, count, what, &ordinal);
-  return ordinal;
-}
-
 #endif  // SONARE_WITH_ARRANGEMENT
 
 }  // namespace
@@ -502,12 +487,18 @@ void RealtimeEngineWasm::bindController(const val& destination_id_val, val bindi
   // Ordinals out of range are refused rather than clamped: a value the caller
   // meant as "poly pressure" arriving as "control change" is a binding that
   // works and listens to the wrong thing.
-  entry.input = static_cast<sonare::midi::ControllerInput>(
-      wasmRequiredControllerEnum(binding, "input", sonare_wasm_synth::kControllerInputs,
-                                 SONARE_CONTROLLER_INPUT_COUNT, "controller input"));
-  entry.axis = static_cast<sonare::midi::ControllerAxis>(
-      wasmRequiredControllerEnum(binding, "axis", sonare_wasm_synth::kControllerAxes,
-                                 SONARE_CONTROLLER_AXIS_COUNT, "controller axis"));
+  // Required rather than defaulted: ordinal 0 is a working value on both enums
+  // (`control-change`, `none`), so an omitted key would bind something the
+  // caller never asked for.
+  int input = 0;
+  int axis = 0;
+  sonare_wasm_synth::requiredEnumProperty(binding, "input", sonare_wasm_synth::kControllerInputs,
+                                          SONARE_CONTROLLER_INPUT_COUNT, "controller input",
+                                          &input);
+  sonare_wasm_synth::requiredEnumProperty(binding, "axis", sonare_wasm_synth::kControllerAxes,
+                                          SONARE_CONTROLLER_AXIS_COUNT, "controller axis", &axis);
+  entry.input = static_cast<sonare::midi::ControllerInput>(input);
+  entry.axis = static_cast<sonare::midi::ControllerAxis>(axis);
   const int index = typedIntProperty(binding, "index", 0);
   requireOrdinalInRange(index, 0, 127, "controller binding index");
   entry.index = static_cast<uint8_t>(index);
