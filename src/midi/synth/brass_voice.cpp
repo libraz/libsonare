@@ -193,6 +193,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   lip_z2_ = 0.0f;
 
   const float f0 = note_to_hz(note);
+  bore_f0_ = f0;
   // Brass bore: a positive-feedback comb of the whole period, so the resonances
   // land on the full harmonic series (f0, 2f0, 3f0 …) a bell/mouthpiece-corrected
   // brass tube radiates. The lip valve buzzes the fundamental; the tube
@@ -220,14 +221,10 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // lower damping = a higher Q = a sharper, brassier buzz.
   const float damp = std::clamp(params.lip_damping, 0.0f, 1.0f);
   const float tension = std::clamp(params.lip_tension, 0.0f, 1.0f);
-  const float f_lip = std::min(f0 * (1.0f + kLipTuneSpan * (tension - 0.5f)), 0.45f * srf);
-  const float q = kLipQMin + kLipQSpan * (1.0f - damp);
-  float lip_r = std::exp(-kPi * (f_lip / q) / srf);
-  lip_r = std::min(lip_r, 0.99995f);
-  const float w = kTwoPi * f_lip / srf;
-  lip_a1_ = 2.0f * lip_r * std::cos(w);
-  lip_a2_ = -lip_r * lip_r;
-  lip_b0_ = 1.0f - lip_r;  // peak gain ~unity; absolute gain absorbed by lip_couple_
+  lip_srf_ = srf;
+  lip_q_ = kLipQMin + kLipQSpan * (1.0f - damp);
+  lip_tune_ = 1.0f + kLipTuneSpan * (tension - 0.5f);
+  tune_lip(f0);
   lip_offset_ = kLipOffset;
   lip_couple_ = kLipCouple;
 
@@ -353,7 +350,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   dyn_lip_ = std::clamp(params.dynamic_lip, 0.0f, 1.0f);
   lip2_x1_ = lip2_x2_ = lip2_z1_ = lip2_z2_ = 0.0f;
   if (dyn_lip_ > 0.0f) {
-    const float f2 = std::min(f_lip * kLip2Mult, 0.45f * srf);
+    const float f2 = std::min(std::min(f0 * lip_tune_, 0.45f * srf) * kLip2Mult, 0.45f * srf);
     float r2 = std::exp(-kPi * (f2 / kLip2Q) / srf);
     r2 = std::min(r2, 0.99995f);
     const float w2 = kTwoPi * f2 / srf;
@@ -362,6 +359,42 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
     lip2_b0_ = 1.0f - r2;
     lip2_couple_ = kLip2Couple * dyn_lip_;
   }
+}
+
+void BrassVoiceCore::tune_lip(float f0) noexcept {
+  // Constant Q: the pole radius follows the note so the lip stays as selective
+  // at the bottom of the range as at the top.
+  const float f_lip = std::min(f0 * lip_tune_, 0.45f * lip_srf_);
+  float lip_r = std::exp(-kPi * (f_lip / lip_q_) / lip_srf_);
+  lip_r = std::min(lip_r, 0.99995f);
+  const float w = kTwoPi * f_lip / lip_srf_;
+  lip_a1_ = 2.0f * lip_r * std::cos(w);
+  lip_a2_ = -lip_r * lip_r;
+  lip_b0_ = 1.0f - lip_r;  // peak gain ~unity; absolute gain absorbed by lip_couple_
+  // The second lip resonance rides on the first, so it moves with it rather
+  // than being left behind on the old note. Skipped while dyn_lip_ is still
+  // zero, which is the case on the note-on call: start() sets it below and
+  // tunes the second resonator itself, so that path is untouched.
+  if (dyn_lip_ > 0.0f) {
+    const float f2 = std::min(f_lip * kLip2Mult, 0.45f * lip_srf_);
+    float r2 = std::exp(-kPi * (f2 / kLip2Q) / lip_srf_);
+    r2 = std::min(r2, 0.99995f);
+    const float w2 = kTwoPi * f2 / lip_srf_;
+    lip2_a1_ = 2.0f * r2 * std::cos(w2);
+    lip2_a2_ = -r2 * r2;
+    lip2_b0_ = 1.0f - r2;
+  }
+}
+
+void BrassVoiceCore::retune(float pitch_ratio) noexcept {
+  // The bore follows a bend on its own -- the delay is divided by the ratio
+  // every sample -- but the lip resonance is a filter tuned once at note-on, so
+  // without this it stays on the old note and drags the sounding pitch back
+  // toward it. Measured on a held bend, the lip gives back more than half the
+  // interval and the response stops being monotone at the top of it.
+  if (lip_srf_ <= 0.0f || lip_q_ <= 0.0f) return;
+  const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
+  tune_lip(bore_f0_ * ratio);
 }
 
 float BrassVoiceCore::render(float pitch_ratio) noexcept {

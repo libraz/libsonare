@@ -190,6 +190,10 @@ class BrassVoiceCore {
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / vibrato / drift), 1 = on pitch.
   float render(float pitch_ratio) noexcept;
+  /// Legato continuation: move the lip resonance to the pitch the bore is now
+  /// sounding. @p pitch_ratio is the same per-sample factor render() takes, at
+  /// the point the new note is settled on.
+  void retune(float pitch_ratio) noexcept;
   /// Note-off: tongue off (ramp the breath to zero); the bore rings down.
   void release() noexcept;
   /// Immediate silence.
@@ -268,6 +272,14 @@ class BrassVoiceCore {
   // resonator tuned to a low fundamental would have a huge DC gain and integrate
   // the breath into a runaway, so the DC zero is essential here (unlike the reed
   // resonator, which sits at a high, DC-safe reed frequency).
+  /// Lip resonance as note-on left it: the note's own f0, the constant Q, and
+  /// the tension nudge. Retained so a legato continuation can re-tune the
+  /// resonator to the new note -- the bore follows a pitch change by itself,
+  /// the lip does not.
+  float bore_f0_ = 0.0f;
+  float lip_srf_ = 0.0f;
+  float lip_q_ = 0.0f;
+  float lip_tune_ = 1.0f;
   float lip_b0_ = 0.0f;
   float lip_a1_ = 0.0f;
   float lip_a2_ = 0.0f;
@@ -381,6 +393,7 @@ class BrassVoiceCore {
 
   // Lip resonator step: a two-pole (mass-spring) resonator driven by the pressure
   // difference; returns the lip displacement.
+  void tune_lip(float f0) noexcept;
   float lip_resonator(float dp) noexcept;
   // Second lip mode (4d): the transverse resonance, same bandpass form.
   float lip_resonator2(float dp) noexcept;
