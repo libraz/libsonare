@@ -63,9 +63,7 @@ constexpr int kWindowFrames = 16384;
 /// and a line that has run out gives back all of it.
 constexpr double kTravelFloor = 30.0;
 
-double cents_between(double from_hz, double to_hz) {
-  return 1200.0 * std::log2(to_hz / from_hz);
-}
+double cents_between(double from_hz, double to_hz) { return 1200.0 * std::log2(to_hz / from_hz); }
 
 /// Sounds @p note with a downward bend of @p cents and returns the measured
 /// fundamental. The bend is set before the note starts, so the line is read at
@@ -118,9 +116,10 @@ constexpr WaveguideEngine kEngines[] = {
 
 TEST_CASE("a waveguide keeps descending past the span a note-on period would buy",
           "[midi][synth][waveguide]") {
-  // 500 and 700 cents both sit past the 1.3x (454 cents) and 1.15x (242 cents)
-  // a per-note span reaches, so a line sized that way pins before the first of
-  // them and the interval between the two collapses.
+  // A per-note span is 1.3x the period on a string and 1.15x in a pipe, which
+  // at this note reaches 489 and 242 cents. Both bends below sit past the first
+  // of those, so a line sized that way pins before the shallower one and the
+  // interval between the two collapses to nothing.
   size_t measured = 0;
   for (const WaveguideEngine& engine : kEngines) {
     CAPTURE(engine.label);
@@ -157,8 +156,7 @@ TEST_CASE("the delay line length is what bounds the descent", "[midi][synth][wav
     std::vector<float> out(static_cast<size_t>(kSettleFrames + kWindowFrames));
     for (float& sample : out) sample = core.render(static_cast<float>(ratio));
     const double hint = kNoteHz * ratio;
-    return cents_between(kNoteHz,
-                         fft_fundamental(out, static_cast<size_t>(kSettleFrames), hint));
+    return cents_between(kNoteHz, fft_fundamental(out, static_cast<size_t>(kSettleFrames), hint));
   };
 
   // A seventh below: 700 cents of descent asked for on both arms.
