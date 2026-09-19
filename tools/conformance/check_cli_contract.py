@@ -616,6 +616,12 @@ def _run_active_cases(
                             f"{label}: expected empty stdout, got {result['stdout'][:160]!r}",
                         )
                     )
+                # A case printing text still writes its artifact, and the bytes are
+                # the point of declaring one: without this the declaration sits on
+                # the case and nothing reads it.
+                _check_artifact(
+                    case["artifact"], contract, None, normal_paths, label, report
+                )
             else:
                 try:
                     parsed = parse_single_json(result["stdout"])
@@ -679,6 +685,14 @@ def _run_active_cases(
                             message,
                         )
                     )
+                _check_artifact(
+                    case["artifact"],
+                    contract,
+                    None,
+                    legacy_paths,
+                    f"{label} [legacy]",
+                    report,
+                )
             else:
                 try:
                     legacy_payload = parse_single_json(legacy_result["stdout"])

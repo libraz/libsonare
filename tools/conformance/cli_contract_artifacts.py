@@ -22,6 +22,14 @@ def _check_artifact(
     label: str,
     report: list[tuple[str, str]],
 ) -> None:
+    """Verify one case's artifact. ``payload`` is None for a case printing text.
+
+    A text-mode case writes the same file its JSON-mode sibling does but reports
+    nothing to cross-check the size against, so the payload-coupled assertions
+    are skipped there and the bytes alone are pinned. None cannot mean "the
+    payload failed to parse": the caller reaches this only with a parsed payload
+    or with a case that has none.
+    """
     if artifact_name == "none":
         return
     artifact = contract["artifacts"].get(artifact_name)
@@ -42,7 +50,9 @@ def _check_artifact(
             report.append(("fail", f"{label}: artifact is not a readable WAV ({exc})"))
             return
         sample_rate_key = artifact["sample_rate_key"]
-        if not isinstance(payload, dict) or payload.get(sample_rate_key) != sample_rate:
+        if payload is not None and (
+            not isinstance(payload, dict) or payload.get(sample_rate_key) != sample_rate
+        ):
             payload_rate = (
                 payload.get(sample_rate_key) if isinstance(payload, dict) else None
             )
@@ -102,7 +112,9 @@ def _check_artifact(
             )
         return
     bytes_key = artifact["bytes_key"]
-    if not isinstance(payload, dict) or payload.get(bytes_key) != len(data):
+    if payload is not None and (
+        not isinstance(payload, dict) or payload.get(bytes_key) != len(data)
+    ):
         payload_bytes = payload.get(bytes_key) if isinstance(payload, dict) else None
         message = (
             f"{label}: payload {bytes_key}={payload_bytes!r} does not equal "
