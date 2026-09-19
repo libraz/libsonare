@@ -652,4 +652,39 @@ Audio warp_to_map(const Audio& audio, const WarpMap& map, const WarpTsmConfig& c
   return Audio::from_vector(std::move(out), audio.sample_rate());
 }
 
+namespace {
+
+/// One median-collapse pass: a run of anchors sharing @p key is represented by
+/// its middle element. Takes the key as a member pointer so the same pass serves
+/// both axes without a second copy of the walk.
+std::vector<WarpAnchor> collapse_ties(const std::vector<WarpAnchor>& anchors,
+                                      double WarpAnchor::*key) {
+  std::vector<WarpAnchor> out;
+  out.reserve(anchors.size());
+  size_t run_start = 0;
+  while (run_start < anchors.size()) {
+    size_t run_end = run_start + 1;
+    while (run_end < anchors.size() && anchors[run_end].*key == anchors[run_start].*key) ++run_end;
+    // Lower median, so an even run resolves the same way every time.
+    out.push_back(anchors[run_start + (run_end - run_start - 1) / 2]);
+    run_start = run_end;
+  }
+  return out;
+}
+
+}  // namespace
+
+std::vector<WarpAnchor> strictly_increasing_anchors(const std::vector<WarpAnchor>& anchors) {
+  if (anchors.size() < 2) return anchors;
+  // Source first, then warp: the second pass drops entries from a sequence the
+  // first pass already made strict, and a subsequence of a strictly increasing
+  // sequence stays strictly increasing, so both properties hold at the end. The
+  // reverse order would be equally valid; fixing one keeps the result
+  // reproducible.
+  std::vector<WarpAnchor> reduced =
+      collapse_ties(collapse_ties(anchors, &WarpAnchor::source_sample), &WarpAnchor::warp_sample);
+  if (reduced.size() < 2) return anchors;
+  return reduced;
+}
+
 }  // namespace sonare::mir

@@ -170,6 +170,64 @@ static_assert(sizeof(SonareProjectWarpMapDesc) == 3u * sizeof(void*) + sizeof(si
               "SonareProjectWarpMapDesc layout drift");
 #endif
 
+/// @brief Chroma-DTW parameters for @ref sonare_align_take_to_reference.
+///
+/// A zeroed struct is a valid request for the library values, and passing NULL
+/// does the same: neither field has a meaning at 0, so unlike
+/// @ref SonareNoteTargetAssignConfig there is no default-filling entry point to
+/// call first. The multiscale and band parameters the core also carries are not
+/// exposed, because they trade working memory against path precision without
+/// changing what an anchor means.
+typedef struct {
+  /// Chroma hop in samples, which sets the time resolution of the anchors.
+  int32_t hop_length;
+  /// Chroma bins per octave. Must be a positive multiple of 12, because the grid
+  /// is folded onto the twelve pitch classes and a span that does not divide by
+  /// them has no fold -- 13 and 18 are refused for that reason alone.
+  ///
+  /// A multiple of 12 is necessary and not sufficient: the finest usable
+  /// resolution also depends on @p sample_rate, because the grid has to fit
+  /// inside the analysed band. The ceiling is not monotonic in the rate -- 22050
+  /// carries 60 where 44100 stops at 36, and 8000 and 192000 carry only 12 -- so
+  /// it is measured rather than stated, and 12 is the one value every rate the
+  /// bindings accept can carry. Leave the field at 0 unless a finer grid has been
+  /// checked against the rate it will run at.
+  int32_t bins_per_octave;
+} SonareTakeAlignConfig;
+
+/// @brief How well an alignment was conditioned.
+///
+/// Reported so a caller can tell a take the reference genuinely fits from one it
+/// does not. Every field is descriptive: none of them makes the call fail, and a
+/// caller deciding what is acceptable supplies its own threshold.
+typedef struct {
+  /// Mean absolute frame residual of the path around its diagonal trend. A
+  /// coarse indicator of how far the alignment strayed from a constant rate, not
+  /// an error bound.
+  float mean_residual_frames;
+  /// Chroma frames the reference and the take each produced. Their ratio is the
+  /// overall rate difference the anchors encode.
+  int32_t reference_frames;
+  int32_t take_frames;
+} SonareTakeAlignment;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareTakeAlignConfig, hop_length) == 0,
+              "TakeAlignConfig.hop_length offset");
+static_assert(offsetof(SonareTakeAlignConfig, bins_per_octave) == sizeof(int32_t),
+              "TakeAlignConfig.bins_per_octave offset");
+static_assert(sizeof(SonareTakeAlignConfig) == 2u * sizeof(int32_t),
+              "SonareTakeAlignConfig layout drift");
+static_assert(offsetof(SonareTakeAlignment, mean_residual_frames) == 0,
+              "TakeAlignment.mean_residual_frames offset");
+static_assert(offsetof(SonareTakeAlignment, reference_frames) == sizeof(float),
+              "TakeAlignment.reference_frames offset");
+static_assert(offsetof(SonareTakeAlignment, take_frames) == sizeof(float) + sizeof(int32_t),
+              "TakeAlignment.take_frames offset");
+static_assert(sizeof(SonareTakeAlignment) == sizeof(float) + 2u * sizeof(int32_t),
+              "SonareTakeAlignment layout drift");
+#endif
+
 /// @brief Clip fade-curve ordinals; mirror sonare::arrangement::FadeCurve.
 ///        Pinned by a static_assert in the .cpp so reordering is caught.
 typedef enum SONARE_ENUM_BASE {
@@ -412,6 +470,50 @@ SonareError sonare_project_set_clip_takes(SonareProject* project, uint32_t clip_
 SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32_t clip_id,
                                                   const SonareProjectClipCompSegment* segments,
                                                   size_t segment_count);
+
+/// @brief Aligns one take to a reference timeline, producing the warp anchors
+///        that place the take under it.
+/// @details Measures a chromagram for each signal and aligns them, then reduces
+///   the alignment to anchors @ref sonare_project_set_warp_map accepts: at least
+///   two finite, strictly increasing pairs. The reduction is needed rather than
+///   decorative -- an alignment path advances one axis at a time, so the raw
+///   correspondence repeats a coordinate wherever one signal carries more frames
+///   than the other, and those pairs are refused as a warp map.
+///
+///   **The anchors are oriented for the take's own clip.** @c warp_sample is a
+///   position on the REFERENCE timeline and @c source_sample the corresponding
+///   position in the TAKE, which is the direction a clip whose source is that
+///   take needs. Callers do not compose this from the core alignment primitive by
+///   hand: that one names its arguments the other way round, so passing the
+///   reference as its reference yields the inverse map and nothing reports it.
+///
+///   Both signals are read at @p sample_rate; resample first if they differ,
+///   since the alignment does no I/O and no rate conversion.
+/// @param reference The reference timeline -- the guide take, or the backing
+///   track the takes were sung against.
+/// @param take The signal to be placed under it.
+/// @param sample_rate Sample rate of both buffers; must be > 0.
+/// @param config Optional; NULL or a zeroed struct selects the library values.
+/// @param out_anchors Receives a heap-owned array of @p out_count anchors,
+///   released with @ref sonare_free_warp_anchors. Written on success only.
+/// @param out_alignment Optional; receives how well the alignment was
+///   conditioned. Zeroed on entry, so a caller may read it after any return code.
+/// @return ::SONARE_ERROR_INVALID_PARAMETER when a buffer is empty, the rate is
+///   not positive, a config field is outside its domain, or the two signals
+///   produce no pair of distinct anchors -- the last of which is what an
+///   unalignable pair looks like, and is reported rather than answered with a map
+///   a caller cannot use.
+/// @note The chroma grid does not shrink with the sample rate, so rates under
+///   roughly 8 kHz cannot carry it and are refused by the measurement rather than
+///   by a bound stated here.
+SonareError sonare_align_take_to_reference(const float* reference, size_t reference_len,
+                                           const float* take, size_t take_len, int sample_rate,
+                                           const SonareTakeAlignConfig* config,
+                                           SonareProjectWarpAnchor** out_anchors, size_t* out_count,
+                                           SonareTakeAlignment* out_alignment);
+
+/// @brief Releases an anchor array from @ref sonare_align_take_to_reference.
+void sonare_free_warp_anchors(SonareProjectWarpAnchor* anchors);
 
 /// @brief Adds or replaces a first-class project warp map via an undoable edit.
 ///        @p desc->id must be non-zero and @p anchors must contain at least two

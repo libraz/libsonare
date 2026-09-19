@@ -154,6 +154,29 @@ struct ChromaDtwResult {
 ChromaDtwResult chroma_dtw_align(const Audio& reference, const Audio& target,
                                  const ChromaDtwConfig& config = ChromaDtwConfig());
 
+/// @brief Reduces DTW anchors to a set that strictly increases on both axes.
+/// @details A DTW path advances at least one axis per step, so whenever one
+///   signal carries more frames than the other, several of its frames share one
+///   frame of the other and the anchors repeat a coordinate. @ref WarpMap absorbs
+///   that by de-duplicating on construction, but a consumer that requires
+///   strictly increasing pairs -- the project warp-map C entry point does -- has
+///   to reduce them first, and doing it here keeps one rule rather than one per
+///   consumer.
+///
+///   Collapsing one axis is not enough: it leaves ties on the other whenever the
+///   frame counts are the other way round. So each axis is collapsed in turn, and
+///   a run of equal coordinates is represented by its middle element (the lower
+///   of the two for an even run). The middle rather than an end because a run is
+///   the span over which the alignment is undetermined, and either end states a
+///   position the path does not claim; an existing path point rather than an
+///   interpolated one so every anchor returned is one the DTW actually visited.
+/// @param anchors Monotonic anchors, as @ref ChromaDtwResult::anchors carries.
+/// @return Anchors strictly increasing on both axes, in order. Fewer than two
+///   inputs, or inputs that collapse to fewer than two, come back as given and
+///   are the caller's to refuse -- a map needs two anchors and this does not
+///   invent one.
+std::vector<WarpAnchor> strictly_increasing_anchors(const std::vector<WarpAnchor>& anchors);
+
 // ===========================================================================
 // Time-scale modification (HPSS + component-specific TSM)
 // ===========================================================================

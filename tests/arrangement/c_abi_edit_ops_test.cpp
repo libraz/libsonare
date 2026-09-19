@@ -40,6 +40,27 @@ std::vector<float> make_stereo(int frames) {
   return out;
 }
 
+// A continuous pitch glide. The chroma moves every frame, so no two frames carry
+// the same pitch class and one alignment is strictly cheaper than the rest -- a
+// held tone leaves the path unconstrained along its whole length and the recovered
+// anchors say nothing.
+std::vector<float> make_glide(int sample_rate, double f0, double semitones, double seconds) {
+  const int n = static_cast<int>(sample_rate * seconds);
+  std::vector<float> out(static_cast<size_t>(n));
+  double phase[2] = {};
+  for (int i = 0; i < n; ++i) {
+    const double frac = static_cast<double>(i) / n;
+    const double freq = f0 * std::pow(2.0, semitones * frac / 12.0);
+    double v = 0.0;
+    for (int partial = 1; partial <= 2; ++partial) {
+      phase[partial - 1] += sonare::constants::kTwoPiD * freq * partial / sample_rate;
+      v += (partial == 1 ? 1.0 : 0.5) * std::sin(phase[partial - 1]);
+    }
+    out[static_cast<size_t>(i)] = static_cast<float>(0.4 * v);
+  }
+  return out;
+}
+
 // Adds an audio track carrying one audio clip with decoded samples. Returns the
 // track id via out params.
 struct AudioFixture {
@@ -1494,4 +1515,149 @@ TEST_CASE("C-ABI set_source_audio preserves PCM ownership through undo and redo"
   REQUIRE(project->audio.sources.at(unresolved_source).channels.front().data() == unresolved_data);
 
   sonare_project_destroy(project);
+}
+
+TEST_CASE("C ABI take alignment produces anchors the project warp map accepts", "[c_api][mir]") {
+  // The composition this entry point exists for. The core alignment's own anchors
+  // are monotonic but not strictly increasing, and sonare_project_set_warp_map
+  // requires strict, so forwarding them unreduced is refused -- the control at the
+  // foot of this case is that refusal, asserted against the same project.
+  const int sr = 22050;
+  const std::vector<float> reference = make_glide(sr, 261.63, 11.0, 0.5);
+  const std::vector<float> take = make_glide(sr, 261.63, 11.0, 0.75);
+
+  SonareProjectWarpAnchor* anchors = nullptr;
+  size_t anchor_count = 0;
+  SonareTakeAlignment alignment{};
+  REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), take.data(),
+                                         take.size(), sr, nullptr, &anchors, &anchor_count,
+                                         &alignment) == SONARE_OK);
+  REQUIRE(anchors != nullptr);
+  REQUIRE(anchor_count >= 2);
+
+  // The frame counts follow the arguments this entry point took, not the ones it
+  // passes on: the take is the longer signal here, so a swap shows up.
+  CAPTURE(alignment.reference_frames, alignment.take_frames, alignment.mean_residual_frames);
+  REQUIRE(alignment.reference_frames > 0);
+  REQUIRE(alignment.take_frames > alignment.reference_frames);
+
+  for (size_t i = 1; i < anchor_count; ++i) {
+    CAPTURE(i, anchors[i - 1].warp_sample, anchors[i].warp_sample);
+    REQUIRE(anchors[i].warp_sample > anchors[i - 1].warp_sample);
+    REQUIRE(anchors[i].source_sample > anchors[i - 1].source_sample);
+  }
+  // Orientation: warp_sample is on the reference timeline, source_sample in the
+  // take. The two lengths differ by half again, so the axes cannot be confused.
+  const double last_warp = anchors[anchor_count - 1].warp_sample;
+  const double last_source = anchors[anchor_count - 1].source_sample;
+  CAPTURE(last_warp, last_source, reference.size(), take.size());
+  REQUIRE(last_source > last_warp);
+  REQUIRE(last_warp < static_cast<double>(reference.size()));
+  REQUIRE(last_source < static_cast<double>(take.size()));
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  SonareProjectWarpMapDesc map{};
+  map.id = 101;
+  map.name = "aligned take";
+  map.anchors = anchors;
+  map.anchor_count = anchor_count;
+  // The assertion the whole reduction is for.
+  REQUIRE(sonare_project_set_warp_map(project, &map) == SONARE_OK);
+
+  // Control: the same project refuses an anchor array that repeats a coordinate,
+  // which is the shape the unreduced alignment has. Without this the acceptance
+  // above would also pass if set_warp_map had stopped checking.
+  SonareProjectWarpAnchor tied[] = {{0.0, 0.0}, {100.0, 50.0}, {100.0, 90.0}};
+  SonareProjectWarpMapDesc tied_map{};
+  tied_map.id = 102;
+  tied_map.name = "unreduced";
+  tied_map.anchors = tied;
+  tied_map.anchor_count = 3;
+  REQUIRE(sonare_project_set_warp_map(project, &tied_map) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_project_destroy(project);
+  sonare_free_warp_anchors(anchors);
+}
+
+TEST_CASE("C ABI take alignment reads its configuration and refuses unusable input",
+          "[c_api][mir]") {
+  const int sr = 22050;
+  const std::vector<float> reference = make_glide(sr, 261.63, 11.0, 0.5);
+  const std::vector<float> take = make_glide(sr, 261.63, 11.0, 0.75);
+
+  const auto align = [&](const SonareTakeAlignConfig* config, size_t* count) {
+    SonareProjectWarpAnchor* anchors = nullptr;
+    const SonareError code =
+        sonare_align_take_to_reference(reference.data(), reference.size(), take.data(), take.size(),
+                                       sr, config, &anchors, count, nullptr);
+    sonare_free_warp_anchors(anchors);
+    return code;
+  };
+
+  SECTION("a zeroed config asks for the library values, as NULL does") {
+    size_t from_null = 0;
+    size_t from_zeroed = 0;
+    const SonareTakeAlignConfig zeroed{};
+    REQUIRE(align(nullptr, &from_null) == SONARE_OK);
+    REQUIRE(align(&zeroed, &from_zeroed) == SONARE_OK);
+    REQUIRE(from_null == from_zeroed);
+    REQUIRE(from_null >= 2);
+  }
+
+  SECTION("the hop reaches the alignment, so a finer one yields more anchors") {
+    // A domain check would only prove the value was read off the struct. Two runs
+    // differing in one field, required to answer differently, is what shows it
+    // reached the measurement: a hop dropped on the floor gives the same count.
+    SonareTakeAlignConfig coarse{};
+    coarse.hop_length = 1024;
+    SonareTakeAlignConfig fine{};
+    fine.hop_length = 256;
+    size_t coarse_count = 0;
+    size_t fine_count = 0;
+    REQUIRE(align(&coarse, &coarse_count) == SONARE_OK);
+    REQUIRE(align(&fine, &fine_count) == SONARE_OK);
+    CAPTURE(coarse_count, fine_count);
+    REQUIRE(fine_count > coarse_count);
+  }
+
+  SECTION("the chroma resolution has to divide the twelve pitch classes") {
+    // A second, cheaper proof that the field reaches the measurement: the reader
+    // only checks the sign, so a span the chroma fold cannot use is refused only
+    // if the value travelled all the way into the core's grid.
+    size_t count = 0;
+    SonareTakeAlignConfig folds{};
+    folds.bins_per_octave = 36;
+    REQUIRE(align(&folds, &count) == SONARE_OK);
+    SonareTakeAlignConfig does_not_fold{};
+    does_not_fold.bins_per_octave = 18;
+    REQUIRE(align(&does_not_fold, &count) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareTakeAlignConfig negative{};
+    negative.bins_per_octave = -12;
+    REQUIRE(align(&negative, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("unusable input is an invalid parameter rather than an empty answer") {
+    size_t count = 0;
+    SonareProjectWarpAnchor* anchors = nullptr;
+    REQUIRE(sonare_align_take_to_reference(nullptr, 0, take.data(), take.size(), sr, nullptr,
+                                           &anchors, &count,
+                                           nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), nullptr, 0, sr,
+                                           nullptr, &anchors, &count,
+                                           nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), take.data(),
+                                           take.size(), 0, nullptr, &anchors, &count,
+                                           nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    // Out-params are cleared on every refusal, so a caller reading them after a
+    // failure sees nothing rather than a stale pointer.
+    REQUIRE(anchors == nullptr);
+    REQUIRE(count == 0);
+    SonareTakeAlignment alignment{};
+    alignment.reference_frames = 7;
+    REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), take.data(),
+                                           take.size(), -1, nullptr, &anchors, &count,
+                                           &alignment) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(alignment.reference_frames == 0);
+  }
 }

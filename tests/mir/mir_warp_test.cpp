@@ -26,6 +26,7 @@ using sonare::Audio;
 using sonare::mir::chroma_dtw_align;
 using sonare::mir::ChromaDtwConfig;
 using sonare::mir::ChromaDtwResult;
+using sonare::mir::strictly_increasing_anchors;
 using sonare::mir::warp_to_length;
 using sonare::mir::warp_to_map;
 using sonare::mir::WarpAnchor;
@@ -539,6 +540,146 @@ TEST_CASE("chroma-DTW builds its chroma grid from the requested resolution", "[m
     ChromaDtwConfig cfg;
     cfg.bins_per_octave = 0;
     REQUIRE_THROWS(chroma_dtw_align(a, b, cfg));
+  }
+}
+
+TEST_CASE("chroma-DTW puts the target on the warp axis and the reference on the source axis",
+          "[mir]") {
+  // Which anchor field carries which signal decides whether a WarpMap built
+  // from these anchors warps the way the caller asked or the inverse, and a
+  // swap is invisible to every other assertion here: the path stays monotonic,
+  // the anchor count still matches, and the recovered offset only changes sign.
+  // The sibling cases that do assert on the path read `path`, whose two axes are
+  // named by position, so none of them reaches this.
+  //
+  // Asserted by length rather than by alignment accuracy. A DTW path ends at the
+  // far corner of its cost matrix whatever it did in between, so the last anchor
+  // carries each signal's own extent -- which makes two signals of different
+  // lengths enough, and makes the check independent of how well short signals
+  // align.
+  const int sr = 22050;
+  const double reference_seconds = 0.4;
+  const double target_seconds = 0.6;
+  const Audio reference = make_glide(sr, 261.63, 11.0, reference_seconds);
+  const Audio target = make_glide(sr, 261.63, 11.0, target_seconds);
+
+  ChromaDtwConfig cfg;
+  cfg.hop_length = 512;
+  const ChromaDtwResult r = chroma_dtw_align(reference, target, cfg);
+
+  REQUIRE(r.anchors.size() >= 2);
+  REQUIRE(r.reference_frames > 0);
+  REQUIRE(r.target_frames > 0);
+  // The frame counts follow the same naming, and the two differ here, so a
+  // swapped pair fails before the anchors are read.
+  REQUIRE(r.target_frames > r.reference_frames);
+
+  const WarpAnchor& last = r.anchors.back();
+  const double reference_extent = static_cast<double>(reference.size());
+  const double target_extent = static_cast<double>(target.size());
+  CAPTURE(last.warp_sample, last.source_sample, reference_extent, target_extent);
+  // One hop of slack at each end: the last frame starts within a hop of the
+  // signal's end rather than at it.
+  const double slack = 2.0 * cfg.hop_length;
+  REQUIRE(std::abs(last.warp_sample - target_extent) < slack);
+  REQUIRE(std::abs(last.source_sample - reference_extent) < slack);
+  // Stated as the separation the swap would invert, so the assertion names the
+  // defect rather than two coincidences.
+  REQUIRE(last.warp_sample > last.source_sample);
+
+  // What the anchors are for: WarpMap::from_anchors consumes them directly, and
+  // `warp_to_source` then takes a position on the TARGET timeline to one on the
+  // REFERENCE timeline. A caller placing a take under a reference needs that
+  // direction, so it is pinned here rather than left to the header's prose.
+  // These anchors are monotonic but NOT strictly increasing, and a consumer that
+  // needs strictness has to reduce them rather than forward them. The path takes
+  // one step per cell, so when one signal carries more frames than the other,
+  // several of its frames necessarily share a frame of the other -- which appears
+  // here as repeated values on the shorter signal's axis. Structural, not
+  // incidental: it follows from target_frames > reference_frames above.
+  //
+  // WarpMap::from_anchors absorbs it by de-duplicating on construction, so
+  // nothing inside C++ notices. sonare_project_set_warp_map does not: it
+  // requires at least two finite, strictly increasing pairs, so the same anchors
+  // that satisfy the C++ consumer are refused at the C boundary.
+  int warp_flat = 0;
+  int source_flat = 0;
+  for (size_t i = 1; i < r.anchors.size(); ++i) {
+    if (!(r.anchors[i].warp_sample > r.anchors[i - 1].warp_sample)) ++warp_flat;
+    if (!(r.anchors[i].source_sample > r.anchors[i - 1].source_sample)) ++source_flat;
+  }
+  CAPTURE(r.anchors.size(), warp_flat, source_flat);
+  // The longer signal advances every step, so its own axis stays strict.
+  REQUIRE(warp_flat == 0);
+  REQUIRE(source_flat > 0);
+
+  const WarpMap map = WarpMap::from_anchors(r.anchors);
+  REQUIRE(map.valid());
+  const double mapped = map.warp_to_source(target_extent * 0.5);
+  CAPTURE(mapped);
+  REQUIRE(mapped > 0.0);
+  REQUIRE(mapped < reference_extent);
+
+  // And the reduction that makes them acceptable to a strict consumer actually
+  // removes the ties counted above rather than returning the input.
+  const std::vector<WarpAnchor> strict = strictly_increasing_anchors(r.anchors);
+  REQUIRE(strict.size() >= 2);
+  REQUIRE(strict.size() < r.anchors.size());
+  for (size_t i = 1; i < strict.size(); ++i) {
+    CAPTURE(i, strict[i - 1].warp_sample, strict[i].warp_sample, strict[i - 1].source_sample,
+            strict[i].source_sample);
+    REQUIRE(strict[i].warp_sample > strict[i - 1].warp_sample);
+    REQUIRE(strict[i].source_sample > strict[i - 1].source_sample);
+  }
+  REQUIRE(WarpMap::from_anchors(strict).valid());
+}
+
+TEST_CASE("strictly-increasing reduction represents a tied run by its middle anchor", "[mir]") {
+  // Hand-built so the selection rule is asserted against stated positions rather
+  // than against whatever a DTW happened to produce.
+  SECTION("a tie on the source axis") {
+    // Three anchors share source 100; the middle one is warp 20.
+    const std::vector<WarpAnchor> reduced = strictly_increasing_anchors(
+        {{0.0, 0.0}, {10.0, 100.0}, {20.0, 100.0}, {30.0, 100.0}, {40.0, 200.0}});
+    REQUIRE(reduced.size() == 3);
+    REQUIRE(reduced[1].warp_sample == Catch::Approx(20.0));
+    REQUIRE(reduced[1].source_sample == Catch::Approx(100.0));
+  }
+
+  SECTION("a tie on the warp axis, which one source-axis pass cannot reach") {
+    // The mirror case: collapsing source alone leaves these three untouched,
+    // because every source value here is already distinct.
+    const std::vector<WarpAnchor> reduced = strictly_increasing_anchors(
+        {{0.0, 0.0}, {100.0, 10.0}, {100.0, 20.0}, {100.0, 30.0}, {200.0, 40.0}});
+    REQUIRE(reduced.size() == 3);
+    REQUIRE(reduced[1].warp_sample == Catch::Approx(100.0));
+    REQUIRE(reduced[1].source_sample == Catch::Approx(20.0));
+  }
+
+  SECTION("an even run takes the lower middle, so the choice is reproducible") {
+    const std::vector<WarpAnchor> reduced =
+        strictly_increasing_anchors({{0.0, 0.0}, {10.0, 100.0}, {20.0, 100.0}, {30.0, 200.0}});
+    REQUIRE(reduced.size() == 3);
+    REQUIRE(reduced[1].warp_sample == Catch::Approx(10.0));
+  }
+
+  SECTION("an input already strict comes back unchanged") {
+    const std::vector<WarpAnchor> input = {{0.0, 0.0}, {10.0, 20.0}, {30.0, 40.0}};
+    const std::vector<WarpAnchor> reduced = strictly_increasing_anchors(input);
+    REQUIRE(reduced.size() == input.size());
+    for (size_t i = 0; i < input.size(); ++i) {
+      REQUIRE(reduced[i].warp_sample == Catch::Approx(input[i].warp_sample));
+      REQUIRE(reduced[i].source_sample == Catch::Approx(input[i].source_sample));
+    }
+  }
+
+  SECTION("a run that collapses below two anchors is handed back rather than invented into one") {
+    // Every anchor shares both coordinates, so the reduction has nothing to
+    // return; the caller refuses it, since a map needs two.
+    const std::vector<WarpAnchor> input = {{5.0, 7.0}, {5.0, 7.0}, {5.0, 7.0}};
+    const std::vector<WarpAnchor> reduced = strictly_increasing_anchors(input);
+    REQUIRE(reduced.size() == input.size());
+    REQUIRE_THROWS([&] { WarpMap::from_anchors(reduced); }());
   }
 }
 

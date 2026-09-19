@@ -35,6 +35,7 @@
 #include "midi/ump.h"
 #include "mir/grid_snap.h"
 #include "mir/tempo_estimator_bridge.h"
+#include "mir/warp.h"
 #include "rt/command.h"
 #include "serialize/project_serializer.h"
 #include "transport/tempo_map.h"

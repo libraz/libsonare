@@ -341,6 +341,84 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
 }
 
 // ============================================================================
+// Take alignment
+// ============================================================================
+
+SonareError sonare_align_take_to_reference(const float* reference, size_t reference_len,
+                                           const float* take, size_t take_len, int sample_rate,
+                                           const SonareTakeAlignConfig* config,
+                                           SonareProjectWarpAnchor** out_anchors, size_t* out_count,
+                                           SonareTakeAlignment* out_alignment) {
+  SONARE_C_API_ENTRY;
+  if (out_alignment != nullptr) *out_alignment = SonareTakeAlignment{};
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_anchors == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_anchors = nullptr;
+  *out_count = 0;
+  if (reference == nullptr || take == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (reference_len == 0 || take_len == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  sonare::mir::ChromaDtwConfig dtw_config;
+  if (config != nullptr) {
+    // Zero is not a value either field can take, so it reads as "library value"
+    // rather than needing a separate default-filling entry point.
+    if (config->hop_length != 0) dtw_config.hop_length = config->hop_length;
+    if (config->bins_per_octave != 0) dtw_config.bins_per_octave = config->bins_per_octave;
+  }
+
+  SONARE_C_TRY
+  const Audio reference_audio =
+      Audio::from_vector(std::vector<float>(reference, reference + reference_len), sample_rate);
+  const Audio take_audio =
+      Audio::from_vector(std::vector<float>(take, take + take_len), sample_rate);
+  // Argument order inverted on purpose, and this is the whole reason the entry
+  // point exists rather than the core call being exposed directly: the core names
+  // the signal that lands on the SOURCE axis its `reference`, while a clip needs
+  // its own recording there. Passing the take as the core's reference is what puts
+  // the reference timeline on the warp axis.
+  const sonare::mir::ChromaDtwResult aligned =
+      sonare::mir::chroma_dtw_align(take_audio, reference_audio, dtw_config);
+
+  const std::vector<sonare::mir::WarpAnchor> anchors =
+      sonare::mir::strictly_increasing_anchors(aligned.anchors);
+  if (out_alignment != nullptr) {
+    out_alignment->mean_residual_frames = aligned.mean_residual_frames;
+    // Named for the arguments this entry point took, not for the ones it passed
+    // on, so the two counts describe the signals the caller handed over.
+    out_alignment->reference_frames = aligned.target_frames;
+    out_alignment->take_frames = aligned.reference_frames;
+  }
+  // The reduction hands back its input when it cannot produce two distinct
+  // anchors, so the count is checked here rather than assumed from the alignment
+  // having succeeded.
+  if (anchors.size() < 2) return SONARE_ERROR_INVALID_PARAMETER;
+  for (const sonare::mir::WarpAnchor& anchor : anchors) {
+    if (!std::isfinite(anchor.warp_sample) || !std::isfinite(anchor.source_sample)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+  }
+
+  auto rows = std::make_unique<SonareProjectWarpAnchor[]>(anchors.size());
+  for (size_t i = 0; i < anchors.size(); ++i) {
+    rows[i].warp_sample = anchors[i].warp_sample;
+    rows[i].source_sample = anchors[i].source_sample;
+  }
+  *out_count = anchors.size();
+  *out_anchors = rows.release();
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  if (out_anchors) *out_anchors = nullptr;
+  if (out_count) *out_count = 0;
+  SONARE_C_STUB_NOT_SUPPORTED(reference, reference_len, take, take_len, sample_rate, config,
+                              out_anchors, out_count, out_alignment);
+#endif
+}
+
+void sonare_free_warp_anchors(SonareProjectWarpAnchor* anchors) { delete[] anchors; }
+
+// ============================================================================
 // Memory management
 // ============================================================================
 
