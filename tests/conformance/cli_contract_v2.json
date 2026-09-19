@@ -3449,6 +3449,15 @@
           "domain": null
         },
         {
+          "name": "report",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "top-db",
           "type": "number",
           "default": 60.0,
@@ -8705,6 +8714,15 @@
           "domain": null
         },
         {
+          "name": "report",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "top-db",
           "type": "number",
           "default": 60.0,
@@ -8739,6 +8757,26 @@
               "end_sample": "integer"
             }
           }
+        },
+        "success_report": {
+          "keys": {
+            "intervals": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "start_sample": "integer",
+                  "end_sample": "integer"
+                }
+              }
+            },
+            "report": {
+              "keys": {
+                "silence_ceiling_db": "number",
+                "max_signal_intervals": "integer",
+                "min_signal_intervals": "integer"
+              }
+            }
+          }
         }
       },
       "cases": [
@@ -8769,6 +8807,54 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "report",
+          "argv": [
+            "split-silence",
+            "{audio}",
+            "--json",
+            "--report"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success_report",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "two_takes_report",
+          "argv": [
+            "split-silence",
+            "{audio}",
+            "--input",
+            "{audio_take}",
+            "--json",
+            "--report"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success_report",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "report_text",
+          "argv": [
+            "split-silence",
+            "{audio}",
+            "--report"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "silence ceiling",
+            "--top-db",
+            "intervals per signal:"
+          ]
         }
       ],
       "artifacts": {}

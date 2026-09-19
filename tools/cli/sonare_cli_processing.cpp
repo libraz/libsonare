@@ -1175,9 +1175,13 @@ int cmd_split_silence(const CliArgs& args, const Audio& audio) {
   // calls. A single take answers exactly as sonare_split_silence does.
   int* flat = nullptr;
   size_t flat_count = 0;
+  // Always asked for, only sometimes printed: the report costs nothing here and
+  // taking it unconditionally keeps one call site rather than two that could
+  // refuse differently.
+  SonareSilenceCommonReport report{};
   const SonareError err =
-      sonare_split_silence_common(signals.data(), signals.size(), lengths.data(), top_db,
-                                  args.n_fft, args.hop_length, &flat, &flat_count);
+      sonare_split_silence_common_ex(signals.data(), signals.size(), lengths.data(), top_db,
+                                     args.n_fft, args.hop_length, &flat, &flat_count, &report);
   if (err != SONARE_OK) {
     // Mapped rather than raised as a plain runtime error, so the failure keeps
     // the class it carries out to the exit code the two front-ends publish for
@@ -1197,8 +1201,8 @@ int cmd_split_silence(const CliArgs& args, const Audio& audio) {
     write_split_silence_takes(write_takes, takes, ranges, audio.sample_rate());
   }
 
-  if (args.json_output) {
-    JsonBuilder json;
+  const bool with_report = args.has("report");
+  const auto append_intervals = [&ranges](JsonBuilder& json) {
     json.begin_array();
     for (const auto& range : ranges) {
       json.begin_object()
@@ -1206,11 +1210,38 @@ int cmd_split_silence(const CliArgs& args, const Audio& audio) {
           .kv("end_sample", range.second)
           .end_object();
     }
-    json.end_array().print();
+    json.end_array();
+  };
+  if (args.json_output) {
+    JsonBuilder json;
+    if (with_report) {
+      json.begin_object().key("intervals");
+      append_intervals(json);
+      json.key("report")
+          .begin_object()
+          .kv("silence_ceiling_db", report.silence_ceiling_db)
+          .kv("max_signal_intervals", report.max_signal_intervals)
+          .kv("min_signal_intervals", report.min_signal_intervals)
+          .end_object()
+          .end_object();
+    } else {
+      append_intervals(json);
+    }
+    json.print();
   } else {
     std::cout << "Non-silent intervals: " << ranges.size() << "\n";
     for (const auto& range : ranges) {
       printf("  %d - %d\n", range.first, range.second);
+    }
+    if (with_report) {
+      // Read against the --top-db in use, which is the whole rule: a ceiling
+      // under it means the threshold was too loose for the quiet these takes
+      // have, and one at or over it means the quiet is there and they do not
+      // share it.
+      printf("  silence ceiling %.2f dB at --top-db %.2f\n", report.silence_ceiling_db,
+             static_cast<double>(top_db));
+      printf("  intervals per signal: %d..%d\n", report.min_signal_intervals,
+             report.max_signal_intervals);
     }
     if (!write_takes.empty()) {
       std::cout << "Wrote " << takes.size() * ranges.size() << " take files with prefix "

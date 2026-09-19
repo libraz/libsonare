@@ -657,9 +657,14 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // `--input` names further takes of the same part; the positional is the
     // first. `--write-takes` is the destination rather than `-o`, because one
     // run writes a file per take per interval.
+    // `--report` wraps the result instead of replacing it: without the flag the
+    // payload is the bare interval array it has always been, so a caller reading
+    // `[0].start_sample` is untouched. The flag is what makes the diagnosis
+    // reachable from a command line at all -- one interval covering everything
+    // answers three different situations and the intervals cannot say which.
     add_command(commands, "split-silence", true,
                 {repeatable_path("input"), number_value("top-db", 60.0), path_value("write-takes"),
-                 global_int("n-fft", 2048), global_int("hop-length", 512)});
+                 flag("report"), global_int("n-fft", 2048), global_int("hop-length", 512)});
     add_command(commands, "normalize", true,
                 {string_value("mode", "peak"), number_value("target-db"), required_output()}, {},
                 nullptr, 0, /*preserves_stereo_input=*/true);

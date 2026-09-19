@@ -761,14 +761,16 @@ def _split_silence_slice(take: list[float], start: int, end: int) -> list[float]
 
 
 def cmd_split_silence(args: argparse.Namespace) -> int:
-    from . import split_silence_common
+    from . import split_silence_common_with_report
 
     top_db = getattr(args, "top_db", 60.0)
     n_fft = getattr(args, "n_fft", 2048)
     hop_length = getattr(args, "hop_length", 512)
 
     takes, sr = _split_silence_takes(args)
-    intervals = split_silence_common(
+    # Always asked for, only sometimes printed: one call site rather than two
+    # that could come to refuse differently.
+    intervals, report = split_silence_common_with_report(
         takes,
         top_db=top_db,
         frame_length=n_fft,
@@ -785,16 +787,43 @@ def cmd_split_silence(args: argparse.Namespace) -> int:
                     sr,
                 )
 
+    with_report = bool(getattr(args, "report", False))
+    interval_rows = [{"start_sample": start, "end_sample": end} for start, end in intervals]
     if args.json:
-        print(
-            _strict_json_dumps(
-                [{"start_sample": start, "end_sample": end} for start, end in intervals]
+        # --report wraps the result rather than replacing it, so without the flag
+        # the payload is the bare array it has always been.
+        if with_report:
+            print(
+                _strict_json_dumps(
+                    {
+                        "intervals": interval_rows,
+                        "report": {
+                            "silence_ceiling_db": report.silence_ceiling_db,
+                            "max_signal_intervals": report.max_signal_intervals,
+                            "min_signal_intervals": report.min_signal_intervals,
+                        },
+                    }
+                )
             )
-        )
+        else:
+            print(_strict_json_dumps(interval_rows))
     else:
         print(f"Non-silent intervals: {len(intervals)}")
         for start, end in intervals:
             print(f"  {start} - {end}")
+        if with_report:
+            # Read against the --top-db in use, which is the whole rule: a ceiling
+            # under it means the threshold was too loose for the quiet these takes
+            # have, and one at or over it means the quiet is there and they do not
+            # share it.
+            print(
+                f"  silence ceiling {report.silence_ceiling_db:.2f} dB "
+                f"at --top-db {float(top_db):.2f}"
+            )
+            print(
+                f"  intervals per signal: {report.min_signal_intervals}.."
+                f"{report.max_signal_intervals}"
+            )
         if write_takes:
             print(f"Wrote {len(takes) * len(intervals)} take files with prefix {write_takes}")
     return 0

@@ -1108,6 +1108,15 @@ def _build_parser() -> _ContractArgumentParser:
         metavar="PREFIX",
         help=("Write every take sliced at every interval as PREFIX{take:02d}_{interval:03d}.wav"),
     )
+    split_silence_p.add_argument(
+        "--report",
+        action="store_true",
+        help=(
+            "Also say why those are the intervals: the largest --top-db at which every "
+            "take still shows silence, read against the one in use. One interval covering "
+            "everything answers three situations and the intervals cannot say which"
+        ),
+    )
     resample_p = sub.add_parser(
         "resample", parents=[common], help="Resample audio to a target sample rate"
     )
