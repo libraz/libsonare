@@ -11185,6 +11185,31 @@
           ]
         },
         {
+          "id": "two_takes",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes_many}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "--audio",
+            "3={audio}",
+            "-o",
+            "{align_takes_many_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "aligned_project_many",
+          "stdout": "json"
+        },
+        {
           "id": "finer_hop",
           "argv": [
             "project",
@@ -11506,6 +11531,12 @@
           "encoding": "utf-8",
           "bytes_key": "bytes",
           "sha256": "06df818b2b075ecc4feeb7a3284d47a399809f15a1ef21120aae841349e21abe"
+        },
+        "aligned_project_many": {
+          "placeholder": "align_takes_many_output",
+          "encoding": "utf-8",
+          "bytes_key": "bytes",
+          "sha256": "0b91531dd06e9cdb1350ad87ee4f8e4c24fcc29dcdda4913795d58663ded51a0"
         }
       }
     },
@@ -15248,6 +15279,7 @@
       "warning": "{\"version\":1,\"sample_rate\":48000,\"tracks\":[{\"id\":1,\"name\":\"audio\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":99,\"start_ppq\":0,\"length_ppq\":1,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}]}",
       "malformed": "{ this is not valid json ",
       "takes": "{\"version\":1,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}",
+      "takes_many": "{\"version\":1,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":3,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take-a\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":3,\"name\":\"take-b\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":3,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":3,\"track_id\":3,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[{\"id\":7,\"name\":\"hand-made\",\"anchors\":[{\"warp_sample\":0.0,\"source_sample\":0.0},{\"warp_sample\":100.0,\"source_sample\":120.0}]}]}",
       "takes_single": "{\"version\":1,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}"
     },
     "presets": {

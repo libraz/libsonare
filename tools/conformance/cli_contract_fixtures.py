@@ -139,6 +139,7 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     # A second destination, so the case that varies the chroma resolution does not
     # overwrite the document whose bytes the case above pins.
     paths["align_takes_finer_output"] = str(directory / "aligned-takes-finer.json")
+    paths["align_takes_many_output"] = str(directory / "aligned-takes-many.json")
     # The import paths read what the export paths write, so the export contracts
     # are ordered ahead of them in the manifest.
     paths["smf_output"] = str(directory / "export.mid")

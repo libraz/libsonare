@@ -1523,16 +1523,16 @@ def validate_manifest(manifest: Any) -> list[str]:
         projects = fixtures["projects"]
         if _exact(
             projects,
-            {"clean", "warning", "malformed", "takes", "takes_single"},
+            {"clean", "warning", "malformed", "takes", "takes_many", "takes_single"},
             "manifest.fixtures.projects",
             errors,
         ):
-            for key in ("clean", "warning", "malformed", "takes", "takes_single"):
+            for key in ("clean", "warning", "malformed", "takes", "takes_many", "takes_single"):
                 if not isinstance(projects[key], str):
                     errors.append(
                         f"manifest.fixtures.projects.{key}: expected a string"
                     )
-            for key in ("clean", "warning", "takes", "takes_single"):
+            for key in ("clean", "warning", "takes", "takes_many", "takes_single"):
                 if isinstance(projects.get(key), str):
                     try:
                         json.loads(projects[key])
