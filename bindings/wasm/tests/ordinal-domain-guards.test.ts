@@ -253,14 +253,11 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
   });
 
   it('refuses an ordinal past the end of the table instead of rendering silence', () => {
-    // 9, 10, 99 and -1 all used to be accepted and render exactly what 'none'
+    // 13, 99 and -1 all used to be accepted and render exactly what 'none'
     // renders, so the caller got a working patch with their routing dropped.
-    // The two tables end at different ordinals: 9-12 are the engine-owned axes
-    // on the destination side and past the end on the source side.
-    for (const value of [9, 10, 99, -1]) {
-      expectRefusalNaming('mod source', () => fromSource(value));
-    }
+    // Both tables hold 13 values, so 13 is the first ordinal past either end.
     for (const value of [13, 99, -1]) {
+      expectRefusalNaming('mod source', () => fromSource(value));
       expectRefusalNaming('mod destination', () => toDestination(value));
     }
   });
