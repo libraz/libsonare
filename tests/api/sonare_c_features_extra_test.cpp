@@ -15,6 +15,7 @@
 
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace {
 
@@ -531,6 +532,109 @@ TEST_CASE("sonare_split_silence_common keeps what any one signal sounds through"
 
     REQUIRE(sonare_split_silence_common(nullptr, 0, nullptr, 60.0f, 2048, 512, &flat, &count) ==
             SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_split_silence_common_ex separates the three ways one interval happens",
+          "[c_api][features]") {
+  // One interval covering everything is the answer to three different
+  // situations. Each section builds one of them and reads the pair of figures
+  // that is supposed to tell it apart from the other two.
+  const size_t tenth = static_cast<size_t>(kSampleRate) / 10;
+  const auto report_of = [](const std::vector<const float*>& signals,
+                            const std::vector<size_t>& lengths, float top_db) {
+    int* flat = nullptr;
+    size_t count = 7;
+    SonareSilenceCommonReport report{};
+    REQUIRE(sonare_split_silence_common_ex(signals.data(), signals.size(), lengths.data(), top_db,
+                                           2048, 512, &flat, &count, &report) == SONARE_OK);
+    const size_t intervals = count / 2;
+    if (flat != nullptr) sonare_free_ints(flat);
+    return std::make_pair(intervals, report);
+  };
+
+  SECTION("a part that never stops: no threshold can open a gap") {
+    const auto tone = sonare::test::generate_sine_samples(440.0f, kSampleRate, tenth * 10, 1.0f);
+    const auto [intervals, report] = report_of({tone.data()}, {tone.size()}, 60.0f);
+    REQUIRE(intervals == 1);
+    REQUIRE(report.max_signal_intervals == 1);
+    REQUIRE(report.min_signal_intervals == 1);
+    // A steady tone's frames sit within a hair of each other, so the deepest dip
+    // is nowhere near any usable threshold. That is what says "not the setting".
+    REQUIRE(report.silence_ceiling_db < 6.0f);
+  }
+
+  SECTION("takes that each go quiet, but never together") {
+    std::vector<float> early(tenth * 10, 0.0f);
+    std::vector<float> late(tenth * 10, 0.0f);
+    const auto tone = sonare::test::generate_sine_samples(440.0f, kSampleRate, tenth * 5, 1.0f);
+    // Each take is silent for half its length and the halves do not overlap, so
+    // the union covers everything while each take has silence of its own.
+    std::copy(tone.begin(), tone.end(), early.begin());
+    std::copy(tone.begin(), tone.end(), late.begin() + static_cast<long>(tenth * 5));
+    const float top_db = 60.0f;
+    const auto [intervals, report] =
+        report_of({early.data(), late.data()}, {early.size(), late.size()}, top_db);
+    REQUIRE(intervals == 1);
+    // The ceiling at or above the threshold in use is what names this case: the
+    // silence is there at this very setting, so a single interval means the takes
+    // do not share it. The interval counts do NOT say so -- a take that sounds
+    // once and stops counts 1, the same as a take with no silence at all, which
+    // is why the ceiling and not the count carries the verdict.
+    REQUIRE(report.silence_ceiling_db >= top_db);
+    REQUIRE(report.min_signal_intervals == 1);
+    REQUIRE(report.max_signal_intervals == 1);
+  }
+
+  SECTION("a shared dip the threshold was too loose to see, and the figure that fixes it") {
+    // A dip 40 dB down in both takes, at the same place. At top_db 60 the frames
+    // stay above the line and nothing is cut; the ceiling says 60 was too loose,
+    // and a threshold under it splits the very same input.
+    std::vector<float> take(tenth * 10, 0.0f);
+    const auto loud = sonare::test::generate_sine_samples(440.0f, kSampleRate, tenth * 10, 1.0f);
+    std::copy(loud.begin(), loud.end(), take.begin());
+    const float quiet_gain = sonare::db_to_linear(-40.0f);
+    for (size_t i = tenth * 4; i < tenth * 6; ++i) take[i] *= quiet_gain;
+    const std::vector<float> other = take;
+
+    const float loose_top_db = 60.0f;
+    const auto [loose_intervals, loose] =
+        report_of({take.data(), other.data()}, {take.size(), other.size()}, loose_top_db);
+    REQUIRE(loose_intervals == 1);
+    REQUIRE(loose.max_signal_intervals == 1);
+    // Below the threshold in use, which is the signature of this case and what
+    // separates it from the section above, where the ceiling sits at or over it.
+    REQUIRE(loose.silence_ceiling_db < loose_top_db);
+    REQUIRE(loose.silence_ceiling_db > 30.0f);
+
+    // The figure is actionable, not merely different: a threshold below it cuts.
+    const auto [tight_intervals, tight] = report_of(
+        {take.data(), other.data()}, {take.size(), other.size()}, loose.silence_ceiling_db - 5.0f);
+    REQUIRE(tight_intervals == 2);
+    REQUIRE(tight.min_signal_intervals == 2);
+  }
+
+  SECTION("the plain entry point answers identically and takes no report") {
+    std::vector<float> take(tenth * 10, 0.0f);
+    const auto tone = sonare::test::generate_sine_samples(440.0f, kSampleRate, tenth * 3, 1.0f);
+    std::copy(tone.begin(), tone.end(), take.begin());
+    int* plain = nullptr;
+    size_t plain_count = 0;
+    const float* signal = take.data();
+    const size_t length = take.size();
+    REQUIRE(sonare_split_silence_common(&signal, 1, &length, 60.0f, 2048, 512, &plain,
+                                        &plain_count) == SONARE_OK);
+    const std::vector<int> expected(plain, plain + plain_count);
+    if (plain != nullptr) sonare_free_ints(plain);
+
+    int* with_report = nullptr;
+    size_t with_report_count = 0;
+    SonareSilenceCommonReport report{};
+    REQUIRE(sonare_split_silence_common_ex(&signal, 1, &length, 60.0f, 2048, 512, &with_report,
+                                           &with_report_count, &report) == SONARE_OK);
+    const std::vector<int> got(with_report, with_report + with_report_count);
+    if (with_report != nullptr) sonare_free_ints(with_report);
+    REQUIRE(got == expected);
   }
 }
 

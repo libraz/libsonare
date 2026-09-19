@@ -213,43 +213,18 @@ SonareError sonare_split_silence_common_ex(const float* const* signals, size_t s
     }
   }
   SONARE_C_TRY
-  std::vector<std::pair<int, int>> merged;
-  // The union needs every signal quiet at the same place, so the binding
-  // constraint is the signal with the least headroom -- hence the minimum of the
-  // per-signal ceilings rather than the deepest dip anywhere.
-  float ceiling_db = 0.0f;
-  int32_t most = 0;
-  int32_t fewest = 0;
-  for (size_t index = 0; index < signal_count; ++index) {
-    sonare::SplitReport report =
-        sonare::split_with_report(signals[index], lengths[index], top_db, frame_length, hop_length);
-    const int32_t count = static_cast<int32_t>(report.intervals.size());
-    if (index == 0) {
-      ceiling_db = report.silence_ceiling_db;
-      most = count;
-      fewest = count;
-    } else {
-      ceiling_db = std::min(ceiling_db, report.silence_ceiling_db);
-      most = std::max(most, count);
-      fewest = std::min(fewest, count);
-    }
-    merged.insert(merged.end(), report.intervals.begin(), report.intervals.end());
-  }
+  // The union rule and its report live in the core because the WebAssembly
+  // binding needs them too and calls the core directly, never this layer.
+  const CommonSplitReport report =
+      split_common_with_report(signals, lengths, signal_count, top_db, frame_length, hop_length);
   if (out_report != nullptr) {
-    out_report->silence_ceiling_db = ceiling_db;
-    out_report->max_signal_intervals = most;
-    out_report->min_signal_intervals = fewest;
+    out_report->silence_ceiling_db = report.silence_ceiling_db;
+    out_report->max_signal_intervals = static_cast<int32_t>(report.max_signal_intervals);
+    out_report->min_signal_intervals = static_cast<int32_t>(report.min_signal_intervals);
   }
-  std::sort(merged.begin(), merged.end());
   std::vector<int> flat;
-  flat.reserve(merged.size() * 2);
-  for (const auto& range : merged) {
-    // Touching counts as overlapping: two takes whose intervals meet exactly
-    // leave no silent sample between them, so a cut there would be mid-phrase.
-    if (!flat.empty() && range.first <= flat.back()) {
-      flat.back() = std::max(flat.back(), range.second);
-      continue;
-    }
+  flat.reserve(report.intervals.size() * 2);
+  for (const auto& range : report.intervals) {
     flat.push_back(range.first);
     flat.push_back(range.second);
   }

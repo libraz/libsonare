@@ -105,8 +105,8 @@ TrimResult trim(const std::vector<float>& x, float top_db, int frame_length, int
   return trim(x.data(), x.size(), top_db, frame_length, hop_length);
 }
 
-std::vector<std::pair<int, int>> split(const float* x, std::size_t n, float top_db,
-                                       int frame_length, int hop_length) {
+SplitReport split_with_report(const float* x, std::size_t n, float top_db, int frame_length,
+                              int hop_length) {
   // Rejected for the same reason as trim(): an empty interval list is already
   // the all-silent result, so an empty input must not share it.
   if (n == 0) {
@@ -143,7 +143,62 @@ std::vector<std::pair<int, int>> split(const float* x, std::size_t n, float top_
     const int end_sample = static_cast<int>(n);
     if (end_sample > start_sample) intervals.emplace_back(start_sample, end_sample);
   }
-  return intervals;
+  // Measured from the same frames the mask was built from, so the figure and the
+  // intervals can never describe different passes. The quietest frame against the
+  // peak IS the threshold the detector compares to, read back as a dB depth: it
+  // is the largest top_db at which this signal still has a frame under the line.
+  SplitReport report;
+  report.intervals = std::move(intervals);
+  if (!rms.empty()) {
+    const float peak = *std::max_element(rms.begin(), rms.end());
+    if (peak > 0.0f) {
+      const float quietest = *std::min_element(rms.begin(), rms.end());
+      report.silence_ceiling_db = -linear_to_db(quietest / peak);
+    }
+  }
+  return report;
+}
+
+std::vector<std::pair<int, int>> split(const float* x, std::size_t n, float top_db,
+                                       int frame_length, int hop_length) {
+  return split_with_report(x, n, top_db, frame_length, hop_length).intervals;
+}
+
+CommonSplitReport split_common_with_report(const float* const* signals, const std::size_t* lengths,
+                                           std::size_t signal_count, float top_db, int frame_length,
+                                           int hop_length) {
+  if (signal_count == 0 || signals == nullptr || lengths == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "split_common: at least one signal is required");
+  }
+  CommonSplitReport out;
+  std::vector<std::pair<int, int>> collected;
+  for (std::size_t index = 0; index < signal_count; ++index) {
+    SplitReport one =
+        split_with_report(signals[index], lengths[index], top_db, frame_length, hop_length);
+    const int count = static_cast<int>(one.intervals.size());
+    if (index == 0) {
+      out.silence_ceiling_db = one.silence_ceiling_db;
+      out.max_signal_intervals = count;
+      out.min_signal_intervals = count;
+    } else {
+      out.silence_ceiling_db = std::min(out.silence_ceiling_db, one.silence_ceiling_db);
+      out.max_signal_intervals = std::max(out.max_signal_intervals, count);
+      out.min_signal_intervals = std::min(out.min_signal_intervals, count);
+    }
+    collected.insert(collected.end(), one.intervals.begin(), one.intervals.end());
+  }
+  std::sort(collected.begin(), collected.end());
+  for (const auto& range : collected) {
+    // Touching counts as overlapping: two takes whose intervals meet exactly
+    // leave no silent sample between them, so a cut there would be mid-phrase.
+    if (!out.intervals.empty() && range.first <= out.intervals.back().second) {
+      out.intervals.back().second = std::max(out.intervals.back().second, range.second);
+      continue;
+    }
+    out.intervals.push_back(range);
+  }
+  return out;
 }
 
 std::vector<std::pair<int, int>> split(const std::vector<float>& x, float top_db, int frame_length,

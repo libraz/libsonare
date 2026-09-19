@@ -911,6 +911,56 @@ SonareError sonare_split_silence_common(const float* const* signals, size_t sign
                                         int hop_length, int** out_intervals,
                                         size_t* out_interval_count);
 
+/// @brief Why @ref sonare_split_silence_common_ex found the gaps it did.
+/// @details One interval covering everything is the answer to three different
+///   situations and the interval list cannot separate them: no take has a quiet
+///   moment at all, the takes each have one but not in the same place, or
+///   @p top_db was set too loose to see the ones they have.
+///
+///   **Read @p silence_ceiling_db against the @p top_db that was passed**, which
+///   is the whole decision:
+///   - ceiling near 0 — a take is sounding continuously. No threshold helps, and
+///     a cut point has to come from somewhere other than silence.
+///   - ceiling below @p top_db — the threshold was too loose to see the quiet
+///     these takes do have. A @p top_db under the reported ceiling finds it.
+///   - ceiling at or above @p top_db, and still one interval — every take shows
+///     silence at this setting and they do not share any of it. That is the
+///     alignment case, and it is what @ref sonare_align_take_to_reference is for.
+///
+///   The figures come from the same RMS pass the intervals do, so they can never
+///   describe a different measurement, and the caller does not re-derive the
+///   detector's threshold rule from a second pass of its own.
+typedef struct {
+  /// @brief The largest @p top_db at which EVERY signal still shows silence.
+  /// @details A frame counts as silent when it sits at least @p top_db under its
+  ///   own signal's peak RMS, so each signal's deepest dip decides whether any
+  ///   threshold can find silence in it, and the union needs all of them quiet at
+  ///   once — hence the minimum across the signals. 0 for an all-silent signal,
+  ///   where the peak is 0 and the ratio has no value; 120 is the floor the dB
+  ///   conversion clamps at, reported for a signal holding a zero-valued frame.
+  float silence_ceiling_db;
+  /// @brief How many intervals the most and least fragmented signal produced alone.
+  /// @details Counted before the union merges anything, and a measure of shape
+  ///   rather than of cause: 1 is a take that sounds once and stops, so a take
+  ///   that is loud then silent counts 1 exactly as a take with no silence does.
+  ///   Use @p silence_ceiling_db to tell those apart; use these to see whether any
+  ///   take has an interior gap at all (>= 2) and whether the takes differ in how
+  ///   broken up they are (max != min).
+  int32_t max_signal_intervals;
+  int32_t min_signal_intervals;
+} SonareSilenceCommonReport;
+
+/// @brief @ref sonare_split_silence_common plus the report above.
+/// @details Identical intervals, identical refusals; the only difference is the
+///   filled-in @p out_report, which may not be NULL. The plain entry point stays
+///   because a caller cutting takes has no use for the diagnosis.
+/// @note Free @p out_intervals with @ref sonare_free_ints.
+SonareError sonare_split_silence_common_ex(const float* const* signals, size_t signal_count,
+                                           const size_t* lengths, float top_db, int frame_length,
+                                           int hop_length, int** out_intervals,
+                                           size_t* out_interval_count,
+                                           SonareSilenceCommonReport* out_report);
+
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_frame_signal(const float* samples, size_t length, int frame_length,
                                 int hop_length, float** out, size_t* out_length, int* out_n_frames);
