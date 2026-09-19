@@ -179,6 +179,27 @@ export const SYNTH_MOD_DESTINATIONS = [
   'spectrum-morph',
 ] as const;
 
+/** How a device spells a gesture (see {@link ControllerBinding}). */
+export const CONTROLLER_INPUTS = [
+  'control-change',
+  'channel-pressure',
+  'poly-pressure',
+  'pitch-bend',
+  'velocity',
+] as const;
+
+/** What a gesture means — the expression axis a binding drives. */
+export const CONTROLLER_AXES = [
+  'none',
+  'excitation',
+  'position',
+  'brightness',
+  'morph',
+  'loudness',
+  'pitch-cents',
+  'vibrato-depth',
+] as const;
+
 export interface SynthEnumTables {
   engineModes: string[];
   waveforms: string[];
@@ -188,6 +209,8 @@ export interface SynthEnumTables {
   bodyTypes: string[];
   modSources: string[];
   modDestinations: string[];
+  controllerInputs: string[];
+  controllerAxes: string[];
 }
 
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
@@ -294,6 +317,57 @@ export type SynthModSource = (typeof SYNTH_MOD_SOURCES)[number];
 
 /** {@link SynthPatch} mod-matrix destination. */
 export type SynthModDestination = (typeof SYNTH_MOD_DESTINATIONS)[number];
+
+/** Input side of a {@link ControllerBinding}: how the device spells the gesture. */
+export type ControllerInput = (typeof CONTROLLER_INPUTS)[number];
+
+/** Output side of a {@link ControllerBinding}: which expression axis it means. */
+export type ControllerAxis = (typeof CONTROLLER_AXES)[number];
+
+/**
+ * One device gesture bound to one expression axis
+ * ({@link RealtimeEngine.bindController}).
+ *
+ * Binding the same input twice with different axes is how a single gesture
+ * reaches two of them, which is what a breath controller driving both
+ * excitation and loudness needs. `input` and `axis` are required and are the
+ * canonical names (or their C ordinals); an unknown name throws rather than
+ * resolving to the first member.
+ *
+ * @example
+ * ```ts
+ * engine.bindController(0, { input: 'control-change', index: 2, axis: 'excitation' });
+ * ```
+ */
+export interface ControllerBinding {
+  /** How the device spells the gesture. */
+  input: ControllerInput | number;
+  /**
+   * CC number 0-127 for `'control-change'`. Every other input is identified by
+   * its message status alone and ignores this. Default `0`.
+   */
+  index?: number;
+  /**
+   * Which expression axis the gesture means. `'none'` is refused: a binding
+   * that means nothing is a caller mistake, not an empty slot.
+   */
+  axis: ControllerAxis | number;
+  /**
+   * Axis value at zero deflection, in the axis's own unit — normalized `[0,1]`
+   * for the excitation axes and loudness, cents for pitch and vibrato depth.
+   * Default `0`.
+   */
+  lo?: number;
+  /** Axis value at full deflection; `lo > hi` inverts the gesture. Default `1`. */
+  hi?: number;
+  /**
+   * Exponent applied to the normalized input before the range maps it. Default
+   * `1` (linear) and deliberately so: a wind controller has already applied the
+   * curve its player chose, and a second one on this side bends a gesture that
+   * was already shaped. Must be finite and positive.
+   */
+  curve?: number;
+}
 
 /** One {@link SynthPatch} mod-matrix routing (name or C ordinal per field). */
 export interface SynthModRouting {
