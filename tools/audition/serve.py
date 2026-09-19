@@ -170,6 +170,41 @@ def read_feedback(path: Path) -> list[dict]:
     return out
 
 
+#: Verdicts worst first. The order is what a one-glance marker has to show: a
+#: voice that barely sounds outranks anything about its colour, so a list of
+#: 180 entries marks each with the worst thing said about it rather than the
+#: last. Kept in step with the tree's verdict labels in `i18n.js`.
+GRADE_ORDER = ("broken", "wrong-instrument", "off", "acceptable", "ok")
+
+
+def feedback_index() -> dict[str, dict]:
+    """Per set: how much has been said about it, and the worst of it.
+
+    The picker and the bank both list every voice, and "has anybody listened to
+    this one" is the fact neither could answer — the log is one file per voice
+    and reading 180 of them one request at a time is not a thing a list does.
+    Scanned per request like the set index, so a note taken in one tab shows up
+    in another's list on a refresh.
+    """
+    out: dict[str, dict] = {}
+    for path in sorted(FEEDBACK_ROOT.glob("*.jsonl")):
+        entries = read_feedback(path)
+        if not entries:
+            continue
+        grades = [str(e.get("grade") or "") for e in entries]
+        worst = next((g for g in GRADE_ORDER if g in grades), "")
+        out[path.stem] = {
+            "n": len(entries),
+            "worst": worst,
+            # A preference ranks candidates and carries no verdict, so it is
+            # counted apart: a voice with three preferences and no grade has
+            # been listened to hard and judged not at all.
+            "prefer": sum(1 for e in entries if e.get("tag") == "prefer"),
+            "last": max((str(e.get("at") or "") for e in entries), default=""),
+        }
+    return out
+
+
 def append_feedback(path: Path, entry: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
@@ -622,6 +657,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         if rel == "bank.json":
             self._json(read_bank())
+            return
+        if rel == "feedback-index.json":
+            self._json(feedback_index())
             return
         if rel == "feedback.json":
             path = feedback_path((self._query().get("set") or [""])[0])

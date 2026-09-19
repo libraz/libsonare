@@ -300,6 +300,40 @@ def test_every_module_the_page_loads_is_servable() -> None:
         assert handler._resolve(bad) is None, bad
 
 
+@_with_feedback_root
+def test_the_index_marks_each_voice_with_the_worst_thing_said_about_it() -> None:
+    """Not the last thing, and not a count on its own.
+
+    The list this fills is 180 rows long and its marker is read at a glance, so
+    a voice that barely sounds has to outrank anything about its colour however
+    many cheerful notes were taken after it. A preference is counted apart
+    because it carries no verdict at all: a voice with three of them and no
+    grade has been listened to hard and judged not once.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        _feedback_in(tmp)
+        path = serve.feedback_path("p081-lead")
+        serve.append_feedback(path, {"at": "2026-09-01T00:00:00+00:00",
+                                     "grade": "broken", "tag": "broken"})
+        serve.append_feedback(path, {"at": "2026-09-19T00:00:00+00:00",
+                                     "grade": "acceptable", "tag": "tone/dark"})
+        serve.append_feedback(path, {"at": "2026-09-20T00:00:00+00:00",
+                                     "grade": "", "tag": "prefer"})
+        quiet = serve.feedback_path("p040-violin")
+        serve.append_feedback(quiet, {"at": "2026-09-05T00:00:00+00:00",
+                                      "grade": "ok", "tag": "ok"})
+
+        index = serve.feedback_index()
+        assert index["p081-lead"]["worst"] == "broken", index
+        assert index["p081-lead"]["n"] == 3, index
+        assert index["p081-lead"]["prefer"] == 1, index
+        assert index["p081-lead"]["last"] == "2026-09-20T00:00:00+00:00", index
+        # A voice nobody has faulted is not the same as one nobody has opened,
+        # and the second must not appear in the index at all.
+        assert index["p040-violin"]["worst"] == "ok", index
+        assert "p019-organ" not in index, index
+
+
 def _with_bank_files(fn):
     """Point the policy and the capture definitions at a scratch tree."""
     def wrapped() -> None:

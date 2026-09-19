@@ -58,6 +58,10 @@
   --tint-line: color-mix(in srgb, var(--accent) 28%, var(--line));
   --warn-tint: color-mix(in srgb, var(--warn) 11%, var(--panel));
   --warn-line: color-mix(in srgb, var(--warn) 34%, var(--line));
+  /* The middle of the three states a status chip can be in. Amber, which is
+     the reference role's colour, so "not settled" reads the same everywhere. */
+  --mid-tint: color-mix(in srgb, var(--role-reference) 12%, var(--panel));
+  --mid-line: color-mix(in srgb, var(--role-reference) 34%, var(--line));
 
   /* Whatever role the element is in. Anything that wants "this thing's colour"
      reads these, so a block, its dot and its selected button cannot drift. */
@@ -179,16 +183,6 @@ select {
 
 select:hover { border-color: var(--ink-faint); }
 
-/* The voice being listened to is the page's subject, so its picker is set as
-   the title rather than sitting beside one. */
-#setSelect {
-  min-width: 9rem;
-  border-color: var(--tint-line);
-  background: var(--tint);
-  font-size: 13px;
-  font-weight: 600;
-}
-
 /* Where this voice stands, carried from the bank into the listening surface —
    without it a page says what it sounds like and nothing about why it is open. */
 .head-stage {
@@ -260,6 +254,163 @@ body.lang-ja .sheet h2 { letter-spacing: 0.04em; text-transform: none; font-size
 }
 
 .keys dt, .keys dd { margin: 0; }
+
+/* ---- the voice palette ---- */
+
+/* The control in the header names what is open and shows how far it has got,
+   so the one fact a picker should carry is on it without opening anything. */
+.voice-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 340px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.voice-pick:hover { border-color: var(--ink-faint); }
+.voice-pick[aria-expanded="true"] { border-color: var(--accent); }
+
+.vp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.vp-id {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+/* Anchored under the header rather than laid out in it: opening the list must
+   not move the console, which is what the eye is holding position on. */
+.palette {
+  position: absolute;
+  z-index: 20;
+  top: 44px;
+  left: 168px;
+  width: min(680px, calc(100vw - 190px));
+  max-height: min(560px, calc(100vh - 80px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-2);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 0.45);
+  overflow: hidden;
+}
+
+.palette[hidden] { display: none; }
+
+.palette-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.palette-bar input { flex: 1; min-width: 0; }
+.palette-bar .mono { font-size: 11px; color: var(--ink-faint); }
+
+.palette-rows { overflow-y: auto; padding: 5px 0 7px; }
+
+.palette-group {
+  position: sticky;
+  top: 0;
+  padding: 9px 13px 4px;
+  background: var(--panel-2);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+body.lang-ja .palette-group { letter-spacing: 0.04em; text-transform: none; font-size: 11px; }
+
+/* One grid for every row, so the bars and the counts line up down the list —
+   which is most of what makes 180 rows scannable rather than merely present. */
+.palette-row {
+  display: grid;
+  grid-template-columns: 3.6rem minmax(0, 1fr) 9px 5.4rem 2.2rem auto auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 5px 13px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette-row:hover { background: var(--panel); }
+.palette-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.palette-row[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 13%, var(--panel));
+}
+
+/* The count of what has been said about a voice. Blank where nothing has —
+   most of the bank — so the handful that carry a number are what the eye
+   finds, which is the question the column exists to answer. */
+.heard {
+  justify-self: end;
+  min-width: 1.6rem;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.heard.on {
+  padding: 1px 6px;
+  border: 1px solid var(--tint-line);
+  border-radius: 999px;
+  background: var(--tint);
+  color: var(--ink);
+}
+
+.heard.good { border-color: var(--tint-line); background: var(--tint); }
+.heard.mid { border-color: var(--mid-line); background: var(--mid-tint); }
+.heard.bad { border-color: var(--warn-line); background: var(--warn-tint); }
+
+.solo {
+  justify-self: end;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.signoff { display: flex; gap: 4px; justify-self: end; }
+
+.sg {
+  padding: 0 5px;
+  border: 1px solid var(--tint-line);
+  border-radius: 3px;
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+
+.sg.good { border-color: var(--tint-line); background: var(--tint); color: var(--ink); }
+.sg.mid { border-color: var(--mid-line); background: var(--mid-tint); }
+.sg.bad { border-color: var(--warn-line); background: var(--warn-tint); }
+
+.palette-legend {
+  margin: 0;
+  padding: 8px 13px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
 
 /* ---- listen layout ---- */
 
@@ -1188,7 +1339,7 @@ body:not(.bank-view) .bank { display: none; }
 .bank-row, .bank-cols {
   display: grid;
   grid-template-columns:
-    4.2rem minmax(8rem, 1.3fr) 8.4rem 5.2rem 6.4rem minmax(0, 1.4fr);
+    4.2rem minmax(8rem, 1.3fr) 8.4rem 5.2rem 6.4rem 2.4rem 3.6rem minmax(0, 1.4fr);
   align-items: center;
   gap: 12px;
   width: 100%;

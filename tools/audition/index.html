@@ -22,10 +22,16 @@
     <button type="button" role="tab" data-view="listen" data-i18n="view.listen" aria-selected="true">listen</button>
   </div>
 
-  <label class="pick listen-only">
+  <!-- 180 rendered voices. A native select shows one of them at a time, in a
+       list that says nothing but the name — so choosing what to listen to next
+       meant knowing the answer before opening it. This is a palette: the same
+       readouts the bank carries, filtered as you type. -->
+  <div class="pick listen-only">
     <span class="pick-lab" data-i18n="head.voice">voice</span>
-    <select id="setSelect" data-i18n-aria="head.voice"></select>
-  </label>
+    <button id="voicePick" type="button" class="voice-pick" aria-expanded="false"
+            aria-haspopup="listbox" aria-controls="voicePanel"
+            data-i18n-aria="head.voice"></button>
+  </div>
 
   <!-- Where this voice stands, carried over from the bank. -->
   <span id="headStage" class="head-stage listen-only"></span>
@@ -39,6 +45,18 @@
   <button id="optionsBtn" type="button" class="ghost listen-only" aria-expanded="false"
           aria-controls="options" data-i18n="head.options">options</button>
 </header>
+
+<!-- The voice palette. Anchored under the header rather than inline, so opening
+     it never moves the console underneath. -->
+<div id="voicePanel" class="palette listen-only" hidden>
+  <div class="palette-bar">
+    <input id="voiceFind" type="search" data-i18n-placeholder="pick.findPlaceholder"
+           data-i18n-aria="pick.find">
+    <span id="voiceCount" class="mono"></span>
+  </div>
+  <div id="voiceRows" class="palette-rows" role="listbox" data-i18n-aria="head.voice"></div>
+  <p class="palette-legend" data-i18n="pick.legend"></p>
+</div>
 
 <!-- Everything that is decided once and then left alone. On screen it is one
      button; the listening surface below stays about what is being listened to. -->
@@ -67,6 +85,7 @@
   <div class="opt-col">
     <h2 data-i18n="keys.title">keyboard</h2>
     <dl class="keys">
+      <dt><kbd>V</kbd></dt><dd data-i18n="keys.voice">pick a voice</dd>
       <dt><kbd>space</kbd></dt><dd data-i18n="keys.playPause">play / pause</dd>
       <dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd data-i18n="keys.take">previous / next take</dd>
       <dt class="compare-only"><kbd>tab</kbd></dt><dd class="compare-only" data-i18n="keys.swap">model ⇄ reference</dd>
@@ -138,6 +157,8 @@
         <span data-i18n="bank.colEngine">engine</span>
         <span data-i18n="bank.colStage">stage</span>
         <span data-i18n="bank.colOracle">reference</span>
+        <span data-i18n="bank.colHeard">heard</span>
+        <span data-i18n="bank.colSignoff">claims</span>
         <span data-i18n="bank.colNext">next</span>
       </div>
       <div id="bankRows" role="listbox" data-i18n-aria="bank.voices" tabindex="0"></div>

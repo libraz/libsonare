@@ -103,6 +103,50 @@ export function stageBar(v) {
   return bar;
 }
 
+/* What the ear has said about this voice, as one chip.
+ *
+ * Absent where nothing has been said, which is the state most of the bank is
+ * in and is the point: a list of 180 voices whose every row claims a status
+ * says nothing, and the four that have been listened to are what a session
+ * starts from. */
+export function heardChip(id) {
+  const got = (state.fbIndex || {})[id];
+  if (!got) return el('span', 'heard');
+  const chip = el('span', 'heard on', String(got.n));
+  if (got.worst === 'broken' || got.worst === 'wrong-instrument') chip.classList.add('bad');
+  else if (got.worst === 'acceptable' || got.worst === 'off') chip.classList.add('mid');
+  else if (got.worst === 'ok') chip.classList.add('good');
+  const said = [t('pick.notes', { n: got.n })];
+  if (got.worst) said.push(gradeWord(got.worst));
+  if (got.prefer) said.push(t('pick.prefer', { n: got.prefer }));
+  chip.title = said.join(' · ');
+  return chip;
+}
+
+/* The two claims nothing on disk implies: that the residual was diagnosed, and
+ * that somebody listened and said it is the instrument. They are what the top
+ * of the ladder is gated on, and no voice in this bank carries the second — so
+ * an empty column here is the bank's own answer rather than a missing readout. */
+export function signoffChip(v) {
+  const wrap = el('span', 'signoff');
+  if (!v) return wrap;
+  for (const which of ['structure', 'music']) {
+    const claim = (v.axes || {})[which];
+    const state_ = claim && claim.state;
+    if (!state_) continue;
+    const chip = el('span', 'sg', t(`pick.${which}`));
+    if (state_ === 'current') chip.classList.add('good');
+    else if (state_ === 'stale') chip.classList.add('bad');
+    else chip.classList.add('mid');
+    chip.title = `${t(`pick.${which}.long`)} — ${t(`pick.${state_}`)}`;
+    wrap.append(chip);
+  }
+  return wrap;
+}
+
+const gradeWord = (name) => t(
+  name === 'wrong-instrument' ? 'grade.wrongInstrument' : `grade.${name}`);
+
 function stageEl(v) {
   const wrap = el('span', 'stage');
   wrap.append(stageBar(v), el('span', '', v.stage.toFixed(1)));
@@ -206,7 +250,11 @@ function bankRow(v, index) {
   // 150 copies of it bury the four that say something.
   if (v.stage > 0.2 && v.stage < 1) tail.append(el('span', 'next', v.next));
 
-  row.append(el('span', 'addr', addressOf(v)), who, engine, stageEl(v), oracle, tail);
+  row.append(el('span', 'addr', addressOf(v)), who, engine, stageEl(v), oracle,
+    // The same two readouts the palette carries, from the same functions: what
+    // the ear has said about this voice, and the two claims the top of the
+    // ladder is gated on.
+    heardChip(v.slug), signoffChip(v), tail);
   return row;
 }
 

@@ -92,6 +92,16 @@ Either form opens on exactly that render, and an address arriving at a page alre
 
 The version is left out of the address in blind mode, along with the path and the label: an address bar is visible, and hiding the name is the whole point of that mode.
 
+## Choosing what to listen to
+
+`V`, or the control in the header. A native select over a hundred and eighty entries shows one at a time and says nothing but the name, so choosing what to open next meant already knowing the answer. Every row here carries the three facts that decide whether a voice is worth opening, and they are rendered by the same functions the bank view uses rather than a second set that can drift from them:
+
+- **how far the calibration has got** — the stage bar and its number, the same rung the bank sorts by
+- **whether anybody has listened** — a count of the notes in that voice's log, and its colour is the worst verdict among them. **Blank means nobody has**, which is most of the bank, and is the point: a list whose every row claims a status says nothing, while the handful carrying a number is where a session starts
+- **the two claims the top of the ladder is gated on** — `res` that the structural residual was diagnosed, `ear` that somebody listened and said it is the instrument. Green is current, amber unverified because a shared unit moved, red stale because the voice itself moved under it. **No voice in this bank carries `ear`**, so an empty column there is the bank's own answer rather than a missing readout.
+
+Typing filters over the name, the program number, the engine and the patch at once — a voice is looked for by number at least as often as by name. `↓` drops from the box into the rows, `enter` opens, `esc` closes. Both columns are on the bank's rows too.
+
 ## The bank view
 
 `listen` in the header is one of two views. `bank` is the other: every GM program and GS variation the library voices, whatever has been rendered — the engine answering it, how far its calibration has got, and whether a reference has been captured for it at all.

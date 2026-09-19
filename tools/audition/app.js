@@ -18,7 +18,8 @@ import {
 } from './player.js';
 import { drawSpec, drawWave, seekFromEvent } from './scope.js';
 import {
-  applyRoute, buildSetPicker, copyConditions, loadSet, readRoute, rebuildVersions,
+  applyRoute, buildSetPicker, closePalette, copyConditions, loadFeedbackIndex,
+  loadSet, openPalette, paletteKey, paletteOpen, readRoute, rebuildVersions,
   recordBlindResult, refreshListen, renderCaptions, renderScore, renderSubject,
   resetBlindReveal, reshuffleBlind, selectTake, setVersion, stepVersion, swapRole,
 } from './listen.js';
@@ -80,14 +81,25 @@ function onKey(ev) {
   const tag = ev.target.tagName;
   // The find box is the one field with a way out: escape drops back to the
   // rows, which is where every other key does something.
+  if (ev.target.id === 'voiceFind') {
+    if (ev.key === 'Escape') { closePalette(); $('voicePick').focus(); return; }
+    if (ev.key === 'ArrowDown' || ev.key === 'Enter') paletteKey(ev);
+    return;
+  }
   if (tag === 'INPUT' && ev.key === 'Escape') { ev.target.blur(); return; }
   if (tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'INPUT'
       || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (paletteOpen()) {
+    if (ev.key === 'Escape') { closePalette(); $('voicePick').focus(); return; }
+    paletteKey(ev);
+    return;
+  }
   if (ev.key === '?') { ev.preventDefault(); toggleHelp(); return; }
   if (ev.key === 'Escape' && !$('help').hidden) { toggleHelp(false); return; }
   if (document.body.classList.contains('bank-view')) { bankKey(ev); return; }
 
   const k = ev.key;
+  if (k === 'v' || k === 'V') { ev.preventDefault(); openPalette(); return; }
   if (k === ' ') { ev.preventDefault(); togglePlay(); return; }
   if (!state.take) return;
   if (k === 'Tab') { ev.preventDefault(); swapRole(); return; }
@@ -162,7 +174,19 @@ function wire() {
   $('copyLink').addEventListener('click', copyConditions);
   $('blindRecord').addEventListener('click', recordBlindResult);
   $('swapBtn').addEventListener('click', swapRole);
-  $('setSelect').addEventListener('change', () => loadSet($('setSelect').value));
+  $('voicePick').addEventListener('click', () => {
+    if (paletteOpen()) closePalette(); else openPalette();
+  });
+  $('voiceFind').addEventListener('input', buildSetPicker);
+  // Click-away rather than a scrim: the palette is a control on the header and
+  // the page behind it stays live, so a click meant for the transport should
+  // reach the transport.
+  document.addEventListener('pointerdown', (ev) => {
+    if (!paletteOpen()) return;
+    if (!$('voicePanel').contains(ev.target) && !$('voicePick').contains(ev.target)) {
+      closePalette();
+    }
+  });
 
   $('matchRms').addEventListener('change', () => {
     if (state.take) { applyGains(false); renderLevels(); }
@@ -259,6 +283,7 @@ async function boot() {
   initLang();
   buildLangToggle();
   state.sets = await (await fetch('sets.json')).json();
+  await loadFeedbackIndex();
   wireBank(async (slug) => {
     await setView('listen');
     await loadSet(slug, { set: slug, take: '', ver: '', t: null });
