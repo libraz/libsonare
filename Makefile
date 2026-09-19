@@ -9,7 +9,7 @@
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
        voicematch-substitution voicematch-substitution-all voicematch-determinism \
-       voicematch-reextract-check voicematch-sf2-corpus \
+       voicematch-reextract-check voicematch-sf2-corpus voicematch-sustain-check \
        spec-liveness spec-liveness-census spec-liveness-census-check \
        excerpts excerpts-check test-voicematch \
        check-c-api-out-param-init check-c-api-pointer-contracts check-c-api-header-self-contained \
@@ -721,6 +721,21 @@ voicematch-determinism:
 voicematch-reextract-check:
 	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
 		tools/voicematch/reextract_check.py
+
+# Whether a voice still sounds at the end of a held note, and for as long as
+# its reference does. `decay_db_s` is measured on every captured note and is
+# not a canonical dimension for the sustained class, so it is neither gated nor
+# excusable and nothing reports it; a voice whose column stops oscillating then
+# renders a note that falls away under a compare table of ordinary numbers,
+# because every other column is a ratio the signal keeps producing on its way
+# to the noise floor. Reads the reference for the target rather than holding
+# every voice to a constant -- a pad is meant to evolve -- and is two-sided,
+# since holding where the reference decays is the same kind of defect. Renders
+# the model, writes nothing, exits 0 whatever it finds, and stays out of CI on
+# the same terms as `voicematch-substitution`.
+voicematch-sustain-check:
+	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+		tools/voicematch/sustain_check.py
 
 # Rebuild the corpus of every capture whose untracked overlay names a SoundFont.
 # Which captures those are is a question only the overlay can answer, so a clone
