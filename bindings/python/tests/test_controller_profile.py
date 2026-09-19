@@ -104,13 +104,36 @@ def test_a_controller_profile_installs_binds_counts_and_clears() -> None:
         assert engine.controller_binding_count(DESTINATION) == gm_bindings
 
 
-def test_an_unknown_spelling_is_refused_by_the_binding() -> None:
+def test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding() -> None:
+    """The refusals the binding makes before the C ABI is reached.
+
+    Each one asserts :class:`SonareValueError` rather than :class:`SonareError`,
+    which is what says the binding refused it: the C ABI range-checks the same
+    ordinals and would raise the plain base class, so the two sides are
+    indistinguishable here unless the exception type is the one asserted.
+    """
     with _reed_engine() as engine:
         engine.clear_controller_bindings(DESTINATION)
         with pytest.raises(SonareValueError, match="controller axis"):
             engine.bind_controller(DESTINATION, input="control-change", axis="no-such-axis")
         with pytest.raises(SonareValueError, match="controller input"):
             engine.bind_controller(DESTINATION, input="no-such-input", axis="excitation")
+        # An ordinal past the enum, taken from the table's own length so it
+        # follows a value being added rather than pinning today's count.
+        with pytest.raises(SonareValueError, match="controller axis"):
+            engine.bind_controller(
+                DESTINATION,
+                input="control-change",
+                axis=len(SYNTH_ENUM_TABLES["controller_axes"]),
+            )
+        with pytest.raises(SonareValueError, match="controller input"):
+            engine.bind_controller(
+                DESTINATION,
+                input=len(SYNTH_ENUM_TABLES["controller_inputs"]),
+                axis="excitation",
+            )
+        with pytest.raises(SonareValueError, match="controller input"):
+            engine.bind_controller(DESTINATION, input=-1, axis="excitation")
         # A non-finite range or curve would reach the audio thread and stay
         # there, so the struct's own narrowing refuses it before the C ABI.
         for field in ("lo", "hi", "curve"):
@@ -136,8 +159,11 @@ def test_a_binding_that_cannot_mean_anything_is_refused_by_the_c_abi() -> None:
         # Python-side guard growing over it would fail here instead of passing.
         assert not isinstance(refusal.value, SonareValueError)
 
-        with pytest.raises(SonareError):
+        with pytest.raises(SonareError) as none_refusal:
             engine.bind_controller(DESTINATION, input="control-change", axis="none")
+        # "none" is a name the C table supplies, so the spelling resolves here
+        # and the refusal is the C ABI's -- asserted the same way as above.
+        assert not isinstance(none_refusal.value, SonareValueError)
 
         # The same input on an excitation axis is accepted, so the refusal above
         # is about the axis and not about poly pressure.
