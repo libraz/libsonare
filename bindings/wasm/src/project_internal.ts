@@ -10,6 +10,8 @@ import type {
 } from './instrument_types';
 import { getSonareModule } from './module_state';
 import type {
+  AlignTakeToReferenceRequest,
+  AlignTakeToReferenceResult,
   ProjectAssistSidecar,
   ProjectAutomationCurve,
   ProjectAutomationLaneDesc,
@@ -332,6 +334,15 @@ export interface ProjectModule {
     tempoBpm: number | undefined,
     config: TranscribeOptions,
   ) => TranscribeResult;
+  // Positional in the C ABI's own order minus the derived lengths and the out
+  // parameters. The request object is passed as `config` as well, the way
+  // `transcribe` passes its own: the reader only looks at the resolution keys.
+  alignTakeToReference: (
+    reference: Float32Array,
+    take: Float32Array,
+    sampleRate: number,
+    config: AlignTakeToReferenceRequest,
+  ) => AlignTakeToReferenceResult;
 }
 
 export function projectModule(): ProjectModule {

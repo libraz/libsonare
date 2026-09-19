@@ -1,5 +1,7 @@
 /// @file project_arrange.cpp
-/// @brief Embind project facade: track + clip arrangement structure and warp.
+/// @brief Embind project facade: track + clip arrangement structure and warp,
+/// plus the standalone take-alignment entry point that produces a warp map's
+/// anchors.
 
 #ifdef __EMSCRIPTEN__
 
@@ -252,6 +254,65 @@ void ProjectWasm::removeWarpMap(const val& warp_ref_id_val) {
   if (err != SONARE_OK) {
     throwCError(err, "failed to remove warp map");
   }
+}
+
+namespace {
+
+val warpAnchorToVal(const SonareProjectWarpAnchor& anchor) {
+  val out = val::object();
+  out.set("warpSample", anchor.warp_sample);
+  out.set("sourceSample", anchor.source_sample);
+  return out;
+}
+
+}  // namespace
+
+val js_align_take_to_reference(val reference, val take, const val& sample_rate_val, val config) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  // Both fields default to 0, which the C ABI reads as "use the library value",
+  // so an omitted key and a written 0 are one request -- as they are on the other
+  // two surfaces. A value outside the domain is refused by the measurement rather
+  // than here: the resolution has to divide the twelve pitch classes and the hop
+  // has to be positive, and neither condition belongs to this layer.
+  SonareTakeAlignConfig resolved{};
+  resolved.hop_length = typedIntProperty(config, "hopLength", 0);
+  resolved.bins_per_octave = typedIntProperty(config, "binsPerOctave", 0);
+
+  validateWasmFloat32ArrayPair(reference, "reference samples", take, "take samples",
+                               "alignTakeToReference input", false);
+  const std::vector<float> reference_buffer = float32ArrayToVector(reference);
+  const std::vector<float> take_buffer = float32ArrayToVector(take);
+
+  SonareProjectWarpAnchor* rows = nullptr;
+  size_t count = 0;
+  SonareTakeAlignment alignment{};
+  const SonareError err = sonare_align_take_to_reference(
+      reference_buffer.empty() ? nullptr : reference_buffer.data(), reference_buffer.size(),
+      take_buffer.empty() ? nullptr : take_buffer.data(), take_buffer.size(), sample_rate,
+      &resolved, &rows, &count, &alignment);
+  if (err != SONARE_OK) {
+    throwCError(err, "failed to align take to reference");
+  }
+  // Copied out and released before anything JS-facing is built, so a throw while
+  // marshalling cannot leak the heap block.
+  std::vector<SonareProjectWarpAnchor> anchors;
+  if (rows != nullptr && count != 0) {
+    anchors.assign(rows, rows + count);
+  }
+  sonare_free_warp_anchors(rows);
+
+  val list = val::array();
+  for (size_t i = 0; i < anchors.size(); ++i) {
+    list.set(static_cast<unsigned>(i), warpAnchorToVal(anchors[i]));
+  }
+  val summary = val::object();
+  summary.set("meanResidualFrames", alignment.mean_residual_frames);
+  summary.set("referenceFrames", static_cast<double>(alignment.reference_frames));
+  summary.set("takeFrames", static_cast<double>(alignment.take_frames));
+  val out = val::object();
+  out.set("anchors", list);
+  out.set("alignment", summary);
+  return out;
 }
 
 void ProjectWasm::setTrackMidiDestination(const val& track_id_val, const val& destination_id_val) {

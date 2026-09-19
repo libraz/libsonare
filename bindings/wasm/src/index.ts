@@ -32,6 +32,7 @@ import type {
   WasmMatrix2dResult,
 } from './sonare.js';
 
+export { alignTakeToReference } from './align_take';
 export type { BrowserAudioDecodeOptions } from './audio';
 export { Audio } from './audio';
 export type {
@@ -507,6 +508,8 @@ export {
 export type { AnalyzePolyphonicRequest } from './polyphony';
 export { analyzePolyphonic, PolyphonicAnalysis } from './polyphony';
 export type {
+  AlignTakeToReferenceRequest,
+  AlignTakeToReferenceResult,
   BuiltinSynthBinding,
   BuiltinSynthConfig,
   BuiltinSynthWaveform,
@@ -569,6 +572,7 @@ export type {
   SynthModSource,
   SynthOscWaveform,
   SynthPatch,
+  TakeAlignment,
   TranscribeOptions,
   TranscribeResult,
 } from './project';

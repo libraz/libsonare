@@ -1724,6 +1724,12 @@ export interface SonareModule {
     tempoBpm: number | undefined,
     config: unknown,
   ) => unknown;
+  alignTakeToReference: (
+    reference: Float32Array,
+    take: Float32Array,
+    sampleRate: number,
+    config: unknown,
+  ) => unknown;
   _analysisResultSchemaPaths: () => string[];
   _analysisResultSchemaFixture: () => WasmAnalysisResult;
   analyzeImpulseResponse: (

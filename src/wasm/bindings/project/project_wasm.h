@@ -373,6 +373,14 @@ val js_midi_route_events(val events, val config);
 // sampleRate, tempoBpm, config. An undefined tempoBpm asks for detection.
 val js_transcribe(val samples, const val& sample_rate, const val& tempo_bpm, val config);
 
+// Standalone take alignment (body in project_arrange.cpp). Positional in the C
+// ABI's own order minus the derived lengths and the out parameters: reference,
+// take, sampleRate, config -- stated here because embind argument order on this
+// surface has historically diverged from the siblings rather than followed them.
+// The anchors come back oriented for the take's own clip: warpSample is a
+// position on the REFERENCE timeline, sourceSample the matching one in the TAKE.
+val js_align_take_to_reference(val reference, val take, const val& sample_rate, val config);
+
 // NativeSynth preset / enum free functions (bodies in project_bounce.cpp).
 val js_synth_preset_names();
 val js_synth_preset_patch(const std::string& name);

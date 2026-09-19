@@ -42,6 +42,8 @@ export {
   synthPresetPatch,
 } from './project_synth';
 export type {
+  AlignTakeToReferenceRequest,
+  AlignTakeToReferenceResult,
   ExternalSeparatedStem,
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
@@ -90,6 +92,7 @@ export type {
   ProjectWarpAnchor,
   ProjectWarpMapDesc,
   ProjectWarpMode,
+  TakeAlignment,
   TranscribeOptions,
   TranscribeResult,
 } from './project_types';

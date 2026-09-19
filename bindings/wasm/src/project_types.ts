@@ -386,6 +386,79 @@ export interface ProjectWarpMapDesc {
   anchors: ProjectWarpAnchor[];
 }
 
+/**
+ * Canonical request form for {@link alignTakeToReference}.
+ *
+ * Both resolution fields are optional and omitting one takes the library value.
+ * A `0` is **refused** rather than read as a request for the default: neither
+ * field has a meaning at 0, so omission is already how you ask for the default,
+ * and a substituted value is indistinguishable downstream from one you chose.
+ */
+export interface AlignTakeToReferenceRequest {
+  /**
+   * The reference timeline — the guide take, or the backing track the takes were
+   * sung against. Must be non-empty and all-finite.
+   */
+  reference: Float32Array;
+  /** The take to be placed under it. Must be non-empty and all-finite. */
+  take: Float32Array;
+  /**
+   * Sample rate of **both** buffers in Hz, `[8000, 384000]`. Resample first if
+   * they differ: the alignment does no rate conversion.
+   */
+  sampleRate: number;
+  /**
+   * Chroma hop in samples, which sets the time resolution of the anchors — a
+   * smaller hop measures more frames and yields more anchors. Default `512`;
+   * must be a positive integer.
+   */
+  hopLength?: number;
+  /**
+   * Chroma bins per octave — the CQT resolution the twelve pitch classes are
+   * folded from. Default `12`; must be a positive **multiple of 12**, since each
+   * pitch class takes the mean of a whole number of CQT bins.
+   */
+  binsPerOctave?: number;
+}
+
+/**
+ * How well an alignment was conditioned, reported by
+ * {@link AlignTakeToReferenceResult}.
+ *
+ * Every field is descriptive: none of them makes the call fail, and a caller
+ * deciding what is acceptable supplies its own threshold.
+ */
+export interface TakeAlignment {
+  /**
+   * Mean absolute frame residual of the path around its diagonal trend. A coarse
+   * indicator of how far the alignment strayed from a constant rate, not an error
+   * bound.
+   */
+  meanResidualFrames: number;
+  /** Chroma frames the reference produced. */
+  referenceFrames: number;
+  /**
+   * Chroma frames the take produced. Its ratio to `referenceFrames` is the
+   * overall rate difference the anchors encode.
+   */
+  takeFrames: number;
+}
+
+/** Result of {@link alignTakeToReference}. */
+export interface AlignTakeToReferenceResult {
+  /**
+   * At least two finite, strictly increasing anchors, ready to hand to
+   * {@link Project.setWarpMap} as the take clip's own warp map.
+   *
+   * `warpSample` is a position on the **reference** timeline and `sourceSample`
+   * the corresponding position in the **take**, which is the direction a clip
+   * whose source is that take needs.
+   */
+  anchors: ProjectWarpAnchor[];
+  /** How well the alignment was conditioned. */
+  alignment: TakeAlignment;
+}
+
 /** Descriptor for {@link Project.addClip}. */
 export interface ProjectClipDesc {
   trackId: number;
