@@ -91,6 +91,11 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "pitch-cents",
         "vibrato-depth",
     ),
+    "articulations": (
+        "poly",
+        "mono-retrigger",
+        "mono-legato",
+    ),
 }
 
 

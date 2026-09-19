@@ -1344,6 +1344,29 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint32,
             ctypes.POINTER(ctypes.c_int),
         ]
+    if hasattr(lib, "sonare_engine_set_articulation"):
+        lib.sonare_engine_set_articulation.restype = ctypes.c_int32
+        lib.sonare_engine_set_articulation.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint8,
+            ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_articulation"):
+        lib.sonare_engine_articulation.restype = ctypes.c_int32
+        lib.sonare_engine_articulation.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint8,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+    if hasattr(lib, "sonare_engine_legato_fallback_count"):
+        lib.sonare_engine_legato_fallback_count.restype = ctypes.c_int32
+        lib.sonare_engine_legato_fallback_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
     if hasattr(lib, "sonare_engine_set_midi_fx"):
         lib.sonare_engine_set_midi_fx.restype = ctypes.c_int32
         lib.sonare_engine_set_midi_fx.argtypes = [

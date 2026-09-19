@@ -20,7 +20,12 @@ from ._project import (
     _cc_binding_to_c,
     _synth_patch_arg,
 )
-from ._project_synth import _controller_axis_value, _controller_input_value
+from ._project_synth import (
+    _articulation_name,
+    _articulation_value,
+    _controller_axis_value,
+    _controller_input_value,
+)
 from ._runtime import (
     SonareValueError,
     _check,
@@ -454,6 +459,97 @@ class _EngineMidiMixin:
             )
         )
         return out.value != 0
+
+    # -- articulation --------------------------------------------------------
+
+    def set_articulation(self, destination_id: int, channel: int, articulation: str | int) -> None:
+        """Set what one channel does with an overlapping note-on.
+
+        ``articulation`` is one of ``synth_enum_tables()["articulations"]``:
+        ``"poly"`` gives every note-on its own voice, ``"mono-retrigger"``
+        stops the sounding note and starts over (what GS MONO MODE and CC126
+        mean, and all they can reach), and ``"mono-legato"`` carries the
+        sounding voice and only re-tunes it, so the exciter and the amplitude
+        envelope never restart -- a wind player's slur, which no MIDI message
+        names.
+
+        The mode is per ``(destination_id, channel)``, so slurring one part
+        leaves the rest of the rack alone. ``channel`` is 0..15 and an
+        articulation outside the table is refused rather than clamped.
+
+        ``"mono-legato"`` is a request, not a guarantee: an engine whose
+        exciter is spent at the onset -- anything struck or plucked -- and a
+        target pitch below what the engine's delay line holds both fall back to
+        an ordinary note, which :meth:`legato_fallback_count` counts.
+
+        Raises :class:`SonareValueError` for an unknown spelling,
+        :class:`SonareError` for a destination nothing is bound to, and
+        :class:`SonareError` with :attr:`ErrorCode.NOT_SUPPORTED` for an
+        instrument that has no articulation of its own -- the two are different
+        answers and both would otherwise read as "the call worked".
+
+        Control-thread only: do not call concurrently with :meth:`process`.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_articulation"):
+            raise RuntimeError("libsonare was built without the articulation ABI")
+        _check(
+            lib.sonare_engine_set_articulation(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_int(_articulation_value(articulation), "articulation"),
+            )
+        )
+
+    def articulation(self, destination_id: int, channel: int) -> str | int:
+        """Read back :meth:`set_articulation` as its canonical name.
+
+        Returns the raw ordinal for a value this binding has no name for, so a
+        mode added to the library reaches a caller rather than raising.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_articulation"):
+            raise RuntimeError("libsonare was built without the articulation ABI")
+        out = ctypes.c_int()
+        _check(
+            lib.sonare_engine_articulation(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(channel, "channel"),
+                ctypes.byref(out),
+            )
+        )
+        return _articulation_name(int(out.value))
+
+    def legato_fallback_count(self, destination_id: int) -> int:
+        """Times a legato continuation was asked for and refused.
+
+        Counted rather than inferred: a refusal sounds like an ordinary note,
+        so nothing in the audio separates "this engine declines legato" from
+        "the mode was never set". Saturates at ``2**32 - 1`` rather than
+        wrapping, so a large value stays readable as "at least this many".
+
+        Refuses on the same terms as :meth:`set_articulation` rather than
+        answering zero: :class:`SonareError` for a destination nothing is bound
+        to, and :class:`SonareError` with :attr:`ErrorCode.NOT_SUPPORTED` for
+        an instrument that has no articulation of its own. The two are
+        different answers, and an instrument that never had an articulation has
+        refused nothing -- a host reading that zero would read it as "every
+        slur took", which is the reading this counter exists to prevent.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_legato_fallback_count"):
+            raise RuntimeError("libsonare was built without the articulation ABI")
+        out = ctypes.c_uint32()
+        _check(
+            lib.sonare_engine_legato_fallback_count(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                ctypes.byref(out),
+            )
+        )
+        return int(out.value)
 
     def bind_midi_cc(
         self,

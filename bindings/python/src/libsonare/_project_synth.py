@@ -165,6 +165,13 @@ _CONTROLLER_AXES = {
     "pitch-cents": 6,
     "vibrato-depth": 7,
 }
+# Articulation names (mirror SonareArticulation in sonare_c_engine.h): what a
+# channel does with a note-on while another note on it is still held.
+_ARTICULATIONS = {
+    "poly": 0,
+    "mono-retrigger": 1,
+    "mono-legato": 2,
+}
 SYNTH_ENUM_TABLES = {
     "engine_modes": tuple(_SYNTH_ENGINE_MODES),
     "waveforms": tuple(_SYNTH_OSC_WAVEFORMS),
@@ -176,6 +183,7 @@ SYNTH_ENUM_TABLES = {
     "mod_destinations": tuple(_SYNTH_MOD_DESTINATIONS),
     "controller_inputs": tuple(_CONTROLLER_INPUTS),
     "controller_axes": tuple(_CONTROLLER_AXES),
+    "articulations": tuple(_ARTICULATIONS),
 }
 _SYNTH_ENUM_KINDS = {
     "engine_modes": 0,
@@ -188,6 +196,7 @@ _SYNTH_ENUM_KINDS = {
     "mod_destinations": 6,
     "controller_inputs": 8,
     "controller_axes": 9,
+    "articulations": 10,
 }
 
 
@@ -235,6 +244,16 @@ def _controller_input_value(value: str | int) -> int:
 def _controller_axis_value(value: str | int) -> int:
     """Resolve a controller-profile axis spelling to its C ordinal."""
     return _synth_enum_value(value, _CONTROLLER_AXES, "controller axis")
+
+
+def _articulation_value(value: str | int) -> int:
+    """Resolve an articulation spelling to its C ordinal."""
+    return _synth_enum_value(value, _ARTICULATIONS, "articulation")
+
+
+def _articulation_name(value: int) -> str | int:
+    """Spell a C articulation ordinal, or return it unchanged if unknown."""
+    return _synth_enum_name(value, _ARTICULATIONS)
 
 
 def _sample_desc_loop_value(mode: str | int) -> int:
