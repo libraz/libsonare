@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -543,3 +544,68 @@ Napi::Value ProjectWrap::AssistSidecars(const Napi::CallbackInfo& info) {
   return out;
   SONARE_NODE_CATCH(env)
 }
+
+namespace {
+
+// Owns the heap anchor array for the rest of the call, so the marshalling below
+// cannot leak it by throwing.
+struct WarpAnchorArrayDeleter {
+  void operator()(SonareProjectWarpAnchor* anchors) const { sonare_free_warp_anchors(anchors); }
+};
+
+}  // namespace
+
+namespace sonare_node {
+
+Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
+    Napi::TypeError::New(
+        env, "alignTakeToReference expects (reference, take, sampleRate) with two Float32Arrays")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Float32Array reference = info[0].As<Napi::Float32Array>();
+  Napi::Float32Array take = info[1].As<Napi::Float32Array>();
+  int sample_rate = 0;
+  if (!Int32Arg(env, info, 2, "sampleRate", 0, &sample_rate)) return env.Undefined();
+  // Zeroed rather than seeded: the C entry reads 0 on either field as "library
+  // value", so a key the caller left out must stay 0 instead of carrying a
+  // default this surface spelled.
+  SonareTakeAlignConfig config{};
+  if (info.Length() > 3 && info[3].IsObject()) {
+    Napi::Object options = info[3].As<Napi::Object>();
+    config.hop_length = IntProperty(options, "hopLength", kZeroIsSentinel);
+    config.bins_per_octave = IntProperty(options, "binsPerOctave", kZeroIsSentinel);
+  }
+
+  SonareProjectWarpAnchor* raw_anchors = nullptr;
+  size_t count = 0;
+  SonareTakeAlignment alignment{};
+  const SonareError code = sonare_align_take_to_reference(
+      reference.Data(), reference.ElementLength(), take.Data(), take.ElementLength(), sample_rate,
+      &config, &raw_anchors, &count, &alignment);
+  std::unique_ptr<SonareProjectWarpAnchor, WarpAnchorArrayDeleter> anchors(raw_anchors);
+  ThrowIfError(env, code);
+  if (env.IsExceptionPending()) return env.Undefined();
+
+  Napi::Array out_anchors = Napi::Array::New(env, count);
+  for (size_t i = 0; i < count; ++i) {
+    Napi::Object anchor = Napi::Object::New(env);
+    anchor.Set("warpSample", Napi::Number::New(env, anchors.get()[i].warp_sample));
+    anchor.Set("sourceSample", Napi::Number::New(env, anchors.get()[i].source_sample));
+    out_anchors.Set(static_cast<uint32_t>(i), anchor);
+  }
+  Napi::Object conditioning = Napi::Object::New(env);
+  conditioning.Set("meanResidualFrames", Napi::Number::New(env, alignment.mean_residual_frames));
+  conditioning.Set("referenceFrames", Napi::Number::New(env, alignment.reference_frames));
+  conditioning.Set("takeFrames", Napi::Number::New(env, alignment.take_frames));
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("anchors", out_anchors);
+  result.Set("alignment", conditioning);
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
+}  // namespace sonare_node

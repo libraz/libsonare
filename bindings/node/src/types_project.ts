@@ -106,6 +106,79 @@ export interface ProjectWarpMapDesc {
 export type WarpMode = 'off' | 'repitch' | 'tempo-sync' | 'time-stretch';
 
 /**
+ * Request form of {@link alignTakeToReference}.
+ *
+ * Both signals are read at {@link sampleRate}: the alignment does no I/O and no
+ * rate conversion, so resample first if the two were recorded at different
+ * rates.
+ */
+export interface AlignTakeToReferenceRequest {
+  /**
+   * The reference timeline — the guide take, or the backing track the takes were
+   * sung against. Must not be empty.
+   */
+  reference: Float32Array;
+  /** The mono take to be placed under {@link reference}. Must not be empty. */
+  take: Float32Array;
+  /** Sample rate of both buffers, in Hz. */
+  sampleRate: number;
+  /**
+   * Chroma hop in samples, which sets the time resolution of the anchors: a
+   * finer hop yields more of them. Omit for the library value — 0 is not a
+   * meaningful hop, so the library reads it as "keep the default" and a
+   * fractional value is refused rather than truncated onto one.
+   */
+  hopLength?: number;
+  /**
+   * Chroma bins per octave. Omit for the library value of 12, as with
+   * {@link hopLength}.
+   *
+   * Must be a positive multiple of 12: the chromagram folds onto 12 pitch
+   * classes, so `13` and `18` are refused as an invalid parameter rather than
+   * rounded to one that fits. A multiple of 12 is necessary but not sufficient —
+   * the CQT grid has to fit the analysis band as well, so how fine a value is
+   * accepted depends on {@link sampleRate}, and one the rate cannot carry is
+   * refused rather than analysed over a narrower range. 12 is the only value
+   * accepted across the whole supported rate range; 24 and 36 hold from 16 kHz
+   * to 48 kHz but not at 8 kHz.
+   */
+  binsPerOctave?: number;
+}
+
+/**
+ * How well an alignment was conditioned, from {@link alignTakeToReference}.
+ *
+ * Every field is descriptive: none of them makes the call fail, and a caller
+ * deciding what is acceptable supplies its own threshold.
+ */
+export interface TakeAlignment {
+  /**
+   * Mean absolute frame residual of the alignment path around its diagonal
+   * trend. A coarse indicator of how far the alignment strayed from a constant
+   * rate, not an error bound.
+   */
+  meanResidualFrames: number;
+  /** Chroma frames the reference produced. */
+  referenceFrames: number;
+  /**
+   * Chroma frames the take produced. Its ratio to {@link referenceFrames} is the
+   * overall rate difference the anchors encode.
+   */
+  takeFrames: number;
+}
+
+/** Result of {@link alignTakeToReference}. */
+export interface AlignTakeToReferenceResult {
+  /**
+   * At least two finite, strictly increasing anchors, ready to hand to
+   * {@link Project.setWarpMap} as a {@link ProjectWarpMapDesc}.
+   */
+  anchors: ProjectWarpAnchor[];
+  /** How well the alignment was conditioned. */
+  alignment: TakeAlignment;
+}
+
+/**
  * Descriptor for {@link Project.addClip}. All musical positions are PPQ
  * (quarter notes); `lengthPpq` must be > 0.
  */

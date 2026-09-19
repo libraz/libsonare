@@ -139,4 +139,16 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   static Napi::Object Wrap(const Napi::CallbackInfo& info, SonareProject* handle);
 };
 
+namespace sonare_node {
+
+/// @brief `alignTakeToReference(reference, take, sampleRate, config?)` — the
+///        handle-free take alignment (@ref sonare_align_take_to_reference).
+/// @details Positional like the other MIR bridges on this surface; the facade's
+///   request object is folded before the call. Answers `{ anchors, alignment }`,
+///   the anchors in the `{ warpSample, sourceSample }` shape `setWarpMap` takes.
+///   Defined in project/midi_mir.cpp beside them.
+Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info);
+
+}  // namespace sonare_node
+
 #endif  // SONARE_NODE_SONARE_WRAP_PROJECT_H_

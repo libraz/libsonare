@@ -25,6 +25,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
+  alignTakeToReference,
   analyze,
   analyzePolyphonic,
   assignNoteTargets,
@@ -92,6 +93,7 @@ import {
   readerShapedDefinitions,
   SHARED_READER_FILE,
 } from './_addon_sources.js';
+import { glide } from './_helpers.js';
 
 /**
  * `file:key` reads that may stay in the bare form, each with the reason it is
@@ -234,6 +236,19 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
 }> = [
   { jsName: 'pcen', invoke: (o) => Array.from(pcen(sine(32), 4, 8, o)) },
   { jsName: 'analyze', invoke: (o) => analyze(sine(8192), SR, o) },
+  {
+    // A glide rather than a tone, and two lengths rather than one: a held pair
+    // leaves the alignment path unconstrained, so both runs would agree on
+    // anchors that say nothing about the options.
+    jsName: 'alignTakeToReference',
+    invoke: (o) =>
+      alignTakeToReference({
+        ...o,
+        reference: glide(261.63, 0.5, { sampleRate: SR }),
+        take: glide(261.63, 0.75, { sampleRate: SR }),
+        sampleRate: SR,
+      }),
+  },
   {
     // Long enough for the detector's kernel; the novelty curve is compared as
     // well as the boundary list, so two runs that both found nothing still

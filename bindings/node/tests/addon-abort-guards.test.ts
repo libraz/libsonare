@@ -1531,6 +1531,34 @@ const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'SonareWrap.alignTakeToReference',
+    missingRequired: [],
+    // A stateless alignment over two buffers, so the C-1 half is the whole
+    // assertion. The rate is read before either buffer reaches the alignment, so
+    // none of these needs an alignable pair. 2^32 + 22050 is the wrap that
+    // matters: ToInt32 lands it on 22050, a rate the C entry accepts, so it would
+    // align at a rate the caller never asked for.
+    rejectsArgument: [
+      {
+        argument: 'sampleRate',
+        call: () => addon.alignTakeToReference(samples(16), samples(16), 'x'),
+      },
+      {
+        argument: 'omitted sampleRate',
+        call: () => addon.alignTakeToReference(samples(16), samples(16)),
+      },
+      {
+        argument: 'sampleRate past the signed range',
+        call: () => addon.alignTakeToReference(samples(16), samples(16), 2 ** 32 + 22050),
+        error: RangeError,
+      },
+      {
+        argument: 'reference',
+        call: () => addon.alignTakeToReference([0, 0], samples(16), 22050),
+      },
+    ],
+  },
+  {
     name: 'SonareWrap.hpss',
     missingRequired: [],
     // Stateless separation over a buffer, so there is no handle state to

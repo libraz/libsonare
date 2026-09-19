@@ -19,6 +19,8 @@ export { transcribe } from './transcribe.js';
 export type {
   AcousticOptions,
   AcousticResult,
+  AlignTakeToReferenceRequest,
+  AlignTakeToReferenceResult,
   AnalysisBeat,
   AnalysisChord,
   AnalysisDynamics,
@@ -301,6 +303,7 @@ export type {
   SynthOscWaveform,
   SynthPatch,
   SynthWaveform,
+  TakeAlignment,
   TempogramMode,
   TimbreFrame,
   TimbreResult,
