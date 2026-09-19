@@ -342,6 +342,55 @@ export interface NoteSegment {
   medianCents: number;
 }
 
+/**
+ * Why {@link splitSilenceCommonWithReport} found the gaps it did.
+ *
+ * One interval covering everything is the answer to three different situations
+ * and the interval list cannot separate them: no take has a quiet moment at
+ * all, the takes each have one but not in the same place, or `topDb` was set
+ * too loose to see the ones they have.
+ *
+ * Read `silenceCeilingDb` against the `topDb` that was passed, which is the
+ * whole decision:
+ *
+ * - ceiling near `0` — a take is sounding continuously. No threshold helps, and
+ *   a cut point has to come from somewhere other than silence.
+ * - ceiling below `topDb` — the threshold was too loose to see the quiet these
+ *   takes do have. A `topDb` under the reported ceiling finds it.
+ * - ceiling at or above `topDb`, and still one interval — every take shows
+ *   silence at this setting and they do not share any of it. That is the
+ *   alignment case, and what {@link alignTakeToReference} is for.
+ *
+ * The figures come from the same RMS pass the intervals do, so they can never
+ * describe a different measurement.
+ */
+export interface SilenceCommonReport {
+  /**
+   * The largest `topDb` at which EVERY signal still shows silence.
+   *
+   * A frame counts as silent when it sits at least `topDb` under its own
+   * signal's peak RMS, so each signal's deepest dip decides whether any
+   * threshold can find silence in it, and the union needs all of them quiet at
+   * once — hence the minimum across the signals. `0` for an all-silent signal,
+   * where the peak is 0 and the ratio has no value; `120` is the floor the dB
+   * conversion clamps at, reported for a signal holding a zero-valued frame.
+   */
+  silenceCeilingDb: number;
+  /**
+   * How many intervals the most fragmented signal produced alone.
+   *
+   * Counted before the union merges anything, and a measure of shape rather
+   * than of cause: `1` is a take that sounds once and stops, so a take that is
+   * loud then silent counts `1` exactly as a take with no silence does. Use
+   * `silenceCeilingDb` to tell those apart; use these two to see whether any
+   * take has an interior gap at all (`>= 2`) and whether the takes differ in
+   * how broken up they are (`maxSignalIntervals !== minSignalIntervals`).
+   */
+  maxSignalIntervals: number;
+  /** How many intervals the least fragmented signal produced alone. */
+  minSignalIntervals: number;
+}
+
 /** Phase processing mode for the streaming equalizer. */
 export type EqPhaseMode = 'zero' | 'natural' | 'linear';
 

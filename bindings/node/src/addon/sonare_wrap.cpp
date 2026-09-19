@@ -546,6 +546,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("splitSilence", Napi::Function::New(env, &SonareWrap::SplitSilence, "splitSilence"));
   exports.Set("splitSilenceCommon",
               Napi::Function::New(env, &SonareWrap::SplitSilenceCommon, "splitSilenceCommon"));
+  exports.Set("splitSilenceCommonWithReport",
+              Napi::Function::New(env, &SonareWrap::SplitSilenceCommonWithReport,
+                                  "splitSilenceCommonWithReport"));
   exports.Set("frameSignal", Napi::Function::New(env, &SonareWrap::FrameSignal, "frameSignal"));
   exports.Set("padCenter", Napi::Function::New(env, &SonareWrap::PadCenter, "padCenter"));
   exports.Set("fixLength", Napi::Function::New(env, &SonareWrap::FixLength, "fixLength"));

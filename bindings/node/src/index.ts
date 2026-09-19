@@ -272,6 +272,7 @@ export type {
   SendTiming,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
+  SilenceCommonReport,
   SoloProcessor,
   SourceBackend,
   SpectralEditMode,

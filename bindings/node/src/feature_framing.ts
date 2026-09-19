@@ -2,6 +2,7 @@ import { resolvePositiveIntegerOption } from './_feature_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import type { ValuesRequest } from './feature_units.js';
 import { addon } from './native.js';
+import type { SilenceCommonReport } from './types_features.js';
 import { assertPositiveInteger } from './validation.js';
 
 export interface TrimSilenceRequest {
@@ -217,6 +218,52 @@ export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Arr
     512,
   );
   return addon.splitSilenceCommon(
+    request.signals,
+    request.topDb ?? 60,
+    resolvedFrameLength,
+    resolvedHopLength,
+  );
+}
+
+/**
+ * {@link splitSilenceCommon} plus the figures that say why those are the gaps.
+ *
+ * Identical intervals, identical arguments, identical refusals; the only
+ * difference is the `report`. The plain entry point stays because a caller
+ * cutting takes has no use for the diagnosis — reach for this one when a single
+ * interval covering everything needs explaining, and read
+ * {@link SilenceCommonReport.silenceCeilingDb} against the `topDb` passed in.
+ *
+ * @param request - As {@link splitSilenceCommon}.
+ * @throws {TypeError} `request.signals` is empty, or one of its elements is
+ *   not a `Float32Array`.
+ * @example
+ * ```ts
+ * const topDb = 60;
+ * const { intervals, report } = splitSilenceCommonWithReport({ signals, topDb });
+ * if (intervals.length === 2 && report.silenceCeilingDb < topDb) {
+ *   // The takes do have a shared dip; this threshold was too loose to see it.
+ *   splitSilenceCommonWithReport({ signals, topDb: report.silenceCeilingDb - 5 });
+ * }
+ * ```
+ */
+export function splitSilenceCommonWithReport(request: SplitSilenceCommonRequest): {
+  intervals: Int32Array;
+  report: SilenceCommonReport;
+} {
+  const resolvedFrameLength = resolvePositiveIntegerOption(
+    'splitSilenceCommonWithReport',
+    'frameLength',
+    request.frameLength,
+    2048,
+  );
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'splitSilenceCommonWithReport',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
+  return addon.splitSilenceCommonWithReport(
     request.signals,
     request.topDb ?? 60,
     resolvedFrameLength,

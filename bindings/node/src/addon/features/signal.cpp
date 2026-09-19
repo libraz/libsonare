@@ -121,7 +121,12 @@ Napi::Value SonareWrap::SplitSilence(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
+namespace {
+
+// The two split_silence_common entry points take the same arguments and refuse
+// the same inputs; sharing one body is what makes that true rather than claimed.
+// `with_report` picks the `_ex` call and wraps the intervals in an object.
+Napi::Value SplitSilenceCommonImpl(const Napi::CallbackInfo& info, bool with_report) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsArray()) {
@@ -160,12 +165,36 @@ Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
   int hop_length = node_arg_int(info, 3, 512);
   int* out = nullptr;
   size_t out_count = 0;
-  SonareError err =
-      sonare_split_silence_common(signal_ptrs.data(), signal_ptrs.size(), lengths.data(), top_db,
-                                  frame_length, hop_length, &out, &out_count);
+  SonareSilenceCommonReport report{};
+  const SonareError err =
+      with_report
+          ? sonare_split_silence_common_ex(signal_ptrs.data(), signal_ptrs.size(), lengths.data(),
+                                           top_db, frame_length, hop_length, &out, &out_count,
+                                           &report)
+          : sonare_split_silence_common(signal_ptrs.data(), signal_ptrs.size(), lengths.data(),
+                                        top_db, frame_length, hop_length, &out, &out_count);
   if (err != SONARE_OK) return CheckCResult(env, err);
-  return IntResult(env, out, out_count);
+  Napi::Value intervals = IntResult(env, out, out_count);
+  if (!with_report) return intervals;
+  Napi::Object report_object = Napi::Object::New(env);
+  report_object.Set("silenceCeilingDb", report.silence_ceiling_db);
+  report_object.Set("maxSignalIntervals", report.max_signal_intervals);
+  report_object.Set("minSignalIntervals", report.min_signal_intervals);
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("intervals", intervals);
+  result.Set("report", report_object);
+  return result;
   SONARE_NODE_CATCH(env)
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
+  return SplitSilenceCommonImpl(info, false);
+}
+
+Napi::Value SonareWrap::SplitSilenceCommonWithReport(const Napi::CallbackInfo& info) {
+  return SplitSilenceCommonImpl(info, true);
 }
 
 Napi::Value SonareWrap::FrameSignal(const Napi::CallbackInfo& info) {
