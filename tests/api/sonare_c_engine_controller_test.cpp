@@ -185,13 +185,21 @@ TEST_CASE("a controller binding that cannot mean anything is refused", "[c_api][
   binding.axis = SONARE_CONTROLLER_AXIS_BRIGHTNESS;
   REQUIRE(sonare_engine_bind_controller(engine, 3, &binding) == SONARE_OK);
 
-  // Ordinals past the enum and a CC number past 127.
+  // Ordinals past the enum and a CC number past 127. Each names its own field
+  // in the last-error message: the code cannot carry the diagnosis, because an
+  // unbound destination returns the same INVALID_PARAMETER.
   binding = breath_to_excitation();
   binding.input = SONARE_CONTROLLER_INPUT_COUNT;
   REQUIRE(sonare_engine_bind_controller(engine, 3, &binding) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).find("input") != std::string::npos);
   binding = breath_to_excitation();
   binding.axis = SONARE_CONTROLLER_AXIS_COUNT;
   REQUIRE(sonare_engine_bind_controller(engine, 3, &binding) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).find("axis") != std::string::npos);
+  binding = breath_to_excitation();
+  binding.index = 128;
+  REQUIRE(sonare_engine_bind_controller(engine, 3, &binding) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).find("index") != std::string::npos);
 
   // A non-finite range or curve would reach the audio thread and stay there.
   binding = breath_to_excitation();

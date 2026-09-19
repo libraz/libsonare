@@ -113,9 +113,19 @@ SonareError sonare_engine_bind_controller(SonareRealtimeEngine* engine, uint32_t
 #else
   // Ordinals out of range are refused rather than clamped: a value the caller
   // meant as "poly pressure" arriving as "control change" is a binding that
-  // works and listens to the wrong thing.
-  if (binding->input >= SONARE_CONTROLLER_INPUT_COUNT ||
-      binding->axis >= SONARE_CONTROLLER_AXIS_COUNT || binding->index > 127) {
+  // works and listens to the wrong thing. Named one at a time because the field
+  // is the whole diagnosis, and because the code alone cannot carry it -- it is
+  // the same INVALID_PARAMETER an unbound destination returns.
+  if (binding->input >= SONARE_CONTROLLER_INPUT_COUNT) {
+    set_last_error("controller binding: input is not one of SonareControllerInput");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (binding->axis >= SONARE_CONTROLLER_AXIS_COUNT) {
+    set_last_error("controller binding: axis is not one of SonareControllerAxis");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (binding->index > 127) {
+    set_last_error("controller binding: index must be a MIDI controller number in [0, 127]");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
