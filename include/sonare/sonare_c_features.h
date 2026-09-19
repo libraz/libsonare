@@ -484,6 +484,7 @@ SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, 
 SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out);
 /// @brief Extended CENS chromagram with configurable CQT resolution.
+/// @details @p bins_per_octave must be a positive multiple of @p n_chroma.
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sample_rate,
                                   int hop_length, int n_chroma, int bins_per_octave,
@@ -501,6 +502,9 @@ SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_ra
 SonareError sonare_chroma_cqt_ex(const float* samples, size_t length, int sample_rate,
                                  int hop_length, int n_chroma, int bins_per_octave,
                                  SonareChromaResult* out);
+/// @details The CQT resolution is the library's own rather than a parameter, and
+///   every pitch class takes the mean of a whole number of its bins, so
+///   @p n_chroma must divide 36.
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_bass_chroma(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out);

@@ -469,7 +469,21 @@ def chroma_cens(
     n_chroma: int = 12,
     bins_per_octave: int = 36,
 ) -> ChromaResult:
-    """Compute CENS chroma features."""
+    """Compute CENS chroma features.
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        hop_length: Hop length in samples (default 512).
+        n_chroma: Number of pitch classes (default 12).
+        bins_per_octave: Constant-Q bins per octave (default 36). Must be a
+            positive multiple of ``n_chroma``: each pitch class takes the mean of
+            a whole number of CQT bins, and a resolution that does not divide by
+            them has no fold, so 18 is refused against the default 12 classes.
+
+    Returns:
+        ChromaResult with chroma features and mean energy.
+    """
     return _chroma_variant(
         "sonare_chroma_cens_ex",
         samples,
@@ -488,7 +502,21 @@ def chroma_cqt(
     n_chroma: int = 12,
     bins_per_octave: int = 36,
 ) -> ChromaResult:
-    """Compute a constant-Q chromagram (librosa.feature.chroma_cqt)."""
+    """Compute a constant-Q chromagram (librosa.feature.chroma_cqt).
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        hop_length: Hop length in samples (default 512).
+        n_chroma: Number of pitch classes (default 12).
+        bins_per_octave: Constant-Q bins per octave (default 36). Must be a
+            positive multiple of ``n_chroma``: each pitch class takes the mean of
+            a whole number of CQT bins, and a resolution that does not divide by
+            them has no fold, so 18 is refused against the default 12 classes.
+
+    Returns:
+        ChromaResult with chroma features and mean energy.
+    """
     return _chroma_variant(
         "sonare_chroma_cqt_ex",
         samples,
@@ -506,7 +534,20 @@ def bass_chroma(
     hop_length: int = 512,
     n_chroma: int = 12,
 ) -> ChromaResult:
-    """Compute bass-focused chroma features."""
+    """Compute bass-focused chroma features.
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        hop_length: Hop length in samples (default 512).
+        n_chroma: Number of pitch classes (default 12). The constant-Q resolution
+            is the library's own here rather than an argument, and every pitch
+            class takes the mean of a whole number of its bins, so a class count
+            that does not divide 36 -- 5 among them -- is refused.
+
+    Returns:
+        ChromaResult with chroma features and mean energy.
+    """
     return _chroma_variant(
         "sonare_bass_chroma",
         samples,
