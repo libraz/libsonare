@@ -27,6 +27,15 @@ enum class ModSource : int {
   kKeyTrack = 6,   // (note - 60)/12 octaves, bipolar
   kModWheel = 7,   // CC1, [0,1]
   kRandom = 8,     // per-voice seeded constant, bipolar [-1,1]
+  // Live controller sources. Named for what the protocol calls them, never for
+  // their polarity: a route's depth is signed, so polarity belongs to the
+  // connection. kAftertouch rather than kPressure because the physical-model
+  // side of this tree spells breath pressure "pressure", and the two would read
+  // as each other's opposite sitting next to kBreath.
+  kBreath = 9,         // CC2, [0,1]
+  kAftertouch = 10,    // channel and polyphonic aftertouch combined, [0,1]
+  kExpressionCc = 11,  // CC11, [0,1]
+  kPitchBend = 12,     // bend wheel position, bipolar [-1,1]
 };
 
 enum class ModDestination : int {
@@ -111,6 +120,14 @@ struct ModMatrix {
   }
 };
 
+/// The one rule for reading aftertouch: a channel value and a per-note value
+/// add, and the sum saturates. Shared rather than restated so the two synths
+/// cannot answer the same controller differently.
+inline float combined_aftertouch(float channel01, float poly01) noexcept {
+  const float sum = channel01 + poly01;
+  return sum < 0.0f ? 0.0f : (sum > 1.0f ? 1.0f : sum);
+}
+
 /// Per-sample source snapshot (the voice fills this in).
 struct ModSourceValues {
   float amp_env = 0.0f;
@@ -121,6 +138,12 @@ struct ModSourceValues {
   float key_track = 0.0f;
   float mod_wheel = 0.0f;
   float random = 0.0f;
+  float breath = 0.0f;
+  float aftertouch = 0.0f;
+  /// CC11 is already folded into the SoundFont channel gain, so routing this to
+  /// kAmpGain applies it twice (squared). Use it to move timbre.
+  float expression_cc = 0.0f;
+  float pitch_bend = 0.0f;
 };
 
 /// Accumulated destination offsets for one sample.

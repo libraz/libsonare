@@ -157,6 +157,10 @@ export const SYNTH_MOD_SOURCES = [
   'key-track',
   'mod-wheel',
   'random',
+  'breath',
+  'aftertouch',
+  'expression-cc',
+  'pitch-bend',
 ] as const;
 
 export const SYNTH_MOD_DESTINATIONS = [

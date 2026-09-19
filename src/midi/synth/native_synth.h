@@ -332,6 +332,10 @@ struct NativeSynthVoice : VoiceState {
   /// wrapper, so its control setters are worth calling each sample.
   bool has_engine_control_routes = false;
   float velocity01 = 0.0f;
+  /// Polyphonic aftertouch for this note, added to the channel's own before it
+  /// reaches the matrix. Per voice because that is the granularity the message
+  /// carries; cleared at note-on so a voice never inherits the last one's.
+  float poly_pressure01 = 0.0f;
   float key_track_octaves = 0.0f;
   float random_value = 0.0f;
   /// Previous sample's ModDestination::kLfo1RateScale, applied to LFO1 on the
@@ -556,7 +560,14 @@ class NativeSynth final : public MidiInstrument {
     uint8_t expression = 127;  // CC11
     uint8_t pan = 64;          // CC10
     uint8_t mod_wheel = 0;     // CC1
-    uint8_t program = 0;       // last program change (or GM melodic program)
+    /// CC2 and channel aftertouch as the channel last sent them, unscaled by
+    /// any engine's own axis. The per-engine breath fields below carry a 255
+    /// "untouched" sentinel because they override a preset value; these two are
+    /// controller state and start at zero, which is what a channel that has
+    /// sent nothing means.
+    uint8_t breath = 0;
+    uint8_t pressure = 0;
+    uint8_t program = 0;  // last program change (or GM melodic program)
     uint8_t bank_msb = 0;
     uint8_t bank_lsb = 0;
     uint16_t pitch_bend = 8192;
@@ -598,6 +609,8 @@ class NativeSynth final : public MidiInstrument {
   void process_impl(float* const* channels, const MidiInstrumentSourceOutput* source_outputs,
                     size_t source_output_count, int num_channels, int num_samples) noexcept;
   void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
+  void channel_pressure(uint8_t channel, uint8_t pressure7) noexcept;
+  void poly_pressure(uint8_t channel, uint8_t note, uint8_t pressure7) noexcept;
   void sustain_cc(uint8_t channel, uint8_t value) noexcept;
   void sostenuto_pedal(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;

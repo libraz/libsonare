@@ -54,6 +54,10 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "key-track",
         "mod-wheel",
         "random",
+        "breath",
+        "aftertouch",
+        "expression-cc",
+        "pitch-bend",
     ),
     "mod_destinations": (
         "none",

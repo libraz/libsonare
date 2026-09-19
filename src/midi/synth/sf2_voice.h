@@ -148,6 +148,15 @@ struct Sf2ChannelMod {
   /// which stopped being a fixed multiple of it once the depth became a part
   /// parameter a file can write.
   float mod_wheel01 = 0.0f;
+  /// The live controllers the mod matrix reads, normalized once per channel
+  /// refresh rather than per voice per sample. expression01 is CC11 raw: it is
+  /// already folded into `gain` above, so a route from it to amplitude applies
+  /// it twice. pitch_bend01 is the wheel position, bipolar, not the cents in
+  /// `pitch_cents` (which carries the part's bend range with it).
+  float breath01 = 0.0f;
+  float aftertouch01 = 0.0f;
+  float expression01 = 1.0f;
+  float pitch_bend01 = 0.0f;
   /// CC10 pan offset in SF2 pan units (-500..500 added to the zone pan).
   float pan_units = 0.0f;
   /// CC91/CC93 -> effect send contribution in [0,1] (default mod: 200/1000

@@ -89,14 +89,15 @@ static_assert(static_cast<int>(sonare::midi::synth::BodyType::kBrassBell) + 1 ==
 static_assert(static_cast<int>(sonare::midi::synth::BodyType::kVocal) + 1 ==
               SONARE_SYNTH_BODY_VOCAL);
 
-static_assert(static_cast<int>(sonare::midi::synth::ModSource::kRandom) + 1 ==
+static_assert(static_cast<int>(sonare::midi::synth::ModSource::kPitchBend) + 1 ==
               SONARE_SYNTH_MOD_SOURCE_COUNT);
 static_assert(static_cast<int>(sonare::midi::synth::ModDestination::kSpectrumMorph) + 1 ==
               SONARE_SYNTH_MOD_DESTINATION_COUNT);
 
 inline sonare::midi::synth::ModSource mod_source_from_c(int value) noexcept {
   using sonare::midi::synth::ModSource;
-  if (value < static_cast<int>(ModSource::kNone) || value > static_cast<int>(ModSource::kRandom)) {
+  if (value < static_cast<int>(ModSource::kNone) ||
+      value > static_cast<int>(ModSource::kPitchBend)) {
     return ModSource::kNone;
   }
   return static_cast<ModSource>(value);

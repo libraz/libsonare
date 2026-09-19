@@ -9,11 +9,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 #include "midi/midi_event.h"
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -32,11 +34,7 @@ using sonare::midi::synth::VaWaveform;
 
 constexpr double kRate = 48000.0;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 struct StereoRender {
   std::vector<float> left;
@@ -942,4 +940,34 @@ TEST_CASE("a morph route whose source stays at zero changes nothing", "[midi][sy
   NativeSynthPatch driven = routed;
   driven.mod_matrix.routes[0].source = ModSource::kVelocity;
   REQUIRE(render_note(driven, 16000) != without);
+}
+
+TEST_CASE("the live controller sources reach their destinations", "[midi][synth]") {
+  // One route per new source, each at unit depth, so a source wired to the
+  // wrong field shows up as a zero rather than as a shifted value.
+  ModSourceValues values;
+  values.breath = 0.25f;
+  values.aftertouch = 0.5f;
+  values.expression_cc = 0.75f;
+  values.pitch_bend = -1.0f;
+
+  const std::pair<ModSource, float> cases[] = {
+      {ModSource::kBreath, 0.25f},
+      {ModSource::kAftertouch, 0.5f},
+      {ModSource::kExpressionCc, 0.75f},
+      {ModSource::kPitchBend, -1.0f},
+  };
+  for (const auto& [source, expected] : cases) {
+    CAPTURE(static_cast<int>(source));
+    ModMatrix matrix;
+    matrix.routes[0] = {source, ModDestination::kCutoffCents, 1200.0f};
+    REQUIRE(evaluate_mod_matrix(matrix, values).cutoff_cents == 1200.0f * expected);
+  }
+}
+
+TEST_CASE("aftertouch is the saturating sum of channel and poly", "[midi][synth]") {
+  REQUIRE(sonare::midi::synth::combined_aftertouch(0.0f, 0.0f) == 0.0f);
+  REQUIRE(sonare::midi::synth::combined_aftertouch(0.25f, 0.5f) == 0.75f);
+  // Both at full is still full, not double: the sum saturates.
+  REQUIRE(sonare::midi::synth::combined_aftertouch(1.0f, 1.0f) == 1.0f);
 }

@@ -444,14 +444,21 @@ typedef enum SONARE_ENUM_BASE {
 } SonareSynthBodyType;
 #define SONARE_SYNTH_BODY_TYPE_COUNT 7
 
-#define SONARE_SYNTH_MOD_SOURCE_COUNT 9
+#define SONARE_SYNTH_MOD_SOURCE_COUNT 13
 #define SONARE_SYNTH_MOD_DESTINATION_COUNT 13
 
 /* One mod-matrix routing. Source/destination mirror the core ordinals
    directly; a slot with source or destination 0 (none) is disabled. */
 typedef struct {
   int source;      /* 0=none 1=ampEnv 2=filterEnv 3=lfo1 4=lfo2 5=velocity
-                      6=keyTrack 7=modWheel 8=random */
+                      6=keyTrack 7=modWheel 8=random 9=breath 10=aftertouch
+                      11=expressionCc 12=pitchBend. 9-12 are the live
+                      controllers: CC2, channel plus polyphonic aftertouch
+                      summed and saturated, CC11, and the bend wheel's
+                      position. Only 12 is bipolar; a route's depth carries the
+                      sign, so none of them is spelled for a polarity.
+                      11 is already folded into the channel gain, so routing it
+                      to ampGain applies it twice. */
   int destination; /* 0=none 1=pitchCents 2=cutoffCents 3=ampGain 4=panUnits
                       5=resonanceQ 6=vibratoDepthCents 7=filterEnvDepth
                       8=lfo1RateScale 9=excitationForce 10=excitationPosition

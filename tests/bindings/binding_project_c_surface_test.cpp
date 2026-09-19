@@ -290,7 +290,8 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
                                  "vocal"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_SOURCE)) ==
         std::vector<std::string>{"none", "amp-env", "filter-env", "lfo1", "lfo2", "velocity",
-                                 "key-track", "mod-wheel", "random"});
+                                 "key-track", "mod-wheel", "random", "breath", "aftertouch",
+                                 "expression-cc", "pitch-bend"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION)) ==
         std::vector<std::string>{"none", "pitch-cents", "cutoff-cents", "amp-gain", "pan-units",
                                  "resonance-q", "vibrato-depth-cents", "filter-env-depth",

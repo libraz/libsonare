@@ -124,6 +124,10 @@ _SYNTH_MOD_SOURCES = {
     "key-track": 6,
     "mod-wheel": 7,
     "random": 8,
+    "breath": 9,
+    "aftertouch": 10,
+    "expression-cc": 11,
+    "pitch-bend": 12,
 }
 _SYNTH_MOD_DESTINATIONS = {
     "none": 0,

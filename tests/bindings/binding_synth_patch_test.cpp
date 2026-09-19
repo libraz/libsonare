@@ -125,7 +125,7 @@ TEST_CASE("synth patch enum counts match the public C ordinals", "[project][synt
   REQUIRE(SONARE_SYNTH_FILTER_OUT_HIGHPASS + 1 == SONARE_SYNTH_FILTER_OUTPUT_COUNT);
   REQUIRE(SONARE_SYNTH_BODY_DEFAULT == 0);
   REQUIRE(SONARE_SYNTH_BODY_VOCAL + 1 == SONARE_SYNTH_BODY_TYPE_COUNT);
-  REQUIRE(SONARE_SYNTH_MOD_SOURCE_COUNT == 9);
+  REQUIRE(SONARE_SYNTH_MOD_SOURCE_COUNT == 13);
   REQUIRE(SONARE_SYNTH_MOD_DESTINATION_COUNT == 13);
 }
 
@@ -371,6 +371,20 @@ TEST_CASE("sonare_engine synth instrument renders live MIDI input", "[c_api][syn
 
   REQUIRE(sonare_engine_clear_midi_instrument(engine, 7) == SONARE_OK);
   sonare_engine_destroy(engine);
+}
+
+TEST_CASE("every mod source ordinal survives the C conversion", "[project][synth_patch]") {
+  // The clamp in mod_source_from_c is the one place a new ordinal can be lost
+  // without anything going red: a value past its upper bound comes back as
+  // kNone, so the route is silently disabled and the render is merely quiet.
+  // Walking the whole domain is what catches an upper bound left behind.
+  using sonare::midi::synth::ModSource;
+  for (int ordinal = 0; ordinal < SONARE_SYNTH_MOD_SOURCE_COUNT; ++ordinal) {
+    CAPTURE(ordinal);
+    REQUIRE(static_cast<int>(sonare_c_detail::mod_source_from_c(ordinal)) == ordinal);
+  }
+  REQUIRE(sonare_c_detail::mod_source_from_c(SONARE_SYNTH_MOD_SOURCE_COUNT) == ModSource::kNone);
+  REQUIRE(sonare_c_detail::mod_source_from_c(-1) == ModSource::kNone);
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT

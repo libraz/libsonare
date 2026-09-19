@@ -228,6 +228,10 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
   mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01;
   mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
+  mod.breath01 = static_cast<float>(st.breath) / 127.0f;
+  mod.aftertouch01 = static_cast<float>(st.pressure) / 127.0f;
+  mod.expression01 = static_cast<float>(st.expression) / 127.0f;
+  mod.pitch_bend01 = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f;
 }
 
 void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
@@ -519,6 +523,22 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
   }
 }
 
+void NativeSynth::channel_pressure(uint8_t channel, uint8_t pressure7) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  channels_[ch].pressure = pressure7 & 0x7Fu;
+  refresh_channel_mod(ch);
+}
+
+void NativeSynth::poly_pressure(uint8_t channel, uint8_t note, uint8_t pressure7) noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  const float value = static_cast<float>(pressure7 & 0x7Fu) / 127.0f;
+  // Every sounding voice on the note takes it: a layered patch is several
+  // voices of one key, and pressure is a property of the key.
+  for (NativeSynthVoice& v : pool_) {
+    if (v.active && v.note == note && v.channel == ch) v.poly_pressure01 = value;
+  }
+}
+
 void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   // MIDI RP-015: reset performance controllers, keep volume/pan.
   const uint8_t ch = channel & 0x0Fu;
@@ -526,6 +546,11 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.mod_wheel = 0;
   st.expression = 127;
   st.pitch_bend = 8192;
+  st.breath = 0;
+  st.pressure = 0;
+  for (NativeSynthVoice& v : pool_) {
+    if (v.channel == ch) v.poly_pressure01 = 0.0f;
+  }
   st.bow_force = 255;
   st.bow_position = 255;
   st.reed_breath = 255;
@@ -565,10 +590,12 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       refresh_channel_mod(ch);
       break;
     case 2:
+      st.breath = value;        // the generic axis every engine can route from
       st.bow_force = value;     // breath -> bowed-string bow force
       st.reed_breath = value;   // breath -> reed mouth pressure
       st.brass_breath = value;  // breath -> brass mouth pressure
       st.flute_breath = value;  // breath -> flute mouth pressure
+      refresh_channel_mod(ch);
       push_bow_control(ch);
       push_reed_control(ch);
       push_brass_control(ch);
@@ -669,6 +696,16 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
       channels_[ch].pitch_bend = static_cast<uint16_t>(u.words[1] >> 18);
     }
     refresh_channel_mod(ch);
+  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kChannelPressure)) {
+    const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
+                               ? u.note_number()
+                               : scale_cc_32_to_7(u.words[1]);
+    channel_pressure(u.channel(), value7);
+  } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPolyPressure)) {
+    const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
+                               ? u.data2_7bit()
+                               : scale_cc_32_to_7(u.words[1]);
+    poly_pressure(u.channel(), u.note_number(), value7);
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
     const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
                                ? u.data2_7bit()

@@ -26,9 +26,9 @@ inline constexpr const char* kSynthFilterModels[] = {"default", "svf", "moog-lad
 inline constexpr const char* kSynthFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
 inline constexpr const char* kSynthBodyTypes[] = {"default",   "none",       "guitar", "violin",
                                                   "wood-tube", "brass-bell", "vocal"};
-inline constexpr const char* kSynthModSources[] = {"none",      "amp-env",   "filter-env",
-                                                   "lfo1",      "lfo2",      "velocity",
-                                                   "key-track", "mod-wheel", "random"};
+inline constexpr const char* kSynthModSources[] = {
+    "none",      "amp-env", "filter-env", "lfo1",       "lfo2",          "velocity",  "key-track",
+    "mod-wheel", "random",  "breath",     "aftertouch", "expression-cc", "pitch-bend"};
 inline constexpr const char* kSynthModDestinations[] = {"none",
                                                         "pitch-cents",
                                                         "cutoff-cents",

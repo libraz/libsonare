@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/mod_matrix.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/ump.h"
 #include "util/constants.h"
@@ -380,9 +381,10 @@ float BuiltinSynth::render_voice_sample(Voice& v) noexcept {
   v.phase += v.phase_inc;
   if (v.phase >= 1.0) v.phase -= std::floor(v.phase);
 
-  // MPE pressure boosts amplitude. Channel and poly pressure combine, clamped to
-  // unity, so the multiplier is exactly 1.0 (no change) when neither is sent.
-  const float pressure = clampf(channel_pressure_[v.channel & 0x0Fu] + v.poly_pressure, 0.0f, 1.0f);
+  // MPE pressure boosts amplitude, so the multiplier is exactly 1.0 (no change)
+  // when neither channel nor poly pressure is sent.
+  const float pressure =
+      synth::combined_aftertouch(channel_pressure_[v.channel & 0x0Fu], v.poly_pressure);
   const float pressure_gain = 1.0f + kPressureModDepth * pressure;
   // Channel volume x expression. Read per sample so a CC ramp is heard as it
   // arrives rather than at the next note.

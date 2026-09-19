@@ -609,7 +609,8 @@ class SynthModRouting:
 
     ``source`` / ``destination`` accept the ordinal or a name (sources:
     ``"amp-env"`` / ``"filter-env"`` / ``"lfo1"`` / ``"lfo2"`` / ``"velocity"``
-    / ``"key-track"`` / ``"mod-wheel"`` / ``"random"``; destinations:
+    / ``"key-track"`` / ``"mod-wheel"`` / ``"random"`` / ``"breath"`` /
+    ``"aftertouch"`` / ``"expression-cc"`` / ``"pitch-bend"``; destinations:
     ``"pitch-cents"`` / ``"cutoff-cents"`` / ``"amp-gain"`` / ``"pan-units"`` /
     ``"resonance-q"`` / ``"vibrato-depth-cents"`` / ``"filter-env-depth"`` /
     ``"lfo1-rate-scale"`` / ``"excitation-force"`` / ``"excitation-position"`` /

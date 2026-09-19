@@ -278,6 +278,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   // A reused slot must not inherit the previous note's LFO rate.
   matrix_lfo1_rate_scale = 1.0f;
   velocity01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
+  poly_pressure01 = 0.0f;
   key_track_octaves = (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) / 12.0f;
   random_value = seq.bipolar_at(103);
 
@@ -329,6 +330,10 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     values.key_track = key_track_octaves;
     values.mod_wheel = mod.mod_wheel01;
     values.random = random_value;
+    values.breath = mod.breath01;
+    values.aftertouch = combined_aftertouch(mod.aftertouch01, poly_pressure01);
+    values.expression_cc = mod.expression01;
+    values.pitch_bend = mod.pitch_bend01;
     offsets = evaluate_mod_matrix(patch->mod_matrix, values);
     matrix_lfo1_rate_scale = offsets.lfo1_rate_scale;
     // Engine-owned axes: the offset is handed to the engine's own control

@@ -26,6 +26,14 @@ float source_value(ModSource source, const ModSourceValues& values) noexcept {
       return values.mod_wheel;
     case ModSource::kRandom:
       return values.random;
+    case ModSource::kBreath:
+      return values.breath;
+    case ModSource::kAftertouch:
+      return values.aftertouch;
+    case ModSource::kExpressionCc:
+      return values.expression_cc;
+    case ModSource::kPitchBend:
+      return values.pitch_bend;
   }
   return 0.0f;
 }

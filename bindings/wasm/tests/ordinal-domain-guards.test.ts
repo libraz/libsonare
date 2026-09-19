@@ -222,6 +222,10 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
       'key-track',
       'mod-wheel',
       'random',
+      'breath',
+      'aftertouch',
+      'expression-cc',
+      'pitch-bend',
     ];
     for (let ordinal = 0; ordinal < sources.length; ordinal++) {
       expect(fromSource(ordinal), `source ordinal ${ordinal}`).toBe(fromSource(sources[ordinal]));

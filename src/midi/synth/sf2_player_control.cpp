@@ -860,6 +860,13 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   const float bend_cents =
       (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f * st.bend_range_cents;
   mod.mod_wheel01 = static_cast<float>(st.mod_wheel) / 127.0f;
+  // The mod matrix's live sources. Filled here as well as in NativeSynth so the
+  // same route reads the same controller whichever player owns the voice; poly
+  // aftertouch has no position on this path, so the voice's own stays at rest.
+  mod.breath01 = static_cast<float>(st.cc_position[2]) / 127.0f;
+  mod.aftertouch01 = static_cast<float>(st.channel_pressure) / 127.0f;
+  mod.expression01 = static_cast<float>(st.cc_position[11]) / 127.0f;
+  mod.pitch_bend01 = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f;
   // Where each controller source presently sits, in the block's own order. The
   // bend and polyphonic aftertouch have no position here and stay at rest, so
   // the sum below is over six terms and four of them can move.
