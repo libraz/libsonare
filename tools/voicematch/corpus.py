@@ -42,6 +42,7 @@ from capture import (
     parse_seconds,
     rig_capable,
 )
+from metrics import sound_onset_s, to_mono
 from patterns import Pattern
 from smf import Note
 from wavio import read_wav
@@ -530,11 +531,20 @@ def corpus_pattern(
 def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
     """Assemble the captured WAVs onto the probe's timeline as one render.
 
-    The capture's preroll is dropped rather than kept: it exists so the plugin's
+    The capture's lead-in is dropped rather than kept: it exists so the plugin's
     first buffer is not the note's attack, and leaving it in would place every
     captured onset a preroll late against the model's, which the per-note
     windows would then read as an attack that arrives slow on every note of the
     grid.
+
+    How much lead-in each slot has is measured rather than assumed to be the
+    nominal preroll. A hosted plugin sounds a note when it sounds it, and the
+    capture's own guard refuses only the renders that are LATE by more than
+    `capture.ONSET_SLACK_MS` — so trimming the nominal preroll leaves a
+    one-sided offset of up to that slack on every slot, in the direction that
+    makes the reference arrive after the model. The model's render has no such
+    offset, being written straight from the score, so the difference lands
+    entirely on the reference side of every timing measurement.
 
     Returned as (frames, channels) to match what an oracle route hands back;
     `to_mono` downmixes it exactly as it does an AudioUnit render.
@@ -549,7 +559,6 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
     total = round(
         (last.start + corpus.slot_for(corpus.capture_slot(last.note), last.velocity)) * sr)
     out: np.ndarray | None = None
-    skip = round(corpus.preroll_s * sr)
     # The pattern is written in the model's numbering; the renders are filed
     # under the notes the reference was struck on. See `Corpus.capture_slot`.
     for note in pattern.notes:
@@ -564,7 +573,8 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
             audio = audio[:, None]
         if out is None:
             out = np.zeros((total, audio.shape[1]), dtype=np.float64)
-        seg = audio[skip:]
+        lead_s = sound_onset_s(to_mono(audio), sr, corpus.preroll_s, len(audio) / sr)
+        seg = audio[round(lead_s * sr):]
         start = round(note.start * sr)
         slot = corpus.slot_for(slot_note, note.velocity)
         room = min(len(seg), total - start, round(slot * sr))

@@ -50,6 +50,13 @@ def onset_index(sig: np.ndarray, sr: float) -> int:
     survive a take with lead-in silence: a captured note commonly starts a
     tenth of a second into the file, and a fixed threshold finds the room
     rather than the strike.
+
+    It is NOT `metrics_signal.sound_onset_s`, which every window outside this
+    package is placed by: -20 dB of the peak on a 1 ms boxcar scanned forward,
+    against -50 dB on a 2 ms RMS walked back. Both sides of a shape comparison
+    are read through this one, so the column is self-consistent; what is not
+    settled is that a shape reading and a metric reading of the same take start
+    at two different instants.
     """
     width = max(1, int(_ENV_MS * 0.001 * sr))
     env = np.convolve(np.abs(sig), np.ones(width) / width, mode="same")

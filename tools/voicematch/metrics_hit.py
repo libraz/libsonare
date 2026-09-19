@@ -16,7 +16,17 @@ from metrics_bands import (
 )
 from metrics_decay import _band_decay, _band_power
 from metrics_modal import measure_modes
-from metrics_signal import _db, _rms_envelope, _spectrum, channel_width
+from metrics_signal import (
+    ONSET_FLOOR_DB,
+    ONSET_HOP_MS,
+    ONSET_SEARCH_S,
+    ONSET_WIN_MS,
+    _db,
+    _rms_envelope,
+    _spectrum,
+    channel_width,
+    sound_onset_s,
+)
 from smf import Note
 
 # Longest stretch of one hit that is analyzed.
@@ -57,22 +67,20 @@ HIT_LONG_MAX_SEC = 10.0
 # A hit's envelope is read on a far finer grid than a sustained note's. Time to
 # peak is single-digit milliseconds for most of the kit, so the 5 ms hop that
 # resolves a bowed attack quantises a snare's to 5, 10 or 15 and reports the
-# quantisation rather than the attack.
-HIT_ENVELOPE_HOP_MS = 0.5
-HIT_ENVELOPE_WIN_MS = 2.0
+# quantisation rather than the attack. It is the grid every onset is located on
+# — see `sound_onset_s` — so the two are one value rather than two that agree.
+HIT_ENVELOPE_HOP_MS = ONSET_HOP_MS
+HIT_ENVELOPE_WIN_MS = ONSET_WIN_MS
 
 #: Widest the centroid is ever integrated over, when the capture set no ceiling
 #: of its own. Above it a kit carries no content a listener places the sound by.
 CENTROID_MAX_HZ = 16000.0
 
 # How far below the hit's own peak the strike is considered to have begun, and
-# how long after the note-on one may still be looked for. A hosted plugin does
-# not always sound a note in the buffer it was delivered in — measured on a
-# sampled kit, the same key at six velocities started anywhere between 0 and
-# 750 ms after the note-on — and a window anchored on the note-on rather than on
-# the strike reports that scheduling jitter as the instrument's attack time.
-HIT_ONSET_FLOOR_DB = -50.0
-HIT_ONSET_SEARCH_SEC = 1.0
+# how long after the note-on one may still be looked for. Both are the bank-wide
+# onset settings — see `sound_onset_s`, which every path locates an onset with.
+HIT_ONSET_FLOOR_DB = ONSET_FLOOR_DB
+HIT_ONSET_SEARCH_SEC = ONSET_SEARCH_S
 
 # How close to its own peak a hit counts as having arrived. Time to the peak
 # itself is not a usable statistic for anything that washes: a crash holds
@@ -335,27 +343,10 @@ class HitMetrics:
 def _hit_onset(mono: np.ndarray, sr: int, start: float, limit: float) -> float:
     """Where the strike actually begins, in seconds, at or after `start`.
 
-    Located by walking back from the loudest moment to the last frame under
-    `HIT_ONSET_FLOOR_DB`, so a piece whose envelope genuinely swells (a crash, a
-    vibraslap's rattle) keeps its real onset rather than being cut to its peak.
-    Only the first `HIT_ONSET_SEARCH_SEC` is searched: past that the loudest
-    thing in the window is more likely to be the next event than this one.
-
-    Falls back to `start` when nothing rises above the floor, which is what a
-    silent render gives and what the caller already handles.
+    The shared onset, under the name the percussion path reads it by; the
+    behaviour and the constants are `sound_onset_s`'s.
     """
-    scan_end = int(min(limit, start + HIT_ONSET_SEARCH_SEC) * sr)
-    scan = np.asarray(mono[int(start * sr):min(scan_end, len(mono))], dtype=np.float64)
-    if len(scan) < 2:
-        return start
-    times, env = _rms_envelope(scan, sr, hop_ms=HIT_ENVELOPE_HOP_MS,
-                               win_ms=HIT_ENVELOPE_WIN_MS)
-    peak_i = int(np.argmax(env))
-    floor = float(env[peak_i]) * 10.0 ** (HIT_ONSET_FLOOR_DB / 20.0)
-    if floor <= 0.0:
-        return start
-    below = np.where(env[: peak_i + 1] <= floor)[0]
-    return start + float(times[int(below[-1])]) if below.size else start
+    return sound_onset_s(mono, sr, start, limit)
 
 
 def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,

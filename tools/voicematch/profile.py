@@ -138,6 +138,7 @@ from profile_measure import (
     SHORT_RING_FLOOR_DB,
     _above_fundamental,
     _short_ring_window,
+    arrival_index,
     body_below_f0_db,
     decay_origin_index,
     double_decay,
@@ -146,7 +147,6 @@ from profile_measure import (
     is_percussion,
     measure_hit,
     measure_note,
-    onset_index,
     partial_decay,
     register_deltas,
     tone_to_noise_db,
@@ -1070,11 +1070,11 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
             # mechanism for at all.
             "tnr": d("tnr_db"),
             "damper": None if damper_capped else d("damper_release_ms"),
-            # How long the note takes to reach its loudest point. On a piano
-            # this is not the strike -- the hammer is over in a couple of
-            # milliseconds -- it is the bloom the soundboard adds after it, and
-            # a model whose envelope peaks on the strike and falls from there
-            # reads as a thump rather than as a note that sinks in.
+            # The rise from the sound's own onset to its loudest point -- the
+            # bloom, not the strike. A model whose envelope peaks on the strike
+            # and falls from there reads as a thump rather than as a note that
+            # sinks in. How late either side sounded is `onset_ms` and is not
+            # in here: that is the capture chain and the plugin, not the voice.
             "attack": d("attack_ms"),
             # The SECOND decay rate. A piano string loses energy fast while the
             # strings of its unison move together and far more slowly once they

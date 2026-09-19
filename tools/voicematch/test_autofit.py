@@ -106,7 +106,7 @@ from report import report_result
 from room import DRY
 from smf import Note
 from staging import _better_seed, screen_knobs, stage_of, staged_indices
-from wavio import write_wav
+from wavio import read_wav, write_wav
 from writeback import (
     DRUM_TABLE_FILE,
     TUNING_LAYER_FILE,
@@ -1784,6 +1784,32 @@ def test_the_corpus_oracle_places_each_capture_at_its_own_onset(tmp_path):
     mono = np.abs(audio).mean(axis=1)
     onset = int(np.argmax(mono > 0.01)) / 48000.0
     assert onset == pytest.approx(probe.notes[0].start, abs=0.005)
+
+
+def test_the_corpus_oracle_takes_out_the_slack_the_capture_guard_let_through(tmp_path):
+    """A slot is placed where it sounds, not a nominal preroll in.
+
+    `capture.ONSET_SLACK_MS` refuses a render for sounding LATE and cannot
+    refuse one for being early, so what survives it is one-sided: the reference
+    arrives after the model on every slot of the grid, by up to the slack, and
+    every timing measurement taken against it carries that the same way. The
+    model's own render has no such offset, being written straight from the
+    score, so none of it cancels.
+    """
+    sr = 48000
+    late_s = 0.008
+    root = _write_corpus(tmp_path / "c", notes=(60,), velocities=(120,))
+    path = root / "t" / "n060_v120.wav"
+    audio, _ = read_wav(path)
+    pad = np.zeros((int(late_s * sr), audio.shape[1]), dtype=np.float32)
+    write_wav(path, np.concatenate([pad, audio[: -len(pad)]]).astype(np.float32), sr)
+
+    corpus = load_corpus(root)
+    probe = corpus_pattern(corpus, notes=(60,), velocities=(120,))
+    mono = np.abs(corpus_oracle(corpus, probe, sr)).mean(axis=1)
+    onset = int(np.argmax(mono > 0.01)) / sr
+
+    assert onset == pytest.approx(probe.notes[0].start, abs=0.003)
 
 
 def test_a_corpus_run_refuses_a_grid_it_has_no_captures_for(tmp_path):

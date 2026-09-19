@@ -33,7 +33,13 @@ Three of those are anchored on `n·f0·√(1+B·n²)`, which describes a **stiff
 
 ### Two attack readings, on different grids
 
-`attack_fine_ms` measures the attack on a 0.5 ms grid. `attack_ms` keeps its 5 ms hop and 10 ms window because every committed profile in `reference/` was measured through it — and measured on synthetic rises that grid reports **5.0 ms for both a 0.5 ms and a 1 ms attack**, and 10.0 for 2, 3 and 5. A struck or plucked string reaches its peak inside that. The percussion path fixed exactly this for itself and the pitched path did not inherit it.
+`attack_fine_ms` measures the attack on a 0.5 ms grid. `attack_ms` keeps its 5 ms hop and 10 ms window because every committed profile in `reference/` was measured through it — and measured on synthetic rises that grid reports **5.0 ms for both a 0.5 ms and a 1 ms attack**, and 10.0 for 2, 3 and 5. A struck or plucked string reaches its peak inside that.
+
+### An attack is a rise, and how late the render spoke is a separate reading
+
+Every path now takes its window from the onset the render actually has (`sound_onset_s`, the one detector all three sets share) and carries the delay itself as `onset_ms`. The two were one field on the reference profile until this: `attack_ms` there ran from the scheduled note-on, so it held the plugin's own latency plus whatever the capture's `ONSET_SLACK_MS` guard let through — a guard that refuses a render for being **late** and cannot refuse one for being early, which makes the residue one-sided rather than noise. The size of it against the size of the reading is the point: measured over the committed references, 40 % of the rows carried an `attack_ms` inside two of the 5 ms quanta the envelope grid resolves, and 29 captures had a median of exactly one quantum.
+
+Re-measuring the whole corpus from the located onset leaves the drum capture bit-identical — the percussion path has anchored on the located strike since it was written — and moves the pitched captures, which had never inherited it.
 
 ## Percussion hits
 

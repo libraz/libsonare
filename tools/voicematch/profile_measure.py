@@ -19,6 +19,7 @@ from metrics import (
     fit_partial_series,
     midi_to_hz,
     partial_hz,
+    sound_onset_s,
     to_mono,
 )
 from smf import Note
@@ -106,7 +107,18 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
 
     if not found:
         return {}
-    peak_a = max(a for _, _, a in found)
+    # The ladder is reported against its own fundamental, which is the anchor
+    # `harmonics_db` uses on the live path and the one every consumer of this
+    # field re-references to before reading it (`partial_balance_db`, `band_db`
+    # both subtract `partials_db[0]`). Anchoring on the loudest partial instead
+    # left the two halves of the harness holding the same ladder at two
+    # different zeroes, and the loudest partial is not a stable choice of zero:
+    # measured over the committed references it sits above h1 on 30 % of rows
+    # and within 1 dB of the runner-up on 9 %, so which partial it is can turn
+    # over between two takes of one note. Falls back to the loudest where the
+    # series has no fundamental at all, there being nothing else to be relative
+    # to.
+    anchor = next((a for n, _, a in found if n == 1), 0.0) or max(a for _, _, a in found)
     return {
         "f0_hz": round(f0, 3),
         "cents_vs_et": round(float(1200.0 * np.log2(f0 / et)), 2),
@@ -120,7 +132,7 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
         "partials_fit": fitted_on,
         "inharmonicity_reliable": fitted_on >= MIN_PARTIALS_FOR_B,
         "partials_hz": [round(fn, 2) for _, fn, _ in found],
-        "partials_db": [round(float(20 * np.log10(max(an, 1e-12) / peak_a)), 2)
+        "partials_db": [round(float(20 * np.log10(max(an, 1e-12) / anchor)), 2)
                         for _, _, an in found],
     }
 
@@ -157,8 +169,13 @@ ONSET_SLACK_DB = 3.0
 RISE_WINDOW_S = 0.25
 
 
-def onset_index(env_db: np.ndarray) -> int:
+def arrival_index(env_db: np.ndarray) -> int:
     """First envelope point within @ref ONSET_SLACK_DB of the loudest one.
+
+    Where the note has ARRIVED at its level, which is the far end of the rise
+    and not its beginning — the beginning is `sound_onset_s`, the one detector
+    every window in this harness is placed by, and this was called `onset_index`
+    for long enough to read as a second one.
 
     The attack time is read off this rather than off `argmax`, which is only an
     onset on an instrument that decays. On a plateau `argmax` is the largest
@@ -187,7 +204,7 @@ def decay_origin_index(env_db: np.ndarray, hop_s: float) -> int:
     """
     if env_db.size == 0:
         return 0
-    start = onset_index(env_db)
+    start = arrival_index(env_db)
     span = max(1, round(RISE_WINDOW_S / max(hop_s, 1e-9)))
     return start + int(np.argmax(env_db[start:min(env_db.size, start + span)]))
 
@@ -470,10 +487,26 @@ def _short_ring_window(held: np.ndarray, sr: int) -> tuple[int, int]:
 
 def measure_note(audio: np.ndarray, sr: int, note: int, *,
                  preroll_s: float, gate_s: float) -> dict:
-    """Every measurement this profile carries, for one captured note."""
+    """Every measurement this profile carries, for one captured note.
+
+    The gate window is placed on the onset the render actually has rather than
+    on the one the score asked for. A capture's own guard refuses a render that
+    sounds LATE by more than `capture.ONSET_SLACK_MS` and cannot refuse one that
+    is early, so what survives it is a one-sided offset of up to that slack —
+    the same size as the 5 ms grid the envelope is read on. Measured on the
+    committed references, 40 % of the rows carried an attack inside two of those
+    quanta, so the window's own placement error was a large fraction of the
+    quantity it was being used to measure. The percussion path has anchored on
+    the located strike since it was written; this is the same anchor, from the
+    same detector.
+    """
     mono = to_mono(audio)
-    on = int(preroll_s * sr)
-    off = int((preroll_s + gate_s) * sr)
+    # From the note-on, the same origin `analyze_hit` and `note_onset` give it:
+    # the preroll is there to absorb the plugin's first buffer, so a scan that
+    # began at the file would answer with whatever that buffer left behind.
+    onset_s = sound_onset_s(mono, sr, preroll_s, len(mono) / sr)
+    on = int(onset_s * sr)
+    off = on + int(gate_s * sr)
     held = mono[on:off]
     if held.size < sr // 4:
         return {}
@@ -524,9 +557,19 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
     # Three indices, because `argmax` answers only the first of the three
     # questions on an envelope that does not decay: how loud the note got, when
     # it arrived, and where its fall begins.
-    onset_i = onset_index(env_db)
+    arrival_i = arrival_index(env_db)
     origin_i = decay_origin_index(env_db, float(t_env[1] - t_env[0]) if t_env.size > 1 else 0.005)
-    row["attack_ms"] = round(float(t_env[onset_i] * 1000.0), 1)
+    # How late the render sounded against the note-on it was sent. Carried
+    # rather than discarded: it is a property of the capture chain and of the
+    # plugin, and it is the offset the window above was moved by, so a reader
+    # can see what the alignment removed. The same field `analyze_hit` reports,
+    # with the same sign — positive means the sound arrived after the note-on.
+    row["onset_ms"] = round((onset_s - preroll_s) * 1000.0, 2)
+    # The rise, now that the delay above is no longer inside it: from the sound's
+    # own onset to the first moment it is within `ONSET_SLACK_DB` of its peak.
+    # On a piano this is not the strike — the hammer is over in a couple of
+    # milliseconds — it is the bloom the soundboard adds after it.
+    row["attack_ms"] = round(float(t_env[arrival_i] * 1000.0), 1)
 
     tail = slice(origin_i, usable_decay_end(env_db, origin_i))
     # How much of the held note the two rates were fitted over. Both are slopes,

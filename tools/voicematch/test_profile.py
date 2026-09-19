@@ -1583,7 +1583,7 @@ def test_a_held_note_arrives_where_it_got_loud_not_where_it_wobbled():
     late = int(np.argmax(env_db))
     assert t[late] > 1.0, "the fixture has to crest late to be a test"
 
-    onset = profile_module.onset_index(env_db)
+    onset = profile_module.arrival_index(env_db)
     assert t[onset] == pytest.approx(0.025, abs=0.02)
     # The decay origin travels with it: fitted from the crest there is almost
     # nothing left of a three-second note to fit over.
@@ -1610,7 +1610,7 @@ def test_a_struck_notes_decay_is_still_fitted_from_its_peak():
          lambda u: -63.0 * (u - 0.04)])
     peak = int(np.argmax(env_db))
 
-    onset = profile_module.onset_index(env_db)
+    onset = profile_module.arrival_index(env_db)
     assert t[onset] < t[peak], "the fixture needs the arrival on the rising edge"
     origin = profile_module.decay_origin_index(env_db, float(t[1] - t[0]))
     assert origin == pytest.approx(peak, abs=1)
@@ -1718,6 +1718,92 @@ def test_the_hammer_reaches_the_body_level_only_through_the_window():
     on_body = hammered["held_peak_dbfs"] - plain["held_peak_dbfs"]
     assert on_peak > 10.0
     assert 0.0 < on_body < on_peak / 4.0
+
+
+def _ramped_tone(sr: int, seconds: float, ramp_s: float = 0.05,
+                 decay: float = 1.0, hz: float = 440.0) -> np.ndarray:
+    t = np.arange(int(seconds * sr)) / sr
+    env = np.minimum(1.0, t / ramp_s) * np.exp(-decay * t)
+    return (np.sin(2 * np.pi * hz * t) * env).astype(np.float32)
+
+
+def test_a_note_the_host_sounded_late_measures_the_same_as_one_it_sounded_on_time():
+    """The gate window follows the onset, because a hosted plugin's does not follow the note-on.
+
+    The percussion path has anchored on the located strike since it was
+    written; this is the same anchor for a held note. What made it matter here
+    is the size of the offset against the size of the reading: a capture's
+    guard refuses a render for sounding LATE and cannot refuse one for being
+    early, so the residue is one-sided rather than noise, and the envelope is
+    read on a 5 ms grid that 40 % of the committed reference rows report an
+    attack within two of. The offset below is larger than the guard's own
+    ceiling so that the failure is unambiguous rather than one quantum.
+    """
+    sr = SR
+    tone = _ramped_tone(sr, 3.0)
+    preroll = np.zeros(int(0.1 * sr), dtype=np.float32)
+
+    def measured(lead_s: float) -> dict:
+        x = np.concatenate([preroll, np.zeros(int(lead_s * sr), dtype=np.float32), tone])
+        return profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
+                                           preroll_s=0.1, gate_s=2.0)
+
+    on_time, late = measured(0.0), measured(0.04)
+    assert on_time["onset_ms"] == pytest.approx(0.0, abs=3.0)
+    assert late["onset_ms"] == pytest.approx(40.0, abs=3.0)
+    assert late["attack_ms"] == pytest.approx(on_time["attack_ms"], abs=5.0)
+    assert late["decay_db_s"] == pytest.approx(on_time["decay_db_s"], abs=0.5)
+    assert late["held_peak_dbfs"] == pytest.approx(on_time["held_peak_dbfs"], abs=0.5)
+
+
+def test_the_window_never_opens_inside_the_preroll():
+    """Whatever is in a preroll is not the note — that is what the preroll is for.
+
+    Two shapes, both from the cached corpus: `electric_grand` leaves a click in
+    the first 70 ms of its file, and `english_horn` carries a previous note's
+    tail decaying from 43 dB under its peak across the whole preroll. Both sit
+    over a floor set 50 dB under a quiet note's own crest, so a detector asked
+    to find the sound in the FILE answers with them and the gate window opens
+    up to a preroll early.
+    """
+    sr = SR
+    tone = _ramped_tone(sr, 3.0, ramp_s=0.01)
+    preroll = np.zeros(int(0.1 * sr), dtype=np.float32)
+
+    click = preroll.copy()
+    click[int(0.02 * sr):int(0.03 * sr)] = 0.2
+    bed = preroll + (0.01 * np.sin(2 * np.pi * 300.0 * np.arange(len(preroll)) / sr)
+                     ).astype(np.float32)
+
+    for lead in (click, bed):
+        x = np.concatenate([lead, tone])
+        row = profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
+                                          preroll_s=0.1, gate_s=2.0)
+        assert row["onset_ms"] >= 0.0
+        assert row["onset_ms"] == pytest.approx(0.0, abs=3.0)
+
+
+def test_the_ladder_is_reported_against_its_fundamental_not_its_loudest_partial():
+    """One ladder, one zero.
+
+    `harmonics_db` is relative to h1 on the live path, and both readers of
+    `partials_db` subtract its first entry before using it — so anchoring the
+    profile on the loudest partial left the same ladder held at two zeroes and
+    bought nothing. It is not a stable choice of zero either: measured over the
+    committed references the loudest partial sits above h1 on 30 % of rows and
+    within 1 dB of the runner-up on 9 %, so which partial it lands on can turn
+    over between two takes of one note.
+    """
+    sr = SR
+    t = np.arange(int(3.0 * sr)) / sr
+    x = (0.25 * np.sin(2 * np.pi * 440.0 * t)
+         + 0.5 * np.sin(2 * np.pi * 880.0 * t)).astype(np.float32)
+
+    row = profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
+                                      preroll_s=0.0, gate_s=2.5)
+
+    assert row["partials_db"][0] == pytest.approx(0.0, abs=0.05)
+    assert row["partials_db"][1] == pytest.approx(6.0, abs=1.0)
 
 
 def test_a_tail_window_stops_where_the_references_do():

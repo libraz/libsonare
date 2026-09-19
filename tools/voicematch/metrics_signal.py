@@ -111,6 +111,136 @@ def _rms_envelope(y: np.ndarray, sr: int, hop_ms: float = 5.0, win_ms: float = 1
     return times, rms
 
 
+# Where a render is taken to start sounding, and on what grid that is decided.
+#
+# A hosted plugin does not always sound a note in the buffer it was delivered
+# in — measured on a sampled kit, the same key at six velocities started
+# anywhere between 0 and 750 ms after the note-on — and a capture's own guard
+# only refuses a render that is LATE, so the offset that survives is bounded on
+# one side and systematic. A window anchored on the note-on rather than on the
+# sound reports that offset as the instrument's attack time.
+#
+# The floor is a fraction of the search window's own peak rather than an
+# absolute level, so a preroll carrying the library's room tone does not read
+# as the note having already started. Half a millisecond because the offset
+# being located is single-digit milliseconds, which a 5 ms hop quantises away.
+ONSET_FLOOR_DB = -50.0
+ONSET_SEARCH_S = 1.0
+ONSET_HOP_MS = 0.5
+ONSET_WIN_MS = 2.0
+#: How long the envelope has to stay over the floor before the crossing counts
+#: as the sound starting. Ten frames of the grid above, so no single-frame
+#: ripple can pass for a beginning. It costs nothing in accuracy: what is
+#: returned is the frame the run STARTS at, so a longer hold only raises the
+#: shortest sound that can satisfy it, and @ref sound_onset_s falls back for
+#: those rather than refusing them.
+ONSET_HOLD_MS = 5.0
+#: How long a stretch under the floor has to be before it is a gap in the sound
+#: rather than a trough in its waveform. One period of 40 Hz, which is the
+#: lowest fundamental this corpus captures — a tuba's E1 at 41 Hz — and the
+#: point below which a 2 ms RMS window stops smoothing a waveform into a level
+#: at all. Measured on `lead_square`'s bottom octave, a 65 Hz pulse read
+#: through that window swings between -9 and -64 dB of its own peak every
+#: 15 ms, so its first 5 ms unbroken stretch over the floor is 38 ms after it
+#: began sounding.
+ONSET_GAP_MS = 25.0
+
+
+def _first_sustained(over: np.ndarray, need: int) -> int | None:
+    """First index of the earliest run of `need` consecutive true values."""
+    if need <= 1:
+        return int(np.argmax(over)) if bool(over.any()) else None
+    if over.size < need:
+        return None
+    runs = np.convolve(over.astype(np.int32), np.ones(need, dtype=np.int32), mode="valid")
+    hit = np.nonzero(runs == need)[0]
+    return int(hit[0]) if hit.size else None
+
+
+def _close_gaps(over: np.ndarray, span: int) -> np.ndarray:
+    """Fill every false stretch shorter than `span`, leaving the longer ones.
+
+    What separates a waveform's own trough from a silence between two sounds,
+    and there is nothing but duration to separate them by — both are the
+    envelope under the floor. See @ref ONSET_GAP_MS for where the line sits.
+    """
+    idx = np.flatnonzero(over)
+    if span <= 1 or idx.size < 2:
+        return over
+    out = over.copy()
+    lo, hi = idx[:-1], idx[1:]
+    for g in np.flatnonzero((hi - lo > 1) & (hi - lo - 1 < span)):
+        out[lo[g] + 1:hi[g]] = True
+    return out
+
+
+def sound_onset_s(mono: np.ndarray, sr: int, start: float, limit: float, *,
+                  floor_db: float = ONSET_FLOOR_DB,
+                  search_s: float = ONSET_SEARCH_S,
+                  hop_ms: float = ONSET_HOP_MS,
+                  win_ms: float = ONSET_WIN_MS,
+                  hold_ms: float = ONSET_HOLD_MS,
+                  gap_ms: float = ONSET_GAP_MS) -> float:
+    """Where the sound begins, in seconds, at or after `start`.
+
+    The earliest moment the envelope goes over `floor_db` of the search
+    window's peak and stays over it for `hold_ms`, counting a stretch under the
+    floor shorter than `gap_ms` as part of the sound rather than as a break in
+    it; the frame before that run is the answer. A voice that genuinely swells
+    (a crash, a vibraslap's rattle, a bowed entry) keeps its real onset rather
+    than being cut to its peak, because a swell is over the floor from its own
+    beginning. Only `search_s` past `start` is looked at: further on, the
+    loudest thing in the window is more likely to be the next event than this
+    one.
+
+    Asked forwards, because the sub-floor frames of a render are not all
+    lead-in. Read backwards from the peak — the last frame under the floor —
+    any single frame the envelope dips through resets the answer to itself:
+    measured on the cached corpus, three frames of ripple 730 ms into a
+    `lead_square` that had been sounding since its preroll put the window
+    630 ms inside the note, and the 2 ms of silence between two of
+    `bird_tweet`'s chirps put it 755 ms in, at the head of the loudest chirp
+    rather than the first one. Across the pitched corpus that rule misplaced
+    49 rows.
+
+    `start` is where the caller knows the sound cannot have begun before, and
+    every caller passes the note-on. It is not a detail: a preroll exists to
+    absorb whatever the plugin does in its first buffer, so what sits in one is
+    by construction not the note — `electric_grand` puts a click in the first
+    70 ms of its file and `english_horn` a previous note's tail decaying from
+    -43 dB, and a scan that started at the file would answer with either.
+
+    This is the one onset every path uses — the percussion window, the live
+    probe's per-note anchor and the profile's captured-note window — so that a
+    model and the reference it is scored against are read from the same kind of
+    instant. Falls back to the first frame over the floor for a sound too short
+    to hold, and to `start` when nothing rises above it at all, which is what a
+    silent render gives and what every caller already handles.
+
+    A lead under the `win_ms` the envelope is read through cannot be resolved
+    and comes back as zero; past that it reads `win_ms / 2` early, because
+    `_rms_envelope` times a frame at its centre and the frame this returns is
+    the last one lying wholly before the sound. Measured against synthetic
+    leads of 0, 2, 5 and 10 ms the error is 0, 0, -1.00 and -1.00 ms — a
+    constant once resolvable, so it cancels in every difference two sides of
+    one comparison take, and only an absolute reading of the delay —
+    `onset_ms` — carries it.
+    """
+    scan_end = int(min(limit, start + search_s) * sr)
+    scan = np.asarray(mono[int(start * sr):min(scan_end, len(mono))], dtype=np.float64)
+    if len(scan) < 2:
+        return start
+    times, env = _rms_envelope(scan, sr, hop_ms=hop_ms, win_ms=win_ms)
+    floor = float(env[int(np.argmax(env))]) * 10.0 ** (floor_db / 20.0)
+    if floor <= 0.0:
+        return start
+    over = _close_gaps(env > floor, max(1, round(gap_ms / hop_ms)))
+    i = _first_sustained(over, max(1, round(hold_ms / hop_ms)))
+    if i is None:
+        i = _first_sustained(over, 1)
+    return start + float(times[i - 1]) if i else start
+
+
 def _spectrum(seg: np.ndarray, sr: int):
     """Hann-windowed magnitude spectrum; returns (freqs, magnitude)."""
     win = np.hanning(len(seg))

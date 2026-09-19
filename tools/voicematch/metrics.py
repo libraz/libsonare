@@ -178,6 +178,10 @@ from metrics_signal import (
     AUDIBILITY_MIN_WEIGHT,
     MONO_MODES,
     N_HARMONICS,
+    ONSET_FLOOR_DB,
+    ONSET_HOP_MS,
+    ONSET_SEARCH_S,
+    ONSET_WIN_MS,
     _db,
     _peak_near,
     _rms_envelope,
@@ -188,6 +192,7 @@ from metrics_signal import (
     channel_width,
     midi_to_hz,
     normalize_rms,
+    sound_onset_s,
     to_mono,
 )
 from smf import Note
