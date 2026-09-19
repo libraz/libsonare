@@ -9,7 +9,7 @@
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
        voicematch-substitution voicematch-substitution-all voicematch-determinism \
-       voicematch-reextract-check \
+       voicematch-reextract-check voicematch-sf2-corpus \
        spec-liveness spec-liveness-census spec-liveness-census-check \
        excerpts excerpts-check test-voicematch \
        check-c-api-out-param-init check-c-api-pointer-contracts check-c-api-header-self-contained \
@@ -721,6 +721,29 @@ voicematch-determinism:
 voicematch-reextract-check:
 	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
 		tools/voicematch/reextract_check.py
+
+# Rebuild the corpus of every capture whose untracked overlay names a SoundFont.
+# Which captures those are is a question only the overlay can answer, so a clone
+# without one imports nothing and says so rather than reporting a clean sweep
+# over an empty set. Each import is refused rather than approximated -- a font
+# needing a player, a grid asking for a velocity layer the font has not got, a
+# gate longer than the shortest recording -- and a refusal is printed and moved
+# past, because one capture's overlay pointing at the wrong file says nothing
+# about the next. Writes only under the scratch root, read-only over `capture/`
+# and `reference/`, exits 0 whatever it finds, and stays out of CI on the same
+# terms as `voicematch-substitution`.
+voicematch-sf2-corpus:
+	@ids=$$(grep -l '"sf2"' tools/voicematch/capture/*.local.json 2>/dev/null \
+		| sed 's|.*/||; s|\.local\.json$$||'); \
+	if [ -z "$$ids" ]; then \
+		echo "voicematch-sf2-corpus: no capture overlay names a SoundFont, so there is nothing to import"; \
+		exit 0; \
+	fi; \
+	for id in $$ids; do \
+		echo "== $$id"; \
+		$(RYE) run --pyproject bindings/python/pyproject.toml python \
+			tools/voicematch/import_sf2.py "tools/voicematch/capture/$$id.json" || true; \
+	done
 
 # Regenerate the bank view. Needs the tuning build, because the engine voicing
 # each patch is reported by the library rather than parsed out of it — the same

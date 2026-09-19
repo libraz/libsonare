@@ -48,6 +48,21 @@
   "variations_follow_capital": true,
   "_variations_follow_capital": "A GS variation is its capital copied and then changed by whatever its name claims is different, so a capital that moves invalidates every variation under it. A variation therefore ranks behind its capital's tier until that capital is finished, and starting one first buys a round of rework.",
 
+  "no_reference": {
+    "p000b016-acoustic-grand-piano": {"names": "Piano 1d", "carries": "European Pf", "reason": "the recordings hold a different instrument at this address"},
+    "p003b008-honky-tonk-piano": {"names": "HonkyTonk w", "carries": "Honky-tonk 2", "reason": "the recordings hold a different instrument at this address"},
+    "p004b008-electric-piano-1": {"names": "Detuned EP1", "carries": "St.Soft EP", "reason": "the recordings hold a different instrument at this address"},
+    "p004b016-electric-piano-1": {"names": "E.Piano 1v", "carries": "FM+SA EP", "reason": "the recordings hold a different instrument at this address"},
+    "p004b024-electric-piano-1": {"names": "60's E.Piano", "carries": "Wurly", "reason": "the recordings hold a different instrument at this address"},
+    "p005b016-electric-piano-2": {"names": "E.Piano 2v", "carries": "St.FM EP", "reason": "the recordings hold a different instrument at this address"},
+    "p011b008-vibraphone": {"names": "Vib.w", "carries": "", "reason": "which tone the recordings hold at this address is not settled, and a reference picked on the likely answer is indistinguishable from a correct one once a patch has been fitted against it"},
+    "p016b008-drawbar-organ": {"names": "Detuned Or1", "carries": "Trem. Organ", "reason": "the recordings hold a different instrument at this address"},
+    "p016b032-drawbar-organ": {"names": "Organ 4", "carries": "70's E.Organ", "reason": "the recordings hold a different instrument at this address"},
+    "p017b008-percussive-organ": {"names": "Detuned Or2", "carries": "Chorus Or.2", "reason": "the recordings hold a different instrument at this address"},
+    "p017b032-percussive-organ": {"names": "Organ 5", "carries": "Perc. Organ", "reason": "the recordings hold a different instrument at this address"}
+  },
+  "_no_reference": "A slot for which no reference exists, as data rather than as an absence. Keyed by the slug `tools/voice-status.json` carries; `names` is the tone this bank's own map calls the slot, `carries` is the tone the available recordings actually hold at that address, and `reason` says which of the two cases it is. An empty `carries` is the undecided case and is deliberately not filled with the likely answer. This is not an unfinished capture and must not be worked as one: the recordings that cover the rest of the map are addressed by name and the name at these addresses belongs to another instrument, so importing one would fit the patch to that instrument and every metric, gate and audition would still read as a finished voice. Every variation the bank voices apart is reachable on the map those recordings come from, so nothing here is about an address the source does not have.",
+
   "approximated": {},
   "_approximated": "A slot whose mechanism this bank does not have and is deliberately answering with the nearest voice it does have. Keyed by the slug of the slot being approximated; each entry carries `answered_by`, the slug of the voice answering it, and `reason`, what the model cannot reach. Both are required because nothing downstream can tell an approximation from an unfinished voice, and an entry with no reason reads as the oversight it was written to stop. Empty is a claim rather than an omission: every slot is currently answered by a patch written for it. Two programs sharing one patch is not an approximation — an electric piano voicing both of its slots is one instrument with two numbers.",
 

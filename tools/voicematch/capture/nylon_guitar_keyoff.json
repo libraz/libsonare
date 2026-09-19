@@ -1,0 +1,62 @@
+{
+  "id": "nylon_guitar_keyoff",
+  "label": "Nylon Gt.o, the GS variation tone, read out of a module's own recordings",
+  "program": 24,
+  "bank": 16,
+  "takes": "sustained",
+  "audition_title": "libsonare Nylon Gt.o vs the module's own recordings",
+  "_notes": "The GS variation Nylon Gt.o sits at program 24, Bank Select MSB 16; `gm_fallback_map.cpp` voices it apart from its capital and this is the reference that patch is fitted against. The grid sits on the source's own lattice - it holds one recording every three semitones from 24 to 96 and nothing between - at six-semitone steps. The span is the capital capture's compass rounded onto that lattice, so the variation and the tone it is a copy of are read over the same register.",
+  "notes": [
+    42,
+    48,
+    54,
+    60,
+    66
+  ],
+  "_velocities": "One, and 100 is a label rather than a measurement: the font records no velocity and the importer refuses a grid asking for more than one layer. `vel_range` and the dynamics it feeds are excused in `dimensions_na` for that reason.",
+  "velocities": [
+    100
+  ],
+  "_dry": "Nothing played this, so nothing was switched off. What the file holds is the module's own PCM with no effect in front of it, which is what `source_class: module` asks for.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "The gate is the recording itself. Every cell of this grid runs 5.10 to 5.12 s and nothing pads one, so 5000 ms is the longest window all 5 of them hold. It is cut short of the recording's own end on purpose: the envelope falls cleanly to about -40 dB by 5.00 s and then steps back up by 17 to 25 dB for the last 100 ms, so a window reaching the end would fit a decay across a discontinuity.",
+  "gate_ms": 5000,
+  "tail": "0s",
+  "_realtime": "Read rather than played: `import_sf2.py` extracts the recorded frames, so there is no host to settle and no lead-in to strip. `preroll_ms` is 0 because a recording begins at its own first frame.",
+  "realtime": false,
+  "warmup": false,
+  "settle_ms": 0,
+  "preroll_ms": 0,
+  "sample_rate": 44100,
+  "_timbres": "One. The source holds exactly one recording per note of this tone, so there is no second of it to disagree with and this capture cannot move the voice past `voiced` however complete its coverage.",
+  "timbres": [
+    {
+      "id": "t0",
+      "label": "Nylon Gt.o, module recording"
+    }
+  ],
+  "_dimensions": "Coverage is read against `toneclass.canonical_dimensions`, which for program 24 is 13 dimensions. The four below are what this source cannot carry, each argued from what the font sets rather than from its being a font.",
+  "dimensions_na": {
+    "vel_range": "the font declares no velocity layers at all - `velRange` is set on none of its zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads",
+    "stereo": "the recordings are mono (`sampleType` 1) and the font sets no `pan`, so the image is absent by construction rather than by voicing",
+    "register": "the font sets no `initialAttenuation` anywhere, so the level relation between one note and the next is not in it. Over this grid the peaks span 3.0 dB, which is the headroom each recording was normalised into rather than the instrument's fall across its compass",
+    "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from"
+  },
+  "dimensions": [
+    "stretch",
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "balance",
+    "centroid_pct",
+    "tnr"
+  ],
+  "rig": "none",
+  "room": "none",
+  "_room": "The module is recorded with reverb, chorus, delay and the insertion effect all off, and `import_sf2.py --report` plus its own dryness check measure the imported corpus rather than taking this declaration's word for it.",
+  "source_class": "module",
+  "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `nylon_guitar_keyoff.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/nylon_guitar_keyoff.json`."
+}
