@@ -24,6 +24,12 @@ namespace sonare::rt {
 /// no future/clamped tap and stays well-formed across the whole sub-sample
 /// range. Both branches interpolate at the same physical delay (base + mu).
 ///
+/// Only the centred branch is passive: a 4-point Lagrange stays at or under
+/// unity gain for a delay of 1..2 in stencil coordinates, which is what that
+/// branch evaluates, while the causal fallback can exceed it and so can grow
+/// inside a feedback loop. Every waveguide loop here floors its delay at one
+/// sample, which keeps base >= 1; a new loop calling this must do the same.
+///
 /// @param buffer          Circular delay buffer (must be non-null).
 /// @param size            Buffer length in samples (must be > 0).
 /// @param write_index     Current write position; advanced by one on return.
