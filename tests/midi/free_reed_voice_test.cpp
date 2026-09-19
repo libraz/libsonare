@@ -15,6 +15,7 @@
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -24,15 +25,11 @@ using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::SynthEngineMode;
 
+using sonare::test::event;
+using sonare::test::harmonic_power;
 using sonare::test::kFft;
 using sonare::test::kRate;
 using sonare::test::power_spectrum;
-
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
 
 std::vector<float> render_patch(const NativeSynthPatch& patch, uint8_t note, uint8_t velocity,
                                 int num_samples) {
@@ -74,15 +71,6 @@ bool all_finite(const std::vector<float>& buf) {
     if (!std::isfinite(s)) return false;
   }
   return true;
-}
-
-double harmonic_power(const std::vector<double>& power, double f0, int k) {
-  const int centre = static_cast<int>(std::lround(k * f0 / kRate * kFft));
-  double acc = 0.0;
-  for (int b = centre - 2; b <= centre + 2; ++b) {
-    if (b > 0 && b < static_cast<int>(power.size())) acc += power[static_cast<size_t>(b)];
-  }
-  return acc;
 }
 
 double note_hz(uint8_t note) {

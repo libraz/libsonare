@@ -14,6 +14,7 @@
 #include "midi/synth/bessel.h"
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -26,11 +27,7 @@ using sonare::midi::synth::SynthFilterOutput;
 
 constexpr double kRate = 48000.0;
 
-sonare::midi::MidiEvent event(const sonare::midi::Ump& ump) {
-  sonare::midi::MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 std::vector<float> render_patch(const NativeSynthPatch& patch, uint8_t note, uint8_t velocity,
                                 int num_samples) {

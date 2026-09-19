@@ -29,6 +29,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -67,11 +68,7 @@ const char* bank_name(Bank bank) { return bank == Bank::kSoundFont ? "soundfont"
 constexpr uint8_t kSoundFontProgram = 0;
 constexpr uint8_t kModelProgram = 82;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// A framed Roland DT1 write of @p data at 40 <block> <lo>, with the checksum.
 std::vector<uint8_t> dt1(uint8_t block, uint8_t lo, const std::vector<uint8_t>& data) {

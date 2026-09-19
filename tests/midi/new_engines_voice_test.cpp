@@ -16,6 +16,7 @@
 #include "midi/synth/native_synth.h"
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -27,19 +28,8 @@ using sonare::midi::synth::SynthEngineMode;
 
 constexpr double kRate = 48000.0;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
-
-std::vector<float> render_left(NativeSynth& synth, int num_samples) {
-  std::vector<float> left(static_cast<size_t>(num_samples), 0.0f);
-  std::vector<float> right(static_cast<size_t>(num_samples), 0.0f);
-  float* chans[2] = {left.data(), right.data()};
-  synth.process(chans, 2, num_samples);
-  return left;
-}
+using sonare::test::event;
+using sonare::test::render_left;
 
 std::vector<float> render_patch(const NativeSynthPatch& patch, uint8_t note, uint8_t velocity,
                                 int num_samples, int note_off_at = -1) {

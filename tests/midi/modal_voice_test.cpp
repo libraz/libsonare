@@ -18,6 +18,7 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -31,23 +32,10 @@ using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
 using sonare::midi::synth::SynthEngineMode;
 
+using sonare::test::event;
 using sonare::test::kFft;
 using sonare::test::kRate;
-
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
-
-template <typename Instrument>
-std::vector<float> render_left(Instrument& instrument, int num_samples) {
-  std::vector<float> left(static_cast<size_t>(num_samples), 0.0f);
-  std::vector<float> right(static_cast<size_t>(num_samples), 0.0f);
-  float* chans[2] = {left.data(), right.data()};
-  instrument.process(chans, 2, num_samples);
-  return left;
-}
+using sonare::test::render_left;
 
 /// Sf2Player with no SoundFont: every note resolves through the GM fallback.
 Sf2Player make_fallback_player() {

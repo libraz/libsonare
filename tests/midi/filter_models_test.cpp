@@ -14,6 +14,7 @@
 #include "midi/midi_event.h"
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -40,11 +41,7 @@ constexpr SynthFilterModel kSelfOscModels[] = {
     SynthFilterModel::kSallenKey,
 };
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Naive 110 Hz saw — a harmonically dense, worst-case-ish filter input.
 float saw_sample(int i) {

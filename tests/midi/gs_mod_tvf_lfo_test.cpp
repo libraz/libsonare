@@ -26,6 +26,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -47,11 +48,7 @@ constexpr uint8_t kModWheel = 1;
 
 enum class Bank : uint8_t { kSoundFont, kModel };
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 std::vector<uint8_t> dt1(uint8_t lo, uint8_t value) {
   std::vector<uint8_t> msg{0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, kDestBlock, lo, value};

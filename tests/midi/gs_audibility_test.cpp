@@ -46,6 +46,7 @@
 
 #if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
 #include "mastering/api/insert_factory.h"
+#include "support/midi_render.h"
 #endif
 
 namespace {
@@ -491,11 +492,7 @@ constexpr double kTwoPi = 6.28318530717958647692;
 constexpr int kSegment = 6000;
 constexpr int kFrames = 4 * kSegment;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Bank 0 program 0 is a looped sine (a sustaining melodic voice); bank 128
 /// program 0 is a one-shot burst, which is what channel 9 resolves to.

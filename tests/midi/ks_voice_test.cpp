@@ -19,6 +19,7 @@
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -29,22 +30,10 @@ using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::SynthEngineMode;
 
+using sonare::test::event;
 using sonare::test::kFft;
 using sonare::test::kRate;
-
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
-
-std::vector<float> render_left(NativeSynth& synth, int num_samples) {
-  std::vector<float> left(static_cast<size_t>(num_samples), 0.0f);
-  std::vector<float> right(static_cast<size_t>(num_samples), 0.0f);
-  float* chans[2] = {left.data(), right.data()};
-  synth.process(chans, 2, num_samples);
-  return left;
-}
+using sonare::test::render_left;
 
 std::vector<float> render_patch(const NativeSynthPatch& patch, uint8_t note, uint8_t velocity,
                                 int num_samples, int note_off_at = -1) {
@@ -121,17 +110,8 @@ double estimate_frequency(const std::vector<float>& buf, size_t from, size_t to,
   return static_cast<double>(cycles) * kRate / (last - first);
 }
 
+using sonare::test::harmonic_power;
 using sonare::test::power_spectrum;
-
-/// Power of harmonic k (+-2 bins around k*f0).
-double harmonic_power(const std::vector<double>& power, double f0, int k) {
-  const int centre = static_cast<int>(std::lround(k * f0 / kRate * kFft));
-  double acc = 0.0;
-  for (int b = centre - 2; b <= centre + 2; ++b) {
-    if (b > 0 && b < static_cast<int>(power.size())) acc += power[static_cast<size_t>(b)];
-  }
-  return acc;
-}
 
 /// Fraction of spectral power above @p freq_hz.
 double high_band_fraction(const std::vector<float>& buf, size_t from, double freq_hz) {

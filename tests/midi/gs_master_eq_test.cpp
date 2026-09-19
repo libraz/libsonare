@@ -27,6 +27,7 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -48,11 +49,7 @@ constexpr double kTwoPi = 6.28318530717958647692;
 /// 40 41 xx.
 constexpr uint8_t kPart1Block = 0x41;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// A Roland DT1 frame for @p addr carrying @p data, with the checksum the GS
 /// decoder requires.

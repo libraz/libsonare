@@ -20,6 +20,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -34,11 +35,7 @@ using sonare::test::Sf2Builder;
 constexpr double kOutRate = 48000.0;
 constexpr double kTwoPi = 6.28318530717958647692;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Program 0: a pure sine loop, 500 Hz at root key 60, no filter generator.
 /// A sine keeps zero-crossing pitch tracking exact at every note in the range

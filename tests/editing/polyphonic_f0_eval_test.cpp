@@ -30,6 +30,7 @@
 #include "midi/midi_event.h"
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 #include "util/constants.h"
 
 namespace {
@@ -56,11 +57,7 @@ constexpr float kToleranceCents = 50.0f;
 /// so their content is not the chord and their score is not the model's.
 constexpr int kEdgeFrames = 4;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 float note_hz(int midi_note) {
   return kA4Hz * std::exp2((static_cast<float>(midi_note) - kMidiA4) / kSemitonesPerOctave);

@@ -16,6 +16,7 @@
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -29,14 +30,9 @@ using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::SynthEngineMode;
 using sonare::midi::synth::VaWaveform;
 
+using sonare::test::event;
 using sonare::test::kFft;
 using sonare::test::kRate;
-
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
 
 struct StereoOut {
   std::vector<float> left;

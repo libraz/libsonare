@@ -19,6 +19,7 @@
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -30,22 +31,10 @@ using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::SynthEngineMode;
 
+using sonare::test::event;
 using sonare::test::kFft;
 using sonare::test::kRate;
-
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
-
-std::vector<float> render_left(NativeSynth& synth, int num_samples) {
-  std::vector<float> left(static_cast<size_t>(num_samples), 0.0f);
-  std::vector<float> right(static_cast<size_t>(num_samples), 0.0f);
-  float* chans[2] = {left.data(), right.data()};
-  synth.process(chans, 2, num_samples);
-  return left;
-}
+using sonare::test::render_left;
 
 float rms(const std::vector<float>& buf, size_t from, size_t to) {
   double acc = 0.0;

@@ -19,6 +19,7 @@
 #include "midi/synth/sample_bank.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
+#include "support/midi_render.h"
 #include "util/constants.h"
 
 namespace {
@@ -35,11 +36,7 @@ using sonare::midi::synth::SynthEngineMode;
 
 constexpr double kOutRate = 48000.0;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// A sine at @p hz, long enough to measure.
 std::vector<float> sine(double hz, double rate, size_t n) {

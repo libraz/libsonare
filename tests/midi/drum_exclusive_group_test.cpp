@@ -19,6 +19,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -36,11 +37,7 @@ constexpr uint8_t kOpenHat = 46;    ///< Covered by the fixture's kit.
 constexpr uint8_t kClosedHat = 42;  ///< Deliberately NOT covered.
 constexpr uint8_t kPedalHat = 44;   ///< Also covered, for the same-pool control.
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Bank 128 program 0, with a long sustaining sine on notes 44 and 46 ONLY.
 ///

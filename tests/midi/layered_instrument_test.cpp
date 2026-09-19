@@ -17,6 +17,7 @@
 #include "midi/midi_event.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -27,11 +28,7 @@ using sonare::midi::MidiInstrument;
 
 constexpr double kRate = 48000.0;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Records what reached it and emits a constant so the mix is measurable.
 /// Not final: DiscardingProbe below extends it to reach the protected

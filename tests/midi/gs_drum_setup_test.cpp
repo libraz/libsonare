@@ -27,6 +27,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -51,11 +52,7 @@ constexpr uint8_t kSourceKitProgram = 25;
 constexpr int kHeld = 6000;
 constexpr int kTail = 12000;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Bank 128 program 0 is a looped sine carrying its own reverb and chorus send
 /// generators, so the 41 m5 / 41 m6 multiplicands have a send to scale whatever

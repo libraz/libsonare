@@ -18,6 +18,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -41,11 +42,7 @@ using sonare::test::Sf2Builder;
 constexpr double kOutRate = 48000.0;
 constexpr double kTwoPi = 6.28318530717958647692;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Program 0: bright square loop with a mid filter (~2.4 kHz). The bank-128
 /// kit maps the same loop so drum NRPNs can be measured tonally.

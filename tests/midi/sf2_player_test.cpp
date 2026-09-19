@@ -19,6 +19,7 @@
 #include "midi/synth/sf2_voice.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -42,11 +43,7 @@ constexpr double kOutRate = 48000.0;
 /// play sounds at least two orders of magnitude above it.
 constexpr float kSilenceFloor = 1.0e-4f;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Fixture: a looped 1 kHz sine preset (program 0), a hard-left-panned copy
 /// (program 1), a one-shot preset (program 2) and a bank-128 drum kit.

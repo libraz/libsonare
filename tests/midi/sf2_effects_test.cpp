@@ -24,6 +24,7 @@
 #include "midi/ump.h"
 #include "rt/processor_base.h"
 #include "support/alloc_guard.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -46,11 +47,7 @@ constexpr double kTwoPi = 6.28318530717958647692;
 /// these cases look for are orders of magnitude above it.
 constexpr float kSilenceFloor = 1.0e-6f;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// A framed Roland DT1 write of @p data at @p addr, with its checksum.
 std::vector<uint8_t> dt1(uint32_t addr, std::vector<uint8_t> data) {

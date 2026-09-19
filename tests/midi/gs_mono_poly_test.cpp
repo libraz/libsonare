@@ -29,6 +29,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -79,11 +80,7 @@ constexpr size_t kWindowLen = 4800;     // 100 ms
 constexpr size_t kGoneBegin = 33600;
 constexpr int kChordFrames = 38400;  // 800 ms
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// A framed Roland DT1 write of @p value at 40 <mid> <lo>, with the checksum.
 std::vector<uint8_t> dt1(uint8_t mid, uint8_t lo, uint8_t value) {

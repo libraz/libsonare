@@ -26,6 +26,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -45,11 +46,7 @@ constexpr uint8_t kPartBlock = 0x11;
 /// and envelope edits program 0 carries, so choosing it is plainly audible.
 constexpr uint8_t kSecondProgram = 40;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// A framed Roland DT1 write of @p data at 40 <block> <lo>, with the checksum.
 std::vector<uint8_t> dt1(uint8_t block, uint8_t lo, const std::vector<uint8_t>& data) {

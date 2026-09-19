@@ -22,6 +22,7 @@
 #include "midi/synth/native_synth.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -41,11 +42,7 @@ using sonare::midi::synth::Sf2PlayerConfig;
 constexpr double kOutRate = 48000.0;
 constexpr uint8_t kDrumChannel = 9;
 
-MidiEvent event(const Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 template <typename Instrument>
 std::vector<float> render(Instrument& instrument, int num_samples) {

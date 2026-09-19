@@ -31,6 +31,7 @@
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -50,11 +51,7 @@ using sonare::test::Sf2Builder;
 
 constexpr double kOutRate = 48000.0;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 struct StereoRender {
   std::vector<float> left;

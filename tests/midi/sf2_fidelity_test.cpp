@@ -18,6 +18,7 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "rt/processor_base.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -33,11 +34,7 @@ using sonare::test::Sf2Builder;
 constexpr double kOutRate = 48000.0;
 constexpr double kTwoPi = 6.28318530717958647692;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Builds a harmonically rich (square-ish) looped sample so filtering is
 /// audible, plus presets exercising specific generators:

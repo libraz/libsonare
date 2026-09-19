@@ -20,6 +20,7 @@
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -29,22 +30,10 @@ using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::SynthEngineMode;
 
+using sonare::test::event;
 using sonare::test::kFft;
 using sonare::test::kRate;
-
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
-
-std::vector<float> render_left(NativeSynth& synth, int num_samples) {
-  std::vector<float> left(static_cast<size_t>(num_samples), 0.0f);
-  std::vector<float> right(static_cast<size_t>(num_samples), 0.0f);
-  float* chans[2] = {left.data(), right.data()};
-  synth.process(chans, 2, num_samples);
-  return left;
-}
+using sonare::test::render_left;
 
 std::vector<float> render_patch(const NativeSynthPatch& patch, uint8_t note, uint8_t velocity,
                                 int num_samples, int note_off_at = -1) {
@@ -80,36 +69,11 @@ float peak(const std::vector<float>& buf) {
   return p;
 }
 
+/// Pitch is read spectrally rather than from zero crossings, which a
+/// noise-driven pipe jitters too much to be measured by.
+using sonare::test::fft_fundamental;
+using sonare::test::harmonic_power;
 using sonare::test::power_spectrum;
-
-/// Parabolic-interpolated spectral peak (Hz) nearest @p f0_hint over a window
-/// of @p buf from @p from. Sub-bin accurate and immune to the breathy
-/// zero-crossing jitter of a noise-driven pipe.
-double fft_fundamental(const std::vector<float>& buf, size_t from, double f0_hint) {
-  const std::vector<double> ps = power_spectrum(buf, from);
-  const int lo = std::max(1, static_cast<int>(0.5 * f0_hint / kRate * kFft));
-  const int hi =
-      std::min(static_cast<int>(ps.size()) - 2, static_cast<int>(1.5 * f0_hint / kRate * kFft));
-  int pk = lo;
-  for (int b = lo; b <= hi; ++b)
-    if (ps[static_cast<size_t>(b)] > ps[static_cast<size_t>(pk)]) pk = b;
-  const double lm = std::log(ps[static_cast<size_t>(pk - 1)] + 1e-30);
-  const double l0 = std::log(ps[static_cast<size_t>(pk)] + 1e-30);
-  const double lp = std::log(ps[static_cast<size_t>(pk + 1)] + 1e-30);
-  const double denom = lm - 2.0 * l0 + lp;
-  const double delta = denom != 0.0 ? 0.5 * (lm - lp) / denom : 0.0;
-  return (static_cast<double>(pk) + delta) * kRate / kFft;
-}
-
-/// Power of harmonic k (+-2 bins around k*f0).
-double harmonic_power(const std::vector<double>& power, double f0, int k) {
-  const int centre = static_cast<int>(std::lround(k * f0 / kRate * kFft));
-  double acc = 0.0;
-  for (int b = centre - 2; b <= centre + 2; ++b) {
-    if (b > 0 && b < static_cast<int>(power.size())) acc += power[static_cast<size_t>(b)];
-  }
-  return acc;
-}
 
 /// A bright filter-bypassed pipe-organ test patch.
 NativeSynthPatch organ_base_patch() {

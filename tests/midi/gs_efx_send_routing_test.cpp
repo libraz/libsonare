@@ -21,6 +21,7 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "rt/processor_base.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -48,11 +49,7 @@ constexpr uint8_t kChorusType[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
 // gated on SONARE_MIDI_WITH_FX and SONARE_WITH_MASTERING (it needs the EFX
 // insertion chain, built through mastering::api::make_insert, to build).
 #if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Framed EFX -> reverb send write (GS address 40 03 17) with the DT1 checksum
 /// computed for @p value.

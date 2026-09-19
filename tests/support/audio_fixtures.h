@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file audio_fixtures.h
-/// @brief Shared audio sample generators for tests.
+/// @brief Shared audio sample generators and spectral measurements for tests.
 
 #include <algorithm>
 #include <cmath>
@@ -155,6 +155,53 @@ inline std::vector<float> spectrum_mag(const std::vector<float>& buf, std::size_
   std::vector<float> mag(spectrum.size());
   for (std::size_t i = 0; i < spectrum.size(); ++i) mag[i] = std::abs(spectrum[i]);
   return mag;
+}
+
+/// Fundamental of @p buf from @p from, as the parabolic interpolation of the
+/// log-power peak within +-50% of @p f0_hint. The hint is what makes this usable
+/// on a voice whose partials outweigh its fundamental.
+///
+/// The 1e-30 guard is not kEpsilon or kSpectrumEpsilon: it floors a raw |X|^2
+/// before a log, where either named epsilon would sit above real bin energy.
+inline double fft_fundamental(const std::vector<float>& buf, std::size_t from, double f0_hint) {
+  const std::vector<double> ps = power_spectrum(buf, from);
+  const int lo = std::max(1, static_cast<int>(0.5 * f0_hint / kRate * kFft));
+  const int hi =
+      std::min(static_cast<int>(ps.size()) - 2, static_cast<int>(1.5 * f0_hint / kRate * kFft));
+  int pk = lo;
+  for (int b = lo; b <= hi; ++b)
+    if (ps[static_cast<std::size_t>(b)] > ps[static_cast<std::size_t>(pk)]) pk = b;
+  const double lm = std::log(ps[static_cast<std::size_t>(pk - 1)] + 1e-30);
+  const double l0 = std::log(ps[static_cast<std::size_t>(pk)] + 1e-30);
+  const double lp = std::log(ps[static_cast<std::size_t>(pk + 1)] + 1e-30);
+  const double denom = lm - 2.0 * l0 + lp;
+  const double delta = denom != 0.0 ? 0.5 * (lm - lp) / denom : 0.0;
+  return (static_cast<double>(pk) + delta) * kRate / kFft;
+}
+
+/// Energy of the @p k-th harmonic of @p f0 in an already-computed @p power
+/// spectrum, summed over the peak bin +-2 so a slightly mistuned partial is
+/// still counted whole.
+inline double harmonic_power(const std::vector<double>& power, double f0, int k) {
+  const int centre = static_cast<int>(std::lround(k * f0 / kRate * kFft));
+  double acc = 0.0;
+  for (int b = centre - 2; b <= centre + 2; ++b) {
+    if (b > 0 && b < static_cast<int>(power.size())) acc += power[static_cast<std::size_t>(b)];
+  }
+  return acc;
+}
+
+/// Power-weighted mean frequency of @p buf from @p from, in Hz. Bin 0 is left
+/// out so a DC offset cannot pull the centroid down.
+inline double spectral_centroid(const std::vector<float>& buf, std::size_t from) {
+  const std::vector<double> ps = power_spectrum(buf, from);
+  double num = 0.0;
+  double den = 0.0;
+  for (std::size_t b = 1; b < ps.size(); ++b) {
+    num += static_cast<double>(b) * kRate / kFft * ps[b];
+    den += ps[b];
+  }
+  return den > 0.0 ? num / den : 0.0;
 }
 
 }  // namespace sonare::test

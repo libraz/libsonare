@@ -27,6 +27,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 #include "support/sf2_builder.h"
 
 namespace {
@@ -60,11 +61,7 @@ constexpr std::array<Unit, 3> kUnits = {{
 constexpr size_t kReverb = 0;
 constexpr size_t kChorus = 1;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 /// Bank 128 program 0: a looped sine whose zone carries the send generators at
 /// @p zone_reverb / @p zone_chorus (0.1% units). Both at zero is a kit that

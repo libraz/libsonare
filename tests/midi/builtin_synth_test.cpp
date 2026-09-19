@@ -14,6 +14,7 @@
 
 #include "midi/midi_event.h"
 #include "midi/ump.h"
+#include "support/midi_render.h"
 
 namespace {
 
@@ -22,11 +23,7 @@ using sonare::midi::BuiltinSynthConfig;
 using sonare::midi::MidiEvent;
 using sonare::midi::MidiInstrumentSourceOutput;
 
-MidiEvent event(const sonare::midi::Ump& ump) {
-  MidiEvent e;
-  e.ump = ump;
-  return e;
-}
+using sonare::test::event;
 
 // Renders `num_samples` mono frames and returns the peak absolute amplitude.
 float render_peak(BuiltinSynth* synth, int num_samples) {
