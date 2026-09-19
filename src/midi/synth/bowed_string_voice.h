@@ -127,8 +127,9 @@ struct BowedStringPatchParams {
 class BowedStringVoiceCore {
  public:
   /// CONTROL-thread wiring (or audio-thread pointer assignment before start()):
-  /// hands the core its delay slab (two spans of @p per_line_capacity — the neck
-  /// and bridge delay lines). The slab outlives the voice.
+  /// hands the core its delay slab (three spans of @p per_line_capacity — the
+  /// neck and bridge lines, plus the reserved second-polarization line). The
+  /// slab outlives the voice.
   void attach(float* slab, int per_line_capacity) noexcept {
     neck_ = slab;
     bridge_ = slab != nullptr ? slab + per_line_capacity : nullptr;
@@ -136,7 +137,7 @@ class BowedStringVoiceCore {
     capacity_ = per_line_capacity;
   }
 
-  /// Configures the string for @p note / @p velocity and zeroes the used spans.
+  /// Configures the string for @p note / @p velocity and zeroes the attached spans.
   /// @p seed drives the deterministic rosin texture (unused when rosin == 0).
   void start(const BowedStringPatchParams& params, double sample_rate, uint8_t note,
              uint8_t velocity, uint64_t seed) noexcept;
@@ -233,8 +234,6 @@ class BowedStringVoiceCore {
   float* neck_ = nullptr;
   float* bridge_ = nullptr;
   int capacity_ = 0;
-  int neck_size_ = 0;
-  int bridge_size_ = 0;
   size_t neck_write_ = 0;
   size_t bridge_write_ = 0;
   // Last delay-line outputs (feed the scattering junction next sample).
@@ -320,7 +319,6 @@ class BowedStringVoiceCore {
   // Off unless params.polarization > 0 (pol_couple_ == 0 -> render skips it,
   // bit-identical). Its own lossy loop with a weak cross-coupling to the primary.
   float* pol_ = nullptr;  // 2nd-polarization delay line (host slab, 3rd span)
-  int pol_size_ = 0;
   size_t pol_write_ = 0;
   float pol_out_ = 0.0f;
   float pol_period_ = 0.0f;  // detuned from base_period_

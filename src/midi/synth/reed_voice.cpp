@@ -243,12 +243,18 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   const float tau_hp = phase_hp / std::max(omega, 1.0e-6f);
   comp_ = 1.0f + tau_lp - kHpCompScale * tau_hp;
 
-  // Circular span sized for the whole loop period plus bend-down headroom and the
-  // interpolator stencil margin.
+  // The bore delay line spans the whole slab, because the line length is what
+  // bounds a downward bend and the clamp enforcing it saturates silently -- a
+  // glide simply stops descending while the note keeps sounding. What the note's
+  // own period still decides is how much of the line the onset seeds: the span
+  // the reed reads back over before the first traversal completes.
   const float eff = std::max(2.0f, bore_period_ - comp_);
   const int span = static_cast<int>(eff * 1.3f) + 8;
-  bore_size_ = std::min(capacity_, std::max(16, span));
-  bore_write_ = 0;
+  prefill_span_ = std::min(capacity_, std::max(16, span));
+  // The seed IS the line's history, so the write position starts just past it
+  // and the first traversal reads back over the seeded span exactly as it did
+  // when the line was no longer than that span.
+  bore_write_ = capacity_ > 0 ? static_cast<size_t>(prefill_span_ % capacity_) : 0;
 
   // Contour + textures.
   attack_coeff_ = ramp_coeff(params.attack_ms, sr);
@@ -268,11 +274,15 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   // rather than swelling up from silence.
   const float prefill = kBorePrefill * breath_target_;
   if (bore_ != nullptr) {
-    for (int i = 0; i < bore_size_; ++i) {
+    // Past the seed the line has to be cleared rather than left alone: it is a
+    // slab slot the previous note wrote, and everything outside the seed is
+    // read before it is written.
+    for (int i = prefill_span_; i < capacity_; ++i) bore_[static_cast<size_t>(i)] = 0.0f;
+    for (int i = 0; i < prefill_span_; ++i) {
       bore_[static_cast<size_t>(i)] = prefill * noise_.bipolar_at(static_cast<uint64_t>(i));
     }
   }
-  drive_index_ = static_cast<uint64_t>(bore_size_);
+  drive_index_ = static_cast<uint64_t>(prefill_span_);
 
   // --- off-by-default advanced physics (Phase 4). When off, render() takes the
   // memoryless branch untouched (bit-identical). ---
@@ -338,12 +348,12 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
     hole_gain_ = kToneholeGainMax * hole;
     const float frac = params.conical ? kToneholeFracCone : kToneholeFracCylinder;
     const int round_trip = static_cast<int>(2.0f * frac * bore_period_);
-    hole_delay_samples_ = std::clamp(round_trip, 1, bore_size_ - 1);
+    hole_delay_samples_ = std::clamp(round_trip, 1, prefill_span_ - 1);
   }
 }
 
 float ReedVoiceCore::render(float pitch_ratio) noexcept {
-  if (bore_ == nullptr || bore_size_ < 8) return 0.0f;
+  if (bore_ == nullptr || capacity_ < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
   // Live control: ramp the steady breath / bell brightness toward their CC
@@ -427,8 +437,8 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   // Advance the bore delay line: write the reed injection, read the delayed
   // pressure returning from the bell.
   const float delay =
-      std::clamp(bore_period_ / ratio - comp_, 1.0f, static_cast<float>(bore_size_ - 4));
-  bore_out_ = rt::lagrange3_fractional_delay(bore_, static_cast<size_t>(bore_size_), bore_write_,
+      std::clamp(bore_period_ / ratio - comp_, 1.0f, static_cast<float>(capacity_ - 4));
+  bore_out_ = rt::lagrange3_fractional_delay(bore_, static_cast<size_t>(capacity_), bore_write_,
                                              static_cast<int>(delay * 256.0f), inj);
   ++drive_index_;
 
@@ -439,7 +449,7 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   if (hole_delay_samples_ > 0) {
     const int d = hole_delay_samples_;
     const size_t idx =
-        (bore_write_ + static_cast<size_t>(bore_size_ - 1 - d)) % static_cast<size_t>(bore_size_);
+        (bore_write_ + static_cast<size_t>(capacity_ - 1 - d)) % static_cast<size_t>(capacity_);
     hole_refl_ = -hole_gain_ * bore_[idx];
   }
 

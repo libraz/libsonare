@@ -232,8 +232,9 @@ class PipeOrganVoiceCore {
     // Bore + jet delay lines (host-owned spans of span_capacity_).
     float* bore = nullptr;
     float* jet = nullptr;
-    int bore_size = 0;
-    int jet_size = 0;
+    /// How much of the bore this rank's onset seeds — its own loop period
+    /// plus the margin the seed needs, shorter than the line itself.
+    int prefill_span = 0;
     size_t bore_write = 0;
     size_t jet_write = 0;
     /// Last bore delay-line output (returns to the mouth next sample).

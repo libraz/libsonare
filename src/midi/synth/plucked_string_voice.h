@@ -92,7 +92,7 @@ class PluckedStringVoiceCore {
   }
 
   /// Configures the string for @p note / @p velocity and injects the seeded
-  /// excitation burst state. Zeroes the used part of the attached span.
+  /// excitation burst state. Zeroes the attached span.
   void start(const PluckedStringPatchParams& params, double sample_rate, uint8_t note,
              uint8_t velocity, uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
@@ -107,8 +107,6 @@ class PluckedStringVoiceCore {
  private:
   float* buffer_ = nullptr;
   int capacity_ = 0;
-  /// Circular span actually used for this note (covers bend-down headroom).
-  int size_ = 0;
   size_t write_index_ = 0;
 
   /// Ideal loop period (samples) at pitch_ratio == 1.

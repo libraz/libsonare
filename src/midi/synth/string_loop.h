@@ -167,9 +167,11 @@ inline StringLoopFilter solve_string_loop_filter(float omega0, float omega_ref, 
 /// One string loop: a circular delay line read at a fractional offset and closed
 /// through a one-pole loss filter and a per-traversal gain.
 struct StringLoop {
-  /// Delay line (a span of the voice's slab), and the span length actually used
-  /// for the current note — the period plus bend-down headroom and the
-  /// interpolator's stencil margin.
+  /// Delay line (a span of the voice's slab) and its length. The line spans the
+  /// whole slab rather than the current note's period: the length is what bounds
+  /// a downward bend, and the clamp enforcing it saturates silently — a glide
+  /// stops descending while the note keeps sounding — so a per-note span is a
+  /// pitch ceiling with nothing to hear it by.
   float* buffer = nullptr;
   int size = 0;
   size_t write = 0;
@@ -219,7 +221,7 @@ struct StringLoop {
     loop_comp = 1.0f + onepole_group_delay_samples(a, constants::kTwoPi / period_samples);
     gain = g;
     release_gain = release_g;
-    size = std::min(capacity, static_cast<int>(period_samples * 1.3f) + 8);
+    size = capacity;
     if (buffer != nullptr) {
       std::fill(buffer, buffer + static_cast<size_t>(std::max(0, size)), 0.0f);
     }

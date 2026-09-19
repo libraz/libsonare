@@ -240,7 +240,9 @@ class ReedVoiceCore {
   // Bore delay line (host-owned): the travelling-wave air column.
   float* bore_ = nullptr;
   int capacity_ = 0;
-  int bore_size_ = 0;
+  /// How much of the line the onset seeds — the note's own loop period plus the
+  /// margin the seed needs, which is shorter than the line itself.
+  int prefill_span_ = 0;
   size_t bore_write_ = 0;
   // Last delay-line output (the pressure returning to the reed next sample).
   float bore_out_ = 0.0f;

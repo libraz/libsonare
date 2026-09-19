@@ -198,7 +198,7 @@ class KsVoiceCore {
   }
 
   /// Configures the string for @p note / @p velocity and injects the seeded
-  /// excitation burst state. Zeroes the used part of the attached span.
+  /// excitation burst state. Zeroes the attached span.
   void start(const KsPatchParams& params, double sample_rate, uint8_t note, uint8_t velocity,
              uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor

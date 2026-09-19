@@ -90,17 +90,18 @@ void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, doubl
 
   output_scale_ = kPluckedOutputScale;
 
-  // Circular span for this note: the base period plus bend-down headroom
-  // (+2 semitones ~= x1.13) and the interpolator's stencil margin.
-  size_ = std::min(capacity_, static_cast<int>(base_period_ * 1.3f) + 8);
+  // The line spans the whole slab rather than this note's period. The line
+  // length is what bounds a downward bend, and the clamp that enforces it
+  // saturates silently, so a span cut to the note-on period is a pitch ceiling
+  // with nothing to hear it by.
   write_index_ = 0;
   if (buffer_ != nullptr) {
-    std::fill(buffer_, buffer_ + static_cast<size_t>(std::max(0, size_)), 0.0f);
+    std::fill(buffer_, buffer_ + static_cast<size_t>(std::max(0, capacity_)), 0.0f);
   }
 }
 
 float PluckedStringVoiceCore::render(float pitch_ratio) noexcept {
-  if (buffer_ == nullptr || size_ < 8) return 0.0f;
+  if (buffer_ == nullptr || capacity_ < 8) return 0.0f;
 
   float exc = 0.0f;
   if (exc_pos_ < exc_total_ + pick_delay_) {
@@ -120,7 +121,7 @@ float PluckedStringVoiceCore::render(float pitch_ratio) noexcept {
   // pitch_ratio scales the frequency, so it divides the loop delay.
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
   const float delay =
-      std::clamp(base_period_ / ratio - loop_comp_, 1.0f, static_cast<float>(size_ - 4));
+      std::clamp(base_period_ / ratio - loop_comp_, 1.0f, static_cast<float>(capacity_ - 4));
   const int delay_q8 = static_cast<int>(delay * 256.0f);
 
   float loop_in = exc + loop_gain_ * lp_state_;
@@ -135,7 +136,7 @@ float PluckedStringVoiceCore::render(float pitch_ratio) noexcept {
     loop_in = buzz_threshold_ + span * over / (span + over);
   }
 
-  const float out = rt::lagrange3_fractional_delay(buffer_, static_cast<size_t>(size_),
+  const float out = rt::lagrange3_fractional_delay(buffer_, static_cast<size_t>(capacity_),
                                                    write_index_, delay_q8, loop_in);
   lp_state_ += loop_alpha_ * (out - lp_state_);
   return out * output_scale_;

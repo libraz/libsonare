@@ -198,8 +198,9 @@ class FluteVoiceCore {
   float* bore_ = nullptr;
   float* jet_ = nullptr;
   int capacity_ = 0;
-  int bore_size_ = 0;
-  int jet_size_ = 0;
+  /// How much of the bore the onset seeds — the note's own loop period plus
+  /// the margin the seed needs, which is shorter than the line itself.
+  int prefill_span_ = 0;
   size_t bore_write_ = 0;
   size_t jet_write_ = 0;
   // Last bore delay-line output (the pressure returning to the mouth next sample).

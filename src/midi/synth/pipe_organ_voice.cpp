@@ -401,13 +401,18 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
         std::clamp(kPeakBase + kPeakTilt * std::log2(std::max(1.0f, f0) / kPeakRefHz), 0.8f, 6.0f);
     pipe.output_scale = kOutputTargetPeak / peak_est;
 
-    // Circular spans: the loop period plus bend-down headroom and the
-    // interpolator stencil margin. The jet span reuses the same size.
+    // Both lines span the whole slab, because the line length is what bounds a
+    // downward bend and the clamp enforcing it saturates silently -- a glide
+    // simply stops descending while the pipe keeps speaking. What this rank's
+    // own period still decides is how much of the bore the onset seeds; the jet
+    // line starts silent and so needs no span of its own.
     const float eff = std::max(2.0f, pipe.bore_period - pipe.comp);
     const int span = std::min(span_capacity_, std::max(16, static_cast<int>(eff * 1.15f) + 8));
-    pipe.bore_size = span;
-    pipe.jet_size = span;
-    pipe.bore_write = 0;
+    pipe.prefill_span = span;
+    // The seed IS the bore's history, so the write position starts just past it
+    // and the first traversal reads back over the seeded span exactly as it did
+    // when the line was no longer than that span.
+    pipe.bore_write = span_capacity_ > 0 ? static_cast<size_t>(span % span_capacity_) : 0;
     pipe.jet_write = 0;
 
     // Jet turbulence band: the wind hiss lives around this pipe's speaking
@@ -458,12 +463,16 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
       const float pf = kBorePrefill * mouth;
       const float w = kTwoPi / std::max(2.0f, pipe.bore_period);
       const float phase = kPi * pipe_tuning_error(note, r + 8);
+      // Past the seed the line has to be cleared rather than left alone: it is
+      // a slab slot the previous note wrote, and everything outside the seed is
+      // read before it is written.
+      for (int i = span; i < span_capacity_; ++i) pipe.bore[static_cast<size_t>(i)] = 0.0f;
       for (int i = 0; i < span; ++i) {
         pipe.bore[static_cast<size_t>(i)] = pf * std::sin(w * static_cast<float>(i) + phase);
       }
     }
     if (pipe.jet != nullptr) {
-      for (int i = 0; i < span; ++i) pipe.jet[static_cast<size_t>(i)] = 0.0f;
+      for (int i = 0; i < span_capacity_; ++i) pipe.jet[static_cast<size_t>(i)] = 0.0f;
     }
   }
   drive_index_ = static_cast<uint64_t>(pipe_organ_buffer_capacity(sr));
@@ -557,7 +566,7 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
   float mix = 0.0f;
   for (int r = 0; r < rank_count_; ++r) {
     Rank& pipe = ranks_[static_cast<size_t>(r)];
-    if (pipe.bore == nullptr || pipe.jet == nullptr || pipe.bore_size < 8) continue;
+    if (pipe.bore == nullptr || pipe.jet == nullptr || pipe.prefill_span < 8) continue;
 
     // Per-rank speech swell (post-loop level ramp toward 1).
     pipe.wind += pipe.speak_coeff * (1.0f - pipe.wind);
@@ -580,12 +589,12 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
     const float pd =
         breath - pipe.jet_reflection * temp + kJetTurbulence * breath * pipe.turb_state;
     const float bore_delay = std::clamp(pipe.bore_period / ratio - pipe.comp, 1.0f,
-                                        static_cast<float>(pipe.bore_size - 4));
+                                        static_cast<float>(span_capacity_ - 4));
     const float jet_delay =
-        std::clamp(pipe.jet_ratio * bore_delay, 1.0f, static_cast<float>(pipe.jet_size - 4));
+        std::clamp(pipe.jet_ratio * bore_delay, 1.0f, static_cast<float>(span_capacity_ - 4));
     const float pd_j =
-        rt::lagrange3_fractional_delay(pipe.jet, static_cast<size_t>(pipe.jet_size), pipe.jet_write,
-                                       static_cast<int>(jet_delay * 256.0f), pd);
+        rt::lagrange3_fractional_delay(pipe.jet, static_cast<size_t>(span_capacity_),
+                                       pipe.jet_write, static_cast<int>(jet_delay * 256.0f), pd);
     const float jet_out = jet_table(pipe.jet_drive * pd_j, pipe.jet_asym);
 
     // DC-block the jet output, then drive the bore: jet flow plus the bore end
@@ -610,7 +619,7 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
       into += pump;
     }
 
-    pipe.bore_out = rt::lagrange3_fractional_delay(pipe.bore, static_cast<size_t>(pipe.bore_size),
+    pipe.bore_out = rt::lagrange3_fractional_delay(pipe.bore, static_cast<size_t>(span_capacity_),
                                                    pipe.bore_write,
                                                    static_cast<int>(bore_delay * 256.0f), into);
 

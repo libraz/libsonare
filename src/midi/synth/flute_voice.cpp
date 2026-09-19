@@ -182,13 +182,17 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, omega);
   comp_ = 1.0f + tau_lp;
 
-  // Circular spans sized for the whole loop period plus bend-down headroom and
-  // the interpolator stencil margin. The jet span reuses the same capacity.
+  // Both lines span the whole slab, because the line length is what bounds a
+  // downward bend and the clamp enforcing it saturates silently -- a glide
+  // simply stops descending while the note keeps sounding. What the note's own
+  // period still decides is how much of the bore the onset seeds; the jet line
+  // starts silent and so needs no span of its own.
   const float eff = std::max(2.0f, bore_period_ - comp_);
-  const int span = std::min(capacity_, std::max(16, static_cast<int>(eff * 1.15f) + 8));
-  bore_size_ = span;
-  jet_size_ = span;
-  bore_write_ = 0;
+  prefill_span_ = std::min(capacity_, std::max(16, static_cast<int>(eff * 1.15f) + 8));
+  // The seed IS the bore's history, so the write position starts just past it
+  // and the first traversal reads back over the seeded span exactly as it did
+  // when the line was no longer than that span.
+  bore_write_ = capacity_ > 0 ? static_cast<size_t>(prefill_span_ % capacity_) : 0;
   jet_write_ = 0;
 
   // Contour + textures.
@@ -213,14 +217,18 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   // The jet span starts silent.
   const float prefill = kBorePrefill * breath_target_;
   if (bore_ != nullptr) {
-    for (int i = 0; i < bore_size_; ++i) {
+    // Past the seed the line has to be cleared rather than left alone: it is a
+    // slab slot the previous note wrote, and everything outside the seed is
+    // read before it is written.
+    for (int i = prefill_span_; i < capacity_; ++i) bore_[static_cast<size_t>(i)] = 0.0f;
+    for (int i = 0; i < prefill_span_; ++i) {
       bore_[static_cast<size_t>(i)] = prefill * noise_.bipolar_at(static_cast<uint64_t>(i));
     }
   }
   if (jet_ != nullptr) {
-    for (int i = 0; i < jet_size_; ++i) jet_[static_cast<size_t>(i)] = 0.0f;
+    for (int i = 0; i < capacity_; ++i) jet_[static_cast<size_t>(i)] = 0.0f;
   }
-  drive_index_ = static_cast<uint64_t>(bore_size_);
+  drive_index_ = static_cast<uint64_t>(prefill_span_);
 
   // --- off-by-default advanced physics (Phase 4). When off, render() takes the
   // linear jet branch untouched (bit-identical). ---
@@ -233,7 +241,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
 }
 
 float FluteVoiceCore::render(float pitch_ratio) noexcept {
-  if (bore_ == nullptr || jet_ == nullptr || bore_size_ < 8) return 0.0f;
+  if (bore_ == nullptr || jet_ == nullptr || capacity_ < 8) return 0.0f;
   float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
   // Live control: ramp the steady breath / brightness / vibrato depth toward
@@ -303,11 +311,11 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
     pd += vortex_ * 0.3f * breath_level_ * breath_level_ * noise_.bipolar_at(drive_index_ + 2u);
   }
   const float bore_delay =
-      std::clamp(bore_period_ / ratio - comp_, 1.0f, static_cast<float>(bore_size_ - 4));
+      std::clamp(bore_period_ / ratio - comp_, 1.0f, static_cast<float>(capacity_ - 4));
   const float jet_delay =
-      std::clamp(jet_ratio_ * bore_delay, 1.0f, static_cast<float>(jet_size_ - 4));
+      std::clamp(jet_ratio_ * bore_delay, 1.0f, static_cast<float>(capacity_ - 4));
   const float pd_j = rt::lagrange3_fractional_delay(
-      jet_, static_cast<size_t>(jet_size_), jet_write_, static_cast<int>(jet_delay * 256.0f), pd);
+      jet_, static_cast<size_t>(capacity_), jet_write_, static_cast<int>(jet_delay * 256.0f), pd);
   const float jet_out = jet_table(pd_j);
 
   // DC-block the jet output, then drive the bore: jet flow plus the bore end
@@ -332,7 +340,7 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
   float pump = even_gain_ * (rect - even_state_);
   pump = pump < -1.5f ? -1.5f : (pump > 1.5f ? 1.5f : pump);
   into_bore += pump;
-  bore_out_ = rt::lagrange3_fractional_delay(bore_, static_cast<size_t>(bore_size_), bore_write_,
+  bore_out_ = rt::lagrange3_fractional_delay(bore_, static_cast<size_t>(capacity_), bore_write_,
                                              static_cast<int>(bore_delay * 256.0f), into_bore);
   ++drive_index_;
 

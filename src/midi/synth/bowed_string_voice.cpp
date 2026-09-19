@@ -152,21 +152,19 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   const float tau_lp = onepole_group_delay_samples(a, omega);
   comp_ = 2.0f + tau_lp;
 
-  // Circular spans: each line is sized for the WHOLE period (plus bend-down
-  // headroom ~+2 semitones and the interpolator stencil margin), not just its
-  // note-on share, so a live bow-position sweep can move the split across the
-  // full range without either line overflowing.
-  const float eff = std::max(2.0f, base_period_ - comp_);
-  const int full_span = static_cast<int>(eff * 1.3f) + 8;
-  neck_size_ = std::min(capacity_, std::max(16, full_span));
-  bridge_size_ = std::min(capacity_, std::max(16, full_span));
+  // Each line spans the whole slab rather than this note's period. The line
+  // length is what bounds a downward bend, and the clamp that enforces it
+  // saturates silently -- a glide simply stops descending while the note keeps
+  // sounding -- so a span cut to the note-on period is a pitch ceiling with
+  // nothing to hear it by. The slab is allocated for the engine's lowest note,
+  // which is the only bound the instrument actually has.
   neck_write_ = 0;
   bridge_write_ = 0;
   if (neck_ != nullptr) {
-    for (int i = 0; i < neck_size_; ++i) neck_[static_cast<size_t>(i)] = 0.0f;
+    for (int i = 0; i < capacity_; ++i) neck_[static_cast<size_t>(i)] = 0.0f;
   }
   if (bridge_ != nullptr) {
-    for (int i = 0; i < bridge_size_; ++i) bridge_[static_cast<size_t>(i)] = 0.0f;
+    for (int i = 0; i < capacity_; ++i) bridge_[static_cast<size_t>(i)] = 0.0f;
   }
 
   // Bow velocity contour.
@@ -228,15 +226,14 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
     pol_lp_alpha_ = 1.0f - kPolLpPole;
     pol_loss_ = kPolLoss;
     pol_drive_ = kPolDrive;
-    pol_size_ = neck_size_;  // sized for a full detuned period (same span budget)
     if (pol_ != nullptr) {
-      for (int i = 0; i < pol_size_; ++i) pol_[static_cast<size_t>(i)] = 0.0f;
+      for (int i = 0; i < capacity_; ++i) pol_[static_cast<size_t>(i)] = 0.0f;
     }
   }
 }
 
 float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
-  if (neck_ == nullptr || bridge_ == nullptr || neck_size_ < 8 || bridge_size_ < 8) return 0.0f;
+  if (neck_ == nullptr || bridge_ == nullptr || capacity_ < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
   // Live control: ramp the bow speed / force / position toward their CC targets
@@ -296,16 +293,16 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
   // Split the (compensated) period between the two lines and read/write them.
   const float eff = std::max(2.0f, base_period_ / ratio - comp_);
   const float neck_delay =
-      std::clamp((1.0f - beta_) * eff, 1.0f, static_cast<float>(neck_size_ - 4));
-  const float bridge_delay = std::clamp(beta_ * eff, 1.0f, static_cast<float>(bridge_size_ - 4));
+      std::clamp((1.0f - beta_) * eff, 1.0f, static_cast<float>(capacity_ - 4));
+  const float bridge_delay = std::clamp(beta_ * eff, 1.0f, static_cast<float>(capacity_ - 4));
 
   // Cross-couple at the junction: each line receives the OTHER side's reflection
   // plus the shared bow injection.
   neck_out_ =
-      rt::lagrange3_fractional_delay(neck_, static_cast<size_t>(neck_size_), neck_write_,
+      rt::lagrange3_fractional_delay(neck_, static_cast<size_t>(capacity_), neck_write_,
                                      static_cast<int>(neck_delay * 256.0f), bridge_refl + v_inj);
   bridge_out_ =
-      rt::lagrange3_fractional_delay(bridge_, static_cast<size_t>(bridge_size_), bridge_write_,
+      rt::lagrange3_fractional_delay(bridge_, static_cast<size_t>(capacity_), bridge_write_,
                                      static_cast<int>(bridge_delay * 256.0f), nut_refl + v_inj);
   ++drive_index_;
   // Output is the string velocity at the bridge (what drives the body).
@@ -316,8 +313,8 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
     pol_lp_state_ += pol_lp_alpha_ * (pol_out_ - pol_lp_state_);
     const float pol_refl = -pol_loss_ * pol_lp_state_;
     const float pol_delay =
-        std::clamp(pol_period_ / ratio - comp_, 1.0f, static_cast<float>(pol_size_ - 4));
-    pol_out_ = rt::lagrange3_fractional_delay(pol_, static_cast<size_t>(pol_size_), pol_write_,
+        std::clamp(pol_period_ / ratio - comp_, 1.0f, static_cast<float>(capacity_ - 4));
+    pol_out_ = rt::lagrange3_fractional_delay(pol_, static_cast<size_t>(capacity_), pol_write_,
                                               static_cast<int>(pol_delay * 256.0f),
                                               pol_refl + pol_drive_ * v_inj);
     dry += output_scale_ * kPolRadiation * pol_out_;

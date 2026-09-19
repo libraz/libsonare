@@ -190,7 +190,6 @@ class PianoVoiceCore {
  private:
   struct String {
     float* buffer = nullptr;
-    int size = 0;
     size_t write_index = 0;
     float base_period = 0.0f;     // ideal loop period / detune included
     float comp = 1.0f;            // loop delay not in the line (fb + lp + allpass)

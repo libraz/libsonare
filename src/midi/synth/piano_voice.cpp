@@ -1439,9 +1439,11 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
     const float lp_comp = std::min(1.0f / std::max(1.0e-3f, lp_h1_gain), 1.0f / 0.9f);
     s.g_slow = std::min(0.99997f, loop_gain_for(s.base_period, sr, t60_slow) * lp_comp);
     s.g_fast = std::min(s.g_slow, loop_gain_for(s.base_period, sr, t60_fast) * lp_comp);
-    s.size = std::min(string_capacity_, static_cast<int>(s.base_period * 1.3f) + 8);
-    if (s.buffer != nullptr && s.size > 0) {
-      std::fill(s.buffer, s.buffer + static_cast<size_t>(s.size), 0.0f);
+    // The line spans the whole slab rather than this note's period: the line
+    // length is what bounds a downward bend, and the clamp that enforces it
+    // saturates silently rather than breaking.
+    if (s.buffer != nullptr && string_capacity_ > 0) {
+      std::fill(s.buffer, s.buffer + static_cast<size_t>(string_capacity_), 0.0f);
     }
   }
   for (int i = num_strings_; i < kMaxPianoStrings; ++i) strings_[static_cast<size_t>(i)] = String{};
@@ -1981,15 +1983,15 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
   const int loop_strings = modal_mix_ < 1.0f ? num_strings_ : 0;
   for (int i = 0; i < loop_strings; ++i) {
     String& s = strings_[static_cast<size_t>(i)];
-    if (s.buffer == nullptr || s.size < 8) continue;
+    if (s.buffer == nullptr || string_capacity_ < 8) continue;
     // Coupled two-stage decay: the coherent (bridge) component recirculates
     // at the fast prompt rate, the residual at the slow aftersound rate.
     const float fb = s.g_slow * s.lp_state - (s.g_slow - s.g_fast) * drain_out_;
     const float delay =
-        std::clamp(s.base_period / ratio - s.comp, 1.0f, static_cast<float>(s.size - 4));
+        std::clamp(s.base_period / ratio - s.comp, 1.0f, static_cast<float>(string_capacity_ - 4));
     const float out = rt::lagrange3_fractional_delay(
-        s.buffer, static_cast<size_t>(s.size), s.write_index, static_cast<int>(delay * 256.0f),
-        exc * s.strike_weight + fb);
+        s.buffer, static_cast<size_t>(string_capacity_), s.write_index,
+        static_cast<int>(delay * 256.0f), exc * s.strike_weight + fb);
     // Dispersion allpass cascade then the loop lowpass.
     float v = out;
     for (float& state : s.ap_state) {
