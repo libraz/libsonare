@@ -418,6 +418,24 @@ class SonareMidiCcBinding(CStruct):
     ]
 
 
+class SonareControllerBinding(CStruct):
+    """Maps to SonareControllerBinding in sonare_c_engine.h (sizeof 16).
+
+    The `reserved` uint8 at offset 3 is load-bearing: drop it and the three
+    floats misalign, which segfaults on access.
+    """
+
+    _fields_ = [
+        ("input", ctypes.c_uint8),
+        ("index", ctypes.c_uint8),
+        ("axis", ctypes.c_uint8),
+        ("reserved", ctypes.c_uint8),
+        ("lo", ctypes.c_float),
+        ("hi", ctypes.c_float),
+        ("curve", ctypes.c_float),
+    ]
+
+
 class SonareEngineMidiEvent(CStruct):
     """Maps to SonareEngineMidiEvent in sonare_c_effects.h."""
 

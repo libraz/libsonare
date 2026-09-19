@@ -904,6 +904,20 @@ def synth_preset_names() -> list[str]:
     return [name for name in raw.decode("utf-8").split("\n") if name]
 
 
+def controller_profile_names() -> list[str]:
+    """Controller-profile preset names (``"gm"``, ``"breath"``,
+    ``"breath-aftertouch"``, ``"mpe"``, ...). Use these to discover the names
+    :meth:`RealtimeEngine.set_controller_profile` accepts instead of hardcoding
+    magic strings."""
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_controller_profile_names"):
+        raise RuntimeError("libsonare was built without the controller-profile ABI")
+    raw = lib.sonare_controller_profile_names()
+    if not raw:
+        return []
+    return [name for name in raw.decode("utf-8").split("\n") if name]
+
+
 def synth_preset_patch(name: str) -> SynthPatch:
     """Fetch the named catalog preset as a :class:`SynthPatch` (the preset name
     plus the wrapper-section values), so hosts can inspect a preset and tweak

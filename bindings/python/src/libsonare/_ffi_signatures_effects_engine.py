@@ -1300,6 +1300,50 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_size_t),
         ]
+    if hasattr(lib, "sonare_controller_profile_names"):
+        lib.sonare_controller_profile_names.restype = ctypes.c_char_p
+        lib.sonare_controller_profile_names.argtypes = []
+    if hasattr(lib, "sonare_engine_set_controller_profile"):
+        lib.sonare_engine_set_controller_profile.restype = ctypes.c_int32
+        lib.sonare_engine_set_controller_profile.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_char_p,
+        ]
+    if hasattr(lib, "sonare_engine_bind_controller"):
+        lib.sonare_engine_bind_controller.restype = ctypes.c_int32
+        lib.sonare_engine_bind_controller.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(SonareControllerBinding),
+        ]
+    if hasattr(lib, "sonare_engine_clear_controller_bindings"):
+        lib.sonare_engine_clear_controller_bindings.restype = ctypes.c_int32
+        lib.sonare_engine_clear_controller_bindings.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+        ]
+    if hasattr(lib, "sonare_engine_controller_binding_count"):
+        lib.sonare_engine_controller_binding_count.restype = ctypes.c_int32
+        lib.sonare_engine_controller_binding_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+    if hasattr(lib, "sonare_engine_set_controller_velocity_meaningful"):
+        lib.sonare_engine_set_controller_velocity_meaningful.restype = ctypes.c_int32
+        lib.sonare_engine_set_controller_velocity_meaningful.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_controller_velocity_meaningful"):
+        lib.sonare_engine_controller_velocity_meaningful.restype = ctypes.c_int32
+        lib.sonare_engine_controller_velocity_meaningful.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_int),
+        ]
     if hasattr(lib, "sonare_engine_set_midi_fx"):
         lib.sonare_engine_set_midi_fx.restype = ctypes.c_int32
         lib.sonare_engine_set_midi_fx.argtypes = [

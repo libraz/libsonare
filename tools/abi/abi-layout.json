@@ -977,6 +977,54 @@
     ],
     "size": 48
   },
+  "SonareControllerBinding": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "input",
+        "offset": 0,
+        "size": 1
+      },
+      {
+        "kind": "unsigned",
+        "name": "index",
+        "offset": 1,
+        "size": 1
+      },
+      {
+        "kind": "unsigned",
+        "name": "axis",
+        "offset": 2,
+        "size": 1
+      },
+      {
+        "kind": "unsigned",
+        "name": "reserved",
+        "offset": 3,
+        "size": 1
+      },
+      {
+        "kind": "float",
+        "name": "lo",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "hi",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "curve",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
   "SonareCqtResult": {
     "align": 8,
     "fields": [

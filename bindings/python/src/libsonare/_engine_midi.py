@@ -10,6 +10,7 @@ from __future__ import annotations
 import ctypes
 from typing import TYPE_CHECKING
 
+from ._ffi_types_mastering_project import SonareControllerBinding
 from ._project import (
     BuiltinSynthConfig,
     MidiCcBinding,
@@ -19,11 +20,13 @@ from ._project import (
     _cc_binding_to_c,
     _synth_patch_arg,
 )
+from ._project_synth import _controller_axis_value, _controller_input_value
 from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
     _to_c_float,
+    _to_c_int,
     _to_c_int64,
     _to_c_uint8,
     _to_c_uint32,
@@ -303,6 +306,154 @@ class _EngineMidiMixin:
         out = ctypes.c_size_t()
         _check(lib.sonare_engine_midi_instrument_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
+
+    # -- controller profiles -------------------------------------------------
+
+    def set_controller_profile(self, destination_id: int, preset_name: str) -> None:
+        """Replace the instrument's controller profile with a named preset.
+
+        ``preset_name`` is one of :func:`controller_profile_names` (``"gm"``,
+        ``"breath"``, ``"breath-aftertouch"``, ``"mpe"``). The preset replaces
+        the binding table wholesale and drops every channel's accumulated axis
+        value, since the new bindings say nothing about what the old ones had
+        reached. Raises :class:`SonareError` for an unknown name, for a
+        destination nothing is bound to, and for an instrument that has nowhere
+        to put a profile.
+
+        Control-thread only: do not call concurrently with :meth:`process`.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_controller_profile"):
+            raise RuntimeError("libsonare was built without the controller-profile ABI")
+        _check(
+            lib.sonare_engine_set_controller_profile(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                preset_name.encode("utf-8"),
+            )
+        )
+
+    def bind_controller(
+        self,
+        destination_id: int,
+        *,
+        input: str | int,
+        index: int = 0,
+        axis: str | int,
+        lo: float = 0.0,
+        hi: float = 1.0,
+        curve: float = 1.0,
+    ) -> None:
+        """Add one binding on top of the instrument's current controller profile.
+
+        ``input`` is how the device spells the gesture
+        (``synth_enum_tables()["controller_inputs"]``: ``"control-change"``,
+        ``"channel-pressure"``, ``"poly-pressure"``, ``"pitch-bend"``,
+        ``"velocity"``) and ``index`` is the CC number for
+        ``"control-change"``; every other input is identified by its message
+        status alone and ignores it. ``axis`` is what the gesture means
+        (``synth_enum_tables()["controller_axes"]``), so the engine is reached
+        by the meaning rather than by the controller number that carried it.
+
+        ``lo`` / ``hi`` are the axis values at zero and full deflection in the
+        axis's own unit -- normalized ``[0, 1]`` for the excitation axes and
+        loudness, cents for ``"pitch-cents"`` and ``"vibrato-depth"`` -- and
+        ``lo > hi`` inverts the gesture. ``curve`` is the exponent applied to
+        the normalized input before the range maps it; keep the linear ``1.0``
+        unless the device has not already shaped the gesture.
+
+        Binding the same input twice with different axes is how one gesture
+        reaches both. Raises :class:`SonareValueError` for an unknown ``input``
+        or ``axis`` spelling and for a non-finite range or curve, and
+        :class:`SonareError` when the table is full, when the axis is
+        ``"none"``, or when a poly-pressure binding names an axis that is not
+        one of the four excitation axes.
+
+        Control-thread only: do not call concurrently with :meth:`process`.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_bind_controller"):
+            raise RuntimeError("libsonare was built without the controller-profile ABI")
+        binding = SonareControllerBinding(
+            input=_controller_input_value(input),
+            index=index,
+            axis=_controller_axis_value(axis),
+            reserved=0,
+            lo=lo,
+            hi=hi,
+            curve=curve,
+        )
+        _check(
+            lib.sonare_engine_bind_controller(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                ctypes.byref(binding),
+            )
+        )
+
+    def clear_controller_bindings(self, destination_id: int) -> None:
+        """Drop every binding of the instrument's controller profile.
+
+        The instrument keeps a profile; it resolves nothing until something is
+        bound again.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_clear_controller_bindings"):
+            raise RuntimeError("libsonare was built without the controller-profile ABI")
+        _check(
+            lib.sonare_engine_clear_controller_bindings(
+                self._require_handle(), _to_c_uint32(destination_id, "destination_id")
+            )
+        )
+
+    def controller_binding_count(self, destination_id: int) -> int:
+        """Return the bindings the instrument's controller profile holds."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_controller_binding_count"):
+            raise RuntimeError("libsonare was built without the controller-profile ABI")
+        out = ctypes.c_size_t()
+        _check(
+            lib.sonare_engine_controller_binding_count(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                ctypes.byref(out),
+            )
+        )
+        return int(out.value)
+
+    def set_controller_velocity_meaningful(self, destination_id: int, meaningful: bool) -> None:
+        """Say whether note-on velocity is expression for this instrument.
+
+        No fixed default is possible: a wind controller ships sending
+        breath-derived velocity on one model and a constant on the next. When
+        false the synth takes every note at full scale and the bound axes carry
+        the dynamics alone.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_controller_velocity_meaningful"):
+            raise RuntimeError("libsonare was built without the controller-profile ABI")
+        _check(
+            lib.sonare_engine_set_controller_velocity_meaningful(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_int(1 if meaningful else 0, "meaningful"),
+            )
+        )
+
+    def controller_velocity_meaningful(self, destination_id: int) -> bool:
+        """Read back :meth:`set_controller_velocity_meaningful`."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_controller_velocity_meaningful"):
+            raise RuntimeError("libsonare was built without the controller-profile ABI")
+        out = ctypes.c_int()
+        _check(
+            lib.sonare_engine_controller_velocity_meaningful(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                ctypes.byref(out),
+            )
+        )
+        return out.value != 0
 
     def bind_midi_cc(
         self,

@@ -144,6 +144,27 @@ _SYNTH_MOD_DESTINATIONS = {
     "excitation-brightness": 11,
     "spectrum-morph": 12,
 }
+# Controller-profile enum names (mirror SonareControllerInput /
+# SonareControllerAxis in sonare_c_engine.h). They describe a device gesture
+# rather than a patch field, but sonare_synth_enum_names serves them, so they
+# are part of the table set whose contract is "the names the C ABI supplies".
+_CONTROLLER_INPUTS = {
+    "control-change": 0,
+    "channel-pressure": 1,
+    "poly-pressure": 2,
+    "pitch-bend": 3,
+    "velocity": 4,
+}
+_CONTROLLER_AXES = {
+    "none": 0,
+    "excitation": 1,
+    "position": 2,
+    "brightness": 3,
+    "morph": 4,
+    "loudness": 5,
+    "pitch-cents": 6,
+    "vibrato-depth": 7,
+}
 SYNTH_ENUM_TABLES = {
     "engine_modes": tuple(_SYNTH_ENGINE_MODES),
     "waveforms": tuple(_SYNTH_OSC_WAVEFORMS),
@@ -153,6 +174,8 @@ SYNTH_ENUM_TABLES = {
     "body_types": tuple(_SYNTH_BODY_TYPES),
     "mod_sources": tuple(_SYNTH_MOD_SOURCES),
     "mod_destinations": tuple(_SYNTH_MOD_DESTINATIONS),
+    "controller_inputs": tuple(_CONTROLLER_INPUTS),
+    "controller_axes": tuple(_CONTROLLER_AXES),
 }
 _SYNTH_ENUM_KINDS = {
     "engine_modes": 0,
@@ -163,6 +186,8 @@ _SYNTH_ENUM_KINDS = {
     "body_types": 4,
     "mod_sources": 5,
     "mod_destinations": 6,
+    "controller_inputs": 8,
+    "controller_axes": 9,
 }
 
 
@@ -200,6 +225,16 @@ def _sample_loop_value(mode: str | int) -> int:
 def _sample_key_track_value(value: str | int) -> int:
     """Resolve a :class:`SynthPatch` sample key-track override to its C ordinal."""
     return _synth_enum_value(value, _SAMPLE_KEY_TRACKS, "sample key track")
+
+
+def _controller_input_value(value: str | int) -> int:
+    """Resolve a controller-profile input spelling to its C ordinal."""
+    return _synth_enum_value(value, _CONTROLLER_INPUTS, "controller input")
+
+
+def _controller_axis_value(value: str | int) -> int:
+    """Resolve a controller-profile axis spelling to its C ordinal."""
+    return _synth_enum_value(value, _CONTROLLER_AXES, "controller axis")
 
 
 def _sample_desc_loop_value(mode: str | int) -> int:

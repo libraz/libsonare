@@ -74,6 +74,23 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "excitation-brightness",
         "spectrum-morph",
     ),
+    "controller_inputs": (
+        "control-change",
+        "channel-pressure",
+        "poly-pressure",
+        "pitch-bend",
+        "velocity",
+    ),
+    "controller_axes": (
+        "none",
+        "excitation",
+        "position",
+        "brightness",
+        "morph",
+        "loudness",
+        "pitch-cents",
+        "vibrato-depth",
+    ),
 }
 
 
