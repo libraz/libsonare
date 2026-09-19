@@ -33,6 +33,7 @@
 #include "midi/controller_profile.h"
 #include "midi/instrument.h"
 #include "midi/synth/additive_voice.h"
+#include "midi/synth/articulation.h"
 #include "midi/synth/body_resonator.h"
 #include "midi/synth/bowed_string_voice.h"
 #include "midi/synth/brass_voice.h"
@@ -326,6 +327,14 @@ struct NativeSynthVoice : VoiceState {
   // Glide: pitch offset in cents decaying to zero through a one-pole.
   float glide_cents = 0.0f;
   float glide_coeff = 0.0f;
+  /// Interval in cents from the note this voice was STARTED on to the note it
+  /// is sounding now, which a legato continuation moves and nothing else does.
+  /// It joins the per-sample pitch sum rather than base_freq_hz because that is
+  /// the one argument every engine's render() already takes: a waveguide reads
+  /// its line at the new period, an oscillator retunes, and no engine needs a
+  /// second entry point to be carried into a new note. Permanent, unlike
+  /// glide_cents, which only carries the transition into it.
+  float retune_cents = 0.0f;
   /// Seeded per-voice pan scatter (patch stereo_spread; pan units).
   float pan_spread_units = 0.0f;
   bool key_down = false;
@@ -400,6 +409,16 @@ struct NativeSynthVoice : VoiceState {
   /// @p wind_pitch / @p wind_gain carry the shared organ wind modulation
   /// (tremulant / wind sag); 1.0 leaves the voice unmodulated.
   float render(const Sf2ChannelMod& mod, float wind_pitch = 1.0f, float wind_gain = 1.0f) noexcept;
+  /// Legato continuation: carry this sounding voice to @p new_note.
+  ///
+  /// The exciter, the delay line and both envelopes are left exactly as they
+  /// are; only the pitch moves, through retune_cents, with glide_cents taking
+  /// up the difference so the transition is continuous rather than a step. A
+  /// patch with no portamento lands on the new pitch immediately, which is what
+  /// a slur with no glide is. `note` becomes the new key, because that is what
+  /// the late note-off of the old key must NOT match (holding the old key here
+  /// is what would cut the slur).
+  void retune(uint8_t new_note, double sample_rate) noexcept;
   /// Note-off: enter release (ignored by one-shot patches).
   void release() noexcept;
   /// Immediate silence (All Sound Off / steal-kill).
@@ -542,6 +561,27 @@ class NativeSynth final : public MidiInstrument {
     return &controller_profile_;
   }
 
+  /// Sets how @p channel treats a note-on while another note is still held.
+  ///
+  /// Not reachable from a MIDI stream: CC126 names a monophonic mode but not
+  /// this one, and reading it as kMonoLegato would change what a compliant file
+  /// sounds like. A host that wants a slurred wind part asks for it here.
+  void set_articulation(uint8_t channel, ArticulationMode mode) noexcept {
+    channels_[channel & 0x0Fu].articulation = mode;
+  }
+  ArticulationMode articulation(uint8_t channel) const noexcept {
+    return channels_[channel & 0x0Fu].articulation;
+  }
+
+  /// How many times a legato continuation was asked for and refused, so the
+  /// note started a voice of its own instead.
+  ///
+  /// Counted rather than inferred: a refusal sounds like an ordinary note, so
+  /// there is nothing in the audio that separates "the engine declines legato"
+  /// from "the mode was never set". Both a declining engine and a pitch below
+  /// the engine's delay line land here.
+  uint64_t legato_fallback_count() const noexcept { return legato_fallbacks_; }
+
  private:
   struct ChannelState {
     bool sustain = false;       // CC64 >= 64 (dampers lifted)
@@ -589,8 +629,42 @@ class NativeSynth final : public MidiInstrument {
     float mod_depth_cents = gs_mod_depth_cents(kGsModDepthDefault);
     /// Previous note's frequency (glide source; 0 = none yet).
     float last_freq_hz = 0.0f;
+    /// What a second note-on does while the first is still held.
+    ArticulationMode articulation = ArticulationMode::kPoly;
+    /// Keys held on this channel, oldest first. Ordered rather than a bitmap
+    /// because last-note priority is a question about the order they were
+    /// pressed in, which a set cannot answer. Ten fingers plus margin; a press
+    /// past that is not recorded rather than displacing an older key, so the
+    /// note still sounds and only the return-to priority loses it.
+    std::array<uint8_t, 16> held_keys{};
+    uint8_t held_count = 0;
+
+    /// Records @p note as held. A repeat moves it to the top, which is what a
+    /// re-press means for last-note priority.
+    void hold_key(uint8_t note) noexcept {
+      release_key(note);
+      if (held_count < held_keys.size()) held_keys[held_count++] = note;
+    }
+    /// Removes @p note from the stack; a key that is not there is a no-op.
+    void release_key(uint8_t note) noexcept {
+      for (uint8_t i = 0; i < held_count; ++i) {
+        if (held_keys[i] != note) continue;
+        for (uint8_t j = static_cast<uint8_t>(i + 1); j < held_count; ++j) {
+          held_keys[j - 1] = held_keys[j];
+        }
+        --held_count;
+        return;
+      }
+    }
+    /// The most recently pressed key still held, or -1 when none is.
+    int newest_key() const noexcept { return held_count > 0 ? held_keys[held_count - 1] : -1; }
   };
 
+  /// The voice a note-off or a legato continuation on @p ch means: sounding on
+  /// @p note, key still down, not yet releasing. One matching rule in one
+  /// place, because a legato continuation moves `note` to the new key and every
+  /// reader of it has to agree on that.
+  NativeSynthVoice* find_sounding(uint8_t ch, uint8_t note, uint32_t source_track_id) noexcept;
   void note_on(uint8_t channel, uint8_t note, uint8_t velocity, uint32_t source_track_id) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void process_impl(float* const* channels, const MidiInstrumentSourceOutput* source_outputs,
@@ -620,6 +694,7 @@ class NativeSynth final : public MidiInstrument {
 
   NativeSynthConfig config_{};
   ControllerProfile controller_profile_ = default_controller_profile();
+  uint64_t legato_fallbacks_ = 0;
   double sample_rate_ = 0.0;
   bool prepared_ = false;
   int64_t tail_samples_ = 0;

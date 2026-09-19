@@ -246,6 +246,40 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   }
 }
 
+namespace {
+
+/// The deepest pitch any rank of @p patch sounds, relative to the key. A pipe
+/// organ voices one key at several pitches at once, so the 16' rank runs out of
+/// delay line an octave before the 8' rank does and it is the 16' that decides
+/// whether the voice can be carried. 1.0 for every other engine, which sounds
+/// the key and nothing below it.
+float lowest_pitch_mult(const NativeSynthPatch& patch) noexcept {
+  if (patch.mode != SynthEngineMode::kPipeOrgan || patch.pipe_organ.rank_count <= 0) return 1.0f;
+  float lowest = 1.0f;
+  const int count = std::min(patch.pipe_organ.rank_count, kMaxPipeRanks);
+  for (int r = 0; r < count; ++r) {
+    const float mult = patch.pipe_organ.ranks[static_cast<size_t>(r)].footage_mult;
+    if (mult > 0.01f && mult < lowest) lowest = mult;
+  }
+  return lowest;
+}
+
+}  // namespace
+
+NativeSynthVoice* NativeSynth::find_sounding(uint8_t ch, uint8_t note,
+                                             uint32_t source_track_id) noexcept {
+  // Key-down and not releasing, because a released loop cannot be carried: a
+  // waveguide's release lowers its loop gain irreversibly, so a voice re-tuned
+  // after note-off would arrive at the new pitch already decaying.
+  for (NativeSynthVoice& v : pool_) {
+    if (v.active && v.channel == ch && v.note == note && v.source_track_id == source_track_id &&
+        v.key_down && !v.releasing) {
+      return &v;
+    }
+  }
+  return nullptr;
+}
+
 void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                           uint32_t source_track_id) noexcept {
   if (!prepared_) return;
@@ -293,6 +327,30 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       }
     }
   }
+  // Legato continuation, before a voice is allocated: on a carrying channel a
+  // note-on under a held key moves that voice to the new key rather than
+  // starting one, so the exciter, the delay line and both envelopes run on.
+  ChannelState& live = channels_[ch];
+  if (live.articulation != ArticulationMode::kPoly && live.newest_key() >= 0) {
+    NativeSynthVoice* held =
+        find_sounding(ch, static_cast<uint8_t>(live.newest_key()), source_track_id);
+    if (held != nullptr) {
+      if (live.articulation == ArticulationMode::kMonoLegato &&
+          accepts_legato(patch->mode, held->note, note, lowest_pitch_mult(*patch))) {
+        held->retune(note, sample_rate_);
+        live.hold_key(note);
+        live.last_freq_hz = synth_note_to_hz(static_cast<float>(note));
+        return;
+      }
+      if (live.articulation == ArticulationMode::kMonoLegato) ++legato_fallbacks_;
+      // Monophonic either way: the previous note stops. Fast rather than the
+      // patch's own release, which on a sustaining patch runs past a second and
+      // would leave the note it replaced audible under the new one.
+      held->choke_fast(sample_rate_);
+    }
+  }
+  live.hold_key(note);
+
   NativeSynthVoice* voice = pool_.allocate(ch, note, source_track_id);
   if (voice == nullptr) return;
   const uint32_t voice_index = static_cast<uint32_t>(voice - pool_.data());
@@ -387,7 +445,28 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
 void NativeSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
-  const ChannelState& st = channels_[ch];
+  ChannelState& st = channels_[ch];
+  st.release_key(note);
+  // Releasing a key under a slur returns the voice to the key still held rather
+  // than ending the phrase. A note-off whose key is NOT the one sounding falls
+  // straight past here and past the release loop below, which is what keeps a
+  // slur alive when the old key is let go late.
+  if (st.articulation == ArticulationMode::kMonoLegato && st.newest_key() >= 0) {
+    NativeSynthVoice* sounding = find_sounding(ch, note, source_track_id);
+    if (sounding != nullptr && sounding->patch != nullptr) {
+      const uint8_t back = static_cast<uint8_t>(st.newest_key());
+      if (accepts_legato(sounding->patch->mode, sounding->note, back,
+                         lowest_pitch_mult(*sounding->patch))) {
+        sounding->retune(back, sample_rate_);
+        st.last_freq_hz = synth_note_to_hz(static_cast<float>(back));
+        return;
+      }
+      // The key still held is out of the engine's reach, so the phrase ends on
+      // the release below and the held key stays silent. Counted, because
+      // nothing in the sound says which of the two happened.
+      ++legato_fallbacks_;
+    }
+  }
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.note == note && v.channel == ch && v.source_track_id == source_track_id &&
         v.key_down) {

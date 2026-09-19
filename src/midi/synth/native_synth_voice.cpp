@@ -346,6 +346,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   // one-pole sized so the pitch lands within ~5% in glide_ms.
   glide_cents = 0.0f;
   glide_coeff = 0.0f;
+  retune_cents = 0.0f;
   if (p.glide_ms > 0.0f && glide_from_hz > 0.0f && base_freq_hz > 0.0f) {
     glide_cents = 1200.0f * std::log2(glide_from_hz / base_freq_hz);
     const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
@@ -482,7 +483,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   const float mode_pitch_offset =
       patch->mode == SynthEngineMode::kSubtractive ? 0.0f : patch->pitch_offset_cents;
   const float pitch_cents = mode_pitch_offset + mod.pitch_cents + gs_scale_cents + vib + drift +
-                            offsets.pitch_cents + glide_cents;
+                            offsets.pitch_cents + glide_cents + retune_cents;
   float common = pitch_cents != 0.0f ? std::exp2(pitch_cents * (1.0f / 1200.0f)) : 1.0f;
   // Shared organ wind: the tremulant / wind-sag pitch factor (1.0 for every
   // non-pipe voice, which the host always passes through).
@@ -589,6 +590,37 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
       mod.tremolo_depth01 != 0.0f ? 1.0f - mod.tremolo_depth01 * (1.0f - lfo1_value) * 0.5f : 1.0f;
   return (sample * level + contact) * velocity_gain * patch->gain * mod.gain * offsets.amp_gain *
          wind_gain * tremolo;
+}
+
+void NativeSynthVoice::retune(uint8_t new_note, double sample_rate) noexcept {
+  if (patch == nullptr || new_note == note) return;
+  // Equal temperament, so the interval is exact arithmetic rather than a ratio
+  // of two frequencies. Accumulated against the current note, which means a
+  // chain of slurs needs no memory of where the phrase began.
+  const float target =
+      retune_cents + 100.0f * (static_cast<float>(new_note) - static_cast<float>(note));
+  // Where the pitch is right now, so the transition starts from the sound
+  // rather than from the note that was asked for.
+  const float sounding = retune_cents + glide_cents;
+  retune_cents = target;
+  note = new_note;
+  // The bore of every waveguide follows the pitch factor on its own; the brass
+  // lip resonance is a filter tuned at note-on and has to be moved with it, or
+  // it pulls the sounding pitch back toward the note that is over.
+  if (patch->mode == SynthEngineMode::kBrass) {
+    brass.retune(std::exp2(target * (1.0f / 1200.0f)));
+  }
+  if (patch->glide_ms > 0.0f) {
+    glide_cents = sounding - target;
+    const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+    glide_coeff = static_cast<float>(std::exp(-3.0 / (patch->glide_ms * 0.001 * sr)));
+  } else {
+    // No portamento: the new pitch is reached on this sample. Left at zero
+    // rather than decayed, because a coefficient of zero never runs the decay
+    // and the offset would stand forever.
+    glide_cents = 0.0f;
+    glide_coeff = 0.0f;
+  }
 }
 
 void NativeSynthVoice::release() noexcept {
