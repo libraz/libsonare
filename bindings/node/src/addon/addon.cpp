@@ -434,6 +434,15 @@ Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+// Controller-profile preset catalog, split from the C ABI's '\n'-joined
+// program-lifetime string like SynthPresetNames.
+Napi::Value ControllerProfileNames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  return SplitJoinedNames(info.Env(), sonare_controller_profile_names());
+  SONARE_NODE_CATCH(env)
+}
+
 // Fetches a named catalog preset as a SynthPatch object (the preset name plus
 // its wrapper-section values), so hosts can inspect and tweak before binding.
 // A "va:" routing prefix is accepted; unknown names throw.
@@ -476,6 +485,10 @@ Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_SOURCE)));
   out.Set("modDestinations",
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION)));
+  out.Set("controllerInputs",
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_INPUT)));
+  out.Set("controllerAxes",
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_AXIS)));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -506,6 +519,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, ProjectAbiVersion, "projectAbiVersion"));
   exports.Set("synthPresetNames", Napi::Function::New(env, SynthPresetNames, "synthPresetNames"));
   exports.Set("synthPresetPatch", Napi::Function::New(env, SynthPresetPatch, "synthPresetPatch"));
+  exports.Set("controllerProfileNames",
+              Napi::Function::New(env, ControllerProfileNames, "controllerProfileNames"));
   exports.Set("_synthEnumTables", Napi::Function::New(env, SynthEnumTables, "_synthEnumTables"));
   exports.Set("_synthPatchRoundTrip",
               Napi::Function::New(env, SynthPatchRoundTrip, "_synthPatchRoundTrip"));

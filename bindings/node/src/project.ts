@@ -101,6 +101,15 @@ export function synthPresetPatch(name: string): SynthPatch {
   return addon.synthPresetPatch(name);
 }
 
+/**
+ * Controller-profile preset names (`'gm'`, `'breath'`, `'breath-aftertouch'`,
+ * `'mpe'`). Use these with {@link RealtimeEngine.setControllerProfile} instead
+ * of hardcoding magic strings; an unknown name throws.
+ */
+export function controllerProfileNames(): string[] {
+  return addon.controllerProfileNames();
+}
+
 /** Return the canonical NativeSynth enum tables from the native C oracle. */
 export function synthEnumTables(): SynthEnumTables {
   return addon._synthEnumTables();

@@ -171,6 +171,25 @@ export const SYNTH_MOD_DESTINATIONS = [
   'spectrum-morph',
 ] as const;
 
+export const CONTROLLER_INPUTS = [
+  'control-change',
+  'channel-pressure',
+  'poly-pressure',
+  'pitch-bend',
+  'velocity',
+] as const;
+
+export const CONTROLLER_AXES = [
+  'none',
+  'excitation',
+  'position',
+  'brightness',
+  'morph',
+  'loudness',
+  'pitch-cents',
+  'vibrato-depth',
+] as const;
+
 export interface SynthEnumTables {
   engineModes: string[];
   waveforms: string[];
@@ -180,6 +199,8 @@ export interface SynthEnumTables {
   bodyTypes: string[];
   modSources: string[];
   modDestinations: string[];
+  controllerInputs: string[];
+  controllerAxes: string[];
 }
 
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
@@ -316,6 +337,47 @@ export interface SynthModRouting {
    * second registration — and a patch carrying one table declines it.
    */
   depth: number;
+}
+
+/** Device gesture a {@link ControllerBinding} listens to. */
+export type ControllerInput = (typeof CONTROLLER_INPUTS)[number];
+
+/** Expression axis a {@link ControllerBinding} drives. */
+export type ControllerAxis = (typeof CONTROLLER_AXES)[number];
+
+/**
+ * One device gesture mapped onto one expression axis, for
+ * {@link RealtimeEngine.bindController}.
+ *
+ * Binding the same `input` twice with different axes is how a single gesture
+ * reaches both — a breath controller driving excitation and loudness together.
+ *
+ * `lo` / `hi` are the axis value at zero and at full deflection, in the axis's
+ * own unit: normalized `[0, 1]` for the excitation axes and `loudness`, cents
+ * for `pitch-cents` and `vibrato-depth`. `lo > hi` inverts the gesture. `curve`
+ * is the exponent applied to the normalized input before that range maps it;
+ * keep the default `1` unless the device sends an unshaped gesture, since a
+ * wind controller has already applied the curve its player chose.
+ *
+ * `axis: 'none'` is refused rather than treated as an empty slot, and a
+ * `poly-pressure` binding may only name one of the four excitation axes —
+ * `loudness`, `pitch-cents` and `vibrato-depth` are channel-level state, so a
+ * per-note value applied channel-wide would look to the caller like a binding
+ * that took.
+ */
+export interface ControllerBinding {
+  /** Gesture the device sends (name or C ordinal). */
+  input: ControllerInput | number;
+  /** CC number 0..127 for `'control-change'`; every other input ignores it. */
+  index?: number;
+  /** Expression axis the gesture means (name or C ordinal). */
+  axis: ControllerAxis | number;
+  /** Axis value at zero deflection. Default 0. */
+  lo?: number;
+  /** Axis value at full deflection. Default 1. */
+  hi?: number;
+  /** Positive exponent shaping the normalized input. Default 1 (linear). */
+  curve?: number;
 }
 
 /**

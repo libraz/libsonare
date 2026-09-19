@@ -742,6 +742,30 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) => withEngine((engine) => engine.setMetronome({ ...o, enabled: true })),
   },
   {
+    jsName: 'bindController',
+    invoke: (o) =>
+      withEngine((engine) => {
+        // The call returns nothing, so the observable is the audio the binding
+        // shapes: lo / hi / curve only surface once the bound CC moves.
+        engine.setSynthInstrument('clarinet', 0);
+        engine.clearControllerBindings(0);
+        engine.bindController(0, {
+          ...o,
+          input: 'control-change',
+          index: 2,
+          axis: 'excitation',
+        });
+        engine.play();
+        engine.pushMidiNoteOn(0, 0, 0, 60, 100);
+        const rendered: number[] = [];
+        for (let block = 0; block < 8; block++) {
+          engine.pushMidiCc(0, 0, 0, 2, block * 16);
+          rendered.push(...engine.process([new Float32Array(128), new Float32Array(128)])[0]);
+        }
+        return rendered;
+      }),
+  },
+  {
     jsName: 'setMarkers',
     invoke: (o) =>
       withEngine((engine) => {

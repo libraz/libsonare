@@ -3,6 +3,7 @@ import { addon } from './native.js';
 import type {
   BuiltinSynthConfig,
   ClipPageRequest,
+  ControllerBinding,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
@@ -902,6 +903,51 @@ export class RealtimeEngine {
 
   midiCcBindingCount(): number {
     return this.native.midiCcBindingCount();
+  }
+
+  /**
+   * Replace the destination instrument's controller profile with a named preset
+   * (see {@link controllerProfileNames}). Unknown names throw rather than
+   * resolving to a default, and installing a profile drops every channel's
+   * accumulated axis value. An instrument with nowhere to put a profile throws.
+   */
+  setControllerProfile(destinationId: number, presetName: string): void {
+    this.native.setControllerProfile(destinationId, presetName);
+  }
+
+  /**
+   * Add one {@link ControllerBinding} on top of the destination instrument's
+   * current profile. Throws when the table is full, when the axis is `'none'`,
+   * when a `poly-pressure` binding names a channel-level axis, or when the
+   * range or curve is not finite.
+   */
+  bindController(destinationId: number, binding: ControllerBinding): void {
+    this.native.bindController(destinationId, binding);
+  }
+
+  /**
+   * Drop every binding of the destination instrument's controller profile. The
+   * instrument keeps a profile; it resolves nothing until something is bound.
+   */
+  clearControllerBindings(destinationId: number): void {
+    this.native.clearControllerBindings(destinationId);
+  }
+
+  controllerBindingCount(destinationId: number): number {
+    return this.native.controllerBindingCount(destinationId);
+  }
+
+  /**
+   * Declare whether note-on velocity is expression for this instrument. When
+   * off, every note is taken at full scale and the bound axes carry the
+   * dynamics alone. There is no fixed default — each preset states it.
+   */
+  setControllerVelocityMeaningful(destinationId: number, meaningful: boolean): void {
+    this.native.setControllerVelocityMeaningful(destinationId, meaningful);
+  }
+
+  controllerVelocityMeaningful(destinationId: number): boolean {
+    return this.native.controllerVelocityMeaningful(destinationId);
   }
 
   /** Install/replace a live non-destructive MIDI-FX insert for one destination. */

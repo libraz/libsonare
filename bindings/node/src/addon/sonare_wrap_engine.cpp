@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -33,6 +34,50 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
   config->polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
   // A wrong-typed field left a pending JS exception; stop before the caller
   // reaches the C ABI with it still set.
+  return !env.IsExceptionPending();
+}
+
+// Controller-profile enum spellings, shared with the Python and WASM facades.
+// The static_asserts catch a widened C enum; the spellings themselves are pinned
+// against the C name tables by the enum-table export.
+constexpr const char* kControllerInputs[] = {"control-change", "channel-pressure", "poly-pressure",
+                                             "pitch-bend", "velocity"};
+constexpr const char* kControllerAxes[] = {"none",  "excitation", "position",    "brightness",
+                                           "morph", "loudness",   "pitch-cents", "vibrato-depth"};
+static_assert(std::size(kControllerInputs) == SONARE_CONTROLLER_INPUT_COUNT,
+              "Node ControllerInput table drifted from C");
+static_assert(std::size(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
+              "Node ControllerAxis table drifted from C");
+
+bool ReadControllerBinding(Napi::Env env, const Napi::Value& value, SonareControllerBinding* out) {
+  if (!value.IsObject()) {
+    Napi::TypeError::New(env, "controller binding must be an object").ThrowAsJavaScriptException();
+    return false;
+  }
+  const Napi::Object obj = value.As<Napi::Object>();
+  // Both are required rather than defaulted: an omitted input would bind
+  // control-change CC0, which the C ABI accepts as a binding that listens to
+  // the wrong gesture.
+  if (!sonare_node::SynthFieldPresent(obj, "input") ||
+      !sonare_node::SynthFieldPresent(obj, "axis")) {
+    Napi::TypeError::New(env, "controller binding requires an input and an axis")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  int input = 0;
+  int axis = 0;
+  if (!sonare_node::SynthEnumProperty(env, obj, "input", kControllerInputs,
+                                      SONARE_CONTROLLER_INPUT_COUNT, "controller input", &input) ||
+      !sonare_node::SynthEnumProperty(env, obj, "axis", kControllerAxes,
+                                      SONARE_CONTROLLER_AXIS_COUNT, "controller axis", &axis)) {
+    return false;
+  }
+  out->input = static_cast<uint8_t>(input);
+  out->axis = static_cast<uint8_t>(axis);
+  out->index = MidiByteProperty(env, obj, "index", 0);
+  out->lo = sonare_node::FiniteFloatProperty(obj, "lo", 0.0f);
+  out->hi = sonare_node::FiniteFloatProperty(obj, "hi", 1.0f);
+  out->curve = sonare_node::FiniteFloatProperty(obj, "curve", 1.0f);
   return !env.IsExceptionPending();
 }
 
@@ -221,6 +266,14 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::BindMidiCcBinding>("bindMidiCcBinding"),
           InstanceMethod<&RealtimeEngineWrap::ClearMidiCcBindings>("clearMidiCcBindings"),
           InstanceMethod<&RealtimeEngineWrap::MidiCcBindingCount>("midiCcBindingCount"),
+          InstanceMethod<&RealtimeEngineWrap::SetControllerProfile>("setControllerProfile"),
+          InstanceMethod<&RealtimeEngineWrap::BindController>("bindController"),
+          InstanceMethod<&RealtimeEngineWrap::ClearControllerBindings>("clearControllerBindings"),
+          InstanceMethod<&RealtimeEngineWrap::ControllerBindingCount>("controllerBindingCount"),
+          InstanceMethod<&RealtimeEngineWrap::SetControllerVelocityMeaningful>(
+              "setControllerVelocityMeaningful"),
+          InstanceMethod<&RealtimeEngineWrap::ControllerVelocityMeaningful>(
+              "controllerVelocityMeaningful"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiFx>("setMidiFx"),
           InstanceMethod<&RealtimeEngineWrap::ClearMidiFx>("clearMidiFx"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiInputSource>("setMidiInputSource"),
@@ -1037,6 +1090,77 @@ Napi::Value RealtimeEngineWrap::MidiCcBindingCount(const Napi::CallbackInfo& inf
   size_t count = 0;
   ThrowIfError(env, sonare_engine_midi_cc_binding_count(engine_, &count));
   return Napi::Number::New(env, static_cast<double>(count));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetControllerProfile(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  if (info.Length() < 2 || !info[1].IsString()) {
+    Napi::TypeError::New(env, "setControllerProfile expects a preset name string")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string preset = info[1].As<Napi::String>().Utf8Value();
+  ThrowIfError(env, sonare_engine_set_controller_profile(engine_, destination_id, preset.c_str()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::BindController(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  SonareControllerBinding binding{};
+  if (!ReadControllerBinding(env, info.Length() > 1 ? info[1] : env.Undefined(), &binding)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_bind_controller(engine_, destination_id, &binding));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::ClearControllerBindings(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  ThrowIfError(env, sonare_engine_clear_controller_bindings(engine_, destination_id));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::ControllerBindingCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  size_t count = 0;
+  ThrowIfError(env, sonare_engine_controller_binding_count(engine_, destination_id, &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(count));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetControllerVelocityMeaningful(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  const bool meaningful = node_arg_bool(info, 1, false);
+  ThrowIfError(env, sonare_engine_set_controller_velocity_meaningful(engine_, destination_id,
+                                                                     meaningful ? 1 : 0));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::ControllerVelocityMeaningful(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  int meaningful = 0;
+  ThrowIfError(env,
+               sonare_engine_controller_velocity_meaningful(engine_, destination_id, &meaningful));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Boolean::New(env, meaningful != 0);
   SONARE_NODE_CATCH(env)
 }
 

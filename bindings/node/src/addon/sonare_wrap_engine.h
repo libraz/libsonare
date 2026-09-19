@@ -120,6 +120,12 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value BindMidiCcBinding(const Napi::CallbackInfo& info);
   Napi::Value ClearMidiCcBindings(const Napi::CallbackInfo& info);
   Napi::Value MidiCcBindingCount(const Napi::CallbackInfo& info);
+  Napi::Value SetControllerProfile(const Napi::CallbackInfo& info);
+  Napi::Value BindController(const Napi::CallbackInfo& info);
+  Napi::Value ClearControllerBindings(const Napi::CallbackInfo& info);
+  Napi::Value ControllerBindingCount(const Napi::CallbackInfo& info);
+  Napi::Value SetControllerVelocityMeaningful(const Napi::CallbackInfo& info);
+  Napi::Value ControllerVelocityMeaningful(const Napi::CallbackInfo& info);
   Napi::Value SetMidiFx(const Napi::CallbackInfo& info);
   Napi::Value ClearMidiFx(const Napi::CallbackInfo& info);
   Napi::Value SetMidiInputSource(const Napi::CallbackInfo& info);

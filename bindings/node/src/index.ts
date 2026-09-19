@@ -61,6 +61,9 @@ export type {
   ClickDetection,
   ClipDetection,
   ClipPageRequest,
+  ControllerAxis,
+  ControllerBinding,
+  ControllerInput,
   CqtResult,
   CrackleDetection,
   DeclickReport,
@@ -321,6 +324,8 @@ export type {
 } from './types.js';
 export {
   BUILTIN_SYNTH_WAVEFORMS,
+  CONTROLLER_AXES,
+  CONTROLLER_INPUTS,
   EXPECTED_PROJECT_ABI_VERSION,
   MarkerKind,
   SAMPLE_KEY_TRACKS,
