@@ -82,10 +82,11 @@ option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
 # fft.cpp derives its granularity from that same value. Enabling the option here
 # means giving the `pffft` target the flag in the same change.
 #
-# Size, built with the flag and compared against bindings/wasm/wasm-size-budget.json:
-# the full module takes +0.47% raw / +0.49% gzip and fits inside the 2% the gate
-# allows, while the analysis-only module takes +2.55% raw / +2.70% gzip and does
-# not. Turning it on therefore also means re-recording that budget.
+# Size, built with the flag: the full module takes +0.47% raw / +0.49% gzip and
+# the analysis-only module +2.55% raw / +2.70% gzip. The cost falls on the entry
+# that exists to be small, and it is more than five times what it costs the full
+# one, so the number to weigh it against is the analysis module's own size rather
+# than whatever headroom bindings/wasm/wasm-size-budget.json happens to carry.
 #
 # Speed does not carry over from the native measurement and has to be taken on
 # WebAssembly. The phase-vocoder streaming benchmark (n_fft 2048, hop 512,
@@ -95,8 +96,8 @@ option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
 # workload should gain more; none is measured here, so that is a reason to
 # re-measure rather than a number to rely on.
 #
-# -8.3% on one pipeline does not pay for a budget rebase on the entry whose
-# whole point is being small, so the WebAssembly build keeps KissFFT alone.
+# -8.3% on one pipeline does not pay for +2.55% on the entry whose whole point is
+# being small, so the WebAssembly build keeps KissFFT alone.
 if(BUILD_WASM)
   set(SONARE_PFFFT_DEFAULT OFF)
 else()
