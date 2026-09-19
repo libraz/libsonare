@@ -4,7 +4,7 @@ Contributions are welcome. Before writing code, please read the next two section
 
 ## What you are contributing to
 
-Roughly 835,000 tracked lines: a C++17 DSP core, four hand-written API surfaces over it (the C ABI, a Node N-API addon, a Python ctypes binding, a WASM embind module), a Python CLI, a native C++ CLI, and a test suite of about 5,400 cases. The core covers analysis, mastering, mixing, editing, a GM instrument bank and a DAW engine, behind nineteen `BUILD_*` options.
+Roughly 860,000 lines of hand-written code, and about as much again in tracked JSON fixtures and goldens: a C++17 DSP core, four hand-written API surfaces over it (the C ABI, a Node N-API addon, a Python ctypes binding, a WASM embind module), a Python CLI, a native C++ CLI, and a C++ suite of some 5,600 cases with the Python and TypeScript suites beside it. The core covers analysis, mastering, mixing, editing, a GM instrument bank and a DAW engine, behind nineteen `BUILD_*` options.
 
 Two consequences worth knowing up front:
 
@@ -65,7 +65,7 @@ source /path/to/emsdk/emsdk_env.sh
 make wasm
 ```
 
-A WASM build overwrites `bindings/wasm/dist/`, which every other surface's tests import, wherever its build directory lives. Use a separate `git worktree` if you need to build a deliberately modified module.
+A WASM build overwrites `bindings/wasm/dist/`, which every other surface's tests import, wherever its build directory lives. Use a separate `git worktree` if you need to build a deliberately modified module. Cut it at the same path depth as the repository and run the package's own scripts inside it: emscripten compiles its system libraries through a path relative to the build directory, so a worktree under `/tmp` fails to link for a reason that looks like your change and is not.
 
 ### Running the gates locally
 
@@ -107,7 +107,7 @@ These are the rules a reviewer will check a change against, and most of them are
 
 ### The C ABI
 
-- **An ABI version moves only when a layout that has already shipped changes — and then it must.** Do not bump to mark progress: a struct that has never appeared in a release can grow a field freely, because nothing was compiled against the old shape. A struct that HAS shipped cannot — a consumer built against the released header still holds the old size and offsets, so adding a field there is a bump, and leaving the version behind lets that consumer memcpy a struct that no longer matches and read the wrong field. Decide which case you are in by measuring rather than by how new the surface feels: `git grep -l <StructName> <last-tag> -- include/`. The versions live in several mirrors that must agree, and `make check-abi-version` verifies the hand-written ones against the C source of truth.
+- **An ABI version moves only when a layout that has already shipped changes — and then it must.** Do not bump to mark progress: a struct that has never appeared in a release can grow a field freely, because nothing was compiled against the old shape. A struct that HAS shipped cannot — a consumer built against the released header still holds the old size and offsets, so adding a field there is a bump, and leaving the version behind lets that consumer memcpy a struct that no longer matches and read the wrong field. Decide which case you are in by measuring rather than by how new the surface feels: `git grep -l <StructName> <last-tag> -- include/`. There are five counters, not one, and the versions live in several mirrors that must agree; `make check-abi-version` verifies the hand-written ones against the C source of truth. One mirror sits outside that check — `src/arrangement/edit_compiler.h` is pinned by a `static_assert` instead, so a bump missed there arrives as a compile error partway through a build rather than as a named mismatch.
 - **ctypes has no `static_assert`.** The C side guards its struct layouts; the Python mirror does not, so changing a C struct field without updating the matching `ctypes.Structure` segfaults pytest instead of failing a test. Run `make abi-layout` and commit the regenerated snapshot in the same change.
 - **Adding a translation unit under `src/c_api/` means editing several source lists, and which ones depends on the unit.** Copy the row of the closest existing sibling rather than assuming a fixed set.
 - **Moving a C-ABI translation unit between library targets can delete an exported function from the shared library while everything still builds and passes.** It surfaces late, as a `dlsym` failure in the parity run. Check `nm -gU` on the built shared library after any such move.
@@ -119,7 +119,7 @@ These are the rules a reviewer will check a change against, and most of them are
 
 ### Build options
 
-- **Feature-gate breakage appears only in a build, never in a test.** `make build-feature-matrix` compiles each option off on its own plus one all-off row. The all-off row is not redundant: a gated symbol can stay reachable through a second enabled feature. No CI job configures a feature-off build, so run this after touching a source list or adding a translation unit outside a gate.
+- **Feature-gate breakage appears only in a build, never in a test.** `make build-feature-matrix` compiles each option off on its own plus one all-off row. The all-off row is not redundant: a gated symbol can stay reachable through a second enabled feature. No CI job configures a feature-off build, so run this after touching a source list or adding a translation unit outside a gate. **The target currently stops partway and cannot report success**, because `BUILD_PITCH_EDITOR=OFF` is a configure error while `BUILD_VOICE_CHANGER` defaults on and requires it, and the recipe aborts there — so the rows after that one, including the all-off row, do not run. Until it is fixed, compile a single gate-off branch by hand: take the translation unit's command out of `build/compile_commands.json`, drop the `-D` for the option you want off, and send `-o` to a scratch path.
 - **A new library target must be named in the export list at the foot of `src/CMakeLists.txt`**, or it builds and links in tree and is silently missing from `find_package`.
 - **Eigen is compiled with `EIGEN_MPL2_ONLY`.** A handful of headers under `unsupported/` are LGPL rather than MPL-2.0, and libsonare ships Apache-2.0 with no copyleft in any distributed artifact, so including one fails the build with `Including non-MPL2 code in EIGEN_MPL2_ONLY mode`. That error means the header has to go, not the definition.
 
