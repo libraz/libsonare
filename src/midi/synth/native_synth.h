@@ -30,6 +30,7 @@
 #include <memory>
 #include <vector>
 
+#include "midi/controller_profile.h"
 #include "midi/instrument.h"
 #include "midi/synth/additive_voice.h"
 #include "midi/synth/body_resonator.h"
@@ -482,6 +483,11 @@ size_t native_synth_param_count() noexcept;
 /// JSON-key name at @p index in [0, native_synth_param_count()), or nullptr.
 const char* native_synth_param_name_at(size_t index) noexcept;
 
+/// The "gm" controller preset: CC2 on the force axis, CC74 on the second one,
+/// note-on velocity meaningful. What the synth answered before a profile layer
+/// existed, so a host that sets none keeps its sound.
+ControllerProfile default_controller_profile() noexcept;
+
 /// Standalone patch-driven MidiInstrument: all 16 channels play the same
 /// patch with BuiltinSynth-compatible channel semantics plus the default-
 /// modulator CCs (CC1 vibrato, CC7/CC11 gain, CC10 pan, pitch bend, CC64
@@ -526,6 +532,13 @@ class NativeSynth final : public MidiInstrument {
   /// Currently sounding voices (test/diagnostic).
   int active_voice_count() const noexcept { return pool_.active_count(); }
 
+  /// The device spelling the synth reads its expression axes through. Replacing
+  /// it clears every channel's axis values: the new profile's bindings say
+  /// nothing about what the old ones had reached, and carrying them over would
+  /// leave an axis held at a value no binding can now move.
+  void set_controller_profile(const ControllerProfile& profile) noexcept;
+  const ControllerProfile& controller_profile() const noexcept { return controller_profile_; }
+
  private:
   struct ChannelState {
     bool sustain = false;       // CC64 >= 64 (dampers lifted)
@@ -560,20 +573,13 @@ class NativeSynth final : public MidiInstrument {
     uint8_t bank_msb = 0;
     uint8_t bank_lsb = 0;
     uint16_t pitch_bend = 8192;
-    /// Excitation-axis controllers (255 = untouched, so the preset's own
-    /// voicing stands until the host sends the CC). CC2 breath reaches the force
-    /// axis — bow force, mouth pressure, bellows pressure, jet drive — and CC74
-    /// reaches the second axis, which is bow position on a bowed string and
-    /// radiating brightness everywhere else. One pair rather than one per
-    /// engine: the two CCs always carried the same value into all of them, and
-    /// which axis an engine reads is engine_axis_capability()'s to say.
-    ///
-    /// Loudness is deliberately not here — it is the shared expression VCA,
-    /// because pushing the breath toward the beating / buzzing / overblow
-    /// threshold would silence the exciter rather than soften it. CC11 does
-    /// additionally scale bow speed, which on a bowed string IS the loudness.
-    uint8_t excitation_force = 255;
-    uint8_t excitation_bright = 255;
+    /// Expression axes as the channel's ControllerProfile has resolved them.
+    /// Which controller reaches which axis is the profile's to say, and which
+    /// axis an engine reads is engine_axis_capability()'s; nothing between them
+    /// names a CC number. An axis no binding has reached is absent rather than
+    /// zero, so the patch's own voicing, the channel's own pitch and a unit gain
+    /// all stand until a controller actually arrives.
+    ControllerAxisState axes;
     ChannelParamState params;
     float bend_range_cents = 200.0f;
     /// MODULATION LFO1 PITCH DEPTH (40 2x 04), the depth CC1 reaches at full.
@@ -595,16 +601,22 @@ class NativeSynth final : public MidiInstrument {
   void all_sound_off(uint8_t channel) noexcept;
   /// Recharges the channel's drawbar-organ percussion if no key is still held.
   void recharge_percussion(uint8_t channel) noexcept;
-  /// The channel's excitation-axis controllers as an axis set; @p present comes
-  /// back naming the axes the host has actually sent.
-  static ExcitationAxes channel_excitation(const ChannelState& st, uint32_t& present) noexcept;
-  /// Pushes the channel's live excitation controllers (CC2 force, CC74 the
-  /// second axis, CC11 bow speed) to its sounding voices.
+  /// The channel's expression axes as an engine axis set; @p present comes back
+  /// naming the axes a controller has actually reached.
+  static ExcitationAxes channel_excitation(const ControllerAxisState& axes,
+                                           uint32_t& present) noexcept;
+  /// Resolves @p ump through the controller profile and applies whatever axis
+  /// values it produced. Runs before the protocol dispatch, so a note-on whose
+  /// velocity is bound to an axis starts from its own value.
+  void apply_controller_input(const Ump& ump) noexcept;
+  /// Pushes the channel's live excitation axes (and CC11 bow speed) to its
+  /// sounding voices.
   void push_excitation_control(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
 
   NativeSynthConfig config_{};
+  ControllerProfile controller_profile_ = default_controller_profile();
   double sample_rate_ = 0.0;
   bool prepared_ = false;
   int64_t tail_samples_ = 0;

@@ -470,6 +470,7 @@ if(BUILD_ARRANGEMENT)
     midi/native_synth_test.cpp
     midi/gm_program_golden_test.cpp
     midi/excitation_axis_test.cpp
+    midi/controller_profile_test.cpp
     midi/filter_models_test.cpp
     midi/mod_matrix_test.cpp
     midi/fm_voice_test.cpp

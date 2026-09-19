@@ -232,11 +232,28 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   mod.aftertouch01 = static_cast<float>(st.pressure) / 127.0f;
   mod.expression01 = static_cast<float>(st.expression) / 127.0f;
   mod.pitch_bend01 = (static_cast<float>(st.pitch_bend) - 8192.0f) / 8192.0f;
+  // The three axes that land on the channel rather than inside an engine. Each
+  // is folded only when a binding has reached it, so a profile that names none
+  // leaves this arithmetic untouched rather than multiplying by an identity.
+  if (st.axes.has(ControllerAxis::kLoudness)) {
+    mod.gain *= st.axes.values[static_cast<size_t>(ControllerAxis::kLoudness)];
+  }
+  if (st.axes.has(ControllerAxis::kPitchCents)) {
+    mod.pitch_cents += st.axes.values[static_cast<size_t>(ControllerAxis::kPitchCents)];
+  }
+  if (st.axes.has(ControllerAxis::kVibratoDepth)) {
+    mod.extra_vibrato_cents += st.axes.values[static_cast<size_t>(ControllerAxis::kVibratoDepth)];
+  }
 }
 
 void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                           uint32_t source_track_id) noexcept {
   if (!prepared_) return;
+  // A profile that calls velocity meaningless takes every note at full scale,
+  // so the bound axes carry the dynamics on their own. 127 rather than some
+  // mid value because it is the scale's identity: nothing is attenuated here
+  // that a controller is not asking for.
+  if (!controller_profile_.velocity_meaningful) velocity = 127;
   const uint8_t ch = channel & 0x0Fu;
   // Generic MIDI rendering resolves every channel through the shared GM/GS bank
   // rule, so a rhythm part (channel 10, a GM2 percussion bank, or a GS-assigned
@@ -341,7 +358,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   }
   {
     uint32_t present = kAxisNone;
-    const ExcitationAxes base = channel_excitation(st, present);
+    const ExcitationAxes base = channel_excitation(st.axes, present);
     voice->seed_excitation(base, present);
   }
   // Bus-level piano body (the direct-share attenuation, the modal soundboard
@@ -516,8 +533,7 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   for (NativeSynthVoice& v : pool_) {
     if (v.channel == ch) v.poly_pressure01 = 0.0f;
   }
-  st.excitation_force = 255;
-  st.excitation_bright = 255;
+  st.axes.reset();
   st.params.reset();
   sustain_cc(ch, 0);
   sostenuto_pedal(ch, false);
@@ -546,10 +562,10 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       refresh_channel_mod(ch);
       break;
     case 2:
-      st.breath = value;            // the generic axis every engine can route from
-      st.excitation_force = value;  // breath -> the engines' own force axis
+      // The matrix source. Which axis CC2 additionally reaches, if any, is the
+      // controller profile's to say and is applied before this switch runs.
+      st.breath = value;
       refresh_channel_mod(ch);
-      push_excitation_control(ch);
       break;
     case 11:
       st.expression = value;
@@ -560,12 +576,6 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       break;
     case 32:
       st.bank_lsb = value;
-      break;
-    case 74:
-      // brightness/SC5 -> the engines' own second axis (bow position on a bowed
-      // string, radiating brightness everywhere else)
-      st.excitation_bright = value;
-      push_excitation_control(ch);
       break;
     case 6:
       if (st.params.selected_rpn(0, 0)) {
@@ -626,6 +636,9 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
       u.message_type() != UmpMessageType::kMidi2ChannelVoice) {
     return;
   }
+  // The profile runs first so a note-on whose velocity is bound to an axis
+  // starts from its own value rather than from the previous note's.
+  apply_controller_input(u);
   if (u.is_note_on()) {
     const uint8_t vel7 =
         u.message_type() == UmpMessageType::kMidi1ChannelVoice

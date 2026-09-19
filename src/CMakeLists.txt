@@ -783,6 +783,7 @@ if(BUILD_ARRANGEMENT)
     midi/sound_destination.cpp
     midi/routing.cpp
     midi/cc_map.cpp
+    midi/controller_profile.cpp
     midi/clock_sync.cpp
     midi/capture.cpp
     midi/builtin_synth.cpp
