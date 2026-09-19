@@ -8,6 +8,7 @@
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
+       voicematch-substitution voicematch-substitution-all voicematch-determinism \
        spec-liveness spec-liveness-census spec-liveness-census-check \
        excerpts excerpts-check test-voicematch \
        check-c-api-out-param-init check-c-api-pointer-contracts check-c-api-header-self-contained \
@@ -680,6 +681,31 @@ voice-status-all:
 voice-readiness:
 	@$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/profile.py \
 		status --all
+
+# What a gate does NOT say. Its bounds come from whatever the voice measured on
+# the day, so passing them means "no worse than when this was written"; feeding
+# another instrument's reference rows through the same comparison counts how
+# many of those bounds are not identifying the instrument at all. Reads only the
+# committed captures, profiles and gates — no render, no build, seconds — and it
+# exits 0 whatever it finds, for the same reason `voice-status` does: a target
+# that failed on "a gate is loose" could not be read to decide which to
+# re-record. Deliberately outside `ci-local` and outside CI.
+voicematch-substitution:
+	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+		tools/voicematch/substitution.py
+
+# The same over every grid two or more captures share, not only the largest.
+voicematch-substitution-all:
+	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+		tools/voicematch/substitution.py --all-grids
+
+# Whether a repeated note comes back as the same waveform, one program per
+# engine. Renders, so it needs the Python dylib current — `render_model` warns
+# when it is not. Exits 0 whatever it finds, and stays out of CI: a voice that
+# repeats itself is a voicing finding rather than a build failure.
+voicematch-determinism:
+	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+		tools/voicematch/determinism_check.py
 
 # Regenerate the bank view. Needs the tuning build, because the engine voicing
 # each patch is reported by the library rather than parsed out of it — the same
