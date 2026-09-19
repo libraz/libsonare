@@ -142,6 +142,7 @@ export const READER_FAMILIES: Readonly<
     objectProperty: 'out-of-scope',
     optionAt: 'out-of-scope',
     repairOptionValue: 'out-of-scope',
+    requiredEnumProperty: 'out-of-scope',
     requireNumberProperty: 'out-of-scope',
   },
 };
