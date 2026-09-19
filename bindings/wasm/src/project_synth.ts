@@ -21,6 +21,16 @@ export function synthPresetNames(): string[] {
 }
 
 /**
+ * Controller-profile preset names (`'gm'`, `'breath'`, `'breath-aftertouch'`,
+ * `'mpe'`). These are the names {@link RealtimeEngine.setControllerProfile}
+ * accepts; an unknown one throws rather than resolving to a default.
+ */
+export function controllerProfileNames(): string[] {
+  // Array.from re-roots embind's vector as a plain, structured-cloneable Array.
+  return Array.from(projectModule().controllerProfileNames());
+}
+
+/**
  * Fetch a named catalog preset as a {@link SynthPatch} (the preset name plus
  * the wrapper-section values), so hosts can inspect a preset and tweak fields
  * before binding it. A `"va:"` routing prefix is accepted; unknown names

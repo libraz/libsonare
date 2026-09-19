@@ -7,6 +7,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   BUILTIN_SYNTH_WAVEFORMS,
+  CONTROLLER_AXES,
+  CONTROLLER_INPUTS,
   init,
   Project,
   RealtimeEngine,
@@ -94,6 +96,8 @@ describe('Sonare WASM NativeSynth', () => {
       bodyTypes: [...SYNTH_BODY_TYPES],
       modSources: [...SYNTH_MOD_SOURCES],
       modDestinations: [...SYNTH_MOD_DESTINATIONS],
+      controllerInputs: [...CONTROLLER_INPUTS],
+      controllerAxes: [...CONTROLLER_AXES],
     });
 
     for (const [ordinal, name] of SYNTH_ENGINE_MODES.entries()) {

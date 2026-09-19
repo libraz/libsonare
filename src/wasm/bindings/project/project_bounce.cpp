@@ -10,6 +10,8 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
+#include "midi/controller_profile.h"
+
 namespace {
 
 /// Live sample banks by id. A bounce binding names a bank by the id its handle
@@ -450,6 +452,20 @@ val js_synth_preset_patch(const std::string& name) {
                                   "unknown synth preset name: '" + name + "'");
   }
   return sonare_wasm_synth::synthPatchToVal(patch);
+}
+
+// Controller-profile preset catalog as a JS string[]. Read from the core rather
+// than from sonare_controller_profile_names: the controller C-ABI translation
+// unit is not linked into this module, so the profile class is the source here
+// exactly as it is for the realtime-engine controller entries.
+val js_controller_profile_names() {
+  val out = val::array();
+  for (size_t i = 0; i < sonare::midi::ControllerProfile::preset_count(); ++i) {
+    const char* name = sonare::midi::ControllerProfile::preset_name_at(i);
+    if (name == nullptr) break;
+    out.call<void>("push", std::string(name));
+  }
+  return out;
 }
 
 val js_synth_enum_tables() { return sonare_wasm_synth::synthEnumTablesToVal(); }

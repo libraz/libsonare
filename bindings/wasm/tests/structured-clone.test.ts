@@ -9,6 +9,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   analyzeSections,
+  controllerProfileNames,
   detectKeyCandidates,
   init,
   masteringInsertParamNames,
@@ -78,6 +79,7 @@ describe('structured-clone safety of embind-marshalled returns', () => {
       ['masteringInsertParamNames', () => masteringInsertParamNames(masteringProcessorNames()[0])],
       ['mixingScenePresetNames', () => mixingScenePresetNames()],
       ['synthPresetNames', () => synthPresetNames()],
+      ['controllerProfileNames', () => controllerProfileNames()],
       ['realtimeVoiceChangerPresetNames', () => realtimeVoiceChangerPresetNames()],
     ];
 

@@ -1,7 +1,7 @@
 import { panLawCode, panModeCode, sendTimingCode, trackMonitorModeCode } from './codes';
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
-import type { ProjectMidiCcBinding, SynthPatch } from './project';
+import type { ControllerBinding, ProjectMidiCcBinding, SynthPatch } from './project';
 import { normalizeSynthInstrument } from './project_internal';
 import type { EqBand, PanLawInput, PanMode, SendTiming } from './public_types';
 import type {
@@ -398,6 +398,49 @@ export class RealtimeEngine {
 
   midiCcBindingCount(): number {
     return this.native.midiCcBindingCount();
+  }
+
+  /**
+   * Replace a destination instrument's controller profile with a named preset
+   * (see {@link controllerProfileNames}). Installing a profile drops every
+   * channel's accumulated axis values: the new bindings say nothing about what
+   * the old ones had reached. An unknown name throws, and so does a destination
+   * with no instrument or one whose instrument holds no profile.
+   */
+  setControllerProfile(destinationId: number, presetName: string): void {
+    this.native.setControllerProfile(destinationId, presetName);
+  }
+
+  /** Add one {@link ControllerBinding} on top of the destination's current profile. */
+  bindController(destinationId: number, binding: ControllerBinding): void {
+    this.native.bindController(destinationId, binding);
+  }
+
+  /**
+   * Drop every binding of the destination's controller profile. The instrument
+   * keeps a profile; it resolves nothing until something is bound again.
+   */
+  clearControllerBindings(destinationId: number): void {
+    this.native.clearControllerBindings(destinationId);
+  }
+
+  controllerBindingCount(destinationId: number): number {
+    return this.native.controllerBindingCount(destinationId);
+  }
+
+  /**
+   * Whether note-on velocity is expression for this instrument. No fixed
+   * default is possible — a wind controller ships sending breath-derived
+   * velocity on one model and a constant on the next — so each preset states it
+   * and a host building its own profile sets it. When false the synth takes
+   * every note at full scale and the bound axes carry the dynamics alone.
+   */
+  setControllerVelocityMeaningful(destinationId: number, meaningful: boolean): void {
+    this.native.setControllerVelocityMeaningful(destinationId, meaningful);
+  }
+
+  controllerVelocityMeaningful(destinationId: number): boolean {
+    return this.native.controllerVelocityMeaningful(destinationId);
   }
 
   /** Install/replace a live non-destructive MIDI-FX insert for one destination. */

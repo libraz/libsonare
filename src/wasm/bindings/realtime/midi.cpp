@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -11,6 +12,7 @@
 #include "c_api/midi_fx_json.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"
+#include "midi/controller_profile.h"
 #include "midi/midi_fx.h"
 #include "realtime_engine_wasm.h"
 #include "util/zero_is_default.h"
@@ -33,6 +35,61 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
                                   "invalid MIDI-FX configuration");
   }
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+
+// The destination's current profile. WASM does not link the controller C-ABI
+// unit, so sonare_c_engine_controller.cpp's two failures are reproduced here:
+// InvalidParameter for a destination nothing is bound to, NotImplemented (the
+// C ABI's NOT_SUPPORTED) for a bound instrument that holds no profile.
+sonare::midi::ControllerProfile wasmControllerProfile(const sonare::engine::RealtimeEngine& engine,
+                                                      uint32_t destination_id) {
+  sonare::midi::MidiInstrument* instrument = engine.midi_instrument(destination_id);
+  if (instrument == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "no MIDI instrument is bound to this destination");
+  }
+  const sonare::midi::ControllerProfile* profile = instrument->controller_profile();
+  if (profile == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                  "the bound instrument holds no controller profile");
+  }
+  return *profile;
+}
+
+// Installs a profile back onto the destination. Every entry reads, changes one
+// thing and installs, so the rule that installing drops the channels'
+// accumulated axis values holds however the profile was reached.
+void wasmInstallControllerProfile(const sonare::engine::RealtimeEngine& engine,
+                                  uint32_t destination_id,
+                                  const sonare::midi::ControllerProfile& profile) {
+  sonare::midi::MidiInstrument* instrument = engine.midi_instrument(destination_id);
+  if (instrument == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "no MIDI instrument is bound to this destination");
+  }
+  if (!instrument->set_controller_profile(profile)) {
+    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                  "the bound instrument declined a controller profile");
+  }
+}
+
+// Reads a required controller enum field. Absence is refused rather than
+// defaulted: ordinal 0 is a working value on both enums (`control-change`,
+// `none`), so a caller who omitted the key would get a binding they did not ask
+// for instead of an error.
+int wasmRequiredControllerEnum(val object, const char* key, const char* const* names, int count,
+                               const char* what) {
+  if (!hasProperty(object, key)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string("controller binding requires ") + key);
+  }
+  int ordinal = 0;
+  sonare_wasm_synth::enumProperty(object, key, names, count, what, &ordinal);
+  return ordinal;
+}
+
+#endif  // SONARE_WITH_ARRANGEMENT
 
 }  // namespace
 
@@ -405,6 +462,144 @@ size_t RealtimeEngineWasm::midiCcBindingCount() const {
   return engine_.midi_cc_binding_count();
 #else
   return 0;
+#endif
+}
+
+// Replaces the destination instrument's controller profile with a named preset
+// (controllerProfileNames lists them). Mirrors the C ABI
+// sonare_engine_set_controller_profile: the name is validated before the engine
+// is touched, so an unknown preset reads as a bad argument whether or not the
+// destination has an instrument, and is never resolved to a default -- a
+// default that silently replaced the device's spelling would still play, just
+// not the gestures that were sent.
+void RealtimeEngineWasm::setControllerProfile(const val& destination_id_val,
+                                              const std::string& preset_name) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  sonare::midi::ControllerProfile profile;
+  if (!sonare::midi::ControllerProfile::preset(preset_name, &profile)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown controller profile preset: '" + preset_name + "'");
+  }
+  wasmInstallControllerProfile(engine_, destination_id, profile);
+#else
+  (void)destination_id_val;
+  (void)preset_name;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
+// Adds one binding on top of the destination instrument's current profile.
+// `binding` is { input, index?, axis, lo?, hi?, curve? }; input and axis are the
+// canonical enum names (or their ordinals). Mirrors
+// sonare_engine_bind_controller, including which refusals come before the
+// destination is looked up.
+void RealtimeEngineWasm::bindController(const val& destination_id_val, val binding) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  sonare::midi::ControllerBinding entry;
+  // Ordinals out of range are refused rather than clamped: a value the caller
+  // meant as "poly pressure" arriving as "control change" is a binding that
+  // works and listens to the wrong thing.
+  entry.input = static_cast<sonare::midi::ControllerInput>(
+      wasmRequiredControllerEnum(binding, "input", sonare_wasm_synth::kControllerInputs,
+                                 SONARE_CONTROLLER_INPUT_COUNT, "controller input"));
+  entry.axis = static_cast<sonare::midi::ControllerAxis>(
+      wasmRequiredControllerEnum(binding, "axis", sonare_wasm_synth::kControllerAxes,
+                                 SONARE_CONTROLLER_AXIS_COUNT, "controller axis"));
+  const int index = typedIntProperty(binding, "index", 0);
+  requireOrdinalInRange(index, 0, 127, "controller binding index");
+  entry.index = static_cast<uint8_t>(index);
+  const float lo = typedFloatProperty(binding, "lo", 0.0f);
+  const float hi = typedFloatProperty(binding, "hi", 1.0f);
+  const float curve = typedFloatProperty(binding, "curve", 1.0f);
+
+  sonare::midi::ControllerProfile profile = wasmControllerProfile(engine_, destination_id);
+  // A non-finite range or curve would reach the audio thread and stay there, so
+  // it is refused here rather than substituted: a mapping silently replaced by a
+  // default is a mapping the caller believes it installed.
+  if (!std::isfinite(lo) || !std::isfinite(hi)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "binding range must be finite");
+  }
+  if (!std::isfinite(curve) || curve <= 0.0f) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "binding curve must be finite and positive");
+  }
+  entry.lo = lo;
+  entry.hi = hi;
+  entry.curve = curve;
+
+  if (!profile.bind(entry)) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "controller binding refused: the table is full, the axis is none, or a poly-pressure "
+        "binding named a channel-level axis");
+  }
+  wasmInstallControllerProfile(engine_, destination_id, profile);
+#else
+  (void)destination_id_val;
+  (void)binding;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
+// Drops every binding of the destination instrument's controller profile. The
+// instrument keeps a profile; it resolves nothing until something is bound
+// again.
+void RealtimeEngineWasm::clearControllerBindings(const val& destination_id_val) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  sonare::midi::ControllerProfile profile = wasmControllerProfile(engine_, destination_id);
+  profile.clear();
+  wasmInstallControllerProfile(engine_, destination_id, profile);
+#else
+  (void)destination_id_val;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
+size_t RealtimeEngineWasm::controllerBindingCount(const val& destination_id_val) const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  return wasmControllerProfile(engine_, destination_id).binding_count();
+#else
+  (void)destination_id_val;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
+// Whether note-on velocity is expression for this instrument. No fixed default
+// is possible -- a wind controller ships sending breath-derived velocity on one
+// model and a constant on the next -- so each preset states it and a host
+// building its own profile sets it.
+void RealtimeEngineWasm::setControllerVelocityMeaningful(const val& destination_id_val,
+                                                         bool meaningful) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  sonare::midi::ControllerProfile profile = wasmControllerProfile(engine_, destination_id);
+  profile.velocity_meaningful = meaningful;
+  wasmInstallControllerProfile(engine_, destination_id, profile);
+#else
+  (void)destination_id_val;
+  (void)meaningful;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
+bool RealtimeEngineWasm::controllerVelocityMeaningful(const val& destination_id_val) const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  return wasmControllerProfile(engine_, destination_id).velocity_meaningful;
+#else
+  (void)destination_id_val;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
 #endif
 }
 
@@ -856,6 +1051,16 @@ void registerRealtimeEngineMidi(class_<RealtimeEngineWasm>& cls) {
       .function("bindMidiCcBinding", &RealtimeEngineWasm::bindMidiCcBinding)
       .function("clearMidiCcBindings", &RealtimeEngineWasm::clearMidiCcBindings)
       .function("midiCcBindingCount", &RealtimeEngineWasm::midiCcBindingCount)
+      // destinationId first, matching the C ABI's own argument order minus the
+      // engine handle -- stated because embind argument order on this surface
+      // has historically diverged from the siblings rather than followed them.
+      .function("setControllerProfile", &RealtimeEngineWasm::setControllerProfile)
+      .function("bindController", &RealtimeEngineWasm::bindController)
+      .function("clearControllerBindings", &RealtimeEngineWasm::clearControllerBindings)
+      .function("controllerBindingCount", &RealtimeEngineWasm::controllerBindingCount)
+      .function("setControllerVelocityMeaningful",
+                &RealtimeEngineWasm::setControllerVelocityMeaningful)
+      .function("controllerVelocityMeaningful", &RealtimeEngineWasm::controllerVelocityMeaningful)
       .function("setMidiFx", &RealtimeEngineWasm::setMidiFx)
       .function("clearMidiFx", &RealtimeEngineWasm::clearMidiFx)
       .function("setMidiInputSource", &RealtimeEngineWasm::setMidiInputSource)

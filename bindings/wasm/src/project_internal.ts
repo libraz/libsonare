@@ -284,6 +284,7 @@ export interface ProjectModule {
   projectAbiVersion: () => number;
   synthPresetNames: () => string[];
   synthPresetPatch: (name: string) => SynthPatch;
+  controllerProfileNames: () => string[];
   _synthEnumTables: () => SynthEnumTables;
   _synthPatchRoundTrip: (patch: SynthPatch) => SynthPatch;
   midiGmInstrumentName: (program: number) => string | null;

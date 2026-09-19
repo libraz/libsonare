@@ -2,6 +2,9 @@ export type {
   BuiltinSynthBinding,
   BuiltinSynthConfig,
   BuiltinSynthWaveform,
+  ControllerAxis,
+  ControllerBinding,
+  ControllerInput,
   SampleDesc,
   SampleDescLoopMode,
   SampleKeyTrack,
@@ -23,6 +26,8 @@ export type {
 } from './instrument_types';
 export {
   BUILTIN_SYNTH_WAVEFORMS,
+  CONTROLLER_AXES,
+  CONTROLLER_INPUTS,
   SAMPLE_KEY_TRACKS,
   SAMPLE_LOOP_MODES,
   SYNTH_BODY_TYPES,
@@ -35,6 +40,7 @@ export {
 } from './instrument_types';
 export { Project } from './project_class';
 export {
+  controllerProfileNames,
   projectAbiVersion,
   synthEnumTables,
   synthPatchRoundTripForTest,

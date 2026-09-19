@@ -384,6 +384,9 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate, 
 // NativeSynth preset / enum free functions (bodies in project_bounce.cpp).
 val js_synth_preset_names();
 val js_synth_preset_patch(const std::string& name);
+// Controller-profile preset names (body in project_bounce.cpp), the catalogue
+// RealtimeEngineWasm::setControllerProfile accepts.
+val js_controller_profile_names();
 val js_synth_enum_tables();
 val js_synth_patch_round_trip(val desc);
 

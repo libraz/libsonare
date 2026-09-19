@@ -8,6 +8,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include <emscripten/val.h>
+#include <sonare/sonare_c_engine.h>
 #include <sonare/sonare_c_project.h>
 #include <sonare/sonare_c_types.h>
 
@@ -51,6 +52,13 @@ inline constexpr const char* kModDestinations[] = {"none",
                                                    "excitation-position",
                                                    "excitation-brightness",
                                                    "spectrum-morph"};
+// Controller-profile spellings. Not synth-patch fields: they live beside the
+// tables above because this is the surface's one place an ordinal meets a name.
+inline constexpr const char* kControllerInputs[] = {"control-change", "channel-pressure",
+                                                    "poly-pressure", "pitch-bend", "velocity"};
+inline constexpr const char* kControllerAxes[] = {"none",        "excitation",   "position",
+                                                  "brightness",  "morph",        "loudness",
+                                                  "pitch-cents", "vibrato-depth"};
 
 static_assert(std::size(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "WASM SynthEngineMode table drifted from C");
@@ -70,6 +78,10 @@ static_assert(std::size(kModSources) == SONARE_SYNTH_MOD_SOURCE_COUNT,
               "WASM SynthModSource table drifted from C");
 static_assert(std::size(kModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
               "WASM SynthModDestination table drifted from C");
+static_assert(std::size(kControllerInputs) == SONARE_CONTROLLER_INPUT_COUNT,
+              "WASM ControllerInput table drifted from C");
+static_assert(std::size(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
+              "WASM ControllerAxis table drifted from C");
 
 inline emscripten::val synthEnumTablesToVal() {
   using emscripten::val;
@@ -101,6 +113,9 @@ inline emscripten::val synthEnumTablesToVal() {
   out.set("modSources", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_SOURCE)));
   out.set("modDestinations",
           array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION)));
+  out.set("controllerInputs",
+          array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_INPUT)));
+  out.set("controllerAxes", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_AXIS)));
   return out;
 }
 

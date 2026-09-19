@@ -473,6 +473,7 @@ void registerProjectFreeFunctions() {
   function("alignTakeToReference", &js_align_take_to_reference);
   function("synthPresetNames", &js_synth_preset_names);
   function("synthPresetPatch", &js_synth_preset_patch);
+  function("controllerProfileNames", &js_controller_profile_names);
   function("_synthEnumTables", &js_synth_enum_tables);
   function("_synthPatchRoundTrip", &js_synth_patch_round_trip);
 }

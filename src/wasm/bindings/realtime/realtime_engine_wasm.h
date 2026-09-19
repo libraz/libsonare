@@ -119,6 +119,13 @@ class RealtimeEngineWasm {
   void bindMidiCcBinding(emscripten::val binding);
   void clearMidiCcBindings();
   size_t midiCcBindingCount() const;
+  void setControllerProfile(const emscripten::val& destination_id_val,
+                            const std::string& preset_name);
+  void bindController(const emscripten::val& destination_id_val, emscripten::val binding);
+  void clearControllerBindings(const emscripten::val& destination_id_val);
+  size_t controllerBindingCount(const emscripten::val& destination_id_val) const;
+  void setControllerVelocityMeaningful(const emscripten::val& destination_id_val, bool meaningful);
+  bool controllerVelocityMeaningful(const emscripten::val& destination_id_val) const;
   void setMidiFx(const emscripten::val& destination_id_val, const std::string& config_json);
   void clearMidiFx(const emscripten::val& destination_id_val);
   void setMidiInputSource(const emscripten::val& destination_id_val);
