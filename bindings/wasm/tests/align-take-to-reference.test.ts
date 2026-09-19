@@ -192,12 +192,16 @@ describe('WASM alignTakeToReference', () => {
 
   it('reads a written zero as the library value, the way the C ABI defines it', () => {
     // 0 is the C ABI's "use the library value" on both fields, so a written 0 and an
-    // omitted key are one request. The other two surfaces answer that way as well,
-    // and this surface used to refuse it -- the only one of the three that did.
-    for (const options of [{ hopLength: 0 }, { binsPerOctave: 0 }, {
-      hopLength: 0,
-      binsPerOctave: 0,
-    }]) {
+    // omitted key are one request -- the same answer the other two surfaces give,
+    // which is what this case holds this surface to.
+    for (const options of [
+      { hopLength: 0 },
+      { binsPerOctave: 0 },
+      {
+        hopLength: 0,
+        binsPerOctave: 0,
+      },
+    ]) {
       const written = alignTakeToReference({ reference, take, sampleRate, ...options });
       expect(written.anchors.length).toBe(baseline.anchors.length);
       expect(written.alignment.referenceFrames).toBe(baseline.alignment.referenceFrames);
