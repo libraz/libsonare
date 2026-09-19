@@ -2633,6 +2633,103 @@
           "domain": null
         }
       ],
+      "project.align-takes": [
+        {
+          "name": "audio",
+          "type": "string",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "bins-per-octave",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-source",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "resolve-audio",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
       "project.compile": [
         {
           "name": "in",
@@ -4524,6 +4621,14 @@
       ]
     },
     "project.bounce": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active",
+      "requires": [
+        "arrangement"
+      ]
+    },
+    "project.align-takes": {
       "classification": "shared",
       "status": "active",
       "option_status": "active",
@@ -10904,6 +11009,507 @@
       "artifacts": {}
     },
     {
+      "path": "project.align-takes",
+      "options": [
+        {
+          "name": "audio",
+          "type": "string",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "bins-per-octave",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": null
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-source",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true,
+          "domain": {
+            "choices": [],
+            "minimum": 1,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "resolve-audio",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "reference_source": "integer",
+            "take_count": "integer",
+            "takes": {
+              "type": "array",
+              "min_items": 1,
+              "items": {
+                "keys": {
+                  "source_id": "integer",
+                  "warp_ref_id": "integer",
+                  "clip_count": "integer",
+                  "anchor_count": "integer",
+                  "reference_frames": "integer",
+                  "take_frames": "integer",
+                  "mean_residual_frames": "number"
+                }
+              }
+            },
+            "bytes": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "-o",
+            "{align_takes_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "aligned_project",
+          "stdout": "json"
+        },
+        {
+          "id": "success_text",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "-o",
+            "{align_takes_output}"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "none",
+          "artifact": "aligned_project",
+          "stdout": "text",
+          "stdout_contains": [
+            "Aligned 1 take(s) against source 1",
+            "source 2 -> warp map 1",
+            "anchors",
+            "mean residual"
+          ]
+        },
+        {
+          "id": "finer_hop",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "--hop-length",
+            "256",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "resolution_off_grid",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "--bins-per-octave",
+            "18",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "negative_hop",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "--hop-length",
+            "-256",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "non_integer_hop",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "--hop-length",
+            "1.5",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "reference_source_zero",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "0",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "reference_not_a_source",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "9",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "audio_assignment_malformed",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "{audio}",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "no_takes",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes_single}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "take_without_audio",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 9,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "resolve_audio_without_file_uri",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--resolve-audio",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "malformed_document",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_malformed}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 5,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "reject_missing_output",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "reject_missing_reference_source",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "reject_unlisted_frames",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "1",
+            "--frames",
+            "1",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        }
+      ],
+      "artifacts": {
+        "aligned_project": {
+          "placeholder": "align_takes_output",
+          "encoding": "utf-8",
+          "bytes_key": "bytes",
+          "sha256": "06df818b2b075ecc4feeb7a3284d47a399809f15a1ef21120aae841349e21abe"
+        }
+      }
+    },
+    {
       "path": "project.export-smf",
       "options": [
         {
@@ -14608,7 +15214,8 @@
       "sample_rate": 22050,
       "frames": 13230,
       "frequency_hz": 220.0,
-      "amplitude": 0.5
+      "amplitude": 0.5,
+      "take_frames": 9922
     },
     "melodies": {
       "reference": {
@@ -14639,7 +15246,9 @@
     "projects": {
       "clean": "{\"version\":1,\"sample_rate\":48000,\"tracks\":[],\"clips\":[]}",
       "warning": "{\"version\":1,\"sample_rate\":48000,\"tracks\":[{\"id\":1,\"name\":\"audio\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":99,\"start_ppq\":0,\"length_ppq\":1,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}]}",
-      "malformed": "{ this is not valid json "
+      "malformed": "{ this is not valid json ",
+      "takes": "{\"version\":1,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0},{\"kind\":0,\"id\":2,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]},{\"id\":2,\"name\":\"take\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0},{\"id\":2,\"track_id\":2,\"source_id\":2,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}",
+      "takes_single": "{\"version\":1,\"sample_rate\":22050,\"sources\":[{\"kind\":0,\"id\":1,\"uri\":\"\",\"channel_count\":1,\"sample_rate_hint\":22050,\"storage_handle_id\":0}],\"tracks\":[{\"id\":1,\"name\":\"reference\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":1,\"start_ppq\":0,\"length_ppq\":960,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}],\"warp_maps\":[]}"
     },
     "presets": {
       "valid": {

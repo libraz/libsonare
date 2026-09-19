@@ -91,6 +91,12 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     audio_path = directory / "contract.wav"
     _write_wav(audio_path, fixtures["audio"])
     paths["audio"] = str(audio_path)
+    # The same tone at a second length, for the commands that take two recordings
+    # of one part. Written from the audio fixture's own descriptor so the pair
+    # cannot drift apart in rate or frequency, which is what an alignment needs.
+    take_path = directory / "contract-take.wav"
+    _write_wav(take_path, {**fixtures["audio"], "frames": fixtures["audio"]["take_frames"]})
+    paths["audio_take"] = str(take_path)
     for name, text in fixtures["projects"].items():
         project_path = directory / f"project_{name}.json"
         project_path.write_text(text, encoding="utf-8")
@@ -129,6 +135,10 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     paths["morph_output"] = str(directory / "morph-output.wav")
     paths["bounce_output"] = str(directory / "bounce-output.wav")
     paths["new_project_output"] = str(directory / "new-project.json")
+    paths["align_takes_output"] = str(directory / "aligned-takes.json")
+    # A second destination, so the case that varies the chroma resolution does not
+    # overwrite the document whose bytes the case above pins.
+    paths["align_takes_finer_output"] = str(directory / "aligned-takes-finer.json")
     # The import paths read what the export paths write, so the export contracts
     # are ordered ahead of them in the manifest.
     paths["smf_output"] = str(directory / "export.mid")

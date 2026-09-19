@@ -1485,7 +1485,7 @@ def validate_manifest(manifest: Any) -> list[str]:
         audio = fixtures["audio"]
         if _exact(
             audio,
-            {"sample_rate", "frames", "frequency_hz", "amplitude"},
+            {"sample_rate", "frames", "frequency_hz", "amplitude", "take_frames"},
             "manifest.fixtures.audio",
             errors,
         ):
@@ -1493,9 +1493,21 @@ def validate_manifest(manifest: Any) -> list[str]:
                 errors.append(
                     "manifest.fixtures.audio.sample_rate: expected a positive integer"
                 )
-            if not _is_int(audio["frames"]) or audio["frames"] <= 0:
+            for key in ("frames", "take_frames"):
+                if not _is_int(audio[key]) or audio[key] <= 0:
+                    errors.append(
+                        f"manifest.fixtures.audio.{key}: expected a positive integer"
+                    )
+            # The two lengths carry the same tone and must differ: an alignment
+            # reports a frame count per side, so equal lengths would let the two
+            # front-ends swap reference for take and still compare equal.
+            if (
+                _is_int(audio["frames"])
+                and _is_int(audio["take_frames"])
+                and audio["frames"] == audio["take_frames"]
+            ):
                 errors.append(
-                    "manifest.fixtures.audio.frames: expected a positive integer"
+                    "manifest.fixtures.audio.take_frames: expected a length other than frames"
                 )
             for key in ("frequency_hz", "amplitude"):
                 if not _is_number(audio[key]):
@@ -1511,16 +1523,16 @@ def validate_manifest(manifest: Any) -> list[str]:
         projects = fixtures["projects"]
         if _exact(
             projects,
-            {"clean", "warning", "malformed"},
+            {"clean", "warning", "malformed", "takes", "takes_single"},
             "manifest.fixtures.projects",
             errors,
         ):
-            for key in ("clean", "warning", "malformed"):
+            for key in ("clean", "warning", "malformed", "takes", "takes_single"):
                 if not isinstance(projects[key], str):
                     errors.append(
                         f"manifest.fixtures.projects.{key}: expected a string"
                     )
-            for key in ("clean", "warning"):
+            for key in ("clean", "warning", "takes", "takes_single"):
                 if isinstance(projects.get(key), str):
                     try:
                         json.loads(projects[key])

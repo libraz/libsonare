@@ -966,7 +966,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "system-info", false, {});
 
 #ifdef SONARE_WITH_ARRANGEMENT
-    // Exactly ten project leaves; there is deliberately no broad `project`
+    // Exactly eleven project leaves; there is deliberately no broad `project`
     // option row. Each takes its subcommand as the one positional, so they are
     // registered through a helper rather than each restating that arity.
     const auto add_project_command = [&commands](const char* path,
@@ -990,6 +990,22 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          int_value("block-size", 0), int_value("channels", 2), int_value("instrument-latency", 0),
          optional_string("synth"), string_value("audio", false, true), flag("resolve-audio")},
         &validate_project_bounce_channels);
+    // `align-takes` reads the source FILES rather than binding PCM, so it shares
+    // `--audio` / `--resolve-audio` with `bounce` and nothing else. Its three
+    // numeric options carry the invalid-parameter class: each is a value the
+    // caller spelled correctly and the measurement then refuses, and the two
+    // resolution options mean "the library value" at 0, which is also what an
+    // absent flag sends -- so their own domain (a positive multiple of twelve)
+    // stays with the core rather than being restated here.
+    add_project_command(
+        "project.align-takes",
+        {required_path("in"), required_output(),
+         with_domain(int_value("reference-source", true),
+                     at_least(1.0, CliOptionDomainStage::Parameter)),
+         string_value("audio", false, true), flag("resolve-audio"),
+         with_domain(global_int("hop-length", 0), at_least(0.0, CliOptionDomainStage::Parameter)),
+         with_domain(int_value("bins-per-octave", 0),
+                     at_least(0.0, CliOptionDomainStage::Parameter))});
     // `project bounce` with the synth pinned on, as a top-level leaf: it takes
     // no subcommand positional, and `--synth` is a plain value rather than an
     // optional flag because the rendering always goes through NativeSynth and

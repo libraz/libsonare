@@ -538,6 +538,36 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "project.align-takes",
+      "option": "reference-source",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 1.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "project.align-takes",
+      "option": "hop-length",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "project.align-takes",
+      "option": "bins-per-octave",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "tune-to-midi",
       "option": "track",
       "rejectExit": "invalid_parameter",
@@ -820,6 +850,10 @@
     },
     {
       "command": "preemphasis",
+      "option": "output"
+    },
+    {
+      "command": "project.align-takes",
       "option": "output"
     },
     {

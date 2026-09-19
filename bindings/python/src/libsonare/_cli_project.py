@@ -8,6 +8,7 @@ import math
 import sys
 import urllib.parse
 import urllib.request
+from dataclasses import asdict, dataclass
 from typing import Any, cast
 
 from ._cli_common import (
@@ -39,6 +40,10 @@ _FILE_URI_SCHEME = "file"
 # discard the requested destination, so it is rejected instead.
 _PROJECT_NO_OUTPUT = frozenset({"abi", "compile", "synth-presets"})
 
+# The mode an aligned clip plays its warp map through. Anchors encode a rate
+# difference, and a clip left in any other mode ignores it.
+_ALIGNED_WARP_MODE = "time-stretch"
+
 
 def _load_project(path: str) -> object:
     from . import Project
@@ -47,18 +52,22 @@ def _load_project(path: str) -> object:
     return Project.from_json(data)
 
 
-def _load_project_with_diagnostics(path: str) -> object:
+def _project_from_document(document: bytes) -> object:
+    """Load already-read project bytes, publishing the CLI's malformed-document class."""
     from . import Project
 
-    data = _read_bounded(path, _MAX_PROJECT_OR_MIDI_BYTES)
     try:
-        return Project.from_json_with_diagnostics(data)
+        return Project.from_json_with_diagnostics(document)
     except ValueError as exc:
         # ``Project.from_json*`` intentionally keeps its public ValueError
         # contract.  The CLI, however, publishes the C-ABI InvalidFormat
         # class for malformed project documents, so translate only at this
         # private command boundary.
         raise SonareError(int(ErrorCode.INVALID_FORMAT), str(exc)) from exc
+
+
+def _load_project_with_diagnostics(path: str) -> object:
+    return _project_from_document(_read_bounded(path, _MAX_PROJECT_OR_MIDI_BYTES))
 
 
 def _write_project_json(project: object, path: str) -> int:
@@ -250,6 +259,181 @@ def _project_bounce(
         cast(Any, project).close()
 
 
+@dataclass(frozen=True)
+class _AlignedTake:
+    """One take's alignment, in the field order both stdout modes report."""
+
+    source_id: int
+    warp_ref_id: int
+    clip_count: int
+    anchor_count: int
+    reference_frames: int
+    take_frames: int
+    mean_residual_frames: float
+
+
+def _align_source_paths(
+    args: argparse.Namespace, uris: dict[int, str], needed: list[int]
+) -> dict[int, str]:
+    """Resolve a local file path for every source the alignment has to decode.
+
+    ``project bounce`` binds PCM to the project; this command decodes the files
+    itself, so it takes the same two options for the same purpose and keeps the
+    paths instead.
+    """
+    paths: dict[int, str] = {}
+    for assignment in list(getattr(args, "audio", None) or []):
+        source_id, path = _parse_audio_binding(assignment)
+        if source_id not in uris:
+            raise ValueError(f"--audio {assignment}: the project has no audio source {source_id}")
+        paths[source_id] = path
+    if getattr(args, "resolve_audio", False):
+        for source_id in needed:
+            if source_id in paths:
+                continue
+            uri = uris.get(source_id, "")
+            resolved = _path_from_file_uri(uri)
+            if resolved is None:
+                raise ValueError(
+                    f"source {source_id} ({uri}): --resolve-audio opens file:// URIs only; "
+                    f"pass --audio {source_id}=FILE"
+                )
+            paths[source_id] = resolved
+    missing = [source_id for source_id in needed if source_id not in paths]
+    if missing:
+        # One line per source, as `project bounce` reports it: the caller has to
+        # act on every one of them, so a document with four unbound takes must
+        # not take four runs to diagnose.
+        raise SonareError(
+            int(ErrorCode.INVALID_STATE),
+            "\n".join(
+                f"source {source_id} ({uris.get(source_id, '')}) has no audio; "
+                f"pass --audio {source_id}=FILE or --resolve-audio"
+                for source_id in missing
+            ),
+        )
+    return paths
+
+
+def _project_align_takes(args: argparse.Namespace) -> int:
+    """Warp every take in a document onto one reference source's timeline."""
+    from . import align_take_to_reference
+
+    if not args.output:
+        raise ValueError("project align-takes requires --output")
+    reference_source = int(args.reference_source)
+    if reference_source < 1:
+        raise ValueError(f"--reference-source must be >= 1, got {reference_source}")
+    if args.hop_length < 0:
+        raise ValueError(f"--hop-length must be >= 0, got {args.hop_length}")
+    if args.bins_per_octave < 0:
+        raise ValueError(f"--bins-per-octave must be >= 0, got {args.bins_per_octave}")
+
+    document = _read_bounded(args.input, _MAX_PROJECT_OR_MIDI_BYTES)
+    project = cast(Any, _project_from_document(document)).project
+    try:
+        # The clip -> source map has no C-ABI getter, so it is read from the
+        # document, which is also where the untruncated source URIs live.
+        shape = json.loads(document)
+        uris = _audio_source_uris(document)
+        clips_by_source: dict[int, list[int]] = {}
+        for clip in shape.get("clips", []):
+            clips_by_source.setdefault(int(clip.get("source_id", 0)), []).append(
+                int(clip.get("id", 0))
+            )
+        source_ids = {int(source.get("id", 0)) for source in shape.get("sources", [])}
+        if reference_source not in source_ids:
+            raise ValueError(
+                f"--reference-source {reference_source}: the project has no source "
+                f"{reference_source}"
+            )
+        if reference_source not in uris:
+            raise ValueError(
+                f"--reference-source {reference_source}: source {reference_source} is not an "
+                "audio source"
+            )
+        # A source no clip references is not a take: nothing would carry its warp
+        # map, so it is neither aligned nor required to have a path.
+        take_ids = sorted(
+            source_id
+            for source_id in clips_by_source
+            if source_id != reference_source and source_id in uris
+        )
+        if not take_ids:
+            raise ValueError(
+                "no takes to align: no clip references an audio source other than "
+                f"{reference_source}"
+            )
+        paths = _align_source_paths(args, uris, [reference_source, *take_ids])
+
+        reference_samples, reference_rate = _load_audio(paths[reference_source])
+        # Ids already in the document are never reused and never renumbered.
+        next_warp_id = max([int(entry.get("id", 0)) for entry in shape.get("warp_maps", [])] + [0])
+        aligned: list[_AlignedTake] = []
+        for source_id in take_ids:
+            take_samples, take_rate = _load_audio(paths[source_id])
+            if take_rate != reference_rate:
+                raise ValueError(
+                    f"source {source_id} is {take_rate} Hz and reference source "
+                    f"{reference_source} is {reference_rate} Hz; one chroma frame grid cannot "
+                    "span two rates"
+                )
+            anchors, alignment = align_take_to_reference(
+                reference_samples,
+                take_samples,
+                reference_rate,
+                hop_length=args.hop_length,
+                bins_per_octave=args.bins_per_octave,
+            )
+            next_warp_id += 1
+            cast(Any, project).set_warp_map(next_warp_id, anchors, name=f"take-{source_id}")
+            clip_ids = sorted(clips_by_source[source_id])
+            for clip_id in clip_ids:
+                cast(Any, project).set_clip_warp_ref(clip_id, next_warp_id)
+                # A map without a mode plays unaligned, so the mode is part of
+                # the alignment rather than left to the caller.
+                cast(Any, project).set_clip_warp_mode(clip_id, _ALIGNED_WARP_MODE)
+            aligned.append(
+                _AlignedTake(
+                    source_id=source_id,
+                    warp_ref_id=next_warp_id,
+                    clip_count=len(clip_ids),
+                    anchor_count=len(anchors),
+                    reference_frames=alignment.reference_frames,
+                    take_frames=alignment.take_frames,
+                    mean_residual_frames=alignment.mean_residual_frames,
+                )
+            )
+        bytes_written = _write_project_json(project, args.output)
+    finally:
+        cast(Any, project).close()
+
+    if args.json:
+        # Neither path is reported: both are the caller's own arguments.
+        print(
+            _strict_json_dumps(
+                {
+                    "reference_source": reference_source,
+                    "take_count": len(aligned),
+                    "takes": [asdict(take) for take in aligned],
+                    "bytes": bytes_written,
+                }
+            )
+        )
+    else:
+        print(f"Aligned {len(aligned)} take(s) against source {reference_source}")
+        for take in aligned:
+            print(
+                f"  source {take.source_id} -> warp map {take.warp_ref_id}: "
+                f"{take.anchor_count} anchors, "
+                f"{take.reference_frames}/{take.take_frames} frames, "
+                f"mean residual {take.mean_residual_frames:.3f} frames, "
+                f"{take.clip_count} clip(s)"
+            )
+        print(f"Wrote {args.output} ({bytes_written} bytes)")
+    return 0
+
+
 def cmd_project(args: argparse.Namespace) -> int:
     from . import Project, project_abi_version, synth_preset_names
 
@@ -360,6 +544,8 @@ def cmd_project(args: argparse.Namespace) -> int:
             cast(Any, project).close()
     if subcommand == "bounce":
         return _project_bounce(args)
+    if subcommand == "align-takes":
+        return _project_align_takes(args)
     if subcommand == "export-smf":
         if not args.output:
             raise ValueError("project export-smf requires --output")

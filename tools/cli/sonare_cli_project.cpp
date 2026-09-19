@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <set>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -527,6 +528,57 @@ std::map<uint32_t, std::string> project_audio_source_uris(const std::string& doc
                  uri != nullptr && uri->is_string() ? uri->as_string() : std::string());
   }
   return uris;
+}
+
+// What `project align-takes` has to read straight out of the document because
+// the C ABI exposes counts but no per-clip and no per-warp-map getter. Read the
+// same way project_audio_source_uris reads the URIs, and in one pass, since the
+// document may be as large as kMaxProjectOrMidiBytes.
+struct ProjectAlignDocumentFacts {
+  // Every source in the document, either kind, so a reference naming a MIDI
+  // source is refused differently from one naming nothing.
+  std::set<uint32_t> source_ids;
+  // Clip ids per source, ascending, which is the order the clips are visited in.
+  std::map<uint32_t, std::vector<uint32_t>> clip_ids_by_source;
+  // Highest warp-map id already in the document; the first map written takes the
+  // next id after it, so nothing already present is reused or renumbered.
+  uint32_t max_warp_map_id = 0;
+};
+
+ProjectAlignDocumentFacts project_align_document_facts(const std::string& document) {
+  ProjectAlignDocumentFacts facts;
+  const auto root = sonare::util::json::parse(document);
+  if (const auto* sources = root.find("sources"); sources != nullptr && sources->is_array()) {
+    for (const auto& source : sources->as_array()) {
+      const auto* id = source.find("id");
+      if (id != nullptr && id->is_number()) {
+        facts.source_ids.insert(static_cast<uint32_t>(id->as_number()));
+      }
+    }
+  }
+  if (const auto* clips = root.find("clips"); clips != nullptr && clips->is_array()) {
+    for (const auto& clip : clips->as_array()) {
+      const auto* id = clip.find("id");
+      const auto* source_id = clip.find("source_id");
+      if (id == nullptr || !id->is_number()) continue;
+      if (source_id == nullptr || !source_id->is_number()) continue;
+      facts.clip_ids_by_source[static_cast<uint32_t>(source_id->as_number())].push_back(
+          static_cast<uint32_t>(id->as_number()));
+    }
+  }
+  for (auto& [source_id, clip_ids] : facts.clip_ids_by_source) {
+    (void)source_id;
+    std::sort(clip_ids.begin(), clip_ids.end());
+  }
+  if (const auto* maps = root.find("warp_maps"); maps != nullptr && maps->is_array()) {
+    for (const auto& map : maps->as_array()) {
+      const auto* id = map.find("id");
+      if (id == nullptr || !id->is_number()) continue;
+      facts.max_warp_map_id =
+          std::max(facts.max_warp_map_id, static_cast<uint32_t>(id->as_number()));
+    }
+  }
+  return facts;
 }
 
 // Every audio source the loaded document has no PCM for, in the order the C ABI
@@ -1090,6 +1142,257 @@ int cmd_project_import_midi2(const CliArgs& args) {
   return 0;
 }
 
+// One take's alignment, as it was measured and as it was written into the
+// document. Collected for every take before anything is printed, so the text and
+// the `--json` branch report the same run.
+struct AlignedTake {
+  uint32_t source_id = 0;
+  uint32_t warp_ref_id = 0;
+  size_t clip_count = 0;
+  size_t anchor_count = 0;
+  int32_t reference_frames = 0;
+  int32_t take_frames = 0;
+  float mean_residual_frames = 0.0f;
+};
+
+// The local file each source the alignment decodes is read from.
+//
+// `--audio` and `--resolve-audio` mean what they mean on `project bounce`, down
+// to the refusals: what differs is that this command needs the path rather than
+// the decoded PCM, so it never binds a source. @p needed is every source the
+// alignment must decode, ascending.
+//
+// Returns 0 when every needed source has a path, and the exit code to report
+// otherwise.
+int resolve_align_source_paths(const CliArgs& args, const std::map<uint32_t, std::string>& uris,
+                               const std::vector<uint32_t>& needed,
+                               std::map<uint32_t, std::string>* out_paths) {
+  for (const auto& assignment : args.get_string_list("audio")) {
+    uint32_t source_id = 0;
+    std::string path;
+    parse_audio_binding(assignment, &source_id, &path);
+    if (uris.count(source_id) == 0) {
+      std::cerr << color::red << "Error: --audio " << assignment
+                << ": the project has no audio source " << source_id << color::reset << "\n";
+      return kExitInvalidParameter;
+    }
+    (*out_paths)[source_id] = path;
+  }
+  if (args.has("resolve-audio")) {
+    for (const uint32_t source_id : needed) {
+      if (out_paths->count(source_id) != 0) continue;
+      const auto found = uris.find(source_id);
+      const std::string uri = found != uris.end() ? found->second : std::string();
+      std::string path;
+      if (!path_from_file_uri(uri, &path)) {
+        std::cerr << color::red << "Error: source " << source_id << " (" << uri
+                  << "): --resolve-audio opens file:// URIs only; pass --audio " << source_id
+                  << "=FILE" << color::reset << "\n";
+        return kExitInvalidParameter;
+      }
+      (*out_paths)[source_id] = path;
+    }
+  }
+  // One line per source, for the reason resolve_bounce_audio_sources gives: a
+  // document with four unbound takes must not take four runs to diagnose.
+  bool missing = false;
+  for (const uint32_t source_id : needed) {
+    if (out_paths->count(source_id) != 0) continue;
+    missing = true;
+    const auto found = uris.find(source_id);
+    std::cerr << color::red << "Error: source " << source_id << " ("
+              << (found != uris.end() ? found->second : std::string())
+              << ") has no audio; pass --audio " << source_id << "=FILE or --resolve-audio"
+              << color::reset << "\n";
+  }
+  return missing ? kExitInvalidState : 0;
+}
+
+// `project align-takes --in in.json --reference-source <id> -o out.json` — align
+// every take in the document against one reference take and write the result in
+// as first-class warp maps the takes' own clips point at.
+//
+// A take is an audio source other than the reference that at least one clip
+// references; a source no clip references is not a take and needs no path. Takes
+// are processed in ascending source-id order, which is what decides the warp-map
+// ids.
+int cmd_project_align_takes(const CliArgs& args) {
+  ProjectHandle handle;
+  SonareError load_error = SONARE_OK;
+  if (!load_project_from_args(args, &handle, nullptr, &load_error))
+    return project_exit_code(load_error);
+
+  const std::string in_path = project_input_path(args);
+  std::vector<uint8_t> document_bytes;
+  if (!read_binary_file(in_path, &document_bytes)) {
+    std::cerr << color::red << "Error: cannot open project file: " << in_path << color::reset
+              << "\n";
+    return project_exit_code(SONARE_ERROR_FILE_NOT_FOUND);
+  }
+  const std::string document(document_bytes.begin(), document_bytes.end());
+  const std::map<uint32_t, std::string> uris = project_audio_source_uris(document);
+  const ProjectAlignDocumentFacts facts = project_align_document_facts(document);
+
+  const auto reference_source = static_cast<uint32_t>(args.get_int("reference-source", 0));
+  if (uris.count(reference_source) == 0) {
+    std::cerr << color::red << "Error: --reference-source " << reference_source << ": "
+              << (facts.source_ids.count(reference_source) != 0
+                      ? "that source is not an audio source"
+                      : "the project has no source with that id")
+              << color::reset << "\n";
+    return kExitInvalidParameter;
+  }
+
+  // `uris` is ordered by source id, so this is the ascending order the warp-map
+  // ids are handed out in.
+  std::vector<uint32_t> take_ids;
+  for (const auto& [source_id, uri] : uris) {
+    (void)uri;
+    if (source_id == reference_source) continue;
+    if (facts.clip_ids_by_source.count(source_id) == 0) continue;
+    take_ids.push_back(source_id);
+  }
+  // An invalid parameter rather than a success with an empty result: an aligned
+  // document with no takes in it is indistinguishable from one never aligned.
+  if (take_ids.empty()) {
+    std::cerr << color::red << "Error: no takes to align against source " << reference_source
+              << "; a take is another audio source at least one clip references" << color::reset
+              << "\n";
+    return kExitInvalidParameter;
+  }
+
+  std::vector<uint32_t> needed = take_ids;
+  needed.push_back(reference_source);
+  std::sort(needed.begin(), needed.end());
+  std::map<uint32_t, std::string> paths;
+  if (const int paths_exit = resolve_align_source_paths(args, uris, needed, &paths);
+      paths_exit != 0) {
+    return paths_exit;
+  }
+
+  // 0 is the C ABI's "use the library value" for both fields, which is what an
+  // absent option means, so neither is given a value this CLI would have to keep
+  // in step with the core's.
+  SonareTakeAlignConfig config{};
+  config.hop_length = args.get_int("hop-length", 0);
+  config.bins_per_octave = args.get_int("bins-per-octave", 0);
+
+  const auto [reference_samples, reference_rate] = load_audio(paths.at(reference_source));
+  uint32_t next_warp_id = facts.max_warp_map_id + 1;
+  std::vector<AlignedTake> aligned;
+  for (const uint32_t source_id : take_ids) {
+    const auto [take_samples, take_rate] = load_audio(paths.at(source_id));
+    // Refused before the call rather than after: one chroma frame grid cannot
+    // span two rates, and the alignment does no rate conversion.
+    if (take_rate != reference_rate) {
+      std::cerr << color::red << "Error: source " << source_id << " is " << take_rate
+                << " Hz and reference source " << reference_source << " is " << reference_rate
+                << " Hz; align-takes reads both at one rate and does not resample" << color::reset
+                << "\n";
+      return kExitInvalidParameter;
+    }
+    SonareProjectWarpAnchor* anchors = nullptr;
+    size_t anchor_count = 0;
+    SonareTakeAlignment alignment{};
+    SonareError err = sonare_align_take_to_reference(
+        reference_samples.data(), reference_samples.size(), take_samples.data(),
+        take_samples.size(), reference_rate, &config, &anchors, &anchor_count, &alignment);
+    if (err != SONARE_OK) {
+      project_report_error("align source " + std::to_string(source_id), err);
+      return project_exit_code(err);
+    }
+    // The anchors go in exactly as returned: they are already oriented for a clip
+    // whose source is the take, so reordering or rescaling them here would invert
+    // the map with nothing to report it.
+    const std::string name = "take-" + std::to_string(source_id);
+    SonareProjectWarpMapDesc desc{};
+    desc.id = next_warp_id;
+    desc.name = name.c_str();
+    desc.anchors = anchors;
+    desc.anchor_count = anchor_count;
+    err = sonare_project_set_warp_map(handle.ptr, &desc);
+    sonare_free_warp_anchors(anchors);
+    if (err != SONARE_OK) {
+      project_report_error("set warp map " + name, err);
+      return project_exit_code(err);
+    }
+    const std::vector<uint32_t>& clip_ids = facts.clip_ids_by_source.at(source_id);
+    for (const uint32_t clip_id : clip_ids) {
+      err = sonare_project_set_clip_warp_ref(handle.ptr, clip_id, next_warp_id);
+      if (err != SONARE_OK) {
+        project_report_error("set clip " + std::to_string(clip_id) + " warp ref", err);
+        return project_exit_code(err);
+      }
+      // A map without a mode plays unaligned, so the mode is part of the job
+      // rather than something left to the caller.
+      err = sonare_project_set_clip_warp_mode(handle.ptr, clip_id,
+                                              SONARE_PROJECT_WARP_MODE_TIME_STRETCH);
+      if (err != SONARE_OK) {
+        project_report_error("set clip " + std::to_string(clip_id) + " warp mode", err);
+        return project_exit_code(err);
+      }
+    }
+    AlignedTake take{};
+    take.source_id = source_id;
+    take.warp_ref_id = next_warp_id;
+    take.clip_count = clip_ids.size();
+    take.anchor_count = anchor_count;
+    take.reference_frames = alignment.reference_frames;
+    take.take_frames = alignment.take_frames;
+    take.mean_residual_frames = alignment.mean_residual_frames;
+    aligned.push_back(take);
+    ++next_warp_id;
+  }
+
+  char* json = nullptr;
+  size_t len = 0;
+  SonareError err = sonare_project_serialize(handle.ptr, &json, &len);
+  if (err != SONARE_OK) {
+    project_report_error("serialize project", err);
+    return project_exit_code(err);
+  }
+  const bool ok = write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
+  sonare_free_string(json);
+  if (!ok) {
+    return report_output_write_failure(args.output_file);
+  }
+
+  if (args.json_output) {
+    // Neither path is in the payload: both are the caller's own arguments, so
+    // echoing them reports nothing the caller did not just write.
+    JsonBuilder builder;
+    builder.begin_object()
+        .kv("reference_source", static_cast<int>(reference_source))
+        .kv("take_count", aligned.size())
+        .key("takes")
+        .begin_array();
+    for (const auto& take : aligned) {
+      builder.begin_object()
+          .kv("source_id", static_cast<int>(take.source_id))
+          .kv("warp_ref_id", static_cast<int>(take.warp_ref_id))
+          .kv("clip_count", take.clip_count)
+          .kv("anchor_count", take.anchor_count)
+          .kv("reference_frames", static_cast<int>(take.reference_frames))
+          .kv("take_frames", static_cast<int>(take.take_frames))
+          .kv("mean_residual_frames", take.mean_residual_frames)
+          .end_object();
+    }
+    builder.end_array().kv("bytes", len).end_object().print();
+  } else if (!args.quiet) {
+    std::cout << color::green << "Aligned " << aligned.size() << " take(s) against source "
+              << reference_source << "\n";
+    for (const auto& take : aligned) {
+      std::cout << "  source " << take.source_id << " -> warp map " << take.warp_ref_id << ": "
+                << take.anchor_count << " anchors, " << take.reference_frames << "/"
+                << take.take_frames << " frames, mean residual " << std::fixed
+                << std::setprecision(3) << take.mean_residual_frames << std::defaultfloat
+                << " frames, " << take.clip_count << " clip(s)\n";
+    }
+    std::cout << "Wrote " << args.output_file << " (" << len << " bytes)" << color::reset << "\n";
+  }
+  return 0;
+}
+
 // Every option a `project.*` leaf accepts that @p curated does not already
 // name, rendered the way the leaf-level help renders it. Matching on the flag
 // followed by a space or a newline keeps one option from hiding another whose
@@ -1134,6 +1437,11 @@ void print_project_usage(std::ostream& out) {
       << "                       --synth <preset> selects one fixed NativeSynth patch\n"
       << "                       SF2 and per-destination synth JSON are not exposed here; use the\n"
       << "                       project C/Node/Python/WASM APIs for SoundFont-backed bounces\n"
+      << "  align-takes          Align every take to one reference take and write the alignment\n"
+      << "                       in as warp maps (--in in.json --reference-source <id> -o "
+         "out.json)\n"
+      << "                       Needs the source files, not bound PCM: --audio <id>=<file> per\n"
+      << "                       source, or --resolve-audio for file:// URIs in the document\n"
       << "  export-smf           Export tempo map + MIDI clips to SMF (--in in.json -o out.mid)\n"
       << "  import-smf           Import an SMF into a new project (--smf in.mid -o out.json)\n"
       << "  export-midi2         Export tempo map + MIDI clips to MIDI2 Clip File (--in in.json -o "
@@ -1162,6 +1470,9 @@ void print_project_usage(std::ostream& out) {
       "                       URI reference and the core never opens one)\n"
       "  --resolve-audio      Open the file:// URIs the document's unresolved audio\n"
       "                       sources carry; any other scheme is refused by name\n"
+      "  --reference-source <id>  Audio source every take is aligned against (align-takes)\n"
+      "  --hop-length <n>     Chroma hop for the alignment (align-takes; 0 = library value)\n"
+      "  --bins-per-octave <n>  Chroma bins per octave (align-takes; 0 = library value)\n"
       "  --synth [preset]     Bare flag: GM program/channel routing + channel-10 drums\n"
       "                       Value: fixed NativeSynth preset (see synth-presets)\n"
       "                       No --sf2/--synth-json CLI wiring in this command\n"
@@ -1184,6 +1495,7 @@ int cmd_project(const CliArgs& args, const Audio&) {
   if (sub == "validate") return cmd_project_validate(args);
   if (sub == "compile") return cmd_project_compile(args);
   if (sub == "bounce") return cmd_project_bounce(args);
+  if (sub == "align-takes") return cmd_project_align_takes(args);
   if (sub == "export-smf") return cmd_project_export_smf(args);
   if (sub == "import-smf") return cmd_project_import_smf(args);
   if (sub == "export-midi2") return cmd_project_export_midi2(args);

@@ -1674,6 +1674,62 @@ def _build_parser() -> _ContractArgumentParser:
             "no --sf2 or --synth-json CLI wiring"
         ),
     )
+    palign = project_sub.add_parser(
+        "align-takes",
+        parents=[project_common],
+        help="Align every take in a project against one reference source",
+    )
+    palign.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    # The value domains stay out of argparse: `type=` / `choices=` would report
+    # them as usage errors, and each one is an invalid parameter.
+    _cli_domain(
+        palign.add_argument(
+            "--reference-source",
+            type=int,
+            required=True,
+            help="Audio source id whose timeline every take is aligned to",
+        ),
+        minimum=1,
+        reject_exit="invalid_parameter",
+    )
+    palign.add_argument(
+        "--audio",
+        action="append",
+        default=[],
+        metavar="SOURCE_ID=WAV",
+        help=(
+            "Supply the file one of the project's audio sources reads from (repeat once "
+            "per source); project JSON carries a URI reference only, so a document's "
+            "takes cannot be decoded until their files are named"
+        ),
+    )
+    palign.add_argument(
+        "--resolve-audio",
+        action="store_true",
+        help="Read the file:// URIs the document's audio sources already carry",
+    )
+    # 0 asks for the library value on both, so only a negative is refused here;
+    # the resolution's own grid is the core's to enforce.
+    _cli_domain(
+        palign.add_argument(
+            "--hop-length",
+            type=int,
+            default=0,
+            help="Chroma hop in samples (0: the library value)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        palign.add_argument(
+            "--bins-per-octave",
+            type=int,
+            default=0,
+            help="Chroma bins per octave (0: the library value)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
     pexport_smf = project_sub.add_parser("export-smf", parents=[project_common], help="Export SMF")
     pexport_smf.add_argument("--in", dest="input", required=True, help="Input project JSON")
     pimport_smf = project_sub.add_parser("import-smf", parents=[project_common], help="Import SMF")

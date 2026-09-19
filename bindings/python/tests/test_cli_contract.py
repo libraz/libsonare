@@ -141,6 +141,7 @@ PROJECT_ROUTES = (
     "validate",
     "compile",
     "bounce",
+    "align-takes",
     "export-smf",
     "import-smf",
     "export-midi2",
