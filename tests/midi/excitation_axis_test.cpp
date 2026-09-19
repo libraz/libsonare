@@ -10,11 +10,14 @@
 /// times differ per patch, the approach is asymptotic so "past decay_ms" is not
 /// "arrived", and the drift and unison beating keep moving inside the window.
 ///
-/// Three walls, and a claim needs all three: the control-subtracted difference
-/// must carry real energy (a pair of silent renders subtracts to a perfect zero
-/// and would otherwise pass every ratio test), the spectrum must move rather
-/// than only the gain, and the level must move in the direction the engine
-/// declares.
+/// Three walls, and a claim needs every one its engine declares applies: the
+/// control-subtracted difference must carry real energy (a pair of silent
+/// renders subtracts to a perfect zero and would otherwise pass every ratio
+/// test), the spectrum must move rather than only the gain, and the level must
+/// move in the direction the engine declares. Every wall subtracts the control,
+/// the centroid included: the patch's own envelope walks the centroid by tens
+/// of percent while the ramp runs, so an unsubtracted spread measures the
+/// envelope and passes even where the force axis is a pure output gain.
 ///
 /// What is deliberately NOT asserted is the direction the spectrum moves. A
 /// waveguide here emits the pressure inside the bore rather than the field
@@ -27,8 +30,8 @@
 /// The engines are addressed through their GM programs rather than through
 /// hand-built patches, so what is measured is the bank a host actually hears.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
-#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -70,9 +73,9 @@ constexpr int kSegmentFrames = 4096;
 /// Two orders under the quietest voice measured here, so it separates "reached
 /// the sound" from "reached nothing" without standing in for audibility.
 constexpr double kReachFloor = 1.0e-4;
-/// Centroid travel, as a fraction of its own mean, that says the controller
-/// moved the spectrum rather than the output gain. The narrowest measured
-/// response is the pipe organ's at about 0.06.
+/// Centroid travel, as a fraction of the centroid the control sits at, that
+/// says the controller moved the spectrum rather than the output gain. The
+/// narrowest response that counts is 0.08, the widest that does not 0.012.
 constexpr double kSpectrumFloor = 0.03;
 
 /// What the engine's force axis does to the level. Declared per engine rather
@@ -87,12 +90,24 @@ enum class ForceLevel {
   kElsewhere,
 };
 
+/// What the engine's force axis does to the spectrum, with the control render's
+/// own centroid subtracted out. Declared for the same reason as ForceLevel and
+/// with the same two states: two engines take their force as a gain and nothing
+/// else, by their own structure rather than by the wiring under test.
+enum class ForceSpectrum {
+  /// More drive, a different spectrum, with the control's own drift removed.
+  kMoves,
+  /// The axis reaches the sound but the spectrum is not where it lands.
+  kElsewhere,
+};
+
 /// One engine and the GM program that voices it in the fallback bank.
 struct EngineProbe {
   SynthEngineMode mode;
   int program;
   const char* label;
   ForceLevel force_level;
+  ForceSpectrum force_spectrum;
 };
 
 /// Every engine the capability table declares an axis for, at a program the
@@ -102,27 +117,58 @@ struct EngineProbe {
 constexpr EngineProbe kProbes[] = {
     // No controller reaches the registration, so the morph axis is exercised by
     // the mod matrix alone and neither ramp below touches this row.
-    {SynthEngineMode::kAdditive, 16, "additive (Drawbar Organ)", ForceLevel::kElsewhere},
+    {SynthEngineMode::kAdditive, 16, "additive (Drawbar Organ)", ForceLevel::kElsewhere,
+     ForceSpectrum::kElsewhere},
     // Wind pressure sets the pipe's speech and its speaking frequency; what it
     // moves here is the tuning and the onset rather than the loudness, and the
     // level side of an organ's wind is the shared supply's sag, a bus stage.
-    {SynthEngineMode::kPipeOrgan, 19, "pipe organ (Church Organ)", ForceLevel::kElsewhere},
-    {SynthEngineMode::kFreeReed, 21, "free reed (Accordion)", ForceLevel::kRises},
-    {SynthEngineMode::kBowedString, 40, "bowed string (Violin)", ForceLevel::kRises},
-    {SynthEngineMode::kVocal, 52, "vocal (Choir Aahs)", ForceLevel::kElsewhere},
-    {SynthEngineMode::kBrass, 56, "brass (Trumpet)", ForceLevel::kRises},
-    {SynthEngineMode::kReed, 65, "reed (Alto Sax)", ForceLevel::kRises},
+    {SynthEngineMode::kPipeOrgan, 19, "pipe organ (Church Organ)", ForceLevel::kElsewhere,
+     ForceSpectrum::kMoves},
+    // The accordion voices the slot shaper, which the drive never reaches, so
+    // force arrives as the output scale alone and a gain cannot tilt a spectrum.
+    {SynthEngineMode::kFreeReed, 21, "free reed (Accordion)", ForceLevel::kRises,
+     ForceSpectrum::kElsewhere},
+    {SynthEngineMode::kBowedString, 40, "bowed string (Violin)", ForceLevel::kRises,
+     ForceSpectrum::kMoves},
+    {SynthEngineMode::kVocal, 52, "vocal (Choir Aahs)", ForceLevel::kElsewhere,
+     ForceSpectrum::kElsewhere},
+    {SynthEngineMode::kBrass, 56, "brass (Trumpet)", ForceLevel::kRises, ForceSpectrum::kMoves},
+    // A reed self-oscillates only inside a narrow pressure band and the exposed
+    // range is calibrated to stay within it, so the breath colours the tone by
+    // a small fraction of what the same travel does to the level.
+    {SynthEngineMode::kReed, 65, "reed (Alto Sax)", ForceLevel::kRises, ForceSpectrum::kElsewhere},
     // The jet holds its own limit cycle, so the loop gain rather than the
     // breath decides the amplitude and the breath is heard as colour.
-    {SynthEngineMode::kFlute, 73, "flute (Flute)", ForceLevel::kElsewhere},
+    {SynthEngineMode::kFlute, 73, "flute (Flute)", ForceLevel::kElsewhere, ForceSpectrum::kMoves},
 };
 
 /// A struck or plucked engine, to show the same ramp reaches nothing there.
 constexpr EngineProbe kDecliningProbes[] = {
-    {SynthEngineMode::kPiano, 0, "piano (Acoustic Grand)", ForceLevel::kElsewhere},
-    {SynthEngineMode::kKarplusStrong, 24, "karplus-strong (Nylon Guitar)", ForceLevel::kElsewhere},
-    {SynthEngineMode::kModal, 11, "modal (Vibraphone)", ForceLevel::kElsewhere},
+    {SynthEngineMode::kPiano, 0, "piano (Acoustic Grand)", ForceLevel::kElsewhere,
+     ForceSpectrum::kElsewhere},
+    {SynthEngineMode::kKarplusStrong, 24, "karplus-strong (Nylon Guitar)", ForceLevel::kElsewhere,
+     ForceSpectrum::kElsewhere},
+    {SynthEngineMode::kModal, 11, "modal (Vibraphone)", ForceLevel::kElsewhere,
+     ForceSpectrum::kElsewhere},
 };
+
+/// An engine whose force axis lands in neither the level nor the spectrum has
+/// nowhere left for it to land, so wall 1 would be all that is still claimed
+/// about it. A pair of exclusions that between them exclude everything is a
+/// declaration saying nothing, and it fails to compile rather than passing.
+constexpr bool every_force_axis_lands_somewhere() {
+  for (const EngineProbe& probe : kProbes) {
+    if ((engine_axis_capability(probe.mode).mask & kAxisForce) == 0u) continue;
+    if (probe.force_level == ForceLevel::kElsewhere &&
+        probe.force_spectrum == ForceSpectrum::kElsewhere) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static_assert(every_force_axis_lands_somewhere(),
+              "an engine's force axis must be declared to reach the level or the spectrum");
 
 NativeSynth make_synth(int program) {
   NativeSynthConfig cfg;
@@ -148,6 +194,9 @@ struct RampMeasurement {
   std::vector<double> level_delta;
   /// Spectral centroid of the ramped segment (Hz).
   std::vector<double> centroid;
+  /// Spectral centroid of the control's same segment (Hz), the reference the
+  /// one above is read against.
+  std::vector<double> control_centroid;
 };
 
 /// Renders one synth with @p controller stepped from silence to full across the
@@ -174,23 +223,37 @@ RampMeasurement measure_ramp(int program, uint8_t controller) {
     out.difference_rms.push_back(static_cast<double>(rms(diff)));
     out.level_delta.push_back(static_cast<double>(rms(a)) - static_cast<double>(rms(b)));
     out.centroid.push_back(spectral_centroid(a, 0));
+    out.control_centroid.push_back(spectral_centroid(b, 0));
   }
   return out;
 }
 
-/// Peak-to-peak travel of a series as a fraction of its mean. Signless on
-/// purpose: it answers "did the controller move this" rather than "which way".
-double spread(const std::vector<double>& values) {
-  double lo = values.front();
-  double hi = values.front();
-  double sum = 0.0;
-  for (const double v : values) {
-    lo = std::min(lo, v);
-    hi = std::max(hi, v);
-    sum += v;
+/// The controller's own share of the centroid, per segment.
+std::vector<double> centroid_delta(const RampMeasurement& m) {
+  std::vector<double> out;
+  out.reserve(m.centroid.size());
+  for (std::size_t i = 0; i < m.centroid.size(); ++i) {
+    out.push_back(m.centroid[i] - m.control_centroid[i]);
   }
-  const double mean = std::abs(sum / static_cast<double>(values.size()));
-  return mean > 0.0 ? (hi - lo) / mean : 0.0;
+  return out;
+}
+
+/// Peak-to-peak travel of that share, as a fraction of where the centroid sits.
+/// Signless on purpose: it answers "did the controller move this" rather than
+/// "which way". The scale is the control's mean rather than the ramped one, so
+/// it does not move with the thing being measured.
+double spectrum_travel(const RampMeasurement& m) {
+  const std::vector<double> delta = centroid_delta(m);
+  double lo = delta.front();
+  double hi = delta.front();
+  for (const double d : delta) {
+    lo = std::min(lo, d);
+    hi = std::max(hi, d);
+  }
+  double sum = 0.0;
+  for (const double c : m.control_centroid) sum += c;
+  const double scale = sum / static_cast<double>(m.control_centroid.size());
+  return scale > 0.0 ? (hi - lo) / scale : 0.0;
 }
 
 /// Largest of a series, for the reachability wall: a ramp that crosses the
@@ -227,9 +290,15 @@ TEST_CASE("a breath ramp reaches every engine that declares the force axis",
     CAPTURE(series(m.difference_rms));
     REQUIRE(peak(m.difference_rms) > kReachFloor);
 
-    // Wall 2: it reached the spectrum, not just the output gain.
-    CAPTURE(series(m.centroid));
-    REQUIRE(spread(m.centroid) > kSpectrumFloor);
+    // Wall 2: it reached the spectrum, not just the output gain -- for the
+    // engines that say the spectrum is where their force lands. The two that
+    // say otherwise carry their reason on their table entry, and wall 3 below
+    // is what still holds them.
+    if (probe.force_spectrum == ForceSpectrum::kMoves) {
+      CAPTURE(series(centroid_delta(m)));
+      CAPTURE(series(m.control_centroid));
+      REQUIRE(spectrum_travel(m) > kSpectrumFloor);
+    }
 
     // Wall 3: and the level moves the way this engine says it does. The two
     // that say otherwise carry their reason on their table entry.
@@ -248,8 +317,11 @@ TEST_CASE("a brightness ramp reaches every engine that declares the brightness a
     const RampMeasurement m = measure_ramp(probe.program, 74);
     CAPTURE(series(m.difference_rms));
     REQUIRE(peak(m.difference_rms) > kReachFloor);
-    CAPTURE(series(m.centroid));
-    REQUIRE(spread(m.centroid) > kSpectrumFloor);
+    // Unconditional here: brightness is the axis whose whole job is the
+    // spectrum, so an engine declaring it and not moving one is the defect.
+    CAPTURE(series(centroid_delta(m)));
+    CAPTURE(series(m.control_centroid));
+    REQUIRE(spectrum_travel(m) > kSpectrumFloor);
   }
 }
 
