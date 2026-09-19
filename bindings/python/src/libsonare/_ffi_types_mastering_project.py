@@ -276,6 +276,25 @@ class SonareProjectWarpMapDesc(CStruct):
     ]
 
 
+class SonareTakeAlignConfig(CStruct):
+    """Maps to SonareTakeAlignConfig in sonare_c_project.h."""
+
+    _fields_ = [
+        ("hop_length", ctypes.c_int32),
+        ("bins_per_octave", ctypes.c_int32),
+    ]
+
+
+class SonareTakeAlignment(CStruct):
+    """Maps to SonareTakeAlignment in sonare_c_project.h."""
+
+    _fields_ = [
+        ("mean_residual_frames", ctypes.c_float),
+        ("reference_frames", ctypes.c_int32),
+        ("take_frames", ctypes.c_int32),
+    ]
+
+
 class SonareProjectDiagnostic(CStruct):
     """Maps to SonareProjectDiagnostic in sonare_c_project.h."""
 

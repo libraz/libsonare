@@ -7,7 +7,9 @@ import ctypes
 from typing import Self
 
 from ._facade import rebind_facade_exports as _rebind_facade_exports
+from ._project_edit import TakeAlignment as TakeAlignment
 from ._project_edit import _ProjectEditMixin
+from ._project_edit import align_take_to_reference as align_take_to_reference
 from ._project_inspection import _ProjectInspectionMixin
 from ._project_midi import _ProjectMidiMixin
 from ._project_model import *  # noqa: F403

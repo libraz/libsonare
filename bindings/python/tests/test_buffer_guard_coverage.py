@@ -183,6 +183,7 @@ _BUFFER_ARGS = (
     "y",
     "source",
     "reference",
+    "take",
     "f0_hz",
     "beat_strengths",
     "voiced_prob",

@@ -280,6 +280,24 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint32,
         ]
 
+        # Take alignment: no project handle, so it carries its own guard rather
+        # than riding on the project block's.
+        if hasattr(lib, "sonare_align_take_to_reference"):
+            lib.sonare_align_take_to_reference.restype = ctypes.c_int32
+            lib.sonare_align_take_to_reference.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareTakeAlignConfig),
+                ctypes.POINTER(ctypes.POINTER(SonareProjectWarpAnchor)),
+                ctypes.POINTER(ctypes.c_size_t),
+                ctypes.POINTER(SonareTakeAlignment),
+            ]
+            lib.sonare_free_warp_anchors.restype = None
+            lib.sonare_free_warp_anchors.argtypes = [ctypes.POINTER(SonareProjectWarpAnchor)]
+
         lib.sonare_project_set_track_midi_destination.restype = ctypes.c_int32
         lib.sonare_project_set_track_midi_destination.argtypes = [
             ctypes.c_void_p,

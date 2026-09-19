@@ -7,6 +7,7 @@ import ctypes
 import math
 import operator
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -45,10 +46,13 @@ from ._runtime import (
     SonareProjectTrackDesc,
     SonareProjectWarpAnchor,
     SonareProjectWarpMapDesc,
+    SonareTakeAlignConfig,
+    SonareTakeAlignment,
     SonareValueError,
     _as_float32_buffer,
     _check,
     _get_lib,
+    _guard_buffer,
     _narrow_float,
     _narrow_int,
     _to_c_float_array,
@@ -58,6 +62,152 @@ from ._runtime import (
     _to_c_uint32,
     _warp_mode_value,
 )
+
+
+@dataclass(frozen=True)
+class TakeAlignment:
+    """How well an :func:`align_take_to_reference` alignment was conditioned.
+
+    Every field is descriptive: none of them makes the call fail, and a caller
+    deciding what is acceptable supplies its own threshold.
+
+    ``mean_residual_frames`` is the mean absolute frame residual of the alignment
+    path around its diagonal trend -- a coarse indicator of how far the alignment
+    strayed from a constant rate, not an error bound. ``reference_frames`` /
+    ``take_frames`` are the chroma frames each signal produced, named for the
+    arguments the caller passed, so their ratio is the overall rate difference
+    the anchors encode.
+    """
+
+    mean_residual_frames: float
+    reference_frames: int
+    take_frames: int
+
+
+@_guard_buffer("reference", "take")
+def align_take_to_reference(
+    reference: Sequence[float] | list[float] | np.ndarray,
+    take: Sequence[float] | list[float] | np.ndarray,
+    sample_rate: int,
+    *,
+    hop_length: int | None = None,
+    bins_per_octave: int | None = None,
+    validate: bool = True,
+) -> tuple[list[tuple[float, float]], TakeAlignment]:
+    """Align a take to a reference timeline and return anchors placing it under it.
+
+    A chromagram is measured for each signal and the two are aligned, then the
+    alignment is reduced to anchors :meth:`Project.set_warp_map` accepts: at
+    least two finite, strictly increasing pairs. The reduction is needed rather
+    than decorative -- an alignment path advances one axis at a time, so the raw
+    correspondence repeats a coordinate wherever one signal carries more frames
+    than the other, and those pairs are refused as a warp map.
+
+    **The anchors are oriented for the take's own clip.** The first element of
+    each pair is a position on the REFERENCE timeline and the second the
+    corresponding position in the TAKE, which is the direction a clip whose
+    source is that take needs. Pass them straight to
+    :meth:`Project.set_warp_map` for the take's clip, and bind the clip to the
+    resulting warp map with :meth:`Project.set_clip_warp_ref`.
+
+    Both signals are read at ``sample_rate``; resample first if they differ,
+    since the alignment does no I/O and no rate conversion.
+
+    Args:
+        reference: The reference timeline -- the guide take, or the backing track
+            the takes were sung against.
+        take: The signal to be placed under it. Its length is independent of
+            ``reference``'s; a take running at a different rate is the case this
+            exists for.
+        sample_rate: Sample rate of both buffers in Hz. It has to carry the whole
+            chroma grid, whose top bin must sit under Nyquist: at the default
+            resolution 8 kHz is enough, and a finer ``bins_per_octave`` raises
+            that bin and the rate it needs -- 24 bins per octave already refuses
+            8 kHz.
+        hop_length: Chroma hop in samples, which sets the time resolution of the
+            anchors. ``None`` keeps the library value, and so does ``0``: the
+            field has no meaning at 0, so there is no separate default to fill
+            in first.
+        bins_per_octave: Chroma bins per octave, ``None`` / ``0`` as above. Must
+            be a positive **multiple of 12**, because the chroma folds the CQT
+            grid onto twelve pitch classes: 12, 24 and 36 are in domain and 13 or
+            18 are refused.
+        validate: Reject empty / NaN / Inf input (default True).
+
+    Returns:
+        ``(anchors, alignment)`` -- the ``(warp_sample, source_sample)`` pairs in
+        increasing order, and a :class:`TakeAlignment` describing how well the
+        alignment was conditioned. The metadata is how a caller tells a take the
+        reference genuinely fits from one it does not.
+
+    Raises:
+        SonareValueError: If either buffer is empty or carries a non-finite
+            sample, or if a configuration value does not fit its C field.
+        SonareError: ``INVALID_PARAMETER`` for a non-positive ``sample_rate``, a
+            rate too low to carry the chroma grid, a ``bins_per_octave`` that is
+            not a positive multiple of 12, or a pair that yields fewer than two
+            distinct anchors -- which is what an unalignable pair looks like, and
+            is reported rather than answered with a map a caller cannot use.
+            ``NOT_SUPPORTED`` when the library was built without the arrangement
+            subsystem.
+
+    Example:
+        >>> anchors, alignment = libsonare.align_take_to_reference(guide, take, 44100)
+        >>> project.set_warp_map(1, anchors)
+        >>> project.set_clip_warp_ref(take_clip, 1)
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_align_take_to_reference"):
+        raise RuntimeError(
+            "loaded libsonare does not export sonare_align_take_to_reference; "
+            "rebuild or upgrade the shared library before calling align_take_to_reference"
+        )
+    # Left at 0 when the caller supplied nothing, which is what the C entry reads
+    # as "library value"; neither field has a meaning at 0, so there is no
+    # default-filling call to make first. Assigned unconverted so the struct's
+    # own narrowing sees the caller's value rather than a truncation of it.
+    config = SonareTakeAlignConfig()
+    if hop_length is not None:
+        config.hop_length = hop_length
+    if bins_per_octave is not None:
+        config.bins_per_octave = bins_per_octave
+
+    reference_array, reference_len = _to_c_float_array(
+        reference, fn_name="align_take_to_reference", arg_name="reference"
+    )
+    take_array, take_len = _to_c_float_array(
+        take, fn_name="align_take_to_reference", arg_name="take"
+    )
+    out_anchors = ctypes.POINTER(SonareProjectWarpAnchor)()
+    out_count = ctypes.c_size_t()
+    out_alignment = SonareTakeAlignment()
+    rc = lib.sonare_align_take_to_reference(
+        reference_array,
+        _to_c_size_t(reference_len, "reference_len"),
+        take_array,
+        _to_c_size_t(take_len, "take_len"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out_anchors),
+        ctypes.byref(out_count),
+        ctypes.byref(out_alignment),
+    )
+    try:
+        _check(rc)
+        anchors = [
+            (float(out_anchors[i].warp_sample), float(out_anchors[i].source_sample))
+            for i in range(out_count.value)
+        ]
+    finally:
+        # The array is heap-owned, so it is released whether the rows were read
+        # or the read raised part-way. A refused call leaves the pointer NULL.
+        if out_anchors:
+            lib.sonare_free_warp_anchors(out_anchors)
+    return anchors, TakeAlignment(
+        mean_residual_frames=float(out_alignment.mean_residual_frames),
+        reference_frames=int(out_alignment.reference_frames),
+        take_frames=int(out_alignment.take_frames),
+    )
 
 
 class _ProjectEditMixin:
