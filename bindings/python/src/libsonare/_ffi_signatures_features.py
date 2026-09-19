@@ -527,6 +527,20 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_size_t),
     ]
 
+    if hasattr(lib, "sonare_split_silence_common_ex"):
+        lib.sonare_split_silence_common_ex.restype = ctypes.c_int32
+        lib.sonare_split_silence_common_ex.argtypes = [
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(SonareSilenceCommonReport),
+        ]
+
     lib.sonare_frame_signal.restype = ctypes.c_int32
     lib.sonare_frame_signal.argtypes = [
         ctypes.POINTER(ctypes.c_float),

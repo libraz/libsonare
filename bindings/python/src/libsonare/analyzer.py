@@ -36,6 +36,7 @@ from ._analysis import (
     voice_changer_abi_version,
 )
 from ._conversions import (
+    SilenceCommonReport,
     amplitude_to_db,
     cyclic_tempogram,
     db_to_amplitude,
@@ -66,6 +67,7 @@ from ._conversions import (
     samples_to_frames,
     split_silence,
     split_silence_common,
+    split_silence_common_with_report,
     tempogram,
     tempogram_ratio,
     time_to_frames,
@@ -532,6 +534,8 @@ __all__ = [
     "samples_to_frames",
     "split_silence",
     "split_silence_common",
+    "split_silence_common_with_report",
+    "SilenceCommonReport",
     "tempogram",
     "tempogram_ratio",
     "time_to_frames",

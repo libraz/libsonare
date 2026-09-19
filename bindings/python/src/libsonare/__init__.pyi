@@ -55,6 +55,9 @@ from .analyzer import (
     RealtimeVoiceChangerConfig as RealtimeVoiceChangerConfig,
 )
 from .analyzer import (
+    SilenceCommonReport as SilenceCommonReport,
+)
+from .analyzer import (
     SpectralRegionOp as SpectralRegionOp,
 )
 from .analyzer import (
@@ -661,6 +664,9 @@ from .analyzer import (
 )
 from .analyzer import (
     split_silence_common as split_silence_common,
+)
+from .analyzer import (
+    split_silence_common_with_report as split_silence_common_with_report,
 )
 from .analyzer import (
     stft as stft,

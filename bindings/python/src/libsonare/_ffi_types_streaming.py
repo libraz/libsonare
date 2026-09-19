@@ -571,3 +571,13 @@ class SonareHpssResult(CStruct):
         ("length", ctypes.c_size_t),
         ("sample_rate", ctypes.c_int32),
     ]
+
+
+class SonareSilenceCommonReport(CStruct):
+    """Maps to SonareSilenceCommonReport in sonare_c_features.h."""
+
+    _fields_ = [
+        ("silence_ceiling_db", ctypes.c_float),
+        ("max_signal_intervals", ctypes.c_int32),
+        ("min_signal_intervals", ctypes.c_int32),
+    ]

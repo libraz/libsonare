@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple, TypeAlias
 
 import numpy as np
@@ -1735,6 +1736,19 @@ def split_silence_common(
     frame_length: int = 2048,
     hop_length: int = 512,
 ) -> list[tuple[int, int]]: ...
+
+@dataclass(frozen=True, slots=True)
+class SilenceCommonReport:
+    silence_ceiling_db: float
+    max_signal_intervals: int
+    min_signal_intervals: int
+
+def split_silence_common_with_report(
+    signals: Sequence[Sequence[float]],
+    top_db: float = 60.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+) -> tuple[list[tuple[int, int]], SilenceCommonReport]: ...
 def frame_signal(
     samples: FloatSamples, frame_length: int, hop_length: int
 ) -> tuple[int, list[float]]: ...

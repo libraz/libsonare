@@ -5,7 +5,10 @@ from __future__ import annotations
 import ctypes
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
 
+from ._ffi import SonareSilenceCommonReport
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -249,6 +252,61 @@ def split_silence(
         return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
 
 
+@dataclass(frozen=True, slots=True)
+class SilenceCommonReport:
+    """Why :func:`split_silence_common_with_report` found the gaps it did.
+
+    One interval covering everything is the answer to three different
+    situations and the interval list separates none of them: no take has a
+    quiet moment at all, the takes each have one but not in the same place, or
+    ``top_db`` was set too loose to see the ones they have.
+
+    Read ``silence_ceiling_db`` -- the largest ``top_db`` at which every signal
+    still shows silence -- against the ``top_db`` that was passed, which is the
+    whole decision. Near 0, a take is sounding continuously and no threshold
+    helps. Below ``top_db``, the threshold was too loose to see the quiet these
+    takes do have, and one under the reported ceiling finds it. At or above
+    ``top_db`` with a single interval, every take shows silence at this setting
+    and they do not share any of it -- the alignment case.
+
+    ``max_signal_intervals`` / ``min_signal_intervals`` count what the most and
+    least fragmented signal produced alone, before the union merged anything.
+    They measure shape rather than cause: a take that sounds once and stops
+    counts 1, exactly as a take with no silence does, so use the ceiling to
+    tell those apart and these to see whether any take has an interior gap
+    (>= 2) and whether the takes differ in how broken up they are.
+    """
+
+    silence_ceiling_db: float
+    max_signal_intervals: int
+    min_signal_intervals: int
+
+
+def _common_silence_signals(
+    fn_name: str, signals: Sequence[Sequence[float]]
+) -> tuple[list[ctypes.Array[ctypes.c_float]], ctypes.Array[Any], ctypes.Array[ctypes.c_size_t]]:
+    """Validate and marshal the signal table both common-silence splitters take.
+
+    The returned per-signal arrays are what the pointer table points at, so the
+    caller must hold them for as long as the call runs.
+    """
+    if len(signals) == 0:
+        raise SonareValueError(f"{fn_name}: signals must not be empty")
+    c_arrays: list[ctypes.Array[ctypes.c_float]] = []
+    lengths: list[int] = []
+    for index, signal in enumerate(signals):
+        coerced = _validate_samples(fn_name, signal, arg_name=f"signals[{index}]")
+        c_array, length = _to_c_float_array(coerced, fn_name=fn_name, arg_name=f"signals[{index}]")
+        c_arrays.append(c_array)
+        lengths.append(length)
+    float_ptr = ctypes.POINTER(ctypes.c_float)
+    signal_ptrs = (float_ptr * len(c_arrays))(
+        *[ctypes.cast(array, float_ptr) for array in c_arrays]
+    )
+    length_array = (ctypes.c_size_t * len(lengths))(*lengths)
+    return c_arrays, signal_ptrs, length_array
+
+
 def split_silence_common(
     signals: Sequence[Sequence[float]],
     top_db: float = 60.0,
@@ -264,21 +322,8 @@ def split_silence_common(
     exactly what :func:`split_silence` does.
     """
     fn_name = "split_silence_common"
-    if len(signals) == 0:
-        raise SonareValueError(f"{fn_name}: signals must not be empty")
+    c_arrays, signal_ptrs, length_array = _common_silence_signals(fn_name, signals)
     lib = _get_lib()
-    c_arrays: list[ctypes.Array[ctypes.c_float]] = []
-    lengths: list[int] = []
-    for index, signal in enumerate(signals):
-        coerced = _validate_samples(fn_name, signal, arg_name=f"signals[{index}]")
-        c_array, length = _to_c_float_array(coerced, fn_name=fn_name, arg_name=f"signals[{index}]")
-        c_arrays.append(c_array)
-        lengths.append(length)
-    float_ptr = ctypes.POINTER(ctypes.c_float)
-    signal_ptrs = (float_ptr * len(c_arrays))(
-        *[ctypes.cast(array, float_ptr) for array in c_arrays]
-    )
-    length_array = (ctypes.c_size_t * len(lengths))(*lengths)
     with _out_int_array(lib) as (out, out_count):
         rc = lib.sonare_split_silence_common(
             signal_ptrs,
@@ -293,6 +338,50 @@ def split_silence_common(
         _check(rc)
         flat = _int_array_result(out, out_count.value)
         return [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
+
+
+def split_silence_common_with_report(
+    signals: Sequence[Sequence[float]],
+    top_db: float = 60.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+) -> tuple[list[tuple[int, int]], SilenceCommonReport]:
+    """Return what :func:`split_silence_common` returns, plus why.
+
+    Identical intervals and identical refusals; the difference is the
+    :class:`SilenceCommonReport`, whose figures come from the same RMS pass the
+    intervals do and so can never describe a different measurement. The plain
+    entry point stays because a caller cutting takes has no use for the
+    diagnosis.
+    """
+    fn_name = "split_silence_common_with_report"
+    c_arrays, signal_ptrs, length_array = _common_silence_signals(fn_name, signals)
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_split_silence_common_ex"):
+        raise _unsupported_feature_symbol("sonare_split_silence_common_ex")
+    report = SonareSilenceCommonReport()
+    with _out_int_array(lib) as (out, out_count):
+        rc = lib.sonare_split_silence_common_ex(
+            signal_ptrs,
+            _to_c_size_t(len(c_arrays), "signal_count"),
+            length_array,
+            _to_c_float(top_db, "top_db"),
+            _to_c_int(frame_length, "frame_length"),
+            _to_c_int(hop_length, "hop_length"),
+            ctypes.byref(out),
+            ctypes.byref(out_count),
+            ctypes.byref(report),
+        )
+        _check(rc)
+        flat = _int_array_result(out, out_count.value)
+    return (
+        [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)],
+        SilenceCommonReport(
+            silence_ceiling_db=float(report.silence_ceiling_db),
+            max_signal_intervals=int(report.max_signal_intervals),
+            min_signal_intervals=int(report.min_signal_intervals),
+        ),
+    )
 
 
 def frame_signal(

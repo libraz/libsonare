@@ -7775,6 +7775,30 @@
     ],
     "size": 72
   },
+  "SonareSilenceCommonReport": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "silence_ceiling_db",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "max_signal_intervals",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "min_signal_intervals",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
   "SonareSpectralEditConfig": {
     "align": 4,
     "fields": [
