@@ -535,9 +535,12 @@ class NativeSynth final : public MidiInstrument {
   /// The device spelling the synth reads its expression axes through. Replacing
   /// it clears every channel's axis values: the new profile's bindings say
   /// nothing about what the old ones had reached, and carrying them over would
-  /// leave an axis held at a value no binding can now move.
-  void set_controller_profile(const ControllerProfile& profile) noexcept;
-  const ControllerProfile& controller_profile() const noexcept { return controller_profile_; }
+  /// leave an axis held at a value no binding can now move. Always accepted —
+  /// every engine here reads at least one axis through it.
+  bool set_controller_profile(const ControllerProfile& profile) noexcept override;
+  const ControllerProfile* controller_profile() const noexcept override {
+    return &controller_profile_;
+  }
 
  private:
   struct ChannelState {

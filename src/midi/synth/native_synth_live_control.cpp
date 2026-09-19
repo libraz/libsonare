@@ -52,13 +52,14 @@ void NativeSynth::push_excitation_control(uint8_t channel) noexcept {
   }
 }
 
-void NativeSynth::set_controller_profile(const ControllerProfile& profile) noexcept {
+bool NativeSynth::set_controller_profile(const ControllerProfile& profile) noexcept {
   controller_profile_ = profile;
   for (uint8_t ch = 0; ch < 16; ++ch) {
     channels_[ch].axes.reset();
     refresh_channel_mod(ch);
     push_excitation_control(ch);
   }
+  return true;
 }
 
 void NativeSynth::apply_controller_input(const Ump& ump) noexcept {

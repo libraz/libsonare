@@ -228,7 +228,7 @@ TEST_CASE("the default profile is the gm preset", "[midi][synth][controller-prof
   // A synth that was never told a profile answers the same one.
   NativeSynthConfig cfg;
   NativeSynth synth(cfg);
-  REQUIRE(synth.controller_profile().binding_count() == gm.binding_count());
+  REQUIRE(synth.controller_profile()->binding_count() == gm.binding_count());
 }
 
 TEST_CASE("every named preset resolves and an unnamed one refuses",

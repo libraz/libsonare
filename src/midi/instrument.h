@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <string>
 
+#include "midi/controller_profile.h"
 #include "midi/sequencer.h"
 #include "rt/processor_base.h"
 #include "transport/transport_state.h"
@@ -87,6 +88,22 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
     (void)data;
     (void)size;
   }
+
+  /// CONTROL thread: adopts a device's spelling of the expression axes, so a
+  /// breath gesture reaches an exciter by what it means rather than by the
+  /// controller number that carried it. Returns false when the instrument has
+  /// nowhere to put one, which is the answer a caller needs: a silent success
+  /// here is indistinguishable from a profile that took, and the next note
+  /// would be the only evidence. Default: refused.
+  virtual bool set_controller_profile(const ControllerProfile& profile) noexcept {
+    (void)profile;
+    return false;
+  }
+
+  /// CONTROL thread: the profile in force, or nullptr for an instrument that
+  /// refuses one. Paired with the setter so a host can show the mapping it
+  /// installed rather than the one it believes it installed.
+  virtual const ControllerProfile* controller_profile() const noexcept { return nullptr; }
 
   /// AUDIO thread: render one block into source-track-specific output targets.
   /// Implementations must advance every voice and shared DSP state exactly once,
