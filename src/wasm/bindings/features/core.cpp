@@ -160,8 +160,14 @@ val js_split_silence(val samples, const val& top_db_val, const val& frame_length
   return vectorToInt32Array(flat);
 }
 
-val js_split_silence_common(val signals, const val& top_db_val, const val& frame_length_val,
-                            const val& hop_length_val) {
+namespace {
+
+// What several signals share is their silence, not their sound, and the union
+// rule that follows from it lives in sonare::split_common_with_report -- a merge
+// rule held in two places is one place for them to disagree.
+CommonSplitReport splitSilenceCommonImpl(val signals, const val& top_db_val,
+                                         const val& frame_length_val, const val& hop_length_val,
+                                         const char* function) {
   const float top_db = checkedFloatFromVal(top_db_val, "topDb");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
@@ -169,10 +175,13 @@ val js_split_silence_common(val signals, const val& top_db_val, const val& frame
   const std::size_t signal_count = wasmArrayLikeLength(signals, "signals");
   if (signal_count == 0) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "splitSilenceCommon: signals must not be empty");
+                          std::string(function) + ": signals must not be empty");
   }
 
+  const std::string budget_subject = std::string(function) + " input";
   std::vector<std::vector<float>> buffers(signal_count);
+  std::vector<const float*> pointers(signal_count);
+  std::vector<std::size_t> lengths(signal_count);
   std::size_t budget = 0;
   for (std::size_t index = 0; index < signal_count; ++index) {
     const val signal = signals[index];
@@ -180,33 +189,48 @@ val js_split_silence_common(val signals, const val& top_db_val, const val& frame
       throw SonareException(ErrorCode::InvalidParameter,
                             "signals[" + std::to_string(index) + "] must be a Float32Array");
     }
-    accumulateWasmFloat32ArrayLength(signal, "signals entry", "splitSilenceCommon input", &budget);
+    accumulateWasmFloat32ArrayLength(signal, "signals entry", budget_subject.c_str(), &budget);
     buffers[index] = float32ArrayToVector(signal);
-    validateFiniteVector(buffers[index], "splitSilenceCommon");
+    validateFiniteVector(buffers[index], function);
+    pointers[index] = buffers[index].data();
+    lengths[index] = buffers[index].size();
   }
 
-  // What several signals share is their silence, not their sound: collect each
-  // signal's own non-silent ranges (the same split() js_split_silence uses),
-  // then sort and merge where they touch -- mirroring
-  // sonare_split_silence_common's union rule so a cut between merged ranges is
-  // silent in every signal.
-  std::vector<std::pair<int, int>> merged;
-  for (const auto& buffer : buffers) {
-    auto ranges = split(buffer, top_db, frame_length, hop_length);
-    merged.insert(merged.end(), ranges.begin(), ranges.end());
-  }
-  std::sort(merged.begin(), merged.end());
+  return split_common_with_report(pointers.data(), lengths.data(), signal_count, top_db,
+                                  frame_length, hop_length);
+}
+
+val flattenIntervals(const std::vector<std::pair<int, int>>& intervals) {
   std::vector<int> flat;
-  flat.reserve(merged.size() * 2);
-  for (const auto& range : merged) {
-    if (!flat.empty() && range.first <= flat.back()) {
-      flat.back() = std::max(flat.back(), range.second);
-      continue;
-    }
-    flat.push_back(range.first);
-    flat.push_back(range.second);
+  flat.reserve(intervals.size() * 2);
+  for (const auto& interval : intervals) {
+    flat.push_back(interval.first);
+    flat.push_back(interval.second);
   }
   return vectorToInt32Array(flat);
+}
+
+}  // namespace
+
+val js_split_silence_common(val signals, const val& top_db_val, const val& frame_length_val,
+                            const val& hop_length_val) {
+  const CommonSplitReport report = splitSilenceCommonImpl(signals, top_db_val, frame_length_val,
+                                                          hop_length_val, "splitSilenceCommon");
+  return flattenIntervals(report.intervals);
+}
+
+val js_split_silence_common_with_report(val signals, const val& top_db_val,
+                                        const val& frame_length_val, const val& hop_length_val) {
+  const CommonSplitReport result = splitSilenceCommonImpl(
+      signals, top_db_val, frame_length_val, hop_length_val, "splitSilenceCommonWithReport");
+  val report = val::object();
+  report.set("silenceCeilingDb", result.silence_ceiling_db);
+  report.set("maxSignalIntervals", result.max_signal_intervals);
+  report.set("minSignalIntervals", result.min_signal_intervals);
+  val out = val::object();
+  out.set("intervals", flattenIntervals(result.intervals));
+  out.set("report", report);
+  return out;
 }
 
 val js_frame_signal(val samples, const val& frame_length_val, const val& hop_length_val) {
@@ -540,6 +564,7 @@ void registerFeatureCoreBindings() {
   function("trimSilence", &js_trim_silence);
   function("splitSilence", &js_split_silence);
   function("splitSilenceCommon", &js_split_silence_common);
+  function("splitSilenceCommonWithReport", &js_split_silence_common_with_report);
   function("frameSignal", &js_frame_signal);
   function("tone", &js_tone);
   function("chirp", &js_chirp);

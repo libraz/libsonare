@@ -27,6 +27,7 @@ export {
   samplesToFrames,
   splitSilence,
   splitSilenceCommon,
+  splitSilenceCommonWithReport,
   tempogram,
   timeToFrames,
   tone,

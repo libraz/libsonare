@@ -7,6 +7,7 @@
  * rather than a stale artifact waiting on a rebuild.
  */
 
+import type { SplitSilenceCommonWithReportResult } from './feature_core';
 import type { StripMeteringOptions } from './mixer';
 import type {
   NoteEditInput,
@@ -1471,6 +1472,15 @@ export interface WasmRealtimeEngine {
   bindMidiCcBinding: (binding: import('./project_types').ProjectMidiCcBinding) => void;
   clearMidiCcBindings: () => void;
   midiCcBindingCount: () => number;
+  setControllerProfile: (destinationId: number, presetName: string) => void;
+  bindController: (
+    destinationId: number,
+    binding: import('./instrument_types').ControllerBinding,
+  ) => void;
+  clearControllerBindings: (destinationId: number) => void;
+  controllerBindingCount: (destinationId: number) => number;
+  setControllerVelocityMeaningful: (destinationId: number, meaningful: boolean) => void;
+  controllerVelocityMeaningful: (destinationId: number) => boolean;
   setMidiFx: (destinationId: number, configJson: string) => void;
   clearMidiFx: (destinationId: number) => void;
   setMidiInputSource: (destinationId: number) => void;
@@ -1595,6 +1605,8 @@ export interface WasmSynthEnumTables {
   bodyTypes: string[];
   modSources: string[];
   modDestinations: string[];
+  controllerInputs: string[];
+  controllerAxes: string[];
 }
 
 export interface SonareModule {
@@ -1682,6 +1694,7 @@ export interface SonareModule {
   projectAbiVersion: () => number;
   synthPresetNames: () => string[];
   synthPresetPatch: (name: string) => unknown;
+  controllerProfileNames: () => string[];
   midiGmInstrumentName: (program: number) => string | null;
   midiGmProgramForName: (name: string) => number;
   midiGmFamilyName: (family: number) => string | null;
@@ -2956,6 +2969,12 @@ export interface SonareModule {
     frameLength: number,
     hopLength: number,
   ) => Int32Array;
+  splitSilenceCommonWithReport: (
+    signals: Float32Array[],
+    topDb: number,
+    frameLength: number,
+    hopLength: number,
+  ) => SplitSilenceCommonWithReportResult;
   frameSignal: (samples: Float32Array, frameLength: number, hopLength: number) => WasmFrameResult;
   tone: (
     frequency: number,
