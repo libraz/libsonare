@@ -14,7 +14,8 @@ import {
   t, applyStatic, initLang, onLang, setLang, currentLang, languages,
 } from './i18n.js';
 import {
-  applyGains, pause, playhead, renderLevels, rewind, seekTo, startAt, togglePlay,
+  applyGains, applyRegion, atEnd, markRegion, pause, playhead, renderLevels,
+  rewind, seekTo, setLoop, startAt, stop, togglePlay,
 } from './player.js';
 import { drawSpec, drawWave, seekFromEvent } from './scope.js';
 import {
@@ -104,7 +105,7 @@ function onKey(ev) {
   if (k === ' ') { ev.preventDefault(); togglePlay(); return; }
   if (!state.take) return;
   if (k === 'Tab') { ev.preventDefault(); swapRole(); return; }
-  if (k >= '1' && k <= '9') { setVersion(state.display[+k - 1]); return; }
+  if (k >= '1' && k <= '9') { setVersion(state.display[+k - 1], { play: true }); return; }
   if (k === 'ArrowRight') { ev.preventDefault(); stepVersion(1); return; }
   if (k === 'ArrowLeft') { ev.preventDefault(); stepVersion(-1); return; }
   if (k === 'ArrowDown') { ev.preventDefault(); selectTake(state.itemIndex + 1); return; }
@@ -149,16 +150,12 @@ function wire() {
   $('playBtn').addEventListener('click', togglePlay);
   $('rewindBtn').addEventListener('click', rewind);
 
-  $('loopBtn').addEventListener('click', () => {
-    state.loop = !state.loop;
-    $('loopBtn').setAttribute('aria-pressed', String(state.loop));
-    if (state.playing) startAt(playhead());
-  });
+  $('loopBtn').addEventListener('click', () => setLoop(!state.loop));
 
   $('clearRegion').addEventListener('click', () => {
     state.region = null;
     markRegion();
-    if (state.playing) startAt(playhead());
+    applyRegion();
   });
 
   $('optionsBtn').addEventListener('click', () => {
@@ -229,56 +226,90 @@ function wire() {
     applyRoute(route);
   });
 
+  /* The pictures are the timeline, so every gesture a timeline has works on
+   * them: grab the playhead to scrub it, drag anywhere else to mark a passage,
+   * click to seek. The playhead had no grip at all — a drag that began on it
+   * marked a region a pixel wide — which is the one move anyone reaches for
+   * first. */
+  const GRAB_PX = 9;      // how close to the playhead counts as on it
+  const MIN_DRAG = 0.02;  // shorter than this was a click with a shaky hand
+
   for (const cv of [$('wave'), $('spec')]) {
     let dragFrom = null;
+    let scrub = null;
+    const near = (ev) => {
+      const w = cv.getBoundingClientRect().width;
+      return Math.abs(seekFromEvent(cv, ev) - playhead())
+        <= (GRAB_PX / Math.max(w, 1)) * state.take.duration;
+    };
+
     cv.addEventListener('pointerdown', (ev) => {
       if (!state.take) return;
       cv.setPointerCapture(ev.pointerId);
+      if (near(ev)) {
+        // Silent while it moves. Restarting eighteen sources per frame is what
+        // an audible scrub would cost here, and nothing is learned from a
+        // sixteen-millisecond window of a decay anyway.
+        scrub = { resume: state.playing };
+        if (state.playing) pause();
+        seekTo(seekFromEvent(cv, ev));
+        return;
+      }
       dragFrom = seekFromEvent(cv, ev);
     });
+
     cv.addEventListener('pointermove', (ev) => {
-      if (dragFrom === null) return;
+      if (scrub) { seekTo(seekFromEvent(cv, ev)); return; }
+      if (dragFrom === null) {
+        if (state.take) cv.style.cursor = near(ev) ? 'ew-resize' : '';
+        return;
+      }
       const to = seekFromEvent(cv, ev);
-      if (Math.abs(to - dragFrom) > 0.02) {
+      if (Math.abs(to - dragFrom) > MIN_DRAG) {
         state.region = [Math.min(dragFrom, to), Math.max(dragFrom, to)];
         markRegion();
       }
     });
-    cv.addEventListener('pointerup', (ev) => {
+
+    const release = (ev) => {
+      if (scrub) {
+        seekTo(seekFromEvent(cv, ev));
+        if (scrub.resume) startAt(playhead());
+        scrub = null;
+        return;
+      }
       if (dragFrom === null) return;
       const to = seekFromEvent(cv, ev);
-      if (Math.abs(to - dragFrom) <= 0.02) {
-        // A click with no drag is a seek, and drops whatever region it lands in.
-        state.region = null;
+      if (Math.abs(to - dragFrom) <= MIN_DRAG) {
+        // A click inside the marked passage seeks inside it; outside it is how
+        // you leave it. Dropping the region on every click made a passage
+        // something nobody could move around in without losing it.
+        const r = state.region;
+        if (r && (to < r[0] || to > r[1])) state.region = null;
         seekTo(to);
-      } else if (state.playing) {
-        startAt(state.region[0]);
+      } else {
+        applyRegion();
       }
       markRegion();
       dragFrom = null;
-    });
+    };
+    cv.addEventListener('pointerup', release);
+    cv.addEventListener('pointercancel', release);
   }
 
   document.addEventListener('keydown', onKey);
 
   const tick = () => {
     if (state.take) {
-      $('clock').textContent =
-        `${playhead().toFixed(2)} / ${state.take.duration.toFixed(2)}`;
-      if (state.playing && !state.loop && playhead() >= state.take.duration - 0.02) pause();
+      $('clockAt').textContent = playhead().toFixed(2);
+      $('clockOf').textContent = ` / ${state.take.duration.toFixed(2)}`;
+      if (atEnd()) stop();
       drawWave();
       drawSpec();
     }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
-}
-
-function markRegion() {
-  const on = Boolean(state.region);
-  $('clearRegion').hidden = !on;
-  $('regionSpan').textContent = on
-    ? `${state.region[0].toFixed(2)}–${state.region[1].toFixed(2)} s` : '';
 }
 
 /* ------------------------------------------------------------------- boot */

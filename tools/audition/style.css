@@ -893,12 +893,50 @@ canvas {
 
 /* ---- transport ---- */
 
+/* The controls that make a sound are grouped and the readouts are spaced away
+   from them, so the row says at a glance which part of it is the player. */
 #transport {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 15px;
   flex-wrap: wrap;
 }
+
+.tport { display: flex; align-items: center; gap: 6px; }
+
+.tbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+/* Type, not emoji: the glyphs are set in the monospace at the weight of the
+   word beside them. A colour font would put three stickers in the one row that
+   has to be read without being looked at. */
+/* A box rather than a glyph: `pause` is two bars where `play` is one triangle,
+   so an icon sized to its own ink moved the button under the pointer at the
+   instant it was pressed. */
+.ticon {
+  display: inline-block;
+  min-width: 15px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+
+/* Engaged, not accented. Teal and amber are the two sides of the comparison
+   everywhere else on this page and a transport button is neither of them, so
+   `sounding` and `looping` read as a key held down. */
+#transport button[aria-pressed="true"] {
+  background: var(--panel-3);
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+#transport button[aria-pressed="true"] .ticon { color: var(--ink); }
 
 button {
   padding: 6px 13px;
@@ -933,7 +971,47 @@ button.ghost:hover { border-color: var(--line); color: var(--ink); }
 button.ghost[aria-expanded="true"] { background: var(--panel-2); color: var(--ink); }
 button.ghost[hidden] { display: none; }
 
-.play { min-width: 84px; font-weight: 600; }
+.play { font-weight: 600; }
+.play .ticon { color: var(--ink-dim); }
+
+/* Play and pause are words of different lengths in both languages, so without
+   a floor the button changes width under the pointer at the instant it is
+   pressed — which is the one moment it must not move. */
+.play .tlabel { min-width: 4.6em; text-align: left; }
+
+/* The one readout the eye comes back to, so the position is set in the ink the
+   rest of the row is not, and the length it is out of stays quiet. */
+.clock { font-size: 12.5px; color: var(--ink); }
+.clock .of { color: var(--ink-faint); }
+
+/* The marked passage, as one object that says what is being played and how to
+   stop playing only that. */
+.passage {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 3px 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.passage[hidden] { display: none; }
+.passage .mono { color: var(--ink); }
+
+.passage-x {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-dim);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.passage-x:hover { background: var(--panel-3); color: var(--ink); }
 
 .mono { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
 .mono:empty { display: none; }

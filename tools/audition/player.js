@@ -52,6 +52,24 @@ function bufferRms(buf) {
   return Math.sqrt(sum / Math.max(n, 1));
 }
 
+/* Shorter than this is not a passage: a stray two-pixel drag would otherwise
+ * confine playback to a click. */
+const MIN_SPAN = 0.02;
+
+/* The passage being listened to: the marked region, or the whole take.
+ *
+ * Every move the transport makes is defined against this one span rather than
+ * against the file — where play starts, where rewind goes, where a pass ends,
+ * what loop repeats. A region that only the loop button made real was the
+ * confusion worth ending: marking a passage looked like choosing what to hear
+ * and playback walked straight out of it.
+ */
+export function span() {
+  const total = state.take ? state.take.duration : 0;
+  const [a, b] = state.region || [0, total];
+  return b - a > MIN_SPAN ? [a, b] : [0, total];
+}
+
 export function targetGain(key) {
   if (!$('matchRms').checked) return 1;
   const vals = state.take.keys.map((k) => state.take.rms[k]).filter((v) => v > 0);
@@ -90,20 +108,31 @@ export function stopSources() {
   state.sources = [];
 }
 
-function markPlay(playing) {
+/* The play button says what pressing it will do, and carries the glyph a
+ * transport is scanned by. The label keeps its own key rather than being
+ * written in plain text, so switching language mid-pass re-renders the state
+ * the button is actually in instead of resetting it to `play`. */
+export function markPlay(playing) {
   const btn = $('playBtn');
-  btn.textContent = playing ? t('transport.pause') : t('transport.play');
+  const lab = btn.querySelector('.tlabel');
+  btn.querySelector('.ticon').textContent = playing ? '❚❚' : '▶︎';
+  lab.dataset.i18n = playing ? 'transport.pause' : 'transport.play';
+  lab.textContent = t(lab.dataset.i18n);
   if (playing) btn.setAttribute('aria-pressed', 'true');
   else btn.removeAttribute('aria-pressed');
 }
 
 export function startAt(offset) {
   const ctx = audio();
+  // Here rather than at the play button: every control that names a version now
+  // sounds it, and a context left suspended by the browser's autoplay rule made
+  // whichever of them was pressed first do nothing at all.
+  ctx.resume();
   stopSources();
   state.gains = {};
-  const [a, b] = state.region || [0, state.take.duration];
-  const looping = state.loop && b - a > 0.02;
-  const from = looping ? Math.min(Math.max(offset, a), b - 0.001) : Math.max(0, offset);
+  const [a, b] = span();
+  const looping = state.loop && b - a > MIN_SPAN;
+  const from = Math.min(Math.max(offset, a), Math.max(a, b - 0.001));
 
   for (const k of state.take.keys) {
     const src = ctx.createBufferSource();
@@ -111,7 +140,9 @@ export function startAt(offset) {
     const g = ctx.createGain();
     g.gain.value = 0;
     src.connect(g).connect(state.master);
-    if (looping) { src.loop = true; src.loopStart = a; src.loopEnd = b; }
+    src.loopStart = a;
+    src.loopEnd = b;
+    src.loop = looping;
     src.start(0, from);
     state.sources.push(src);
     state.gains[k] = g;
@@ -131,13 +162,89 @@ export function pause() {
   markPlay(false);
 }
 
+/* The end of a pass, which is a different thing from a pause: the playhead goes
+ * back to the top of what was playing.
+ *
+ * Parked on the last sample, `play` could not mean play — it either had to be
+ * rewound first or it silently started somewhere the button does not name. On a
+ * page where one take is heard twenty times that is the press that gets made
+ * most, so it is the one that has to need no thought.
+ */
+export function stop() {
+  stopSources();
+  state.startOffset = span()[0];
+  state.playing = false;
+  markPlay(false);
+}
+
+/// True once a pass has run out of passage. Never true under loop, which is
+/// what loop means.
+export function atEnd() {
+  if (!state.take || !state.playing || state.loop) return false;
+  return playhead() >= span()[1] - 0.004;
+}
+
 export function playhead() {
   if (!state.take) return 0;
   if (!state.playing) return state.startOffset;
   const t0 = state.startOffset + (audio().currentTime - state.startedAt);
-  const [a, b] = state.region || [0, state.take.duration];
-  if (state.loop && b - a > 0.02) return a + ((t0 - a) % (b - a));
-  return Math.min(t0, state.take.duration);
+  const [a, b] = span();
+  if (state.loop && b - a > MIN_SPAN) return a + ((t0 - a) % (b - a));
+  return Math.min(t0, b);
+}
+
+/* Loop on or off without a gap in what is sounding.
+ *
+ * The sources carry the loop themselves and it is settable while they run, so
+ * the only thing that has to move is the anchor the playhead is measured from:
+ * read it on the old rule, write it back, and the picture and the sound agree
+ * across the switch. Restarting them instead cut a hole in the middle of the
+ * passage the listener was in — at the moment they asked to hear it again.
+ */
+export function setLoop(on) {
+  const at = playhead();
+  state.loop = on;
+  $('loopBtn').setAttribute('aria-pressed', String(on));
+  if (!state.playing) return;
+  const [a, b] = span();
+  state.startOffset = at;
+  state.startedAt = audio().currentTime;
+  for (const s of state.sources) s.loop = on && b - a > MIN_SPAN;
+}
+
+/// The passage chip: what is being played, and the way back to the whole take.
+export function markRegion() {
+  const on = Boolean(state.region);
+  $('passage').hidden = !on;
+  $('regionSpan').textContent = on
+    ? `${state.region[0].toFixed(2)}–${state.region[1].toFixed(2)} s` : '';
+}
+
+/* The marked passage changed while something is sounding.
+ *
+ * Inside the new span the playhead stays where it is: somebody who marked a
+ * passage around the note they were on did not ask to hear it from the top.
+ * Outside it there is nowhere to stay, so the pass begins again.
+ */
+export function applyRegion() {
+  if (!state.take) return;
+  const [a, b] = span();
+  const at = playhead();
+  const inside = at >= a && at <= b;
+  if (!state.playing) {
+    // To the top rather than to the near edge: parked on the end of a passage
+    // it has not played, the playhead says the pass is over before it began.
+    state.startOffset = inside ? at : a;
+    return;
+  }
+  if (!inside) { startAt(a); return; }
+  state.startOffset = at;
+  state.startedAt = audio().currentTime;
+  for (const s of state.sources) {
+    s.loopStart = a;
+    s.loopEnd = b;
+    s.loop = state.loop && b - a > MIN_SPAN;
+  }
 }
 
 /* Move the playhead, whether or not anything is sounding.
@@ -149,7 +256,8 @@ export function playhead() {
  */
 export function seekTo(offset) {
   if (!state.take) return;
-  const at = Math.max(0, Math.min(offset, state.take.duration));
+  const [a, b] = span();
+  const at = Math.min(Math.max(offset, a), b);
   state.startOffset = at;
   if (state.playing) startAt(at);
 }
@@ -164,14 +272,17 @@ export function seekTo(offset) {
  * that has to be undone.
  */
 export function rewind() {
-  seekTo(state.region ? state.region[0] : 0);
+  seekTo(span()[0]);
 }
 
 export function togglePlay() {
   if (!state.take) return;
-  audio().resume();
-  if (state.playing) pause();
-  else startAt(state.startOffset >= state.take.duration - 0.01 ? 0 : state.startOffset);
+  if (state.playing) { pause(); return; }
+  // Stopped at the far end, play starts over rather than sounding the last
+  // millisecond. The end of a pass already rewinds; this covers a playhead put
+  // there by hand.
+  const [a, b] = span();
+  startAt(state.startOffset >= b - 0.01 ? a : state.startOffset);
 }
 
 export function renderLevels() {

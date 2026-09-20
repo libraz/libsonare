@@ -82,17 +82,11 @@ export function drawWave() {
   const g = cv.getContext('2d');
   if (!state.take) { g.clearRect(0, 0, w, h); return; }
   const active = activeKey();
-  const sig = `${state.take.id}|${active}|${state.blind}|${w}x${h}`
-    + `|${state.region ? state.region.join(',') : ''}`;
+  const sig = `${state.take.id}|${active}|${state.blind}|${w}x${h}`;
   const off = layer('wave', w, h, sig, (c) => {
     c.clearRect(0, 0, w, h);
     const mid = h / 2;
     const cols = Math.min(w, 3000);
-    if (state.region) {
-      const [a, b] = state.region;
-      c.fillStyle = 'rgba(255,255,255,0.07)';
-      c.fillRect((a / state.take.duration) * w, 0, ((b - a) / state.take.duration) * w, h);
-    }
     // The inactive versions first and dimmed, so the active one is never hidden
     // behind a louder take that happens to be selected somewhere else.
     const order = [...state.take.keys.filter((k) => k !== active), active];
@@ -129,14 +123,48 @@ export function drawWave() {
   });
   g.clearRect(0, 0, w, h);
   g.drawImage(off, 0, 0);
+  drawPassage(g, w, h);
   drawPlayhead(g, w, h);
 }
 
+/* The marked passage, drawn by taking the rest of the take back rather than by
+ * tinting it: what plays is what is lit, which needs no legend. Neutral,
+ * because teal and amber mean model and reference everywhere on this page and a
+ * passage is neither.
+ *
+ * On the blit rather than into the cached layer. It moves under the pointer
+ * through a whole drag, and both layers cost a full repaint — the spectrogram
+ * a per-pixel one — to change a rectangle that is two fills.
+ */
+function drawPassage(g, w, h) {
+  if (!state.region) return;
+  const [a, b] = state.region;
+  const x0 = (a / state.take.duration) * w;
+  const x1 = (b / state.take.duration) * w;
+  g.fillStyle = 'rgba(16,18,22,0.58)';
+  g.fillRect(0, 0, x0, h);
+  g.fillRect(x1, 0, w - x1, h);
+  g.strokeStyle = 'rgba(219,224,232,0.32)';
+  g.lineWidth = Math.max(1, window.devicePixelRatio || 1);
+  for (const x of [x0, x1]) {
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke();
+  }
+}
+
 function drawPlayhead(g, w, h) {
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
   const x = (playhead() / state.take.duration) * w;
   g.strokeStyle = 'rgba(248,246,242,0.92)';
-  g.lineWidth = Math.max(1, window.devicePixelRatio || 1);
+  g.lineWidth = dpr;
   g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke();
+  // A grip on it, because it can be dragged and a hairline does not look like
+  // anything that can be.
+  const s = 4.5 * dpr;
+  g.fillStyle = 'rgba(248,246,242,0.92)';
+  g.beginPath();
+  g.moveTo(x - s, 0); g.lineTo(x + s, 0); g.lineTo(x, s * 1.5);
+  g.closePath();
+  g.fill();
 }
 
 /* --- FFT: iterative radix-2, in place on split real/imaginary arrays --- */
@@ -285,6 +313,7 @@ export function drawSpec() {
   });
   g.clearRect(0, 0, w, h);
   g.drawImage(off, 0, 0);
+  drawPassage(g, w, h);
   drawPlayhead(g, w, h);
 }
 

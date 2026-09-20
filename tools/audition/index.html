@@ -200,14 +200,39 @@
       </div>
 
       <div id="transport">
-        <button id="rewindBtn" type="button" data-i18n="transport.rewind"
-                data-i18n-title="transport.rewindTitle">rewind</button>
-        <button id="playBtn" type="button" class="play" data-i18n="transport.play">play</button>
-        <button id="loopBtn" type="button" data-i18n="transport.loop">loop</button>
-        <span id="clock" class="mono">0.00 / 0.00</span>
-        <span id="regionSpan" class="mono"></span>
-        <button id="clearRegion" type="button" class="ghost" hidden
-                data-i18n="transport.clearRegion">whole take</button>
+        <!-- The three controls that make a sound are one object, set apart from
+             the readouts beside them. Evenly spaced in a flat row, nothing said
+             which of the things in the row would play anything. -->
+        <div class="tport">
+          <button id="rewindBtn" type="button" class="tbtn"
+                  data-i18n-title="transport.rewindTitle">
+            <span class="ticon" aria-hidden="true">❙◀︎</span>
+            <span data-i18n="transport.rewind">back to the top</span>
+          </button>
+          <button id="playBtn" type="button" class="tbtn play">
+            <span class="ticon" aria-hidden="true">▶︎</span>
+            <span class="tlabel" data-i18n="transport.play">play</span>
+          </button>
+          <button id="loopBtn" type="button" class="tbtn" aria-pressed="false"
+                  data-i18n-title="transport.loopTitle">
+            <span class="ticon" aria-hidden="true">↻</span>
+            <span data-i18n="transport.loop">loop</span>
+          </button>
+        </div>
+
+        <span id="clock" class="clock mono"><span id="clockAt">0.00</span><span
+          id="clockOf" class="of"> / 0.00</span></span>
+
+        <!-- The marked passage and the way out of it are one thing. A readout
+             saying `1.20–3.40 s` and a button saying `whole take`, set apart in
+             the row, never said they were about each other. -->
+        <span id="passage" class="passage" hidden>
+          <span id="regionSpan" class="mono"></span>
+          <button id="clearRegion" type="button" class="passage-x"
+                  data-i18n-title="transport.clearRegion"
+                  data-i18n-aria="transport.clearRegion">×</button>
+        </span>
+
         <span id="levels" class="mono"></span>
         <span class="grow"></span>
         <span id="blindScore" class="mono"></span>

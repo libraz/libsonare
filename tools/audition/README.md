@@ -136,6 +136,14 @@ Name none and they are discovered under the scratch root the rest of the harness
 
 Everything that is set once and then left alone is behind `options`. What stays on the listening surface is what is being listened to, and what is being said about it.
 
+## The transport
+
+**Choosing a version sounds it.** A version button, `1`…`9`, the arrows, `tab` and the swap button all start the render they name if nothing is playing — the page exists to compare two sounds, and with the transport stopped every one of those controls changed a label and produced silence, so hearing the two sides cost three presses with a hunt for the play button in the middle. The one case that stays silent is restoring an address: a link opens a page, it does not start a sound in a tab nobody has looked at yet.
+
+**A marked passage is what plays.** Drag across either picture to mark one and playback stays inside it, `loop` repeats it, `home` goes to its top, and the chip beside the clock says what it is and takes it off again. The rest of the take is dimmed rather than the passage being tinted, so what plays is what is lit. A click seeks; a click outside the passage is how you leave it, and one inside keeps it — dropping it on every click made a passage nobody could move around in. Dragging the playhead itself scrubs, silently, and playback resumes where it is let go.
+
+**A pass ends at the top, not at the end.** Reaching the end of the passage rewinds to its start and releases the play button, so the next press means play rather than "rewind, then play". Turning loop on or off mid-pass does not interrupt the sound: the sources carry the loop and only the anchor the playhead is measured from has to move.
+
 ## Keys
 
 `?` shows them on either view.
@@ -146,6 +154,7 @@ Everything that is set once and then left alone is behind `options`. What stays 
 | `tab` | swap between the two sides of the comparison |
 | `1`…`9`, `←` `→` | pick a version |
 | `↑` `↓` | previous / next take |
+| `home` | back to the top of the passage |
 | `L` | loop |
 | `M` | match loudness |
 | `S` | restart on switch |
@@ -161,7 +170,9 @@ On the bank the rows are what is navigated, since nothing is sounding there:
 | `enter` | listen to this voice, where a page has been rendered |
 | `/` | find; `esc` leaves the box |
 
-Dragging across the waveform sets a loop region; a click with no drag seeks. The digits count in the order the versions are shown, which is by role, not the order the manifest happens to list them in.
+The digits count in the order the versions are shown, which is by role, not the order the manifest happens to list them in.
+
+## Blind mode
 
 **Blind mode** hides which version is which and shuffles them per take, so a judgement is a judgement rather than an expectation.
 

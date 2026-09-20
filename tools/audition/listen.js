@@ -26,8 +26,8 @@ import {
 import { t, applyStatic, phrase } from './i18n.js';
 import { takeText } from './take-text.js';
 import {
-  activeKey, applyGains, loadTake, pause, playhead, renderLevels,
-  startAt, stopSources, hitAt, conditions,
+  activeKey, applyGains, loadTake, markPlay, markRegion, pause, playhead,
+  renderLevels, span, startAt, stopSources, hitAt, conditions,
 } from './player.js';
 import { dotEl, heardChip, signoffChip, stageBar } from './bank.js';
 import { loadFeedback, recordBlind, recordPreference } from './feedback.js';
@@ -91,7 +91,7 @@ export async function loadSet(id, want) {
   if (!entry) return;
   stopSources();
   state.playing = false;
-  $('playBtn').textContent = t('transport.play');
+  markPlay(false);
   state.setId = entry.id;
   state.base = `s/${entry.id}/`;
   localStorage.setItem(SET_KEY, entry.id);
@@ -331,7 +331,11 @@ export async function selectTake(i) {
   pause();
   state.itemIndex = i;
   state.startOffset = 0;
+  // A passage is marked on one take's picture and means nothing on the next
+  // one's, so it comes off with the take — and the chip that says so has to go
+  // with it, or the transport claims to be playing a passage nothing holds.
   state.region = null;
+  markRegion();
   markTakeList();
   // On a kit the take decides which instruments are in play, so the subject
   // line moves with it rather than with the set.
@@ -484,7 +488,7 @@ function buildVersionButtons() {
     b.append(text);
     b.title = versionTitle(slot);
     b.setAttribute('aria-pressed', String(slot === state.versionIndex));
-    b.addEventListener('click', () => setVersion(slot));
+    b.addEventListener('click', () => setVersion(slot, { play: true }));
     seg.append(b);
   });
   for (const block of blocks) fillHead(block);
@@ -604,7 +608,7 @@ export function swapRole() {
   const slots = slotsInRole(other);
   if (!slots.length) return;
   const want = state.lastByRole[other];
-  setVersion(slots.includes(want) ? want : slots[0]);
+  setVersion(slots.includes(want) ? want : slots[0], { play: true });
 }
 
 function markSwap() {
@@ -642,7 +646,18 @@ function selectVersionByKey(key) {
   if (slot >= 0) setVersion(slot);
 }
 
-export function setVersion(slot) {
+/* Choose a version — and, unless the caller is restoring an address, hear it.
+ *
+ * `play` is what makes the switch a listening act rather than a selection.
+ * Nothing on this page is worth selecting for its own sake: the page exists to
+ * compare two sounds, and with the transport stopped every one of these
+ * controls changed a label and produced silence, so the shortest route from
+ * opening the page to hearing the two sides was three presses with a hunt for
+ * the play button in the middle. Restoring an address is the one case that must
+ * stay silent — a link opens a page, it does not start a sound in a tab
+ * somebody has not looked at yet.
+ */
+export function setVersion(slot, { play = false } = {}) {
   if (!state.take || slot < 0 || slot >= state.take.keys.length) return;
   state.versionIndex = slot;
   if (!state.blind) {
@@ -658,11 +673,13 @@ export function setVersion(slot) {
   // means the new version's onset has already gone by, and waiting out the take
   // to hear it is long enough for the ear to lose what it was holding.
   if ($('restartOnSwitch').checked) {
-    const from = (state.region || [0])[0];
-    if (state.playing) startAt(from);
+    const from = span()[0];
+    if (state.playing || play) startAt(from);
     else state.startOffset = from;  // the rAF loop redraws the playhead
   } else if (state.playing) {
     applyGains(false);
+  } else if (play) {
+    startAt(state.startOffset);
   }
   renderLevels();
   writeRoute();
@@ -673,7 +690,7 @@ export function stepVersion(delta) {
   const at = state.display.indexOf(state.versionIndex);
   const n = state.display.length;
   if (!n) return;
-  setVersion(state.display[((at < 0 ? 0 : at) + delta + n) % n]);
+  setVersion(state.display[((at < 0 ? 0 : at) + delta + n) % n], { play: true });
 }
 
 /* ------------------------------------------------------------- readouts */
@@ -1041,5 +1058,5 @@ export function refreshListen() {
   renderCaptions();
   renderLevels();
   renderScore();
-  $('playBtn').textContent = state.playing ? t('transport.pause') : t('transport.play');
+  markPlay(state.playing);
 }
