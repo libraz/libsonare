@@ -113,13 +113,11 @@ BANK_PATH = REPO_ROOT / "tools" / "voice-status.json"
 POLICY_PATH = REPO_ROOT / "tools" / "voicematch" / "policy.json"
 CAPTURE_DIR = REPO_ROOT / "tools" / "voicematch" / "capture"
 
-#: The one source class a `machine` timbre axis can be answered by: a slot
-#: naming a sound the machine invented has nothing standing behind it for a
-#: recording to be made of. The rule belongs to
-#: `tests/conformance/check_bank_policy.py`, which counts the slots that break
-#: it; it is spelled again here because this server imports nothing outside the
-#: standard library and the tools tree needs numpy.
-MACHINE_SOURCE = "module"
+#: Which source class answers which layer is `tools/voicematch/policy.py`, and
+#: it is imported rather than spelled again here: the same rule now decides
+#: which capture answers a voice, and two readings of it would disagree
+#: silently. That module imports only the standard library, so it does not cost
+#: this server the numpy-free start the rest of the tools tree would.
 
 #: Where the page writes what a listener said, one file of JSON lines per voice.
 #: Under the scratch root rather than in the tree: a listening note is taken
@@ -373,43 +371,28 @@ def capture_facts(capture_id: str) -> dict:
     }
 
 
-def wanted_layer(policy: dict, program: int, kit: bool, bank: int = 0) -> dict:
-    """Which kind of reference this slot is aimed at, and why.
+def _layers():
+    """The module that owns the layer rule, or None outside the repository.
 
-    Two branches are selected by a flag rather than by a program number, because
-    both share the program space with something else and the number cannot tell
-    them apart. A kit takes the kit branch whatever its number, or a kit selected
-    by a program some branch also names would be answered as that melodic voice.
-    A GS variation takes the variation branch whenever its bank is non-zero,
-    because a variation carries its capital's program: dispatching it by number
-    resolves it to `default`, which wants an instrument, and the caller's
-    off-target test then cannot fire on any variation at all. Otherwise a branch
-    naming this program wins, and `default` takes everything left.
+    Same shape as `_calibration`: imported rather than mirrored, because the
+    rule decides both which capture answers a voice and whether the one that
+    did is the right kind. None costs this server the provenance block and
+    nothing else, which is the state before any of it existed.
     """
-    branches = policy.get("reference_layer")
-    if not isinstance(branches, dict):
-        return {}
-    named = {k: v for k, v in branches.items()
-             if isinstance(v, dict) and not k.startswith("_")}
-    chosen = ""
-    if kit and "kits" in named:
-        chosen = "kits"
-    elif bank and "variations" in named:
-        chosen = "variations"
-    for name, branch in named.items():
-        if not chosen and program in (branch.get("programs") or []):
-            chosen = name
-    if not chosen:
-        chosen = "default"
-    branch = named.get(chosen)
-    if not branch:
-        return {}
-    return {
-        "branch": chosen,
-        "timbre": branch.get("timbre") or "",
-        "behaviour": branch.get("behaviour") or "",
-        "reason": branch.get("reason") or "",
-    }
+    tools = REPO_ROOT / "tools" / "voicematch"
+    if str(tools) not in sys.path:
+        sys.path.append(str(tools))
+    try:
+        import policy
+    except ImportError:
+        return None
+    return policy
+
+
+def wanted_layer(policy: dict, program: int, kit: bool, bank: int = 0) -> dict:
+    """Which kind of reference this slot is aimed at, and why. See `policy.py`."""
+    layers = _layers()
+    return layers.wanted_layer(policy, program, kit, bank) if layers else {}
 
 
 def provenance(voice: dict, ident: str) -> dict:
@@ -439,11 +422,15 @@ def provenance(voice: dict, ident: str) -> dict:
     declined = (policy.get("no_reference") or {}).get(ident)
     capture = capture_facts(voice.get("capture") or "") if voice.get("capture") else {}
 
+    layers = _layers()
     if capture:
         cls = capture["source_class"]
         if not cls:
             state = "unclassified"
-        elif want.get("timbre") == "machine" and cls != MACHINE_SOURCE:
+        # Both directions, not just a machine slot answered by a recording: a
+        # slot aimed at an instrument and answered by the module is the same
+        # mistake read the other way, and it used to report as `aimed`.
+        elif layers and not layers.answers_layer(cls, want):
             state = "off-target"
         else:
             state = "aimed"
