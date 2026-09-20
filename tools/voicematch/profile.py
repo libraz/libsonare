@@ -1336,15 +1336,26 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
 # 6 dB disagreement about how loud a tambourine is says the kit balance is a mix
 # decision, and a fit given one reference will happily take it 31 dB down.
 #
+# THE TWO SENTENCES ABOVE NAME TWO DIFFERENT BASES AND THE TABLE USES BOTH.
+# "Measured by asking twice" is the references' own disagreement; "set at roughly
+# the difference a listener would call a different choice" is a judgement. The six
+# older entries are the judgement, and they sit between 0.59x and 2.38x of the
+# measured figure rather than at it (level 6.0 against 10.20 measured, centroid
+# 50.0 against 21.00). The two below are the measured width, taken from the kit
+# grid's own two-reference comparison recorded in `capture/drums.json`.
+#
+# The consequence of that basis is untested and worth knowing before reading a
+# run: a tolerance set AT the median disagreement puts about half the cells
+# outside it by construction, so a low agreement count on these two is not yet
+# evidence the references disagree about the instrument. What would settle it is
+# an `agree` run over the kit reporting the agreed/counted ratio.
+#
 # `band_decay` and `ring` are the two a percussion row carries and a melodic one
 # does not; both come back `None` where the fields are absent, which prints as
-# `n/a` and counts nothing. Their widths are the two references' own measured
-# disagreement over the kit grid, recorded in `capture/drums.json`. They are wide
-# — 0.69 doublings is a factor of 1.6 — and a wide bound is the point: it catches
-# a hit that is several times wrong and passes anything a second real kit could
-# have been. Without them nothing in the tree could fail a ring regression on any
-# kit note at all, which is how an engine change that moved every sub-unity mode's
-# damping reached the bank with no instrument able to see it.
+# `n/a` and counts nothing. Without them nothing in the tree could fail a ring
+# regression on any kit note at all, which is how an engine change that moved
+# every sub-unity mode's damping reached the bank with no instrument able to
+# see it.
 AGREEMENT_TOLERANCE = {
     "level": 6.0,
     "band_tilt": 6.0,
