@@ -58,7 +58,8 @@
     "centroid_pct",
     "tnr"
   ],
-  "rig": "none",
+  "_rig": "Unclassified and terminal, which is not the same as unanswered. An electric grand is a strung piano heard through its own pickups, so it is a family that carries an amplifier and the question has to be put; what is missing here is any way to put it. Neither route reaches this source. There is no A/B, because the module has no amplifier stage to switch off - the tone is a recording of whatever chain sampled it, fixed, and nothing downstream of that is a control. The sibling-shape test does not apply either: it turns a dark spectrum into evidence by finding siblings that share the shape, which is an argument only where the siblings came through ONE chain in one session, and this source's tones were each sampled separately. A `none` here would be a claim nothing measured, which is why the acoustic instruments of this source carry one and this tone does not - for a grand or a marimba there is no amplifier for the answer to be about.",
+  "rig": "unclassified",
   "room": "none",
   "_room": "The module is recorded with reverb, chorus, delay and the insertion effect all off, and `import_sf2.py --report` plus its own dryness check measure the imported corpus rather than taking this declaration's word for it.",
   "source_class": "module",
