@@ -826,5 +826,91 @@
         "note": "a longer downward sweep with more shell behind it, so the kick should sit bigger and boomier under the groove"
       }
     ]
+  },
+  "p067-baritone-sax": {
+    "variants": [
+      {
+        "name": "valve-scale-0.6",
+        "title": {
+          "en": "Valve at 0.6 of its pressure scale",
+          "ja": "弁の圧力スケール 0.6"
+        },
+        "desc": {
+          "en": "The note speaks sooner. Nothing measurable is given up for it.",
+          "ja": "音の出だしが早くなります。測定上は何も失っていません。"
+        },
+        "overrides": "baritone_sax.reed.pressure_scale=0.6",
+        "note": "arrival error 265 -> 175 ms, release 50 -> 40 ms, brightness and tone-to-noise flat; the half-fundamental the valve carries rises from -50 to -46 dB at the top of the grid"
+      },
+      {
+        "name": "valve-scale-0.25",
+        "title": {
+          "en": "Valve at a quarter of its pressure scale",
+          "ja": "弁の圧力スケール 0.25"
+        },
+        "desc": {
+          "en": "Much prompter again, and now with an edge on the tone and a longer ring after the key comes up.",
+          "ja": "さらに立ち上がりが早くなる代わりに、音に硬さが出て、鍵を離した後の余韻も伸びます。"
+        },
+        "overrides": "baritone_sax.reed.pressure_scale=0.25",
+        "note": "arrival error 265 -> 95 ms; the half-fundamental rises to -41 dB and brightness p90 74 -> 113"
+      },
+      {
+        "name": "valve-scale-0.08",
+        "title": {
+          "en": "Valve at the scale the reference attack asks for",
+          "ja": "実機の立ち上がりに合う弁の圧力スケール"
+        },
+        "desc": {
+          "en": "As prompt as the reference. Whether it is still a saxophone is the question this one is here to ask.",
+          "ja": "立ち上がりは実機と同等です。それでもサックスに聞こえるかどうかが、この候補の問いです。"
+        },
+        "overrides": "baritone_sax.reed.pressure_scale=0.08",
+        "note": "the scale the arrival bound needs, and past the valve's period doubling: the half-fundamental stops being a line at all and the band under the note becomes a -30 dB carpet"
+      }
+    ]
+  },
+  "p065-alto-sax": {
+    "variants": [
+      {
+        "name": "valve-scale-0.6",
+        "title": {
+          "en": "Valve at 0.6 of its pressure scale",
+          "ja": "弁の圧力スケール 0.6"
+        },
+        "desc": {
+          "en": "The note speaks sooner. Nothing measurable is given up for it.",
+          "ja": "音の出だしが早くなります。測定上は何も失っていません。"
+        },
+        "overrides": "alto_sax.reed.pressure_scale=0.6",
+        "note": "arrival error 70 -> 45 ms, brightness p90 50 -> 57, release 10 -> 20 ms"
+      },
+      {
+        "name": "valve-scale-0.25",
+        "title": {
+          "en": "Valve at a quarter of its pressure scale",
+          "ja": "弁の圧力スケール 0.25"
+        },
+        "desc": {
+          "en": "Much prompter again, and now with an edge on the tone and a longer ring after the key comes up.",
+          "ja": "さらに立ち上がりが早くなる代わりに、音に硬さが出て、鍵を離した後の余韻も伸びます。"
+        },
+        "overrides": "alto_sax.reed.pressure_scale=0.25",
+        "note": "arrival error 70 -> 20 ms, inside the recorded bound and one gate failure fewer than the shipped build; brightness p90 50 -> 114 and release 10 -> 55 ms are what it costs"
+      },
+      {
+        "name": "valve-scale-0.08",
+        "title": {
+          "en": "Valve at the scale the reference attack asks for",
+          "ja": "実機の立ち上がりに合う弁の圧力スケール"
+        },
+        "desc": {
+          "en": "Past the reference rather than level with it: the top of the grid now speaks sooner than the recording does.",
+          "ja": "実機に並ぶのではなく行き過ぎた状態です。グリッド上端では録音より先に音が出ます。"
+        },
+        "overrides": "alto_sax.reed.pressure_scale=0.08",
+        "note": "past the reference rather than level with it, and past the valve's period doubling; listed as the end of the range rather than as a candidate"
+      }
+    ]
   }
 }
