@@ -9,18 +9,24 @@
 /// indistinguishable from one that followed, in every instrument except the
 /// pitch itself.
 ///
-/// The measurement is travel rather than accuracy. An engine's sounding pitch
-/// is not the requested one: a brass lip resonance drags the pitch back against
-/// a bend by more than half of it, and every waveguide is tuned to within a few
-/// cents rather than exactly. What a pinned line does instead is stop moving,
-/// so what is required here is that the pitch is still descending at the deep
-/// bend -- a property no engine's own tuning error can fake, and one a pinned
-/// line cannot satisfy however well tuned it is.
+/// The reach measurement is travel rather than accuracy, because an engine's
+/// sounding pitch is not exactly the requested one -- every waveguide is tuned
+/// to within a few cents, and each engine's own excitation moves it a little
+/// further. What a pinned line does instead is stop moving, so what is required
+/// there is that the pitch is still descending at the deep bend -- a property
+/// no engine's own tuning error can fake, and one a pinned line cannot satisfy
+/// however well tuned it is.
+///
+/// The last case is the opposite measurement on one engine. The brass carries a
+/// lip resonance that the bore's own bend does not move, so it is the one
+/// engine whose sounding pitch can be dragged back by something other than the
+/// line running out, and its interval is held to the one it was given.
 ///
 /// The positive control is the second case: the same engine, the same note and
 /// the same bend, driven at two delay-line lengths. It has to show a pin at the
 /// short one, or nothing above is evidence that this file could report one.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -58,19 +64,26 @@ constexpr double kNoteHz = 261.6255653;
 constexpr int kSettleFrames = 8192;
 constexpr int kWindowFrames = 16384;
 
-/// Cents of further descent required between the two deep bends. With no lip
-/// drag the interval itself is 200 cents; the brass lip gives back most of it,
-/// and a line that has run out gives back all of it.
+/// Cents of further descent required between the two deep bends. The interval
+/// itself is 200 cents and a line that has run out gives back all of it, so the
+/// floor sits far enough under 200 that an engine which merely tunes a few
+/// cents off is not caught by it.
 constexpr double kTravelFloor = 30.0;
+
+/// How far a sounded interval may sit from the one asked for. Wide enough to
+/// absorb each engine's own excitation pulling on the pitch, far too narrow for
+/// a resonance left behind on the unbent note, which costs most of the interval.
+constexpr double kIntervalTolerance = 12.0;
 
 double cents_between(double from_hz, double to_hz) { return 1200.0 * std::log2(to_hz / from_hz); }
 
-/// Sounds @p note with a downward bend of @p cents and returns the measured
+/// Sounds kNote bent by @p cents, positive up, and returns the measured
 /// fundamental. The bend is set before the note starts, so the line is read at
 /// the bent delay from the first sample and no glide transient sits inside the
-/// window. A bend range of N semitones with the wheel at its bottom stop is
-/// exactly -N * 100 cents, which is why the range carries the depth.
-double bent_fundamental(SynthEngineMode mode, int cents) {
+/// window. The RPN range is opened just wide enough to hold the request and the
+/// wheel placed proportionally inside it, so the depth is what is asked for
+/// rather than whatever a stop happens to reach.
+double bent_fundamental(SynthEngineMode mode, double cents) {
   NativeSynthConfig cfg;
   cfg.patch = NativeSynthPatch{};
   cfg.patch.mode = mode;
@@ -80,15 +93,19 @@ double bent_fundamental(SynthEngineMode mode, int cents) {
 
   NativeSynth synth(cfg);
   synth.prepare(kRate, kBlock);
-  const uint8_t semitones = static_cast<uint8_t>(cents / 100);
+  const int semitones = std::max(1, static_cast<int>(std::ceil(std::fabs(cents) / 100.0)));
   synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 101, 0)));
   synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 100, 0)));
-  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 6, semitones)));
-  synth.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, 0, 0)));
+  synth.on_event(
+      0, event(sonare::midi::make_midi1_control_change(0, 0, 6, static_cast<uint8_t>(semitones))));
+  const double span = semitones * 100.0;
+  const int wheel =
+      std::clamp(8192 + static_cast<int>(std::lround(8192.0 * cents / span)), 0, 16383);
+  synth.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, 0, static_cast<uint16_t>(wheel))));
   synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kNote, kVelocity)));
 
   const std::vector<float> out = render_left(synth, kSettleFrames + kWindowFrames);
-  const double hint = kNoteHz * std::exp2(-static_cast<double>(cents) / 1200.0);
+  const double hint = kNoteHz * std::exp2(cents / 1200.0);
   return fft_fundamental(out, static_cast<size_t>(kSettleFrames), hint);
 }
 
@@ -123,8 +140,8 @@ TEST_CASE("a waveguide keeps descending past the span a note-on period would buy
   size_t measured = 0;
   for (const WaveguideEngine& engine : kEngines) {
     CAPTURE(engine.label);
-    const double shallow = bent_fundamental(engine.mode, 500);
-    const double deep = bent_fundamental(engine.mode, 700);
+    const double shallow = bent_fundamental(engine.mode, -500.0);
+    const double deep = bent_fundamental(engine.mode, -700.0);
     REQUIRE(shallow > 0.0);
     REQUIRE(deep > 0.0);
     const double travel = -cents_between(shallow, deep);
@@ -136,6 +153,34 @@ TEST_CASE("a waveguide keeps descending past the span a note-on period would buy
   // being iterated reports exactly what a passing tree reports.
   INFO("engines measured: " << measured);
   REQUIRE(measured == std::size(kEngines));
+}
+
+TEST_CASE("a brass bend arrives at the interval it asked for", "[midi][synth][waveguide]") {
+  // The bore follows a bend by itself -- its delay is divided by the pitch
+  // factor every sample -- but the lip is a resonator tuned to a frequency, and
+  // a lip left on the unbent note pulls the loop back toward itself. Left that
+  // way two semitones arrive as well under one, and the response stops being
+  // monotone once the bend is deep enough for the lip to win.
+  //
+  // The engine's own tuning error is taken out first: it is the same offset on
+  // every reading here, and what is under test is the interval rather than the
+  // absolute pitch this model lands on.
+  const double unbent = cents_between(kNoteHz, bent_fundamental(SynthEngineMode::kBrass, 0.0));
+  // Both directions and three depths each: the drag is not symmetric, and it
+  // grows with the interval, so a single shallow downward point would miss it.
+  const double asked[] = {-200.0, -100.0, -60.0, 60.0, 100.0, 200.0};
+
+  size_t measured = 0;
+  for (const double cents : asked) {
+    const double sounded =
+        cents_between(kNoteHz, bent_fundamental(SynthEngineMode::kBrass, cents)) - unbent;
+    CAPTURE(cents, sounded, unbent);
+    REQUIRE(std::fabs(sounded - cents) < kIntervalTolerance);
+    ++measured;
+  }
+  // Un-reach is a failure rather than a clean run, same as above.
+  INFO("bends measured: " << measured);
+  REQUIRE(measured == std::size(asked));
 }
 
 TEST_CASE("the delay line length is what bounds the descent", "[midi][synth][waveguide]") {

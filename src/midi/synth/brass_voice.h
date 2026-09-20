@@ -280,6 +280,10 @@ class BrassVoiceCore {
   float lip_srf_ = 0.0f;
   float lip_q_ = 0.0f;
   float lip_tune_ = 1.0f;
+  /// The pitch factor the lip is currently tuned for. render() re-tunes once
+  /// this and its own factor have drifted apart, so a bend moves the lip as
+  /// well as the bore; 1 means note-on left it on the note's own f0.
+  float lip_ratio_ = 1.0f;
   float lip_b0_ = 0.0f;
   float lip_a1_ = 0.0f;
   float lip_a2_ = 0.0f;

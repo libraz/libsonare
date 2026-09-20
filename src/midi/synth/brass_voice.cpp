@@ -53,6 +53,11 @@ SONARE_TUNABLE(kLipQSpan, 22.0f);
 // Lip tension detunes the lip resonance a little above / below the note (the
 // embouchure centre). Small — a few percent.
 SONARE_TUNABLE(kLipTuneSpan, 0.04f);  // f_lip = f0 * (1 + span*(tension - 0.5))
+// How far the per-sample pitch factor may drift from the one the lip is tuned
+// for before the resonator is redesigned — 1.04 cents, under what a bend needs
+// to sound continuous and over a shallow vibrato's own excursion. Not a
+// SONARE_TUNABLE: it trades CPU against pitch resolution, with no reference.
+constexpr float kLipRetuneTolerance = 0.0006f;
 // Pitch correction: an outward-striking lip oscillates just ABOVE its resonance
 // (Fletcher 1979), so the played note lands a touch sharp of the bore/lip lock;
 // the loop delay is lengthened to bring it back onto pitch. Co-calibrated with
@@ -225,6 +230,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   lip_q_ = kLipQMin + kLipQSpan * (1.0f - damp);
   lip_tune_ = 1.0f + kLipTuneSpan * (tension - 0.5f);
   tune_lip(f0);
+  lip_ratio_ = 1.0f;
   lip_offset_ = kLipOffset;
   lip_couple_ = kLipCouple;
 
@@ -395,11 +401,21 @@ void BrassVoiceCore::retune(float pitch_ratio) noexcept {
   if (lip_srf_ <= 0.0f || lip_q_ <= 0.0f) return;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
   tune_lip(bore_f0_ * ratio);
+  lip_ratio_ = ratio;
 }
 
 float BrassVoiceCore::render(float pitch_ratio) noexcept {
   if (bore_ == nullptr || capacity_ < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
+
+  // The bore follows the bend every sample below, but the lip resonance is a
+  // filter, so without this it stays on the note it was tuned at and drags the
+  // sounding pitch back toward it -- a two-semitone bend arrives as about 0.8,
+  // and stops being monotone at the top. The factor carries vibrato, drift and
+  // the patch's own pitch offset as well as the wheel, so a patch modulating
+  // past the tolerance re-tunes with nothing bending it -- the lip tracks the
+  // sounding pitch, which is the same physics a bend asks for.
+  if (std::fabs(ratio - lip_ratio_) > kLipRetuneTolerance) retune(ratio);
 
   // Live control: ramp the steady breath / bell brightness toward their CC
   // targets (control-rate host updates, audio-rate smoothing -> no zipper).
