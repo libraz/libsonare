@@ -553,10 +553,13 @@ TEST_CASE("BuiltinSynth obeys the zone's prohibitions", "[midi][synth][mpe]") {
 }
 
 TEST_CASE("BuiltinSynth renders a project that configures no zone unchanged",
-          "[midi][synth][golden]") {
+          "[.][midi][synth][golden]") {
   // The zone model is inert until an MCM arrives, and this is the hash that says
   // so: every controller this synth honours, sent on an ordinary channel, over a
-  // render long enough to cover the attack, the sustain and the release.
+  // render long enough to cover the attack, the sustain and the release. Hidden
+  // like every other render hash: the 1e-6 quantization is finer than float
+  // reproducibility across architectures and libm implementations, so the digest
+  // is specific to the host that recorded it.
   BuiltinSynthConfig cfg;
   cfg.waveform = sonare::midi::SynthWaveform::kSaw;
   cfg.gain = 0.3f;
