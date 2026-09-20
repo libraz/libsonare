@@ -110,13 +110,22 @@ struct ReedPatchParams {
   /// reed rings at its natural frequency, boosting the partials near it (the
   /// "reed formant" edge) and adding a live beating to the attack, the way a real
   /// cane reed does. Like the bowed string's elasto-plastic friction, the sharp
-  /// table is KEPT (so the harmonic structure survives) and only biased. OFF by
-  /// default -> the render path is bit-identical to the memoryless table, and
-  /// neither goldens nor parity move.
+  /// table is KEPT (so the harmonic structure survives) and only biased. With
+  /// the beating reed below on there is no table to bias, and the same reed
+  /// becomes the VALVE: its opening turns from a function of the current
+  /// pressure drop into a state, driven toward the static valve's opening at DC
+  /// gain 1 — so the static valve is the dynamic one's fixed point and the
+  /// oscillating band is unchanged. What that buys is not the reed's inertia,
+  /// which is an order below the bore's own seed, but the tongue: the reed is
+  /// held shut against the lay until the mouth pressure has risen, and the
+  /// swing from a closed channel is the pulse that speaks the note. OFF by
+  /// default -> the render path is bit-identical on both branches, and neither
+  /// goldens nor parity move.
   bool dynamic_reed = false;
   /// Reed natural frequency in [0,1] (only when dynamic_reed): low = a soft, low
   /// reed resonance (a darker, rounder cane reed); high = a stiff, high reed
-  /// resonance (a brighter, edgier reed formant).
+  /// resonance (a brighter, edgier reed formant). With the beating reed on it is
+  /// the valve's own resonance, so it sets how fast the reed swings open.
   float reed_resonance = 0.5f;
 
   /// Beating-reed closing pressure: the mouth-minus-bore drop at which the reed
@@ -149,9 +158,9 @@ struct ReedPatchParams {
   /// table's own scale, which the valve inherited and where the note needs
   /// tens of round trips to speak.
   float pressure_scale = 1.0f;
-  /// @note With the beating reed on, the valve is this pair alone:
-  /// reed_stiffness, reed_opening and dynamic_reed all address the table it
-  /// replaces and stop reaching the sound.
+  /// @note With the beating reed on, reed_stiffness and reed_opening address
+  /// the table it replaces and stop reaching the sound. dynamic_reed does not:
+  /// it turns the valve's own opening into a state (see its field above).
 
   /// Register vent in [0,1]: opening the register key vents the bore near the
   /// mouthpiece, damping the fundamental so the tube speaks its upper register
@@ -285,6 +294,11 @@ class ReedVoiceCore {
   float closing_pressure_ = 0.0f;
   float pressure_scale_ = 1.0f;
   float flow_gain_ = 0.0f;
+  // Tonguing (dynamic valve only): the reed is pinned shut until the mouth
+  // pressure reaches tongue_release_, so it starts its swing from a closed
+  // channel. Held false for the static valve, which has nothing to start.
+  bool tongue_held_ = false;
+  float tongue_release_ = 0.0f;
 
   // Breath contour: a one-pole ramp of the mouth pressure toward the target
   // level (1 while blowing, 0 once tongued off). breath_target_ is the steady
@@ -328,6 +342,10 @@ class ReedVoiceCore {
   // Dynamic (mass-spring) reed: a damped resonator driven by the pressure
   // difference, whose displacement biases the reed table. Returns the bias.
   float reed_resonator(float dp) noexcept;
+
+  // The same reed as the beating valve's own opening: driven toward @p x_rest
+  // (the static valve's opening) at DC gain 1. Returns the clamped displacement.
+  float valve_opening(float x_rest) noexcept;
 
   // 4a: dynamic reed. reed_dyn_ gates it; the resonator is a biquad bandpass
   // (b0, a1, a2) tuned to the reed's natural frequency, its output scaled by

@@ -89,6 +89,19 @@ float rms(const std::vector<float>& buf, size_t from, size_t to) {
   return n > 0 ? static_cast<float>(std::sqrt(acc / static_cast<double>(n))) : 0.0f;
 }
 
+/// Samples until a short-window RMS first reaches @p frac of the steady level,
+/// which the tail of the same render supplies. buf.size() when it never does.
+size_t speak_samples(const std::vector<float>& buf, double frac) {
+  const size_t win = 256;
+  if (buf.size() < 4 * win) return buf.size();
+  const float steady = rms(buf, buf.size() - 4 * win, buf.size());
+  if (!(steady > 0.0f)) return buf.size();
+  for (size_t i = 0; i + win <= buf.size(); i += win / 4) {
+    if (rms(buf, i, i + win) >= frac * steady) return i;
+  }
+  return buf.size();
+}
+
 float peak(const std::vector<float>& buf) {
   float p = 0.0f;
   for (float s : buf) p = std::max(p, std::fabs(s));
@@ -600,6 +613,85 @@ TEST_CASE("the beating reed leaves no steady flow under the note", "[midi][synth
       under += ps[static_cast<size_t>(b)];
     }
     REQUIRE(under < 0.25 * harmonic_power(ps, f0, 1));
+  }
+}
+
+TEST_CASE("the dynamic valve speaks the note from the tongue's release", "[midi][synth][reed]") {
+  // The static valve's opening is a function of the current pressure drop, so
+  // at the onset the bore has nothing but its seeded noise to grow from and the
+  // note swells in over tens of round trips. Giving the opening a state lets the
+  // tongue hold the reed shut and then let go: the swing from a closed channel
+  // to the rest opening is a deterministic pulse, and it is the pulse — not the
+  // reed's inertia, which is an order below the seed — that speaks the note.
+  // Measured with the onset chiff off, so the only thing starting the column is
+  // the valve itself.
+  for (bool conical : {false, true}) {
+    for (uint8_t note : {34, 50, 70}) {
+      NativeSynthPatch statics = reed_base_patch();
+      statics.reed.conical = conical;
+      statics.reed.chiff = 0.0f;
+      statics.reed.closing_pressure = 2.0f;
+      statics.reed.flow_gain = 1.0f;
+      NativeSynthPatch dynamic = statics;
+      dynamic.reed.dynamic_reed = true;
+      const std::vector<float> a = render_patch(statics, note, 110, 48000);
+      const std::vector<float> b = render_patch(dynamic, note, 110, 48000);
+      const size_t t_static = speak_samples(a, 0.5);
+      const size_t t_dynamic = speak_samples(b, 0.5);
+      const float s_static = rms(a, a.size() - 1024, a.size());
+      const float s_dynamic = rms(b, b.size() - 1024, b.size());
+      INFO("conical " << conical << " note " << int(note) << ": static " << t_static << "/"
+                      << s_static << " dynamic " << t_dynamic << "/" << s_dynamic);
+      REQUIRE(t_dynamic < a.size());
+      REQUIRE(t_dynamic < t_static);
+      // The onset halves while the steady level does not rise: the valve is
+      // normalised to DC gain 1, so what changed is where the column started
+      // rather than how much the loop returns. Over this grid the steady level
+      // moves between -22% and +5%, the larger side DOWNWARD — the opposite
+      // direction from a note that spoke sooner because it was driven harder,
+      // which is what separates the two explanations for the speed.
+      REQUIRE(s_dynamic > 0.65f * s_static);
+      REQUIRE(s_dynamic < 1.5f * s_static);
+    }
+  }
+}
+
+TEST_CASE("the dynamic valve lets the bore, not the reed, choose the pitch",
+          "[midi][synth][reed]") {
+  // A reed light enough to ring outruns the bore's round-trip gain at its own
+  // frequency and the note speaks there instead — a squeak. A real bore holds it
+  // down with a high-frequency loss this waveguide does not have, so the reed's
+  // damping is the only thing standing in the way. Read on notes whose reed
+  // resonance sits above the fortieth harmonic, where the bore has nothing of
+  // its own left in that band to be confused with.
+  const double f_reed = 2500.0;  // kReedResBaseHz + 0.5*kReedResSpanHz
+  for (bool conical : {false, true}) {
+    for (uint8_t note : {34, 46}) {
+      // Brightness opens the bell's loop lowpass, which returns more of the reed
+      // band each round trip — it is the patch axis that arms the squeak, so the
+      // damping has to hold at the top of it and not only in the middle.
+      for (float brightness : {0.5f, 1.0f}) {
+        const double f0 = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+        NativeSynthPatch patch = reed_base_patch();
+        patch.reed.conical = conical;
+        patch.reed.brightness = brightness;
+        patch.reed.closing_pressure = 2.0f;
+        patch.reed.flow_gain = 1.0f;
+        patch.reed.dynamic_reed = true;
+        patch.reed.reed_resonance = 0.5f;
+        const std::vector<double> ps = power_spectrum(render_patch(patch, note, 110, 48000), 24000);
+        double reed_band = 0.0;
+        const int lo = static_cast<int>(0.9 * f_reed / kRate * kFft);
+        const int hi = static_cast<int>(1.1 * f_reed / kRate * kFft);
+        for (int b = lo; b <= hi && b < static_cast<int>(ps.size()); ++b) {
+          reed_band += ps[static_cast<size_t>(b)];
+        }
+        const double bore = std::max(harmonic_power(ps, f0, 1), harmonic_power(ps, f0, 3));
+        INFO("conical " << conical << " note " << int(note) << " bright " << brightness << ": bore "
+                        << bore << " reed " << reed_band);
+        REQUIRE(bore > reed_band);
+      }
+    }
   }
 }
 

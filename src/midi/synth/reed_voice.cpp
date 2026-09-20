@@ -105,6 +105,14 @@ SONARE_TUNABLE(kReedResSpanHz, 2000.0f);
 // the bias only nudges the already-clamped table, never adds unbounded gain.
 SONARE_TUNABLE(kReedResR, 0.985f);
 SONARE_TUNABLE(kReedCouple, 0.15f);
+// Damping qr of the dynamic VALVE. Under 1.05 the reed outruns the bore at its
+// own frequency and the lowest bright note speaks there instead — a squeak the
+// cliff for which is sharp, so the default stands clear rather than on its edge.
+SONARE_TUNABLE(kReedValveDamping, 1.2f);
+// Mouth-pressure level at which the tongue leaves the reed; until then the reed
+// is pinned shut, so it starts its swing from a closed channel rather than from
+// equilibrium. 0 = the tongue is already off at note-on.
+SONARE_TUNABLE(kTongueReleaseLevel, 0.5f);
 
 // --- 4b register vent (only when params.register_vent > 0) ---
 // Low-band follower corner (Hz): the follower tracks the loop's low content so
@@ -153,6 +161,13 @@ SONARE_TUNABLE(kToneholeFracCone, 0.25f);
 // reed<->bell loop.
 SONARE_TUNABLE(kToneholeGainMax, 0.5f);
 
+/// The reed's own natural frequency (Hz) from the patch knob, held below
+/// Nyquist. Shared by the two roles the reed plays so they cannot drift apart.
+float reed_natural_hz(float resonance01, float srf) noexcept {
+  const float res01 = std::clamp(resonance01, 0.0f, 1.0f);
+  return std::min(kReedResBaseHz + kReedResSpanHz * res01, 0.45f * srf);
+}
+
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
   const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
@@ -164,6 +179,7 @@ float ramp_coeff(float ms, double sample_rate) noexcept {
 void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uint8_t note,
                           uint8_t velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const float srf = static_cast<float>(sr);
   noise_ = VoiceRandomSequence(seed);
   drive_index_ = 0;
   releasing_ = false;
@@ -174,7 +190,7 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   dc_y1_ = 0.0f;
 
   const float f0 = note_to_hz(note);
-  const float period = static_cast<float>(sr) / std::max(1.0f, f0);
+  const float period = srf / std::max(1.0f, f0);
   // Bore topology: a cylinder (clarinet) is a negative-feedback comb of half the
   // period -> odd harmonics; a cone (sax/oboe/bassoon), approximated as an open
   // pipe, is a positive-feedback comb of the full period -> full harmonics.
@@ -212,6 +228,33 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   // it reads as the unscaled valve, which is what the table's scale gives.
   pressure_scale_ = params.pressure_scale > 0.0f ? params.pressure_scale : 1.0f;
 
+  // Dynamic valve (gated, beating reed only): the opening becomes a STATE
+  // instead of a function of the current drop, so the reed carries its own
+  // inertia and the tongue's release becomes an initial condition. Matched-Z
+  // form of x" + qr*wr*x' + wr^2*x = wr^2*x_rest, normalised to DC gain 1 so the
+  // static valve is this one's fixed point and the oscillating band survives.
+  // The resonator state is shared with the table bias the valve replaces: a
+  // voice has one reed, and the two roles never run in the same render.
+  reed_dyn_ = params.dynamic_reed;
+  reed_z1_ = 0.0f;
+  reed_z2_ = 0.0f;
+  tongue_held_ = false;
+  float valve_tau = 0.0f;
+  if (reed_dyn_ && closing_pressure_ > 0.0f) {
+    const float f_reed = reed_natural_hz(params.reed_resonance, srf);
+    const float qr = std::clamp(kReedValveDamping, 0.05f, 1.9f);
+    const float w = kTwoPi * f_reed / srf;
+    const float r = std::exp(-0.5f * qr * w);
+    const float wd = w * std::sqrt(std::max(0.0f, 1.0f - 0.25f * qr * qr));
+    reed_a1_ = 2.0f * r * std::cos(wd);
+    reed_a2_ = -r * r;
+    reed_b0_ = 1.0f - reed_a1_ - reed_a2_;
+    tongue_release_ = std::clamp(kTongueReleaseLevel, 0.0f, 0.99f);
+    tongue_held_ = true;
+    // The opening lags its drive by the reed's group delay at DC.
+    valve_tau = qr * srf / (kTwoPi * f_reed);
+  }
+
   // Bell loop lowpass: brightness -> pole a (y += (1-a)(x - y)).
   bright01_base_ = std::clamp(params.brightness, 0.0f, 1.0f);
   // Both axes are derived here and nowhere else. A note-on copy of the mapping
@@ -246,6 +289,9 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   const float tau_hp = phase_hp / std::max(omega, 1.0e-6f);
   const float hp_scale = closing_pressure_ > 0.0f ? kHpCompScaleValve : kHpCompScale;
   comp_ = 1.0f + tau_lp - hp_scale * tau_hp;
+  // The dynamic valve's lag lengthens the driven loop the way the bell lowpass
+  // does, so it enters comp with the same sign.
+  if (valve_tau > 0.0f) comp_ += valve_tau;
 
   // The bore delay line spans the whole slab, because the line length is what
   // bounds a downward bend and the clamp enforcing it saturates silently -- a
@@ -285,18 +331,13 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
 
   // --- off-by-default advanced physics (Phase 4). When off, render() takes the
   // memoryless branch untouched (bit-identical). ---
-  const float srf = static_cast<float>(sr);
 
   // 4a: dynamic (mass-spring) reed — a biquad bandpass resonator tuned to the
   // reed's natural frequency, driven by the pressure difference, biasing the
-  // table. Off -> render skips the resonator entirely.
-  reed_dyn_ = params.dynamic_reed;
-  reed_z1_ = 0.0f;
-  reed_z2_ = 0.0f;
-  if (reed_dyn_) {
-    const float res01 = std::clamp(params.reed_resonance, 0.0f, 1.0f);
-    float f_reed = kReedResBaseHz + kReedResSpanHz * res01;
-    f_reed = std::min(f_reed, 0.45f * srf);
+  // table. Off -> render skips the resonator entirely. With the beating reed on
+  // there is no table to bias, and the same reed is the valve instead (above).
+  if (reed_dyn_ && closing_pressure_ == 0.0f) {
+    const float f_reed = reed_natural_hz(params.reed_resonance, srf);
     const float w = kTwoPi * f_reed / srf;
     reed_a1_ = 2.0f * kReedResR * std::cos(w);
     reed_a2_ = -kReedResR * kReedResR;
@@ -413,7 +454,7 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   // Dynamic (mass-spring) reed (gated): bias the sharp table's operating point by
   // the reed resonator's displacement, so the reed rings at its natural frequency
   // (a live beating and a "reed formant" edge) while the table stays sharp.
-  if (reed_dyn_) reed += reed_couple_ * reed_resonator(dp);
+  if (reed_dyn_ && closing_pressure_ == 0.0f) reed += reed_couple_ * reed_resonator(dp);
   if (reed > 1.0f) reed = 1.0f;
   if (reed < -1.0f) reed = -1.0f;
   float inj = breath + dp * reed;
@@ -429,14 +470,26 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
     const float mouth = pressure_scale_ * breath;
     const float pc = pressure_scale_ * closing_pressure_;
     const float drop = mouth - refl;
-    const float open = std::clamp(1.0f - drop / pc, 0.0f, 1.0f);
-    const float flow = open * std::copysign(std::sqrt(std::fabs(drop)), drop);
-    // The same flow with the bore at rest is the steady part, which holds the
-    // mouthpiece open and radiates nothing. Subtracted in closed form rather
-    // than tracked, so the note speaks without a settling rumble under it.
-    const float rest = std::clamp(1.0f - mouth / pc, 0.0f, 1.0f);
-    const float steady = rest * std::sqrt(std::max(mouth, 0.0f));
-    inj = refl + flow_gain_ * (flow - steady);
+    // Tonguing (dynamic valve only): the tongue pins the reed shut against the
+    // lay, so the channel passes nothing at all, until the mouth pressure has
+    // risen through the release level. What speaks the note is the swing from a
+    // closed channel that follows — an initial condition, not reed inertia.
+    if (tongue_held_) tongue_held_ = breath_level_ < tongue_release_;
+    if (tongue_held_) {
+      inj = refl;
+    } else {
+      const float x_rest = 1.0f - drop / pc;
+      const float open = reed_dyn_ ? valve_opening(x_rest) : std::clamp(x_rest, 0.0f, 1.0f);
+      const float flow = open * std::copysign(std::sqrt(std::fabs(drop)), drop);
+      // The same flow with the bore at rest is the steady part, which holds the
+      // mouthpiece open and radiates nothing. Subtracted in closed form rather
+      // than tracked, so the note speaks without a settling rumble under it.
+      // It stays the STATIC rest opening with the dynamic valve on: that is
+      // exactly what makes the reed's swing toward it a forcing term.
+      const float rest = std::clamp(1.0f - mouth / pc, 0.0f, 1.0f);
+      const float steady = rest * std::sqrt(std::max(mouth, 0.0f));
+      inj = refl + flow_gain_ * (flow - steady);
+    }
   }
 
   // Advance the bore delay line: write the reed injection, read the delayed
@@ -483,6 +536,17 @@ float ReedVoiceCore::reed_resonator(float dp) noexcept {
   reed_z2_ = reed_z1_;
   reed_z1_ = y;
   return y;
+}
+
+float ReedVoiceCore::valve_opening(float x_rest) noexcept {
+  // The same damped mass-spring reed as the table bias, driven toward the static
+  // valve's opening instead of by the pressure difference and normalised to DC
+  // gain 1. The state carries the reed's displacement, so the clamp is the
+  // channel's geometry alone and never enters what the reed remembers.
+  const float x = reed_b0_ * x_rest + reed_a1_ * reed_z1_ + reed_a2_ * reed_z2_;
+  reed_z2_ = reed_z1_;
+  reed_z1_ = x;
+  return std::clamp(x, 0.0f, 1.0f);
 }
 
 void ReedVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
