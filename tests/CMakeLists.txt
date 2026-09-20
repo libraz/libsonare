@@ -492,6 +492,10 @@ if(BUILD_ARRANGEMENT)
     midi/piano_voice_test.cpp
     midi/pipe_organ_voice_test.cpp
     midi/bowed_string_voice_test.cpp
+    midi/bowed_string_probe_test.cpp
+    midi/bowed_string_onset_test.cpp
+    midi/bowed_string_body_test.cpp
+    midi/bowed_string_force_window_test.cpp
     midi/reed_voice_test.cpp
     midi/free_reed_voice_test.cpp
     midi/brass_voice_test.cpp
