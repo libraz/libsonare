@@ -373,14 +373,18 @@ def capture_facts(capture_id: str) -> dict:
     }
 
 
-def wanted_layer(policy: dict, program: int, kit: bool) -> dict:
+def wanted_layer(policy: dict, program: int, kit: bool, bank: int = 0) -> dict:
     """Which kind of reference this slot is aimed at, and why.
 
-    A kit takes the kit branch whatever its number, because a kit and a melodic
-    voice share the program space and nothing in the number tells them apart —
-    a kit selected by a program some branch also names would otherwise be
-    answered as that melodic voice. Otherwise a branch naming this program wins,
-    and `default` takes everything left.
+    Two branches are selected by a flag rather than by a program number, because
+    both share the program space with something else and the number cannot tell
+    them apart. A kit takes the kit branch whatever its number, or a kit selected
+    by a program some branch also names would be answered as that melodic voice.
+    A GS variation takes the variation branch whenever its bank is non-zero,
+    because a variation carries its capital's program: dispatching it by number
+    resolves it to `default`, which wants an instrument, and the caller's
+    off-target test then cannot fire on any variation at all. Otherwise a branch
+    naming this program wins, and `default` takes everything left.
     """
     branches = policy.get("reference_layer")
     if not isinstance(branches, dict):
@@ -390,6 +394,8 @@ def wanted_layer(policy: dict, program: int, kit: bool) -> dict:
     chosen = ""
     if kit and "kits" in named:
         chosen = "kits"
+    elif bank and "variations" in named:
+        chosen = "variations"
     for name, branch in named.items():
         if not chosen and program in (branch.get("programs") or []):
             chosen = name
@@ -428,7 +434,8 @@ def provenance(voice: dict, ident: str) -> dict:
     if not isinstance(program, int):
         return {}
     kit = bool(voice.get("kit"))
-    want = wanted_layer(policy, program, kit)
+    bank = voice.get("bank")
+    want = wanted_layer(policy, program, kit, bank if isinstance(bank, int) else 0)
     declined = (policy.get("no_reference") or {}).get(ident)
     capture = capture_facts(voice.get("capture") or "") if voice.get("capture") else {}
 
