@@ -51,11 +51,8 @@
   },
   "dimensions": [
     "decay",
-    "aftersound",
-    "doubling",
     "body",
     "attack",
-    "damper",
     "balance",
     "centroid_pct",
     "tnr",

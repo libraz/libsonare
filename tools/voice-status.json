@@ -2584,8 +2584,8 @@
       "patch": "dulcimer",
       "engine": "karplus_strong",
       "capture": "dulcimer",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -2595,15 +2595,13 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 10,
+          "gated": 11,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "stretch"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -2618,6 +2616,7 @@
             "decay",
             "doubling",
             "register",
+            "stretch",
             "tnr",
             "vel_range"
           ]
@@ -2625,7 +2624,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: stretch"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p016-drawbar-organ",
@@ -6596,8 +6595,8 @@
       "patch": "tenor_sax",
       "engine": "reed",
       "capture": "tenor_sax",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6607,14 +6606,12 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 8,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -6625,6 +6622,7 @@
             "balance",
             "body",
             "centroid_pct",
+            "damper",
             "register",
             "stretch",
             "tnr",
@@ -6634,7 +6632,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p067-baritone-sax",
@@ -6801,8 +6799,8 @@
       "patch": "bassoon",
       "engine": "reed",
       "capture": "bassoon",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -6812,14 +6810,12 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 8,
+          "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -6830,6 +6826,7 @@
             "balance",
             "body",
             "centroid_pct",
+            "damper",
             "register",
             "stretch",
             "tnr",
@@ -6839,7 +6836,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p071-clarinet",
