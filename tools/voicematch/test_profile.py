@@ -1034,6 +1034,60 @@ def test_a_capture_naming_a_phrase_set_names_one_that_exists():
             assert takes in TAKE_SETS, f"{name} names phrase set {takes!r}, which does not exist"
 
 
+def _audition_capture(cap_id: str, *, plugin: str = "") -> object:
+    from bank import Capture
+
+    raw = {"id": cap_id, "plugin": plugin} if plugin else {"id": cap_id}
+    return Capture(path=Path(f"{cap_id}.json"), id=cap_id, label=cap_id, program=0,
+                   bank=0, take_set="drums", timbres=(), dry=True, title=cap_id,
+                   source_class=None, raw=raw)
+
+
+def test_a_capture_that_can_render_no_reference_does_not_represent_the_page(tmp_path):
+    """The page's representative is whichever capture can actually play one.
+
+    The kit is the live case: the policy aims a kit at the machine, so the
+    module captures lead, and a capture imported from a file names no plugin.
+    Left alone the most-calibrated voice in the bank renders model-only while
+    its library reference sits in the archive.
+    """
+    import make_audition
+    from bank import Voice
+
+    module, library = _audition_capture("m"), _audition_capture("l", plugin="a:b:c")
+    voice = Voice(program=0, kit=True, captures=(module, library))
+    assert voice.capture is module
+    assert make_audition.playable_first(voice, tmp_path).capture is library
+
+
+def test_the_archive_is_the_other_route_to_a_reference(tmp_path):
+    """A capture with no plugin still represents the page when takes are held.
+
+    Otherwise this reorders away from the layer the policy asked for on the
+    strength of a plugin nobody needed.
+    """
+    import make_audition
+    from bank import Voice
+
+    module, library = _audition_capture("m"), _audition_capture("l", plugin="a:b:c")
+    (tmp_path / "m").mkdir()
+    voice = Voice(program=0, kit=True, captures=(module, library))
+    assert make_audition.playable_first(voice, tmp_path).capture is module
+    # And with no archive at all the plugin is the only route left.
+    assert make_audition.playable_first(voice, None).capture is library
+
+
+def test_a_voice_whose_captures_can_all_supply_one_is_left_in_policy_order(tmp_path):
+    """The reorder must not become a second opinion about which layer wins."""
+    import make_audition
+    from bank import Voice
+
+    first = _audition_capture("first", plugin="a:b:c")
+    second = _audition_capture("second", plugin="d:e:f")
+    voice = Voice(program=0, captures=(first, second))
+    assert make_audition.playable_first(voice, tmp_path).captures == (first, second)
+
+
 def test_an_audition_of_a_capture_with_no_phrase_set_is_refused(capsys, tmp_path):
     """Not rendered on the piano's phrases, which would look like it worked.
 

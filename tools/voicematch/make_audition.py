@@ -102,7 +102,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import calibration
 from _repo import REPO_ROOT
 from au_oracle import AuRenderError, render_oracle_au, with_keyswitches
-from bank import Voice, load_capture, parse_selection, voices, write_index
+from bank import Capture, Voice, load_capture, parse_selection, voices, write_index
 from calibration import Variant
 from capture import CORPUS_ROOT, source_for
 from phrases import Take, build_takes
@@ -702,6 +702,40 @@ class Unselectable(Exception):
     """
 
 
+def can_supply_a_reference(capture: Capture, archive: Path | None) -> bool:
+    """Whether a reference take can actually be produced from this capture.
+
+    A capture imported from a file names no plugin, so nothing can be rendered
+    from it and the archive is its only route.
+    """
+    if capture.raw.get("plugin"):
+        return True
+    return bool(archive) and (archive / capture.id).is_dir()
+
+
+def playable_first(voice: Voice, archive: Path | None) -> Voice:
+    """Move a capture that can supply a reference to the front of the voice.
+
+    `Voice.capture` is defined as the one whose reference a PAGE PLAYS, so a
+    capture that can play none is the wrong representative for a page however
+    well it answers the policy's layer. The kit is the live case: the policy
+    aims a kit at the machine, the module captures therefore lead, and none of
+    them names a plugin — so the most-calibrated voice in the bank rendered
+    model-only while its library reference sat in the archive.
+
+    Order is otherwise preserved, so the layer preference still decides among
+    captures that can each supply one. This reorders the audition run's own view
+    and not `capture_for`, which answers a different question for the gates.
+    """
+    playable = [c for c in voice.captures if can_supply_a_reference(c, archive)]
+    if not playable or playable[0] is voice.capture:
+        return voice
+    rest = [c for c in voice.captures if c not in playable]
+    print(f"{voice.slug}: {voice.capture.id} can render no reference; "
+          f"the page plays {playable[0].id}", file=sys.stderr)
+    return replace(voice, captures=tuple(playable + rest))
+
+
 def resolve_voices(args) -> list[Voice]:
     """What this run was asked to audition, as bank entries."""
     if args.config:
@@ -723,7 +757,10 @@ def resolve_voices(args) -> list[Voice]:
 
     banks = parse_selection(args.banks) if args.banks else None
     catalogue = load_catalogue(args.lib) if banks is None and programs else None
-    return voices(sorted(set(programs)), banks=banks, kits=kits, catalogue=catalogue)
+    archive = (Path(args.reference_from).expanduser().resolve()
+               if args.reference_from else None)
+    return [playable_first(v, archive) for v in
+            voices(sorted(set(programs)), banks=banks, kits=kits, catalogue=catalogue)]
 
 
 def main() -> int:
