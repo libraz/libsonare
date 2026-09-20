@@ -208,6 +208,9 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   // Beating reed (gated): the channel's own physics in place of the table above.
   closing_pressure_ = std::max(params.closing_pressure, 0.0f);
   flow_gain_ = std::max(params.flow_gain, 0.0f);
+  // 0 is what a blanked reed block carries, and it would divide by zero here;
+  // it reads as the unscaled valve, which is what the table's scale gives.
+  pressure_scale_ = params.pressure_scale > 0.0f ? params.pressure_scale : 1.0f;
 
   // Bell loop lowpass: brightness -> pole a (y += (1-a)(x - y)).
   bright01_base_ = std::clamp(params.brightness, 0.0f, 1.0f);
@@ -423,14 +426,16 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   // constraint no per-field clamp can carry, and the mouth pressure here is
   // kBreathBase + kBreathSpan*b rather than the patch's breath_pressure.
   if (closing_pressure_ > 0.0f) {
-    const float drop = breath - refl;
-    const float open = std::clamp(1.0f - drop / closing_pressure_, 0.0f, 1.0f);
+    const float mouth = pressure_scale_ * breath;
+    const float pc = pressure_scale_ * closing_pressure_;
+    const float drop = mouth - refl;
+    const float open = std::clamp(1.0f - drop / pc, 0.0f, 1.0f);
     const float flow = open * std::copysign(std::sqrt(std::fabs(drop)), drop);
     // The same flow with the bore at rest is the steady part, which holds the
     // mouthpiece open and radiates nothing. Subtracted in closed form rather
     // than tracked, so the note speaks without a settling rumble under it.
-    const float rest = std::clamp(1.0f - breath / closing_pressure_, 0.0f, 1.0f);
-    const float steady = rest * std::sqrt(std::max(breath, 0.0f));
+    const float rest = std::clamp(1.0f - mouth / pc, 0.0f, 1.0f);
+    const float steady = rest * std::sqrt(std::max(mouth, 0.0f));
     inj = refl + flow_gain_ * (flow - steady);
   }
 

@@ -139,6 +139,16 @@ struct ReedPatchParams {
   /// 1 the loop enters the subharmonic every fit ran into, and the column's
   /// level stops tracking the drive.
   float flow_gain = 0.7f;
+  /// Pressure scale the valve works in (only when closing_pressure > 0). The
+  /// flow follows a square root, so this is a LOOP GAIN and not a level:
+  /// multiplying every pressure by it scales the injection by its square root
+  /// against a reflection scaling by itself, leaving the mouth-over-closing
+  /// ratio — and so the oscillating band — exactly where it was. Smaller means
+  /// a steeper valve, so the note reaches its steady amplitude in fewer bore
+  /// round trips, at the cost of a harder-edged tone. 1 = the linearised
+  /// table's own scale, which the valve inherited and where the note needs
+  /// tens of round trips to speak.
+  float pressure_scale = 1.0f;
   /// @note With the beating reed on, the valve is this pair alone:
   /// reed_stiffness, reed_opening and dynamic_reed all address the table it
   /// replaces and stop reaching the sound.
@@ -273,6 +283,7 @@ class ReedVoiceCore {
 
   // Beating reed (gated): 0 closing pressure keeps the table above.
   float closing_pressure_ = 0.0f;
+  float pressure_scale_ = 1.0f;
   float flow_gain_ = 0.0f;
 
   // Breath contour: a one-pole ramp of the mouth pressure toward the target

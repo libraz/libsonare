@@ -277,6 +277,7 @@ void apply_reed(NativeSynthPatch& p, const Fields& f) {
   F(reed.tonehole);
   F(reed.closing_pressure);
   F(reed.flow_gain);
+  F(reed.pressure_scale);
 }
 
 void apply_brass(NativeSynthPatch& p, const Fields& f) {

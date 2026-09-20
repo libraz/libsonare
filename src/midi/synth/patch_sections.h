@@ -257,6 +257,7 @@ constexpr ReedPatchParams blank_reed() noexcept {
   z.tonehole = 0.0f;
   z.closing_pressure = 0.0f;
   z.flow_gain = 0.0f;
+  z.pressure_scale = 0.0f;
   return z;
 }
 
