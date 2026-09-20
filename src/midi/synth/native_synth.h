@@ -1233,6 +1233,16 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.bowed_string.stribeck = patch_clamp_detail::sanitize(p.bowed_string.stribeck, 0.5f);
   p.bowed_string.sympathetic = patch_clamp_detail::sanitize(p.bowed_string.sympathetic, 0.0f);
   p.bowed_string.polarization = patch_clamp_detail::sanitize(p.bowed_string.polarization, 0.0f);
+  p.bowed_string.attack_noise =
+      std::clamp(patch_clamp_detail::sanitize(p.bowed_string.attack_noise, 0.0f), 0.0f, 1.0f);
+  // Shares `attack_ms`'s upper bound; the lower bound is 0 because 0 is this
+  // field's "keep the one-pole ramp" sentinel rather than an instant run-up.
+  p.bowed_string.bow_accel_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.bowed_string.bow_accel_ms, 0.0f), 0.0f, 2000.0f);
+  p.bowed_string.corpus_scale =
+      std::clamp(patch_clamp_detail::sanitize(p.bowed_string.corpus_scale, 1.0f), 0.1f, 4.0f);
+  p.bowed_string.corpus_tilt_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.bowed_string.corpus_tilt_hz, 0.0f), 0.0f, 20000.0f);
   p.reed.breath_pressure =
       std::clamp(patch_clamp_detail::sanitize(p.reed.breath_pressure, 0.6f), 0.0f, 1.0f);
   p.reed.vel_to_breath =

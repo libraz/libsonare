@@ -119,6 +119,36 @@ struct BowedStringPatchParams {
   /// feedback stays bounded. 0 = off -> the second line is skipped entirely
   /// (bit-identical render).
   float polarization = 0.0f;
+
+  // --- onset: the string is not at rest and the bow is not at speed ---
+  /// Note-on excitation seed in [0,1]: deterministic noise sown into the delay
+  /// lines at note-on, the bowed sibling of the wind engines' bore prefill. A
+  /// string about to speak carries a disturbance rather than sitting at the
+  /// ideal zero the waveguide starts from, and the seed is what lets Helmholtz
+  /// motion lock in over a few periods instead of growing out of the rosin
+  /// noise alone. 0 = off -> no seed is written (bit-identical render).
+  float attack_noise = 0.0f;
+  /// Bow run-up (ms) under a constant-acceleration ramp: the time the bow takes
+  /// to reach full speed. ZERO IS A SENTINEL, not "instant" — it selects the
+  /// one-pole ramp `attack_ms` drives, whose acceleration is largest at t=0 and
+  /// decays from there, which is the opposite shape to a real bow stroke. A
+  /// non-zero value switches the note-on ramp to the linear one and this field
+  /// is then its duration. Release stays one-pole either way (lifting the bow
+  /// carries no acceleration argument).
+  float bow_accel_ms = 0.0f;
+
+  // --- corpus: the shared violin body bank, placed and tilted per instrument ---
+  /// Uniform scale on the body bank's mode centre frequencies (1 = the violin
+  /// corpus as measured). This is a DIMENSION RATIO and it can only place A0: a
+  /// cello is not a scaled violin, since rib depth does not scale with body
+  /// length, so B1+/B1- and the bridge hill do not land where a uniform scale
+  /// puts them. Placing those needs a bank written per instrument.
+  float corpus_scale = 1.0f;
+  /// One-pole high-frequency loss (Hz) on the body stage's dry floor: real
+  /// radiativity keeps a broadband floor between the modes, but that floor
+  /// falls above a few kHz while the parallel dry path is flat. 0 = off -> an
+  /// explicit bypass branch, since a unity one-pole is not bit-identical.
+  float corpus_tilt_hz = 0.0f;
 };
 
 /// Per-voice bowed-string state, embedded in NativeSynthVoice. The voice's

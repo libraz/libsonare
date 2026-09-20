@@ -252,6 +252,10 @@ void apply_bowed_string(NativeSynthPatch& p, const Fields& f) {
   F(bowed_string.stribeck);
   F(bowed_string.sympathetic);
   F(bowed_string.polarization);
+  F(bowed_string.attack_noise);
+  F(bowed_string.bow_accel_ms);
+  F(bowed_string.corpus_scale);
+  F(bowed_string.corpus_tilt_hz);
 }
 
 void apply_reed(NativeSynthPatch& p, const Fields& f) {

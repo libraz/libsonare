@@ -94,4 +94,6 @@ TEST_CASE("stripping keeps the voiced section and clears the rest", "[midi][synt
   CHECK(sub_stripped.fm.ops[0].ratio == 0.0f);
   CHECK(sub_stripped.harpsichord.eight_a == false);
   CHECK(sub_stripped.pipe_organ.ranks[0].footage_mult == 0.0f);
+  // A field whose default is non-zero is the one a blank can miss silently.
+  CHECK(sub_stripped.bowed_string.corpus_scale == 0.0f);
 }
