@@ -469,11 +469,14 @@ def stage_for(axes: dict) -> int:
 def approximation(pol: dict, slug: str) -> dict | None:
     """The policy's record that this slot is answered by a neighbour, or None.
 
-    An approximated slot has no oracle to capture and never will: the bank does
-    not have the mechanism and is deliberately answering with the nearest voice
-    it does have. Nothing downstream can tell that apart from an unfinished
-    voice, so without this the slot's next action reads `capture an oracle`,
-    which is precisely the work that is never going to happen for it.
+    An approximated slot is deliberately answered by the nearest voice the bank
+    does have, and it is not waiting on a capture. **That is not the same as
+    having no oracle**, and reading it that way is the mistake to avoid: the
+    register holds two shapes, a slot whose mechanism the bank lacks and a slot
+    the map names apart from a neighbour that shares its patch, and the second
+    commonly has a capture, a reference and a stage of its own. What both have
+    in common is that the next move is the entry's own reason and never
+    `capture an oracle`, which is what nothing downstream could otherwise tell.
     """
     entry = (pol.get("approximated") or {}).get(slug)
     return entry if isinstance(entry, dict) else None
@@ -688,15 +691,20 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
           + ", ".join(f"{n} {s}" for s, n in
                       sorted(counts.items(), key=lambda kv: STAGES.index(kv[0]))))
     # Counted apart from the unfinished voices rather than added to them: an
-    # approximated slot has no oracle and is not waiting for one.
+    # approximated slot is not waiting on a capture, whether or not it has one.
     approximated = [r for r in rows if approximation(pol, r["slug"])]
     no_oracle = [r for r in rows if not r["capture"] and r not in approximated]
     if no_oracle:
         print(f"  {len(no_oracle)} with no oracle captured — that is the task list, "
               f"and nothing below stage 0.4 moves without one")
     if approximated:
-        print(f"  {len(approximated)} approximated by a neighbouring voice and terminal: "
-              f"no oracle exists for them and none is being sought")
+        # Two shapes, and the count does not separate them: the bank has no
+        # mechanism for the slot, or one patch answers it and a neighbour both.
+        # Either way nothing moves until the entry's own reason is addressed,
+        # and several of these do hold a capture of their own.
+        print(f"  {len(approximated)} answered by a neighbouring voice and terminal "
+              f"until the entry's reason is addressed — read `approximated` in "
+              f"policy.json for which")
     waiting, ready = variation_split(rows, pol)
     if waiting or ready:
         print(f"  {waiting + ready} variation(s) below heard: {waiting} behind a capital that "
