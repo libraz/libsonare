@@ -51,7 +51,7 @@ def test_a_kit_and_a_piano_share_program_zero_and_nothing_else():
 
 
 def test_a_capture_is_matched_to_its_own_voice_and_not_another():
-    """Program 0 has two captures — the grand and the kit — and one number."""
+    """Program 0 has six captures — two on the grand, four on the kit — and one number."""
     pool = bank.captures()
     if not pool:
         pytest.skip("no capture definitions in this checkout")

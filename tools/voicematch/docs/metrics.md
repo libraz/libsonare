@@ -63,7 +63,7 @@ Measured across the reference kit it spans 49 dB, from −55.6 to −6.8, in the
 
 What it does **not** answer is how narrow a peak is. A line and a filled quarter-octave carrying the same band energy over the same floor come back about a decibel apart, which is inside the 3.5 dB the two reference kits disagree by. Narrowness within a band is unmeasured, and a small `tonality` delta is not evidence about it.
 
-The other one is `decay_ms`, which is not in a spectrum at all. It was measured from the first grid and compared by nothing for as long as the kit had a gate; `band_decay`, its nearest stand-in, averages only the octaves both sides resolved, so a hit that ends early loses those octaves from its own average instead of being charged for them. The gate reads it as `ring`, in doublings — the kit spans 24× on this quantity, 60 ms of woodblock against 1428 of cymbal, so a median in milliseconds is the cymbals and percent would price a doubling at +100 and a halving at −50.
+The other one is `decay_ms`, which is not in a spectrum at all. It was measured from the first grid and compared by nothing for as long as the kit had a gate; `band_decay`, its nearest stand-in, averages only the octaves both sides resolved, so a hit that ends early loses those octaves from its own average instead of being charged for them. The two module captures that read past the strike gate it as `ring` — `drums_module` at 400 ms and `drums_module_mid` at 150 — in doublings, because the kit spans 24× on this quantity, 60 ms of woodblock against 1428 of cymbal, so a median in milliseconds is the cymbals and percent would price a doubling at +100 and a halving at −50.
 
 ### Most of a kit does have a pitch
 
