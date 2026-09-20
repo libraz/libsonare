@@ -333,6 +333,28 @@ class RealtimeEngine:
         value: int,
         port_time_samples: int = 0,
     ) -> None: ...
+    def push_midi_input_pitch_bend(
+        self,
+        group: int,
+        channel: int,
+        bend14: int,
+        port_time_samples: int = 0,
+    ) -> None: ...
+    def push_midi_input_channel_pressure(
+        self,
+        group: int,
+        channel: int,
+        pressure: int,
+        port_time_samples: int = 0,
+    ) -> None: ...
+    def push_midi_input_poly_pressure(
+        self,
+        group: int,
+        channel: int,
+        note: int,
+        pressure: int,
+        port_time_samples: int = 0,
+    ) -> None: ...
     def push_midi_note_on(
         self,
         destination_id: int,
@@ -349,6 +371,31 @@ class RealtimeEngine:
         channel: int,
         note: int,
         velocity: int = 0,
+        render_frame: int = -1,
+    ) -> None: ...
+    def push_midi_pitch_bend(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        bend14: int,
+        render_frame: int = -1,
+    ) -> None: ...
+    def push_midi_channel_pressure(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        pressure: int,
+        render_frame: int = -1,
+    ) -> None: ...
+    def push_midi_poly_pressure(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        note: int,
+        pressure: int,
         render_frame: int = -1,
     ) -> None: ...
     def transport_state(self) -> TransportState: ...

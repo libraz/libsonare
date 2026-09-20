@@ -1385,11 +1385,17 @@ def test_engine_set_and_clear_midi_fx_round_trips() -> None:
 def test_engine_live_midi_input_source_queue() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
+        # The input family is refused until the input source is enabled.
+        with pytest.raises(SonareError):
+            engine.push_midi_input_pitch_bend(0, 0, 16383, 0)
         engine.set_midi_input_source(0)
         engine.push_midi_input_note_on(0, 0, 60, 100, 0)
         engine.push_midi_input_cc(0, 0, 1, 64, 0)
+        engine.push_midi_input_pitch_bend(0, 0, 16383, 0)
+        engine.push_midi_input_channel_pressure(0, 0, 127, 0)
+        engine.push_midi_input_poly_pressure(0, 0, 60, 96, 0)
         engine.push_midi_input_note_off(0, 0, 60, 0, 0)
-        assert engine.midi_input_pending_count() == 3
+        assert engine.midi_input_pending_count() == 6
         engine.clear_midi_input_source()
 
 
@@ -1398,6 +1404,74 @@ def test_engine_push_immediate_notes_do_not_raise() -> None:
         engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
         engine.push_midi_note_on(0, 0, 0, 60, 100)
         engine.push_midi_note_off(0, 0, 0, 60, 0)
+
+
+def test_engine_push_midi_bend_and_pressure_change_rendered_audio() -> None:
+    sample_rate = 48000.0
+    block = 512
+    window = 8192
+
+    def render(engine: RealtimeEngine, frames: int) -> np.ndarray:
+        blocks = [
+            np.asarray(engine.process([[0.0] * block, [0.0] * block]))[0]
+            for _ in range(frames // block)
+        ]
+        return np.concatenate(blocks)
+
+    def peak_hz(samples: np.ndarray) -> float:
+        spectrum = np.abs(np.fft.rfft(samples * np.hanning(len(samples))))
+        bin_index = int(np.argmax(spectrum))
+        # One bin is 5.9 Hz here, which is 2% of the fundamental and would eat
+        # the tolerance below whole, so interpolate the peak over its
+        # neighbours rather than lengthening the render.
+        if 0 < bin_index < len(spectrum) - 1:
+            low, mid, high = spectrum[bin_index - 1 : bin_index + 2]
+            curvature = low - 2.0 * mid + high
+            if curvature != 0.0:
+                return (bin_index + 0.5 * (low - high) / curvature) * sample_rate / len(samples)
+        return bin_index * sample_rate / len(samples)
+
+    def rms(samples: np.ndarray) -> float:
+        return float(np.sqrt(np.mean(np.square(samples))))
+
+    with RealtimeEngine(sample_rate=sample_rate, max_block_size=block) as engine:
+        engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
+        engine.push_midi_note_on(0, 0, 0, 60, 100)
+        render(engine, window)  # Let the amplitude envelope reach sustain.
+        plain = render(engine, window)
+        engine.push_midi_pitch_bend(0, 0, 0, 16383)
+        bent = render(engine, window)
+        engine.push_midi_channel_pressure(0, 0, 0, 127)
+        pressed = render(engine, window)
+        # Channel pressure back to zero, so what the next block carries is the
+        # key pressure alone rather than the pair saturating together.
+        engine.push_midi_channel_pressure(0, 0, 0, 0)
+        engine.push_midi_poly_pressure(0, 0, 0, 60, 127)
+        poly_pressed = render(engine, window)
+
+    assert peak_hz(plain) == pytest.approx(261.6, rel=0.01)
+    # A full positive bend is the built-in synth's whole +2-semitone range.
+    assert peak_hz(bent) / peak_hz(plain) == pytest.approx(2 ** (2 / 12), rel=0.01)
+    # Full channel pressure doubles the amplitude; the bend left it alone.
+    assert rms(bent) == pytest.approx(rms(plain), rel=0.01)
+    assert rms(pressed) / rms(bent) == pytest.approx(2.0, rel=0.01)
+    # Key pressure reaches the one sounding voice and doubles it the same way.
+    assert rms(poly_pressed) / rms(bent) == pytest.approx(2.0, rel=0.01)
+
+
+def test_engine_push_midi_bend_rejects_out_of_range_value() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
+        engine.push_midi_pitch_bend(0, 0, 0, 16383)
+        with pytest.raises(SonareError) as bend_error:
+            engine.push_midi_pitch_bend(0, 0, 0, 16384)
+        assert bend_error.value.code == 4
+        engine.set_midi_input_source(0)
+        with pytest.raises(SonareError):
+            engine.push_midi_input_pitch_bend(0, 0, 16384, 0)
+        for pressure in (128, 255):
+            with pytest.raises(SonareError):
+                engine.push_midi_channel_pressure(0, 0, 0, pressure)
 
 
 def test_engine_push_midi_sysex_accepts_frame_and_rejects_oversized() -> None:

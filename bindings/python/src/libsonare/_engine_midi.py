@@ -37,6 +37,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_int64,
     _to_c_uint8,
+    _to_c_uint16,
     _to_c_uint32,
 )
 
@@ -698,8 +699,9 @@ class _EngineMidiMixin:
         """Enable the engine-owned live MIDI input source for ``destination_id``.
 
         Hosts can then push timestamped events with
-        :meth:`push_midi_input_note_on` / ``_note_off`` / ``_cc``; the engine
-        drains them at block boundaries.
+        :meth:`push_midi_input_note_on` / ``_note_off`` / ``_cc`` /
+        ``_pitch_bend`` / ``_channel_pressure`` / ``_poly_pressure``; the
+        engine drains them at block boundaries.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_midi_input_source"):
@@ -797,6 +799,85 @@ class _EngineMidiMixin:
             )
         )
 
+    def push_midi_input_pitch_bend(
+        self,
+        group: int,
+        channel: int,
+        bend14: int,
+        port_time_samples: int = 0,
+    ) -> None:
+        """Queue a pitch bend into the engine-owned live MIDI input source.
+
+        ``bend14`` is the unsigned 14-bit bend with centre ``8192`` (0..16383);
+        a value above the range is refused rather than clamped. Requires
+        :meth:`set_midi_input_source`; without it the call is refused.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_input_pitch_bend"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        _check(
+            lib.sonare_engine_push_midi_input_pitch_bend(
+                self._require_handle(),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint16(bend14, "bend14"),
+                _to_c_int64(port_time_samples, "port_time_samples"),
+            )
+        )
+
+    def push_midi_input_channel_pressure(
+        self,
+        group: int,
+        channel: int,
+        pressure: int,
+        port_time_samples: int = 0,
+    ) -> None:
+        """Queue a channel pressure into the engine-owned live MIDI input source.
+
+        ``pressure`` is 7-bit (0..127). Requires :meth:`set_midi_input_source`;
+        without it the call is refused.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_input_channel_pressure"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        _check(
+            lib.sonare_engine_push_midi_input_channel_pressure(
+                self._require_handle(),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(pressure, "pressure"),
+                _to_c_int64(port_time_samples, "port_time_samples"),
+            )
+        )
+
+    def push_midi_input_poly_pressure(
+        self,
+        group: int,
+        channel: int,
+        note: int,
+        pressure: int,
+        port_time_samples: int = 0,
+    ) -> None:
+        """Queue a polyphonic key pressure into the live MIDI input source.
+
+        ``note`` is the key the pressure belongs to and ``pressure`` is 7-bit
+        (both 0..127). Requires :meth:`set_midi_input_source`; without it the
+        call is refused.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_input_poly_pressure"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        _check(
+            lib.sonare_engine_push_midi_input_poly_pressure(
+                self._require_handle(),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(note, "note"),
+                _to_c_uint8(pressure, "pressure"),
+                _to_c_int64(port_time_samples, "port_time_samples"),
+            )
+        )
+
     def push_midi_note_on(
         self,
         destination_id: int,
@@ -851,6 +932,93 @@ class _EngineMidiMixin:
                 _to_c_uint8(channel, "channel"),
                 _to_c_uint8(note, "note"),
                 _to_c_uint8(velocity, "velocity"),
+                _to_c_int64(render_frame, "render_frame"),
+            )
+        )
+
+    def push_midi_pitch_bend(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        bend14: int,
+        render_frame: int = -1,
+    ) -> None:
+        """Queue an immediate live MIDI pitch bend to a MIDI destination.
+
+        ``bend14`` is the unsigned 14-bit bend with centre ``8192`` (0..16383),
+        carried at its own width because no 7-bit scalar command can spell it;
+        a value above the range is refused rather than clamped.
+        ``render_frame`` is the render-frame time to apply, or ``-1`` for
+        immediate.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_pitch_bend"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        _check(
+            lib.sonare_engine_push_midi_pitch_bend(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint16(bend14, "bend14"),
+                _to_c_int64(render_frame, "render_frame"),
+            )
+        )
+
+    def push_midi_channel_pressure(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        pressure: int,
+        render_frame: int = -1,
+    ) -> None:
+        """Queue an immediate live MIDI channel pressure to a MIDI destination.
+
+        ``pressure`` is 7-bit (0..127). ``render_frame`` is the render-frame
+        time to apply, or ``-1`` for immediate.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_channel_pressure"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        _check(
+            lib.sonare_engine_push_midi_channel_pressure(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(pressure, "pressure"),
+                _to_c_int64(render_frame, "render_frame"),
+            )
+        )
+
+    def push_midi_poly_pressure(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        note: int,
+        pressure: int,
+        render_frame: int = -1,
+    ) -> None:
+        """Queue an immediate live MIDI key pressure to a MIDI destination.
+
+        ``note`` is the key the pressure belongs to and ``pressure`` is 7-bit
+        (both 0..127). ``render_frame`` is the render-frame time to apply, or
+        ``-1`` for immediate.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_poly_pressure"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        _check(
+            lib.sonare_engine_push_midi_poly_pressure(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(note, "note"),
+                _to_c_uint8(pressure, "pressure"),
                 _to_c_int64(render_frame, "render_frame"),
             )
         )

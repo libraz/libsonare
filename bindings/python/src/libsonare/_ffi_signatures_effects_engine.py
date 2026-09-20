@@ -1415,6 +1415,7 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         "sonare_engine_push_midi_input_note_on",
         "sonare_engine_push_midi_input_note_off",
         "sonare_engine_push_midi_input_cc",
+        "sonare_engine_push_midi_input_poly_pressure",
     ):
         if hasattr(lib, _name):
             _fn = getattr(lib, _name)
@@ -1427,9 +1428,28 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_uint8,
                 ctypes.c_int64,
             ]
+    if hasattr(lib, "sonare_engine_push_midi_input_pitch_bend"):
+        lib.sonare_engine_push_midi_input_pitch_bend.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_input_pitch_bend.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint16,
+            ctypes.c_int64,
+        ]
+    if hasattr(lib, "sonare_engine_push_midi_input_channel_pressure"):
+        lib.sonare_engine_push_midi_input_channel_pressure.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_input_channel_pressure.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_int64,
+        ]
     for _name in (
         "sonare_engine_push_midi_note_on",
         "sonare_engine_push_midi_note_off",
+        "sonare_engine_push_midi_poly_pressure",
     ):
         if hasattr(lib, _name):
             _fn = getattr(lib, _name)
@@ -1443,6 +1463,26 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_uint8,
                 ctypes.c_int64,
             ]
+    if hasattr(lib, "sonare_engine_push_midi_pitch_bend"):
+        lib.sonare_engine_push_midi_pitch_bend.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_pitch_bend.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint16,
+            ctypes.c_int64,
+        ]
+    if hasattr(lib, "sonare_engine_push_midi_channel_pressure"):
+        lib.sonare_engine_push_midi_channel_pressure.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_channel_pressure.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_int64,
+        ]
     if hasattr(lib, "sonare_engine_get_transport_state"):
         lib.sonare_engine_get_transport_state.restype = ctypes.c_int32
         lib.sonare_engine_get_transport_state.argtypes = [
