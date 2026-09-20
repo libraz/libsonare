@@ -9,6 +9,8 @@ import {
   CONTROLLER_INPUTS,
   controllerProfileNames,
   init,
+  MPE_DIMENSIONS,
+  NOTE_TRACKINGS,
   RealtimeEngine,
   synthEnumTables,
 } from '../dist/index.js';
@@ -70,6 +72,10 @@ describe('Sonare WASM controller profile', () => {
     expect(tables.controllerAxes).toEqual([...CONTROLLER_AXES]);
     expect(tables.controllerInputs).toHaveLength(5);
     expect(tables.controllerAxes).toHaveLength(8);
+    // The two the note-attribution rule is spelled with, which the library
+    // supplies so a host does not hardcode either list.
+    expect(tables.mpeDimensions).toEqual([...MPE_DIMENSIONS]);
+    expect(tables.noteTrackings).toEqual([...NOTE_TRACKINGS]);
   });
 
   it('installs a named preset and refuses an unknown one', () => {
@@ -106,6 +112,26 @@ describe('Sonare WASM controller profile', () => {
       expect(engine.controllerVelocityMeaningful(0)).toBe(false);
       engine.setControllerVelocityMeaningful(0, true);
       expect(engine.controllerVelocityMeaningful(0)).toBe(true);
+    });
+  });
+
+  it('round-trips a note-tracking rule per dimension', () => {
+    withEngine((engine) => {
+      engine.setSynthInstrument(REED_PRESET, 0);
+      // Per dimension, so setting one leaves the other two on their default.
+      engine.setControllerNoteTracking(0, 'pressure', 'highest');
+      expect(engine.controllerNoteTracking(0, 'pressure')).toBe('highest');
+      expect(engine.controllerNoteTracking(0, 'bend')).toBe('last');
+      expect(engine.controllerNoteTracking(0, 'timbre')).toBe('last');
+      engine.setControllerNoteTracking(0, 'bend', 'all');
+      expect(engine.controllerNoteTracking(0, 'bend')).toBe('all');
+      expect(engine.controllerNoteTracking(0, 'pressure')).toBe('highest');
+      // A misspelling is refused rather than resolved to a default, which would
+      // configure a dimension the caller never named.
+      // @ts-expect-error unknown dimension name is rejected at runtime
+      expect(() => engine.setControllerNoteTracking(0, 'no-such-dimension', 'last')).toThrow();
+      // @ts-expect-error unknown tracking name is rejected at runtime
+      expect(() => engine.setControllerNoteTracking(0, 'bend', 'no-such-rule')).toThrow();
     });
   });
 

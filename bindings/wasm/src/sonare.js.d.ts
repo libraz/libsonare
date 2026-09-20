@@ -1481,6 +1481,15 @@ export interface WasmRealtimeEngine {
   controllerBindingCount: (destinationId: number) => number;
   setControllerVelocityMeaningful: (destinationId: number, meaningful: boolean) => void;
   controllerVelocityMeaningful: (destinationId: number) => boolean;
+  setControllerNoteTracking: (
+    destinationId: number,
+    dimension: import('./instrument_types').MpeDimension | number,
+    tracking: import('./instrument_types').NoteTracking | number,
+  ) => void;
+  controllerNoteTracking: (
+    destinationId: number,
+    dimension: import('./instrument_types').MpeDimension | number,
+  ) => import('./instrument_types').NoteTracking | number;
   setArticulation: (
     destinationId: number,
     channel: number,
@@ -1618,6 +1627,8 @@ export interface WasmSynthEnumTables {
   controllerInputs: string[];
   controllerAxes: string[];
   articulations: string[];
+  mpeDimensions: string[];
+  noteTrackings: string[];
 }
 
 export interface SonareModule {

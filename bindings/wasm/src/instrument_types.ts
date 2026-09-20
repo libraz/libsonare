@@ -208,6 +208,20 @@ export const CONTROLLER_AXES = [
  */
 export const ARTICULATIONS = ['poly', 'mono-retrigger', 'mono-legato'] as const;
 
+/** The three dimensions MPE carries per note ({@link RealtimeEngine.setControllerNoteTracking}). */
+export const MPE_DIMENSIONS = ['bend', 'pressure', 'timbre'] as const;
+
+/**
+ * Which note a value addressed to a whole MIDI channel belongs to when several
+ * are sounding on it ({@link RealtimeEngine.setControllerNoteTracking}).
+ *
+ * MPE poses this question and declines to answer it — how a controller affects
+ * the notes when more than one is active on a member channel is left to the
+ * device — so this is a choice rather than a rule. A released note is never
+ * selected, whatever the rule and however long a pedal keeps it sounding.
+ */
+export const NOTE_TRACKINGS = ['last', 'lowest', 'highest', 'all'] as const;
+
 export interface SynthEnumTables {
   engineModes: string[];
   waveforms: string[];
@@ -220,6 +234,8 @@ export interface SynthEnumTables {
   controllerInputs: string[];
   controllerAxes: string[];
   articulations: string[];
+  mpeDimensions: string[];
+  noteTrackings: string[];
 }
 
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
@@ -335,6 +351,12 @@ export type ControllerAxis = (typeof CONTROLLER_AXES)[number];
 
 /** Per-channel note-overlap rule ({@link RealtimeEngine.setArticulation}). */
 export type Articulation = (typeof ARTICULATIONS)[number];
+
+/** One per-note MPE dimension ({@link MPE_DIMENSIONS}). */
+export type MpeDimension = (typeof MPE_DIMENSIONS)[number];
+
+/** One note-attribution rule ({@link NOTE_TRACKINGS}). */
+export type NoteTracking = (typeof NOTE_TRACKINGS)[number];
 
 /**
  * One device gesture bound to one expression axis

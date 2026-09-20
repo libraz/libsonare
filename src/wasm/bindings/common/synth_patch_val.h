@@ -62,6 +62,10 @@ inline constexpr const char* kControllerAxes[] = {"none",        "excitation",  
 // What a channel does with an overlapping note-on. Also not a synth-patch
 // field, and here for the same reason as the two tables above.
 inline constexpr const char* kArticulations[] = {"poly", "mono-retrigger", "mono-legato"};
+// The per-note dimensions MPE carries, and which note a channel-addressed value
+// of one belongs to. Neither is a synth-patch field either.
+inline constexpr const char* kMpeDimensions[] = {"bend", "pressure", "timbre"};
+inline constexpr const char* kNoteTrackings[] = {"last", "lowest", "highest", "all"};
 
 static_assert(std::size(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "WASM SynthEngineMode table drifted from C");
@@ -87,6 +91,10 @@ static_assert(std::size(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
               "WASM ControllerAxis table drifted from C");
 static_assert(std::size(kArticulations) == SONARE_ARTICULATION_COUNT,
               "WASM Articulation table drifted from C");
+static_assert(std::size(kMpeDimensions) == SONARE_MPE_DIMENSION_COUNT,
+              "WASM MpeDimension table drifted from C");
+static_assert(std::size(kNoteTrackings) == SONARE_NOTE_TRACKING_COUNT,
+              "WASM NoteTracking table drifted from C");
 
 inline emscripten::val synthEnumTablesToVal() {
   using emscripten::val;
@@ -122,6 +130,8 @@ inline emscripten::val synthEnumTablesToVal() {
           array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_INPUT)));
   out.set("controllerAxes", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_AXIS)));
   out.set("articulations", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_ARTICULATION)));
+  out.set("mpeDimensions", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MPE_DIMENSION)));
+  out.set("noteTrackings", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_NOTE_TRACKING)));
   return out;
 }
 

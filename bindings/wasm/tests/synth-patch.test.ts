@@ -11,6 +11,8 @@ import {
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
   init,
+  MPE_DIMENSIONS,
+  NOTE_TRACKINGS,
   Project,
   RealtimeEngine,
   SAMPLE_KEY_TRACKS,
@@ -100,6 +102,8 @@ describe('Sonare WASM NativeSynth', () => {
       controllerInputs: [...CONTROLLER_INPUTS],
       controllerAxes: [...CONTROLLER_AXES],
       articulations: [...ARTICULATIONS],
+      mpeDimensions: [...MPE_DIMENSIONS],
+      noteTrackings: [...NOTE_TRACKINGS],
     });
 
     for (const [ordinal, name] of SYNTH_ENGINE_MODES.entries()) {

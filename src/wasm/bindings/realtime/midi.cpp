@@ -79,6 +79,22 @@ void wasmInstallControllerProfile(const sonare::engine::RealtimeEngine& engine,
   }
 }
 
+// The tracking field a dimension ordinal names. A pointer rather than a copy so
+// the setter and the getter share one mapping: three fields spelled out twice is
+// where the two would drift apart. The ordinal has already been checked by the
+// shared enum reader.
+sonare::midi::NoteTracking* wasmNoteTrackingField(sonare::midi::ControllerProfile* profile,
+                                                  int dimension) {
+  switch (dimension) {
+    case SONARE_MPE_DIMENSION_PRESSURE:
+      return &profile->pressure_tracking;
+    case SONARE_MPE_DIMENSION_TIMBRE:
+      return &profile->timbre_tracking;
+    default:
+      return &profile->bend_tracking;
+  }
+}
+
 #endif  // SONARE_WITH_ARRANGEMENT
 
 }  // namespace
@@ -594,6 +610,56 @@ bool RealtimeEngineWasm::controllerVelocityMeaningful(const val& destination_id_
   return wasmControllerProfile(engine_, destination_id).velocity_meaningful;
 #else
   (void)destination_id_val;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
+// Says which note a value addressed to the whole channel belongs to when several
+// are sounding on it, for one per-note dimension. Set per dimension because the
+// useful answers differ: pressure following the newest note while bend reaches
+// every one is a real configuration, not a mistake. Read only inside an MPE
+// zone, and only while more than one note is sounding on the channel, which an
+// MPE sender avoids by giving each note its own member channel.
+void RealtimeEngineWasm::setControllerNoteTracking(const val& destination_id_val, val dimension,
+                                                   val tracking) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  // Both refused rather than clamped by the shared enum reader: a misspelling
+  // resolved to a default would configure a dimension the caller never named
+  // with a rule they never asked for, and neither shows until two notes share a
+  // member channel.
+  const int which = sonare_wasm_synth::enumFromVal(dimension, sonare_wasm_synth::kMpeDimensions,
+                                                   SONARE_MPE_DIMENSION_COUNT, "dimension");
+  const int rule = sonare_wasm_synth::enumFromVal(tracking, sonare_wasm_synth::kNoteTrackings,
+                                                  SONARE_NOTE_TRACKING_COUNT, "tracking");
+  sonare::midi::ControllerProfile profile = wasmControllerProfile(engine_, destination_id);
+  *wasmNoteTrackingField(&profile, which) = static_cast<sonare::midi::NoteTracking>(rule);
+  wasmInstallControllerProfile(engine_, destination_id, profile);
+#else
+  (void)destination_id_val;
+  (void)dimension;
+  (void)tracking;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
+// Reads back setControllerNoteTracking, as the canonical name. Spelled the way
+// every other enum leaves this surface (synthPatchToVal), so a value handed back
+// can be passed straight to the setter.
+val RealtimeEngineWasm::controllerNoteTracking(const val& destination_id_val, val dimension) const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const int which = sonare_wasm_synth::enumFromVal(dimension, sonare_wasm_synth::kMpeDimensions,
+                                                   SONARE_MPE_DIMENSION_COUNT, "dimension");
+  sonare::midi::ControllerProfile profile = wasmControllerProfile(engine_, destination_id);
+  return sonare_wasm_synth::enumNameVal(static_cast<int>(*wasmNoteTrackingField(&profile, which)),
+                                        sonare_wasm_synth::kNoteTrackings,
+                                        SONARE_NOTE_TRACKING_COUNT);
+#else
+  (void)destination_id_val;
+  (void)dimension;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1140,6 +1206,13 @@ void registerRealtimeEngineMidi(class_<RealtimeEngineWasm>& cls) {
       .function("setControllerVelocityMeaningful",
                 &RealtimeEngineWasm::setControllerVelocityMeaningful)
       .function("controllerVelocityMeaningful", &RealtimeEngineWasm::controllerVelocityMeaningful)
+      // destinationId, dimension, tracking -- the C ABI's own argument order
+      // minus the engine handle, checked against
+      // sonare_engine_set_controller_note_tracking and the Python facade rather
+      // than assumed, since embind argument order on this surface has
+      // historically diverged from the siblings.
+      .function("setControllerNoteTracking", &RealtimeEngineWasm::setControllerNoteTracking)
+      .function("controllerNoteTracking", &RealtimeEngineWasm::controllerNoteTracking)
       // destinationId, channel, articulation -- the C ABI's own argument order
       // minus the engine handle, checked against sonare_engine_set_articulation
       // and the Python facade rather than assumed, since embind argument order
