@@ -193,6 +193,23 @@ def profile_program(profile: dict, cfg: dict) -> int:
     return int(recorded if recorded is not None else cfg.get("program", 0))
 
 
+def profile_bank(profile: dict, cfg: dict) -> int:
+    """The GS variation bank the model answers this profile with.
+
+    A program alone reaches the capital tone, and nineteen captures in the tree
+    are variations of one: `piano_wide` is program 0 at Bank Select MSB 8, which
+    the fallback map voices with a patch of its own. Rendering them without the
+    bank renders the capital and compares it against the variation's reference,
+    which is not a near miss — the two are voiced apart on purpose.
+
+    Same precedence as the program beside it, so a profile that records the
+    field can correct a capture that was re-pointed, and 0 means the capital
+    tone rather than a missing answer.
+    """
+    recorded = profile.get("capture", {}).get("bank")
+    return int(recorded if recorded is not None else cfg.get("bank", 0) or 0)
+
+
 def partial_balance_db(partials_db: list[float] | None) -> float | None:
     """Mean level of partials 2-6 relative to the fundamental.
 

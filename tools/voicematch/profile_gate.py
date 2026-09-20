@@ -240,6 +240,76 @@ def summarize_deltas(deltas: dict[str, list[float]]) -> dict[str, dict]:
 #: on every gate and teach the reader to skip the one that means something.
 PER_NOTE_DIMENSIONS = ("vel_range", "register")
 
+#: Floor for a dimension with neither a measured spread nor a guess. Nobody
+#: chose it for the dimension it lands on, in whatever unit that is: 101 of 119
+#: `register` bounds are this number. Named so a gate can record it as its own.
+GENERIC_FLOOR = 1.0
+
+
+def print_summary_table(summary: dict[str, dict], spread: dict[str, float],
+                        attempted: int) -> None:
+    """The per-dimension summary, with the population each median was taken over.
+
+    `unscored` is the column the table was missing. Every dimension here reduces
+    a list built by skipping the rows it could not produce a number for, so a
+    change that makes a row unscorable removes it from the population instead of
+    failing it — and a median over a shrunk population is free to improve for
+    exactly that reason. `rows` alone cannot say so: it is a count with nothing
+    to read it against, and both comparators print it beside dimensions whose
+    populations differ by design.
+
+    Shared by the pitched and percussion comparators so the two cannot drift;
+    the prose under it is each caller's, since what the columns mean for a kit
+    and for a keyboard is not the same sentence.
+    """
+    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'p90':>8} {'spread':>8} "
+          f"{'x spread':>9} {'rows':>5} {'unscored':>9}")
+    for k, row in summary.items():
+        s_k = spread.get(k)
+        ratio = (row["abs_median"] / s_k) if s_k and s_k > 0 else None
+        # A per-note dimension's unit is not the row, so a difference against the
+        # row count is its shape rather than a censor — the same exemption the
+        # gate's thin-grid check makes.
+        missing = ("        -" if k in PER_NOTE_DIMENSIONS
+                   else f"{max(attempted - row['n'], 0):9d}")
+        print(f"  {DELTA_LABELS.get(k, k):46s} {row['median']:+9.2f} "
+              f"{row['abs_median']:9.2f} {row['p90']:8.2f} "
+              f"{(f'{s_k:8.2f}' if s_k is not None else '       -')} "
+              f"{(f'{ratio:8.1f}x' if ratio is not None else '        -')} "
+              f"{row['n']:5d} {missing}")
+    thin = [k for k, row in summary.items()
+            if k not in PER_NOTE_DIMENSIONS and row["n"] < attempted]
+    if thin:
+        print(f"\n  `unscored` is how many of the {attempted} scored rows the dimension "
+              f"could not\n  produce a number for, and those rows LEFT the median rather "
+              f"than failing it.\n  A change that makes a row unscorable therefore improves "
+              f"the column it broke:\n  read every median above against this count, on "
+              f"{', '.join(DELTA_LABELS.get(k, k) for k in thin)}.")
+
+
+def print_vanished_dimensions(offered: set[str], summary: dict[str, dict],
+                              wanted: list[str], excused: dict[str, str]) -> None:
+    """Name the dimensions that scored no row at all, and so have no line.
+
+    The limit case of `unscored`: at zero the dimension does not appear in the
+    table, which is the same silence as a dimension that agreed. An empty column
+    is the one a metric scores best of all, and the reader has no count to read
+    against it because there is no row to carry one.
+
+    `select_dimensions` reports this only for a capture that declares its
+    dimensions, and a capture that declares none is judged on all of them — so
+    without this those are exactly the runs where a dimension can disappear with
+    nothing said.
+    """
+    gone = sorted(k for k in offered
+                  if k not in summary and k not in (excused or {})
+                  and (not wanted or k in wanted))
+    if not gone:
+        return
+    print(f"\n  {len(gone)} dimension(s) scored no row at all and so have no line above: "
+          f"{', '.join(DELTA_LABELS.get(k, k) for k in gone)}.\n  Not excused and not "
+          f"bounded anywhere — an empty column is not a column that agreed.")
+
 
 def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str,
                measured_utc: str = "") -> int:
@@ -328,9 +398,36 @@ def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str,
     if thin:
         print(f"  held on part of the grid: "
               f"{', '.join(f'{DELTA_LABELS.get(k, k)} {n}/{widest}' for k, n in thin)}")
+    # The same question asked of the BOUND rather than of the run. `--write-gate`
+    # records a bound from whatever population survived censoring and imposes no
+    # minimum, so a dimension reaching one row of thirty-five is written as
+    # confidently as one reaching all of them -- and a median over one row is
+    # that row. Measured across the bank: six of the nine `damper` bounds came
+    # from one to five rows of a thirty-five-row grid. Reported rather than
+    # failed, and reported whether or not the bound was exceeded, because a
+    # passing bound taken from one row says as little as a failing one.
+    frail = [(k, was) for k, _now, was in evidence
+             if was and widest and 2 * was < widest and k not in PER_NOTE_DIMENSIONS]
+    if frail:
+        print(f"  recorded from part of the grid: "
+              f"{', '.join(f'{DELTA_LABELS.get(k, k)} {w}/{widest}' for k, w in frail)}\n"
+              f"  — these bounds are that many rows, not the voice. A pass and a failure "
+              f"both\n  speak for the notes that survived censoring and for no others.")
     if any(was is None for _k, _now, was in evidence):
         print("  this gate records no row counts, so a bound cannot be compared against the "
               "evidence it was set from. The next --write-gate records them.")
+    # A bound resting on `GENERIC_FLOOR` is the weakest kind there is: its
+    # dimension has no measured spread and no guess written for it, so the
+    # number came from an argument default in whatever unit the dimension uses.
+    # Named only when one of them is what failed, since a gate carries many.
+    from_default = sorted({DELTA_LABELS.get(k, k) for k, b in bounds.items()
+                           if isinstance(b, dict) and b.get("floor_from") == "default"
+                           and any(f.startswith(DELTA_LABELS.get(k, k) + ":") for f in failures)})
+    if from_default:
+        print(f"  the bound that failed rests on the generic {GENERIC_FLOOR} floor on "
+              f"{', '.join(from_default)}:\n  its dimension has neither a measured spread nor "
+              f"a guess, so that number was\n  chosen for no dimension in particular and is "
+              f"in this one's units by accident.")
     if failures:
         for line in failures:
             print(f"  FAIL  {line}")
@@ -407,11 +504,18 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
                # instrument. Both are fallbacks — a capture with two references
                # measures its own floor and that one wins.
                "ring": 0.17, "tonality": 1.0}
-    floors = {**guesses, **{k: v for k, v in (spread or {}).items() if v > 0.0}}
+    measured = {k: v for k, v in (spread or {}).items() if v > 0.0}
+    floors = {**guesses, **measured}
     bounds = {}
     for key, row in summary.items():
-        floor = floors.get(key, 1.0)
+        floor = floors.get(key, GENERIC_FLOOR)
         bounds[key] = {
+            # Which of the three decided this floor, recorded because the three
+            # carry different weight and the number alone cannot say which it
+            # was. `default` is the weakest: nobody chose it for this dimension.
+            "floor": round(floor, 4),
+            "floor_from": ("measured spread" if key in measured
+                           else "guess" if key in guesses else "default"),
             "median": round(max(abs(row["median"]) * margin, floor), 3),
             "abs_median": round(max(row["abs_median"] * margin, floor), 3),
             # The tail, held to the same floor as the medians: a p90 tighter

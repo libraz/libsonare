@@ -90,6 +90,7 @@ from capture import (
     out_root,
     tail_seconds,
 )
+from corpus import load_corpus
 from loss import KIT_MIN_MEMBERS, kit_report
 from metrics import (
     ATTACK_FLOOR_MS,
@@ -119,6 +120,8 @@ from profile_gate import (
     PER_NOTE_DIMENSIONS,
     check_gate,
     print_register_profile,
+    print_summary_table,
+    print_vanished_dimensions,
     reference_spread,
     register_levels,
     register_spread_by_note,
@@ -159,6 +162,7 @@ from profile_percussion import (
     percussion_reference_spread,
     percussion_row_deltas,
     print_kit_relations,
+    ring_collapsed,
 )
 from profile_status import (
     CAPTURE_DIR,
@@ -175,6 +179,7 @@ from profile_summary import (
     partial_balance_db,
     print_percussion_summary,
     print_summary,
+    profile_bank,
     profile_program,
     summarize,
     summarize_percussion,
@@ -212,6 +217,40 @@ SILENT_HIT_DBFS = -80.0
 # What a recorded room carries back into a `Room`. The entry beside them says how
 # many notes agreed and over what range, which is provenance rather than the space.
 ROOM_FIELDS = tuple(f.name for f in dataclasses.fields(Room))
+
+
+def reference_window(cfg: dict, corpus_dir: Path | None, timbre: str, *,
+                     preroll_s: float, gate_s: float):
+    """How long to render one slot for: the span its reference row was read over.
+
+    A reference row is measured over the WHOLE recording the corpus holds for it,
+    and a recording read out of a module's own sample data is as long as the
+    instrument rang rather than as long as the gate — 0.42 s to 2.09 s across one
+    seventeen-key kit captured at a flat 400 ms gate. Rendering the model for
+    `preroll + gate + tail` then differences a decay fitted over two seconds
+    against one fitted over four hundred milliseconds, and what the model's
+    column reports is the length of its own buffer.
+
+    The manifest records each slot's own length, so the window is read from
+    there. Where it records none, and for a grid the manifest does not cover, the
+    fallback is the declared `preroll + gate + tail` — which is also exactly what
+    a rendered oracle's manifest records, so on those grids this is the same
+    number and nothing moves.
+    """
+    slots: dict[tuple[int, int], float] = {}
+    if corpus_dir is not None:
+        try:
+            slots = load_corpus(corpus_dir, timbre).slots
+        except (OSError, ValueError, KeyError):
+            slots = {}
+
+    def window(note: int, velocity: int) -> float:
+        recorded = slots.get((note, velocity))
+        if recorded is None:
+            return preroll_s + gate_s + tail_seconds(cfg, note)
+        return preroll_s + recorded
+
+    return window
 
 
 # --------------------------------------------------------------------------
@@ -420,7 +459,7 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
 
 
 def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int,
-                rig: bool | None = None) -> int:
+                bank: int = 0, rig: bool | None = None) -> int:
     """Render the model over the capture's own grid, as one more timbre of it.
 
     The oracle corpus is one WAV per (note, velocity), and the model has to be
@@ -458,21 +497,27 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int,
     # only thing that separates the amplifier from the voice behind it.
     if rig is None:
         rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
+    # The reference's own slot, not this grid's: a model WAV is measured over its
+    # whole length, so a slot shorter than the row it will be diffed against
+    # reports its buffer where the reference reports the instrument.
+    reference_timbre = next((t["id"] for t in cfg.get("timbres", []) if t.get("id")), "")
+    window = reference_window(cfg, corpus_dir, reference_timbre,
+                              preroll_s=preroll_s, gate_s=gate_s)
     rows = []
     total = len(notes) * len(velocities)
     for i, (note, vel) in enumerate(
         ((n, v) for n in notes for v in velocities), start=1
     ):
-        tail_s = tail_seconds(cfg, note)
-        smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program,
-                        channel=channel, end_pad=tail_s)
-        audio = render_model(smf, preroll_s + gate_s + tail_s, sr, rig=rig)
+        window_s = window(note, vel)
+        smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program, bank=bank,
+                        channel=channel, end_pad=max(0.0, window_s - preroll_s - gate_s))
+        audio = render_model(smf, window_s, sr, rig=rig)
         rel = Path(timbre) / f"n{note:03d}_v{vel:03d}.wav"
         write_wav(corpus_dir / rel, np.asarray(audio), sr)
         peak = float(np.abs(audio).max())
         rows.append({"id": f"{timbre}/n{note:03d}_v{vel:03d}", "timbre": timbre,
                      "note": note, "velocity": vel, "path": str(rel),
-                     "peak": peak, "seconds": round(preroll_s + gate_s + tail_s, 2)})
+                     "peak": peak, "seconds": round(window_s, 4)})
         print(f"[{i}/{total}] {rel} peak {peak:.4f}", file=sys.stderr)
 
     header = manifest or {
@@ -501,7 +546,8 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int,
 # compare
 
 
-def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int]) -> int:
+def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int],
+             corpus_dir: Path | None = None) -> int:
     """How much the timbre changes from the softest blow to the hardest.
 
     `compare` scores one velocity at a time, so a model whose every velocity is
@@ -522,6 +568,7 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
     gate_s = cap["gate_ms"] / 1000.0
 
     program = profile_program(profile, cfg)
+    bank = profile_bank(profile, cfg)
     ref = {(r["note"], r["velocity"]): r for r in profile["rows"] if r["timbre"] == timbre}
     if not ref:
         print(f"profile has no timbre {timbre!r}")
@@ -543,17 +590,18 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
     # capture's own answer: a direct reference is compared against the direct
     # signal, one recorded through an amplifier against the model plus its rig.
     rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
+    window = reference_window(cfg, corpus_dir, timbre,
+                              preroll_s=preroll_s, gate_s=gate_s)
     swing: dict[str, list[float]] = {}
     for note in notes:
         got = {}
-        tail_s = tail_seconds(cfg, note)
         for v in (lo_v, hi_v):
             if (note, v) not in ref:
                 break
-            smf = write_smf([Note(note, v, preroll_s, gate_s)], program=program,
-                            end_pad=tail_s)
-            audio = render_model(smf, preroll_s + gate_s + tail_s, cap["sample_rate"],
-                                 rig=rig)
+            window_s = window(note, v)
+            smf = write_smf([Note(note, v, preroll_s, gate_s)], program=program, bank=bank,
+                            end_pad=max(0.0, window_s - preroll_s - gate_s))
+            audio = render_model(smf, window_s, cap["sample_rate"], rig=rig)
             m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
             if not m:
                 break
@@ -596,12 +644,17 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
         if mk not in swing or rk not in swing:
             continue
         mm, rr = float(np.median(swing[mk])), float(np.median(swing[rk]))
-        print(f"  {label:22s} model {mm:+7.2f}   ref {rr:+7.2f}   error {mm - rr:+7.2f}")
+        # Over how many notes, because these medians are taken over the notes
+        # that produced a number and a note that stopped producing one leaves
+        # the median instead of moving it. Both sides, since they can differ.
+        print(f"  {label:22s} model {mm:+7.2f}   ref {rr:+7.2f}   error {mm - rr:+7.2f}"
+              f"   over {len(swing[mk])}/{len(swing[rk])} of {len(notes)} notes")
     return 0
 
 
 def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
-                       gate_path: str, write_gate: str, margin: float) -> int:
+                       gate_path: str, write_gate: str, margin: float,
+                       corpus_dir: Path | None = None) -> int:
     """Score the model against a captured kit, one instrument per note.
 
     Separate from `compare` rather than a branch inside it, because almost
@@ -628,6 +681,7 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         return 2
 
     program = profile_program(profile, cfg)
+    bank = profile_bank(profile, cfg)
     pairs = sorted({k for k in ref if not notes_filter or k[0] in notes_filter})
     print(f"model vs {timbre}: {len(pairs)} hits, model on GM kit {program}, "
           f"MIDI channel {PERCUSSION_CHANNEL}")
@@ -664,16 +718,26 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
     # capture's own answer: a direct reference is compared against the direct
     # signal, one recorded through an amplifier against the model plus its rig.
     rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
+    # The captured note, not the one the map makes the model play: the window has
+    # to be the one the reference row was measured over, and both the corpus slot
+    # and `tail_by_note` are written in the capture's own numbering.
+    window = reference_window(cfg, corpus_dir, timbre,
+                              preroll_s=preroll_s, gate_s=gate_s)
     kit_rows: list[tuple[dict, dict]] = []
+    decay_censored: list[tuple[int, int, bool, bool]] = []
+    ring_gone: list[tuple[int, int, str]] = []
+    # Rows that reached the per-row arithmetic at all, which is what every
+    # dimension below was OFFERED. A dimension's own count cannot be read
+    # without it: 11 rows is a full grid on one capture and a third of one here.
+    attempted = 0
+    offered_keys: set[str] = set()
     for note, vel in pairs:
         played = mapping.get(note, note)
-        # The captured note, not the one the map makes the model play: the window
-        # has to be the one the reference row was measured over, and `tail_by_note`
-        # is written in the capture's own numbering.
-        tail_s = tail_seconds(cfg, note)
-        smf = write_smf([Note(played, vel, preroll_s, gate_s)], program=program,
-                        channel=PERCUSSION_CHANNEL - 1, end_pad=tail_s)
-        audio = render_model(smf, preroll_s + gate_s + tail_s, sr, rig=rig)
+        window_s = window(note, vel)
+        smf = write_smf([Note(played, vel, preroll_s, gate_s)], program=program, bank=bank,
+                        channel=PERCUSSION_CHANNEL - 1,
+                        end_pad=max(0.0, window_s - preroll_s - gate_s))
+        audio = render_model(smf, window_s, sr, rig=rig)
         audio = place(audio, sr)
         m = measure_hit(audio, sr, played, vel, preroll_s=preroll_s, gate_s=gate_s,
                         max_band_hz=band_edge)
@@ -687,10 +751,33 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
                   f"{SILENT_HIT_DBFS:.0f} dBFS")
             continue
 
+        attempted += 1
         row = percussion_row_deltas(m, r)
-        got, offered = band_decay_reach(m, r)
-        reach[0] += got
-        reach[1] += offered
+        # A hit that stopped ringing altogether. `ring_doublings` has no ratio to
+        # return for a zero and refuses it, and a refusal reduced with a skip is
+        # how a collapsed piece leaves the median rather than failing it — the
+        # family's worst member stops being counted and the family reads better.
+        collapsed = ring_collapsed(m, r)
+        if collapsed:
+            ring_gone.append((note, vel, collapsed))
+        # A capped reading never fell 20 dB inside the window, so what it records
+        # is the window and not the hit — the percussion counterpart of a capped
+        # damper release. `ring` already refuses one (`ring_doublings`), and the
+        # per-octave rates are slopes fitted over that same truncated span, so
+        # they are the second column the cap reaches. Shown and left out.
+        decay_capped = bool(m.get("decay_capped") or r.get("decay_capped"))
+        uncensored_decay = row["band_decay"]
+        if decay_capped:
+            decay_censored.append((note, vel, bool(m.get("decay_capped")),
+                                   bool(r.get("decay_capped"))))
+            row["band_decay"] = None
+        if not decay_capped:
+            # Counted only where the column it describes counted the row, or it
+            # would speak for cells no average was taken over.
+            got, offered = band_decay_reach(m, r)
+            reach[0] += got
+            reach[1] += offered
+        offered_keys |= set(row)
         for k, v in row.items():
             if v is not None and np.isfinite(v):
                 deltas.setdefault(k, []).append(float(v))
@@ -704,12 +791,44 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
                     else "n/a".rjust(len(format(0, spec))))
 
         label = f"{note:5d}" if played == note else f"{note:3d}>{played:<2d}"
+        # A censored row still prints its rate, marked, because which side ran
+        # out first is the whole content of the finding.
+        decay_col = fmt(uncensored_decay, '+11.2f') + ("~" if decay_capped else " ")
+        ring_col = fmt(row['ring'], '+8.2f') + ("!" if collapsed else " ")
         print(f"{label} {vel:4d} | {fmt(row['band_tilt'], '+9.1f')} "
-              f"{fmt(row['band_shape'], '9.1f')} {fmt(row['band_decay'], '+12.2f')} "
+              f"{fmt(row['band_shape'], '9.1f')} {decay_col} "
               f"{fmt(row['centroid_pct'], '+12.1f')} {fmt(row['attack'], '+11.1f')} "
               f"{fmt(row['crest'], '+10.1f')} {fmt(row['level'], '+10.1f')} "
-              f"{fmt(row['ring'], '+9.2f')} {fmt(row['tonality'], '+10.2f')}")
+              f"{ring_col} {fmt(row['tonality'], '+10.2f')}")
 
+    if ring_gone:
+        # Loud and separate from the censors below, because this one is a
+        # finding about the voice rather than about the measurement: the piece
+        # no longer rings. It is UNSCORABLE rather than a large error, since no
+        # ratio of zero exists, and the row it would otherwise vacate is the
+        # worst row the median had.
+        sides = sorted({s for _n, _v, s in ring_gone})
+        print(f"\n! {len(ring_gone)} of {attempted} scored rows report NO ring at all "
+              f"({', '.join(sides)} side): `decay_ms` is 0, so the hit is a click and "
+              f"`ring` has no ratio to take. Counted here and unscorable, never dropped "
+              f"— a collapsed piece leaving the median reads as the family improving:")
+        print("  " + ", ".join(f"n{n}v{v}" for n, v, _s in ring_gone))
+    if decay_censored:
+        # WHICH side hit its ceiling, because that is the finding the censor
+        # hides: a row drops out exactly when one hit was still loud where the
+        # other had already gone, which is the same thing as saying it rings
+        # much longer. Left unnamed it reads as missing data.
+        model_only = sum(1 for _n, _v, mc, rc in decay_censored if mc and not rc)
+        ref_only = sum(1 for _n, _v, mc, rc in decay_censored if rc and not mc)
+        both = len(decay_censored) - model_only - ref_only
+        parts = [f"{model_only} on the model side" if model_only else "",
+                 f"{ref_only} on the reference side" if ref_only else "",
+                 f"{both} on both" if both else ""]
+        print(f"\n~ {len(decay_censored)} of {len(pairs)} rows never fell 20 dB inside "
+              f"the window the reference was recorded over, so their decay covers a "
+              f"different part of the fall on the two sides; shown, not counted, and "
+              f"{', '.join(p for p in parts if p)}:")
+        print("  " + ", ".join(f"n{n}v{v}" for n, v, _m, _r in decay_censored))
     if silent:
         print(f"\n* {len(silent)} of {len(pairs)} hits are silent on the model side; "
               f"shown, not counted:")
@@ -726,15 +845,9 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
     summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [],
                                 cfg.get("dimensions_na") or {})
     spread = percussion_reference_spread(profile, list(summary))
-    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'p90':>8} {'spread':>8} "
-          f"{'x spread':>9} {'rows':>5}")
-    for k, row in summary.items():
-        s_k = spread.get(k)
-        ratio = (row["abs_median"] / s_k) if s_k and s_k > 0 else None
-        print(f"  {DELTA_LABELS.get(k, k):46s} {row['median']:+9.2f} "
-              f"{row['abs_median']:9.2f} {row['p90']:8.2f} "
-              f"{(f'{s_k:8.2f}' if s_k is not None else '       -')} "
-              f"{(f'{ratio:8.1f}x' if ratio is not None else '        -')} {row['n']:5d}")
+    print_summary_table(summary, spread, attempted)
+    print_vanished_dimensions(offered_keys, summary, cfg.get("dimensions") or [],
+                              cfg.get("dimensions_na") or {})
     print("\n  A kit has no register to average along: every row is a different "
           "instrument,\n  so the signed median says only how the kit leans as a whole and the "
           "absolute\n  one is the column to read. `band shape` is a magnitude already and its "
@@ -793,7 +906,8 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
     return 0
 
 
-def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
+def takes(cfg: dict, *, archive: Path, only: set[str], program: int,
+          bank: int = 0) -> int:
     """Measure the phrase takes, which is where the couplings live.
 
     A per-note grid answers what one string does. Everything an instrument does
@@ -839,7 +953,7 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int) -> int:
             continue
         windows = take_windows(take)
         spans = [(n.start, n.start + n.dur) for n in take.notes]
-        smf = write_smf(take.notes, program=program, end_pad=take.tail_s,
+        smf = write_smf(take.notes, program=program, bank=bank, end_pad=take.tail_s,
                         cc_events=take.cc_events, channel=take.channel)
         # The tail window ends where the references do, not where the phrase
         # nominally does. Clipped for both sides at once, before either is
@@ -969,7 +1083,8 @@ class ModelPlacer:
 
 
 def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int],
-            gate_path: str = "", write_gate: str = "", margin: float = 1.25) -> int:
+            gate_path: str = "", write_gate: str = "", margin: float = 1.25,
+            corpus_dir: Path | None = None) -> int:
     """Measure libsonare the same way and print the difference, dimension by dimension."""
     if not profile_path.exists():
         print(f"no profile at {profile_path} — run `profile.py measure` first")
@@ -977,7 +1092,8 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     profile = json.loads(profile_path.read_text())
     if is_percussion(profile["capture"]):
         return compare_percussion(cfg, profile, timbre=timbre, notes_filter=notes_filter,
-                                  gate_path=gate_path, write_gate=write_gate, margin=margin)
+                                  gate_path=gate_path, write_gate=write_gate, margin=margin,
+                                  corpus_dir=corpus_dir)
     cap = profile["capture"]
     preroll_s = cap["preroll_ms"] / 1000.0
     gate_s = cap["gate_ms"] / 1000.0
@@ -989,6 +1105,7 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         return 2
 
     program = profile_program(profile, cfg)
+    bank = profile_bank(profile, cfg)
     pairs = sorted({k for k in ref if not notes_filter or k[0] in notes_filter})
     a4_off = a4_offset_cents(profile["rows"], timbre)
     print(f"model vs {timbre}: {len(pairs)} notes, model on GM program {program}")
@@ -1011,6 +1128,10 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     deltas: dict[str, list[float]] = {}
     damper_censored: list[tuple[int, int]] = []
     span_censored: list[tuple[int, int]] = []
+    # Rows that reached the per-row arithmetic at all, which is what every
+    # dimension below was OFFERED — see `print_summary_table`.
+    attempted = 0
+    offered_keys: set[str] = set()
     # Peak level per side, per note, per velocity. The dynamic range is the one
     # dimension no single (note, velocity) row can carry: it is the difference
     # between two of them, so it is accumulated here and reduced after the loop.
@@ -1023,18 +1144,21 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     # capture's own answer: a direct reference is compared against the direct
     # signal, one recorded through an amplifier against the model plus its rig.
     rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
+    window = reference_window(cfg, corpus_dir, timbre,
+                              preroll_s=preroll_s, gate_s=gate_s)
     levels: dict[str, dict[int, dict[int, float]]] = {}
     for note, vel in pairs:
-        tail_s = tail_seconds(cfg, note)
-        smf = write_smf([Note(note, vel, preroll_s, gate_s)],
-                        program=program, end_pad=tail_s)
-        audio = render_model(smf, preroll_s + gate_s + tail_s, cap["sample_rate"], rig=rig)
+        window_s = window(note, vel)
+        smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program, bank=bank,
+                        end_pad=max(0.0, window_s - preroll_s - gate_s))
+        audio = render_model(smf, window_s, cap["sample_rate"], rig=rig)
         audio = place(audio, cap["sample_rate"])
         m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
         r = ref[(note, vel)]
         if not m:
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")
             continue
+        attempted += 1
 
         def d(key, scale=1.0, m=m, r=r):
             if key not in m or key not in r:
@@ -1101,7 +1225,9 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         bal_m = partial_balance_db(m.get("partials_db"))
         bal_r = partial_balance_db(r.get("partials_db"))
         row["balance"] = None if bal_m is None or bal_r is None else bal_m - bal_r
-        for k, v in list(row.items()) + [("centroid_pct", centroid_pct)]:
+        scored = list(row.items()) + [("centroid_pct", centroid_pct)]
+        offered_keys |= {k for k, _v in scored}
+        for k, v in scored:
             if v is not None and np.isfinite(v):
                 deltas.setdefault(k, []).append(float(v))
         for side, src in (("m", m), ("r", r)):
@@ -1126,11 +1252,12 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
               f"{fmt(row['attack'], '+11.1f')} {fmt(row['stereo'], '+8.3f')}")
 
     if damper_censored:
-        # Each censored row was rendered over its own note's tail, so the
+        # Each censored row was rendered over its own slot's tail, so the
         # sentence names the span rather than one number it no longer has.
-        tails = sorted({tail_seconds(cfg, n) for n, _ in damper_censored})
-        span = (f"{tails[0]:.0f} s" if len(tails) == 1
-                else f"{tails[0]:.0f}-{tails[-1]:.0f} s")
+        tails = sorted({round(window(n, v) - preroll_s - gate_s, 2)
+                        for n, v in damper_censored})
+        span = (f"{tails[0]:.2g} s" if len(tails) == 1
+                else f"{tails[0]:.2g}-{tails[-1]:.2g} s")
         print(f"\n* {len(damper_censored)} of {len(pairs)} rows never fell 40 dB inside the "
               f"{span} tail on one side or the other; shown, not counted:")
         print("  " + ", ".join(f"n{n}v{v}" for n, v in damper_censored))
@@ -1164,14 +1291,9 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [],
                                 cfg.get("dimensions_na") or {})
     spread = reference_spread(profile, list(summary))
-    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'p90':>8} {'spread':>8} {'x spread':>9} {'rows':>5}")
-    for k, row in summary.items():
-        s_k = spread.get(k)
-        ratio = (row["abs_median"] / s_k) if s_k and s_k > 0 else None
-        print(f"  {DELTA_LABELS.get(k, k):46s} {row['median']:+9.2f} "
-              f"{row['abs_median']:9.2f} {row['p90']:8.2f} "
-              f"{(f'{s_k:8.2f}' if s_k is not None else '       -')} "
-              f"{(f'{ratio:8.1f}x' if ratio is not None else '        -')} {row['n']:5d}")
+    print_summary_table(summary, spread, attempted)
+    print_vanished_dimensions(offered_keys, summary, cfg.get("dimensions") or [],
+                              cfg.get("dimensions_na") or {})
     print("\n  The signed median is what the voice is doing on average and the absolute one "
           "is\n  how far any given note is from the reference. They part company exactly where "
           "a\n  summary is least trustworthy: errors of opposite sign in different registers "
@@ -1223,7 +1345,8 @@ AGREEMENT_TOLERANCE = {
 }
 
 
-def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int]) -> int:
+def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
+          corpus_dir: Path | None = None) -> int:
     """Measure a second reference over the same grid and report where the two agree.
 
     Every bound in `reference/*_gate.json` was decided by hand from one
@@ -1247,6 +1370,7 @@ def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int]) -> i
     sr = cap["sample_rate"]
     band_edge = cap.get("band_edge_hz")
     program = profile_program(profile, cfg)
+    bank = profile_bank(profile, cfg)
     if not is_percussion(cap):
         print("`agree` measures the percussion metric set; the pitched one has no "
               "second reference wired to it yet", file=sys.stderr)
@@ -1264,12 +1388,15 @@ def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int]) -> i
     agreed: dict[str, int] = {k: 0 for k in AGREEMENT_TOLERANCE}
     counted: dict[str, int] = {k: 0 for k in AGREEMENT_TOLERANCE}
     deltas: dict[str, list[float]] = {}
+    window = reference_window(cfg, corpus_dir, timbre,
+                              preroll_s=preroll_s, gate_s=gate_s)
     for note, vel in pairs:
-        tail_s = tail_seconds(cfg, note)
-        smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program,
-                        channel=PERCUSSION_CHANNEL - 1, end_pad=tail_s)
+        window_s = window(note, vel)
+        smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program, bank=bank,
+                        channel=PERCUSSION_CHANNEL - 1,
+                        end_pad=max(0.0, window_s - preroll_s - gate_s))
         try:
-            audio = render_oracle_fluidsynth(smf, preroll_s + gate_s + tail_s, sr)
+            audio = render_oracle_fluidsynth(smf, window_s, sr)
         except (FileNotFoundError, RuntimeError) as exc:
             print(f"second reference unavailable: {exc}", file=sys.stderr)
             return 2
@@ -1474,6 +1601,7 @@ def main() -> int:
     if args.cmd == "render-grid":
         return render_grid(cfg, corpus_dir, timbre=args.timbre,
                            program=int(cfg.get("program", 0)),
+                           bank=int(cfg.get("bank", 0) or 0),
                            rig=False if args.no_rig else None)
     if args.cmd == "status":
         from make_audition import DEFAULT_REFERENCE_ARCHIVE
@@ -1506,23 +1634,26 @@ def main() -> int:
                      archive=Path(args.archive).expanduser().resolve() if args.archive
                      else DEFAULT_REFERENCE_ARCHIVE,
                      only={t.strip() for t in args.only.split(",") if t.strip()},
-                     program=int(cfg.get("program", 0)))
+                     program=int(cfg.get("program", 0)),
+                     bank=int(cfg.get("bank", 0) or 0))
     timbre = args.timbre or cfg["timbres"][0]["id"]
     notes_filter = {int(x) for x in args.notes.split(",") if x.strip()}
     if args.cmd == "dynamics":
-        return dynamics(cfg, profile_path, timbre=timbre, notes_filter=notes_filter)
+        return dynamics(cfg, profile_path, timbre=timbre, notes_filter=notes_filter,
+                        corpus_dir=corpus_dir)
     if args.cmd == "agree":
         if not profile_path.exists():
             print(f"no profile at {profile_path} — run `profile.py measure` first")
             return 2
         return agree(cfg, json.loads(profile_path.read_text()), timbre=timbre,
-                     notes_filter=notes_filter)
+                     notes_filter=notes_filter, corpus_dir=corpus_dir)
     if args.gate and args.write_gate:
         print("--gate and --write-gate are alternatives: one checks the bounds and the "
               "other replaces them", file=sys.stderr)
         return 2
     return compare(cfg, profile_path, timbre=timbre, notes_filter=notes_filter,
-                   gate_path=args.gate, write_gate=args.write_gate, margin=args.margin)
+                   gate_path=args.gate, write_gate=args.write_gate, margin=args.margin,
+                   corpus_dir=corpus_dir)
 
 
 if __name__ == "__main__":

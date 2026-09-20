@@ -55,6 +55,25 @@ def ring_doublings(model: dict, ref: dict) -> float | None:
     return float(np.log2(m / r))
 
 
+def ring_collapsed(model: dict, ref: dict) -> str:
+    """Which side reported no ring at all, where both were asked for one.
+
+    `ring_doublings` refuses a zero because no ratio of it exists, and a refusal
+    reduced with a skip is how a hit that stopped ringing leaves the median
+    instead of failing it — the worst member of a family stops being counted and
+    the family reads as improved. A caller has to be able to tell that apart
+    from a row the measurement never offered, which is what the `None` guard
+    above cannot say on its own.
+
+    Empty where either side carries no reading, since that is a profile without
+    the field rather than a voice without a ring.
+    """
+    m, r = model.get("decay_ms"), ref.get("decay_ms")
+    if m is None or r is None:
+        return ""
+    return "+".join(side for side, v in (("model", m), ("reference", r)) if v <= 0.0)
+
+
 def band_decay_reach(model: dict, ref: dict) -> tuple[int, int]:
     """Octaves the reference resolved a rate in, and how many the model did too.
 
