@@ -15,6 +15,7 @@ namespace {
 
 using sonare::constants::kInvSqrt2;
 using sonare::constants::kPi;
+using sonare::constants::kSoundSpeedMps;
 using sonare::constants::kTwoPi;
 /// Noise draws live far above any other per-voice index range.
 constexpr uint64_t kNoiseIndexBase = 1ull << 20;
@@ -39,8 +40,33 @@ SONARE_TUNABLE(kPhisemCollisionRate, 100.0f);
 /// collision rate, which is a shaker's own cue and not a level.
 SONARE_TUNABLE(kPhisemVelocityFloor, 0.9f);
 
+/// Pressure a compact axial dipole radiates per unit kL, against the monopole
+/// of equal displacement. Not kInvSqrt2's neighbour: it is the solid-angle
+/// average of cos(theta) and belongs to this pair and no other.
+constexpr float kDipolePerKl = 0.57735026919f;
+
 float radius_for(double sample_rate, float t60_s) noexcept {
   return std::exp(-6.907755279f / (static_cast<float>(sample_rate) * std::max(0.005f, t60_s)));
+}
+
+/// Magnitude spectrum of a raised-cosine contact force of duration tau, read at
+/// x = f * tau and normalised to unity at DC: |sinc(x) / (1 - x^2)|.
+float contact_spectrum(float x) noexcept {
+  const float ax = std::abs(x);
+  if (ax < 1.0e-6f) return 1.0f;
+  // sinc and the denominator go to zero together at x = 1, where the limit is
+  // 1/2 and the quotient is two cancellations divided by each other.
+  if (std::abs(ax - 1.0f) < 1.0e-3f) return 0.5f;
+  const float s = std::sin(kPi * ax) / (kPi * ax);
+  return std::abs(s / (1.0f - ax * ax));
+}
+
+/// Piston-equivalent area fraction 2 J_1(alpha) / alpha of an axisymmetric mode
+/// — the share of its displacement that moves air, and so what the cavity's
+/// spring acts on. 0.432 for the (0,1), -0.123 for the (0,2).
+float piston_area(float alpha) noexcept {
+  if (alpha <= 1.0e-6f) return 1.0f;
+  return 2.0f * bessel_j(1, alpha) / alpha;
 }
 
 }  // namespace
@@ -54,44 +80,95 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   const float base_hz = params.base_freq_hz > 0.0f ? params.base_freq_hz : note_to_hz(note);
   const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
 
-  // Membrane modes: harder hits excite the upper ring modes a bit more.
-  num_modes_ = std::clamp(params.num_modes, 0, kMaxPercussionModes);
+  // Membrane modes. The strike is a force with a duration and its spectrum is
+  // how much of each mode it reaches; with mallet_ms at 0 it is the older law
+  // in the mode index, which knows nothing about where the modes sit.
+  const int asked = std::clamp(params.num_modes, 0, kMaxPercussionModes);
   tone_gain_ = std::max(0.0f, params.tone_gain);
   tone_peak_ = 0.0f;
   const float nyquist_limit = 0.45f * static_cast<float>(sr);
-  for (int k = 0; k < num_modes_; ++k) {
-    Mode& mode = modes_[static_cast<size_t>(k)];
-    const float ratio = params.mode_ratios[static_cast<size_t>(k)];
+  // The head is still stretched while the stick is on it, so the force spectrum
+  // is read at the frequency the mode starts on rather than its resting one.
+  const float start_ratio = 1.0f + std::max(0.0f, params.pitch_drop);
+  const float tau_s = params.mallet_ms > 0.0f ? 0.001f * params.mallet_ms *
+                                                    std::pow(std::max(vel01, 1.0f / 127.0f),
+                                                             -std::max(0.0f, params.mallet_vel_exp))
+                                              : 0.0f;
+  const float air_spring = std::max(0.0f, params.air_spring);
+  int placed = 0;
+
+  // The slot a mode lands in is not the slot the patch wrote it in — a ratio of
+  // 0 and a mode over Nyquist are both dropped, and a spawned partner needs a
+  // slot of its own. `index` stays the patch's, because the older amplitude law
+  // is keyed on it and a compacted index would re-voice every piece with a gap.
+  const auto place = [&](int index, float ratio, int m, float alpha, bool dipole) {
+    if (placed >= kMaxPercussionModes) return;
     const float freq = base_hz * std::max(0.01f, ratio);
-    mode.y1 = 0.0f;
-    mode.y2 = 0.0f;
-    if (ratio <= 0.0f || freq >= nyquist_limit) {
-      mode = Mode{};
-      continue;
-    }
+    if (freq <= 0.0f || freq >= nyquist_limit) return;
+    Mode& mode = modes_[static_cast<size_t>(placed)];
+    mode = Mode{};
     mode.omega = kTwoPi * freq / static_cast<float>(sr);
     // Upper membrane modes die faster than the fundamental (1/ratio scaling).
     mode.r = radius_for(sr, std::max(0.005f, params.mode_decay_s) / std::max(1.0f, ratio));
-    const float strike = k == 0 ? 1.0f : (0.4f + 0.4f * vel01) / static_cast<float>(k + 1);
     // Strike-point weighting: each membrane mode is excited by the value of
     // its shape J_m(alpha_mn * r) * cos(m * theta) at the strike. A centre
     // hit (strike_r == 0) is the legacy uniform excitation.
     float strike_pos = 1.0f;
     if (params.strike_r > 0.0f) {
-      const int m = static_cast<int>(params.mode_m[static_cast<size_t>(k)]);
-      const float arg = params.mode_alpha[static_cast<size_t>(k)] * params.strike_r;
-      strike_pos =
-          std::abs(bessel_j(m, arg) * std::cos(static_cast<float>(m) * params.strike_theta));
+      strike_pos = std::abs(bessel_j(m, alpha * params.strike_r) *
+                            std::cos(static_cast<float>(m) * params.strike_theta));
     }
-    mode.gain = strike * std::sin(mode.omega) * strike_pos;
+    const float strike =
+        tau_s > 0.0f ? contact_spectrum(freq * start_ratio * tau_s)
+                     : (index == 0 ? 1.0f : (0.4f + 0.4f * vel01) / static_cast<float>(index + 1));
+    // Displacement is not pressure: a mode with m nodal diameters moves no net
+    // volume and radiates as a 2m-pole, and the pair member whose heads move
+    // together is an axial dipole of the shell's depth.
+    float radiation = 1.0f;
+    const float wavenumber = kTwoPi * freq / kSoundSpeedMps;
+    if (m >= 1 && params.head_diameter_m > 0.0f) {
+      radiation = std::min(
+          1.0f, std::pow(wavenumber * 0.5f * params.head_diameter_m, static_cast<float>(m)));
+    } else if (m == 0 && dipole && params.shell_depth_m > 0.0f) {
+      radiation = std::min(1.0f, wavenumber * params.shell_depth_m * kDipolePerKl);
+    }
+    mode.gain = strike * std::sin(mode.omega) * strike_pos * radiation;
     // The head's own peak swing at unit excitation. Every mode is impulse-
     // excited in phase, so the in-phase sum of the two-pole peaks (gain/sin w,
     // read at the frequency the strike starts on) is the bound the membrane
     // cannot exceed. It is what the wire gate measures its threshold against.
-    const float w0 = std::min(mode.omega * (1.0f + std::max(0.0f, params.pitch_drop)), 0.95f * kPi);
+    const float w0 = std::min(mode.omega * start_ratio, 0.95f * kPi);
     tone_peak_ += mode.gain / std::max(1.0e-6f, std::sin(w0));
+    ++placed;
+  };
+
+  // The (0,1)'s piston area and ratio: the air spring's split is stated against
+  // it, so a higher axisymmetric mode splits by what it moves and how stiff it
+  // is rather than by the same factor.
+  float pair_area = 0.0f;
+  float pair_ratio = 0.0f;
+  for (int k = 0; k < asked; ++k) {
+    const float ratio = params.mode_ratios[static_cast<size_t>(k)];
+    if (ratio <= 0.0f) continue;
+    const int m = static_cast<int>(params.mode_m[static_cast<size_t>(k)]);
+    const float alpha = params.mode_alpha[static_cast<size_t>(k)];
+    const bool splits = air_spring > 0.0f && m == 0;
+    place(k, ratio, m, alpha, splits);
+    if (!splits) continue;
+    const float area = piston_area(alpha);
+    if (pair_ratio <= 0.0f) {
+      pair_area = area;
+      pair_ratio = ratio;
+    }
+    const float area_share = pair_area != 0.0f ? area / pair_area : 0.0f;
+    const float stiffness_share = pair_ratio / ratio;
+    place(k,
+          ratio * std::sqrt(1.0f + air_spring * area_share * area_share * stiffness_share *
+                                       stiffness_share),
+          m, alpha, false);
   }
-  for (int k = num_modes_; k < kMaxPercussionModes; ++k) modes_[static_cast<size_t>(k)] = Mode{};
+  num_modes_ = placed;
+  for (int k = placed; k < kMaxPercussionModes; ++k) modes_[static_cast<size_t>(k)] = Mode{};
 
   // Descending pitch envelope.
   drop_state_ = std::max(0.0f, params.pitch_drop);

@@ -488,6 +488,11 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   F(percussion.pitch_drop_ms);
   F(percussion.strike_r);
   F(percussion.strike_theta);
+  F(percussion.mallet_ms);
+  F(percussion.mallet_vel_exp);
+  F(percussion.air_spring);
+  F(percussion.head_diameter_m);
+  F(percussion.shell_depth_m);
   F(percussion.noise_gain);
   F(percussion.noise_decay_ms);
   F(percussion.noise_cutoff_hz);

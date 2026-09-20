@@ -1024,6 +1024,20 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   for (float& alpha : p.percussion.mode_alpha) {
     alpha = std::clamp(patch_clamp_detail::sanitize(alpha, 0.0f), 0.0f, 64.0f);
   }
+  // 50 ms is longer than any struck contact the kit models; the exponent is a
+  // power of a normalized velocity, so above 1 a soft hit is brighter.
+  p.percussion.mallet_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.mallet_ms, 0.0f), 0.0f, 50.0f);
+  p.percussion.mallet_vel_exp =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.mallet_vel_exp, 0.0f), 0.0f, 1.0f);
+  // A cavity eight times the head's stiffness splits the pair by a factor of 3;
+  // the two lengths bound a concert bass drum and leave a taiko room.
+  p.percussion.air_spring =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.air_spring, 0.0f), 0.0f, 8.0f);
+  p.percussion.head_diameter_m =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.head_diameter_m, 0.0f), 0.0f, 2.0f);
+  p.percussion.shell_depth_m =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.shell_depth_m, 0.0f), 0.0f, 2.0f);
   p.percussion.noise_gain =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.noise_gain, 0.0f), 0.0f, 4.0f);
   p.percussion.noise_decay_ms =

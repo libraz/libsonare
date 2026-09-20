@@ -34,7 +34,10 @@
 
 namespace sonare::midi::synth {
 
-inline constexpr int kMaxPercussionModes = 6;
+/// Modes one piece can place, the spawned air-spring partners included. The
+/// first ten circular-membrane zeros end at alpha_51 = 8.771, which `bessel_j`
+/// still evaluates exactly, and the two spare slots hold the partners.
+inline constexpr int kMaxPercussionModes = 12;
 inline constexpr int kMaxShellModes = 4;
 
 /// Percussion section of a NativeSynthPatch (used when mode == kPercussion).
@@ -55,7 +58,8 @@ struct PercussionPatchParams {
   int num_modes = 0;
   /// Mode ratios to the base frequency (circular membrane: 1, 1.59, 2.14,
   /// 2.30, 2.65).
-  std::array<float, kMaxPercussionModes> mode_ratios = {1.0f, 1.59f, 2.14f, 2.3f, 2.65f, 0.0f};
+  std::array<float, kMaxPercussionModes> mode_ratios = {1.0f, 1.59f, 2.14f, 2.3f, 2.65f, 0.0f,
+                                                        0.0f, 0.0f,  0.0f,  0.0f, 0.0f,  0.0f};
   /// Fundamental t60 (seconds) of the tone layer.
   float mode_decay_s = 0.3f;
   /// Tone layer mix gain.
@@ -92,14 +96,72 @@ struct PercussionPatchParams {
   /// Strike angle (radians); orients the m>=1 degenerate sin/cos pair.
   float strike_theta = 0.0f;
   /// Per-mode angular order m (nodal diameters), parallel to mode_ratios.
-  /// Defaults to the ideal circular-membrane set (0,1)(1,1)(2,1)(0,2)(3,1).
-  std::array<uint8_t, kMaxPercussionModes> mode_m = {0, 1, 2, 0, 3, 0};
+  /// Defaults to the ideal circular-membrane set in frequency order, (0,1)
+  /// (1,1)(2,1)(0,2)(3,1)(1,2)(4,1)(2,2)(0,3)(5,1); the last two slots are the
+  /// air-spring partners', which take their order from the mode they split off.
+  std::array<uint8_t, kMaxPercussionModes> mode_m = {0, 1, 2, 0, 3, 1, 4, 2, 0, 5, 0, 0};
   /// Per-mode Bessel zero alpha_mn (the spatial argument scale), parallel to
   /// mode_ratios. mode_ratios[k] == mode_alpha[k] / mode_alpha[0] for the
   /// ideal membrane, but the two serve different roles: ratio scales
   /// frequency, alpha scales the strike-shape argument.
-  std::array<float, kMaxPercussionModes> mode_alpha = {2.4048f, 3.8317f, 5.1356f,
-                                                       5.5201f, 6.3802f, 0.0f};
+  std::array<float, kMaxPercussionModes> mode_alpha = {2.4048f, 3.8317f, 5.1356f, 5.5201f,
+                                                       6.3802f, 7.0156f, 7.5883f, 8.4172f,
+                                                       8.6537f, 8.7715f, 0.0f,    0.0f};
+
+  // --- contact force (how much of each mode the strike reaches) ---
+  /// Contact time at full velocity (ms). 0 = the index-ordered amplitude law
+  /// that predates this field, bit-identical.
+  ///
+  /// The force a stick, beater or hand applies over its contact is a smooth
+  /// pulse, and that pulse's spectrum read at each mode's frequency is the
+  /// mode's share of the strike — the standard modal reduction, in which the
+  /// force does not depend on the resonator state and so costs no feedback loop
+  /// (Wagner, KTH 2006, restating Bork and Asano; Avanzini & Marogna, IEEE
+  /// TASLP 18, 2010). Orders of magnitude: stick on a snare or tom head 1-3.5,
+  /// felt kick beater 4-8, hand on a conga 5-15, stick tip on a cymbal 0.2-0.5,
+  /// wood on wood 0.1-0.3.
+  ///
+  /// Physically the same number as `contact_ms` and separate from it only
+  /// because that one was fitted on 30 keys as a brightness control for the
+  /// direct pulse under the old law. They merge once this is fitted on the
+  /// membranes and the two land within a factor of about 1.5.
+  float mallet_ms = 0.0f;
+  /// How far the contact shortens as the strike hardens: the contact time is
+  /// `mallet_ms * vel01 ^ -mallet_vel_exp`. 0 = velocity-independent, which is
+  /// also what a hand or a soft beater does. 0.2 is the Hertzian mallet-on-bar
+  /// result (Chaigne & Doutaut, JASA 101, 1997) — for a head the direction is
+  /// measured and the exponent is not, so this is fitted, not asserted.
+  float mallet_vel_exp = 0.0f;
+
+  // --- two-head coupling and radiation ---
+  /// Cavity air-spring stiffness as a fraction of the head's, at the (0,1).
+  /// 0 = the heads are uncoupled and no partner is spawned, bit-identical.
+  ///
+  /// Two heads over an enclosed volume split every m = 0 mode in two: the
+  /// members moving in the same direction leave the volume constant and the
+  /// spring idle, the members moving oppositely compress it. The patch's mode
+  /// stays as the low member and the partner is spawned above it, which is what
+  /// the spare mode slots are for. Its geometric estimate is
+  /// `1.385 rho c^2 / (L sigma_s omega_01^2)` — 3.9 for a 14x5.5 snare against
+  /// 1.56 measured on it, so this is a fitted scalar with a physical starting
+  /// point rather than a derived constant. (Rossing, Bork, Zhao & Fystrom, JASA
+  /// 92, 1992; Avanzini & Marogna, IEEE TASLP 18, 2010.)
+  float air_spring = 0.0f;
+  /// Head diameter (m). 0 = no multipole weighting, bit-identical.
+  ///
+  /// A mode with m nodal diameters moves no net volume and radiates as a
+  /// 2m-pole, so below ka ~ 1 its pressure falls as (ka)^m against a monopole
+  /// of the same displacement. Capped at 1: the law is asymptotic and a drum
+  /// head sits right at the knee, where it is good to about 3 dB and the shell
+  /// is not the rigid baffle it assumes.
+  float head_diameter_m = 0.0f;
+  /// Shell depth (m). 0 = no dipole weighting, bit-identical.
+  ///
+  /// The pair member whose heads move together pushes air out of one and pulls
+  /// it in at the other: an axial dipole of this separation, radiating
+  /// kL/sqrt(3) of what its breathing partner does. Read only where
+  /// `air_spring` spawned that partner.
+  float shell_depth_m = 0.0f;
 
   // --- noise layer ---
   float noise_gain = 0.0f;

@@ -435,213 +435,81 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[36] = d.kick;
   t[36].gain = 5.2037f;
   t[46] = d.open_hat;
-  // The six toms start from one patch because they are key-tracked — the struck
-  // key sets the head frequency — and then part company below, each fitted
-  // against its own captured drum.
-  t[41] = t[43] = t[45] = t[47] = t[48] = t[50] = d.tom;
-  t[47].amp_env.attack_ms = 1.5172f;
-  t[47].amp_env.decay_ms = 50.0f;
-  t[47].amp_env.sustain = 0.125947f;
-  t[47].cutoff_hz = 4404.95f;
-  t[47].drive = 0.356028f;
-  t[47].percussion.contact = 0.347392f;
-  t[47].percussion.mode_decay_s = 0.357981f;
-  t[47].percussion.mode_ratios[0] = 0.920847f;
-  t[47].percussion.mode_ratios[1] = 0.661637f;
-  t[47].percussion.mode_ratios[2] = 7.8434f;
-  t[47].percussion.mode_ratios[3] = 3.75206f;
-  t[47].percussion.mode_ratios[4] = 2.18956f;
-  t[47].percussion.noise_cutoff_hz = 228.362f;
-  t[47].percussion.noise_decay_ms = 4.75026f;
-  t[47].percussion.noise_gain = 0.578683f;
-  t[47].percussion.noise_q = 1.81726f;
-  t[47].percussion.num_modes = 1;
-  t[47].percussion.pitch_drop = 1.9615f;
-  t[47].percussion.pitch_drop_ms = 14.7123f;
-  t[47].percussion.plate_gain = 0.767737f;
-  t[47].percussion.shell_mix = 0.549229f;
-  t[47].percussion.shell_num_modes = 3;
-  t[47].percussion.shell_t60_s[0] = 0.0528995f;
-  t[47].percussion.shell_weight[0] = 0.464666f;
-  t[47].percussion.shell_weight[1] = 2.8029f;
-  t[47].percussion.strike_r = 0.876996f;
-  t[47].percussion.strike_theta = 0.638249f;
-  t[47].percussion.tone_gain = 2.87243f;
-  t[47].resonance_q = 1.23387f;
-  t[47].stereo_spread = 0.733672f;
-  t[47].gain = 1.7579f;
-  t[45].amp_env.attack_ms = 0.412972f;
-  t[45].amp_env.decay_ms = 39.0723f;
-  t[45].amp_env.sustain = 0.218642f;
-  t[45].cutoff_hz = 439.419f;
-  t[45].drive = 1.0f;
-  t[45].percussion.contact = 0.859948f;
-  t[45].percussion.mode_decay_s = 0.136273f;
-  t[45].percussion.mode_ratios[0] = 0.119677f;
-  t[45].percussion.mode_ratios[1] = 2.3049f;
-  t[45].percussion.mode_ratios[2] = 0.523409f;
-  t[45].percussion.mode_ratios[3] = 1.46114f;
-  t[45].percussion.mode_ratios[4] = 9.04296f;
-  t[45].percussion.noise_cutoff_hz = 120.322f;
-  t[45].percussion.noise_decay_ms = 7.01112f;
-  t[45].percussion.noise_gain = 1.88579f;
-  t[45].percussion.noise_q = 1.55848f;
-  t[45].percussion.num_modes = 3;
-  t[45].percussion.pitch_drop = 1.1347f;
-  t[45].percussion.pitch_drop_ms = 287.935f;
-  t[45].percussion.plate_gain = 2.70378f;
-  t[45].percussion.shell_mix = 0.493173f;
-  t[45].percussion.shell_num_modes = 2;
-  t[45].percussion.shell_t60_s[0] = 0.699765f;
-  t[45].percussion.shell_t60_s[1] = 0.130808f;
-  t[45].percussion.shell_weight[0] = 1.10919f;
-  t[45].percussion.shell_weight[1] = 0.0f;
-  t[45].percussion.strike_r = 0.368635f;
-  t[45].percussion.strike_theta = 0.672819f;
-  t[45].percussion.tone_gain = 2.68692f;
-  t[45].resonance_q = 0.5f;
-  t[45].stereo_spread = 0.525785f;
-  t[45].percussion.contact_ms = 0.112507f;
-  t[45].percussion.plate_hf_ratio = 0.64863f;
-  t[45].percussion.plate_low_hz = 158.424f;
-  t[45].percussion.plate_t60_s = 1.52302f;
-  t[45].percussion.shell_weight[2] = 0.227623f;
-  t[45].percussion.tone_direct = 0.534888f;
-  t[45].gain = 1.8134f;
-  t[50].amp_env.attack_ms = 1.13446f;
-  t[50].amp_env.decay_ms = 60.7551f;
-  t[50].cutoff_hz = 9241.57f;
-  t[50].percussion.contact = 1.20857f;
-  t[50].percussion.mode_decay_s = 1.4464f;
-  t[50].percussion.mode_ratios[0] = 0.160763f;
-  t[50].percussion.mode_ratios[1] = 0.0691419f;
-  t[50].percussion.mode_ratios[2] = 1.78945f;
-  t[50].percussion.mode_ratios[3] = 6.08448f;
-  t[50].percussion.mode_ratios[4] = 9.12403f;
-  t[50].percussion.noise_cutoff_hz = 105.803f;
-  t[50].percussion.noise_decay_ms = 135.572f;
-  t[50].percussion.noise_gain = 1.79751f;
-  t[50].percussion.noise_q = 1.99401f;
-  t[50].percussion.num_modes = 0;
-  t[50].percussion.pitch_drop = 1.24141f;
-  t[50].percussion.pitch_drop_ms = 328.792f;
-  t[50].percussion.plate_gain = 2.84131f;
-  t[50].percussion.shell_mix = 0.337229f;
-  t[50].percussion.shell_num_modes = 0;
-  t[50].percussion.shell_t60_s[0] = 0.0367571f;
-  t[50].percussion.shell_weight[0] = 1.66629f;
-  t[50].percussion.shell_weight[1] = 2.01492f;
-  t[50].percussion.strike_r = 0.64041f;
-  t[50].percussion.strike_theta = 0.427684f;
-  t[50].percussion.tone_gain = 0.947679f;
-  t[50].amp_env.sustain = 0.473151f;
-  t[50].drive = 0.508784f;
-  t[50].percussion.contact_ms = 0.159226f;
-  t[50].percussion.plate_hf_ratio = 0.0911714f;
-  t[50].percussion.plate_low_hz = 389.298f;
-  t[50].percussion.plate_t60_s = 0.262769f;
-  t[50].resonance_q = 1.95192f;
-  t[50].percussion.shell_t60_s[1] = 0.0501966f;
-  t[50].percussion.tone_direct = 0.162503f;
-  t[48].amp_env.attack_ms = 0.0425854f;
-  t[48].amp_env.decay_ms = 335.306f;
-  t[48].amp_env.sustain = 0.477489f;
-  t[48].cutoff_hz = 4590.22f;
-  t[48].drive = 0.154601f;
-  t[48].percussion.mode_decay_s = 0.0138718f;
-  t[48].percussion.mode_ratios[0] = 0.281591f;
-  t[48].percussion.mode_ratios[1] = 49.1507f;
-  t[48].percussion.mode_ratios[2] = 16.1877f;
-  t[48].percussion.mode_ratios[3] = 1.27713f;
-  t[48].percussion.mode_ratios[4] = 1.64009f;
-  t[48].percussion.noise_cutoff_hz = 122.338f;
-  t[48].percussion.noise_decay_ms = 149.378f;
-  t[48].percussion.noise_gain = 1.98885f;
-  t[48].percussion.noise_q = 0.71776f;
-  t[48].percussion.pitch_drop = 0.366487f;
-  t[48].percussion.pitch_drop_ms = 55.3347f;
-  t[48].percussion.plate_gain = 1.15659f;
-  t[48].percussion.shell_mix = 0.521556f;
-  t[48].percussion.shell_num_modes = 2;
-  t[48].percussion.shell_t60_s[0] = 0.0942461f;
-  t[48].percussion.shell_weight[1] = 2.80129f;
-  t[48].percussion.strike_r = 0.163287f;
-  t[48].percussion.strike_theta = 0.931919f;
-  t[48].percussion.tone_gain = 3.39111f;
-  t[48].percussion.contact = 0.442594f;
-  t[48].percussion.num_modes = 1;
-  t[48].percussion.plate_hf_ratio = 0.835957f;
-  t[48].percussion.plate_low_hz = 265.555f;
-  t[48].percussion.plate_t60_s = 0.490177f;
-  t[48].percussion.shell_weight[0] = 0.771718f;
-  t[48].percussion.tone_direct = 0.463782f;
-  t[48].resonance_q = 0.5f;
-  t[48].gain = 1.7916f;
-  t[41].amp_env.attack_ms = 1.30323f;
-  t[41].amp_env.decay_ms = 55.9659f;
-  t[41].amp_env.sustain = 0.0983869f;
-  t[41].cutoff_hz = 4923.92f;
-  t[41].drive = 0.354172f;
-  t[41].percussion.contact = 0.166701f;
-  t[41].percussion.mode_decay_s = 0.922246f;
-  t[41].percussion.mode_ratios[0] = 0.734396f;
-  t[41].percussion.mode_ratios[1] = 0.958137f;
-  t[41].percussion.mode_ratios[2] = 2.64812f;
-  t[41].percussion.mode_ratios[3] = 1.51843f;
-  t[41].percussion.mode_ratios[4] = 18.735f;
-  t[41].percussion.noise_cutoff_hz = 246.394f;
-  t[41].percussion.noise_decay_ms = 5.18107f;
-  t[41].percussion.noise_gain = 0.820234f;
-  t[41].percussion.noise_q = 5.84366f;
-  t[41].percussion.num_modes = 2;
-  t[41].percussion.pitch_drop = 1.90096f;
-  t[41].percussion.pitch_drop_ms = 220.769f;
-  t[41].percussion.plate_gain = 2.02608f;
-  t[41].percussion.shell_mix = 0.300043f;
-  t[41].percussion.shell_num_modes = 3;
-  t[41].percussion.shell_t60_s[0] = 0.0433665f;
-  t[41].percussion.shell_t60_s[1] = 0.0553053f;
-  t[41].percussion.shell_weight[0] = 0.593744f;
-  t[41].percussion.shell_weight[1] = 2.41562f;
-  t[41].percussion.strike_r = 0.801913f;
-  t[41].percussion.strike_theta = 0.367653f;
-  t[41].percussion.tone_gain = 3.0687f;
-  t[41].stereo_spread = 0.13347f;
-  t[41].gain = 1.3631f;
-  t[43].amp_env.attack_ms = 0.0214768f;
-  t[43].amp_env.decay_ms = 58.724f;
-  t[43].amp_env.sustain = 0.111286f;
-  t[43].cutoff_hz = 708.889f;
-  t[43].drive = 0.0186866f;
-  t[43].percussion.contact = 0.489255f;
-  t[43].percussion.mode_decay_s = 0.886665f;
-  t[43].percussion.mode_ratios[0] = 1.18929f;
-  t[43].percussion.mode_ratios[1] = 0.413419f;
-  t[43].percussion.mode_ratios[2] = 2.88348f;
-  t[43].percussion.mode_ratios[3] = 0.356884f;
-  t[43].percussion.mode_ratios[4] = 15.7198f;
-  t[43].percussion.noise_cutoff_hz = 701.536f;
-  t[43].percussion.noise_decay_ms = 14.4177f;
-  t[43].percussion.noise_gain = 1.85473f;
-  t[43].percussion.noise_q = 7.35009f;
-  t[43].percussion.num_modes = 3;
-  t[43].percussion.pitch_drop = 0.606076f;
-  t[43].percussion.pitch_drop_ms = 69.9541f;
-  t[43].percussion.shell_mix = 0.144526f;
-  t[43].percussion.shell_t60_s[0] = 0.0493077f;
-  t[43].percussion.shell_t60_s[1] = 0.0111126f;
-  t[43].percussion.shell_weight[0] = 0.426064f;
-  t[43].percussion.shell_weight[1] = 2.20036f;
-  t[43].percussion.strike_r = 0.456311f;
-  t[43].percussion.strike_theta = 0.868581f;
-  t[43].percussion.tone_gain = 1.72636f;
-  t[43].resonance_q = 0.71466f;
-  t[43].stereo_spread = 0.738875f;
-  t[43].percussion.contact_ms = 0.0752723f;
-  t[43].percussion.plate_gain = 2.6512f;
-  t[43].percussion.shell_num_modes = 1;
-  t[43].gain = 1.246f;
-
+  // The six toms are six drums. Each takes the geometry the name on its key
+  // carries — 18, 16, 14, 13, 12 and 10 inch, with the depth a drum that size
+  // is built to — and a head frequency and ring read off the module rather than
+  // off a recording of somebody's kit: how a set is pitched and how far its
+  // members sit apart is a relation between them, which is the module's.
+  //
+  // Key-tracking spans 1.68:1 and the module spans 2.04:1, so the pitch is
+  // pinned; the GS per-note pitch NRPN still multiplies on top. Both are needed
+  // together, because the frequency is what sets the ring: the module's low
+  // bands lose 47-65 dB/s under the floor tom and 97-106 under the high tom.
+  //
+  // `air_spring` is the one scalar here a fit still has to land. Its starting
+  // value scales the 1.43 the reference snare's measured 1.56 split implies by
+  // 1 / (depth * f01^2) — the cavity's stiffness against the head's — which
+  // puts the floor tom's axisymmetric split at 1.73 and the high tom's at 1.40.
+  struct TomSpec {
+    int note;
+    float base_hz;
+    float diameter_m;
+    float depth_m;
+    float air_spring;
+    float mode_decay_s;
+    float mallet_ms;
+  };
+  // `mode_decay_s` is the fundamental's t60, taken as 60 dB over the rate the
+  // module loses in the three bands its head sounds in. The upper modes then
+  // die as 1 / ratio, which is the shape the module has as well: its tom bands
+  // run -73, -61, -62, -92, -130, -175, -258, -380 dB/s from low to high.
+  constexpr TomSpec kToms[] = {
+      {41, 79.7f, 0.457f, 0.406f, 1.99f, 1.10f, 2.8f},
+      {43, 94.5f, 0.406f, 0.406f, 1.41f, 0.89f, 2.7f},
+      {45, 102.9f, 0.356f, 0.356f, 1.36f, 1.04f, 2.6f},
+      {47, 120.4f, 0.330f, 0.279f, 1.27f, 0.95f, 2.5f},
+      {48, 137.7f, 0.305f, 0.254f, 1.06f, 0.67f, 2.3f},
+      {50, 162.3f, 0.254f, 0.203f, 0.96f, 0.59f, 2.2f},
+  };
+  // The first eight circular-membrane modes as alpha_mn / alpha_01, which is
+  // what a ratio is for. Two of the eight are axisymmetric, so the air spring
+  // spawns two partners and the voice places ten of its twelve slots.
+  constexpr std::array<float, kMaxPercussionModes> kMembraneRatios = {
+      1.0f,     1.59335f, 2.13556f, 2.29545f, 2.65311f, 2.91733f,
+      3.15547f, 3.50017f, 0.0f,     0.0f,     0.0f,     0.0f};
+  // Each note is assigned on its own line rather than in a loop over the table:
+  // `writeback.py` anchors a fitted drum value on the last line that starts
+  // with `t[<note>]`, so a loop leaves every tom with nowhere for a fit to write
+  // its result back to and the calibration round reports instead of adopting.
+  auto tom_patch = [&](const TomSpec& tom) {
+    NativeSynthPatch p = d.tom;
+    p.percussion.base_freq_hz = tom.base_hz;
+    p.percussion.head_diameter_m = tom.diameter_m;
+    p.percussion.shell_depth_m = tom.depth_m;
+    p.percussion.air_spring = tom.air_spring;
+    p.percussion.mode_decay_s = tom.mode_decay_s;
+    p.percussion.mallet_ms = tom.mallet_ms;
+    p.percussion.mallet_vel_exp = 0.2f;
+    p.percussion.num_modes = 8;
+    p.percussion.mode_ratios = kMembraneRatios;
+    // Where a stick lands: far enough out to excite the m >= 1 modes the drum's
+    // pitch is heard in, short of the rim that kills the fundamental.
+    p.percussion.strike_r = 0.55f;
+    // The head tightens under the stick by a few percent, not by the 60% the
+    // key-tracked archetype carried as a pitch effect.
+    p.percussion.pitch_drop = 0.08f;
+    p.percussion.pitch_drop_ms = 40.0f;
+    // The stick's own radiation, which every resonator here is too slow to
+    // supply in the first milliseconds.
+    p.percussion.contact = 0.4f;
+    return p;
+  };
+  t[41] = tom_patch(kToms[0]);
+  t[43] = tom_patch(kToms[1]);
+  t[45] = tom_patch(kToms[2]);
+  t[47] = tom_patch(kToms[3]);
+  t[48] = tom_patch(kToms[4]);
+  t[50] = tom_patch(kToms[5]);
   // --- cymbals ---
   //
   // Six keys, six plates. They cannot share one patch the way the toms do: a

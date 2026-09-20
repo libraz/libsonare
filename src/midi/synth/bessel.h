@@ -7,9 +7,11 @@
 /// libc++ (the default macOS/clang standard library) ships no
 /// std::cyl_bessel_j, so the percussion core cannot depend on the C++17
 /// special-math functions. This ascending-series evaluator covers the small
-/// integer orders (m <= 3) and bounded arguments (|x| <~ 7) the circular
-/// membrane needs. It is called only at note-on (never per-sample), so the
-/// fixed term count is allocation-free and RT-safe.
+/// integer orders and bounded arguments the circular membrane needs: measured
+/// against the same series run to 200 terms, its 24 are exact to double
+/// precision at every order up to m = 5 and every argument up to alpha_51 =
+/// 8.771, which is where the mode budget stops. It is called only at note-on
+/// (never per-sample), so the fixed term count is allocation-free and RT-safe.
 
 #include <cmath>
 

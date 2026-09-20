@@ -131,6 +131,11 @@ constexpr PercussionPatchParams blank_percussion() noexcept {
   z.strike_theta = 0.0f;
   for (uint8_t& v : z.mode_m) v = 0;
   for (float& v : z.mode_alpha) v = 0.0f;
+  z.mallet_ms = 0.0f;
+  z.mallet_vel_exp = 0.0f;
+  z.air_spring = 0.0f;
+  z.head_diameter_m = 0.0f;
+  z.shell_depth_m = 0.0f;
   z.noise_gain = 0.0f;
   z.noise_decay_ms = 0.0f;
   z.noise_cutoff_hz = 0.0f;

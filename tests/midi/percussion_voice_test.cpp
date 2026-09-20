@@ -78,6 +78,19 @@ TEST_CASE("bessel_j matches known values and zeros", "[midi][synth][bessel]") {
   REQUIRE(bessel_j(0, 1.0f) == Catch::Approx(0.7651977f).margin(1e-5));
   // J_1(1) = 0.4400505857.
   REQUIRE(bessel_j(1, 1.0f) == Catch::Approx(0.4400506f).margin(1e-5));
+
+  // The far end of the mode budget. The 24-term cap is where an ascending
+  // series stops converging, and the alphas up here are the ones a twelve-mode
+  // membrane places: the series must still find their zeros.
+  REQUIRE(bessel_j(1, 7.0156f) == Catch::Approx(0.0f).margin(1e-3));
+  REQUIRE(bessel_j(4, 7.5883f) == Catch::Approx(0.0f).margin(1e-3));
+  REQUIRE(bessel_j(2, 8.4172f) == Catch::Approx(0.0f).margin(1e-3));
+  REQUIRE(bessel_j(0, 8.6537f) == Catch::Approx(0.0f).margin(1e-3));
+  REQUIRE(bessel_j(5, 8.7715f) == Catch::Approx(0.0f).margin(1e-3));
+  // And an interior value at the same order, so the zeros above are the
+  // function's and not an evaluator that has collapsed to nothing.
+  REQUIRE(bessel_j(5, 5.0f) == Catch::Approx(0.2611405f).margin(1e-5));
+  REQUIRE(bessel_j(4, 5.0f) == Catch::Approx(0.3912324f).margin(1e-5));
 }
 
 TEST_CASE("strike_r == 0 reproduces the legacy percussion output bit-for-bit",
@@ -952,4 +965,119 @@ TEST_CASE("each burst in the train decays on its own, shorter than the tail",
   const double before_next = window_rms(train, 864, 960) / window_rms(one, 864, 960);
   REQUIRE(at_burst > 1.7);      // 10..12 ms: the gate has just reopened
   REQUIRE(before_next < 1.35);  // 18..20 ms: four decay times later, nearly gone
+}
+
+TEST_CASE("a gap in the mode table does not move the older excitation law",
+          "[midi][synth][percussion]") {
+  // With `mallet_ms` at 0 the amplitude of mode k is 0.8 / (k + 1) of the
+  // fundamental's, and k is the slot the patch wrote it in. Modes are packed as
+  // they are placed so a spawned partner has somewhere to go, so a table with a
+  // hole in it is where a compacted index would show: the 2x mode would come
+  // back a third louder than the patch asked for.
+  NativeSynthPatch gapped = tom_patch();
+  gapped.percussion.num_modes = 3;
+  gapped.percussion.mode_ratios = {1.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f,
+                                   0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  NativeSynthPatch packed = tom_patch();
+  packed.percussion.num_modes = 2;
+  packed.percussion.mode_ratios = {1.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                   0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+
+  const double a = goertzel(render_patch(gapped, 50, 100, 8192), 300.0);
+  const double b = goertzel(render_patch(packed, 50, 100, 8192), 300.0);
+  // A ratio between two silences is 2/3 as readily as any other number.
+  REQUIRE(b > 0.1 * goertzel(render_patch(packed, 50, 100, 8192), 150.0));
+  REQUIRE(a == Catch::Approx(b * 2.0 / 3.0).epsilon(0.02));
+}
+
+TEST_CASE("the contact force is a lowpass on the modes it strikes", "[midi][synth][percussion]") {
+  // A longer contact is a narrower force spectrum, so the upper modes lose
+  // more of the strike than the fundamental does. Read as a ratio between the
+  // two modes, which cancels the level the law also takes off mode 0.
+  // |sinc(x)/(1-x^2)| at 150 and 397.5 Hz: 0.996 and 0.975 at 0.5 ms, 0.798
+  // and 0.126 at 4 ms — a sixfold separation in the ratio.
+  NativeSynthPatch brief = tom_patch();
+  brief.percussion.strike_r = 0.5f;
+  brief.percussion.mallet_ms = 0.5f;
+  NativeSynthPatch dull = tom_patch();
+  dull.percussion.strike_r = 0.5f;
+  dull.percussion.mallet_ms = 4.0f;
+
+  const std::vector<float> b = render_patch(brief, 50, 100, 8192);
+  const std::vector<float> d = render_patch(dull, 50, 100, 8192);
+  const double brief_tilt = goertzel(b, 150.0 * 2.65) / goertzel(b, 150.0);
+  const double dull_tilt = goertzel(d, 150.0 * 2.65) / goertzel(d, 150.0);
+  REQUIRE(brief_tilt > 3.0 * dull_tilt);
+}
+
+TEST_CASE("a harder strike shortens the contact and brightens the head",
+          "[midi][synth][percussion]") {
+  // The velocity brightening the old law faked as a flat +6 dB on every upper
+  // mode: here it is the contact time moving, so it lands where the force
+  // spectrum has rolled off and nowhere else. tau at velocity 32 is 1.32x its
+  // value at 127, which at these frequencies is a 1.34x change in the tilt.
+  NativeSynthPatch p = tom_patch();
+  p.percussion.strike_r = 0.5f;
+  p.percussion.mallet_ms = 2.0f;
+  p.percussion.mallet_vel_exp = 0.2f;
+
+  const std::vector<float> hard = render_patch(p, 50, 127, 8192);
+  const std::vector<float> soft = render_patch(p, 50, 32, 8192);
+  const double hard_tilt = goertzel(hard, 150.0 * 2.65) / goertzel(hard, 150.0);
+  const double soft_tilt = goertzel(soft, 150.0 * 2.65) / goertzel(soft, 150.0);
+  REQUIRE(hard_tilt > 1.15 * soft_tilt);
+}
+
+TEST_CASE("the air spring splits an axisymmetric mode into a pair", "[midi][synth][percussion]") {
+  // Two heads over an enclosed volume: the members moving together leave the
+  // cavity alone, the members moving oppositely compress it and sit at
+  // sqrt(1 + air_spring) above. At 3 that is an octave, which is far enough
+  // from the (0,1) to read without the two leaking into each other.
+  NativeSynthPatch alone = tom_patch();
+  alone.percussion.num_modes = 1;
+  NativeSynthPatch coupled = alone;
+  coupled.percussion.air_spring = 3.0f;
+
+  const std::vector<float> a = render_patch(alone, 50, 100, 8192);
+  const std::vector<float> c = render_patch(coupled, 50, 100, 8192);
+  REQUIRE(goertzel(c, 300.0) > 10.0 * goertzel(a, 300.0));
+  // Nothing has been taken off the low member: that is radiation's job, and
+  // the shell depth it needs is still at its sentinel.
+  REQUIRE(goertzel(c, 150.0) == Catch::Approx(goertzel(a, 150.0)).epsilon(0.02));
+}
+
+TEST_CASE("radiation weights a pair member by how it moves air", "[midi][synth][percussion]") {
+  // The member whose heads move together is an axial dipole of the shell's
+  // depth and radiates kL/sqrt(3) of what its breathing partner does: 0.22 for
+  // a 5.5-inch shell at 150 Hz, about 13 dB down. The partner is a monopole
+  // and keeps all of it.
+  NativeSynthPatch flat = tom_patch();
+  flat.percussion.num_modes = 1;
+  flat.percussion.air_spring = 3.0f;
+  NativeSynthPatch shelled = flat;
+  shelled.percussion.shell_depth_m = 0.14f;
+
+  const std::vector<float> f = render_patch(flat, 50, 100, 8192);
+  const std::vector<float> s = render_patch(shelled, 50, 100, 8192);
+  // The partner has to be sounding, or the control below compares two floors.
+  REQUIRE(goertzel(f, 300.0) > 0.1 * goertzel(f, 150.0));
+  REQUIRE(goertzel(s, 150.0) < 0.4 * goertzel(f, 150.0));
+  REQUIRE(goertzel(s, 300.0) == Catch::Approx(goertzel(f, 300.0)).epsilon(0.02));
+}
+
+TEST_CASE("radiation weights a mode by its multipole order", "[midi][synth][percussion]") {
+  // A mode with m nodal diameters moves no net volume, so below ka ~ 1 its
+  // pressure falls as (ka)^m. On a 12-inch head the (1,1) at 238.5 Hz sits at
+  // ka = 0.65; the (0,1) is a monopole and is not weighted at all.
+  NativeSynthPatch bare = tom_patch();
+  bare.percussion.num_modes = 2;
+  bare.percussion.strike_r = 0.5f;
+  NativeSynthPatch sized = bare;
+  sized.percussion.head_diameter_m = 0.30f;
+
+  const std::vector<float> b = render_patch(bare, 50, 100, 8192);
+  const std::vector<float> s = render_patch(sized, 50, 100, 8192);
+  REQUIRE(goertzel(b, 150.0 * 1.59) > 0.1 * goertzel(b, 150.0));
+  REQUIRE(goertzel(s, 150.0 * 1.59) < 0.8 * goertzel(b, 150.0 * 1.59));
+  REQUIRE(goertzel(s, 150.0) == Catch::Approx(goertzel(b, 150.0)).epsilon(0.02));
 }
