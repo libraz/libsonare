@@ -587,7 +587,10 @@ def test_every_shipped_capture_reads_as_one_kind_of_instrument():
     percussion = sorted(name for name in shipped_captures()
                         if profile_module.is_percussion(load_config(here / f"{name}.json")))
     assert len(shipped_captures()) >= 70
-    assert percussion == ["drums"]
+    # Two, and they are the same kit read on its two reference axes: `drums` is
+    # the modern recording that answers its colour, `drums_module` the module
+    # that answers how it rings, damps and sits against itself.
+    assert percussion == ["drums", "drums_module"]
 
 
 def _corpus_manifest(root: Path, timbres: list[dict], *, config: str = "") -> Path:

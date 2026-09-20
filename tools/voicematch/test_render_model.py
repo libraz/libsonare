@@ -84,3 +84,49 @@ def test_a_library_that_is_not_there_is_not_a_staleness_finding(tmp_path, monkey
     monkeypatch.setattr(render_model, "_newest_source_mtime", lambda: 1000.0 + HOUR)
     render_model.warn_if_stale(str(tmp_path / "absent.dylib"))
     assert capsys.readouterr().err == ""
+
+
+def test_the_render_is_pinned_to_the_rate_the_capture_was_recorded_at(monkeypatch):
+    """A bounce rate that differs from the project's own is refused outright.
+
+    `project_bounce.cpp` rejects the pair rather than resampling, and a fresh
+    project does not start at the rate a capture happens to hold. Every capture
+    whose `source_class` is `module` records 44.1 kHz, so before the project was
+    told the rate none of those 19 references could be compared against the
+    model at all — `profile.py compare` raised INVALID_PARAMETER on the first
+    note and nothing downstream distinguished that from a voice that does not
+    render.
+    """
+    seen: dict[str, object] = {}
+
+    class _Project:
+        def set_sample_rate(self, rate):
+            seen["project_rate"] = rate
+
+        def import_smf(self, _data):
+            pass
+
+        def bounce_with_sf2_instrument(self, _cfg, *, total_frames, sample_rate):
+            seen["bounce_rate"] = sample_rate
+            seen["frames"] = total_frames
+            return [[0.0, 0.0]] * total_frames
+
+        def soundfont_manifest(self):
+            return {}
+
+        def close(self):
+            pass
+
+    fake = type(sys)("libsonare")
+    fake.Project = _Project
+    fake.Sf2InstrumentConfig = lambda **_kw: object()
+    monkeypatch.setitem(sys.modules, "libsonare", fake)
+    monkeypatch.setattr(render_model, "ensure_lib_path", lambda: None)
+    monkeypatch.setattr(render_model, "check_gm_fallback", lambda _m: None)
+
+    render_model.render_model(b"", 0.4, 44100, rig=False)
+
+    assert seen["project_rate"] == 44100.0
+    # The two have to be the same number, which is the whole of the contract.
+    assert seen["bounce_rate"] == 44100
+    assert seen["frames"] == round(0.4 * 44100)

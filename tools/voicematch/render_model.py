@@ -114,6 +114,11 @@ def render_model(smf_bytes: bytes, total_seconds: float, sr: int = 48000, *,
 
     project = libsonare.Project()
     try:
+        # A bounce rate that differs from the project's own is refused outright
+        # (`project_bounce.cpp`), and a new project does not start at the rate a
+        # capture was recorded at. Every module capture records 44.1 kHz, so
+        # without this the model cannot be rendered against any of them at all.
+        project.set_sample_rate(float(sr))
         project.import_smf(smf_bytes)
         audio = project.bounce_with_sf2_instrument(
             libsonare.Sf2InstrumentConfig(clear_bank_rig=not rig),

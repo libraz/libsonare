@@ -1,0 +1,52 @@
+{
+  "id": "drums_module",
+  "label": "Standard kit, the long-ringing half, read out of a module's own recordings",
+  "program": 0,
+  "takes": "drums",
+  "audition_title": "libsonare drums vs the module's own recordings",
+  "_why": "`policy.json`'s `reference_layer` gives a kit two references on two axes: `timbre: instrument`, which is `drums.json` and its sampled kits, and `behaviour: machine` - how it rings, how it damps, and how its members sit against one another, which are the module's rather than any drum's. Only the first existed. This is the second, and it is not a better version of the first: the two answer different dimensions and each is excused from the other's.",
+  "_notes": "Seventeen keys rather than the kit's forty-seven, and the seventeen are exactly those whose recording fills the gate. A module's kit is one-shot recordings and their lengths ARE its damping - a kick that stops at 160 ms has stopped - so nothing here is truncated by the choice, and the importer refuses to pad in any case. What the cut keeps whole is the two families whose behaviour is in question: all six toms and all seven cymbals, read at one gate from one source, which is also the first thing able to say how far the cymbals sit over the drums. The kicks, the closed hats, the snares and the small idiophones record shorter than 400 ms and need a capture at their own gate.",
+  "notes": [41, 43, 45, 46, 47, 48, 49, 50, 51, 52, 53, 55, 57, 58, 59, 66, 81],
+  "_groups": "Two, and only the two that survive the gate whole. A family is a set of relations between its members, so a group holding one member holds none — the open hat, the low timbale, the open triangle and the vibraslap are in the grid and deliberately in no group, because `hats` with its two closed members missing is not the hats. The grid's own rows still carry them.",
+  "groups": {
+    "toms": [41, 43, 45, 47, 48, 50],
+    "cymbals": [49, 51, 52, 53, 55, 57, 59]
+  },
+  "_velocities": "One, and 100 is a label rather than a measurement: the font sets `velRange` on no zone, so it holds one recording per note at a velocity it does not state. A grid asking for more would write that one recording out under several velocity labels and manufacture the axis a dynamics fit reads, which the importer refuses. `vel_range` is excused below for the same reason.",
+  "velocities": [100],
+  "_stimulus": "Nothing played this. The recordings are read out of the source, so there is no preroll to strip, no settle to wait out and no warmup to play in; a non-zero `preroll_ms` would cut that many milliseconds off an attack that begins at its own first frame.",
+  "gate_ms": 400,
+  "tail": "0s",
+  "warmup": false,
+  "realtime": false,
+  "settle_ms": 0,
+  "preroll_ms": 0,
+  "onset_slack_ms": 0,
+  "sample_rate": 44100,
+  "params": [],
+  "_dry": "Nothing played this, so nothing was switched off. What the file holds is the module's own PCM with no effect in front of it, which is what `source_class: module` asks for and what the importer re-measures rather than trusts.",
+  "dry": false,
+  "rig": "none",
+  "room": "none",
+  "_note_map": "There is deliberately none. The sampled kits in `drums.json` needed one because their toms do not hold GM's pitch order, and the two of them disagree about which order they do hold. This source IS the GS kit map, so its keys are GM's by construction and a remap would be inventing a disagreement.",
+  "_dimensions": "This capture answers the behaviour axis and is excused from the colour axis, which is `drums.json`'s. Listing a dimension here that policy assigns to the other reference would score a kit's colour against a module and quietly make the module the timbre target.",
+  "dimensions": ["band_decay", "ring", "attack", "crest", "level"],
+  "dimensions_na": {
+    "vel_range": "the font declares no velocity layers at all - `velRange` is set on none of its zones, so it holds one recording per note at a velocity it does not state. One recording cannot hold a dynamics range, and writing it out under several labels would manufacture one.",
+    "band_tilt": "colour, which `policy.json` assigns to the modern reference for a kit and not to the module. `drums.json` gates it.",
+    "band_shape": "colour, as `band_tilt`.",
+    "centroid_pct": "colour, as `band_tilt`.",
+    "tonality": "colour, as `band_tilt`.",
+    "stereo": "the recordings are single-channel, so a width is zero by construction rather than by voicing. `drums.json`'s second kit is genuinely wide and is where a width is read."
+  },
+  "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `drums_module.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/drums_module.json`.",
+  "source_class": "module",
+  "_timbres": "`channel` is what makes a note number select an instrument rather than a pitch, and it is what `profile.py` reads to choose the percussion metric set over the pitched one. It is a statement about the keys and not about a transport: nothing played these recordings, and without it the kit is measured for fundamentals, inharmonicity and a damper release it does not have.",
+  "timbres": [
+    {
+      "id": "t0",
+      "label": "Standard kit, module recording",
+      "channel": 10
+    }
+  ]
+}
