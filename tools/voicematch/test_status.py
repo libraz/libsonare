@@ -202,9 +202,10 @@ def test_the_policy_resolved_answer_never_reaches_the_generated_file():
 def test_an_approximated_slot_is_not_counted_among_the_voices_awaiting_an_oracle():
     """Two different states, and adding them together names the wrong task list.
 
-    The shipped `approximated` block is empty — a claim that every slot is
-    answered by a patch written for it — so an entry is planted here, over a
-    slot that really has no capture, rather than measuring an empty set.
+    The policy here is built in full rather than read, so the test keeps its
+    sensitivity whatever the shipped block happens to hold. The entry is planted
+    over a slot that really has no capture, because an approximated slot with no
+    oracle is exactly the overlap being ruled out.
     """
     rows = _shipped()
     uncaptured = next(r for r in rows if not r["capture"])
@@ -217,9 +218,23 @@ def test_an_approximated_slot_is_not_counted_among_the_voices_awaiting_an_oracle
     assert len(no_oracle) == len([r for r in rows if not r["capture"]]) - 1
 
 
-def test_the_shipped_policy_claims_every_slot_has_a_patch_written_for_it():
-    """Empty is a claim rather than an omission, so it is worth asserting."""
-    assert json.loads(status.POLICY.read_text())["approximated"] == {}
+def test_every_declared_approximation_names_a_real_slot_and_a_real_answer():
+    """An entry is only worth as much as the two names in it.
+
+    This used to assert the block was EMPTY — a claim that every slot had a
+    patch written for it. That claim expired the day one did not, so what is
+    asserted now is the part that does not expire: an entry names a slot that
+    exists, is answered by a slot that exists, and carries a reason. Without
+    those an entry reads exactly like the oversight the block was written to
+    stop, and a reader cannot tell an approximation from an unfinished voice.
+    """
+    slugs = {row["slug"] for row in _shipped()}
+    block = json.loads(status.POLICY.read_text())["approximated"]
+    for slug, entry in block.items():
+        assert slug in slugs, f"{slug} is not a slot in the bank"
+        assert entry["answered_by"] in slugs, f"{slug} is answered by an unknown slot"
+        assert entry["answered_by"] != slug, f"{slug} cannot approximate itself"
+        assert entry.get("reason", "").strip(), f"{slug} declares no reason"
 
 
 # --------------------------------------------------------------------------- #

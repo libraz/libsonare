@@ -2,7 +2,7 @@
   "_": "The bank's policy as data: which timbre rule a slot falls under, what order the bank is worked in, which slots are answered by a neighbour, and what each release goal asks for. The prose that argues all of it is docs/objective.md; this file is what tooling reads, so an ordering cannot drift from the page that justifies it. Programs are zero-based GM numbers throughout, for a kit as much as for a melodic voice: a kit is named by the rhythm-part program a file selects it with, which is the number tools/voice-status.json carries, and never by its kGsDrumKits index.",
 
   "reference_layer": {
-    "_": "Which reference a slot is aimed at, on two independent axes. `timbre` is what it should sound like and `behaviour` is how it should ring, damp and sit against its neighbours. A slot naming an instrument that exists outside the machine takes a modern recording on both; a slot naming a sound the machine invented takes the machine on both, because nothing stands behind it for a recording to be made of.",
+    "_": "Which reference a slot is aimed at, on two independent axes. `timbre` is what it should sound like and `behaviour` is how it should ring, damp and sit against its neighbours. A slot naming an instrument that exists outside the machine takes a modern recording on both; a slot naming a sound the machine invented takes the machine on both, because nothing stands behind it for a recording to be made of. A modern recording is preferred where it applies because it is physically faithful and that is what a physical model can be fitted to — not because it is newer. Where it is not available, or answers the address with a different instrument, `machine_fallback` below says the slot takes the machine instead.",
     "default": {
       "timbre": "instrument",
       "behaviour": "instrument",
@@ -15,10 +15,23 @@
       "reason": "synth bass, synth strings, synth voice, the orchestra hit, synth brass, the leads, pads and effects, and the sound effects: a file playing one of these is playing that sound rather than referring to an instrument through it, so a substitute with a different envelope and spectrum stops the arrangement working"
     },
     "kits": {
-      "timbre": "instrument",
+      "timbre": "machine",
       "behaviour": "machine",
-      "reason": "a kit's slots name real drums, so their colour comes from a modern reference; what a groove rests on is ring, damping and the relations between members, which are the module's rather than the drum's"
+      "reason": "a kit's slots do name real drums, but a modern library's kit is a different set of drums in a different layout rather than the same kit recorded better — the mapping does not line up piece for piece, so following its colour moves which instrument answers a note and a groove written for the machine stops being that groove. Both axes therefore take the module, under machine_fallback's third condition. `vel_range` is the one crossing and drums.json argues it: the module holds one recording per note, so how a piece's colour moves with the stroke is the one thing its recordings cannot answer at all"
+    },
+    "variations": {
+      "timbre": "machine",
+      "behaviour": "machine",
+      "reason": "a GS variation exists because the machine defines it, and what makes it a variation rather than its capital is a difference no instrument library's catalogue is indexed by — no library ships a 'Piano 1w'. This is machine_fallback's first condition and it is a statement about the VARIATION alone: a capital keeps whatever the default gives it, so program 0 can be answered by a dedicated modern product while bank 8 of that same program is answered by the module"
     }
+  },
+
+  "machine_fallback": {
+    "_": "When a slot the `default` branch covers takes the machine anyway. The default prefers a modern recording because it is physically faithful and a physical model can be fitted to it; these are the three cases where that preference has nothing to attach to. The goal the whole bank serves is that a file written for the machine plays with the right tones in the right slots — an exact reproduction is impossible by construction, so where the modern source cannot say WHICH instrument a slot is, the machine says it and the modern source is what the model is then fitted to sound like.",
+    "no_modern_source": "no recording of the instrument exists to be made, so the machine is the only thing that defines the sound. `reference_layer.machine_defined` is this case enumerated, and the GS variation tones are the bulk of it: no instrument library ships a 'Piano 1w'.",
+    "answers_a_different_instrument": "the source covers the name but holds another instrument at that address, so fitting to it would produce a finished-looking voice of the wrong instrument. Where that source is a modern library the slot falls back to the machine; where it is the machine — which is the case `no_reference` records, since the map this bank uses and the recordings that cover it are addressed by name and the names part company at eleven addresses — there is nothing further to fall back to and the slot has no reference at all. An entry in `no_reference` is therefore this condition found on the LAST source rather than the first.",
+    "layout_does_not_line_up": "a modern source covers the family but its composition or layout differs, so following it moves which instrument a note reaches. Kits are the standing case and are assigned to the machine on both axes above.",
+    "_test_is_measured": "For a slot not already enumerated, which of these holds is measured rather than judged: compare the modern reference against the module's tone at the same address and read the distance, the same comparison `profile.py compare` runs against the model. A slot moved to the machine on an impression is indistinguishable afterwards from one moved on a reading."
   },
 
   "tiers": [
@@ -47,6 +60,7 @@
 
   "variations_follow_capital": true,
   "_variations_follow_capital": "A GS variation is its capital copied and then changed by whatever its name claims is different, so a capital that moves invalidates every variation under it. A variation therefore ranks behind its capital's tier until that capital is finished, and starting one first buys a round of rework.",
+  "_variations_reference": "The `variations` branch of `reference_layer` carries the rule; this says how a reader reaches it. A variation cannot be dispatched by program, because it shares its capital's number — it is recognised by a NON-ZERO `bank`, exactly as a kit is recognised by its own flag rather than by its number. A reader that branches on program alone does not merely mis-label a variation: it resolves one to `default`, which wants an instrument, so the check that catches a reference aimed at the wrong layer can never fire on a variation at all and every one of them reports as correctly aimed. That is a vacuous guard rather than a loose one, which is why the field to read is named here.",
 
   "no_reference": {
     "p000b016-acoustic-grand-piano": {"names": "Piano 1d", "carries": "European Pf", "reason": "the recordings hold a different instrument at this address"},
@@ -63,8 +77,13 @@
   },
   "_no_reference": "A slot for which no reference exists, as data rather than as an absence. Keyed by the slug `tools/voice-status.json` carries; `names` is the tone this bank's own map calls the slot, `carries` is the tone the available recordings actually hold at that address, and `reason` says which of the two cases it is. An empty `carries` is the undecided case and is deliberately not filled with the likely answer. This is not an unfinished capture and must not be worked as one: the recordings that cover the rest of the map are addressed by name and the name at these addresses belongs to another instrument, so importing one would fit the patch to that instrument and every metric, gate and audition would still read as a finished voice. Every variation the bank voices apart is reachable on the map those recordings come from, so nothing here is about an address the source does not have.",
 
-  "approximated": {},
-  "_approximated": "A slot whose mechanism this bank does not have and is deliberately answering with the nearest voice it does have. Keyed by the slug of the slot being approximated; each entry carries `answered_by`, the slug of the voice answering it, and `reason`, what the model cannot reach. Both are required because nothing downstream can tell an approximation from an unfinished voice, and an entry with no reason reads as the oversight it was written to stop. Empty is a claim rather than an omission: every slot is currently answered by a patch written for it. Two programs sharing one patch is not an approximation — an electric piano voicing both of its slots is one instrument with two numbers.",
+  "approximated": {
+    "p005-electric-piano-2": {
+      "answered_by": "p004-electric-piano-1",
+      "reason": "the map separates a tine instrument at program 4 from an FM one at program 5, and the machine holds them as independently recorded tones whose variation families name that difference — a Rhodes and a Wurlitzer hang under the first, FM tones under the second. The bank gives both one patch: `gm_fallback_map.cpp` falls `case 4:` through to `case 5:` and returns `e_piano`, which is voiced as a tine instrument (a 1:1 body pair plus a fast 14:1 tine ping). So program 5 is answered by program 4's voice. The engine is not the gap — both are FM and the DX-type instrument is reachable on it — what is missing is a patch written for it, which is why this reads as an approximation rather than as an unfinished voice: program 5 has a capture and a stage of its own, and nothing downstream can tell that its patch was written for its neighbour"
+    }
+  },
+  "_approximated": "A slot whose mechanism this bank does not have and is deliberately answering with the nearest voice it does have. Keyed by the slug of the slot being approximated; each entry carries `answered_by`, the slug of the voice answering it, and `reason`, what the model cannot reach. Both are required because nothing downstream can tell an approximation from an unfinished voice, and an entry with no reason reads as the oversight it was written to stop. Two programs sharing one patch is not automatically an approximation and not automatically fine either — the question is whether the map calls them one instrument. Where it does, one patch with two numbers is correct; where it does not, one patch is an approximation and owes an entry. The electric pianos are the case to check rather than the case to cite: the map separates a tine instrument at program 4 from an FM one at program 5, and the machine holds them as independently recorded tones whose variation families name that difference.",
 
   "goals": {
     "1.8.0": {
