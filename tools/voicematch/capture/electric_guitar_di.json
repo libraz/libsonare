@@ -60,7 +60,8 @@
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a plucked string names every melodic dimension, so anything not gated here has to be argued here.",
   "dimensions_na": {
     "stereo": "the reference renders dual mono: the two channels are bit-identical and their difference is digital silence, so the width is zero by construction rather than by voicing",
-    "damper": "the release is slower than the note it releases - 1.69 dB/s after note-off against 3.87 dB/s while the key is held - so what this dimension would read is the string continuing rather than a damper arriving, and a model fitted to it would be fitted to acquire a release that lengthens its notes"
+    "damper": "the release is slower than the note it releases - 1.69 dB/s after note-off against 3.87 dB/s while the key is held - so what this dimension would read is the string continuing rather than a damper arriving, and a model fitted to it would be fitted to acquire a release that lengthens its notes",
+    "vel_range": "the axis deliberately spans the two sample layers `_velocities` describes, and this is the one dimension that cannot be read across a layer boundary. `vel_range` is a difference of peak spans, so over all five rows it measures the switch rather than the instrument's response to velocity: the span runs 14.83 to 28.58 dB and moves with the note, because how far the two layers sit apart is itself note-dependent. Over the three rows above the boundary it is 7.70 to 7.76 dB on all twenty note-and-timbre pairs - constant to six hundredths of a decibel, which is what a designed velocity curve looks like. The step from 48 to 56 is 10.55 dB at note 48 against 3.80 below it and 4.51 above, so the discontinuity is two to three times either neighbouring step. A model fitted to the wide number would be fitted to produce a sample-layer switch out of a velocity curve, which is the mechanism it does not have. The grid stays as it is, because every other dimension gains from having both layers; what is excluded is this one reading. It becomes readable again the moment a comparison can be restricted to rows 56, 80 and 104, and the target on those rows is the 7.74 dB above."
   },
   "dimensions": [
     "stretch",
@@ -72,7 +73,6 @@
     "balance",
     "centroid_pct",
     "tnr",
-    "vel_range",
     "register"
   ],
   "source_class": "dedicated",
