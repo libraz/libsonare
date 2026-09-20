@@ -103,7 +103,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -154,7 +154,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -206,7 +206,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -257,7 +257,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -296,6 +296,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -360,7 +361,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -412,7 +413,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -429,30 +430,30 @@
       "tone_class": "struck-string",
       "patch": "electric_grand",
       "engine": "piano",
-      "capture": "electric_grand",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "capture": "electric_grand_module",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "electric_grand",
         "timbres": 1,
-        "profile_rows": 44,
+        "profile_rows": 53,
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
           "gated": 11,
           "excused": [
+            "damper",
             "stereo"
           ],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -470,7 +471,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p002b001-electric-grand-piano",
@@ -516,7 +517,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -568,7 +569,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -607,6 +608,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -671,7 +673,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -722,7 +724,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -766,6 +768,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -826,7 +829,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -877,7 +880,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -928,7 +931,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -979,7 +982,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1030,7 +1033,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1081,7 +1084,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1125,6 +1128,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -1185,7 +1189,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1236,7 +1240,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1288,7 +1292,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1339,7 +1343,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1437,7 +1441,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1488,7 +1492,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1539,7 +1543,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1591,7 +1595,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1643,7 +1647,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1695,7 +1699,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -1739,6 +1743,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -1788,6 +1793,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -1840,6 +1846,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -1890,6 +1897,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -1941,6 +1949,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -2002,7 +2011,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2052,7 +2061,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2104,6 +2113,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -2163,7 +2173,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2214,7 +2224,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2258,6 +2268,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -2310,6 +2321,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -2369,7 +2381,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2419,7 +2431,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2470,7 +2482,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2521,7 +2533,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2563,6 +2575,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -2677,7 +2690,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2725,7 +2738,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2773,7 +2786,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2821,7 +2834,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2870,7 +2883,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2918,7 +2931,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -2961,6 +2974,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -3018,7 +3032,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3066,7 +3080,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3114,7 +3128,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3162,7 +3176,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3205,6 +3219,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -3324,7 +3339,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3372,7 +3387,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3421,7 +3436,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3470,7 +3485,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3507,6 +3522,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -3555,6 +3571,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -3615,7 +3632,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3652,6 +3669,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -3700,6 +3718,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -3748,6 +3767,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -3813,7 +3833,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3864,7 +3884,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3916,7 +3936,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -3968,7 +3988,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -4007,6 +4027,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4071,7 +4092,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -4122,7 +4143,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -4174,7 +4195,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -4226,7 +4247,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -4265,6 +4286,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4329,8 +4351,7 @@
           "gated": 11,
           "excused": [
             "damper",
-            "stereo",
-            "vel_range"
+            "stereo"
           ],
           "gaps": [],
           "complete": true
@@ -4386,6 +4407,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -4436,6 +4458,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4487,6 +4510,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4543,6 +4567,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4593,6 +4618,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4646,6 +4672,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4697,6 +4724,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4749,6 +4777,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4801,6 +4830,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4861,6 +4891,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -4915,6 +4946,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -4967,6 +4999,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5016,6 +5049,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5080,7 +5114,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -5129,7 +5163,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
-          "unjudgeable": []
+          "outside": {}
         },
         "structure": null,
         "music": null
@@ -5168,6 +5202,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5223,6 +5258,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5278,6 +5314,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5325,6 +5362,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5386,6 +5424,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5440,6 +5479,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -5493,6 +5533,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -5547,6 +5588,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5601,6 +5643,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5657,6 +5700,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5712,6 +5756,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5765,6 +5810,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5821,6 +5867,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5876,6 +5923,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5936,6 +5984,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -5989,6 +6038,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6038,6 +6088,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6087,6 +6138,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6142,6 +6194,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6195,6 +6248,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6243,6 +6297,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6291,6 +6346,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6339,6 +6395,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6389,6 +6446,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6442,6 +6500,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6499,6 +6558,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6551,6 +6611,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6600,6 +6661,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6649,6 +6711,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6700,6 +6763,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6748,6 +6812,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6797,6 +6862,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6846,6 +6912,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6895,6 +6962,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6944,6 +7012,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -6993,6 +7062,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7042,6 +7112,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7093,6 +7164,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7142,6 +7214,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7189,6 +7262,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7237,6 +7311,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7287,6 +7362,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7336,6 +7412,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7385,6 +7462,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7432,6 +7510,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7480,6 +7559,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7530,6 +7610,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7579,6 +7660,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7626,6 +7708,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7674,6 +7757,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7722,6 +7806,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7772,6 +7857,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7821,6 +7907,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7870,6 +7957,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7917,6 +8005,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -7967,6 +8056,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8014,6 +8104,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8064,6 +8155,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8111,6 +8203,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8162,6 +8255,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8210,6 +8304,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8257,6 +8352,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8305,6 +8401,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8356,6 +8453,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -8412,6 +8510,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8464,6 +8563,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -8516,6 +8616,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -8568,6 +8669,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -8622,6 +8724,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8671,6 +8774,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8723,6 +8827,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -8774,6 +8879,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -8825,6 +8931,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -8875,6 +8982,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -8932,6 +9040,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "centroid_pct",
@@ -8984,6 +9093,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -9039,6 +9149,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "balance",
@@ -9087,6 +9198,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "aftersound",
             "attack",
@@ -9139,6 +9251,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "centroid_pct",
@@ -9188,6 +9301,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "centroid_pct",
@@ -9240,6 +9354,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "centroid_pct",
@@ -9287,6 +9402,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "centroid_pct",
@@ -9338,6 +9454,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "centroid_pct",
@@ -9388,6 +9505,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "centroid_pct",
@@ -9436,6 +9554,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "centroid_pct",
@@ -9485,6 +9604,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "centroid_pct",
@@ -9536,6 +9656,7 @@
         "agreement": {
           "inside": 0,
           "total": 0,
+          "outside": {},
           "unjudgeable": [
             "attack",
             "centroid_pct",
@@ -9564,7 +9685,7 @@
       "tone_class": "modal",
       "patch": null,
       "engine": "percussion",
-      "capture": "drums",
+      "capture": "drums_module",
       "stage": 0.6,
       "stage_name": "fitted",
       "open_candidates": [
@@ -9582,16 +9703,13 @@
         "engine": "percussion",
         "patch": null,
         "timbres": 2,
-        "profile_rows": 564,
+        "profile_rows": 637,
         "gate_state": "current",
         "coverage": {
           "canonical": 11,
-          "gated": 5,
+          "gated": 8,
           "excused": [
-            "attack",
             "band_decay",
-            "crest",
-            "level",
             "ring",
             "stereo"
           ],
@@ -9599,11 +9717,18 @@
           "complete": true
         },
         "agreement": {
-          "inside": 4,
-          "total": 5,
-          "outside": {
-            "band_shape": 1.26
-          }
+          "inside": 1,
+          "total": 1,
+          "outside": {},
+          "unjudgeable": [
+            "attack",
+            "band_shape",
+            "band_tilt",
+            "centroid_pct",
+            "crest",
+            "level",
+            "tonality"
+          ]
         },
         "structure": {
           "state": "stale",
