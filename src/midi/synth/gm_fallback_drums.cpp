@@ -392,7 +392,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
 
   // --- kit archetypes ---
   t[35] = d.kick;
-  t[35].amp_env.attack_ms = 0.651532f;
+  // The module reads a 13.47 ms attack against the fitted 0.65: a windowed RMS
+  // needs most of a cycle of a sub-100 Hz fundamental before it reads arrival.
+  t[35].amp_env.attack_ms = 13.47f;
   t[35].amp_env.decay_ms = 73.3945f;
   t[35].amp_env.sustain = 0.876601f;
   t[35].cutoff_hz = 22000.0f;
@@ -402,7 +404,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[35].percussion.mode_ratios[0] = 0.857872f;
   t[35].percussion.mode_ratios[1] = 5.5857f;
   t[35].percussion.noise_cutoff_hz = 297.277f;
-  t[35].percussion.noise_decay_ms = 90.3274f;
+  // The beater thud lost energy faster than the octaves the module resolves a
+  // rate in: -218 dB/s measured against -140 modelled, so it hangs on longer.
+  t[35].percussion.noise_decay_ms = 70.0f;
   t[35].percussion.noise_gain = 1.41687f;
   t[35].percussion.noise_q = 1.27328f;
   t[35].percussion.pitch_drop = 2.55066f;
@@ -422,7 +426,13 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[35].percussion.wire_buzz = 1.5f;
   t[35].percussion.wire_threshold = 0.25f;
   t[36] = d.kick;
-  t[36].gain = 5.2037f;
+  t[36].gain = 5.891f;
+  // -318 dB/s measured against -509 modelled in every matched octave: the
+  // beater thud outlasts the membrane fundamental it sits under.
+  t[36].percussion.noise_decay_ms = 54.0f;
+  // The module's own attack reads 9.98 ms rather than the base envelope's
+  // 0.5 ms floor.
+  t[36].amp_env.attack_ms = 9.98f;
   // The six toms are six drums. Each takes the geometry the name on its key
   // carries — 18, 16, 14, 13, 12 and 10 inch, with the depth a drum that size
   // is built to — and a head frequency and ring read off the module rather than
@@ -1019,13 +1029,16 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[63].percussion.wire_buzz = 3.0f;
   t[63].percussion.wire_threshold = 0.4f;
   t[64] = make_membrane(130.0f, 0.30f, 0.35f, 0.0f, 1.4014f);  // Low Conga
-  t[64].amp_env.attack_ms = 0.103689f;
+  // The module reads a 6.98 ms attack against the fitted envelope's 0.1.
+  t[64].amp_env.attack_ms = 6.98f;
   t[64].amp_env.decay_ms = 92.8306f;
   t[64].amp_env.sustain = 0.466948f;
   t[64].cutoff_hz = 11671.9f;
   t[64].drive = 0.895751f;
   t[64].percussion.contact = 0.346301f;
-  t[64].percussion.mode_decay_s = 0.690647f;
+  // -204 dB/s averaged over the module's octaves is a 0.29 s t60, against the
+  // fitted 0.69; shortened toward it.
+  t[64].percussion.mode_decay_s = 0.22f;
   t[64].percussion.mode_ratios[0] = 0.113204f;
   t[64].percussion.mode_ratios[1] = 1.94495f;
   t[64].percussion.mode_ratios[2] = 2.06324f;
@@ -1045,10 +1058,12 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[64].percussion.contact_ms = 0.072924f;
   t[64].percussion.plate_gain = 0.00894634f;
   t[64].resonance_q = 0.639576f;
-  t[64].gain = 0.7491f;
+  t[64].gain = 1.286f;
   t[65] = make_membrane(250.0f, 0.22f, 0.20f, 700.0f, 1.1120f);  // High Timbale
   t[65].amp_env.attack_ms = 0.0703342f;
-  t[65].amp_env.decay_ms = 2157.14f;
+  // A 2.16 s decay held the piece loud across the whole window, so the strike
+  // had no fall to stand above: 22.49 dB of crest measured, 10.7 short.
+  t[65].amp_env.decay_ms = 130.0f;
   t[65].amp_env.sustain = 0.112366f;
   t[65].cutoff_hz = 958.011f;
   t[65].drive = 0.750198f;
@@ -1081,7 +1096,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[65].percussion.tone_direct = 0.907509f;
   t[65].resonance_q = 1.33548f;
   t[65].percussion.shell_num_modes = 2;
-  t[65].gain = 0.7364f;
+  t[65].gain = 1.356f;
   t[66] = make_membrane(200.0f, 0.26f, 0.20f, 550.0f, 0.70f);  // Low Timbale
   t[66].amp_env.attack_ms = 0.316485f;
   t[66].amp_env.decay_ms = 40.3508f;
@@ -1152,8 +1167,10 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[71].gain = 0.6823f;
   t[72].percussion.exclusive_class = 4;
   t[72].amp_env.attack_ms = 69.341f;
-  t[72].amp_env.decay_ms = 671.355f;
-  t[72].amp_env.sustain = 0.457957f;
+  // Zero sustain, as the acoustic snare above: a one-shot that sustains
+  // plateaus rather than falls, and never loses 20 dB inside the window.
+  t[72].amp_env.decay_ms = 350.0f;
+  t[72].amp_env.sustain = 0.0f;
   t[72].cutoff_hz = 10189.4f;
   t[72].drive = 0.329158f;
   t[72].percussion.contact = 0.0f;
@@ -1174,7 +1191,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[72].percussion.plate_t60_s = 13.5899f;
   t[72].resonance_q = 2.82361f;
   t[72].percussion.contact_ms = 0.0743891f;
-  t[72].gain = 0.2515f;
+  t[72].gain = 0.0873f;
   t[39] = clap;  // Hand Clap
 
   // --- radiated ceiling (mute group note) ---
@@ -1215,11 +1232,21 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // and dips at 200. Above them the ordinary membrane ladder, and the shell
   // filling 165-400 over the top.
   t[38].percussion.num_modes = 5;
-  t[38].percussion.base_freq_hz = 250.0f;
-  t[38].percussion.mode_ratios = {1.0f, 0.64f, 1.59f, 2.14f, 2.3f, 0.0f};
+  // Re-based on the 160 Hz partner rather than the 250 Hz one: `damping`
+  // clamps any ratio under 1 to 1, so the two heads' pair used to share the
+  // 250 Hz mode's decay instead of each ringing on its own. Absolute
+  // frequencies are unchanged (160, 250, 397.5, 535, 575 Hz).
+  t[38].percussion.base_freq_hz = 160.0f;
+  t[38].percussion.mode_ratios = {1.5625f, 1.0f, 2.4844f, 3.3438f, 3.5938f, 0.0f};
   t[38].percussion.mode_m = {0, 0, 1, 2, 0, 0};
   t[38].percussion.mode_alpha = {2.4048f, 2.4048f, 3.8317f, 5.1356f, 5.5201f, 0.0f};
-  t[38].percussion.mode_decay_s = 0.35f;
+  // The 160 Hz mode carries this figure directly (module: 67.96 dB/s, a 0.88 s
+  // t60).
+  t[38].percussion.mode_decay_s = 0.85f;
+  // The module's octave bands fall at close to one common rate from 63 Hz to
+  // 8 kHz rather than doubling per octave, which is the membrane-in-air
+  // exponent this engine documents (0.5) rather than the default law's 1.
+  t[38].percussion.mode_decay_exp = 0.5f;
   t[38].percussion.tone_gain = 1.0f;
   t[38].percussion.pitch_drop = 0.25f;
   t[38].percussion.pitch_drop_ms = 20.0f;
@@ -1243,7 +1270,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[38].percussion.wire_buzz = 0.15f;
   t[38].percussion.wire_threshold = 0.12f;
   t[38].percussion.wire_cutoff_hz = 1500.0f;
-  t[38].percussion.wire_decay_ms = 60.0f;
+  t[38].percussion.wire_decay_ms = 400.0f;
   t[38].percussion.noise_air_hz = 6000.0f;
   t[38].percussion.plate_gain = 0.0f;
   t[38].percussion.tone_direct = 1.0f;
@@ -1253,9 +1280,11 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // Zero sustain, because a one-shot voice ignores note-off and a patch that
   // sustains never frees its slot. The fit it replaces held 0.26.
   t[38].amp_env = fallback_env(0.5f, 600.0f, 0.0f, 80.0f);
-  t[38].gain = 3.5606f;  // Acoustic Snare
+  // Level read 2.18 dB quiet against the module; gain is linear in level, so
+  // this is the exact correction (x10^(2.18/20)) rather than a further search.
+  t[38].gain = 2.665f;  // Acoustic Snare
   t[39].percussion.noise_air_hz = 1459.44f;
-  t[39].gain = 2.5615f;  // Hand Clap
+  t[39].gain = 4.20f;  // Hand Clap
   t[39].amp_env.attack_ms = 3.87415f;
   t[39].amp_env.decay_ms = 145.203f;
   t[39].amp_env.sustain = 0.00762793f;
@@ -1281,6 +1310,10 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[40].percussion.pitch_drop = 0.0772591f;
   t[40].percussion.pitch_drop_ms = 15.4921f;
   t[40].percussion.plate_gain = 0.44394f;
+  // Left at the engine's 2 s default while every other decay here was set
+  // short, so the plate never lost 20 dB inside a window the module fills in
+  // 78.3 ms; read off that recording.
+  t[40].percussion.plate_t60_s = 0.0783f;
   t[40].percussion.strike_r = 0.898037f;
   t[40].percussion.strike_theta = 0.329214f;
   t[40].percussion.tone_gain = 0.631376f;
@@ -1365,12 +1398,16 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[74].percussion.phisem_sound_ms = 1.07784f;
   t[74].percussion.plate_gain = 0.259111f;
   t[74].stereo_spread = 0.269538f;
-  t[74].gain = 0.3224f;
+  t[74].gain = 0.2773f;
   // Cuica (mute group 2): friction drum with a resonance pitch glide.
   t[78] = make_scrape(6.0f, 120.0f, 40.0f, 400.0f, 3.0f, -0.3f, 1.7655f);  // Mute Cuica (down)
   t[79] = make_scrape(6.0f, 250.0f, 40.0f, 500.0f, 3.0f, 0.5f, 0.55f);     // Open Cuica (up)
   t[78].percussion.exclusive_class = 2;
-  t[78].amp_env.decay_ms = 112.279f;
+  // The module falls at 289 to 553 dB/s in half the octaves it resolves, a
+  // rate one envelope stage cannot reach without flattening the strike; 95 ms
+  // is the closest it comes while crest and ring hold.
+  t[78].amp_env.decay_ms = 95.0f;
+  t[78].amp_env.attack_ms = 45.4f;
   t[78].cutoff_hz = 2689.01f;
   t[78].drive = 0.178906f;
   t[78].percussion.contact = 0.177884f;
@@ -1384,7 +1421,10 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[78].percussion.plate_gain = 1.11689f;
   t[78].resonance_q = 0.531205f;
   t[78].stereo_spread = 0.283496f;
+  t[78].gain = 1.250f;
   t[79].percussion.exclusive_class = 2;
+  // The module reads a 30.43 ms attack against the fitted near-zero rise.
+  t[79].amp_env.attack_ms = 30.43f;
   t[79].amp_env.decay_ms = 145.805f;
   t[79].amp_env.sustain = 0.0534685f;
   t[79].cutoff_hz = 6205.98f;
@@ -1400,6 +1440,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[79].percussion.phisem_sound_ms = 7.25467f;
   t[79].percussion.plate_gain = 0.0471479f;
   t[79].stereo_spread = 0.531757f;
+  t[79].gain = 0.804f;
 
   // The body the collisions happen inside, radiating alongside the bright band
   // above rather than through it. Fitted against the measured kit on the bands
@@ -1433,6 +1474,8 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[54].percussion.plate_low_hz = 180.348f;
   t[54].percussion.plate_t60_s = 10.0008f;
   t[54].resonance_q = 2.22992f;
+  // Measured 10.9 dB quiet against the module; `level` is exact in `gain`.
+  t[54].gain = 0.7954f;
   t[70].percussion.phisem_body_hz = 210.0f;  // Maracas
   t[70].percussion.phisem_body_q = 0.820548f;
   t[70].percussion.phisem_body_gain = 2.76066f;
