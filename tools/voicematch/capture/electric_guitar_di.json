@@ -20,10 +20,8 @@
     72,
     76
   ],
-  "_velocities": "Five, and the top one is 104 rather than the 127 every other plucked capture here uses. Velocity 125 and above is a different articulation on this instrument, not a louder version of the same one: at 127 the note is 21 dB brighter at 2-4 kHz, 30 dB brighter at 4-8 kHz, seven decibels louder and less than half as long, which is the pinch-harmonic layer the instrument switches in at that threshold. Not the natural harmonics - those sit on a key switch below the sounding compass, off the velocity axis entirely, and the keys carrying it are among the ones `_notes` records as rendering digital silence. A grid holding the velocity layer would measure two instruments and report the difference as dynamics. The ceiling below it is 104 rather than 120 because the instrument's own gain curve saturates first: 104 and 120 render identically to the byte, so the fifth row would have been the fourth again. Two sample layers sit under that with the boundary between 50 and 55 - the lower one is 9 dB darker at 2-4 kHz and 20 at 4-8 - so 32 and 48 sit in one and 56 upward in the other, and the axis has both rather than one row of the quiet one.",
+  "_velocities": "Three, and all three are one articulation. **This instrument switches articulation on velocity rather than layering one**, and the boundary is measured rather than inferred: 50 renders a mute and 52 a sustained note. The grid used to carry 32 and 48 as well, read as the quiet end of one dynamic range; they are the mute. The reference's own readings say so without any interpretation - on the mute rows `decay_db_s` is -143 to -147 where the sustained rows read -6.88, `tnr_db` 7.85 against 49.63, `centroid_hz` 165 against 613, `decay_span_s` 0.40 against 5.89. Within each state every non-level reading agrees to a tenth of a percent and only `peak_dbfs` moves, so what looked like a five-step axis was two states. The mute rows are still in the corpus and in `reference/`; nothing was re-measured to drop them, and they are the answer program 28 wants rather than data this capture lost. The ceiling is 104 rather than the 127 every other plucked capture uses, for two further articulations above: velocity 125 and up is the pinch harmonic - 21 dB brighter at 2-4 kHz, 30 at 4-8, seven decibels louder and less than half as long - and 104 against 120 renders identically to the byte, the instrument's own gain curve saturating first. The natural harmonics are a fourth, on a key switch below the sounding compass rather than on this axis at all.",
   "velocities": [
-    32,
-    48,
     56,
     80,
     104
@@ -60,9 +58,10 @@
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a plucked string names every melodic dimension, so anything not gated here has to be argued here.",
   "dimensions_na": {
     "stereo": "the reference renders dual mono: the two channels are bit-identical and their difference is digital silence, so the width is zero by construction rather than by voicing",
-    "damper": "the release is slower than the note it releases - 1.69 dB/s after note-off against 3.87 dB/s while the key is held - so what this dimension would read is the string continuing rather than a damper arriving, and a model fitted to it would be fitted to acquire a release that lengthens its notes",
-    "vel_range": "the axis deliberately spans the two sample layers `_velocities` describes, and this is the one dimension that cannot be read across a layer boundary. `vel_range` is a difference of peak spans, so over all five rows it measures the switch rather than the instrument's response to velocity: the span runs 14.83 to 28.58 dB and moves with the note, because how far the two layers sit apart is itself note-dependent. Over the three rows above the boundary it is 7.70 to 7.76 dB on all twenty note-and-timbre pairs - constant to six hundredths of a decibel, which is what a designed velocity curve looks like. The step from 48 to 56 is 10.55 dB at note 48 against 3.80 below it and 4.51 above, so the discontinuity is two to three times either neighbouring step. A model fitted to the wide number would be fitted to produce a sample-layer switch out of a velocity curve, which is the mechanism it does not have. The grid stays as it is, because every other dimension gains from having both layers; what is excluded is this one reading. It becomes readable again the moment a comparison can be restricted to rows 56, 80 and 104, and the target on those rows is the 7.74 dB above."
+    "damper": "the release is slower than the note it releases - 1.69 dB/s after note-off against 3.87 dB/s while the key is held - so what this dimension would read is the string continuing rather than a damper arriving, and a model fitted to it would be fitted to acquire a release that lengthens its notes"
   },
+  "_gate_is_stale": "Every bound in `reference/electric_guitar_di_gate.json`, and the `reference_spread` it is read against, was recorded over the five-row axis `_velocities` now describes as two articulations - so each one pools a mute with a sustained note. The yardstick is what that inflates: `decay`'s spread is 8.69 dB over five rows and 2.01 over the three that remain, `aftersound`'s 8.43 against 2.27, `doubling`'s 6.28 against 3.79. The gate is therefore some four times looser than this grid can now support on the worst of them. **Nothing reports this.** A gate is held stale against the reference's `measured_utc`, and the reference has not moved and must not - what moved is which of its rows this capture asks for. Re-record on the next fit; until then read a pass here as passing the old axis.",
+  "_vel_range": "Back in `dimensions` now that the axis is one articulation. Over the five-row grid it measured the articulation switch rather than the instrument: the span ran 14.83 to 28.58 dB and moved with the note, because how far the two states sit apart is itself note-dependent, and the step from 48 to 56 was 10.55 dB at note 48 against 3.80 below and 4.51 above. Over rows 56, 80 and 104 it is 7.70 to 7.76 dB on all twenty note-and-timbre pairs - constant to six hundredths of a decibel, which is what a designed velocity curve looks like. **7.74 dB is the target.**",
   "dimensions": [
     "stretch",
     "decay",
@@ -73,6 +72,7 @@
     "balance",
     "centroid_pct",
     "tnr",
+    "vel_range",
     "register"
   ],
   "source_class": "dedicated",
