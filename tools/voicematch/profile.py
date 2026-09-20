@@ -1335,6 +1335,16 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
 # than a different instrument. Level is the widest and the most important: a
 # 6 dB disagreement about how loud a tambourine is says the kit balance is a mix
 # decision, and a fit given one reference will happily take it 31 dB down.
+#
+# `band_decay` and `ring` are the two a percussion row carries and a melodic one
+# does not; both come back `None` where the fields are absent, which prints as
+# `n/a` and counts nothing. Their widths are the two references' own measured
+# disagreement over the kit grid, recorded in `capture/drums.json`. They are wide
+# — 0.69 doublings is a factor of 1.6 — and a wide bound is the point: it catches
+# a hit that is several times wrong and passes anything a second real kit could
+# have been. Without them nothing in the tree could fail a ring regression on any
+# kit note at all, which is how an engine change that moved every sub-unity mode's
+# damping reached the bank with no instrument able to see it.
 AGREEMENT_TOLERANCE = {
     "level": 6.0,
     "band_tilt": 6.0,
@@ -1342,7 +1352,52 @@ AGREEMENT_TOLERANCE = {
     "centroid_pct": 50.0,
     "attack": 5.0,
     "crest": 3.0,
+    "band_decay": 41.7,
+    "ring": 0.69,
 }
+
+
+def _delta(a: float | None, b: float | None) -> float | None:
+    """`a - b`, or None where either side did not measure."""
+    return None if a is None or b is None else float(a) - float(b)
+
+
+def agreement_row(second: dict, r: dict) -> dict:
+    """One grid cell's second-reference-minus-reference delta, per dimension.
+
+    Its keys are exactly `AGREEMENT_TOLERANCE`'s, and `agree` indexes it with
+    `row[key]` rather than `.get` deliberately: a tolerance with no delta behind
+    it would otherwise read as a dimension the two references never disagreed
+    on, which is the empty set scoring as perfect agreement.
+    """
+    tilt_a, tilt_b = band_tilt_db(r.get("bands_db")), band_tilt_db(second.get("bands_db"))
+    return {
+        "level": (second["peak_dbfs"] - r["peak_dbfs"]
+                  if r.get("peak_dbfs") is not None else None),
+        "band_tilt": None if tilt_a is None or tilt_b is None else tilt_b - tilt_a,
+        "band_shape": band_shape_error_db(second.get("bands_db"), r.get("bands_db")),
+        "centroid_pct": (100.0 * (second["centroid_hz"] / r["centroid_hz"] - 1.0)
+                         if r.get("centroid_hz") else None),
+        "attack": second["attack_ms"] - r["attack_ms"],
+        "crest": second["crest_db"] - r["crest_db"],
+        "band_decay": _delta(second.get("band_decay_db_s"), r.get("band_decay_db_s")),
+        # A capped decay is the analysis window, not the hit, so a ratio taken
+        # against one compares a window with an instrument.
+        "ring": (None if second.get("decay_capped") or r.get("decay_capped")
+                 else _ratio_doublings(second.get("decay_ms"), r.get("decay_ms"))),
+    }
+
+
+def _ratio_doublings(a: float | None, b: float | None) -> float | None:
+    """How many doublings `a` is above `b`, or None where either is unusable.
+
+    A length is compared as a ratio rather than a difference because the kit
+    spans 24x on it — 60 ms of woodblock against 1428 of cymbal — so a bound in
+    milliseconds would be the cymbals and nothing else.
+    """
+    if a is None or b is None or a <= 0.0 or b <= 0.0:
+        return None
+    return float(np.log2(float(a) / float(b)))
 
 
 def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
@@ -1407,17 +1462,7 @@ def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
             print(f"{note:5d} {vel:4d} | the second reference does not voice this note")
             continue
 
-        tilt_a, tilt_b = band_tilt_db(r.get("bands_db")), band_tilt_db(second.get("bands_db"))
-        row = {
-            "level": (second["peak_dbfs"] - r["peak_dbfs"]
-                      if r.get("peak_dbfs") is not None else None),
-            "band_tilt": None if tilt_a is None or tilt_b is None else tilt_b - tilt_a,
-            "band_shape": band_shape_error_db(second.get("bands_db"), r.get("bands_db")),
-            "centroid_pct": (100.0 * (second["centroid_hz"] / r["centroid_hz"] - 1.0)
-                             if r.get("centroid_hz") else None),
-            "attack": second["attack_ms"] - r["attack_ms"],
-            "crest": second["crest_db"] - r["crest_db"],
-        }
+        row = agreement_row(second, r)
         cells = []
         for key, tol in AGREEMENT_TOLERANCE.items():
             v = row[key]

@@ -1088,6 +1088,58 @@ def test_a_voice_whose_captures_can_all_supply_one_is_left_in_policy_order(tmp_p
     assert make_audition.playable_first(voice, tmp_path).captures == (first, second)
 
 
+def _hit(**kw) -> dict:
+    """A measured percussion cell, with every field `agreement_row` reads."""
+    base = {"peak_dbfs": -10.0, "bands_db": [-20.0] * 8, "centroid_hz": 400.0,
+            "attack_ms": 5.0, "crest_db": 12.0, "band_decay_db_s": -40.0,
+            "decay_ms": 200.0, "decay_capped": False}
+    return {**base, **kw}
+
+
+def test_every_agreement_tolerance_has_a_delta_behind_it():
+    """A tolerance with no row entry reads as a dimension nobody disagreed on.
+
+    `agree` indexes the row with `row[key]`, so the two key sets drifting apart
+    is a KeyError rather than a silent pass — but only if they are compared
+    somewhere, which is here.
+    """
+    row = profile_module.agreement_row(_hit(), _hit())
+    assert set(row) == set(profile_module.AGREEMENT_TOLERANCE)
+
+
+def test_the_two_percussion_dimensions_are_measured_and_bounded():
+    """Neither was reachable before, so a ring regression could fail nothing.
+
+    The widths are the two references' own disagreement over the kit grid, as
+    recorded in `capture/drums.json`.
+    """
+    assert profile_module.AGREEMENT_TOLERANCE["ring"] == 0.69
+    assert profile_module.AGREEMENT_TOLERANCE["band_decay"] == 41.7
+    row = profile_module.agreement_row(_hit(decay_ms=400.0, band_decay_db_s=-10.0), _hit())
+    assert row["ring"] == pytest.approx(1.0)
+    assert row["band_decay"] == pytest.approx(30.0)
+
+
+def test_a_capped_decay_yields_no_ring_on_either_side():
+    """A capped decay is the analysis window, not the hit.
+
+    Measured live: one drum note's model never fell 20 dB inside the only window
+    covering it, so its length is a bound of the window. Compared as a ratio it
+    would read as a confident agreement with whatever the other side happened to
+    be.
+    """
+    assert profile_module.agreement_row(_hit(decay_capped=True), _hit())["ring"] is None
+    assert profile_module.agreement_row(_hit(), _hit(decay_capped=True))["ring"] is None
+
+
+def test_a_melodic_cell_reports_the_percussion_dimensions_as_unmeasured():
+    """They must come back None rather than raising, and count nothing."""
+    melodic = {"peak_dbfs": -10.0, "bands_db": [-20.0] * 8, "centroid_hz": 400.0,
+               "attack_ms": 5.0, "crest_db": 12.0}
+    row = profile_module.agreement_row(melodic, melodic)
+    assert row["ring"] is None and row["band_decay"] is None
+
+
 def test_an_audition_of_a_capture_with_no_phrase_set_is_refused(capsys, tmp_path):
     """Not rendered on the piano's phrases, which would look like it worked.
 
