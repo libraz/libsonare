@@ -6,10 +6,13 @@
 ///        silence. A richer literature-backed instrument bank (FM, Karplus-Strong,
 ///        modal) is planned separately.
 ///
-/// Covers note on/off, sustain, channel mode, CC7/CC10/CC11 and MPE-style
-/// expression (per-channel bend and pressure, which act per-note because MPE
-/// gives each note its own member channel). RPN / NRPN, including a configurable
-/// bend range, stay with NativeSynth / Sf2Player.
+/// Covers note on/off, sustain, channel mode, CC7/CC10/CC11, per-channel bend
+/// and pressure, and MPE through the shared zone model (midi/mpe.h) — so a
+/// controller that configures a zone gets the same channel layout, the same
+/// bend ranges and the same manager fold here as from the full instrument. The
+/// only RPNs parsed are the two a zone needs, 00 06 and 00 00; everything else
+/// in RPN / NRPN stays with NativeSynth / Sf2Player, and outside a zone the
+/// bend range is the fixed one below rather than a configurable one.
 ///
 /// Volume, pan and expression follow the same laws as those two, so swapping the
 /// instrument keeps an arrangement's balance and image: volume x expression as a
@@ -26,6 +29,8 @@
 #include <vector>
 
 #include "midi/instrument.h"
+#include "midi/mpe.h"
+#include "midi/synth/channel_param_state.h"
 #include "rt/pan_law.h"
 
 namespace sonare::midi {
@@ -100,12 +105,22 @@ class BuiltinSynth final : public MidiInstrument {
   void note_on(uint8_t channel, uint8_t note, float velocity, uint32_t source_track_id) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void sustain_pedal(uint8_t channel, bool down) noexcept;
-  // MPE-style expression. Pitch bend is a per-channel 14-bit value (center 8192)
-  // mapped through a fixed +/-2 semitone range; channel pressure applies to every
-  // voice on the channel, poly pressure to the single matching note.
+  // Per-channel expression. Pitch bend is a 14-bit value (center 8192) mapped
+  // through a fixed +/-2 semitone range, or through the zone's own range when
+  // the channel is in one; channel pressure applies to every voice on the
+  // channel, poly pressure to the single matching note.
   void pitch_bend(uint8_t channel, uint16_t bend14) noexcept;
   void channel_pressure(uint8_t channel, uint8_t pressure7) noexcept;
   void poly_pressure(uint8_t channel, uint8_t note, uint8_t pressure7) noexcept;
+  // Recomputes a channel's cached bend and pressure from the zone model, and
+  // every channel of the zone when @p channel is its manager, whose values
+  // reach all of them.
+  void refresh_channel_expression(uint8_t channel) noexcept;
+  // Accepts an MPE Configuration Message: the channels that entered or left the
+  // zone lose their sounding notes and their controllers, so re-zoning
+  // mid-performance cannot leave a note hanging on a channel with no owner
+  // (M1-100-UM v1.1 section 2.2.3).
+  void apply_mcm(uint8_t manager_channel, uint8_t member_count) noexcept;
   // Channel-mode "All Notes Off" (CC#123): release every sounding voice on the
   // channel (graceful, honours the release tail). `all_sound_off` (CC#120)
   // silences them immediately, bypassing the release stage.
@@ -153,11 +168,18 @@ class BuiltinSynth final : public MidiInstrument {
 
   std::array<ChannelControls, 16> channel_controls_{};
   std::array<bool, 16> sustain_down_{};
-  // Per-channel MPE expression state. Bend is stored in semitones (0 == centered);
-  // pressure in [0,1]. Both default to neutral so a project that sends no
-  // expression bounces bit-identically to the pre-MPE synth.
+  // Per-channel expression as the render reads it. Bend is stored in semitones
+  // (0 == centered); pressure in [0,1]. Both default to neutral so a project
+  // that sends no expression bounces bit-identically to the synth before either
+  // existed, and inside a zone both carry the manager's contribution folded in.
   std::array<float, 16> channel_bend_semitones_{};
   std::array<float, 16> channel_pressure_{};
+  // Empty until an MPE Configuration Message arrives, and while it is empty
+  // every channel reads as unassigned and nothing above behaves differently.
+  MpeState mpe_{};
+  // Only ever asked about RPN 00 06 and RPN 00 00, the two a zone is configured
+  // with. The full parameter-number machinery stays with the bigger synths.
+  std::array<synth::ChannelParamState, 16> params_{};
   std::vector<Voice> voices_;
 };
 
