@@ -57,6 +57,7 @@
     "centroid_pct",
     "tnr"
   ],
+  "_rig": "Unclassified and terminal, which is not the same as unanswered. Program 16 is a family that can carry a rig, and for an organ the rig is a rotary rather than a cabinet, so the question has to be put; what is missing here is any way to put it. Neither route reaches this source. There is no A/B, because the module has no rotary stage to switch off - the tone is a recording of whatever chain sampled it, fixed, and nothing downstream of that is a control. The rotary test `profile.py rig` runs is no help either: it reads a rotor from the inter-channel correlation going negative, and a rotor recorded INTO the sample is already summed with the room it turned in, so a positive reading would mean the sample is stereo and not that a rotor is live. And the sibling-shape test does not apply, because it is an argument only where the siblings came through one chain in one session, which the module's separately sampled tones did not. So this stays unclassified however the spectrum reads, and a later reader should not open it again expecting a measurement to settle it.",
   "rig": "unclassified",
   "room": "none",
   "_room": "The module is recorded with reverb, chorus, delay and the insertion effect all off, and `import_sf2.py --report` plus its own dryness check measure the imported corpus rather than taking this declaration's word for it.",

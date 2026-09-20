@@ -58,6 +58,7 @@
     "centroid_pct",
     "tnr"
   ],
+  "_rig": "Unclassified and terminal, which is not the same as unanswered. Program 5 is a family that can carry an amplifier, so the question has to be put; what is missing here is any way to put it. Neither route reaches this source. There is no A/B, because the module has no amplifier stage to switch off - the tone is a recording of whatever chain sampled it, fixed, and nothing downstream of that is a control. And the sibling-shape test does not apply either: it turns a dark spectrum into evidence by finding siblings that share the shape, which is an argument only where the siblings came through ONE chain in one session. The module's tones were each sampled from their own instrument on their own day, so a shape shared across them would be evidence of nothing and a shape not shared would exclude nothing. So this stays unclassified however the spectrum reads, and a later reader should not open it again expecting a measurement to settle it.",
   "rig": "unclassified",
   "room": "none",
   "_room": "The module is recorded with reverb, chorus, delay and the insertion effect all off, and `import_sf2.py --report` plus its own dryness check measure the imported corpus rather than taking this declaration's word for it.",
