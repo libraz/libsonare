@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <string_view>
 
+#include "midi/note_tracking.h"
 #include "midi/ump.h"
 
 namespace sonare::midi {
@@ -170,6 +171,16 @@ class ControllerProfile {
 
   size_t binding_count() const noexcept { return count_; }
   const ControllerBinding& binding_at(size_t index) const noexcept { return bindings_[index]; }
+
+  /// Which note a value addressed to the whole channel belongs to when several
+  /// are sounding on it, per dimension. Set separately because the useful
+  /// answers differ: pressure following the newest note while bend reaches
+  /// every one is a real configuration, not a mistake. All three default to
+  /// kLastNote. Read by the zone model (midi/mpe.h) and by nothing else --
+  /// outside a zone a channel-addressed value is channel-wide by definition.
+  NoteTracking pressure_tracking = NoteTracking::kLastNote;
+  NoteTracking bend_tracking = NoteTracking::kLastNote;
+  NoteTracking timbre_tracking = NoteTracking::kLastNote;
 
   /// Whether note-on velocity is expression. No fixed default is possible: a
   /// wind controller ships sending breath-derived velocity on one model and a

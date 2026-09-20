@@ -784,6 +784,7 @@ if(BUILD_ARRANGEMENT)
     midi/routing.cpp
     midi/cc_map.cpp
     midi/controller_profile.cpp
+    midi/mpe.cpp
     midi/clock_sync.cpp
     midi/capture.cpp
     midi/builtin_synth.cpp

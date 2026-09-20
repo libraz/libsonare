@@ -32,6 +32,7 @@
 
 #include "midi/controller_profile.h"
 #include "midi/instrument.h"
+#include "midi/mpe.h"
 #include "midi/synth/additive_voice.h"
 #include "midi/synth/body_resonator.h"
 #include "midi/synth/bowed_string_voice.h"
@@ -336,6 +337,14 @@ struct NativeSynthVoice : VoiceState {
   float retune_cents = 0.0f;
   /// Seeded per-voice pan scatter (patch stereo_spread; pan units).
   float pan_spread_units = 0.0f;
+  /// The channel mod this voice reads instead of its channel's, and whether it
+  /// has one. Set only on a member channel carrying more than one sounding
+  /// note, where the channel's bend and pressure belong to the note the
+  /// tracking rule names and the others keep the manager's contribution alone.
+  /// MPE's normal form is one note per member channel, so this is inert
+  /// wherever a sender is doing what the specification expects.
+  bool mpe_mod_active = false;
+  Sf2ChannelMod mpe_mod{};
   bool key_down = false;
   /// Captured by the sostenuto pedal (CC66): held past key-up until the pedal
   /// lifts, regardless of the sustain pedal.
@@ -684,15 +693,66 @@ class NativeSynth final : public MidiInstrument {
   /// Resolves @p ump through the controller profile and applies whatever axis
   /// values it produced. Runs before the protocol dispatch, so a note-on whose
   /// velocity is bound to an axis starts from its own value.
+  ///
+  /// Inside a zone this is also where the manager's fold happens, because the
+  /// third dimension reaches an axis through the profile rather than through
+  /// this class: a member's message is resolved carrying the combined value,
+  /// and a manager's is resolved once per member of its zone as well as on the
+  /// channel it arrived on.
   void apply_controller_input(const Ump& ump) noexcept;
+  /// Resolves one message through the profile and applies its axis values.
+  void apply_resolved_input(const Ump& ump) noexcept;
+  /// The per-note dimension @p ump carries, or false for a message that is not
+  /// one of the three.
+  static bool mpe_dimension_of(const Ump& ump, MpeDimension* out) noexcept;
+  /// Fills mpe_notes_ with the channel's sounding notes, oldest first and one
+  /// entry per note, and returns how many. Deduplicated because a layered patch
+  /// is several voices of one key while the tracking rule names notes.
+  size_t gather_mpe_notes(uint8_t channel) noexcept;
+  /// The note a value addressed to the whole channel belongs to, or
+  /// kControllerAnyNote when it belongs to every sounding note -- which is the
+  /// answer outside a zone, on a manager channel whose values reach the whole
+  /// zone, under kAllNotes, and whenever at most one note is sounding.
+  uint8_t mpe_attributed_note(uint8_t channel, MpeDimension dimension) noexcept;
+  /// Recomputes the per-voice mods of @p channel from its channel mod, so the
+  /// bend and pressure a member channel carries reach the note they were
+  /// attributed to and no other.
+  void refresh_mpe_note_mods(uint8_t channel) noexcept;
+  /// The message a channel's combined value would arrive as. MIDI 1.0 because
+  /// the zone model's domain is 7-bit, which is also what the protocol dispatch
+  /// below narrows every controller to. Groupless, because the profile resolves
+  /// from the status, the controller number and the channel alone.
+  Ump mpe_controller_message(uint8_t channel, MpeDimension dimension) const noexcept;
+  /// Resolves @p channel's combined value through the profile, and every member
+  /// of the zone as well when @p channel is the manager, whose value is a bias
+  /// on each of them.
+  void push_mpe_controller_axis(uint8_t channel, MpeDimension dimension) noexcept;
+  /// Tracks the two combining dimensions ahead of the profile, so a value
+  /// reaching an axis carries the manager's fold (2.2.7, 2.2.8).
+  void track_mpe_input(const Ump& ump) noexcept;
   /// Pushes the channel's live excitation axes (and CC11 bow speed) to its
   /// sounding voices.
   void push_excitation_control(uint8_t channel) noexcept;
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
+  void refresh_all_channel_mods() noexcept;
+  /// Accepts an MPE Configuration Message and does what accepting one obliges:
+  /// every channel that entered or left the zone loses its sounding notes and
+  /// its controllers, so a sender that re-zones mid-performance cannot leave a
+  /// note hanging on a channel with no owner (M1-100-UM v1.1 section 2.2.3).
+  void apply_mcm(uint8_t manager_channel, uint8_t member_count) noexcept;
 
   NativeSynthConfig config_{};
   ControllerProfile controller_profile_ = default_controller_profile();
+  /// Empty until an MCM arrives, and while it is empty every channel reads as
+  /// unassigned and nothing below behaves differently than it did before this
+  /// member existed.
+  MpeState mpe_{};
+  /// Scratch for the note attribution and the allocation ages that order it,
+  /// sized in prepare() to the polyphony, which bounds how many notes one
+  /// channel can be sounding. Never resized on the audio thread.
+  std::vector<MpeNote> mpe_notes_;
+  std::vector<uint64_t> mpe_note_ages_;
   uint64_t legato_fallbacks_ = 0;
   double sample_rate_ = 0.0;
   bool prepared_ = false;
