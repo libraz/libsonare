@@ -375,21 +375,6 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // than fitted values; the wash corners below have since been measured. They
   // exist per piece because a shared patch cannot be calibrated at all: every
   // knob moved for the ride moved the crash by the same amount.
-  auto make_cymbal = [&](float base_hz, float mode_decay_s, float tone_gain, float noise_decay_ms,
-                         float noise_cutoff_hz, float shimmer, float length_ms, float gain) {
-    NativeSynthPatch p = d.cymbal;
-    // Release is unused by a one-shot voice in normal play; `length_ms` is what
-    // decides how long the piece sounds.
-    p.amp_env = fallback_env(0.5f, length_ms, 0.0f, length_ms * 0.29f);
-    p.percussion.base_freq_hz = base_hz;
-    p.percussion.mode_decay_s = mode_decay_s;
-    p.percussion.tone_gain = tone_gain;
-    p.percussion.noise_decay_ms = noise_decay_ms;
-    p.percussion.noise_cutoff_hz = noise_cutoff_hz;
-    p.percussion.shimmer = shimmer;
-    p.gain = gain;
-    return p;
-  };
 
   // Hand clap: a dense band-passed noise burst.
   NativeSynthPatch clap = piece;
@@ -438,7 +423,6 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[35].percussion.wire_threshold = 0.25f;
   t[36] = d.kick;
   t[36].gain = 5.2037f;
-  t[46] = d.open_hat;
   // The six toms are six drums. Each takes the geometry the name on its key
   // carries — 18, 16, 14, 13, 12 and 10 inch, with the depth a drum that size
   // is built to — and a head frequency and ring read off the module rather than
@@ -539,137 +523,199 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[50] = tom_patch(kToms[5]);
   // --- cymbals ---
   //
-  // Six keys, six plates. They cannot share one patch the way the toms do: a
-  // cymbal patch pins `base_freq_hz`, so a shared one renders the same plate at
-  // the same pitch on every key and only the noise seed tells them apart.
+  // Seven keys, seven plates, one table. They cannot share a patch the way the
+  // toms do - a cymbal pins `base_freq_hz`, so one patch would render the same
+  // plate at the same pitch on every key - but they do share a structure, and
+  // what separates them is six numbers each.
   //
-  // The wash is high-passed, so its corner is what makes a plate dark or
-  // bright: a lower corner lets more of the low-mid body through. The two
-  // members of each pair are the two sizes a kit actually carries - a 16 inch
-  // crash against an 18, a 20 inch ride against a 22 - so the larger of each is
-  // darker, slower and longer.
+  // Every behavioural column is read off the module's own recordings, which is
+  // where `policy.json` puts a kit's ring, its damping and how its members sit
+  // against one another. Three of those readings contradicted what was here,
+  // and each had reached the tree as a fitted value:
   //
-  // The corners are measured against the sampled kit, on the bands that
-  // reference can resolve, and they land where the plate sizes say they should:
-  // a splash speaks from 3.4 kHz up, a crash from around 1.2, and a ride - the
-  // largest plate here and the one whose lowest modes are lowest - from 200 Hz.
-  // Each is several times under the corner the archetype started with, which is
-  // why every cymbal in the kit was reading 20 to 45 dB short across its whole
-  // midrange while matching at the top.
-  //                       base   ring  tone   wash  cutoff shimm   len   gain
+  // - the ring. A cymbal loses 17 to 30 dB/s in the module, flat across every
+  //   octave it sounds in, which is a plate ringing 2.1 to 3.2 seconds. The
+  //   plates here held 0.08 to 1.6, under an amplitude envelope that had
+  //   already decayed to nothing - so the envelope was the only ring being
+  //   heard and no plate value could be read back through it.
+  // - the damping's colour. Flat means `plate_hf_ratio` near one; the fitted
+  //   values ran to 0.15, which is a top dying six times faster than a bottom.
+  // - the band. The module's cymbals peak between 3.1 and 8 kHz and centre
+  //   between 4.4 and 7.3; the voice carried a low-pass at 368 Hz on one crash
+  //   and 515 on the china, and a plate ceiling of 6 Hz on the second ride.
+  //   A cymbal below 400 Hz is not a dark cymbal, it is not a cymbal.
   //
-  // The lengths and washes are the measured kit's rather than the archetype's.
-  // Every cymbal here sounded for a fraction of the time its reference does — a
-  // crash fell 40 dB in 1.2 s against 3.6, a splash in 0.2 s against 2.0 — and
-  // a plate cannot ring past the envelope that gates it, so the field the
-  // network builds was being cut off before it was audible. The wash runs about
-  // as long as the piece, because it is what keeps re-exciting the plate: a
-  // struck cymbal is not one impulse into a resonator but a plate whose modes
-  // keep trading energy, and a wash that stops leaves the partials to ring on
-  // undisturbed, which reads as a bell rather than as a cymbal.
-  t[49] = make_cymbal(3600.0f, 1.10f, 0.20f, 4000.0f, 3000.0f, 6.0f, 5000.0f, 0.50f);  // Crash 1
-  t[57] = make_cymbal(2500.0f, 1.55f, 0.22f, 4500.0f, 2800.0f, 5.0f, 3360.0f, 0.52f);  // Crash 2
-  // A ride is played on its shoulder with the tip of the stick, so what carries
-  // is a defined ping over a wash kept short enough to stay out of its way; a
-  // ride that blooms like a crash is a ride nobody can play time on.
-  t[51] = make_cymbal(2800.0f, 2.20f, 0.96f, 3500.0f, 3000.0f, 1.0f, 6000.0f, 0.50f);    // Ride 1
-  t[59] = make_cymbal(4750.0f, 2.80f, 0.70f, 4000.0f, 2600.0f, 0.6f, 7000.0f, 0.1495f);  // Ride 2
-  t[55] = make_cymbal(5200.0f, 0.30f, 0.30f, 1500.0f, 4200.0f, 2.5f, 2500.0f, 0.45f);    // Splash
-  t[52] = make_cymbal(2600.0f, 0.35f, 0.70f, 2500.0f, 2520.0f, 3.0f, 1600.0f, 0.55f);    // China
-  // The china's upturned flange is what makes it trashy, and trashy is neither
-  // dark nor bright: it concentrates the wash into one harsh band instead of
-  // spreading it up the spectrum the way a flat plate does. That is a different
-  // filter rather than a different corner - every other cymbal here high-passes
-  // its wash, and moving the corner alone only ever slides the china between
-  // the two crashes. Its partials are pulled off the plate ratios the others
-  // share until nothing in the sound reads as a pitch, and it is those partials
-  // rather than the wash that carry it, hence the high tone gain and the short,
-  // abrupt ring.
+  // What stays fitted is the wash's own shape, which is colour and belongs to
+  // the sampled kit rather than here.
+  struct CymbalSpec {
+    int note;
+    float base_hz;       // the lowest partial the ring modes place
+    float mode_decay_s;  // those modes' t60
+    float tone_gain;     // how much of the piece is those modes rather than the plate
+    float wash_hz;       // the band the wash is centred on: the module's own peak band
+    float wash_ms;       // its one-pole decay, which runs about as long as the piece
+    float shimmer;       // the post-strike bloom, and the family's brightness control
+    float plate_low_hz;  // the lowest partial the network places: the diameter as a pitch
+    float
+        plate_t60_s;  // the plate's ring, set by how long the module's own hit takes to fall 20 dB
+    float plate_gain;
+    float contact;  // the stick's own radiation, which is the strike's peak
+    float gain;
+  };
+  // `wash_ms` is `plate_t60_s / 6.9`, the one-pole time constant that loses 60
+  // dB over the same span: the wash is what keeps re-exciting the plate, and
+  // one that stops early leaves the partials ringing on undisturbed, which
+  // reads as a bell rather than as a cymbal.
+  //
+  // `shimmer` is the one knob the family's brightness hangs on, which is not
+  // what its name suggests. It is a high-passed wash driven by the squared
+  // modal energy, and nothing bounds it above, so every unit of it lands in the
+  // top third-octave band there is. Taking it off note 49 alone moves that
+  // piece's centroid from 57 % over the module to 4 %, its peak band from
+  // 12.5 kHz to 3.15, and its crest from 4.2 dB under the module to 4.0 over;
+  // the plate and the mode bank each move the centroid by under 5 %. On the
+  // open hi-hat the same knob carried the level and the attack as well - at 4.0
+  // the piece peaked 58 ms late and 7.3 dB loud, and at 0.5 it peaks at the
+  // strike and within 0.1 dB.
+  //
+  // `plate_t60_s` is set against the module's `decay_ms` - peak to -20 dB - and
+  // not against its per-octave rate, which the two rides and the splash make
+  // the difference visible on: they lose 22 to 67 dB/s per octave and still
+  // fall their first 20 dB in 220 to 287 ms, because what follows is a long
+  // quiet tail rather than the same slope continuing.
+  constexpr CymbalSpec kCymbals[] = {
+      // Crashes. Wash-dominated, a dense field from 3.4 kHz up, 16 and 18 inch.
+      // 49 peaks 61 ms after the strike in the module and the voice peaked at
+      // it: `contact` at 12 put the stick's own radiation over the bloom, and
+      // the bloom is what a crash is. Below about 4 the contact sits under the
+      // plate's own peak and stops being audible at all, so it is set there and
+      // the level it was carrying is paid back in `gain`. Both already placed
+      // their own `tone_f0_hz` within 0.4 doublings of the module before this
+      // round; raising `plate_low_hz` to the field floor moved each a full
+      // doubling further out, so it is left at the unmeasured value.
+      {49, 3413.0f, 1.10f, 0.20f, 4000.0f, 348.0f, 2.5f, 220.0f, 2.40f, 0.80f, 2.0f, 0.320f},
+      {57, 3569.0f, 1.55f, 0.22f, 8000.0f, 406.0f, 0.8f, 174.0f, 2.80f, 0.80f, 8.5f, 0.223f},
+      // Rides. Played on the shoulder with the tip, so a defined ping over a
+      // wash that stays out of its way - the module reads them 11 dB more
+      // peaked than the crashes. Both hold a low body pair near 360 Hz that no
+      // crash does, which is what `base_freq_hz` reaches down to here; that pair
+      // is a body and not the ping, so `tone_gain` stays at 0.12 rather than the
+      // 0.5 that once made it the loudest thing in either piece. `plate_low_hz`
+      // was left inside that same body register (116-141 Hz) rather than at the
+      // field the module actually reads above the pair - its next partial sits
+      // at 2351 and 2491 Hz, so the network's own floor now starts there instead.
+      // Raising the floor rang 59 a doubling long against its own 2.00 s
+      // `plate_t60_s` (51's shorter 1.20 s needed no change); 0.45 s lands the
+      // ring back on the module, but that is a fit rather than its 287 ms
+      // decay reading read straight - 51 needs the same reading scaled up
+      // 5.2x at the same floor, so the floor's mode count is not what was
+      // setting the multiplier and this is left as an open question.
+      {51, 352.0f, 2.20f, 0.12f, 6300.0f, 174.0f, 0.3f, 2351.0f, 1.20f, 0.60f, 16.0f, 0.149f},
+      {59, 373.0f, 2.80f, 0.12f, 6300.0f, 290.0f, 0.2f, 2491.0f, 0.45f, 0.55f, 16.0f, 0.124f},
+      // The ride bell, struck on the cup. The module reads one partial at
+      // 3052 Hz standing 13 dB over its neighbours, which is the one cymbal
+      // here that is a tone rather than a field. Its `tone_f0_hz` already sits
+      // on the module's own reading before this round; raising `plate_low_hz`
+      // to the field's faint 1459 Hz floor underneath moved nothing measurable
+      // here, so it is left at the unmeasured value rather than carrying a
+      // change with no reading behind it.
+      {53, 3052.0f, 2.22f, 1.40f, 3150.0f, 322.0f, 0.0f, 569.0f, 2.22f, 0.30f, 9.8f, 0.146f},
+      // The china's upturned flange concentrates the wash into one harsh band
+      // instead of spreading it up the spectrum, and stiffens the plate, which
+      // takes its lowest partial up rather than down for its size. Its own
+      // `tone_f0_hz` sat within 0.3 doublings of the module before this round;
+      // reading `plate_low_hz` up to the field floor moved it to 0.8 out, so it
+      // is left at the unmeasured value.
+      {52, 1576.0f, 0.35f, 0.70f, 4000.0f, 246.0f, 0.5f, 260.0f, 1.70f, 0.70f, 7.5f, 0.238f},
+      // A 10 inch splash: the one piece whose damping is not flat, losing
+      // 100 dB/s at the bottom against 45 in the middle, because a plate that
+      // small barely supports its lowest modes at all.
+      // It is also the only piece whose first 20 dB and whose per-octave rate
+      // say the same thing - 282 ms against 67 dB/s - where every other cymbal
+      // here falls fast and then trails, so its plate is set short and its wash
+      // with it. Its contact comes down with the crash's: the module takes
+      // 21 ms to reach its peak and a contact over the plate's own peak puts
+      // the model's at the strike. The module's own field starts at 2196 Hz;
+      // moving `plate_low_hz` there roughly halved the piece's decay (292 ms
+      // to 156, against a reference of 282), so it is left at the unmeasured
+      // 563 Hz this round could not improve on without breaking it.
+      {55, 3663.0f, 0.30f, 0.30f, 4000.0f, 94.0f, 0.3f, 563.0f, 0.65f, 0.75f, 2.0f, 0.760f},
+      // The open hi-hat: two small cymbals held apart, so it is a plate like
+      // the rest and not the dark band the kit had here. The module reads its
+      // centre of gravity at 8.6 kHz, higher than any other piece, and its
+      // damping flat at 31 to 43 dB/s - where the voice carried a low-pass at
+      // 2.9 kHz and a top dying a hundred times faster than its bottom.
+      {46, 3770.0f, 1.94f, 0.25f, 10000.0f, 167.0f, 0.5f, 700.0f, 1.15f, 0.80f, 4.0f, 0.200f},
+      // The two closed hats, which are the same pair held shut: the module
+      // reads them at 9.4 and 9.5 kHz with almost no peak structure at all,
+      // which is a plate stopped early rather than a noise band. The pedal
+      // hat also holds a partial at 380 Hz that the stick-closed one does
+      // not - the two cymbals meeting each other rather than a stick.
+      // Their gate is 60 ms, which is the whole piece and also the shimmer's own
+      // buildup, so nothing measures a bloom on either of them. They take the
+      // open hat's value because the three are one mechanism at three openings,
+      // not because a reading asked for it.
+      {42, 3745.0f, 0.30f, 0.25f, 9500.0f, 43.0f, 0.5f, 900.0f, 0.30f, 0.80f, 4.0f, 0.150f},
+      {44, 3768.0f, 0.35f, 0.25f, 9500.0f, 51.0f, 0.5f, 380.0f, 0.35f, 0.80f, 4.0f, 0.104f},
+  };
+  auto cymbal_patch = [&](const CymbalSpec& c) {
+    NativeSynthPatch p = d.cymbal;
+    // Held, so how long a plate rings is the plate's answer. A one-shot takes
+    // no note-off, so the slot is reclaimed on the level reading instead.
+    p.amp_env = fallback_env(0.5f, 0.0f, 1.0f, 120.0f);
+    p.percussion.base_freq_hz = c.base_hz;
+    p.percussion.mode_decay_s = c.mode_decay_s;
+    // Flat across every octave the piece sounds in, which is what the module
+    // measures and what a plate of metal does.
+    p.percussion.mode_decay_exp = 0.05f;
+    p.percussion.tone_gain = c.tone_gain;
+    p.percussion.noise_cutoff_hz = c.wash_hz;
+    p.percussion.noise_decay_ms = c.wash_ms;
+    p.percussion.shimmer = c.shimmer;
+    p.percussion.plate_low_hz = c.plate_low_hz;
+    p.percussion.plate_t60_s = c.plate_t60_s;
+    p.percussion.plate_gain = c.plate_gain;
+    p.percussion.plate_hf_ratio = 0.95f;
+    // The tip of the stick, which reaches the listener without passing through
+    // the plate. Nothing else here peaks at the strike - the wash drives the
+    // network and the network takes time to fill - and the module reads a
+    // ride 31 dB over its own held level against the 11 the plate alone gives.
+    p.percussion.contact = c.contact;
+    p.percussion.contact_ms = 0.3f;
+    p.gain = c.gain;
+    return p;
+  };
+  // One line per key, as the toms are: `writeback.py` anchors a fitted value on
+  // the last line that starts with `t[<note>]`, and a loop leaves a fit with
+  // nowhere to put its result.
+  t[49] = cymbal_patch(kCymbals[0]);
+  t[57] = cymbal_patch(kCymbals[1]);
+  t[51] = cymbal_patch(kCymbals[2]);
+  t[59] = cymbal_patch(kCymbals[3]);
+  t[53] = cymbal_patch(kCymbals[4]);
+  t[52] = cymbal_patch(kCymbals[5]);
+  t[55] = cymbal_patch(kCymbals[6]);
+  t[46] = cymbal_patch(kCymbals[7]);
+  t[42] = cymbal_patch(kCymbals[8]);
+  t[44] = cymbal_patch(kCymbals[9]);
+  // The three hats mute each other: a stick on the open pair stops the closed
+  // one, and the foot stops both.
+  t[46].percussion.exclusive_class = 1;
+  t[46].amp_env.release_ms = 40.0f;
+  t[42].percussion.exclusive_class = 1;
+  t[44].percussion.exclusive_class = 1;
+  // The china's wash is a band rather than a corner, and a narrow one: that is
+  // what trashy is, and it is a different filter rather than a different
+  // corner. Its partials are pulled off the plate ratios the others share until
+  // nothing in the sound reads as a pitch.
   t[52].percussion.noise_output = SynthFilterOutput::kBandpass;
   t[52].percussion.noise_q = 3.0091f;
   t[52].percussion.mode_ratios = {1.0f, 1.19f, 1.51f, 1.83f, 0.0f, 0.0f};
-
-  // Each plate's own partial field. `plate_low_hz` is the lowest partial the
-  // network places, so it is the piece's diameter read as a frequency - a 20
-  // inch ride reaches lower than a 16 inch crash and far lower than an 8 inch
-  // splash - and `plate_t60_s` is how long the plate itself rings, which is
-  // bounded by the amplitude envelope's length above and so tracks it. The
-  // china is the exception in both: its flange stiffens the plate, which takes
-  // its lowest partial up rather than down for its size, and stops it early.
-  t[49].percussion.plate_low_hz = 498.198f;
-  t[49].percussion.plate_t60_s = 1.28054f;
-  t[49].percussion.plate_gain = 0.0821527f;
-  t[49].percussion.plate_hf_ratio = 0.151528f;
-  t[57].percussion.plate_low_hz = 1037.06f;
-  t[57].percussion.plate_t60_s = 1.4058f;
-  t[57].percussion.plate_gain = 3.15282f;
-  t[57].percussion.plate_hf_ratio = 0.583589f;
-  t[57].percussion.shimmer_cutoff_hz = 1462.25f;
-  t[51].percussion.plate_low_hz = 211.186f;
-  t[51].percussion.plate_t60_s = 0.0817966f;
-  t[51].percussion.plate_gain = 0.981567f;
-  t[51].percussion.plate_hf_ratio = 0.925295f;
-  t[51].percussion.mode_ratios[1] = 7.00082f;
-  t[51].percussion.noise_q = 3.04653f;
-  t[51].amp_env.sustain = 0.165936f;
-  t[51].drive = 0.359081f;
-  t[59].percussion.plate_low_hz = 390.472f;
-  t[59].percussion.plate_t60_s = 1.64807f;
-  t[59].percussion.plate_gain = 0.334388f;
-  t[59].percussion.plate_hf_ratio = 0.921336f;
-  t[59].percussion.mode_ratios[0] = 0.0654023f;
-  t[59].percussion.noise_gain = 2.5936f;
-  t[59].percussion.noise_q = 3.02876f;
-  t[59].amp_env.sustain = 0.713879f;
-  t[55].percussion.plate_low_hz = 262.282f;
-  t[55].percussion.plate_t60_s = 0.128504f;
-  t[55].percussion.plate_gain = 0.645203f;
-  t[55].percussion.phisem_beans = 3.34772f;
-  // The china's plate is at the top of its clamp. The search asked for more
-  // than the range allows, which is a result and not a setting: either the
-  // bound is wrong for a piece this small and stiff, or what it wants is not
-  // more of this plate.
-  t[52].percussion.plate_low_hz = 1907.68f;
-  t[52].percussion.plate_t60_s = 0.148375f;
-  t[52].percussion.plate_gain = 0.326908f;
-  t[52].percussion.plate_hf_ratio = 0.458156f;
-  t[52].key_track = 1.0f;
-  t[52].resonance_q = 1.42262f;
-  // Every plate needs a top as well as a bottom. Where the wash corners above
-  // came from the reference's measured band edge, these come from the same
-  // place: the band each piece still radiates in, above which the network would
-  // otherwise answer a broadband strike with as much as it answers the notes
-  // the piece is played on.
-  //
-  // Three bounds per piece, and they do different jobs. `plate_air_hz` is the
-  // top of the band the network responds in; `noise_air_hz` is the top of the
-  // wash, kept even though the wash is a band now, because a single pole pair
-  // falls 6 dB per octave above its centre and a ride's reference falls 40 dB
-  // in the octave and a third above its peak; `cutoff_hz` is the voice corner
-  // over the sum. Removing any one of them was tried and measured: without the
-  // ceiling the ride reads 20 dB over its reference at 8 kHz, and without the
-  // plate it reads 29 dB over, so neither is the other's substitute.
-  t[49].percussion.plate_air_hz = 2324.05f;
-  t[49].percussion.noise_air_hz = 978.472f;
-  t[49].cutoff_hz = 4301.52f;
-  t[57].percussion.plate_air_hz = 12243.9f;
-  t[57].percussion.noise_air_hz = 2967.21f;
-  t[57].percussion.noise_q = 7.92907f;
-  t[57].cutoff_hz = 367.758f;
-  t[51].percussion.plate_air_hz = 15752.7f;
-  t[51].percussion.noise_air_hz = 494.564f;
-  t[51].cutoff_hz = 5239.88f;
-  t[59].percussion.plate_air_hz = 6.06302f;
-  t[59].percussion.noise_air_hz = 1295.74f;
-  t[59].cutoff_hz = 3070.41f;
-  t[55].percussion.plate_air_hz = 393.504f;
-  t[55].percussion.noise_air_hz = 2408.96f;
-  t[55].percussion.noise_cutoff_hz = 2620.58f;
-  t[55].percussion.noise_q = 2.05623f;
-  t[55].cutoff_hz = 3842.29f;
-  t[52].percussion.plate_air_hz = 3319.08f;
-  t[52].percussion.noise_air_hz = 2826.14f;
-  t[52].cutoff_hz = 514.869f;
+  // The bell is the one piece carried by its modes, so its ring is narrow
+  // rather than dense and its wash is only the stick.
+  t[53].percussion.mode_ratios = {1.0f, 1.40f, 2.76f, 3.27f, 0.0f, 0.0f};
+  t[53].percussion.num_modes = 4;
+  t[53].percussion.noise_gain = 0.35f;
 
   // --- snares ---
   // Both take the snare archetype here and are voiced below, where the drum's
@@ -678,188 +724,6 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // set there that contradicted it.
   t[38] = d.snare;  // Acoustic Snare
   t[40] = d.snare;  // Electric Snare
-
-  // --- hi-hats (mute group 1) ---
-  t[42] = d.closed_hat;  // Closed Hi-Hat, the archetype
-  // Pedal Hi-Hat: the foot closes the cymbals against each other rather than a
-  // stick striking them, so the "chick" is duller, softer and slightly longer
-  // than a stick-closed hat - and, sharing a patch with one, was neither.
-  //
-  // Fitted against the captured kit in two passes. The first could only reach
-  // the top - the voice's own low-pass down to 4.2 kHz with the drive up to
-  // hold the body - because the reference peaks at 315 Hz on a hump from 200 to
-  // 400 that is the two cymbals clashing, and the voice had no low mode to put
-  // there. The plate modes above are that mode; the second pass places them
-  // lowest of the three hats and rings them longest, which is what a foot
-  // closing the pair does against a stick striking it, and gives back some of
-  // the noise the first pass had leaned on. The attack still sits at its clamp
-  // against a reference that takes 12 to 18 ms to arrive.
-  t[44] = d.closed_hat;
-  // Pedal Hi-Hat, taking the same correction as the two it shares a mute group
-  // with: a band rather than a corner, the waveshaper's low-mid replaced by the
-  // plate mode it should have come from, a ceiling over the network, and the
-  // gain the piece needs once it is no longer being carried by distortion.
-  t[44].amp_env = fallback_env(25.0f, 38.9229f, 0.263723f, 40.0f);
-  t[44].amp_env.delay_ms = 2.5f;
-  t[44].cutoff_hz = 4160.9f;
-  t[44].drive = 0.494827f;
-  t[44].key_track = 0.1f;
-  t[44].resonance_q = 3.25156f;
-  t[44].percussion.base_freq_hz = 224.0f;
-  t[44].percussion.mode_decay_s = 0.12384f;
-  t[44].percussion.mode_ratios[1] = 0.185843f;
-  t[44].percussion.mode_ratios[2] = 4.45821f;
-  t[44].percussion.tone_gain = 1.92456f;
-  t[44].percussion.pitch_drop = 0.483151f;
-  t[44].percussion.pitch_drop_ms = 4.29143f;
-  t[44].percussion.strike_r = 0.877276f;
-  t[44].percussion.noise_output = SynthFilterOutput::kBandpass;
-  t[44].percussion.noise_cutoff_hz = 428.226f;
-  t[44].percussion.noise_decay_ms = 28.6381f;
-  t[44].percussion.noise_gain = 3.55515f;
-  t[44].percussion.noise_q = 1.13559f;
-  t[44].percussion.plate_gain = 3.7106f;
-  t[44].percussion.plate_low_hz = 163.796f;
-  t[44].percussion.plate_t60_s = 0.429089f;
-  t[44].percussion.plate_air_hz = 4755.27f;
-  t[44].gain = 0.2228f;
-
-  // Hi-hats share mute group 1; the open hat gets a snappy choke fade (release
-  // is unused by one-shot voices in normal play, so this stays bit-identical
-  // there — it only governs how fast a closed/pedal strike cuts the open hat).
-  t[42].percussion.exclusive_class = 1;
-  // Closed Hi-Hat, voiced against the measured kit. The archetype's noise is
-  // high-passed at 7.5 kHz, which puts the whole piece above where the
-  // reference's energy ends: its band profile peaks at 4 kHz and is 57 dB down
-  // by 12.5 kHz, while the model's peaked at 12.5 kHz and was at the -60 dB
-  // floor below 630 Hz. The fitted band is a low corner under the voice's own
-  // filter rather than a ceiling over it, which is what moves the peak rather
-  // than only attenuating past it.
-  //
-  // The envelope, the wash length and the voice corner are the plate's rather
-  // than the fit's. An 11 ms amplitude decay is shorter than the plate takes to
-  // fill, so it gated the field off before it existed and left the strike
-  // alone; the reference falls 20 dB in 205 ms and 60 dB in 665. The corner
-  // comes up because a 2.6 kHz ceiling removes most of what a plate radiates:
-  // at 12 kHz the piece holds 88 % of its energy above 2 kHz against the
-  // reference's 53 %, and at 3.5 kHz it holds 57 %.
-  //
-  // The wash is a band and not a corner. A hi-hat's reference peaks at 4 kHz,
-  // sits 17 dB below that at 1 kHz and is 24 dB down by 8 kHz — a resonance
-  // with a floor on both sides — while a high-pass with a ceiling over it is a
-  // plateau between the two, which is why the piece measured within a couple of
-  // dB at 4 kHz and 12 dB over at 1 kHz and again at 8. Neither corner could
-  // fix that, because the shape wanted is not the shape a corner makes.
-  //
-  // `drive` comes down with it. The waveshaper was carrying most of the piece's
-  // low-mid — switching it off drops the 63 Hz band by 42 dB — and a distortion
-  // product is not a body: it put the model 20 dB over its reference below
-  // 100 Hz, where a hi-hat radiates nothing at all. What the low-mid should come
-  // from is the plate mode, so it does: the mode bank moves onto the band the
-  // reference peaks in, at a gain that makes it audible. It was not audible
-  // before — at a 50 ms ring and a gain of 1.4, switching the whole mode bank
-  // off moved its own band by 0.8 dB.
-  //
-  // It stays a knock and not a ring, and that distinction is not visible in a
-  // band profile. The profile integrates the whole hit, so a body mode ringing
-  // for 600 ms and one struck four times as hard and gone in 200 sum to the
-  // same third-octave level — and the long one measures better, because it also
-  // fills the 1 kHz valley the wash left. It also stops being a hi-hat: with the
-  // body ringing under it, the share of energy above 2 kHz a tenth of a second
-  // after the strike falls from 54 % to 29 % against a reference that holds
-  // 53 %, and what is left is a small drum. Anything voiced against the band
-  // profile alone can walk into that trade, so the hats are read on both.
-  t[42].amp_env.attack_ms = 9.08185f;
-  t[42].amp_env.decay_ms = 174.0f;
-  t[42].amp_env.delay_ms = 1.0f;
-  t[42].cutoff_hz = 3500.0f;
-  t[42].drive = 0.375f;
-  t[42].percussion.base_freq_hz = 393.75f;
-  t[42].percussion.mode_decay_s = 0.2f;
-  t[42].percussion.mode_ratios[1] = 1.072f;
-  t[42].percussion.mode_ratios[2] = 1.032f;
-  t[42].percussion.tone_gain = 4.0f;
-  t[42].percussion.noise_output = SynthFilterOutput::kBandpass;
-  t[42].percussion.noise_cutoff_hz = 3800.0f;
-  t[42].percussion.noise_decay_ms = 600.0f;
-  t[42].percussion.noise_gain = 2.54656f;
-  t[42].percussion.noise_q = 1.25f;
-  t[42].percussion.plate_low_hz = 200.0f;
-  t[42].percussion.plate_t60_s = 2.4f;
-  t[42].percussion.plate_air_hz = 7000.0f;
-  t[42].resonance_q = 2.0f;
-  t[42].stereo_spread = 0.875561f;
-  t[42].gain = 0.3464f;
-  t[42].key_track = 0.1f;
-  t[44].percussion.exclusive_class = 1;
-  t[44].amp_env.decay_ms = 102.575f;
-  t[44].amp_env.sustain = 0.0957462f;
-  t[44].percussion.phisem_beans = 0.00375547f;
-  t[44].percussion.shimmer = 9.93934f;
-  t[44].percussion.shimmer_cutoff_hz = 197.035f;
-  t[44].percussion.mode_alpha[2] = 20.5424f;
-  t[44].amp_env.attack_ms = 21.427f;
-  t[44].percussion.contact = 0.0926551f;
-  t[44].percussion.mode_ratios[0] = 0.0251234f;
-  t[44].percussion.num_modes = 0;
-  t[44].percussion.phisem_energy_ms = 396.123f;
-  t[44].percussion.phisem_sound_ms = 0.710561f;
-  t[44].percussion.plate_hf_ratio = 0.490005f;
-  t[44].percussion.shimmer_attack_ms = 120.291f;
-  t[44].percussion.strike_theta = 0.0165314f;
-  t[44].percussion.tone_direct = 0.454577f;
-  t[44].stereo_spread = 0.839969f;
-  t[44].percussion.contact_ms = 0.272191f;
-  t[46].percussion.exclusive_class = 1;
-  t[46].amp_env.release_ms = 40.0f;
-  // Open Hi-Hat, voiced against the same kit and with the same defect: it
-  // inherits the archetype's 7.5 kHz corner, so it peaked at 12.5 kHz against a
-  // reference that peaks at 2.5 kHz and had nothing at all below 630 Hz. The
-  // corner comes down to 2.6 kHz, and the noise envelope rather than the
-  // amplitude one carries the ring - 1285 ms against a reference that takes
-  // about a second to fall 20 dB.
-  //
-  // Same correction as the closed hat's, and for the same reason: a 2.5 kHz
-  // ceiling over a plate leaves 8 % of the piece's energy above 2 kHz where the
-  // reference carries 78 %. The mode bank comes down with it — four ring modes
-  // at 4x gain put so much at 330 Hz that the network resonated almost nothing
-  // else — and the plate is voiced smaller than the pair's physical size, since
-  // what the two cymbals radiate together is the higher of their fields.
-  t[46].amp_env.attack_ms = 8.45677f;
-  t[46].amp_env.decay_ms = 799.63f;
-  t[46].cutoff_hz = 2861.2f;
-  t[46].drive = 0.226445f;
-  t[46].percussion.base_freq_hz = 315.0f;
-  t[46].percussion.mode_decay_s = 0.059687f;
-  t[46].percussion.mode_ratios[0] = 41.0192f;
-  t[46].percussion.mode_ratios[2] = 0.318105f;
-  t[46].percussion.tone_gain = 3.88086f;
-  t[46].percussion.pitch_drop = 0.180977f;
-  t[46].percussion.pitch_drop_ms = 192.0f;
-  t[46].percussion.strike_r = 0.349741f;
-  t[46].percussion.noise_output = SynthFilterOutput::kBandpass;
-  t[46].percussion.noise_cutoff_hz = 321.282f;
-  t[46].percussion.noise_decay_ms = 349.732f;
-  t[46].percussion.noise_gain = 0.528947f;
-  t[46].percussion.noise_q = 1.78641f;
-  t[46].percussion.plate_gain = 3.49225f;
-  t[46].percussion.plate_low_hz = 322.369f;
-  t[46].percussion.plate_air_hz = 14211.0f;
-  t[46].resonance_q = 6.71819f;
-  t[46].stereo_spread = 0.587404f;
-  t[46].gain = 0.3445f;
-  t[46].amp_env.delay_ms = 0.4f;
-  t[46].percussion.plate_t60_s = 1.24548f;
-  t[46].percussion.mode_alpha[1] = 15.3268f;
-  t[46].percussion.mode_alpha[2] = 8.21696f;
-  t[46].amp_env.sustain = 0.454027f;
-  t[46].percussion.contact = 1.86837f;
-  t[46].percussion.mode_ratios[1] = 7.64858f;
-  t[46].percussion.num_modes = 4;
-  t[46].percussion.plate_hf_ratio = 0.01f;
-  t[46].percussion.strike_theta = 0.124633f;
-  t[46].percussion.tone_direct = 0.878453f;
-  t[46].percussion.contact_ms = 0.168279f;
 
   // --- wooden idiophones + clicks ---
   t[31] = make_wood(1000.0f, 0.0f, 0.03f, 0.6f);  // Sticks
@@ -950,32 +814,6 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // --- metal idiophones + bells ---
   t[34] =
       make_metal(1500.0f, {1.0f, 2.8f, 5.4f, 0.0f, 0.0f, 0.0f}, 3, 0.3f, 0.4f);  // Metronome Bell
-  t[53] = make_metal(1200.0f, {1.0f, 1.5f, 2.6f, 0.0f, 0.0f, 0.0f}, 3, 0.6f, 0.4f);  // Ride Bell
-  t[53].amp_env.attack_ms = 0.0295325f;
-  t[53].amp_env.decay_ms = 93.3168f;
-  t[53].amp_env.sustain = 0.238997f;
-  t[53].cutoff_hz = 2314.16f;
-  t[53].drive = 0.705002f;
-  t[53].percussion.contact = 0.302176f;
-  t[53].percussion.mode_decay_s = 0.0766601f;
-  t[53].percussion.mode_ratios[0] = 14.2512f;
-  t[53].percussion.mode_ratios[1] = 3.07541f;
-  t[53].percussion.mode_ratios[2] = 1.17999f;
-  t[53].percussion.noise_cutoff_hz = 1257.2f;
-  t[53].percussion.noise_decay_ms = 9.45646f;
-  t[53].percussion.noise_gain = 1.67048f;
-  t[53].percussion.noise_q = 1.36764f;
-  t[53].percussion.num_modes = 3;
-  t[53].percussion.plate_gain = 4.0f;
-  t[53].percussion.strike_r = 0.951431f;
-  t[53].percussion.tone_gain = 2.13562f;
-  t[53].resonance_q = 1.57644f;
-  t[53].stereo_spread = 0.24634f;
-  t[53].percussion.plate_hf_ratio = 0.858806f;
-  t[53].percussion.plate_low_hz = 568.867f;
-  t[53].percussion.plate_t60_s = 2.84601f;
-  t[53].percussion.tone_direct = 0.326432f;
-  t[53].percussion.strike_theta = 0.116337f;
   t[56] = make_metal(587.0f, {1.0f, 1.44f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.25f,
                      0.5f);  // Cowbell (587/845 Hz)
   t[56].gain = 1.6652f;
@@ -1011,73 +849,41 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[84] = make_metal(3000.0f, {1.0f, 1.6f, 2.3f, 3.1f, 0.0f, 0.0f}, 4, 1.50f, 0.30f);  // Belltree
 
   // Triangle: high inharmonic modes; mute short, open long (mute group 3).
-  const std::array<float, kMaxPercussionModes> triangle_ratios = {1.0f,  2.76f, 5.40f,
-                                                                  8.90f, 0.0f,  0.0f};
-  t[80] = make_metal(5000.0f, triangle_ratios, 4, 0.15f, 0.35f);  // Mute Triangle
-  t[81] = make_metal(5000.0f, triangle_ratios, 4, 1.20f, 0.35f);  // Open Triangle
+  // The module reads one bar under both keys, with partials at 1692, 3112,
+  // 5494 and 8552 Hz - the 5.5 kHz one standing 7 dB over the rest, which is
+  // what makes a triangle a pitch rather than a shimmer. Written against 3112
+  // because that is the lowest of the set the ear can hear as a fundamental.
+  // Written loudest first, because mode index is the only amplitude control the
+  // modal core has: its weight is 1/(k+1) in the index, so slot 0 is the
+  // strongest partial and the set has to be ordered by level rather than by
+  // frequency. In rising frequency the same four are 1693, 3112, 5494 and 8552
+  // Hz, and the module reads 5494 as the loudest with 1693 the quietest of the
+  // four - written in frequency order the voice peaked at 1.6 kHz against a
+  // module peaking at 5.
+  const std::array<float, kMaxPercussionModes> triangle_ratios = {1.765f, 2.748f, 1.0f,
+                                                                  0.544f, 0.0f,   0.0f};
+  // Held open it loses 27 to 36 dB/s, flat across every octave: a bar of metal
+  // damps the same at the top of its range as at the bottom. Held by the hand
+  // it stops in a tenth of that.
+  t[80] = make_metal(3112.0f, triangle_ratios, 4, 0.22f, 1.610f);  // Mute Triangle
+  t[81] = make_metal(3112.0f, triangle_ratios, 4, 2.20f, 0.742f);  // Open Triangle
   t[80].percussion.exclusive_class = 3;
-  t[80].amp_env.attack_ms = 0.496756f;
-  t[80].amp_env.decay_ms = 67.1263f;
-  t[80].amp_env.sustain = 0.0f;
-  t[80].cutoff_hz = 1076.73f;
-  t[80].drive = 0.358197f;
-  t[80].percussion.contact = 0.0f;
-  t[80].percussion.mode_decay_s = 0.00948575f;
-  t[80].percussion.mode_ratios[0] = 5.71289f;
-  t[80].percussion.mode_ratios[1] = 8.06782f;
-  t[80].percussion.mode_ratios[2] = 0.889723f;
-  t[80].percussion.mode_ratios[3] = 2.05889f;
-  t[80].percussion.noise_cutoff_hz = 3936.92f;
-  t[80].percussion.noise_decay_ms = 3.80459f;
-  t[80].percussion.noise_gain = 1.3615f;
-  t[80].percussion.noise_q = 2.95751f;
-  t[80].percussion.plate_gain = 2.93706f;
-  t[80].percussion.strike_r = 0.131708f;
-  t[80].percussion.tone_gain = 3.30232f;
-  t[80].resonance_q = 0.801302f;
-  t[80].stereo_spread = 0.666104f;
-  t[80].percussion.contact_ms = 0.0375f;
-  t[80].percussion.num_modes = 1;
-  t[80].percussion.plate_hf_ratio = 0.296254f;
-  t[80].percussion.plate_low_hz = 174.366f;
-  t[80].percussion.plate_t60_s = 0.830513f;
-  t[80].percussion.strike_theta = 0.266747f;
-  t[80].percussion.tone_direct = 0.871336f;
-  t[80].gain = 2.0281f;
   t[81].percussion.exclusive_class = 3;
-  t[81].amp_env.attack_ms = 0.0964563f;
-  t[81].amp_env.decay_ms = 1586.8f;
-  t[81].amp_env.sustain = 0.249509f;
-  t[81].cutoff_hz = 2068.25f;
-  t[81].drive = 0.70305f;
-  t[81].percussion.contact = 0.859528f;
-  t[81].percussion.mode_decay_s = 2.24284f;
-  t[81].percussion.mode_ratios[0] = 1.23146f;
-  t[81].percussion.mode_ratios[1] = 1.49443f;
-  t[81].percussion.mode_ratios[2] = 0.880676f;
-  t[81].percussion.mode_ratios[3] = 8.27803f;
-  t[81].percussion.noise_cutoff_hz = 14497.4f;
-  t[81].percussion.noise_decay_ms = 478.975f;
-  t[81].percussion.noise_gain = 2.12371f;
-  t[81].percussion.noise_q = 3.60831f;
-  t[81].percussion.num_modes = 2;
-  t[81].percussion.plate_gain = 1.48575f;
-  t[81].percussion.strike_r = 0.82515f;
-  t[81].percussion.tone_gain = 2.60195f;
-  t[81].resonance_q = 2.31974f;
-  t[81].stereo_spread = 0.149776f;
-  t[81].percussion.strike_theta = 0.523123f;
-  t[81].percussion.contact_ms = 0.0563958f;
-  t[81].percussion.plate_hf_ratio = 0.228995f;
-  t[81].percussion.plate_low_hz = 1159.83f;
-  t[81].percussion.plate_t60_s = 3.43851f;
-  t[81].percussion.tone_direct = 0.704216f;
-  // Not a strainer: a high-passed noise layer the fit reached for on a piece
-  // with no wires, and it carries this triangle's attack reading. Converted to the
-  // fractional threshold rather than deleted, because deleting it is a
-  // re-voicing and the piece was heard as it stands.
-  t[81].percussion.wire_buzz = 3.7f;
-  t[81].percussion.wire_threshold = 0.35f;
+  // Not a strainer: a high-passed noise layer on a piece with no wires, and it
+  // is the only thing here that fills the gaps between the four partials. What
+  // it costs is measured, so it is set by that rather than deleted. At 3.7 it
+  // WAS the spectrum - 8.6 dB of flatness against the module's 40.8, a bar
+  // reading as a noise band - and at 0 the same four partials read 70, so the
+  // engine overshoots the module's sparseness rather than failing to reach it
+  // and the layer's job is to come back part of the way. It is gated on the
+  // membrane's swing and shuts off as a cliff, which is what the per-octave
+  // decay charges: 168 dB/s at 3.7 against the module's 32, and 98 at 0.25.
+  t[81].percussion.wire_buzz = 0.25f;
+  // The beater is a metal rod on a metal bar, so its own radiation reaches the
+  // listener without the modes: one pulse rather than a band, which is why it
+  // buys the strike back without touching a single third-octave cell. The piece
+  // measured 7.5 dB less peaked than the module with no contact at all.
+  t[81].percussion.contact = 3.0f;
 
   // --- fixed-pitch membranes (congas/bongos/timbales/surdo) ---
   t[60] = make_membrane(260.0f, 0.18f, 0.30f, 0.0f, 0.70f);  // Hi Bongo
@@ -1494,165 +1300,6 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[40].resonance_q = 0.9922f;
   t[40].stereo_spread = 0.81941f;
   t[40].gain = 7.7635f;  // Electric Snare
-  //
-  // The cymbal ceilings are several times higher than the drums' because the
-  // plate is behind them. A cymbal's ceiling bounds the wash, and the wash is
-  // also what excites the plate, so a corner low enough to bound flat noise
-  // hands the network nothing above it to resonate and the piece falls back to
-  // its few loud ring modes: at a 1 kHz ceiling a crash held four fifths of its
-  // band energy in twenty bins, against a reference that holds half. Above the
-  // plate's own reach the ceiling does what it did before, which is why the
-  // measured top edges still set where these sit.
-  //
-  // The cymbals have lost their ceilings: their wash is a band now, and a band
-  // already has a top. What each one is bounded by instead is its plate ceiling
-  // and its voice corner, beside the plate values above.
-  t[49].amp_env.decay_ms = 2897.07f;
-  t[49].percussion.mode_decay_s = 5.22347f;
-  t[49].percussion.noise_decay_ms = 892.111f;
-  t[49].resonance_q = 0.524952f;
-  t[49].percussion.mode_ratios[0] = 4.2626f;
-  t[49].gain = 0.6029f;  // Crash 1
-  t[49].amp_env.sustain = 0.846107f;
-  t[49].drive = 0.830042f;
-  t[49].percussion.contact = 3.39062f;
-  t[49].percussion.mode_ratios[1] = 4.09347f;
-  t[49].percussion.mode_ratios[2] = 8.83488f;
-  t[49].percussion.mode_ratios[3] = 0.684544f;
-  t[49].percussion.noise_cutoff_hz = 3352.0f;
-  t[49].percussion.noise_gain = 2.7538f;
-  t[49].percussion.noise_q = 12.4719f;
-  t[49].percussion.shimmer = 16.0f;
-  t[49].percussion.shimmer_attack_ms = 118.295f;
-  t[49].percussion.shimmer_cutoff_hz = 10002.1f;
-  t[49].percussion.strike_r = 0.679358f;
-  t[49].percussion.tone_direct = 0.146176f;
-  t[49].percussion.tone_gain = 0.0669442f;
-  t[49].stereo_spread = 0.568385f;
-  t[49].percussion.contact_ms = 0.0678432f;
-  t[51].drift_cents = 14.9294f;
-  t[51].drift_rate_hz = 0.731264f;
-  t[51].key_track = 0.64f;
-  t[51].percussion.mode_decay_s = 7.27851f;
-  t[51].percussion.noise_cutoff_hz = 2263.25f;
-  t[51].resonance_q = 6.59868f;
-  t[51].percussion.mode_ratios[2] = 1.87896f;
-  t[51].gain = 0.7432f;  // Ride 1
-  t[51].amp_env.attack_ms = 0.228377f;
-  t[51].amp_env.decay_ms = 2449.86f;
-  t[51].percussion.contact = 0.233992f;
-  t[51].percussion.mode_ratios[0] = 6.20648f;
-  t[51].percussion.mode_ratios[3] = 10.8139f;
-  t[51].percussion.noise_decay_ms = 2065.68f;
-  t[51].percussion.noise_gain = 2.95739f;
-  t[51].percussion.shimmer_cutoff_hz = 3844.0f;
-  t[51].percussion.strike_r = 0.138772f;
-  t[51].percussion.tone_direct = 0.902066f;
-  t[51].percussion.tone_gain = 0.624849f;
-  t[51].stereo_spread = 0.255923f;
-  t[52].amp_env.attack_ms = 52.5749f;
-  t[52].percussion.base_freq_hz = 4160.0f;
-  t[52].percussion.mode_decay_s = 1.18457f;
-  t[52].percussion.noise_cutoff_hz = 2492.32f;
-  t[52].percussion.noise_decay_ms = 451.04f;
-  t[52].percussion.noise_gain = 0.838898f;
-  t[52].percussion.phisem_beans = 0.362458f;
-  t[52].percussion.phisem_sound_ms = 3.0697f;
-  t[52].percussion.shimmer = 1.42327f;
-  t[52].percussion.mode_ratios[2] = 1.43935f;
-  t[52].gain = 4.1645f;  // China
-  t[52].amp_env.decay_ms = 543.272f;
-  t[52].amp_env.sustain = 0.389133f;
-  t[52].drive = 0.674902f;
-  t[52].percussion.contact = 0.190899f;
-  t[52].percussion.mode_ratios[0] = 0.488153f;
-  t[52].percussion.mode_ratios[1] = 0.464146f;
-  t[52].percussion.mode_ratios[3] = 0.20025f;
-  t[52].percussion.phisem_energy_ms = 7.20449f;
-  t[52].percussion.shimmer_attack_ms = 333.305f;
-  t[52].percussion.shimmer_cutoff_hz = 497.718f;
-  t[52].percussion.strike_r = 0.420051f;
-  t[52].percussion.tone_direct = 0.171123f;
-  t[52].percussion.tone_gain = 0.105829f;
-  t[52].stereo_spread = 0.387829f;
-  t[52].percussion.contact_ms = 0.767142f;
-  t[52].percussion.num_modes = 3;
-  t[52].percussion.strike_theta = 0.587903f;
-  t[55].amp_env.decay_ms = 3358.34f;
-  t[55].percussion.base_freq_hz = 2080.0f;
-  t[55].percussion.noise_decay_ms = 541.604f;
-  t[55].percussion.noise_gain = 3.27706f;
-  t[55].percussion.phisem_sound_ms = 4.69501f;
-  t[55].percussion.plate_hf_ratio = 0.716924f;
-  t[55].percussion.tone_gain = 1.02085f;
-  t[55].percussion.mode_ratios[0] = 1.52381f;
-  t[55].percussion.mode_ratios[3] = 2.62026f;
-  t[55].gain = 0.1629f;  // Splash
-  t[55].amp_env.sustain = 0.301793f;
-  t[55].drive = 0.21861f;
-  t[55].percussion.contact = 1.60247f;
-  t[55].percussion.mode_decay_s = 0.0858076f;
-  t[55].percussion.mode_ratios[1] = 4.23922f;
-  t[55].percussion.mode_ratios[2] = 11.2842f;
-  t[55].percussion.num_modes = 1;
-  t[55].percussion.phisem_energy_ms = 114.513f;
-  t[55].percussion.shimmer = 15.74f;
-  t[55].percussion.shimmer_cutoff_hz = 7310.5f;
-  t[55].percussion.strike_r = 0.767934f;
-  t[55].resonance_q = 5.805f;
-  t[55].stereo_spread = 0.665173f;
-  t[55].amp_env.attack_ms = 0.0906749f;
-  t[55].percussion.contact_ms = 0.453639f;
-  t[55].percussion.tone_direct = 0.7377f;
-  t[57].amp_env.decay_ms = 3670.55f;
-  t[57].percussion.mode_decay_s = 0.514154f;
-  t[57].percussion.noise_decay_ms = 1198.48f;
-  t[57].percussion.shimmer = 2.00457f;
-  t[57].percussion.tone_gain = 1.68419f;
-  t[57].resonance_q = 4.13277f;
-  t[57].percussion.mode_ratios[1] = 0.211778f;
-  t[57].gain = 2.0872f;  // Crash 2
-  t[57].drive = 0.447548f;
-  t[57].percussion.contact = 0.734647f;
-  t[57].percussion.mode_ratios[0] = 26.935f;
-  t[57].percussion.mode_ratios[2] = 0.511553f;
-  t[57].percussion.mode_ratios[3] = 0.748455f;
-  t[57].percussion.noise_cutoff_hz = 2777.44f;
-  t[57].percussion.noise_gain = 0.214828f;
-  t[57].percussion.num_modes = 1;
-  t[57].percussion.shimmer_attack_ms = 14.1957f;
-  t[57].percussion.strike_r = 0.917643f;
-  t[57].percussion.tone_direct = 0.6968f;
-  t[57].stereo_spread = 0.333327f;
-  t[57].amp_env.attack_ms = 0.409376f;
-  t[57].percussion.contact_ms = 0.218496f;
-  t[57].amp_env.sustain = 0.0228357f;
-  t[59].drift_cents = 0.472376f;
-  t[59].percussion.mode_decay_s = 5.22852f;
-  t[59].percussion.phisem_beans = 1.01776f;
-  t[59].percussion.strike_r = 0.723574f;
-  t[59].pitch_offset_cents = 16.0f;
-  t[59].percussion.mode_ratios[1] = 0.363682f;
-  t[59].gain = 0.8842f;  // Ride 2
-  t[59].amp_env.attack_ms = 0.227998f;
-  t[59].amp_env.decay_ms = 3013.33f;
-  t[59].drift_rate_hz = 0.0499312f;
-  t[59].drive = 0.286114f;
-  t[59].percussion.contact = 2.47087f;
-  t[59].percussion.mode_ratios[2] = 1.74408f;
-  t[59].percussion.noise_cutoff_hz = 1578.79f;
-  t[59].percussion.noise_decay_ms = 2207.52f;
-  t[59].percussion.num_modes = 1;
-  t[59].percussion.phisem_energy_ms = 193.374f;
-  t[59].percussion.phisem_sound_ms = 7.98949f;
-  t[59].percussion.shimmer = 0.0785283f;
-  t[59].percussion.strike_theta = 0.110685f;
-  t[59].percussion.tone_direct = 0.623407f;
-  t[59].percussion.tone_gain = 2.80816f;
-  t[59].resonance_q = 0.530935f;
-  t[59].stereo_spread = 0.967415f;
-  t[59].percussion.contact_ms = 5.84916f;
-  t[59].percussion.mode_ratios[3] = 8.14817f;
 
   // --- PhISEM shakers + scrapers ---
   t[54] = make_shaker(32.0f, 120.0f, 2500.0f, 2.0f, 0.2267f);  // Tambourine

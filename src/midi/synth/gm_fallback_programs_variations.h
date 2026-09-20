@@ -140,27 +140,30 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.marimba_wide.stereo_spread = 0.5f;
 
   // Church Bell (program 14 variation 8): a cast bronze bell, not the tuned
-  // tube the capital voices. A founder tunes five partials — hum an octave
-  // below, prime, the MINOR-third tierce that gives a bell its dark colour,
-  // quint, and nominal an octave above the prime — and the strike note is the
-  // missing fundamental they imply. The tierce is what a tubular bell does not
-  // have, so it carries the variation.
+  // tube the capital voices. Ratios, weights and per-mode t60 are the module's
+  // own recording measured over the capture's five notes, where they hold to
+  // 0.3 %: prime at the played pitch, the MINOR-third tierce a tubular bell has
+  // no equivalent of, nominal, twelfth, and the four partials between four and
+  // eight times the note that carry most of the energy. The hum an octave under
+  // the prime sits at the recording's floor, so it takes no slot.
   o.church_bell = o.tubular_bells;
-  o.church_bell.modal.num_modes = 7;
-  o.church_bell.modal.modes[0] = {0.5f, 0.55f, 1.3f};   // hum
-  o.church_bell.modal.modes[1] = {1.0f, 1.0f, 1.0f};    // prime
-  o.church_bell.modal.modes[2] = {1.19f, 0.85f, 0.9f};  // tierce (minor third)
-  o.church_bell.modal.modes[3] = {1.5f, 0.6f, 0.7f};    // quint
-  o.church_bell.modal.modes[4] = {2.0f, 0.5f, 0.8f};    // nominal
-  o.church_bell.modal.modes[5] = {2.5f, 0.3f, 0.45f};   // deciem
-  o.church_bell.modal.modes[6] = {3.0f, 0.22f, 0.3f};   // undecime
-  // Seven modes, so the eighth slot is cleared rather than left holding
-  // whatever the chime above put there: unread today, and audible the moment
-  // this series grows.
-  o.church_bell.modal.modes[7] = {};
-  o.church_bell.modal.decay_s = 20.0f;
-  o.church_bell.modal.decay_stretch = 0.6f;
-  o.church_bell.modal.strike_brightness = 0.85f;
+  o.church_bell.modal.num_modes = 8;
+  o.church_bell.modal.modes[0] = {0.977f, 0.133f, 1.92f};  // prime
+  o.church_bell.modal.modes[1] = {1.213f, 0.335f, 1.63f};  // tierce (minor third)
+  o.church_bell.modal.modes[2] = {1.998f, 0.380f, 1.18f};  // nominal
+  o.church_bell.modal.modes[3] = {2.965f, 0.563f, 1.33f};  // twelfth
+  o.church_bell.modal.modes[4] = {4.058f, 1.768f, 1.08f};
+  o.church_bell.modal.modes[5] = {5.261f, 1.948f, 1.03f};
+  o.church_bell.modal.modes[6] = {6.556f, 3.013f, 0.88f};
+  o.church_bell.modal.modes[7] = {7.916f, 2.061f, 0.81f};
+  // The reference's ring is flat across the compass — 8.0 to 11.2 s of t60 from
+  // note 54 to 78 — so the octave stretch a hung bar earns is zero here.
+  o.church_bell.modal.decay_s = 10.1f;
+  o.church_bell.modal.decay_stretch = 0.0f;
+  // The mallet curve weights mode k by exp(-(1 - hardness) * 1.5 * k), so at
+  // 0.85 the gains this level profile needs reach 9.8 and the patch clamp stops
+  // at 4. Full hardness flattens that tilt enough for the measured set to fit.
+  o.church_bell.modal.strike_brightness = 1.0f;
   // Stated rather than inherited: the chime this copies carries a mallet tilt
   // fitted to its own reference, and a cast bell is not that instrument.
   o.church_bell.modal.vel_to_brightness = 0.6f;
@@ -173,12 +176,25 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.church_bell.amp_env.release_ms = 6000.0f;
   o.church_bell.gain = 0.55f;
 
-  // Carillon (program 14 variation 9): the same founder's partial series in a
-  // small bell — a short, bright ring rather than the tower bell's long swell.
+  // Carillon (program 14 variation 9): the same bell struck the same way and
+  // stopped far sooner. The two references correlate at 0.99 over their first
+  // 0.8 s and carry one partial series, so only the ring-down is the variation.
   o.carillon = o.church_bell;
-  o.carillon.modal.decay_s = 3.6f;
-  o.carillon.modal.decay_stretch = 0.45f;
-  o.carillon.modal.strike_brightness = 0.92f;
+  // Same strike, faster envelope: the reference's own rate regresses to 2.1 s
+  // of t60 at A4 with a 0.77 octave slope, against the tower bell's flat 10.1.
+  o.carillon.modal.decay_s = 2.1f;
+  o.carillon.modal.decay_stretch = 0.77f;
+  // A loss in parallel with each mode's own, so the spread the tower bell's
+  // partials have (1.92 down to 0.81) compresses towards flat rather than
+  // carrying over: 1/t60 adds, and this envelope's 2.65 s dominates every term.
+  o.carillon.modal.modes[0].decay_scale = 1.111f;
+  o.carillon.modal.modes[1].decay_scale = 1.088f;
+  o.carillon.modal.modes[2].decay_scale = 1.033f;
+  o.carillon.modal.modes[3].decay_scale = 1.054f;
+  o.carillon.modal.modes[4].decay_scale = 1.016f;
+  o.carillon.modal.modes[5].decay_scale = 1.007f;
+  o.carillon.modal.modes[6].decay_scale = 0.973f;
+  o.carillon.modal.modes[7].decay_scale = 0.954f;
   o.carillon.modal.release_damp_s = 3.2f;
   o.carillon.amp_env.release_ms = 2800.0f;
   o.carillon.gain = 0.6f;
