@@ -83,6 +83,11 @@ SONARE_TUNABLE(kHpCornerFloorHz, 10.0f);
 // to estimate it, so compensating that fraction re-centres the tuning (the full
 // phase delay over-corrects into flatness).
 SONARE_TUNABLE(kHpCompScale, 0.5f);
+// The same fraction for the Bernoulli valve, which oscillates on a different
+// waveform and so turns a different part of that phase delay into the shift the
+// compensation removes. Measured over the baritone's grid: at the table's 0.5
+// the valve sits 17.4 cents flat at the bottom of it and 6.3 at the top.
+SONARE_TUNABLE(kHpCompScaleValve, 0.1f);
 
 // Output trim: the raw bore pressure sits near unity already (the reed table is
 // bounded to [-1,1]), so only a gentle scale brings a forte note into the other
@@ -236,7 +241,8 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   const float cw = std::cos(omega);
   const float phase_hp = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
   const float tau_hp = phase_hp / std::max(omega, 1.0e-6f);
-  comp_ = 1.0f + tau_lp - kHpCompScale * tau_hp;
+  const float hp_scale = closing_pressure_ > 0.0f ? kHpCompScaleValve : kHpCompScale;
+  comp_ = 1.0f + tau_lp - hp_scale * tau_hp;
 
   // The bore delay line spans the whole slab, because the line length is what
   // bounds a downward bend and the clamp enforcing it saturates silently -- a
