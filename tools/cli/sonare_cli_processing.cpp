@@ -1128,6 +1128,14 @@ std::vector<std::vector<float>> load_split_silence_takes(const CliArgs& args, co
   return takes;
 }
 
+// Zero-pads to `width` digits and grows past it rather than truncating, so the
+// filenames sort naturally at the expected counts and stay distinct beyond them.
+std::string pad_index(size_t value, int width) {
+  std::ostringstream text;
+  text << std::setw(width) << std::setfill('0') << value;
+  return text.str();
+}
+
 // Writes every take sliced at every interval as `{prefix}{take}_{interval}.wav`,
 // both indices 1-based and zero-padded. A take that ended before an interval is
 // silent there, which is the rule the union was built on, so its slice is padded
@@ -1149,9 +1157,8 @@ void write_split_silence_takes(const std::string& prefix,
         std::copy_n(takes[take].begin() + static_cast<std::ptrdiff_t>(start),
                     std::min(available, slice.size()), slice.begin());
       }
-      char suffix[32];
-      std::snprintf(suffix, sizeof(suffix), "%02zu_%03zu.wav", take + 1, interval + 1);
-      save_wav(prefix + suffix, slice, sample_rate);
+      save_wav(prefix + pad_index(take + 1, 2) + "_" + pad_index(interval + 1, 3) + ".wav", slice,
+               sample_rate);
     }
   }
 }
