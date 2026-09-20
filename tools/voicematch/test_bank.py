@@ -65,6 +65,52 @@ def test_a_capture_is_matched_to_its_own_voice_and_not_another():
         assert melodic.id != kit.id
 
 
+def _capture_at(bank_number: int, capture_id: str) -> bank.Capture:
+    return bank.Capture(
+        path=Path(f"{capture_id}.json"), id=capture_id, label=capture_id,
+        program=6, bank=bank_number, take_set="sustained", timbres=(), dry=True,
+        title=capture_id, source_class="module", raw={},
+    )
+
+
+def _harpsichord_catalogue():
+    """Program 6 as the library reports it: three variations, two addresses each."""
+    from catalogue import Catalogue
+    return Catalogue(defaults={}, bounds={}, programs={
+        (6, 0): "fam1",
+        (6, 8): "harpsichord_octave", (6, 1): "harpsichord_octave",
+        (6, 16): "harpsichord_wide", (6, 2): "harpsichord_wide",
+    })
+
+
+def test_a_patchs_two_bank_addresses_share_one_reference():
+    """A GS variation and its GM2 alias are one patch, so they are one voice.
+
+    Registered at the GS Bank-Select-MSB and asked for at the GM2
+    Bank-Select-LSB, the capture used to be invisible and the voice reported as
+    having no oracle at all.
+    """
+    pool = [_capture_at(8, "harpsichord_octave")]
+    catalogue = _harpsichord_catalogue()
+    found = bank.capture_for(6, 1, pool=pool, catalogue=catalogue)
+    assert found is not None and found.id == "harpsichord_octave"
+
+
+def test_a_different_variation_still_gets_no_reference_from_it():
+    """The alias rule is patch identity, not a licence to borrow a neighbour."""
+    pool = [_capture_at(8, "harpsichord_octave")]
+    catalogue = _harpsichord_catalogue()
+    assert bank.capture_for(6, 2, pool=pool, catalogue=catalogue) is None
+    assert bank.capture_for(6, 0, pool=pool, catalogue=catalogue) is None
+
+
+def test_without_a_catalogue_a_bank_answers_only_itself():
+    """Nothing in the numbers says 8 and 1 are one patch; only the library does."""
+    pool = [_capture_at(8, "harpsichord_octave")]
+    assert bank.capture_for(6, 1, pool=pool) is None
+    assert bank.capture_for(6, 8, pool=pool) is not None
+
+
 def test_every_capture_says_what_kind_of_source_answered_it():
     """The product itself is untracked, so the class is all a consumer can read.
 

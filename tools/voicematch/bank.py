@@ -156,15 +156,33 @@ def captures() -> list[Capture]:
     return [c for c in found if c is not None]
 
 
+def _same_voice(program: int, left: int, right: int, catalogue) -> bool:
+    """Whether two variation banks of one program sound the same patch.
+
+    GS gives a variation a Bank-Select-MSB and GM2 gives the same patch a
+    Bank-Select-LSB, so one patch has two addresses and a capture is registered
+    at one of them. Asked which patch each address sounds, the library answers
+    with the same name — that is what makes them one voice, and the number
+    arithmetic relating 8 to 1 is not something this file is allowed to know.
+    Without a catalogue there is no answer, and a bank matches only itself.
+    """
+    if left == right:
+        return True
+    if catalogue is None:
+        return False
+    return catalogue.patch_for(program, left) == catalogue.patch_for(program, right)
+
+
 def captures_for(program: int, bank: int = 0, *, kit: bool = False,
-                 pool: list[Capture] | None = None) -> list[Capture]:
+                 pool: list[Capture] | None = None, catalogue=None) -> list[Capture]:
     """Every capture covering a voice, the one answering its layer first.
 
     Program 0 is both the grand piano and the standard kit, so the kit flag is
     part of the key rather than something to resolve afterwards. A melodic
-    capture matches its own bank exactly — a variation is a separate patch with
-    separate knobs, and a reference registered for one of them says nothing
-    about another.
+    capture matches the bank asked for, or another address of the same patch —
+    a variation is a separate patch with separate knobs, so a reference
+    registered for one patch says nothing about another, while a patch's second
+    address is the same voice and takes the same reference.
 
     **A voice is answered by as many captures as it takes, not by one.** The
     standard kit is the worked case: `policy.json` aims both its axes at the
@@ -177,14 +195,15 @@ def captures_for(program: int, bank: int = 0, *, kit: bool = False,
     pool = captures() if pool is None else pool
     found = [cap for cap in pool
              if cap.drums == kit
-             and cap.program == program and (kit or cap.bank == bank)]
+             and cap.program == program
+             and (kit or _same_voice(program, cap.bank, bank, catalogue))]
     want = policy.wanted_layer(policy.load(), program, kit, bank)
     aimed = [c for c in found if policy.answers_layer(c.source_class, want)]
     return aimed + [c for c in found if c not in aimed]
 
 
 def capture_for(program: int, bank: int = 0, *, kit: bool = False,
-                pool: list[Capture] | None = None) -> Capture | None:
+                pool: list[Capture] | None = None, catalogue=None) -> Capture | None:
     """The capture that represents a voice, if any does.
 
     The one whose `source_class` answers the layer `policy.json` aims this slot
@@ -193,7 +212,7 @@ def capture_for(program: int, bank: int = 0, *, kit: bool = False,
     is aimed at and gave the page a reference of the wrong layer with nothing
     saying so. Coverage is `captures_for`'s question, not this one's.
     """
-    found = captures_for(program, bank, kit=kit, pool=pool)
+    found = captures_for(program, bank, kit=kit, pool=pool, catalogue=catalogue)
     return found[0] if found else None
 
 
@@ -353,7 +372,8 @@ def voices(programs: list[int] | None = None, *, banks: list[int] | None = None,
             patch = (catalogue.patch_for(program, bank) or "") if catalogue else ""
             out.append(Voice(
                 program=program, bank=bank, patch=patch,
-                captures=tuple(captures_for(program, bank, pool=pool)),
+                captures=tuple(captures_for(program, bank, pool=pool,
+                                            catalogue=catalogue)),
             ))
     for kit in (kits or []):
         out.append(Voice(
