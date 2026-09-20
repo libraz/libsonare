@@ -28,7 +28,8 @@ silent, and `unknown_voices` is what a test holds it to.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -36,6 +37,11 @@ DEFAULT_PATH = HERE / "calibrations.json"
 
 #: The source key the unmodified voice takes on every page.
 BASELINE = "model"
+
+#: The languages a recorded setting is written in. English is the repository's
+#: and the fallback, so a missing translation is an English line in a Japanese
+#: page rather than a blank one.
+LANGS = ("en", "ja")
 
 #: JSON keys that document the file rather than describing a voice. The capture
 #: definitions use the same convention, which is what lets the explanation sit
@@ -49,14 +55,86 @@ class Variant:
 
     name: str
     overrides: str
+    #: The long rationale: what was measured, what it ruled out, what it costs.
+    #: The record rather than the page's first line — it is read once, by
+    #: whoever reopens the question.
     note: str = ""
+    #: What the setting is, in a few words, per language. This is the button:
+    #: a name has to be an identifier and an identifier is not a sentence, so
+    #: `foundations-only` says what moved and never says what it is FOR, and a
+    #: row of ten of them is a lineup nobody can read the intent of.
+    title: dict = field(default_factory=dict)
+    #: One line for whoever is listening, per language: what to listen for, and
+    #: what hearing it would mean. Not the override string in words.
+    desc: dict = field(default_factory=dict)
+
+    def text(self, lang: str = "en") -> dict[str, str]:
+        """Title and line in one language, falling back to English."""
+        return {
+            "title": self.title.get(lang) or self.title.get("en") or self.name,
+            "desc": self.desc.get(lang) or self.desc.get("en") or "",
+        }
 
     @property
     def detail(self) -> str:
-        """What the page shows under the version button."""
-        if self.note and self.overrides:
-            return f"{self.note} — {self.overrides}"
-        return self.note or self.overrides or "no overrides"
+        """What the page shows when this version is the one sounding.
+
+        The override string is deliberately not in it. A question put in the
+        parameter's own vocabulary gets the parameter's own answer back — a
+        listener shown `piano.brightness=0.30` reports on brightness, which is
+        the one thing the knob cannot be asked about. It stays here in the
+        registry, where the person changing it reads it.
+        """
+        return self.note or self.desc.get("en", "") or ("" if self.overrides else "no overrides")
+
+
+#: One `a.b.c=1.5` assignment, which is what an override string is a list of.
+_ASSIGNMENT = re.compile(r"[\w.]+=[-\w.+]+")
+
+
+def _all_assignments(text: str) -> bool:
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    return bool(parts) and all(_ASSIGNMENT.fullmatch(p) for p in parts)
+
+
+def strip_overrides(detail: str) -> str:
+    """A version's line with any override string taken off it.
+
+    Pages rendered before the string came off the page carry `note — a.b=1,c=2`
+    in the field the banner reads, and there are a hundred and eighty-odd of
+    them. Matched against the exact shape the renderer wrote — a list of
+    assignments — rather than by looking for an equals sign, so a note that
+    happens to end in prose is left alone.
+
+    A setting with no note at all had the override string as its WHOLE line,
+    which is the case a rule written around the separator misses: five of them
+    were still naming a knob on the page after the first pass. Nothing is a
+    better answer than the parameter, and it is also the true one — nobody
+    registered anything about that setting.
+    """
+    if _all_assignments(detail):
+        return ""
+    head, sep, tail = detail.rpartition(" — ")
+    return head if sep and _all_assignments(tail) else detail
+
+
+def source_text(variant: Variant, *, direct: bool = False) -> dict:
+    """The both-language title and line a version button carries.
+
+    One function for the two places that need it — `make_audition.py` writing a
+    new manifest and `tools/audition/serve.py` answering for one rendered before
+    the fields existed — so a page rendered months ago carries the same words as
+    one rendered today, and neither is a copy of the other's rule.
+    """
+    title = dict(variant.title)
+    desc = dict(variant.desc)
+    if direct:
+        # In front rather than behind. A voice with a rig renders each candidate
+        # twice and the pair sits side by side, so the one word that separates
+        # them has to be in the part of the button a narrow column keeps.
+        title = {k: (f"リグなし・{v}" if k == "ja" else f"No rig — {v}")
+                 for k, v in title.items()}
+    return {"title": title, "desc": desc}
 
 
 def check_name(name: str) -> str:
@@ -75,11 +153,36 @@ def check_name(name: str) -> str:
     return ""
 
 
+def _lines(raw: object, where: str, field_name: str) -> dict[str, str]:
+    """One line per language, or the reason it is not one.
+
+    Refused at load rather than checked by a test, because the cost of a gap is
+    paid by whoever opens the page: a button with no title falls back to its own
+    key, which is exactly the state this field exists to end, and nothing about
+    the render says a translation was meant to be there. A run that reads the
+    file is the moment the author is still holding the setting.
+    """
+    lines = raw if isinstance(raw, dict) else {}
+    out = {k: str(v).strip() for k, v in lines.items() if k in LANGS and str(v).strip()}
+    missing = [lang for lang in LANGS if not out.get(lang)]
+    if missing:
+        raise ValueError(
+            f"{where}: {field_name} is missing {', '.join(missing)} — it wants a "
+            f"line per language, {{{', '.join(repr(k) for k in LANGS)}}}")
+    return out
+
+
 def parse_cli(specs: list[str]) -> list[Variant]:
     """`name=overrides` pairs from the command line, in the order given.
 
     The overrides are passed through untouched, since the library is the only
     thing that can say whether a key exists.
+
+    No title and no line: a shell argument cannot carry two languages, and the
+    person who typed it is the person listening. Its button falls back to the
+    name, which is the state a *recorded* setting is refused for — a setting
+    worth keeping is worth a sentence, and one typed to hear something once is
+    gone with the shell history.
     """
     out: list[Variant] = []
     for spec in specs:
@@ -110,10 +213,13 @@ def load(path: Path | None = None) -> dict[str, list[Variant]]:
             bad = check_name(name)
             if bad:
                 raise ValueError(f"{path.name}: {slug}: {bad}")
+            where = f"{path.name}: {slug}: {name}"
             variants.append(Variant(
                 name=name,
                 overrides=str(item.get("overrides", "")).strip(),
                 note=str(item.get("note", "")).strip(),
+                title=_lines(item.get("title"), where, "title"),
+                desc=_lines(item.get("desc"), where, "desc"),
             ))
         names = [v.name for v in variants]
         if len(names) != len(set(names)):
@@ -137,10 +243,11 @@ def for_voice(slug: str, table: dict[str, list[Variant]],
               extra: list[Variant]) -> list[Variant]:
     """The recorded settings for one voice, then the run's own, in that order.
 
-    A name declared in both is refused rather than resolved. The page labels its
-    version buttons with the name and nothing else, so two settings sharing one
-    is the single failure a listening page must not have — whichever won, the
-    note written about it would name the other just as well.
+    A name declared in both is refused rather than resolved. The name is the
+    address a render is reached at and the string a listening note carries, so
+    two settings sharing one is the single failure a listening page must not
+    have — whichever won, the note written about it would name the other just
+    as well.
     """
     recorded = table.get(slug, [])
     clash = {v.name for v in recorded} & {v.name for v in extra}

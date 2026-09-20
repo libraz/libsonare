@@ -3,6 +3,8 @@
   "_overrides": "The value of SONARE_TUNING_OVERRIDES, passed to the library untouched — the library is the only thing that can say whether a key exists. Keys are scoped: an engine constant is `<file stem>.<name>` (`brass_voice.kLipCouple`), a patch field is `<patch>.<path>` (`trumpet.brass.brassiness`), and a drum note's patch is `d038.percussion.wire_buzz`. A bare constant name resolves when it is unique across the tree and not otherwise — four voices declare `kBreathBase`. `autofit.py --out result.json` writes a paste-ready string, which is where most of these come from.",
   "_copies": "A patch prefix reaches THAT patch and no other, which is not where a source edit stops. `overdriven` and `distortion` are built by copying `electric_guitar` as the fallback tables are built, and the copy is taken from the compiled-in values before each patch is tuned under its own name — so editing the source propagates to all three and `electric_guitar.ks.brightness=…` moves programs 26 and 27 alone. The failure is silent and it renders: the program the setting was aimed at comes back byte-identical to the unmodified build, which reads as a knob with no effect rather than as a key that arrived somewhere else. A candidate meant for a copy needs its own entry under that copy's own voice.",
   "_note": "What the setting is for, in one line, shown on the page under the version button. It is the only place a candidate says why it is a candidate: the override string says what moved and never says what it was trying to fix, and a page is read weeks after it was built.",
+  "_title": "What the setting IS, in a few words, per language — `{\"en\": …, \"ja\": …}`. This is the button. A name has to be an identifier and an identifier is not a sentence: `foundations-only` says which knob moved and never says what it is for, and a row of nine of them is nine guesses. Refused at load if either language is missing, because the cost of a gap is paid by whoever opens the page and nothing in the render says a title was meant to be there.",
+  "_desc": "One line for whoever is listening, per language: what to listen for and what hearing it would mean. Not the override string in words, and not the measurement — that is `note`, which is the record and is read once.",
   "_name": "The source key: letters, digits, `.`, `_`, `-`. It is the button label, the file stem and the last segment of the address, so what is on the button, what is in the URL and what is in a listening note are one string. `model` is taken by the unmodified build.",
   "_open": "A setting listed here is a candidate that has NOT been written back to the source. That is what the file is for: an override string kept only in a render directory under the scratch root is lost with the directory, and one harpsichord round's candidates were lost exactly that way. Recording is not adoption — a setting stays here until it is either written back (and deleted from here in the same change) or judged and deleted.",
   "_example": {
@@ -18,46 +20,118 @@
     "variants": [
       {
         "name": "tank-3.6",
+        "title": {
+          "en": "The organ's longer tank",
+          "ja": "オルガン用に伸ばした残響"
+        },
+        "desc": {
+          "en": "What the organ's reverb fix costs a voice that never asked for it — the tank is host-wide.",
+          "ja": "オルガンのために伸ばした残響タンクが、それを求めていないこの音色にどう響くか。タンクはホスト全体で共有です。"
+        },
         "overrides": "gs_effects.kReverbDecayScale=1.104",
         "note": "the organ's longer GS tank, on a voice that did not ask for it — the tank is host-wide, so this is what the organ's fix costs every other program"
       },
       {
         "name": "felt-worn",
+        "title": {
+          "en": "Worn hammer felt",
+          "ja": "潰れたハンマーフェルト"
+        },
+        "desc": {
+          "en": "Woolly and edgeless, with the attack gone out of it.",
+          "ja": "毛羽立って角が取れ、アタックの抜けた音になるはずです。"
+        },
         "overrides": "fam0.piano.brightness=0.30",
         "note": "hammers felted flat: the tone should come back woolly and edgeless, with the attack gone out of it"
       },
       {
         "name": "felt-hard",
+        "title": {
+          "en": "A freshly voiced hard hammer",
+          "ja": "整音したての硬いハンマー"
+        },
+        "desc": {
+          "en": "Glassy and aggressive: all attack and little body behind it.",
+          "ja": "ガラス質で攻撃的 — アタックばかりで、その後ろの胴体が薄い音です。"
+        },
         "overrides": "fam0.piano.brightness=0.97,fam0.piano.hammer_exponent=3.4",
         "note": "a freshly voiced hard hammer: glassy and aggressive, all attack and little body behind it"
       },
       {
         "name": "decay-short",
+        "title": {
+          "en": "A shorter decay",
+          "ja": "減衰を短く"
+        },
+        "desc": {
+          "en": "Notes dying under the hand: a small upright rather than a concert grand.",
+          "ja": "音が手の下で死んでいきます。コンサートグランドではなく小型アップライトに聴こえるはずです。"
+        },
         "overrides": "fam0.piano.decay_fast_s=0.55,fam0.piano.decay_slow_s=9",
         "note": "notes dying under the hand, which should read as a small upright rather than a concert grand"
       },
       {
         "name": "decay-long",
+        "title": {
+          "en": "A longer decay",
+          "ja": "減衰を長く"
+        },
+        "desc": {
+          "en": "The note hangs and blooms; the risk is an organ tail where a piano should be letting go.",
+          "ja": "音が長く伸びて膨らみます。ピアノが手放すべきところでオルガンの尾を引く危険があります。"
+        },
         "overrides": "fam0.piano.decay_fast_s=2.1,fam0.piano.decay_slow_s=42",
         "note": "a note that hangs and blooms far longer; the risk is a sustaining organ tail where a piano should be letting go"
       },
       {
         "name": "board-forward",
+        "title": {
+          "en": "More soundboard",
+          "ja": "響板を前に"
+        },
+        "desc": {
+          "en": "Bigger and rounder, as if the lid were up and the microphone closer.",
+          "ja": "蓋を開けてマイクを近づけたような、大きく丸い音になります。"
+        },
         "overrides": "fam0.piano.soundboard=0.62",
         "note": "more wood under every note: bigger and rounder, as if the lid were up and the microphone closer"
       },
       {
         "name": "strike-eighth",
+        "title": {
+          "en": "The strike point at an eighth",
+          "ja": "打弦点を弦の1/8へ"
+        },
+        "desc": {
+          "en": "The hammer landing further along the string: the eighth partial notched, the tone rounder and slightly hollow.",
+          "ja": "ハンマーが弦のより先を打ちます。第8倍音が凹み、丸く少し空ろな音色になります。"
+        },
         "overrides": "fam0.piano.strike_position=0.125",
         "note": "the hammer landing further along the string, which should notch the eighth partial and leave the tone rounder and slightly hollow"
       },
       {
         "name": "unison-wide",
+        "title": {
+          "en": "The unisons pulled apart",
+          "ja": "ユニゾンを広げる"
+        },
+        "desc": {
+          "en": "More beating and chorus in the sustain — honky-tonk if it has gone too far.",
+          "ja": "持続音のうなりとコーラス感が増えます。行き過ぎればホンキートンクです。"
+        },
         "overrides": "fam0.piano.detune_cents=3.5",
         "note": "the three unison strings pulled apart: more beating and chorus in the sustain, honky-tonk if it has gone too far"
       },
       {
         "name": "treble-sings",
+        "title": {
+          "en": "A singing treble",
+          "ja": "高音域を歌わせる"
+        },
+        "desc": {
+          "en": "The top two octaves holding on instead of vanishing, which is what a concert grand does.",
+          "ja": "最高音域の2オクターブが消えずに伸びます。コンサートグランドはそう鳴ります。"
+        },
         "overrides": "piano_voice.kTrebleDecayOct=3.2",
         "note": "the top two octaves holding on instead of vanishing, which is what a concert grand does and what this voice may be under-doing"
       }
@@ -67,46 +141,118 @@
     "variants": [
       {
         "name": "tank-3.6",
+        "title": {
+          "en": "A longer reverb tank",
+          "ja": "残響タンクを長く"
+        },
+        "desc": {
+          "en": "The reference carries a 2 s hall the model cannot reach on the power-on tank.",
+          "ja": "リファレンスは2秒のホールを含んでいて、電源投入時のタンクのままでは届きません。"
+        },
         "overrides": "gs_effects.kReverbDecayScale=1.104",
         "note": "the reference carries a 2 s hall the model cannot reach on the power-on tank"
       },
       {
         "name": "hall",
+        "title": {
+          "en": "A longer hall, send trimmed",
+          "ja": "長いホール＋センド戻し"
+        },
+        "desc": {
+          "en": "The longer tank with the organ's own send pulled back, so the extra decay does not also arrive louder.",
+          "ja": "タンクを長くしつつオルガン自身のセンドを絞り、残響が増えると同時に音量まで上がらないようにしたもの。"
+        },
         "overrides": "gs_effects.kReverbDecayScale=1.104,gm_fallback_map.kSendsChurchOrganRev=1.65",
         "note": "the longer tank with the organ's own send pulled back, so the extra decay does not also arrive louder"
       },
       {
         "name": "no-16",
-        "overrides": "church_organ.pipe_organ.ranks0.level=0.02",
-        "note": "the 16' rank all but silent — the registration question the three gated dimensions cannot settle"
+        "title": {
+          "en": "The 16′ rank out",
+          "ja": "16フィートの列を抜く"
+        },
+        "desc": {
+          "en": "The sub-octave rank silenced. Which registration this voice should draw is the ear's to settle — the captures disagree flatly.",
+          "ja": "サブオクターブの列を止めます。どのレジストレーションを引くべきかはキャプチャ同士が真っ向から食い違うので、耳が決める問題です。"
+        },
+        "overrides": "church_organ.pipe_organ.ranks0.level=0",
+        "note": "the 16' rank out. Measured against the two registrations of the capture this voice is fitted to, which have nothing at the sub-octave — 49 and 56 dB under the shipped voice at 130.8 Hz, and a notch against their own neighbouring bands rather than a highpass, so it is the rank and not the capture. THE OTHER TWO CAPTURES OF THIS PROGRAM DISAGREE FLATLY: both carry a 16' at 5 to 6 dB under the fundamental, against 52 and 75 dB under it in the fitted pair. So this is a question about which registration the voice should draw, not about a defect, and it is the ear's to settle. 0.02 was not silent enough to ask the question: it took 26 dB off and left the rank 23-30 dB above the references, where 0 takes 64 dB off and lands below both. Nothing else moves by more than 0.3 dB, so the ear hears one variable"
       },
       {
         "name": "foundations-only",
+        "title": {
+          "en": "Foundations only",
+          "ja": "基音列だけ"
+        },
+        "desc": {
+          "en": "The mixtures drawn out and only 16′, 8′ and 4′ left standing: dark and plain.",
+          "ja": "ミクスチュアを抜き、16′・8′・4′だけを残します。暗く素っ気ない基音のレジストレーションです。"
+        },
         "overrides": "church_organ.pipe_organ.ranks3.level=0.05,church_organ.pipe_organ.ranks4.level=0.03,church_organ.pipe_organ.ranks5.level=0.02",
         "note": "the mixture ranks drawn out and only 16', 8' and 4' left standing: dark and plain, a foundation registration rather than a plenum"
       },
       {
         "name": "mixtures-forward",
+        "title": {
+          "en": "Mixtures forward",
+          "ja": "ミクスチュアを前に"
+        },
+        "desc": {
+          "en": "The foundations pulled back under a full mixture: thin at the bottom, brilliant to the point of shrill.",
+          "ja": "基音を引っ込めてミクスチュアを全開にします。低域が痩せ、高域は金切り声寸前まで輝きます。"
+        },
         "overrides": "church_organ.pipe_organ.ranks0.level=0.15,church_organ.pipe_organ.ranks1.level=0.55,church_organ.pipe_organ.ranks4.level=1,church_organ.pipe_organ.ranks5.level=1",
         "note": "the foundations pulled back under a full mixture: thin at the bottom and brilliant to the point of shrill at the top, which is the opposite registration error to foundations-only"
       },
       {
         "name": "chiff-strong",
+        "title": {
+          "en": "A pronounced chiff",
+          "ja": "発音音（チフ）を強く"
+        },
+        "desc": {
+          "en": "A cough as each pipe speaks — unmistakable on the repeated-note take, and it should articulate the scale.",
+          "ja": "各パイプが鳴り始める際の咳のような音。同音連打のテイクではっきり出て、音階も粒立つはずです。"
+        },
         "overrides": "church_organ.pipe_organ.chiff=0.85,church_organ.pipe_organ.chiff_ms=30",
         "note": "a pronounced cough as each pipe speaks, which should be unmistakable on the tongued take and should articulate the scale"
       },
       {
         "name": "chiff-none",
+        "title": {
+          "en": "No chiff at all",
+          "ja": "発音音をなくす"
+        },
+        "desc": {
+          "en": "Notes appearing out of nothing, which should read as synthetic and unarticulated.",
+          "ja": "無から音が現れます。合成的で、発音の分節がないように聴こえるはずです。"
+        },
         "overrides": "church_organ.pipe_organ.chiff=0",
         "note": "no speech transient at all: notes appearing out of nothing, which should read as synthetic and unarticulated"
       },
       {
         "name": "slow-speech",
+        "title": {
+          "en": "Slow speech",
+          "ja": "発音を遅く"
+        },
+        "desc": {
+          "en": "Each note winding up far more slowly: sluggish and late through the scale and the leap.",
+          "ja": "各音の立ち上がりが大幅に遅くなります。音階と跳躍で鈍く、遅れて感じるはずです。"
+        },
         "overrides": "church_organ.amp_env.attack_ms=320",
         "note": "each note winding up far more slowly, which should feel sluggish and late through the scale and the leap"
       },
       {
         "name": "wind-unsteady",
+        "title": {
+          "en": "Unsteady wind",
+          "ja": "送風を不安定に"
+        },
+        "desc": {
+          "en": "A weaker supply sagging under a chord: more alive, or seasick, depending on what the ear makes of it.",
+          "ja": "和音で送風が落ち込みます。生々しいと取るか、船酔いと取るかは耳次第です。"
+        },
         "overrides": "church_organ.pipe_organ.wind_sag=0.7,church_organ.pipe_organ.tremulant_depth=0.32",
         "note": "a weaker wind supply sagging under a chord: more alive, or seasick, depending on what the ear makes of the movement"
       }
@@ -116,11 +262,27 @@
     "variants": [
       {
         "name": "perc-quiet",
+        "title": {
+          "en": "The ping held back",
+          "ja": "打鍵音を控えめに"
+        },
+        "desc": {
+          "en": "Half the shipped level: whether the ping sits under the registration or on top of it.",
+          "ja": "出荷値の半分。打鍵音がレジストレーションの下に収まるか、上に乗るかを聴きます。"
+        },
         "overrides": "percussive_organ.additive.percussion_level=0.3",
         "note": "half the shipped level: whether the ping sits under the registration or on top of it"
       },
       {
         "name": "perc-loud",
+        "title": {
+          "en": "The ping well forward",
+          "ja": "打鍵音を前に"
+        },
+        "desc": {
+          "en": "How a jazz registration is usually drawn.",
+          "ja": "ジャズのレジストレーションで普通に引かれる出し方です。"
+        },
         "overrides": "percussive_organ.additive.percussion_level=0.9",
         "note": "the ping well forward, which is how a jazz registration is usually drawn"
       }
@@ -130,16 +292,40 @@
     "variants": [
       {
         "name": "drive-least",
+        "title": {
+          "en": "The least drive there is",
+          "ja": "歪みを最小に"
+        },
+        "desc": {
+          "en": "Level-matched: the question of whether any amplifier belongs here at all.",
+          "ja": "音量を揃えてあります。そもそもアンプが要るのか、という問いです。"
+        },
         "overrides": "rock_organ.drive=0.0001,rock_organ.gain=0.4887",
         "note": "the smallest drive that is not off, level-matched - the knob steps straight to tanh(x)/tanh(1), so this is the question of whether ANY amplifier belongs here"
       },
       {
         "name": "drive-mild",
+        "title": {
+          "en": "Mild drive",
+          "ja": "軽く歪ませる"
+        },
+        "desc": {
+          "en": "1.5 dB of crest off a held chord, level-matched so loudness does not decide the choice.",
+          "ja": "保持した和音からクレストを1.5 dB削ります。音量で選ばせないよう揃えてあります。"
+        },
         "overrides": "rock_organ.drive=0.15,rock_organ.gain=0.3323",
         "note": "1.5 dB of crest off a held chord, level-matched so loudness does not decide the choice"
       },
       {
         "name": "drive-hard",
+        "title": {
+          "en": "Hard drive",
+          "ja": "強く歪ませる"
+        },
+        "desc": {
+          "en": "2.9 dB of crest off: the far end of what a rock organ's amplifier plausibly does.",
+          "ja": "クレストを2.9 dB削ります。ロックオルガンのアンプとして考えうる限界側です。"
+        },
         "overrides": "rock_organ.drive=0.5,rock_organ.gain=0.2288",
         "note": "2.9 dB of crest off, level-matched; the far end of what a rock organ's amplifier plausibly does"
       }
@@ -149,61 +335,157 @@
     "variants": [
       {
         "name": "di-fitted",
+        "title": {
+          "en": "Fitted to the DI",
+          "ja": "DIへのフィット"
+        },
+        "desc": {
+          "en": "It closes most of the brightness gap, but one product at the pickup can bound a voice and cannot target it.",
+          "ja": "明るさの差はほぼ埋まります。ただしピックアップ側の製品1つでは音色を挟み込めても、狙いを定めることはできません。"
+        },
         "overrides": "electric_guitar.ks.brightness=0.944272,electric_guitar.ks.exc_brightness=0.326238,electric_guitar.cutoff_hz=1297.44,electric_guitar.ks.vel_to_brightness=0.944272,electric_guitar.ks.pick_position=0.190983",
         "note": "what a fit against the direct reference returns. It closes most of the gap it was aimed at - the voice sits 12 dB over that reference at 2 kHz rising to 40 at 6.35 - and it is a candidate rather than a fit because one product at the pickup can bound a voice and cannot target it: nothing here says whether this reference's darkness is the instrument or the library. These keys reach programs 26 and 27 only; the same fit on the amplified end is filed under p029, which is where it can be heard against a reference that carries a rig"
       },
       {
         "name": "di-fitted-sustained",
+        "title": {
+          "en": "Decay bounded too",
+          "ja": "減衰も実測に合わせる"
+        },
+        "desc": {
+          "en": "Level lands within 0.6 dB of the reference; it costs the note's shape, crest falling 18.4 to 13.8 dB.",
+          "ja": "レベルはリファレンスから0.6 dB以内に入ります。代償は音の形で、クレストが18.4 dBから13.8 dBに落ちます。"
+        },
         "overrides": "electric_guitar.amp_env.attack_ms=0.782119,electric_guitar.amp_env.release_ms=114.878,electric_guitar.cutoff_hz=20739.1,electric_guitar.ks.body_coupling=0.271601,electric_guitar.ks.decay_s=13.929,electric_guitar.ks.decay_stretch=1,electric_guitar.ks.dispersion=0.0784294,electric_guitar.ks.exc_brightness=0.940952,electric_guitar.ks.nail=0.759909,electric_guitar.ks.pick_position=0.170356,electric_guitar.ks.pickup_pos=0.193898,electric_guitar.ks.pluck_style=0.548331,electric_guitar.ks.polarization=0,electric_guitar.ks.release_damp_s=0.155102,electric_guitar.ks.tension_mod=0.28938,electric_guitar.ks.vel_to_brightness=0.718297,electric_guitar.resonance_q=0.835381",
         "note": "the same reference fitted again with the decay bounded to what that reference measures: a median 5.91 dB/s over its own gate, so 10.2 s to 60 dB, against the 4.5 s the table states. It generalises - two held-out notes score 0.877 where the probe scores 0.893 - and it lands the whole-grid level within 0.6 dB of the reference where the shipped voice sits 5.0 dB under. It is a candidate rather than a fit because of what it costs the note's shape: rendered crest falls from 18.4 dB to 13.8 against the reference's own 20.6, which leaves the bound amplifier 2.7 dB of compression where the rig case asks for 3.0, and that gap is the pick transient rather than any knob here - none of the excitation knobs ends at a limit. Letting the decay run free instead reaches 36 s and 8.9 dB of crest, which inverts the rig relation outright"
       },
       {
         "name": "amp-cleanCombo",
+        "title": {
+          "en": "Clean combo",
+          "ja": "クリーンコンボ"
+        },
+        "desc": {
+          "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
+          "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
+        },
         "overrides": "gm_fallback_map.kRigCleanPreset=0,gm_fallback_map.kRigCleanLevelDb=48.34",
         "note": "the same voice through the cleanCombo amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-chimeEdge",
+        "title": {
+          "en": "Chiming edge",
+          "ja": "きらめくエッジ"
+        },
+        "desc": {
+          "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
+          "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
+        },
         "overrides": "gm_fallback_map.kRigCleanPreset=1,gm_fallback_map.kRigCleanLevelDb=40.29",
         "note": "the same voice through the chimeEdge amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-classicCrunch",
+        "title": {
+          "en": "Classic crunch",
+          "ja": "クラシッククランチ"
+        },
+        "desc": {
+          "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
+          "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
+        },
         "overrides": "gm_fallback_map.kRigCleanPreset=2,gm_fallback_map.kRigCleanLevelDb=37.76",
         "note": "the same voice through the classicCrunch amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-tweedGrind",
+        "title": {
+          "en": "Tweed grind",
+          "ja": "ツイードの粗さ"
+        },
+        "desc": {
+          "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
+          "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
+        },
         "overrides": "gm_fallback_map.kRigCleanPreset=3,gm_fallback_map.kRigCleanLevelDb=42.88",
         "note": "the same voice through the tweedGrind amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-britStack",
+        "title": {
+          "en": "British stack",
+          "ja": "英国スタック"
+        },
+        "desc": {
+          "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
+          "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
+        },
         "overrides": "gm_fallback_map.kRigCleanPreset=4,gm_fallback_map.kRigCleanLevelDb=42.52",
         "note": "the same voice through the britStack amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-modernLead",
+        "title": {
+          "en": "Modern lead",
+          "ja": "モダンリード"
+        },
+        "desc": {
+          "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
+          "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
+        },
         "overrides": "gm_fallback_map.kRigCleanPreset=5,gm_fallback_map.kRigCleanLevelDb=30.30",
         "note": "the same voice through the modernLead amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-rectifierChug",
+        "title": {
+          "en": "Rectifier chug",
+          "ja": "レクチファイアのチャグ"
+        },
+        "desc": {
+          "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
+          "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
+        },
         "overrides": "gm_fallback_map.kRigCleanPreset=6,gm_fallback_map.kRigCleanLevelDb=35.67",
         "note": "the same voice through the rectifierChug amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-coldBiasBuzz",
+        "title": {
+          "en": "Cold-bias buzz",
+          "ja": "コールドバイアスの濁り"
+        },
+        "desc": {
+          "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
+          "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
+        },
         "overrides": "gm_fallback_map.kRigCleanPreset=7,gm_fallback_map.kRigCleanLevelDb=57.33",
         "note": "the same voice through the coldBiasBuzz amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-bassDi",
+        "title": {
+          "en": "Bass DI",
+          "ja": "ベースDI"
+        },
+        "desc": {
+          "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
+          "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
+        },
         "overrides": "gm_fallback_map.kRigCleanPreset=8,gm_fallback_map.kRigCleanLevelDb=46.76",
         "note": "the same voice through the bassDi amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-bassRig",
+        "title": {
+          "en": "Bass rig",
+          "ja": "ベースリグ"
+        },
+        "desc": {
+          "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
+          "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
+        },
         "overrides": "gm_fallback_map.kRigCleanPreset=9,gm_fallback_map.kRigCleanLevelDb=39.51",
         "note": "the same voice through the bassRig amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       }
@@ -213,11 +495,27 @@
     "variants": [
       {
         "name": "di-fitted",
+        "title": {
+          "en": "The DI fit, amplified",
+          "ja": "DIフィットをアンプ側で"
+        },
+        "desc": {
+          "en": "What the direct fit costs the program that carries a rig — against this reference it improves rather than breaks it.",
+          "ja": "DIで得たフィットが、リグを背負うこのプログラムで何を払うか。実際にはこのリファレンスに対して悪化ではなく改善します。"
+        },
         "overrides": "overdriven.ks.brightness=0.944272,overdriven.ks.exc_brightness=0.326238,overdriven.cutoff_hz=1297.44,overdriven.ks.vel_to_brightness=0.944272,overdriven.ks.pick_position=0.190983",
         "note": "the direct fit carried onto the copy that voices this program, which is the measurement that says what it costs the amplified end. Against this program's own reference it improves rather than breaks it, at the shipped rig gain and over all 35 notes: brightness 43.60 to 25.27 per cent of the reference centroid, the partial stack 7.28 to 4.45 dB, body under the note 46.69 to 35.27, the double decay 10.43 to 5.56 dB/s, and the five rows whose decays were too far apart to compare all come back. Tone-to-noise is the one that does not follow, 7.80 to 8.25 dB out"
       },
       {
         "name": "di-fitted-drive-0.75",
+        "title": {
+          "en": "The same, driven harder",
+          "ja": "同じフィット＋歪みを強く"
+        },
+        "desc": {
+          "en": "It centres the brightness and buys it with scatter — judge it against di-fitted by ear.",
+          "ja": "明るさは中心に来ますが、代わりにばらつきが増えます。di-fitted と耳で比べてください。"
+        },
         "overrides": "overdriven.ks.brightness=0.944272,overdriven.ks.exc_brightness=0.326238,overdriven.cutoff_hz=1297.44,overdriven.ks.vel_to_brightness=0.944272,overdriven.ks.pick_position=0.190983,gm_fallback_map.kRigCrunchDrive=0.75",
         "note": "the same fit with the crunch rig driven harder, which is what a darker string in front of the same amplifier asks for. It centres brightness on the reference - the signed median goes to +3.21 per cent - and the per-note figure is the best in the sweep at 22.29. It is not free: the partial stack goes back out from 4.45 to 4.93 dB and tone-to-noise from 8.25 to 8.78, so the drive is buying a centre and selling scatter. Judge it against di-fitted by ear"
       }
@@ -227,46 +525,118 @@
     "variants": [
       {
         "name": "ring-2.3x",
+        "title": {
+          "en": "A longer ring",
+          "ja": "余韻を長く"
+        },
+        "desc": {
+          "en": "Fitted to the first 0.25 s rather than to the 60 dB span the shipped value came off.",
+          "ja": "出荷値の基準である60 dB区間ではなく、最初の0.25秒に合わせたものです。"
+        },
         "overrides": "marimba.modal.decay_s=1.02,marimba.modal.decay_stretch=0.78",
         "note": "a longer ring than the one now shipped, fitted to the first 0.25 s rather than to the 60 dB span the table was set from. The two references are not one envelope over two slots, which is what held this back: at the one note their grids share they agree on ring (0.66 against 0.68 s) and on centroid (443 against 440 Hz) and part company everywhere else - h2-h5 sit 25 to 60 dB apart and the attack is 20 ms against 5 - so a rosewood bar of either kind rings about the same at the same pitch and what separates the two instruments is spectrum and strike, both of which each patch voices on its own. One shared note is thin evidence for a library's provenance, so this is a candidate still and the ear still decides."
       },
       {
         "name": "tube-open",
+        "title": {
+          "en": "Resonator tubes opened",
+          "ja": "共鳴管を開ける"
+        },
+        "desc": {
+          "en": "The fundamental should bloom and the wood of the bar itself recede.",
+          "ja": "基音が膨らみ、音板そのものの木の音が引っ込むはずです。"
+        },
         "overrides": "marimba.body_mix=0.75",
         "note": "more resonator tube under every bar: the fundamental should bloom and the wood of the bar itself recede"
       },
       {
         "name": "tube-off",
+        "title": {
+          "en": "The tubes taken away",
+          "ja": "共鳴管を外す"
+        },
+        "desc": {
+          "en": "Thin and dry, much closer to a xylophone.",
+          "ja": "痩せて乾いた、シロフォンにかなり近い音になるはずです。"
+        },
         "overrides": "marimba.body_mix=0",
         "note": "the bars with their tubes taken away, which should come back thin and dry, much closer to a xylophone"
       },
       {
         "name": "hard-mallet",
+        "title": {
+          "en": "A hard rubber mallet",
+          "ja": "硬いゴムのマレット"
+        },
+        "desc": {
+          "en": "More click at the strike, and far more difference between a soft and a hard stroke.",
+          "ja": "打点のクリックが増え、弱打と強打の差がずっと大きくなります。"
+        },
         "overrides": "marimba.modal.strike_brightness=0.95,marimba.modal.vel_to_brightness=0.9",
         "note": "a hard rubber mallet: more click at the strike, and far more difference between a soft and a hard stroke"
       },
       {
         "name": "soft-mallet",
+        "title": {
+          "en": "A heavy yarn mallet",
+          "ja": "重い毛糸のマレット"
+        },
+        "desc": {
+          "en": "Almost nothing but fundamental: a thud without articulation.",
+          "ja": "ほぼ基音だけになります。分節のない鈍い音です。"
+        },
         "overrides": "marimba.modal.strike_brightness=0.32",
         "note": "a heavy yarn mallet: almost nothing but fundamental, thud without articulation"
       },
       {
         "name": "modes-two",
+        "title": {
+          "en": "One tuned partial fewer",
+          "ja": "調律倍音を1本減らす"
+        },
+        "desc": {
+          "en": "The bar loses part of what makes a marimba recognisable — duller and less characterful.",
+          "ja": "マリンバらしさの一部が失われ、鈍く特徴のない音になります。"
+        },
         "overrides": "marimba.modal.num_modes=2",
         "note": "the third tuned partial dropped, so the bar loses part of what makes a marimba recognisable — duller and less characterful"
       },
       {
         "name": "modes-four",
+        "title": {
+          "en": "One tuned partial more",
+          "ja": "調律倍音を1本足す"
+        },
+        "desc": {
+          "en": "A little more wooden click at the strike, with nothing ringing any longer.",
+          "ja": "打点の木の音がわずかに増えるだけで、余韻が伸びるわけではありません。"
+        },
         "overrides": "marimba.modal.num_modes=4,marimba.modal.modes3.ratio=20,marimba.modal.modes3.gain=0.18,marimba.modal.modes3.decay_scale=0.12",
         "note": "a fourth, very short, high partial at the bar's next tuned mode: a little more wooden click at the strike with nothing ringing longer"
       },
       {
         "name": "ring-short",
+        "title": {
+          "en": "The bars damped hard",
+          "ja": "音板を強く抑える"
+        },
+        "desc": {
+          "en": "As if a player were keeping a hand on them.",
+          "ja": "奏者が手を置いたままのような響きになります。"
+        },
         "overrides": "marimba.modal.decay_s=0.36",
         "note": "bars damped much harder, which should sound like a player keeping a hand on them"
       },
       {
         "name": "bar-even",
+        "title": {
+          "en": "An even compass",
+          "ja": "音域で余韻を揃える"
+        },
+        "desc": {
+          "en": "The high bars ringing nearly as long as the low ones, which real bars do not do.",
+          "ja": "高音の音板が低音とほぼ同じだけ鳴ります。実物の音板はそうなりません。"
+        },
         "overrides": "marimba.modal.decay_stretch=0.2",
         "note": "the high bars ringing nearly as long as the low ones, which real bars do not do — the compass should sound uneven on the way up"
       }
@@ -276,6 +646,14 @@
     "variants": [
       {
         "name": "ring-3.4x",
+        "title": {
+          "en": "A longer ring",
+          "ja": "余韻を長く"
+        },
+        "desc": {
+          "en": "Fitted to the first 0.25 s rather than to the 60 dB span the shipped value came off.",
+          "ja": "出荷値の基準である60 dB区間ではなく、最初の0.25秒に合わせたものです。"
+        },
         "overrides": "xylophone.modal.decay_s=1.02,xylophone.modal.decay_stretch=0.87",
         "note": "the same alternative on the xylophone: fitted to the first 0.25 s, where the shipped value comes off the 60 dB span. The two references are not one envelope over two slots, which is what held this back: at the one note their grids share they agree on ring (0.66 against 0.68 s) and on centroid (443 against 440 Hz) and part company everywhere else - h2-h5 sit 25 to 60 dB apart and the attack is 20 ms against 5 - so a rosewood bar of either kind rings about the same at the same pitch and what separates the two instruments is spectrum and strike, both of which each patch voices on its own. One shared note is thin evidence for a library's provenance, so this is a candidate still and the ear still decides."
       }
@@ -285,11 +663,27 @@
     "variants": [
       {
         "name": "even-register",
+        "title": {
+          "en": "One tilt across the compass",
+          "ja": "音域を通して傾きを揃える"
+        },
+        "desc": {
+          "en": "The loop filter opened and the darkening moved to a key-tracking one; it deletes the buzz's noise along with the tilt.",
+          "ja": "ループのフィルタを開き、暗さを鍵盤に追従するフィルタへ移します。傾きと一緒にサワリのノイズまで削れてしまいます。"
+        },
         "overrides": "shamisen.plucked_string.brightness=1.0,shamisen.key_track=1.0,shamisen.cutoff_hz=900",
         "note": "the loop lowpass opened and the darkening moved to a patch filter that tracks the key. The reference's spectral tilt is the same at every note - -11.5 to -14.7 dB per octave of harmonic number over the whole compass - where the model runs -2.2 at the bottom to -18.1 at the top, because its only tone control is fixed in Hz. On the centroid the model goes from 4.12x the reference at the low probe note down to 0.67x at the high one, and this candidate brings that to 1.72x down to 0.99x. The cost is the reason it is a candidate: the model's only between-partial energy is the buzz's high-frequency spray, so darkening it deletes the noise as well as the tilt and tone-to-noise goes from 5 dB cleaner than the reference to 13"
       },
       {
         "name": "flat-velocity",
+        "title": {
+          "en": "Velocity stops brightening",
+          "ja": "強弱で明るさを変えない"
+        },
+        "desc": {
+          "en": "What a fit returns, and not what a bachi does — judge it by ear against the plectrum.",
+          "ja": "フィットが返した値ですが、撥の挙動ではありません。撥の音を思い浮かべて耳で判断してください。"
+        },
         "overrides": "shamisen.plucked_string.vel_to_brightness=0.0557281",
         "note": "velocity almost stops opening the excitation, which is what a fit returns and is not what a bachi does. It improves five readings - the level range from 7.9 to 3.7 dB too wide, the double decay from 73 to 58 dB/s short, tone-to-noise from 5.4 to 1.7, the held decay from 3.4 to 1.2 and the partial stack by a decibel - and takes the brightness median the other way, from 149 to 199 per cent. Judge it by ear against the plectrum, since the measurement cannot say whether a harder stroke should brighten this instrument"
       }
@@ -299,6 +693,14 @@
     "variants": [
       {
         "name": "keyed-filter",
+        "title": {
+          "en": "A key-tracking filter",
+          "ja": "鍵盤に追従するフィルタ"
+        },
+        "desc": {
+          "en": "The patch's own filter closed to 1.15× f0: 20 dB of a 45 dB gap the engine's own knobs cannot reach.",
+          "ja": "パッチ側のフィルタを基音の1.15倍まで閉じます。エンジンのつまみでは届かない45 dBの差のうち、20 dBを埋めます。"
+        },
         "overrides": "tin_whistle.cutoff_hz=300,tin_whistle.key_track=1.0",
         "note": "the patch's own filter closed to 1.15x f0 and tracking the key, which no flute patch does today: h2-h6 goes from -19 to -38 dB and stays flat across the range for 1 dB of level. The reference sits at -70, so this is 20 of a 45 dB gap; every knob on the engine put together gives 7, and the four that give more than 3 collapse the level to a third because they are loop gain rather than timbre"
       }
@@ -308,46 +710,118 @@
     "variants": [
       {
         "name": "vibraslap-thinned",
+        "title": {
+          "en": "The vibraslap thinned",
+          "ja": "ビブラスラップを薄く"
+        },
+        "desc": {
+          "en": "Sparser collisions and the plate pulled back; it opens the velocity range further than either reference kit does.",
+          "ja": "衝突を疎にして板を引っ込めます。強弱の幅はリファレンスのどちらよりも開いてしまいます。"
+        },
         "overrides": "d058.amp_env.attack_ms=0.166825,d058.amp_env.decay_ms=2469.47,d058.amp_env.sustain=0.326238,d058.cutoff_hz=5419.45,d058.percussion.contact=3.77709,d058.percussion.contact_ms=0.145638,d058.percussion.noise_cutoff_hz=1570.8,d058.percussion.noise_gain=0.944272,d058.percussion.noise_q=1.33667,d058.percussion.phisem_beans=1.18722,d058.percussion.phisem_energy_ms=66.6717,d058.percussion.phisem_res_hz=1802.29,d058.percussion.phisem_res_q=3.22451,d058.percussion.plate_gain=3.27864,d058.percussion.plate_hf_ratio=0.621854",
         "note": "the vibraslap's rattle thinned out - the one key in the kit whose decay length already matches while its crest sits 10.5 dB under both references, so what is wrong is the shape inside the envelope and not its length. A fit sparsens the collisions and pulls the plate back, which is the mechanism the residual pointed at, and takes crest from 5.1x the reference kits' spread to 2.3x, brightness from 1.5x to 0.6x, attack from 1.0x to 0.4x and level from 1.8x to 1.3x. The cost is the velocity range, which goes from 0.8x to 1.3x and is the only reading that leaves the spread: hear whether a harder strike should open this instrument that much before it lands"
       },
       {
         "name": "scrapers-speak",
+        "title": {
+          "en": "Shakers given a rise time",
+          "ja": "シェイカーに立ち上がり"
+        },
+        "desc": {
+          "en": "Cabasa, maracas, long guiro and both cuicas take 11 to 30 ms to speak on both reference kits — but a 40 ms swell turns a chk into a shh.",
+          "ja": "カバサ・マラカス・長いギロ・クイーカ2種は、リファレンス2組とも11〜30 msかけて鳴り始めます。ただし40 msかけると「チャッ」が「シャー」に変わります。"
+        },
         "overrides": "d069.amp_env.attack_ms=40,d070.amp_env.attack_ms=15,d074.amp_env.attack_ms=41,d078.amp_env.attack_ms=36,d079.amp_env.attack_ms=25",
         "note": "the cabasa, maracas, long guiro and both cuicas given a rise time. Their envelope attack is the shaker and scraper helpers' own 0.5 ms literal, shared by all nine members and never fitted against anything, where both reference kits agree these instruments take 11 to 30 ms to speak - the cabasa at 30.0 and 29.2. Each is set to a third above the nearer reference edge, which takes the five notes' attack from 7.8x the reference kits' spread to 2.4x and the whole kit's attack p90 from 24.9 ms to 19.2, with the level and the per-octave decay marginally better and nothing leaving the spread. Three of the nine are deliberately untouched: the short guiro already measures 20.0 ms against 20.5 because the collision density ramps it without the envelope, and the tambourine and vibraslap are inside. What this cannot settle is character - a 40 ms swell turns the cabasa's chk into a shh, and the references may be recording a player's gesture rather than the instrument"
       },
       {
         "name": "crash2-and-china-reopened",
+        "title": {
+          "en": "Crash 2 and china reopened",
+          "ja": "暗いシンバル2枚を開く"
+        },
+        "desc": {
+          "en": "Both sit 22 to 31 dB dark against the reference. Whether a wash opened this far is the one the kit wants is the ear's.",
+          "ja": "どちらもリファレンスより22〜31 dB暗く沈んでいます。ここまで開いた鳴りがこのキットの求めるものかは、耳が決めます。"
+        },
         "overrides": "d057.cutoff_hz=1752.96,d057.gain=0.964,d052.cutoff_hz=2464.29,d052.gain=3.27",
         "note": "the second crash and the china cymbal given back a filter corner. Both carry one under 600 Hz - 368 and 515 Hz against 3.0 to 5.2 kHz on the five cymbals the same factory call builds - and both measure 22 to 31 dB dark in band tilt and 35 to 67 percent low in brightness, against a reference whose two crashes sit within 2 percent of each other in centroid. The corner cannot be moved on its own: on these two voices it is also the level, so opening it raises the note about 31 dB and the level fence charges more for that move than the corrected spectrum is worth, which is why a search over the corner alone walks it further shut. Fitted with the corner and the gain together, then the gain set to bring the level back to the reference, which every other term is blind to - at a fixed corner the whole term set is bit-identical across the gain axis. Crash 2 goes from 28-31 dB dark to within 2.5 dB, brightness from -63/-67 percent to -13/-18, band shape 19.1 to 11.5 and level -16.5/-6.5 dB to -2.1/+1.0; the china from 22-25 dB dark to within 6 dB, brightness from -35/-41 percent to within 5, band shape 19.1 to 9.6 and level -18.4/-13.1 dB to -2.0/+1.3. Held-out velocities generalise on both. Two residuals are untouched and are not this: the crash still speaks 48 ms early at the softest hits, and the china's per-octave decay stays 11 dB/s off there. What this cannot settle is whether a crash opened this far is the one the kit wants - it is a wash the shipped values had removed, so there is nothing to compare it against by ear until it is heard"
       },
       {
         "name": "snare-wires-open",
+        "title": {
+          "en": "The snares slackened",
+          "ja": "スナッピーを緩める"
+        },
+        "desc": {
+          "en": "Left rattling under the head, so the flam and the roll should smear into one sizzle.",
+          "ja": "ヘッドの下で鳴り続けるので、フラムとロールが一続きのジリジリに溶けるはずです。"
+        },
         "overrides": "d038.percussion.wire_buzz=0.6,d038.percussion.wire_decay_ms=150,d038.percussion.wire_threshold=0.05",
         "note": "the snares slackened and left rattling under the head, so the flam and the roll should smear into one sizzle"
       },
       {
         "name": "snare-wires-off",
+        "title": {
+          "en": "The snares thrown off",
+          "ja": "スナッピーを外す"
+        },
+        "desc": {
+          "en": "The drum should read as a small tom and the flam as two separate pitched hits.",
+          "ja": "小さなタムのように聴こえ、フラムは音程のある2打に分かれるはずです。"
+        },
         "overrides": "d038.percussion.wire_buzz=0",
         "note": "the snares thrown off: the drum should read as a small tom and the flam as two separate pitched hits"
       },
       {
         "name": "hats-tight",
+        "title": {
+          "en": "The hats clamped tight",
+          "ja": "ハットを固く締める"
+        },
+        "desc": {
+          "en": "The sixteenths dry and separated, and the choke barely registering.",
+          "ja": "16分が乾いて粒立ち、チョークはほとんど効いて聴こえないはずです。"
+        },
         "overrides": "d042.amp_env.decay_ms=95,d042.percussion.noise_decay_ms=280,d046.amp_env.decay_ms=420,d046.percussion.noise_decay_ms=180",
         "note": "both hats clamped much tighter, so the sixteenths should come back dry and separated and the choke should barely register"
       },
       {
         "name": "hats-washy",
+        "title": {
+          "en": "The hats left loose",
+          "ja": "ハットを緩める"
+        },
+        "desc": {
+          "en": "The sixteenths blurring into one another and the open hat dominating the choke.",
+          "ja": "16分が互いに滲み、オープンがチョークを覆うはずです。"
+        },
         "overrides": "d042.amp_env.decay_ms=320,d042.percussion.noise_decay_ms=950,d046.amp_env.decay_ms=1400,d046.percussion.noise_decay_ms=700",
         "note": "a loose pair of hats, so the sixteenths should blur into one another and the open hat should dominate the choke"
       },
       {
         "name": "toms-ring",
+        "title": {
+          "en": "The toms left ringing",
+          "ja": "タムを鳴らしたままに"
+        },
+        "desc": {
+          "en": "Concert toms under the fill rather than gated studio toms.",
+          "ja": "フィルの下が、ゲートされたスタジオタムではなくコンサートタムになります。"
+        },
         "overrides": "d041.amp_env.decay_ms=140,d043.amp_env.decay_ms=147,d045.amp_env.decay_ms=98,d047.amp_env.decay_ms=125,d048.amp_env.decay_ms=840,d050.amp_env.decay_ms=152",
         "note": "every tom allowed to ring on into the next one: concert toms under the fill rather than gated studio toms"
       },
       {
         "name": "kick-deep",
+        "title": {
+          "en": "A deeper kick",
+          "ja": "キックを深く"
+        },
+        "desc": {
+          "en": "A longer downward sweep with more shell behind it: bigger and boomier under the groove.",
+          "ja": "下降スイープを長く、胴鳴りを厚くします。グルーヴの下でより大きく重くなります。"
+        },
         "overrides": "d036.percussion.pitch_drop=2.6,d036.percussion.pitch_drop_ms=70,d036.percussion.mode_decay_s=0.33,d036.percussion.shell_t60_s0=0.2",
         "note": "a longer downward sweep with more shell behind it, so the kick should sit bigger and boomier under the groove"
       }

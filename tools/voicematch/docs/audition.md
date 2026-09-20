@@ -74,12 +74,15 @@ The passage moves by **whole octaves** to reach a program's compass, and only wh
 
 "Is this constant better at 0 or at 4" is not a question the metrics can settle, and the answer has to be heard against the same phrase and the same reference. Two ways to put one on a page.
 
-**Recorded, per voice — `calibrations.json`.** A voice keeps its own ordered list of named settings, each an override string and a line saying what it is for:
+**Recorded, per voice — `calibrations.json`.** A voice keeps its own ordered list of named settings, each an override string, a title and a line in both languages, and the long rationale:
 
 ```json
 "p073-flute": {
   "variants": [
     { "name": "breathier",
+      "title": { "en": "More air in the attack", "ja": "アタックに息を足す" },
+      "desc": { "en": "The breath should be audible before the pitch arrives.",
+                "ja": "音程が来る前に息が聴こえるはずです。" },
       "overrides": "concert_flute.flute.breath_noise=0.9",
       "note": "not enough air in the attack" }
   ]
@@ -88,11 +91,15 @@ The passage moves by **whole octaves** to reach a program's compass, and only wh
 
 The key is the voice's slug — the same string the directory is called, the picker shows and the address carries. A key matching no voice in the bank is a typo, and `test_calibration.py` fails on it; a run also names any recorded voice it did not resolve, before several hundred renders start.
 
+**`title` and `desc` are required in both languages, and `calibration.py` refuses the file without them.** A name has to be an identifier and an identifier is not a sentence: `foundations-only` says which knob moved and never says what it is for, so a row of nine candidates is nine guesses from truncated keys. Enforced at load rather than by a test, because the failure it prevents is silent — a button with no title falls back to its own key, and nothing in the render says a title was meant to be there. `note` is separate and stays one language: it is the measurement and what it ruled out, read once by whoever reopens the question, where `desc` is one line for whoever is listening now.
+
+Both are resolved at serve time as well as baked at render time — `serve.py` folds them into a manifest that has none — so the pages already rendered carry today's words without one of them being rendered again.
+
 The file is tracked, because an override string is knob names and numbers and no part of it names a commercial product. That is what makes a calibration question reopenable from a clone, which a `--variant` flag in somebody's shell history is not. `autofit.py --out result.json` writes a paste-ready override string, which is where most entries come from.
 
 **`--calibrations`** is what reads it — off by default, since every setting is another render of every take and the override layer needs a `-DBUILD_TUNING=ON` library. `--calibrations FILE` reads a different one.
 
-**Ad-hoc, for the run — `--variant NAME=OVERRIDES`.** Repeatable, and applied to every voice in the run. Recorded settings come first on the page and these follow. A name declared in both is refused rather than resolved: the page labels its version buttons with the name and nothing else, so whichever won, a note written about it would name the other just as well.
+**Ad-hoc, for the run — `--variant NAME=OVERRIDES`.** Repeatable, and applied to every voice in the run. Recorded settings come first on the page and these follow. It carries no title and no line — a shell argument cannot hold two languages and the person who typed it is the person listening — so its button falls back to the name, which is the state a recorded setting is refused for. A name declared in both is refused rather than resolved: the name is the address a render is reached at, so whichever won, a note written about it would name the other just as well.
 
 A setting with an empty override string is a legitimate thing to want — a second copy of the baseline, which is what blind mode needs a control for.
 
