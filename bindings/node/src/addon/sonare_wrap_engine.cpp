@@ -53,6 +53,12 @@ static_assert(std::size(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
 constexpr const char* kArticulations[] = {"poly", "mono-retrigger", "mono-legato"};
 static_assert(std::size(kArticulations) == SONARE_ARTICULATION_COUNT,
               "Node Articulation table drifted from C");
+constexpr const char* kMpeDimensions[] = {"bend", "pressure", "timbre"};
+static_assert(std::size(kMpeDimensions) == SONARE_MPE_DIMENSION_COUNT,
+              "MPE dimension names out of step with the C enum");
+constexpr const char* kNoteTrackings[] = {"last", "lowest", "highest", "all"};
+static_assert(std::size(kNoteTrackings) == SONARE_NOTE_TRACKING_COUNT,
+              "note tracking names out of step with the C enum");
 
 bool ReadControllerBinding(Napi::Env env, const Napi::Value& value, SonareControllerBinding* out) {
   if (!value.IsObject()) {
@@ -279,6 +285,9 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
               "setControllerVelocityMeaningful"),
           InstanceMethod<&RealtimeEngineWrap::ControllerVelocityMeaningful>(
               "controllerVelocityMeaningful"),
+          InstanceMethod<&RealtimeEngineWrap::SetControllerNoteTracking>(
+              "setControllerNoteTracking"),
+          InstanceMethod<&RealtimeEngineWrap::ControllerNoteTracking>("controllerNoteTracking"),
           InstanceMethod<&RealtimeEngineWrap::SetArticulation>("setArticulation"),
           InstanceMethod<&RealtimeEngineWrap::Articulation>("articulation"),
           InstanceMethod<&RealtimeEngineWrap::LegatoFallbackCount>("legatoFallbackCount"),
@@ -1169,6 +1178,48 @@ Napi::Value RealtimeEngineWrap::ControllerVelocityMeaningful(const Napi::Callbac
                sonare_engine_controller_velocity_meaningful(engine_, destination_id, &meaningful));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Boolean::New(env, meaningful != 0);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetControllerNoteTracking(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  // Both are required rather than defaulted, for the reason the C ABI refuses
+  // an ordinal past either enum instead of clamping it: a misspelling that
+  // resolved to the default would configure a dimension the caller never named
+  // with a rule they never asked for, and neither shows until two notes share a
+  // member channel.
+  int dimension = SONARE_MPE_DIMENSION_BEND;
+  if (!sonare_node::SynthEnumValue(env, info[1], kMpeDimensions, SONARE_MPE_DIMENSION_COUNT,
+                                   "dimension", &dimension)) {
+    return env.Undefined();
+  }
+  int tracking = SONARE_NOTE_TRACKING_LAST;
+  if (!sonare_node::SynthEnumValue(env, info[2], kNoteTrackings, SONARE_NOTE_TRACKING_COUNT,
+                                   "tracking", &tracking)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_controller_note_tracking(engine_, destination_id, dimension,
+                                                               tracking));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::ControllerNoteTracking(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  int dimension = SONARE_MPE_DIMENSION_BEND;
+  if (!sonare_node::SynthEnumValue(env, info[1], kMpeDimensions, SONARE_MPE_DIMENSION_COUNT,
+                                   "dimension", &dimension)) {
+    return env.Undefined();
+  }
+  int tracking = 0;
+  ThrowIfError(
+      env, sonare_engine_controller_note_tracking(engine_, destination_id, dimension, &tracking));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return sonare_node::SynthEnumName(env, tracking, kNoteTrackings, SONARE_NOTE_TRACKING_COUNT);
   SONARE_NODE_CATCH(env)
 }
 

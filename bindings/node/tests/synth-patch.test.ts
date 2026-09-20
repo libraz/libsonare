@@ -4,6 +4,8 @@ import {
   BUILTIN_SYNTH_WAVEFORMS,
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
+  MPE_DIMENSIONS,
+  NOTE_TRACKINGS,
   Project,
   RealtimeEngine,
   SYNTH_BODY_TYPES,
@@ -106,6 +108,8 @@ describe('NativeSynth preset catalog', () => {
       controllerInputs: [...CONTROLLER_INPUTS],
       controllerAxes: [...CONTROLLER_AXES],
       articulations: [...ARTICULATIONS],
+      mpeDimensions: [...MPE_DIMENSIONS],
+      noteTrackings: [...NOTE_TRACKINGS],
     });
 
     for (const [ordinal, name] of SYNTH_ENGINE_MODES.entries()) {

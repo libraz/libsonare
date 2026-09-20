@@ -491,6 +491,10 @@ Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_AXIS)));
   out.Set("articulations",
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_ARTICULATION)));
+  out.Set("mpeDimensions",
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MPE_DIMENSION)));
+  out.Set("noteTrackings",
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_NOTE_TRACKING)));
   return out;
   SONARE_NODE_CATCH(env)
 }

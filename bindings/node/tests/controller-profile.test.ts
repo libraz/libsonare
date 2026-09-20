@@ -84,6 +84,25 @@ describe('RealtimeEngine controller bindings', () => {
     engine.destroy();
   });
 
+  it('round-trips a note-tracking rule per dimension', () => {
+    const engine = reedEngine();
+    // Per dimension, so setting one leaves the other two on their default.
+    engine.setControllerNoteTracking(0, 'pressure', 'highest');
+    expect(engine.controllerNoteTracking(0, 'pressure')).toBe('highest');
+    expect(engine.controllerNoteTracking(0, 'bend')).toBe('last');
+    expect(engine.controllerNoteTracking(0, 'timbre')).toBe('last');
+    engine.setControllerNoteTracking(0, 'bend', 'all');
+    expect(engine.controllerNoteTracking(0, 'bend')).toBe('all');
+    expect(engine.controllerNoteTracking(0, 'pressure')).toBe('highest');
+    // A misspelling is refused rather than resolved to a default, which would
+    // configure a dimension the caller never named.
+    // @ts-expect-error unknown dimension name is rejected at runtime
+    expect(() => engine.setControllerNoteTracking(0, 'no-such-dimension', 'last')).toThrow();
+    // @ts-expect-error unknown tracking name is rejected at runtime
+    expect(() => engine.setControllerNoteTracking(0, 'bend', 'no-such-rule')).toThrow();
+    engine.destroy();
+  });
+
   it('installs a named preset and refuses an unknown one', () => {
     const engine = reedEngine();
     engine.setControllerProfile(0, 'breath');

@@ -30,6 +30,8 @@ import type {
   EqBandInput,
   FileClipPageProviderOptions,
   MidiCcBindOptions,
+  MpeDimension,
+  NoteTracking,
   PanLawInput,
   PanMode,
   ProjectMidiCcBinding,
@@ -949,6 +951,43 @@ export class RealtimeEngine {
 
   controllerVelocityMeaningful(destinationId: number): boolean {
     return this.native.controllerVelocityMeaningful(destinationId);
+  }
+
+  /**
+   * Say which note a value addressed to a whole MIDI channel belongs to when
+   * several are sounding on it, for one per-note dimension
+   * ({@link MPE_DIMENSIONS}, {@link NOTE_TRACKINGS}).
+   *
+   * Set per dimension because the useful answers differ: pressure following the
+   * newest note while bend reaches every one is a real configuration, not a
+   * mistake. MPE poses this question and declines to answer it, so this is a
+   * choice rather than a rule — and it is read only inside an MPE zone, and
+   * only while more than one note is sounding on the channel, which an MPE
+   * sender avoids by giving each note its own member channel.
+   *
+   * Both arguments are required and are a name or its C ordinal; an unknown
+   * spelling throws rather than resolving to a default. A destination with no
+   * instrument bound throws `InvalidParameter`; one whose instrument holds no
+   * controller profile throws `NotSupported`.
+   */
+  setControllerNoteTracking(
+    destinationId: number,
+    dimension: MpeDimension | number,
+    tracking: NoteTracking | number,
+  ): void {
+    this.native.setControllerNoteTracking(destinationId, dimension, tracking);
+  }
+
+  /**
+   * Read back {@link RealtimeEngine.setControllerNoteTracking} for one
+   * dimension. An ordinal this binding's name table does not cover comes back
+   * as the number itself rather than as a wrong name.
+   */
+  controllerNoteTracking(
+    destinationId: number,
+    dimension: MpeDimension | number,
+  ): NoteTracking | number {
+    return this.native.controllerNoteTracking(destinationId, dimension);
   }
 
   /**
