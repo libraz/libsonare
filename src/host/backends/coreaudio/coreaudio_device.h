@@ -35,6 +35,30 @@ class CoreAudioDevice final : public AudioDevice {
   CoreAudioDevice& operator=(const CoreAudioDevice&) = delete;
 
   bool open(const AudioStreamConfig& config, AudioDeviceCallback* callback) override;
+
+  /// CONTROL thread: binds the device @p device_id names rather than the system
+  /// default. 0 selects the default, so open() is this with 0. Allocates while
+  /// resolving the device; never called from the audio thread.
+  bool open_device(uint32_t device_id, const AudioStreamConfig& config,
+                   AudioDeviceCallback* callback);
+
+  /// CONTROL thread: how many devices expose at least one output channel. The
+  /// index the two accessors below take is into that filtered list, not into
+  /// the system's full device list, so an input-only interface does not shift
+  /// the outputs a host displays.
+  static size_t output_device_count();
+
+  /// CONTROL thread: the opaque id of output device @p index, which is what
+  /// open_device() accepts. 0 on a bad index, which is also the value meaning
+  /// "the system default" there -- an unreachable index cannot be distinguished
+  /// from a deliberate default, so check the count first.
+  static uint32_t output_device_id(size_t index);
+
+  /// CONTROL thread: writes output device @p index's display name into @p out
+  /// as NUL-terminated UTF-8, truncated to @p capacity. False on a bad index, a
+  /// zero capacity, or a name the device does not publish; @p out is left
+  /// untouched in that case.
+  static bool output_device_name(size_t index, char* out, size_t capacity);
   bool start() override;
   void stop() noexcept override;
   void close() noexcept override;

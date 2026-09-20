@@ -34,6 +34,67 @@ UInt32 read_device_uint32(AudioObjectID device, AudioObjectPropertySelector sele
   return value;
 }
 
+/// Total output channels the device publishes across its output streams, or 0
+/// when it publishes none. This is what separates an output device from an
+/// input-only interface; CoreAudio itself lists both together.
+UInt32 device_output_channel_count(AudioObjectID device) noexcept {
+  AudioObjectPropertyAddress address{kAudioDevicePropertyStreamConfiguration,
+                                     kAudioObjectPropertyScopeOutput,
+                                     kAudioObjectPropertyElementMain};
+  UInt32 size = 0;
+  if (!ok(AudioObjectGetPropertyDataSize(device, &address, 0, nullptr, &size)) || size == 0) {
+    return 0;
+  }
+  std::vector<uint8_t> storage(size, 0);
+  auto* list = reinterpret_cast<AudioBufferList*>(storage.data());
+  if (!ok(AudioObjectGetPropertyData(device, &address, 0, nullptr, &size, list))) return 0;
+  UInt32 channels = 0;
+  for (UInt32 i = 0; i < list->mNumberBuffers; ++i) channels += list->mBuffers[i].mNumberChannels;
+  return channels;
+}
+
+/// Every device with at least one output channel, in CoreAudio's own order.
+/// CONTROL thread only: it allocates, and the list changes as devices come and
+/// go, so an index is only meaningful against the count read beside it.
+std::vector<AudioObjectID> enumerate_output_devices() {
+  AudioObjectPropertyAddress address{kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal,
+                                     kAudioObjectPropertyElementMain};
+  UInt32 size = 0;
+  if (!ok(AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &address, 0, nullptr, &size)) ||
+      size == 0) {
+    return {};
+  }
+  std::vector<AudioObjectID> all(size / sizeof(AudioObjectID), kAudioObjectUnknown);
+  if (!ok(AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size,
+                                     all.data()))) {
+    return {};
+  }
+  std::vector<AudioObjectID> outputs;
+  for (const AudioObjectID device : all) {
+    if (device != kAudioObjectUnknown && device_output_channel_count(device) > 0) {
+      outputs.push_back(device);
+    }
+  }
+  return outputs;
+}
+
+/// Copies a device's display name as UTF-8. False leaves @p out untouched.
+bool copy_device_name(AudioObjectID device, char* out, size_t capacity) {
+  if (device == kAudioObjectUnknown || out == nullptr || capacity == 0) return false;
+  AudioObjectPropertyAddress address{kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal,
+                                     kAudioObjectPropertyElementMain};
+  CFStringRef name = nullptr;
+  UInt32 size = sizeof(name);
+  if (!ok(AudioObjectGetPropertyData(device, &address, 0, nullptr, &size, &name)) ||
+      name == nullptr) {
+    return false;
+  }
+  const bool copied =
+      CFStringGetCString(name, out, static_cast<CFIndex>(capacity), kCFStringEncodingUTF8);
+  CFRelease(name);
+  return copied;
+}
+
 /// Read the device's actual nominal sample rate (its own hardware clock rate,
 /// which the AU's stream-format negotiation does not necessarily match).
 /// Returns 0.0 when the property is absent, malformed, or non-finite.
@@ -209,7 +270,26 @@ CoreAudioDevice::CoreAudioDevice() : impl_(std::make_unique<Impl>()) {}
 
 CoreAudioDevice::~CoreAudioDevice() { close(); }
 
+size_t CoreAudioDevice::output_device_count() { return enumerate_output_devices().size(); }
+
+uint32_t CoreAudioDevice::output_device_id(size_t index) {
+  const std::vector<AudioObjectID> devices = enumerate_output_devices();
+  if (index >= devices.size()) return 0;
+  return static_cast<uint32_t>(devices[index]);
+}
+
+bool CoreAudioDevice::output_device_name(size_t index, char* out, size_t capacity) {
+  const std::vector<AudioObjectID> devices = enumerate_output_devices();
+  if (index >= devices.size()) return false;
+  return copy_device_name(devices[index], out, capacity);
+}
+
 bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback* callback) {
+  return open_device(0, config, callback);
+}
+
+bool CoreAudioDevice::open_device(uint32_t device_id, const AudioStreamConfig& config,
+                                  AudioDeviceCallback* callback) {
   if (callback == nullptr || impl_->unit != nullptr || !std::isfinite(config.sample_rate) ||
       config.sample_rate <= 0.0 || config.max_block_size <= 0 || config.num_output_channels <= 0 ||
       config.num_input_channels > 0) {
@@ -233,15 +313,20 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
   if (comp == nullptr) return false;
   if (!ok(AudioComponentInstanceNew(comp, &impl_->unit)) || impl_->unit == nullptr) return false;
 
-  // Bind the default output device and record its id for latency queries.
-  AudioObjectPropertyAddress default_out{kAudioHardwarePropertyDefaultOutputDevice,
-                                         kAudioObjectPropertyScopeGlobal,
-                                         kAudioObjectPropertyElementMain};
-  UInt32 device_size = sizeof(impl_->device_id);
+  // Bind the requested device -- or the system default when none was named --
+  // and record its id for latency queries.
   impl_->device_id = kAudioObjectUnknown;
-  if (!ok(AudioObjectGetPropertyData(kAudioObjectSystemObject, &default_out, 0, nullptr,
-                                     &device_size, &impl_->device_id))) {
-    impl_->device_id = kAudioObjectUnknown;
+  if (device_id != 0) {
+    impl_->device_id = static_cast<AudioObjectID>(device_id);
+  } else {
+    AudioObjectPropertyAddress default_out{kAudioHardwarePropertyDefaultOutputDevice,
+                                           kAudioObjectPropertyScopeGlobal,
+                                           kAudioObjectPropertyElementMain};
+    UInt32 device_size = sizeof(impl_->device_id);
+    if (!ok(AudioObjectGetPropertyData(kAudioObjectSystemObject, &default_out, 0, nullptr,
+                                       &device_size, &impl_->device_id))) {
+      impl_->device_id = kAudioObjectUnknown;
+    }
   }
   if (impl_->device_id != kAudioObjectUnknown) {
     AudioUnitSetProperty(impl_->unit, kAudioOutputUnitProperty_CurrentDevice,
@@ -265,8 +350,23 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
     return false;
   }
 
-  // Request the negotiated maximum block size.
+  // Ask the DEVICE for the block size before capping the unit's slice. The two
+  // are different properties, and a cap below the buffer the device is already
+  // running silences it: AudioUnitInitialize, AudioOutputUnitStart and
+  // is_running() all still report success while render is never invoked.
   auto max_frames = static_cast<UInt32>(config.max_block_size);
+  if (impl_->device_id != kAudioObjectUnknown) {
+    AudioObjectPropertyAddress buffer_frames{kAudioDevicePropertyBufferFrameSize,
+                                             kAudioDevicePropertyScopeOutput,
+                                             kAudioObjectPropertyElementMain};
+    AudioObjectSetPropertyData(impl_->device_id, &buffer_frames, 0, nullptr, sizeof(max_frames),
+                               &max_frames);
+    // A device may refuse the request or clamp it into its own range, so the
+    // cap follows what it settled on rather than what was asked for.
+    const UInt32 settled = read_device_uint32(impl_->device_id, kAudioDevicePropertyBufferFrameSize,
+                                              kAudioDevicePropertyScopeOutput);
+    if (settled > max_frames) max_frames = settled;
+  }
   if (!ok(AudioUnitSetProperty(impl_->unit, kAudioUnitProperty_MaximumFramesPerSlice,
                                kAudioUnitScope_Global, 0, &max_frames, sizeof(max_frames)))) {
     close();
