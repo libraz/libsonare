@@ -2296,8 +2296,8 @@
       "patch": "tubular_bells",
       "engine": "modal",
       "capture": "tubular_bells",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
@@ -2310,13 +2310,12 @@
           "gated": 8,
           "excused": [
             "balance",
+            "damper",
             "stereo",
             "tnr"
           ],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -2336,7 +2335,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p014b001-tubular-bells",
@@ -2564,11 +2563,11 @@
           "canonical": 13,
           "gated": 10,
           "excused": [
+            "damper",
             "stereo"
           ],
           "gaps": [
-            "stretch",
-            "damper"
+            "stretch"
           ],
           "complete": false
         },
@@ -2592,7 +2591,7 @@
         "structure": null,
         "music": null
       },
-      "next": "2 canonical dimension(s) neither gated nor excused: stretch, damper"
+      "next": "1 canonical dimension(s) neither gated nor excused: stretch"
     },
     {
       "slug": "p016-drawbar-organ",
@@ -4395,12 +4394,13 @@
         "coverage": {
           "canonical": 13,
           "gated": 9,
-          "excused": [],
+          "excused": [
+            "damper"
+          ],
           "gaps": [
             "decay",
             "aftersound",
-            "doubling",
-            "damper"
+            "doubling"
           ],
           "complete": false
         },
@@ -4423,7 +4423,7 @@
         "structure": null,
         "music": null
       },
-      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
+      "next": "3 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling"
     },
     {
       "slug": "p029-overdriven-guitar",

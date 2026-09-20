@@ -45,7 +45,9 @@
   ],
   "_dimensions": "The slot is a palm-muted steel string source. `decay` and its two stages are the dimensions a plucked voice lives or dies on, since everything audible after the first few milliseconds is a fall, and they are read off a gate long enough to contain one. `stereo` is gated rather than excused because this slot does render an image: its two channels are not identical.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a plucked string names every melodic dimension - it has a free decay, a two-stage fall, a damper and a dynamic range, and the stiff-string ladder means something - so anything not gated here has to be argued here.",
-  "dimensions_na": {},
+  "dimensions_na": {
+    "damper": "all 35 rows are already 45 dB under peak before the key lifts, so the field is never computed on any of them and not one row is capped - the note is over, rather than running past the tail. That is the articulation: a muted note is stopped by the hand at the strike, so there is no release left for a damper to arrive during, and a model fitted here would be fitted to acquire one. The stronger form of the same exclusion the clean direct capture makes, where the string was at least still audibly continuing"
+  },
   "dimensions": [
     "stretch",
     "decay",
@@ -54,7 +56,6 @@
     "body",
     "attack",
     "stereo",
-    "damper",
     "balance",
     "centroid_pct",
     "tnr",

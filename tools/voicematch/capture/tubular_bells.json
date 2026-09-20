@@ -46,7 +46,8 @@
   "dimensions_na": {
     "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
     "tnr": "a struck tube's partials are not a harmonic series, so the measurement counts them as noise by construction: only 0.363 of this slot's energy falls on the played key's series, which is the instrument rather than a defect",
-    "balance": "the same fact as `tnr` above, read on the ladder instead of on the noise: the model's modes sit at 0.50, 1.00, 2.76 and 5.40 times the played note at note 65, so h2-h6 reads its own silence and the delta is unscorable. Not an argument that the two agree - the reference's own modes are at 3.01, 4.98 and 8.13 times the played note, a set `modes` can compare and this dimension cannot"
+    "balance": "the same fact as `tnr` above, read on the ladder instead of on the noise: the model's modes sit at 0.50, 1.00, 2.76 and 5.40 times the played note at note 65, so h2-h6 reads its own silence and the delta is unscorable. Not an argument that the two agree - the reference's own modes are at 3.01, 4.98 and 8.13 times the played note, a set `modes` can compare and this dimension cannot",
+    "damper": "not one of the 35 rows carries a usable release: 20 are capped at 495 ms, which is the 500 ms tail rather than the bell, and the other 15 are already 45 dB under peak before the key lifts, so the field is never computed on them. A bell rung and then damped needs a tail long enough to contain the damping; lengthening `tail` and re-measuring would settle it, and nothing short of that can"
   },
   "dimensions": [
     "decay",
@@ -54,7 +55,6 @@
     "doubling",
     "body",
     "attack",
-    "damper",
     "centroid_pct",
     "vel_range",
     "register"

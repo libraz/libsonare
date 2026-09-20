@@ -44,7 +44,8 @@
   "_dimensions": "The slot is a struck string, not a bar: `toneclass.py` classes GM 15 as struck-string because libsonare voices it on Karplus-Strong, so `stretch` is canonical here rather than dropped by the class the way it is for a genuinely modal voice. The reference carries a measured stretch curve across all seven grid notes - +1.03 c at note 48 falling to -1.02 c at 68 and back to -0.39 at 72 - so it is gated. `decay` and its two stages are what a struck voice lives on besides, since everything after the strike is a fall, and they are read off a gate long enough to contain one.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a struck string is every melodic dimension, so anything not gated here has to be argued here.",
   "dimensions_na": {
-    "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing"
+    "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
+    "damper": "not one of the 35 rows carries a usable release: 15 are capped at 495 ms, which is the 500 ms tail rather than the string, and the other 20 are already 45 dB under peak before the key lifts. A hammered string is stopped by the player or not at all, so what this dimension would read here is the fall continuing past the tail; lengthening `tail` and re-measuring is what would settle it"
   },
   "dimensions": [
     "stretch",
@@ -53,7 +54,6 @@
     "doubling",
     "body",
     "attack",
-    "damper",
     "balance",
     "centroid_pct",
     "tnr",
