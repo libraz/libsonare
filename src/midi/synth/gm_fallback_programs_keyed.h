@@ -24,6 +24,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bright_piano = fam[0];
   o.bright_piano.piano.hammer_contact_ms = fam[0].piano.hammer_contact_ms * 0.72f;
   o.bright_piano.piano.brightness = fam[0].piano.brightness * 1.09f;
+  // The damper is the one place this slot's reference and the grand's disagree:
+  // a released note is 40 dB down in 280 ms here against the grand's 1432, and
+  // each follows the recording it is aimed at rather than the family value.
+  o.bright_piano.piano.release_damp_s = fam[0].piano.release_damp_s * 0.15f;
 
   // Electric Grand Piano (GM 2): the CP-style short-string grand, whose whole
   // difference is that a piezo under the bridge takes the string directly.
@@ -33,8 +37,14 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // here -- `dispersion` is already at its ceiling on the grand.
   o.electric_grand = fam[0];
   o.electric_grand.piano.soundboard = fam[0].piano.soundboard * 0.06f;
-  o.electric_grand.piano.decay_slow_s = fam[0].piano.decay_slow_s * 0.55f;
+  // Short strings shed the slow stage the board carried, but not this much of
+  // it: at 0.55 the note was 45 dB down before the key came up on 40 of 44 rows
+  // where the reference is on 19, and the held fall read 6.3 dB/s against 4.9.
+  o.electric_grand.piano.decay_slow_s = fam[0].piano.decay_slow_s * 0.71f;
   o.electric_grand.piano.brightness = fam[0].piano.brightness * 1.06f;
+  // With no board to carry the note on, the damper is the whole release: 110 ms
+  // against the reference, where the grand's takes over a second to fall as far.
+  o.electric_grand.piano.release_damp_s = fam[0].piano.release_damp_s * 0.10f;
   o.electric_grand.stereo_spread = 0.15f;
   // The only one of the four that is levelled. An amplified instrument has no
   // acoustic output level -- the player sets it at the amp -- so leaving it
@@ -61,21 +71,28 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.honky_tonk.piano.soundboard = fam[0].piano.soundboard * 0.7f;
   o.honky_tonk.piano.decay_slow_s = fam[0].piano.decay_slow_s * 0.7f;
   o.honky_tonk.piano.hammer_contact_ms = fam[0].piano.hammer_contact_ms * 0.85f;
+  // A small upright's dampers load a short string harder than a concert grand's
+  // load a long one: the reference is 40 dB down 290 ms after the key comes up.
+  o.honky_tonk.piano.release_damp_s = fam[0].piano.release_damp_s * 0.15f;
 
   // FM e-piano (Rhodes/Wurli sketch): body pair at 1:1 with a velocity-driven
   // index plus a fast-decaying 14:1 "tine" pair — the exponential index
   // fall-off is what reads as an electric piano.
+  //
+  // The three sustaining stages are one decay read three times, so they scale
+  // together: at 3000/3000/1200 the note fell 17.3 dB/s where both references
+  // hold a tine at 4.8-5.8, and it was gone before a held note's gate closed.
   NativeSynthPatch& ep = o.e_piano;
   ep.mode = SynthEngineMode::kFm;
-  ep.amp_env = fallback_env(1.0f, 3000.0f, 0.0f, 250.0f);
+  ep.amp_env = fallback_env(1.0f, 9000.0f, 0.0f, 250.0f);
   ep.fm.algorithm = FmAlgorithm::kPair2x2;
   ep.fm.ops[0].ratio = 1.0f;  // body carrier
   ep.fm.ops[0].level = 1.0f;
-  ep.fm.ops[0].env = fallback_env(1.0f, 3000.0f, 0.0f, 250.0f);
+  ep.fm.ops[0].env = fallback_env(1.0f, 9000.0f, 0.0f, 250.0f);
   ep.fm.ops[0].key_rate_scale = 0.4f;
   ep.fm.ops[1].ratio = 1.0f;  // body modulator (warmth -> velocity)
   ep.fm.ops[1].level = 0.9f;
-  ep.fm.ops[1].env = fallback_env(1.0f, 1200.0f, 0.0f, 250.0f);
+  ep.fm.ops[1].env = fallback_env(1.0f, 3600.0f, 0.0f, 250.0f);
   ep.fm.ops[1].vel_to_level = 0.7f;
   ep.fm.ops[1].key_rate_scale = 0.5f;
   ep.fm.ops[2].ratio = 1.0f;  // tine carrier (quiet sparkle)
@@ -90,13 +107,18 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ep.gain = 0.6f;
 
   // FM clavi / harpsichord: bright high-ratio pluck with a fast index decay.
+  //
+  // The carrier and the VCA carry the ring and move together; the modulator's
+  // 150 ms stays where it is, because that fall is the pluck's brightness and
+  // not its length. At 1000 the note fell 52.0 dB/s against the reference's 8.2
+  // and its usable span was a sixth of the reference's.
   NativeSynthPatch& cl = o.clav;
   cl.mode = SynthEngineMode::kFm;
-  cl.amp_env = fallback_env(1.0f, 1000.0f, 0.0f, 120.0f);
+  cl.amp_env = fallback_env(1.0f, 6340.0f, 0.0f, 120.0f);
   cl.fm.algorithm = FmAlgorithm::kStack2;
   cl.fm.ops[0].ratio = 1.0f;
   cl.fm.ops[0].level = 1.0f;
-  cl.fm.ops[0].env = fallback_env(1.0f, 1000.0f, 0.0f, 120.0f);
+  cl.fm.ops[0].env = fallback_env(1.0f, 6340.0f, 0.0f, 120.0f);
   cl.fm.ops[0].key_rate_scale = 0.4f;
   cl.fm.ops[1].ratio = 7.0f;
   cl.fm.ops[1].level = 2.0f;
@@ -275,7 +297,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   steel.amp_env = fallback_env(1.0f, 0.0f, 1.0f, 250.0f);
   steel.cutoff_hz = 20000.0f;
   steel.ks.brightness = 0.62f;
-  steel.ks.decay_s = 3.5f;
+  // Loop t60 at A4. Every derived voice below sets its own, so this is the steel
+  // guitar's alone: measured against its reference the held note falls 6.5 dB/s,
+  // which 3.5 overshot by half again.
+  steel.ks.decay_s = 5.3f;
   steel.ks.decay_stretch = 0.6f;
   steel.ks.pick_position = 0.18f;
   steel.ks.exc_brightness = 0.85f;
@@ -304,12 +329,14 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Harmonics (GM 31): a finger resting at the twelfth fret, which is the node
   // at half the string. The touch is the whole of it — the loop halves and the
   // odd partials die with the fundamental — so the rest is the same steel
-  // string plucked lightly: a duller loop, a shorter ring, barely any tension
-  // bend. Those four are heard, not measured.
+  // string plucked lightly: a duller loop, barely any tension bend. Those were
+  // heard rather than measured, and so was the ring, which was heard the wrong
+  // way round: the reference holds a harmonic at 4.0 dB/s, slower than the
+  // stopped string beside it, where the shortened loop was falling at 14.6.
   o.guitar_harmonics = steel;
   o.guitar_harmonics.ks.harmonic_node = 2.0f;
   o.guitar_harmonics.ks.brightness = 0.45f;
-  o.guitar_harmonics.ks.decay_s = 2.2f;
+  o.guitar_harmonics.ks.decay_s = 8.0f;
   o.guitar_harmonics.ks.exc_brightness = 0.6f;
   o.guitar_harmonics.ks.tension_mod = 0.1f;
 
@@ -363,7 +390,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // break the palm puts in the series; the rest is fitted against the reference.
   o.muted_guitar = o.electric_guitar;
   o.muted_guitar.ks.mute_harmonic = 2.5f;
-  o.muted_guitar.ks.decay_s = 0.355891f;
+  // A palm chokes the string; it does not stop it. Against the reference's
+  // 22.4 dB/s the old value fell at 72.7, three times too fast, and the note was
+  // gone before the key came up on every row of the grid.
+  o.muted_guitar.ks.decay_s = 1.16f;
   o.muted_guitar.ks.decay_stretch = 0.798374f;
   o.muted_guitar.ks.brightness = 0.55f;
   o.muted_guitar.ks.release_damp_s = 0.04f;
@@ -464,7 +494,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bass_pop = o.bass_slap;
   o.bass_pop.ks.brightness = 0.68f;
   o.bass_pop.ks.exc_brightness = 0.98f;
-  o.bass_pop.ks.decay_s = 3.2f;
+  o.bass_pop.ks.decay_s = 4.13f;  // 6.3 dB/s against the reference, from 8.1
   o.bass_pop.ks.slap = 0.85f;
   o.bass_pop.cutoff_hz = 6500.0f;
 
@@ -518,7 +548,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // and a low body mix rather than as a resonator; a wooden box put underneath
   // it would be the wrong instrument's colour.
   o.banjo = steel;
-  o.banjo.ks.decay_s = 1.0f;
+  // The head drains the string fast, but not as fast as this was doing it: the
+  // reference falls 22.9 dB/s where 1.0 gave 73.2, so the ping was over before
+  // the instrument's own ring had started.
+  o.banjo.ks.decay_s = 3.0f;
   o.banjo.ks.decay_stretch = 0.25f;  // a short neck: the low strings ring little longer
   o.banjo.ks.brightness = 0.8f;
   o.banjo.ks.pick_position = 0.10f;  // picked close to the bridge
@@ -826,10 +859,13 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   oh.stereo_spread = 0.227079f;
   oh.gain = 0.7f;
   oh.amp_env.attack_ms = 0.380382f;
-  oh.amp_env.decay_ms = 40.0f;
+  // A stab is short, but 40 ms is a click: the reference's hit is still usable
+  // 0.77 s in where this one was done in 0.09. The two envelopes move together
+  // because the filter's fall is what makes the stab read as an orchestra.
+  oh.amp_env.decay_ms = 450.0f;
   oh.drift_rate_hz = 2.25699f;
   oh.filter_env.attack_ms = 6.73709f;
-  oh.filter_env.decay_ms = 43.8319f;
+  oh.filter_env.decay_ms = 490.0f;
   oh.resonance_q = 0.765154f;
 
   // Tremolo Strings (GM 44): the string-section pad under a measured-bow
@@ -854,7 +890,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   pz.amp_env = fallback_env(1.0f, 0.0f, 1.0f, 200.0f);
   pz.cutoff_hz = 20000.0f;
   pz.ks.brightness = 0.48f;
-  pz.ks.decay_s = 0.7f;
+  // The one plucked voice the bank was ringing too LONG: a finger on a bowed
+  // string under tension gives 160.6 dB/s on the reference against the 81.0 this
+  // was producing, so half a second of it sat past where the section had stopped.
+  pz.ks.decay_s = 0.35f;
   pz.ks.decay_stretch = 0.55f;
   pz.ks.pick_position = 0.33f;
   pz.ks.exc_brightness = 0.6f;

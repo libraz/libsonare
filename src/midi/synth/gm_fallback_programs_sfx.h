@@ -33,7 +33,11 @@ constexpr void configure_sfx_programs(ProgramOverrides& o) noexcept {
   o.sfx_breath.env_to_cutoff_cents = 1803.67f;
   o.sfx_breath.gain = 0.62f;
   o.sfx_breath.amp_env.attack_ms = 13.5907f;
-  o.sfx_breath.amp_env.decay_ms = 472.764f;
+  // A breath is one exhalation and does not hold: the sustain floor kept it
+  // sounding for a second where the reference is done in 0.4, falling at
+  // 145.5 dB/s against the 12.1 the held tail was producing.
+  o.sfx_breath.amp_env.sustain = 0.0f;
+  o.sfx_breath.amp_env.decay_ms = 180.0f;
   o.sfx_breath.amp_env.release_ms = 111.154f;
   o.sfx_breath.filter_env.attack_ms = 21.0184f;
   o.sfx_breath.filter_env.decay_ms = 147.834f;

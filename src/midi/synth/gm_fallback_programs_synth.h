@@ -268,7 +268,10 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_halo = pad;
   o.pad_halo.drift_cents = 9.0f;
   o.pad_halo.cutoff_hz = 2200.0f;
-  o.pad_halo.amp_env = fallback_env(1200.0f, 900.0f, 0.85f, 1600.0f);
+  // The release is the one stage measured against the reference: a released
+  // halo is 40 dB down 925 ms later, where 1600 ms held it past the capture's
+  // whole two-second tail.
+  o.pad_halo.amp_env = fallback_env(1200.0f, 900.0f, 0.85f, 600.0f);
   o.pad_halo.stereo_spread = 0.85f;
   o.pad_halo.gain = 1.02f;
 

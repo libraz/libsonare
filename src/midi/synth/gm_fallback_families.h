@@ -70,9 +70,10 @@ SONARE_TUNABLE(kPianoHammerContactMs, 1.35f);
 SONARE_TUNABLE(kPianoHammerDynamics, 0.5f);
 /// Damper t60 at note-off, at the loud end of the velocity range; the voice
 /// lengthens it for a softer blow, because felt damps a quiet string weakly
-/// (see kDamperVelSlope in piano_voice.cpp). Fitted here against the reference
-/// with that scaling in place, so the two move together and this one alone is
-/// not the whole damper.
+/// (see kDamperVelSlope in piano_voice.cpp). Fitted against the concert grand's
+/// own reference with that scaling in place, so the two move together and this
+/// one alone is not the whole damper; the three voiced variants scale it down
+/// from here, because the recordings they are aimed at damp far harder.
 ///
 /// It also sets the far end of the half-pedal interpolation, which is what
 /// stops it growing without limit: the pedal grades between the free string and

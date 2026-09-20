@@ -174,13 +174,15 @@ TEST_CASE("velocity scales the modulation index (brightness)", "[midi][synth][fm
 TEST_CASE("key-rate scaling shortens decay up the keyboard", "[midi][synth][fm]") {
   const NativeSynthPatch& ep = gm_fallback_patch(0, 4);  // FM e-piano, krs > 0
   auto decay_ratio = [](const std::vector<float>& buf) {
-    // Level after 0.5 s relative to the initial strike window.
+    // Level after 3 s relative to the initial strike window. The probe sits at
+    // about one time constant of the patch's own decay, so the two notes have
+    // separated; read at half a second neither has fallen far enough to compare.
     const float early = rms(buf, 480, 4800);
-    const float late = rms(buf, 24000, 28800);
+    const float late = rms(buf, 144000, 148800);
     return early > 0.0f ? late / early : 0.0f;
   };
-  const std::vector<float> low_note = render_patch(ep, 36, 110, 28800);
-  const std::vector<float> high_note = render_patch(ep, 96, 110, 28800);
-  // The high note must have decayed appreciably further after 0.5 s.
+  const std::vector<float> low_note = render_patch(ep, 36, 110, 148800);
+  const std::vector<float> high_note = render_patch(ep, 96, 110, 148800);
+  // The high note must have decayed appreciably further by then.
   REQUIRE(decay_ratio(high_note) < 0.6f * decay_ratio(low_note));
 }

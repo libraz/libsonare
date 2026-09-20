@@ -186,11 +186,14 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   // drop and a shell body, one patch for every tom size.
   NativeSynthPatch& mt = o.melodic_tom;
   mt.mode = SynthEngineMode::kPercussion;
-  mt.amp_env = fallback_env(0.5f, 500.0f, 0.0f, 150.0f);
+  // The membrane's own ring and the VCA that gates it are one length read twice,
+  // so they move together: at 500/0.3 the note fell 233.6 dB/s where the
+  // reference holds 84.4, and half the tom was over before its shell answered.
+  mt.amp_env = fallback_env(0.5f, 1385.0f, 0.0f, 150.0f);
   mt.cutoff_hz = 20000.0f;
   mt.percussion.num_modes = 5;
   mt.percussion.base_freq_hz = 0.0f;
-  mt.percussion.mode_decay_s = 0.3f;
+  mt.percussion.mode_decay_s = 0.83f;
   mt.percussion.tone_gain = 0.9f;
   mt.percussion.pitch_drop = 0.6f;
   mt.percussion.pitch_drop_ms = 55.0f;
