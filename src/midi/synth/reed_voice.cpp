@@ -88,11 +88,6 @@ SONARE_TUNABLE(kHpCompScale, 0.5f);
 // bounded to [-1,1]), so only a gentle scale brings a forte note into the other
 // engines' range.
 SONARE_TUNABLE(kOutputScale, 0.9f);
-// Make-up for the beating reed's much weaker column, which at the flow gains
-// that stay clear of the subharmonic settles some 30 dB under the table's. Ten
-// leaves the core inside the bound the table path holds and puts the rest into
-// the patch gains. Flat, so it is loudness only and no metric moves with it.
-SONARE_TUNABLE(kBeatingReedMakeup, 10.0f);
 
 // --- 4a dynamic (mass-spring) reed (only when params.dynamic_reed) ---
 // Reed natural frequency (Hz) = base + span*reed_resonance: a cane reed's own
@@ -263,11 +258,6 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
   output_scale_ = kOutputScale;
-  // A beating reed drives the loop only a little over unity at the flow gains
-  // that stay clear of the subharmonic, so its column settles far below the
-  // linearised table's. Made up at the output, where it cannot move the
-  // oscillation the way an injection-side scale would.
-  if (closing_pressure_ > 0.0f) output_scale_ *= kBeatingReedMakeup;
 
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst (the
   // Karplus-Strong trick) so the reed locks onto a resonating column quickly
@@ -421,7 +411,11 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   // Beating reed (gated): the channel's Bernoulli flow replaces the linearised
   // table above. The opening closes toward zero as the mouth outruns the bore and
   // the flow follows the square root of that drop, so the drive saturates on a
-  // curve instead of on a clamp.
+  // curve instead of on a clamp. The flow peaks at drop = closing_pressure/3 and
+  // the channel is shut at drop >= closing_pressure, so the note only sustains
+  // while breath/closing_pressure stays strictly inside (1/3, 1) — a two-field
+  // constraint no per-field clamp can carry, and the mouth pressure here is
+  // kBreathBase + kBreathSpan*b rather than the patch's breath_pressure.
   if (closing_pressure_ > 0.0f) {
     const float drop = breath - refl;
     const float open = std::clamp(1.0f - drop / closing_pressure_, 0.0f, 1.0f);

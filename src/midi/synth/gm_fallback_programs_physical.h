@@ -237,10 +237,12 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.soprano_sax.reed.release_ms = 478.75f;
   o.soprano_sax.reed.vel_to_breath = 0.768676f;
   o.soprano_sax.resonance_q = 0.626897f;
-  o.alto_sax = reed(true, 0.55f, 0.55f, 0.62f, 0.34f, 16.0f, 90.0f, 0.78f, 0.32f, 1.53f);
-  // No capture: the setting is read off its two fitted neighbours.
-  o.alto_sax.reed.closing_pressure = 2.4f;
-  o.alto_sax.reed.flow_gain = 0.6f;
+  o.alto_sax = reed(true, 0.55f, 0.55f, 0.62f, 0.34f, 16.0f, 90.0f, 0.78f, 0.32f, 0.1882f);
+  // Fitted with the pressure held inside the valve's oscillating band, which
+  // reed_voice.cpp states; the worst of 35 captured notes then holds within
+  // 0.2 dB/s of its reference, and the gain centres the grid's level.
+  o.alto_sax.reed.closing_pressure = 1.88816f;
+  o.alto_sax.reed.flow_gain = 1.03769f;
   o.alto_sax.cutoff_hz = 4500.0f;
   o.alto_sax.lfo_rate_hz = 5.2f;
   o.alto_sax.lfo_to_pitch_cents = 6.0f;
@@ -248,9 +250,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.alto_sax.reed.chiff = 0.6f;
   o.alto_sax.reed.reed_opening = 0.62f;
   o.alto_sax.reed.breath_noise = 0.3f;
-  o.tenor_sax = reed(true, 0.60f, 0.50f, 0.56f, 0.36f, 20.0f, 100.0f, 0.78f, 0.36f, 1.602f);
-  o.tenor_sax.reed.closing_pressure = 0.32753f;
-  o.tenor_sax.reed.flow_gain = 0.815874f;
+  o.tenor_sax = reed(true, 0.60f, 0.50f, 0.56f, 0.36f, 20.0f, 100.0f, 0.78f, 0.36f, 0.8803f);
+  // Fitted inside the valve's oscillating band; the worst of 35 captured notes
+  // holds within 1.2 dB/s of its reference.
+  o.tenor_sax.reed.closing_pressure = 1.26761f;
+  o.tenor_sax.reed.flow_gain = 0.57712f;
   o.tenor_sax.cutoff_hz = 2827.72f;
   o.tenor_sax.lfo_rate_hz = 18.3065f;
   o.tenor_sax.lfo_to_pitch_cents = 0.625687f;
@@ -269,9 +273,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tenor_sax.reed.vel_to_breath = 0.605556f;
   o.tenor_sax.resonance_q = 0.550554f;
   o.tenor_sax.stereo_spread = 0.0f;
-  o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 1.602f);
-  o.baritone_sax.reed.closing_pressure = 2.4f;
-  o.baritone_sax.reed.flow_gain = 0.7f;
+  o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 0.2849f);
+  // Fitted inside the valve's oscillating band; the worst of 35 captured notes
+  // holds within 1.5 dB/s of its reference.
+  o.baritone_sax.reed.closing_pressure = 2.04294f;
+  o.baritone_sax.reed.flow_gain = 0.85836f;
   o.baritone_sax.cutoff_hz = 3800.0f;
   o.baritone_sax.lfo_rate_hz = 4.8f;
   o.baritone_sax.lfo_to_pitch_cents = 4.0f;
@@ -317,9 +323,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.english_horn.reed.release_ms = 115.826f;
   o.english_horn.reed.vel_to_breath = 0.49538f;
   o.english_horn.resonance_q = 0.982102f;
-  o.bassoon = reed(true, 0.65f, 0.45f, 0.5f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 2.808f);
-  o.bassoon.reed.closing_pressure = 0.507749f;
-  o.bassoon.reed.flow_gain = 0.628207f;
+  o.bassoon = reed(true, 0.65f, 0.45f, 0.5f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.4554f);
+  // Fitted inside the valve's oscillating band; the worst of 35 captured notes
+  // holds within 0.8 dB/s of its reference.
+  o.bassoon.reed.closing_pressure = 1.06731f;
+  o.bassoon.reed.flow_gain = 0.70627f;
   o.bassoon.cutoff_hz = 3537.47f;
   o.bassoon.lfo_rate_hz = 14.7409f;
   o.bassoon.lfo_to_pitch_cents = 0.680254f;
