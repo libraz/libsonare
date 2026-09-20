@@ -1,0 +1,67 @@
+{
+  "id": "electric_grand_module",
+  "label": "Piano 3, the GS capital tone, read out of a module's own recordings",
+  "program": 2,
+  "takes": "sustained",
+  "audition_title": "libsonare electric grand vs the module's own recordings",
+  "_notes": "The capital of program 2, which carries no `bank` key for the same reason every other capital in this directory carries none - a variation is recognised by a non-zero bank, so the capital is the absence of one. The grid is `electric_grand`'s, note for note: that capture answers the same address from the library layer, and the point of adding a second answer is that the two can be read cell for cell rather than each on its own lattice. It also lands on the source's own lattice, which holds one recording every three semitones from 24 to 96 and nothing between, so no cell here is a resampled neighbour; and it is the grid `electric_grand_wide` already uses, so the capital and its wide variation are read over the same register too.",
+  "notes": [
+    36,
+    42,
+    48,
+    54,
+    60,
+    66,
+    72,
+    78,
+    84
+  ],
+  "_tone": "Which tone is the program 2 capital is measured here rather than taken from a number, because the source flattens the GS map into its own sequential numbering and neither this tone's position in it nor the variation's is the GM program or the bank. Two readings fix it. First, this tone and the one `electric_grand_wide` reads share not one recording - no two of the 25 notes have the same frames - yet they track each other to within 0.1 dB at every probe point taken (notes 36, 60 and 84, at 0.5, 1 and 2 s after onset), which is a capital and its wide copy and not two unrelated tones. Second, what this tone is: at note 84 it is 11.0 dB down one second in where the two acoustic grands of the same source are 31.4 and 23.9, and at note 60 its held level wanders +/-0.9 dB about its own decay where they wander +/-2.6. A long treble and no unison beating is the electro-acoustic instrument, and it is the same signature `electric_grand` measured on the library slot it captured for this program.",
+  "_velocities": "One, and 100 is a label rather than a measurement: the source sets `velRange` on none of this tone's zones, so it holds one recording per note at a velocity it does not state, and the importer refuses a grid asking for more than one layer. `vel_range` is excused in `dimensions_na` for that reason. This is the one place the grid cannot follow `electric_grand`, which reads five velocities.",
+  "velocities": [
+    100
+  ],
+  "_dry": "Nothing played this, so nothing was switched off. What the file holds is the module's own PCM with no effect in front of it, which is what `source_class: module` asks for.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "The gate is the recording itself. Over this grid the cells run 2.49 to 5.09 s, shortest at note 84, and nothing pads one, so 2400 ms is the longest round window all 9 of them hold. That is well short of `electric_grand`'s eight seconds: what the library capture reads over its tail, this source does not have to give.",
+  "gate_ms": 2400,
+  "tail": "0s",
+  "_realtime": "Read rather than played: `import_sf2.py` extracts the recorded frames, so there is no host to settle and no lead-in to strip. `preroll_ms` is 0 because a recording begins at its own first frame.",
+  "realtime": false,
+  "warmup": false,
+  "settle_ms": 0,
+  "preroll_ms": 0,
+  "sample_rate": 44100,
+  "_timbres": "One. The source holds exactly one recording per note of this tone, so there is no second of it to disagree with and this capture cannot move the voice past `voiced` however complete its coverage.",
+  "timbres": [
+    {
+      "id": "t0",
+      "label": "Piano 3, module recording"
+    }
+  ],
+  "_dimensions": "Coverage is read against `toneclass.canonical_dimensions`, which for program 2 is 13 dimensions. The four below are what this source cannot carry, each argued from what it sets on this tone rather than from its being a font.",
+  "dimensions_na": {
+    "vel_range": "`velRange` is set on none of this tone's zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads",
+    "stereo": "every one of the 25 recordings is mono (`sampleType` 1) and no `pan` is set, so the image is absent by construction rather than by voicing",
+    "register": "no `initialAttenuation` is set anywhere, so the level relation between one note and the next is not in the source. Over this grid the peaks span 4.46 dB and do not fall with pitch - the loudest cell is note 72 and the quietest note 36 - which is the headroom each recording was normalised into rather than the instrument's fall across its compass",
+    "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from. `electric_grand` gates this dimension and this capture cannot"
+  },
+  "dimensions": [
+    "stretch",
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "balance",
+    "centroid_pct",
+    "tnr"
+  ],
+  "_rig": "Unclassified and terminal, which is not the same as unanswered. An electric grand is a strung piano heard through its own pickups, so it is a family that carries an amplifier and the question has to be put; what is missing here is any way to put it. Neither route reaches this source. There is no A/B, because the module has no amplifier stage to switch off - the tone is a recording of whatever chain sampled it, fixed, and nothing downstream of that is a control. The sibling-shape test does not apply either: it turns a dark spectrum into evidence by finding siblings that share the shape, which is an argument only where the siblings came through ONE chain in one session, and this source's tones were each sampled separately. A `none` here would be a claim nothing measured, which is why the acoustic instruments of this source carry one and this tone does not - for a grand or a marimba there is no amplifier for the answer to be about.",
+  "rig": "unclassified",
+  "room": "none",
+  "_room": "The module is recorded with reverb, chorus, delay and the insertion effect all off, and `import_sf2.py --report` plus its own dryness check measure the imported corpus rather than taking this declaration's word for it.",
+  "source_class": "module",
+  "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `electric_grand_module.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/electric_grand_module.json`."
+}
