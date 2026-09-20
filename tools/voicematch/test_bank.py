@@ -96,7 +96,7 @@ def test_a_captured_voice_keeps_the_captures_phrase_set():
     """
     for capture in bank.captures():
         voice = bank.Voice(program=capture.program, bank=capture.bank,
-                           kit=capture.drums, capture=capture)
+                           kit=capture.drums, captures=(capture,))
         assert voice.take_set == capture.take_set
 
 

@@ -500,7 +500,7 @@ def test_an_exclusion_argued_only_in_prose_reads_as_a_gap():
         program, kit = 0, False
 
     prose_only = {"_dimensions": "damper is out because the references disagree"}
-    assert "damper" in status.coverage(V(), prose_only, {"bounds": {}})["gaps"]
+    assert "damper" in status.coverage(V(), [prose_only], [{"bounds": {}}])["gaps"]
 
 
 def test_an_excused_dimension_completes_coverage():
@@ -509,9 +509,52 @@ def test_an_excused_dimension_completes_coverage():
 
     canon = canonical_dimensions(0)
     gate = {"bounds": {d: {"median": 1.0} for d in canon if d != "damper"}}
-    assert status.coverage(V(), {}, gate)["gaps"] == ["damper"]
+    assert status.coverage(V(), [{}], [gate])["gaps"] == ["damper"]
     excused = {"dimensions_na": {"damper": "the references disagree by more than the model does"}}
-    assert status.coverage(V(), excused, gate)["complete"]
+    assert status.coverage(V(), [excused], [gate])["complete"]
+
+
+def test_agreement_folds_a_gate_that_has_no_spread_to_adjudicate_against():
+    """A one-timbre capture's gate reports no `outside` key at all rather than
+    an empty one, and three of the standard kit's four captures are that."""
+
+    judged = {"reference_spread": {"level": 1.0}, "margin": 1.0,
+              "bounds": {"level": {"median": 4.0}}}
+    spreadless = {"bounds": {"attack": {"median": 1.0}}}
+    got = status.merged_agreement([judged, spreadless])
+    assert got["outside"] == {"level": 4.0}
+    assert got["unjudgeable"] == ["attack"]
+    assert status.merged_agreement([spreadless])["outside"] == {}
+
+
+def test_a_dimension_gated_by_a_second_capture_is_not_a_gap():
+    """A voice is answered by as many captures as its axes take: the kit gates
+    colour on the module grids and `vel_range` on the sampled kit, and reading
+    either alone reports the other's bounds as absent."""
+
+    class V:
+        program, kit = 0, False
+
+    canon = canonical_dimensions(0)
+    colour = {"bounds": {d: {"median": 1.0} for d in canon if d != "damper"}}
+    damper = {"bounds": {"damper": {"median": 1.0}}}
+    assert status.coverage(V(), [{}], [colour])["gaps"] == ["damper"]
+    assert status.coverage(V(), [{}, {}], [colour, damper])["complete"]
+
+
+def test_an_excuse_does_not_unseat_a_bound_another_capture_records():
+    """An excuse is a statement about the source carrying it, so it settles a
+    dimension only where nothing gates it — `drums.json` excuses the colour it
+    handed to the module grids, and that colour is gated rather than absent."""
+
+    class V:
+        program, kit = 0, False
+
+    handed_over = {"dimensions_na": {"damper": "moved to the grid that can read it"}}
+    gated_there = {"bounds": {"damper": {"median": 1.0}}}
+    got = status.coverage(V(), [handed_over, {}], [{"bounds": {}}, gated_there])
+    assert "damper" not in got["excused"]
+    assert got["gated"] == 1
 
 
 # --------------------------------------------------------------------------- #

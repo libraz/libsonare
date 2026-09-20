@@ -318,11 +318,52 @@ def gate_agreement(gate: dict) -> dict:
     return out
 
 
-def coverage(voice, cap_raw: dict, gate: dict) -> dict:
-    """Which of this class's dimensions are gated, excused, or missing."""
+def merged_agreement(gates: list[dict]) -> dict:
+    """`gate_agreement` over every gate answering one voice.
+
+    Folded per gate rather than over one merged gate, because a bound is read
+    against its own gate's `reference_spread` and divided by its own `margin`.
+    Pooling the bounds first would read each against whichever gate's spread
+    happened to land in the merged dict.
+    """
+    inside = total = 0
+    outside: dict = {}
+    unjudgeable: list[str] = []
+    for gate in gates:
+        one = gate_agreement(gate)
+        inside += one["inside"]
+        total += one["total"]
+        # A gate whose capture has one timbre has no spread to adjudicate
+        # against, and reports no `outside` at all rather than an empty one.
+        outside.update(one.get("outside") or {})
+        unjudgeable.extend(one.get("unjudgeable") or [])
+    out = {
+        "inside": inside,
+        "total": total,
+        "outside": dict(sorted(outside.items(), key=lambda kv: -kv[1])),
+    }
+    if unjudgeable:
+        out["unjudgeable"] = sorted(set(unjudgeable))
+    return out
+
+
+def coverage(voice, cap_raws: list[dict], gates: list[dict]) -> dict:
+    """Which of this class's dimensions are gated, excused, or missing.
+
+    Read across every capture answering the voice, because a voice is answered
+    by as many as its axes take: the standard kit's colour and ring bounds sit
+    on the module grids while `vel_range` stays on the sampled kit, and asking
+    any one of the four reports the other eleven bounds as absent.
+
+    A dimension gated anywhere is gated, whatever a second capture says about
+    it. An excuse is a statement about the source that carries it — `drums.json`
+    excuses the colour it handed to the module grids — so it settles a dimension
+    only where nothing gates it.
+    """
     canon = canonical_dimensions(voice.program, percussive=voice.kit)
-    gated = set(gate.get("bounds") or {})
-    excused = dict(cap_raw.get("dimensions_na") or {})
+    gated = {d for gate in gates for d in (gate.get("bounds") or {})}
+    excused = {d for raw in cap_raws for d in (raw.get("dimensions_na") or {})}
+    excused -= gated
     gaps = [d for d in canon if d not in gated and d not in excused]
     return {
         "canonical": len(canon),
@@ -353,6 +394,31 @@ def profile_facts(ident: str) -> dict:
         "gate_state": stale,
         "gate_timbre": gate.get("timbre", ""),
         "_gate": gate,
+    }
+
+
+def merged_facts(every: list[dict]) -> dict:
+    """`profile_facts` of every capture answering one voice, as one reading.
+
+    `gate_state` takes the worst of the gates that exist, since the coverage
+    claim rests on all of them at once and a stale bound anywhere makes part of
+    it stale. **A capture carrying no gate is not a stale one**: it contributes
+    no bound, so it neither completes the coverage nor spoils it, and a grid
+    added before its gate is recorded must not knock a voice off the ladder.
+    """
+    if not every:
+        return {"profile_rows": 0, "measured_utc": "", "gate_recorded": False,
+                "gate_state": None, "gate_timbre": ""}
+    states = {f["gate_state"] for f in every if f["gate_state"]}
+    worst = next((s for s in ("unknown", "stale", "current") if s in states), None)
+    return {
+        # The representative's, for the two that describe one reading rather
+        # than the set: which reference the page plays and when it was taken.
+        "measured_utc": every[0]["measured_utc"],
+        "gate_timbre": every[0]["gate_timbre"],
+        "profile_rows": sum(f["profile_rows"] for f in every),
+        "gate_recorded": any(f["gate_recorded"] for f in every),
+        "gate_state": worst,
     }
 
 
@@ -516,11 +582,9 @@ def build(catalogue) -> list[dict]:
     rows = []
     for v in voices:
         cap = v.capture
-        facts = profile_facts(cap.id) if cap else {
-            "profile_rows": 0, "measured_utc": "", "gate_recorded": False,
-            "gate_state": None, "gate_timbre": "", "_gate": {},
-        }
-        gate = facts.pop("_gate")
+        every = [profile_facts(c.id) for c in v.captures]
+        gates = [f.pop("_gate") for f in every]
+        facts = merged_facts(every)
         claim = claims.get(v.slug, signoff.Record())
         # A kit's voices are its drum notes, so it has no single patch unit:
         # the drum kinds stand in for the patch version it does not have.
@@ -529,11 +593,11 @@ def build(catalogue) -> list[dict]:
         axes = {
             "engine": engine_for(v, catalogue),
             "patch": v.patch or None,
-            "timbres": len(cap.timbres) if cap else 0,
+            "timbres": max((len(c.timbres) for c in v.captures), default=0),
             "profile_rows": facts["profile_rows"],
             "gate_state": facts["gate_state"],
-            "coverage": coverage(v, cap.raw if cap else {}, gate),
-            "agreement": gate_agreement(gate),
+            "coverage": coverage(v, [c.raw for c in v.captures], gates),
+            "agreement": merged_agreement(gates),
             "structure": signoff.axis(claim.structure, shared_gen, patch_version, own_gen),
             "music": signoff.axis(claim.music, shared_gen, patch_version, own_gen),
         }

@@ -30,6 +30,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+import policy
 from capture import load_config
 from gm_names import gm_name
 from phrases import is_drum_set, take_set_for
@@ -155,22 +156,45 @@ def captures() -> list[Capture]:
     return [c for c in found if c is not None]
 
 
-def capture_for(program: int, bank: int = 0, *, kit: bool = False,
-                pool: list[Capture] | None = None) -> Capture | None:
-    """The capture covering a voice, if one does.
+def captures_for(program: int, bank: int = 0, *, kit: bool = False,
+                 pool: list[Capture] | None = None) -> list[Capture]:
+    """Every capture covering a voice, the one answering its layer first.
 
     Program 0 is both the grand piano and the standard kit, so the kit flag is
     part of the key rather than something to resolve afterwards. A melodic
     capture matches its own bank exactly — a variation is a separate patch with
     separate knobs, and a reference registered for one of them says nothing
     about another.
+
+    **A voice is answered by as many captures as it takes, not by one.** The
+    standard kit is the worked case: `policy.json` aims both its axes at the
+    machine and the module's recordings hold one velocity per note, so the
+    colour and ring bounds sit on three module grids while `vel_range` stays on
+    the sampled kit, which is the one thing those recordings cannot answer. No
+    single capture carries that voice's coverage, and reading one as if it did
+    reported eleven of its twelve bounds as absent.
     """
-    for cap in (captures() if pool is None else pool):
-        if cap.drums != kit:
-            continue
-        if cap.program == program and (kit or cap.bank == bank):
-            return cap
-    return None
+    pool = captures() if pool is None else pool
+    found = [cap for cap in pool
+             if cap.drums == kit
+             and cap.program == program and (kit or cap.bank == bank)]
+    want = policy.wanted_layer(policy.load(), program, kit, bank)
+    aimed = [c for c in found if policy.answers_layer(c.source_class, want)]
+    return aimed + [c for c in found if c not in aimed]
+
+
+def capture_for(program: int, bank: int = 0, *, kit: bool = False,
+                pool: list[Capture] | None = None) -> Capture | None:
+    """The capture that represents a voice, if any does.
+
+    The one whose `source_class` answers the layer `policy.json` aims this slot
+    at, and otherwise the first covering it. Filename order used to decide this
+    outright, which put a library capture in front of the module grids the kit
+    is aimed at and gave the page a reference of the wrong layer with nothing
+    saying so. Coverage is `captures_for`'s question, not this one's.
+    """
+    found = captures_for(program, bank, kit=kit, pool=pool)
+    return found[0] if found else None
 
 
 @dataclass(frozen=True)
@@ -187,7 +211,18 @@ class Voice:
     #: from a tuning build was available. Empty otherwise, which is a missing
     #: reading rather than a missing patch.
     patch: str = ""
-    capture: Capture | None = None
+    #: Every capture answering this voice, the one whose layer the policy asks
+    #: for first. More than one is the normal case wherever the axes a slot
+    #: needs are split across sources — see `captures_for`.
+    captures: tuple[Capture, ...] = ()
+
+    @property
+    def capture(self) -> Capture | None:
+        """The capture that represents this voice: which reference a page plays.
+
+        Coverage is a question about all of them and asks `captures` instead.
+        """
+        return self.captures[0] if self.captures else None
 
     @property
     def name(self) -> str:
@@ -318,12 +353,12 @@ def voices(programs: list[int] | None = None, *, banks: list[int] | None = None,
             patch = (catalogue.patch_for(program, bank) or "") if catalogue else ""
             out.append(Voice(
                 program=program, bank=bank, patch=patch,
-                capture=capture_for(program, bank, pool=pool),
+                captures=tuple(captures_for(program, bank, pool=pool)),
             ))
     for kit in (kits or []):
         out.append(Voice(
             program=kit, kit=True,
-            capture=capture_for(kit, kit=True, pool=pool),
+            captures=tuple(captures_for(kit, kit=True, pool=pool)),
         ))
     return out
 

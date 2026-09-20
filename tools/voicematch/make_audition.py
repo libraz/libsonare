@@ -710,7 +710,7 @@ def resolve_voices(args) -> list[Voice]:
             raise Unselectable(f"{args.config} names no phrase set (`takes`)")
         program = args.program if args.program is not None else capture.program
         return [Voice(program=program, bank=capture.bank,
-                      kit=capture.drums, capture=capture)]
+                      kit=capture.drums, captures=(capture,))]
 
     programs = parse_selection(args.programs) if args.programs else []
     if args.program is not None:
