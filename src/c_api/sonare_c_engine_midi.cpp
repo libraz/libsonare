@@ -83,6 +83,20 @@ bool valid_midi_note_args(uint8_t group, uint8_t channel, uint8_t note, uint8_t 
   return group <= 15 && channel <= 15 && note <= 127 && velocity <= 127;
 }
 
+// Queues one single-word MIDI 1.0 channel-voice UMP to a destination. The three
+// per-note expression dimensions take this path rather than the packed scalar
+// command the note and CC entry points use, because a bend is 14 bits and that
+// encoding has no room for it.
+SonareError push_ump_command(SonareRealtimeEngine* engine, uint32_t destination_id,
+                             const midi::Ump& ump, int64_t render_frame) noexcept {
+  rt::Command command{};
+  command.type = rt::CommandType::kMidiUmpImmediate;
+  command.target_id = destination_id;
+  command.sample_time = render_frame;
+  command.arg.i = static_cast<int64_t>(ump.words[0]);
+  return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+}
+
 uint8_t infer_ump_word_count(const SonareEngineMidiEvent& event) noexcept {
   if (event.word_count >= 1 && event.word_count <= 4) return event.word_count;
   if (event.word3 != 0) return 4;
@@ -623,6 +637,75 @@ SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8
 #endif
 }
 
+SonareError sonare_engine_push_midi_input_pitch_bend(SonareRealtimeEngine* engine, uint8_t group,
+                                                     uint8_t channel, uint16_t bend14,
+                                                     int64_t port_time_samples) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)group;
+  (void)channel;
+  (void)bend14;
+  (void)port_time_samples;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  if (!engine->midi_input_source_enabled || group > 15 || channel > 15 || bend14 > 16383) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return engine->midi_input_source.push_event(midi::make_midi1_pitch_bend(group, channel, bend14),
+                                              port_time_samples)
+             ? SONARE_OK
+             : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_push_midi_input_channel_pressure(SonareRealtimeEngine* engine,
+                                                           uint8_t group, uint8_t channel,
+                                                           uint8_t pressure,
+                                                           int64_t port_time_samples) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)group;
+  (void)channel;
+  (void)pressure;
+  (void)port_time_samples;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  if (!engine->midi_input_source_enabled || group > 15 || channel > 15 || pressure > 127) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return engine->midi_input_source.push_event(
+             midi::make_midi1_channel_pressure(group, channel, pressure), port_time_samples)
+             ? SONARE_OK
+             : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_push_midi_input_poly_pressure(SonareRealtimeEngine* engine, uint8_t group,
+                                                        uint8_t channel, uint8_t note,
+                                                        uint8_t pressure,
+                                                        int64_t port_time_samples) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)group;
+  (void)channel;
+  (void)note;
+  (void)pressure;
+  (void)port_time_samples;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  if (!engine->midi_input_source_enabled || !valid_midi_note_args(group, channel, note, pressure)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return engine->midi_input_source.push_event(
+             midi::make_midi1_poly_pressure(group, channel, note, pressure), port_time_samples)
+             ? SONARE_OK
+             : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
 SonareError sonare_engine_push_midi_note_on(SonareRealtimeEngine* engine, uint32_t destination_id,
                                             uint8_t group, uint8_t channel, uint8_t note,
                                             uint8_t velocity, int64_t render_frame) {
@@ -695,6 +778,61 @@ SonareError sonare_engine_push_midi_cc(SonareRealtimeEngine* engine, uint32_t de
   command.sample_time = render_frame;
   command.arg.i = static_cast<int64_t>(packed);
   return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
+SonareError sonare_engine_push_midi_pitch_bend(SonareRealtimeEngine* engine,
+                                               uint32_t destination_id, uint8_t group,
+                                               uint8_t channel, uint16_t bend14,
+                                               int64_t render_frame) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (group > 15 || channel > 15 || bend14 > 16383) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  return push_ump_command(engine, destination_id,
+                          midi::make_midi1_pitch_bend(group, channel, bend14), render_frame);
+#endif
+}
+
+SonareError sonare_engine_push_midi_channel_pressure(SonareRealtimeEngine* engine,
+                                                     uint32_t destination_id, uint8_t group,
+                                                     uint8_t channel, uint8_t pressure,
+                                                     int64_t render_frame) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (group > 15 || channel > 15 || pressure > 127) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  return push_ump_command(engine, destination_id,
+                          midi::make_midi1_channel_pressure(group, channel, pressure),
+                          render_frame);
+#endif
+}
+
+SonareError sonare_engine_push_midi_poly_pressure(SonareRealtimeEngine* engine,
+                                                  uint32_t destination_id, uint8_t group,
+                                                  uint8_t channel, uint8_t note, uint8_t pressure,
+                                                  int64_t render_frame) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (group > 15 || channel > 15 || note > 127 || pressure > 127) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  return push_ump_command(engine, destination_id,
+                          midi::make_midi1_poly_pressure(group, channel, note, pressure),
+                          render_frame);
 #endif
 }
 

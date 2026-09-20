@@ -1104,6 +1104,24 @@ SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine,
 SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8_t group,
                                              uint8_t channel, uint8_t controller, uint8_t value,
                                              int64_t port_time_samples);
+/// @brief Pushes a live MIDI pitch bend to the engine-owned MIDI input source.
+/// @param bend14 Unsigned 14-bit bend, centre 8192 (0..16383).
+SonareError sonare_engine_push_midi_input_pitch_bend(SonareRealtimeEngine* engine, uint8_t group,
+                                                     uint8_t channel, uint16_t bend14,
+                                                     int64_t port_time_samples);
+/// @brief Pushes a live MIDI channel pressure to the engine-owned MIDI input source.
+/// @param pressure 7-bit channel pressure (0..127).
+SonareError sonare_engine_push_midi_input_channel_pressure(SonareRealtimeEngine* engine,
+                                                           uint8_t group, uint8_t channel,
+                                                           uint8_t pressure,
+                                                           int64_t port_time_samples);
+/// @brief Pushes a live MIDI polyphonic key pressure to the engine-owned MIDI input source.
+/// @param note Key the pressure belongs to (0..127).
+/// @param pressure 7-bit key pressure (0..127).
+SonareError sonare_engine_push_midi_input_poly_pressure(SonareRealtimeEngine* engine, uint8_t group,
+                                                        uint8_t channel, uint8_t note,
+                                                        uint8_t pressure,
+                                                        int64_t port_time_samples);
 /// @brief Queues an immediate live MIDI note-on to a MIDI destination.
 SonareError sonare_engine_push_midi_note_on(SonareRealtimeEngine* engine, uint32_t destination_id,
                                             uint8_t group, uint8_t channel, uint8_t note,
@@ -1125,6 +1143,35 @@ SonareError sonare_engine_push_midi_note_off(SonareRealtimeEngine* engine, uint3
 SonareError sonare_engine_push_midi_cc(SonareRealtimeEngine* engine, uint32_t destination_id,
                                        uint8_t group, uint8_t channel, uint8_t controller,
                                        uint8_t value, int64_t render_frame);
+/// @brief Queues an immediate (live) MIDI pitch bend to a MIDI destination.
+/// @details The three per-note expression dimensions travel as a single-word
+///          MIDI 1.0 UMP on the engine's queueable command path, which is what
+///          carries them unchanged at their own width: a bend is 14-bit and no
+///          7-bit scalar command can spell it.
+/// @param destination_id MIDI destination id (clip/instrument destination).
+/// @param group UMP group (0..15).
+/// @param channel MIDI channel (0..15).
+/// @param bend14 Unsigned 14-bit bend, centre 8192 (0..16383).
+/// @param render_frame Render-frame time to apply, or -1 for immediate.
+SonareError sonare_engine_push_midi_pitch_bend(SonareRealtimeEngine* engine,
+                                               uint32_t destination_id, uint8_t group,
+                                               uint8_t channel, uint16_t bend14,
+                                               int64_t render_frame);
+/// @brief Queues an immediate (live) MIDI channel pressure to a MIDI destination.
+/// @param pressure 7-bit channel pressure (0..127).
+/// @param render_frame Render-frame time to apply, or -1 for immediate.
+SonareError sonare_engine_push_midi_channel_pressure(SonareRealtimeEngine* engine,
+                                                     uint32_t destination_id, uint8_t group,
+                                                     uint8_t channel, uint8_t pressure,
+                                                     int64_t render_frame);
+/// @brief Queues an immediate (live) MIDI polyphonic key pressure to a MIDI destination.
+/// @param note Key the pressure belongs to (0..127).
+/// @param pressure 7-bit key pressure (0..127).
+/// @param render_frame Render-frame time to apply, or -1 for immediate.
+SonareError sonare_engine_push_midi_poly_pressure(SonareRealtimeEngine* engine,
+                                                  uint32_t destination_id, uint8_t group,
+                                                  uint8_t channel, uint8_t note, uint8_t pressure,
+                                                  int64_t render_frame);
 /// @brief Queues a MIDI panic (all-notes-off) releasing every sounding note.
 /// @param render_frame Render-frame time to apply, or -1 for immediate.
 SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t render_frame);

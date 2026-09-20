@@ -10,6 +10,7 @@
 
 #include "c_api/sonare_c_engine_internal.h"
 #include "sonare_c_test_helpers.h"
+#include "support/audio_fixtures.h"
 #include "util/json.h"
 #include "util/resource_limits.h"
 
@@ -2525,6 +2526,137 @@ TEST_CASE("sonare_engine owned MIDI input source drains into instruments", "[c_a
   REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(sonare_engine_push_midi_input_note_on(engine, 0, 0, 64, 100, 4) ==
           SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine pushes the three per-note dimensions on both live paths",
+          "[c_api][engine]") {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // The two live families reach an instrument by different routes -- the
+  // engine-owned input source drains a UMP queue at block start, the
+  // destination family queues a command at a render frame -- so each dimension
+  // is measured through both rather than assumed to follow its sibling. The
+  // built-in synth answers all three: a bend moves the pitch, either pressure
+  // raises the level.
+  constexpr uint32_t kDestination = 3;
+  constexpr int kBlock = 256;
+  constexpr size_t kSettle = 4096;
+  constexpr size_t kMeasured = 16384;
+  constexpr double kC4Hz = 261.626;
+  // The range this synth bends over, which the note is a whole tone above at
+  // full positive bend.
+  constexpr double kBentHz = 293.665;
+  enum class Path { kInputSource, kDestination };
+
+  auto render = [](Path path, uint16_t bend14, uint8_t channel_pressure,
+                   uint8_t key_pressure) -> std::vector<float> {
+    SonareRealtimeEngine* engine = nullptr;
+    REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
+    SonareEngineBuiltinSynthConfig synth{};
+    synth.gain = 0.4f;
+    REQUIRE(sonare_engine_set_builtin_instrument(engine, kDestination, &synth) == SONARE_OK);
+    const bool live_input = path == Path::kInputSource;
+    if (live_input) {
+      REQUIRE(sonare_engine_set_midi_input_source(engine, kDestination) == SONARE_OK);
+      REQUIRE(sonare_engine_push_midi_input_note_on(engine, 0, 0, 60, 100, 0) == SONARE_OK);
+    } else {
+      REQUIRE(sonare_engine_push_midi_note_on(engine, kDestination, 0, 0, 60, 100, -1) ==
+              SONARE_OK);
+    }
+
+    std::vector<float> settle(kSettle, 0.0f);
+    std::vector<float> settle_right(kSettle, 0.0f);
+    for (size_t at = 0; at < kSettle; at += kBlock) {
+      float* channels[] = {settle.data() + at, settle_right.data() + at};
+      REQUIRE(sonare_engine_process(engine, channels, 2, kBlock) == SONARE_OK);
+    }
+
+    // Sent after the note is sounding, which is both how a live gesture arrives
+    // and what keeps the measurement independent of how two events at the same
+    // timestamp are ordered.
+    if (live_input) {
+      REQUIRE(sonare_engine_push_midi_input_pitch_bend(engine, 0, 0, bend14, 0) == SONARE_OK);
+      REQUIRE(sonare_engine_push_midi_input_channel_pressure(engine, 0, 0, channel_pressure, 0) ==
+              SONARE_OK);
+      REQUIRE(sonare_engine_push_midi_input_poly_pressure(engine, 0, 0, 60, key_pressure, 0) ==
+              SONARE_OK);
+    } else {
+      REQUIRE(sonare_engine_push_midi_pitch_bend(engine, kDestination, 0, 0, bend14, -1) ==
+              SONARE_OK);
+      REQUIRE(sonare_engine_push_midi_channel_pressure(engine, kDestination, 0, 0, channel_pressure,
+                                                       -1) == SONARE_OK);
+      REQUIRE(sonare_engine_push_midi_poly_pressure(engine, kDestination, 0, 0, 60, key_pressure,
+                                                    -1) == SONARE_OK);
+    }
+
+    std::vector<float> left(kMeasured, 0.0f);
+    std::vector<float> right(kMeasured, 0.0f);
+    for (size_t at = 0; at < kMeasured; at += kBlock) {
+      float* channels[] = {left.data() + at, right.data() + at};
+      REQUIRE(sonare_engine_process(engine, channels, 2, kBlock) == SONARE_OK);
+    }
+    sonare_engine_destroy(engine);
+    return left;
+  };
+
+  for (const Path path : {Path::kInputSource, Path::kDestination}) {
+    const std::vector<float> plain = render(path, 8192, 0, 0);
+    const std::vector<float> bent = render(path, 16383, 0, 0);
+    const std::vector<float> pressed = render(path, 8192, 127, 0);
+    const std::vector<float> keyed = render(path, 8192, 0, 127);
+
+    // The note sounds without any of the three, so no check below can pass on a
+    // silent render.
+    const float plain_peak = peak_abs(plain);
+    REQUIRE(plain_peak > 0.01f);
+
+    REQUIRE(sonare::test::fft_fundamental(plain, 0, kC4Hz) == Catch::Approx(kC4Hz).margin(6.0));
+    REQUIRE(sonare::test::fft_fundamental(bent, 0, kBentHz) == Catch::Approx(kBentHz).margin(6.0));
+
+    REQUIRE(peak_abs(pressed) > plain_peak * 1.5f);
+    REQUIRE(peak_abs(keyed) > plain_peak * 1.5f);
+  }
+#else
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_input_pitch_bend(engine, 0, 0, 8192, 0) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_push_midi_pitch_bend(engine, 3, 0, 0, 8192, -1) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  sonare_engine_destroy(engine);
+#endif
+}
+
+TEST_CASE("sonare_engine refuses a per-note dimension outside its domain", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+
+  // A bend is 14-bit, so the one value a 7-bit range check would let through is
+  // exactly the one that has to be refused here.
+  REQUIRE(sonare_engine_push_midi_pitch_bend(engine, 3, 0, 0, 16384, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_channel_pressure(engine, 3, 0, 16, 64, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_poly_pressure(engine, 3, 0, 0, 128, 64, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_poly_pressure(engine, 3, 0, 0, 60, 128, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_input_pitch_bend(nullptr, 0, 0, 8192, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // An input-source push before the source is enabled is refused rather than
+  // queued into a drain nothing reads.
+  REQUIRE(sonare_engine_push_midi_input_pitch_bend(engine, 0, 0, 8192, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_input_channel_pressure(engine, 0, 0, 64, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_input_poly_pressure(engine, 0, 0, 60, 64, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
 #endif
 
   sonare_engine_destroy(engine);
