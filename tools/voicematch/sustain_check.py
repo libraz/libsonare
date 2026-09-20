@@ -64,12 +64,14 @@ LATE_S = ONSET_S + HOLD_S - 0.1
 WINDOW_S = 0.05
 
 #: How far the model's fall may differ from its reference's before it is
-#: reported, in dB over the whole hold. Measured on the reed engine, which
-#: supplies both populations: the four voices that hold sit within 1.6 dB of
-#: their reference and the four that ring down start at 15.5, so the two are
-#: separated by an order of magnitude rather than by a line drawn through them.
-#: Ten sits with margin on both sides and keeps out the pads and effects, whose
-#: own evolution the reference describes only approximately and which reach 6.6.
+#: reported, in dB over the whole hold. Set from the reed engine, which then
+#: supplied both populations an order of magnitude apart: the voices that held
+#: sat within 1.6 dB of their reference and the ones that rang down started at
+#: 15.5, so the line was not drawn through either. All ten reeds now hold, so
+#: the separation the value was read from is no longer in the bank to re-read —
+#: `test_sustain_check.py` places specimens either side of it instead. Ten also
+#: keeps out the pads and effects, whose own evolution the reference describes
+#: only approximately and which reach 6.6.
 EXCESS_TOLERANCE_DB = 10.0
 
 #: How far a reference may itself fall over the hold and still be a target.
