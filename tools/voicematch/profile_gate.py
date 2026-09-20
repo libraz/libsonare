@@ -445,6 +445,25 @@ def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str,
 RATCHETED_BOUND_KEYS = ("median", "abs_median", "p90")
 
 
+def _carry_the_unbounded(bounds: dict[str, dict], gate_path: Path) -> dict[str, str]:
+    """Carry forward the recorded reasons a dimension holds no bound.
+
+    `_unbounded` is hand-written — it says why a dimension the capture asks for
+    could not be measured into one, which nothing computes — and this writer
+    emits a fixed payload, so until this existed every re-record silently
+    deleted it. The kit gates are where the convention lives and they were the
+    ones it would have been deleted from.
+
+    An entry whose dimension now HAS a bound is dropped rather than carried: the
+    reason has been answered, and a stale one would explain away a bound that is
+    sitting right beside it.
+    """
+    if not gate_path.exists():
+        return {}
+    recorded = json.loads(gate_path.read_text()).get("_unbounded") or {}
+    return {k: v for k, v in recorded.items() if k not in bounds}
+
+
 def _keep_the_tighter(bounds: dict[str, dict], gate_path: Path) -> list[str]:
     """Hold each bound to the tighter of the recorded one and the new one.
 
@@ -528,6 +547,7 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
             "rows": int(row.get("n", 0)),
         }
     declined = _keep_the_tighter(bounds, gate_path)
+    carried = _carry_the_unbounded(bounds, gate_path)
     gate_path.parent.mkdir(parents=True, exist_ok=True)
     gate_path.write_text(json.dumps({
         "_": "Bounds the compare table is held to. All three are absolute limits: 'median' "
@@ -552,6 +572,9 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
         # bounds so a later reader can see which of them are the measured floor
         # rather than the voice's own number times the margin.
         "reference_spread": {k: round(v, 4) for k, v in sorted((spread or {}).items())},
+        # Why a dimension this capture asks for carries no bound. Hand-written
+        # and carried across a re-record, since nothing measures it.
+        **({"_unbounded": carried} if carried else {}),
         "bounds": bounds,
     }, indent=2) + "\n")
     print(f"\nwrote {gate_path} — {len(bounds)} bounds at {margin:g}x the measured values")

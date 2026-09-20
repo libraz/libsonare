@@ -1370,6 +1370,38 @@ def test_the_written_gate_records_what_each_bound_was_measured_from(tmp_path):
     assert bounds["tnr"]["rows"] == 50
 
 
+def test_a_re_record_carries_the_hand_written_unbounded_reasons(tmp_path):
+    """A fixed payload silently deleted them, and the kit gates are where they live.
+
+    `_unbounded` says why a dimension the capture asks for holds no bound, which
+    nothing computes — so losing it on a re-record turns an argued absence back
+    into an unexplained one with no diff to notice.
+    """
+    gate = tmp_path / "gate.json"
+    profile_module.write_gate_file(_summary(decay=18), gate, "ref", 1.25)
+    held = json.loads(gate.read_text())
+    held["_unbounded"] = {"ring": "no second reference reaches it"}
+    gate.write_text(json.dumps(held))
+
+    profile_module.write_gate_file(_summary(decay=20), gate, "ref", 1.25)
+    assert json.loads(gate.read_text())["_unbounded"] == {
+        "ring": "no second reference reaches it"}
+
+
+def test_an_unbounded_reason_is_dropped_once_its_dimension_gains_a_bound(tmp_path):
+    """Otherwise a stale reason explains away a bound sitting beside it."""
+    gate = tmp_path / "gate.json"
+    profile_module.write_gate_file(_summary(decay=18), gate, "ref", 1.25)
+    held = json.loads(gate.read_text())
+    held["_unbounded"] = {"tnr": "nothing measured it"}
+    gate.write_text(json.dumps(held))
+
+    profile_module.write_gate_file(_summary(decay=18, tnr=50), gate, "ref", 1.25)
+    written = json.loads(gate.read_text())
+    assert "tnr" in written["bounds"]
+    assert "_unbounded" not in written
+
+
 def _one_bound(tmp_path, error: float, name: str = "gate.json") -> dict:
     """Write a gate whose single dimension carries `error`, and read it back."""
     gate = tmp_path / name
