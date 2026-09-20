@@ -278,8 +278,8 @@
       "patch": "bright_piano",
       "engine": "piano",
       "capture": "bright_piano",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
@@ -289,12 +289,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 12,
+          "gated": 13,
           "excused": [],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -306,6 +304,7 @@
             "balance",
             "body",
             "centroid_pct",
+            "damper",
             "decay",
             "doubling",
             "register",
@@ -318,7 +317,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p001b001-bright-acoustic-piano",
@@ -448,9 +447,8 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 11,
+          "gated": 12,
           "excused": [
-            "damper",
             "stereo"
           ],
           "gaps": [],
@@ -466,6 +464,7 @@
             "balance",
             "body",
             "centroid_pct",
+            "damper",
             "decay",
             "doubling",
             "register",
@@ -596,8 +595,8 @@
       "patch": "honky_tonk",
       "engine": "piano",
       "capture": "honky_tonk",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
@@ -607,12 +606,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 12,
+          "gated": 13,
           "excused": [],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -624,6 +621,7 @@
             "balance",
             "body",
             "centroid_pct",
+            "damper",
             "decay",
             "doubling",
             "register",
@@ -636,7 +634,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p003b001-honky-tonk-piano",
@@ -751,8 +749,8 @@
       "patch": "e_piano",
       "engine": "fm",
       "capture": "electric_piano_1",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
@@ -762,27 +760,26 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 8,
+          "gated": 12,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "outside": {},
           "unjudgeable": [
+            "aftersound",
             "attack",
             "balance",
             "body",
             "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
             "register",
             "stretch",
             "tnr",
@@ -792,7 +789,7 @@
         "structure": null,
         "music": null
       },
-      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p004b001-electric-piano-1",
@@ -1111,8 +1108,8 @@
       "patch": "e_piano",
       "engine": "fm",
       "capture": "electric_piano_2",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
@@ -1122,27 +1119,26 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 8,
+          "gated": 12,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "outside": {},
           "unjudgeable": [
+            "aftersound",
             "attack",
             "balance",
             "body",
             "centroid_pct",
+            "damper",
+            "decay",
+            "doubling",
             "register",
             "stretch",
             "tnr",
@@ -1152,7 +1148,7 @@
         "structure": null,
         "music": null
       },
-      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p005b001-electric-piano-2",
@@ -1749,14 +1745,11 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 8,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
           "gaps": [
-            "decay",
-            "aftersound",
-            "doubling",
             "damper"
           ],
           "complete": false
@@ -1766,10 +1759,13 @@
           "total": 0,
           "outside": {},
           "unjudgeable": [
+            "aftersound",
             "attack",
             "balance",
             "body",
             "centroid_pct",
+            "decay",
+            "doubling",
             "register",
             "stretch",
             "tnr",
@@ -1779,7 +1775,7 @@
         "structure": null,
         "music": null
       },
-      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, damper"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p008-celesta",
@@ -5460,8 +5456,8 @@
       "patch": "pizzicato",
       "engine": "karplus_strong",
       "capture": "pizzicato_strings",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -5471,27 +5467,26 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 8,
+          "gated": 11,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "outside": {},
           "unjudgeable": [
+            "aftersound",
             "attack",
             "balance",
             "body",
             "centroid_pct",
+            "decay",
+            "doubling",
             "register",
             "stretch",
             "tnr",
@@ -5507,7 +5502,7 @@
         },
         "music": null
       },
-      "next": "3 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p046-orchestral-harp",
@@ -6020,8 +6015,8 @@
       "patch": "orchestra_hit",
       "engine": "subtractive",
       "capture": "orchestra_hit",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -6031,27 +6026,26 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 7,
+          "gated": 10,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "outside": {},
           "unjudgeable": [
+            "aftersound",
             "attack",
             "balance",
             "body",
             "centroid_pct",
+            "decay",
+            "doubling",
             "register",
             "tnr",
             "vel_range"
@@ -6066,7 +6060,7 @@
         },
         "music": null
       },
-      "next": "3 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p056-trumpet",
@@ -7996,8 +7990,8 @@
       "patch": "pad_halo",
       "engine": "subtractive",
       "capture": "pad_halo",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -8007,12 +8001,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 9,
+          "gated": 10,
           "excused": [],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8023,6 +8015,7 @@
             "balance",
             "body",
             "centroid_pct",
+            "damper",
             "register",
             "stereo",
             "stretch",
@@ -8033,7 +8026,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p095-pad-8-sweep",
@@ -8544,8 +8537,8 @@
       "patch": "banjo",
       "engine": "karplus_strong",
       "capture": "banjo",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -8555,27 +8548,26 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 8,
+          "gated": 11,
           "excused": [
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "outside": {},
           "unjudgeable": [
+            "aftersound",
             "attack",
             "balance",
             "body",
             "centroid_pct",
+            "decay",
+            "doubling",
             "register",
             "stretch",
             "tnr",
@@ -8585,7 +8577,7 @@
         "structure": null,
         "music": null
       },
-      "next": "3 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p106-shamisen",
@@ -9183,8 +9175,8 @@
       "patch": "melodic_tom",
       "engine": "percussion",
       "capture": "melodic_tom",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "percussion",
@@ -9194,27 +9186,26 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 7,
+          "gated": 10,
           "excused": [
             "damper",
             "tnr"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "outside": {},
           "unjudgeable": [
+            "aftersound",
             "attack",
             "balance",
             "body",
             "centroid_pct",
+            "decay",
+            "doubling",
             "register",
             "stereo",
             "vel_range"
@@ -9223,7 +9214,7 @@
         "structure": null,
         "music": null
       },
-      "next": "3 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p118-synth-drum",
@@ -9391,8 +9382,8 @@
       "patch": "sfx_breath",
       "engine": "subtractive",
       "capture": "breath_noise",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
@@ -9402,14 +9393,12 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 5,
-          "gated": 3,
+          "gated": 4,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "decay"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -9418,6 +9407,7 @@
           "unjudgeable": [
             "attack",
             "centroid_pct",
+            "decay",
             "vel_range"
           ]
         },
@@ -9430,7 +9420,7 @@
         },
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: decay"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p122-seashore",

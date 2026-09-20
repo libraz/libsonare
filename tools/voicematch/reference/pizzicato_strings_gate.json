@@ -3,52 +3,92 @@
   "timbre": "gm046",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-04T14:46:59+00:00",
-  "recorded_utc": "2026-09-09T16:50:04+00:00",
+  "recorded_utc": "2026-09-20T20:48:57+00:00",
   "reference_spread": {},
   "bounds": {
     "stretch": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 9.7,
-      "abs_median": 12.463,
-      "p90": 28.008,
+      "abs_median": 12.425,
+      "p90": 27.933,
       "rows": 35
     },
     "tnr": {
-      "median": 36.875,
-      "abs_median": 36.875,
-      "p90": 54.367,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 22.688,
+      "abs_median": 22.688,
+      "p90": 36.98,
       "rows": 35
     },
     "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
       "median": 40.0,
       "abs_median": 40.0,
       "p90": 40.0,
       "rows": 35
     },
     "body": {
-      "median": 97.213,
-      "abs_median": 97.213,
-      "p90": 132.46,
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 71.812,
+      "abs_median": 71.812,
+      "p90": 99.76,
       "rows": 35
     },
     "balance": {
-      "median": 10.75,
-      "abs_median": 10.75,
-      "p90": 22.154,
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 4.565,
+      "abs_median": 5.445,
+      "p90": 19.198,
       "rows": 35
     },
     "centroid_pct": {
-      "median": 1.0,
-      "abs_median": 4.333,
-      "p90": 35.729,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 7.951,
+      "abs_median": 8.088,
+      "p90": 47.477,
       "rows": 35
     },
+    "decay": {
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 4.887,
+      "abs_median": 17.063,
+      "p90": 41.906,
+      "rows": 30
+    },
+    "aftersound": {
+      "floor": 1.81,
+      "floor_from": "guess",
+      "median": 68.081,
+      "abs_median": 68.081,
+      "p90": 114.084,
+      "rows": 30
+    },
+    "doubling": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 153.656,
+      "abs_median": 153.656,
+      "p90": 260.874,
+      "rows": 30
+    },
     "vel_range": {
-      "median": 10.138,
-      "abs_median": 10.138,
-      "p90": 11.28,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 10.062,
+      "abs_median": 10.062,
+      "p90": 11.22,
       "rows": 7
     },
     "register": {
+      "floor": 1.0,
+      "floor_from": "default",
       "median": 2.912,
       "abs_median": 2.912,
       "p90": 4.917,

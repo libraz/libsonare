@@ -3,70 +3,100 @@
   "timbre": "gm003",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-04T11:47:41+00:00",
-  "recorded_utc": "2026-09-09T16:49:19+00:00",
+  "recorded_utc": "2026-09-20T20:55:48+00:00",
   "reference_spread": {},
   "bounds": {
     "stretch": {
-      "median": 4.494,
-      "abs_median": 4.494,
-      "p90": 7.246,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 4.475,
+      "abs_median": 4.475,
+      "p90": 7.149,
       "rows": 44
     },
     "decay": {
-      "median": 2.2,
-      "abs_median": 2.256,
-      "p90": 3.893,
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 0.881,
+      "abs_median": 1.631,
+      "p90": 2.844,
       "rows": 44
     },
     "tnr": {
-      "median": 20.931,
-      "abs_median": 20.931,
-      "p90": 31.904,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 20.913,
+      "abs_median": 20.913,
+      "p90": 31.406,
       "rows": 44
     },
+    "damper": {
+      "floor": 5.0,
+      "floor_from": "guess",
+      "median": 81.25,
+      "abs_median": 81.25,
+      "p90": 199.375,
+      "rows": 12
+    },
     "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
       "median": 40.0,
       "abs_median": 40.0,
       "p90": 40.0,
       "rows": 44
     },
     "aftersound": {
+      "floor": 1.81,
+      "floor_from": "guess",
       "median": 1.81,
-      "abs_median": 2.394,
+      "abs_median": 1.81,
       "p90": 4.441,
       "rows": 44
     },
     "doubling": {
-      "median": 9.369,
-      "abs_median": 9.369,
-      "p90": 20.606,
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 8.506,
+      "abs_median": 8.506,
+      "p90": 20.574,
       "rows": 44
     },
     "balance": {
-      "median": 19.306,
-      "abs_median": 19.306,
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 19.134,
+      "abs_median": 19.134,
       "p90": 31.039,
       "rows": 44
     },
     "centroid_pct": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 81.643,
       "abs_median": 81.643,
-      "p90": 222.635,
+      "p90": 222.296,
       "rows": 44
     },
     "body": {
-      "median": 21.463,
-      "abs_median": 21.463,
-      "p90": 36.226,
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 20.95,
+      "abs_median": 20.95,
+      "p90": 35.209,
       "rows": 34
     },
     "vel_range": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 18.725,
       "abs_median": 18.725,
       "p90": 26.318,
       "rows": 9
     },
     "register": {
+      "floor": 1.0,
+      "floor_from": "default",
       "median": 1.0,
       "abs_median": 2.747,
       "p90": 9.456,

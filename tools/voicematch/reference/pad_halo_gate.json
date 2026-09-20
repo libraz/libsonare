@@ -3,61 +3,87 @@
   "timbre": "gm095",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-04T09:26:22+00:00",
-  "recorded_utc": "2026-09-09T16:49:57+00:00",
+  "recorded_utc": "2026-09-20T20:55:56+00:00",
   "reference_spread": {},
   "bounds": {
     "stretch": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 1.0,
       "abs_median": 3.452,
       "p90": 21.768,
       "rows": 28
     },
     "tnr": {
-      "median": 18.306,
-      "abs_median": 18.306,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 18.281,
+      "abs_median": 18.281,
       "p90": 61.175,
       "rows": 28
     },
+    "damper": {
+      "floor": 5.0,
+      "floor_from": "guess",
+      "median": 137.5,
+      "abs_median": 178.125,
+      "p90": 580.625,
+      "rows": 28
+    },
     "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
       "median": 731.25,
-      "abs_median": 946.875,
+      "abs_median": 940.625,
       "p90": 1406.25,
       "rows": 28
     },
     "stereo": {
+      "floor": 0.27,
+      "floor_from": "guess",
       "median": 0.369,
       "abs_median": 0.369,
       "p90": 0.875,
       "rows": 28
     },
     "balance": {
-      "median": 5.34,
-      "abs_median": 5.34,
-      "p90": 14.934,
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 5.285,
+      "abs_median": 5.285,
+      "p90": 14.915,
       "rows": 28
     },
     "centroid_pct": {
-      "median": 25.462,
-      "abs_median": 26.132,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 25.404,
+      "abs_median": 25.94,
       "p90": 115.437,
       "rows": 28
     },
     "body": {
-      "median": 82.019,
-      "abs_median": 82.019,
-      "p90": 92.799,
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 82.0,
+      "abs_median": 82.0,
+      "p90": 92.698,
       "rows": 20
     },
     "vel_range": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 19.125,
       "abs_median": 19.125,
       "p90": 19.352,
       "rows": 7
     },
     "register": {
+      "floor": 1.0,
+      "floor_from": "default",
       "median": 1.0,
-      "abs_median": 1.594,
-      "p90": 2.954,
+      "abs_median": 1.544,
+      "p90": 2.932,
       "rows": 28
     }
   }
