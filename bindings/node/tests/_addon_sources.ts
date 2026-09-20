@@ -240,7 +240,7 @@ const POSITIONAL_READER_DEFINITION =
  * covered while the table that names them still read as green.
  */
 const BAILOUT_READER =
-  /\b(?:Optional(?:Int|Uint32|Int64|Float|Double|Bool|String|MidiByte)Arg|Required(?:Int|Int64)Arg|NonNegativeSizeTArg|Int32Arg|node_arg_int_no_wrap)\s*\(/;
+  /\b(?:Optional(?:Int|Uint16|Uint32|Int64|Float|Double|Bool|String|MidiByte)Arg|Required(?:Int|Int64)Arg|NonNegativeSizeTArg|Int32Arg|node_arg_int_no_wrap)\s*\(/;
 
 /**
  * Every positional-reader definition across the addon sources.

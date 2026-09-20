@@ -687,6 +687,30 @@ inline bool RequiredMidiByteValue(Napi::Env env, const Napi::Value& value, const
   return true;
 }
 
+/// @brief Read a value destined for a uint16_t C-ABI field, rejecting anything
+///        that would silently wrap through the narrowing cast.
+/// @details The 16-bit sibling of @ref RequiredMidiByteValue, written for the
+///          fields a MIDI byte cannot spell: a pitch bend is 14-bit, so reading
+///          it through the 7-bit family would refuse half its domain. It closes
+///          the same hole at the wider width — 65536 lands on 0 and -1 on
+///          0xFFFF, both inside the type, so a C ABI checking its own range
+///          cannot tell either from a value the caller chose. The narrower MIDI
+///          domain (a bend is 0..16383) stays the C ABI's to enforce, as it does
+///          for the byte reader.
+inline bool RequiredUint16Value(Napi::Env env, const Napi::Value& value, const std::string& label,
+                                uint16_t* out) {
+  if (!RequireNumberValue(env, value, label)) return false;
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (env.IsExceptionPending()) return false;
+  if (!(number >= 0.0) || number > 65535.0 || std::floor(number) != number) {
+    Napi::RangeError::New(env, label + " must be an integer in [0, 65535]")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = static_cast<uint16_t>(number);
+  return true;
+}
+
 /// @brief Read a value as an int, rejecting anything a float-to-integer cast
 ///        cannot represent: a non-number is a TypeError, a non-finite,
 ///        fractional or out-of-int-range number a RangeError.
@@ -1017,6 +1041,19 @@ inline bool OptionalMidiByteArg(Napi::Env env, const Napi::CallbackInfo& info, s
     return true;
   }
   return RequiredMidiByteValue(env, value, name, out);
+}
+
+/// @brief Read an optional positional argument destined for a uint16_t C-ABI
+///        field, with the wrap rejection @ref RequiredUint16Value applies.
+inline bool OptionalUint16Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, uint16_t fallback, uint16_t* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredUint16Value(env, value, name, out);
 }
 
 /// @brief The size_t domain both readers below enforce, written once: a finite

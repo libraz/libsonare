@@ -1091,6 +1091,73 @@ export class RealtimeEngine {
     this.native.pushMidiInputCc(group, channel, controller, value, portTimeSamples);
   }
 
+  /**
+   * Push a live MIDI pitch bend into the engine-owned MIDI input source.
+   *
+   * Requires {@link RealtimeEngine.setMidiInputSource}; without it the call is
+   * refused. The engine drains the queue at block start, so the event lands on
+   * the block containing `portTimeSamples`.
+   *
+   * @param group UMP group (0..15).
+   * @param channel MIDI channel (0..15).
+   * @param bend14 Unsigned 14-bit bend, centre 8192 (0..16383). A value outside
+   *   that range is refused rather than wrapped into it.
+   * @param portTimeSamples Port-clock timestamp in samples; defaults to 0.
+   * @example
+   * ```ts
+   * engine.setMidiInputSource(destinationId);
+   * engine.pushMidiInputPitchBend(0, 0, 16383); // a full bend up
+   * ```
+   */
+  pushMidiInputPitchBend(
+    group: number,
+    channel: number,
+    bend14: number,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputPitchBend(group, channel, bend14, portTimeSamples);
+  }
+
+  /**
+   * Push a live MIDI channel pressure (aftertouch) into the engine-owned MIDI
+   * input source. Requires {@link RealtimeEngine.setMidiInputSource}.
+   *
+   * @param group UMP group (0..15).
+   * @param channel MIDI channel (0..15).
+   * @param pressure 7-bit channel pressure (0..127), applying to every sounding
+   *   note on the channel.
+   * @param portTimeSamples Port-clock timestamp in samples; defaults to 0.
+   */
+  pushMidiInputChannelPressure(
+    group: number,
+    channel: number,
+    pressure: number,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputChannelPressure(group, channel, pressure, portTimeSamples);
+  }
+
+  /**
+   * Push a live MIDI polyphonic key pressure into the engine-owned MIDI input
+   * source. Requires {@link RealtimeEngine.setMidiInputSource}.
+   *
+   * @param group UMP group (0..15).
+   * @param channel MIDI channel (0..15).
+   * @param note Key the pressure belongs to (0..127), so it reaches that voice
+   *   alone rather than the whole channel.
+   * @param pressure 7-bit key pressure (0..127).
+   * @param portTimeSamples Port-clock timestamp in samples; defaults to 0.
+   */
+  pushMidiInputPolyPressure(
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputPolyPressure(group, channel, note, pressure, portTimeSamples);
+  }
+
   pushMidiNoteOn(
     destinationId: number,
     group: number,
@@ -1127,6 +1194,79 @@ export class RealtimeEngine {
     renderFrame = -1,
   ): void {
     this.native.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
+  }
+
+  /**
+   * Queue an immediate (live) MIDI pitch bend to a MIDI destination.
+   *
+   * The bend travels as a single-word MIDI 1.0 UMP rather than as a 7-bit
+   * scalar command, which is what carries it at its own width: no 7-bit
+   * controller value can spell a 14-bit bend.
+   *
+   * @param destinationId MIDI destination id (clip/instrument destination).
+   * @param group UMP group (0..15).
+   * @param channel MIDI channel (0..15).
+   * @param bend14 Unsigned 14-bit bend, centre 8192 (0..16383). A value outside
+   *   that range is refused rather than wrapped into it.
+   * @param renderFrame Render-frame time to apply, or -1 for immediate.
+   * @example
+   * ```ts
+   * engine.pushMidiNoteOn(destinationId, 0, 0, 60, 100);
+   * engine.pushMidiPitchBend(destinationId, 0, 0, 16383); // a full bend up
+   * ```
+   */
+  pushMidiPitchBend(
+    destinationId: number,
+    group: number,
+    channel: number,
+    bend14: number,
+    renderFrame = -1,
+  ): void {
+    this.native.pushMidiPitchBend(destinationId, group, channel, bend14, renderFrame);
+  }
+
+  /**
+   * Queue an immediate (live) MIDI channel pressure (aftertouch) to a MIDI
+   * destination.
+   *
+   * @param destinationId MIDI destination id (clip/instrument destination).
+   * @param group UMP group (0..15).
+   * @param channel MIDI channel (0..15).
+   * @param pressure 7-bit channel pressure (0..127), applying to every sounding
+   *   note on the channel.
+   * @param renderFrame Render-frame time to apply, or -1 for immediate.
+   */
+  pushMidiChannelPressure(
+    destinationId: number,
+    group: number,
+    channel: number,
+    pressure: number,
+    renderFrame = -1,
+  ): void {
+    this.native.pushMidiChannelPressure(destinationId, group, channel, pressure, renderFrame);
+  }
+
+  /**
+   * Queue an immediate (live) MIDI polyphonic key pressure to a MIDI
+   * destination.
+   *
+   * @param destinationId MIDI destination id (clip/instrument destination).
+   * @param group UMP group (0..15).
+   * @param channel MIDI channel (0..15).
+   * @param note Key the pressure belongs to (0..127), so it reaches that voice
+   *   alone rather than the whole channel.
+   * @param pressure 7-bit key pressure (0..127).
+   * @param renderFrame Render-frame time to apply, or -1 for immediate.
+   */
+  pushMidiPolyPressure(
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
+    renderFrame = -1,
+  ): void {
+    this.native.pushMidiPolyPressure(destinationId, group, channel, note, pressure, renderFrame);
   }
 
   /**

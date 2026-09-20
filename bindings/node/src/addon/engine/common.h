@@ -291,6 +291,7 @@ using sonare_node::OptionalInt64Arg;
 using sonare_node::OptionalIntArg;
 using sonare_node::OptionalMidiByteArg;
 using sonare_node::OptionalStringArg;
+using sonare_node::OptionalUint16Arg;
 using sonare_node::OptionalUint32Arg;
 using sonare_node::ReadBuiltinWaveform;
 using sonare_node::RequiredDoubleProperty;

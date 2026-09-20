@@ -285,6 +285,47 @@ interface NativeEngine {
     value: unknown,
     renderFrame?: unknown,
   ): void;
+  pushMidiPitchBend(
+    destinationId: unknown,
+    group: unknown,
+    channel: unknown,
+    bend14: unknown,
+    renderFrame?: unknown,
+  ): void;
+  pushMidiChannelPressure(
+    destinationId: unknown,
+    group: unknown,
+    channel: unknown,
+    pressure: unknown,
+    renderFrame?: unknown,
+  ): void;
+  pushMidiPolyPressure(
+    destinationId: unknown,
+    group: unknown,
+    channel: unknown,
+    note: unknown,
+    pressure: unknown,
+    renderFrame?: unknown,
+  ): void;
+  pushMidiInputPitchBend(
+    group: unknown,
+    channel: unknown,
+    bend14: unknown,
+    portTimeSamples?: unknown,
+  ): void;
+  pushMidiInputChannelPressure(
+    group: unknown,
+    channel: unknown,
+    pressure: unknown,
+    portTimeSamples?: unknown,
+  ): void;
+  pushMidiInputPolyPressure(
+    group: unknown,
+    channel: unknown,
+    note: unknown,
+    pressure: unknown,
+    portTimeSamples?: unknown,
+  ): void;
   setArticulation(destinationId: unknown, channel: unknown, articulation: unknown): void;
   articulation(destinationId: unknown, channel: unknown): unknown;
   pushMidiPanic(renderFrame?: unknown): void;
@@ -1404,6 +1445,48 @@ const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeEngine.pushMidiPitchBend',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'group and channel out of byte range',
+        call: (e) => e.pushMidiPitchBend(0, 300, 300, 8192),
+        error: RangeError,
+      },
+      {
+        // 65536 casts to 0 — a valid bend — so the wrap has to be refused here.
+        argument: 'bend14 out of uint16 range',
+        call: (e) => e.pushMidiPitchBend(0, 0, 0, 65536),
+        error: RangeError,
+      },
+      { argument: 'renderFrame', call: (e) => e.pushMidiPitchBend(0, 0, 0, 8192, 'now') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.pushMidiChannelPressure',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'group and channel out of byte range',
+        call: (e) => e.pushMidiChannelPressure(0, 300, 300, 64),
+        error: RangeError,
+      },
+      { argument: 'renderFrame', call: (e) => e.pushMidiChannelPressure(0, 0, 0, 64, 'now') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.pushMidiPolyPressure',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'group and channel out of byte range',
+        call: (e) => e.pushMidiPolyPressure(0, 300, 300, 60, 64),
+        error: RangeError,
+      },
+      { argument: 'renderFrame', call: (e) => e.pushMidiPolyPressure(0, 0, 0, 60, 64, 'now') },
+    ],
+  },
+  {
     name: 'RealtimeEngine.pushMidiInputNoteOn',
     missingRequired: [],
     badTransportArguments: [
@@ -1438,6 +1521,50 @@ const CASES: AbortGuardCase[] = [
         error: RangeError,
       },
       { argument: 'portTimeSamples', call: (e) => e.pushMidiInputCc(0, 0, 7, 64, 'now') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.pushMidiInputPitchBend',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'group and channel out of byte range',
+        call: (e) => e.pushMidiInputPitchBend(300, 300, 8192),
+        error: RangeError,
+      },
+      {
+        argument: 'bend14 out of uint16 range',
+        call: (e) => e.pushMidiInputPitchBend(0, 0, 65536),
+        error: RangeError,
+      },
+      { argument: 'portTimeSamples', call: (e) => e.pushMidiInputPitchBend(0, 0, 8192, 'now') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.pushMidiInputChannelPressure',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'group and channel out of byte range',
+        call: (e) => e.pushMidiInputChannelPressure(300, 300, 64),
+        error: RangeError,
+      },
+      { argument: 'portTimeSamples', call: (e) => e.pushMidiInputChannelPressure(0, 0, 64, 'now') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.pushMidiInputPolyPressure',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'group and channel out of byte range',
+        call: (e) => e.pushMidiInputPolyPressure(300, 300, 60, 64),
+        error: RangeError,
+      },
+      {
+        argument: 'portTimeSamples',
+        call: (e) => e.pushMidiInputPolyPressure(0, 0, 60, 64, 'now'),
+      },
     ],
   },
   {

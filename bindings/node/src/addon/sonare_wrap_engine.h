@@ -139,9 +139,15 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value PushMidiInputNoteOn(const Napi::CallbackInfo& info);
   Napi::Value PushMidiInputNoteOff(const Napi::CallbackInfo& info);
   Napi::Value PushMidiInputCc(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiInputPitchBend(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiInputChannelPressure(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiInputPolyPressure(const Napi::CallbackInfo& info);
   Napi::Value PushMidiNoteOn(const Napi::CallbackInfo& info);
   Napi::Value PushMidiNoteOff(const Napi::CallbackInfo& info);
   Napi::Value PushMidiCc(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiPitchBend(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiChannelPressure(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiPolyPressure(const Napi::CallbackInfo& info);
   Napi::Value PushMidiPanic(const Napi::CallbackInfo& info);
   Napi::Value PushMidiSysex(const Napi::CallbackInfo& info);
   Napi::Value SetMidiDestinationExternal(const Napi::CallbackInfo& info);

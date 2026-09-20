@@ -299,9 +299,17 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::PushMidiInputNoteOn>("pushMidiInputNoteOn"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiInputNoteOff>("pushMidiInputNoteOff"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiInputCc>("pushMidiInputCc"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiInputPitchBend>("pushMidiInputPitchBend"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiInputChannelPressure>(
+              "pushMidiInputChannelPressure"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiInputPolyPressure>(
+              "pushMidiInputPolyPressure"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiNoteOn>("pushMidiNoteOn"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiNoteOff>("pushMidiNoteOff"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiCc>("pushMidiCc"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiPitchBend>("pushMidiPitchBend"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiChannelPressure>("pushMidiChannelPressure"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiPolyPressure>("pushMidiPolyPressure"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiPanic>("pushMidiPanic"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiSysex>("pushMidiSysex"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiDestinationExternal>(
@@ -1377,6 +1385,65 @@ Napi::Value RealtimeEngineWrap::PushMidiInputCc(const Napi::CallbackInfo& info) 
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value RealtimeEngineWrap::PushMidiInputPitchBend(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  uint16_t bend14 = 0;
+  int64_t port_time = 0;
+  if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
+      !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
+      !OptionalUint16Arg(env, info, 2, "bend14", 0, &bend14) ||
+      !OptionalInt64Arg(env, info, 3, "portTimeSamples", 0, &port_time)) {
+    return env.Undefined();
+  }
+  ThrowIfError(
+      env, sonare_engine_push_midi_input_pitch_bend(engine_, group, channel, bend14, port_time));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiInputChannelPressure(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  uint8_t pressure = 0;
+  int64_t port_time = 0;
+  if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
+      !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
+      !OptionalMidiByteArg(env, info, 2, "pressure", 0, &pressure) ||
+      !OptionalInt64Arg(env, info, 3, "portTimeSamples", 0, &port_time)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_push_midi_input_channel_pressure(engine_, group, channel,
+                                                                   pressure, port_time));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiInputPolyPressure(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  uint8_t note = 0;
+  uint8_t pressure = 0;
+  int64_t port_time = 0;
+  if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
+      !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
+      !OptionalMidiByteArg(env, info, 2, "note", 0, &note) ||
+      !OptionalMidiByteArg(env, info, 3, "pressure", 0, &pressure) ||
+      !OptionalInt64Arg(env, info, 4, "portTimeSamples", 0, &port_time)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_push_midi_input_poly_pressure(engine_, group, channel, note,
+                                                                pressure, port_time));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value RealtimeEngineWrap::PushMidiNoteOff(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
@@ -1417,6 +1484,68 @@ Napi::Value RealtimeEngineWrap::PushMidiCc(const Napi::CallbackInfo& info) {
   }
   ThrowIfError(env, sonare_engine_push_midi_cc(engine_, destination_id, group, channel, controller,
                                                value, deadline));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiPitchBend(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  uint16_t bend14 = 0;
+  int64_t deadline = -1;
+  if (!OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
+      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel) ||
+      !OptionalUint16Arg(env, info, 3, "bend14", 0, &bend14) ||
+      !OptionalInt64Arg(env, info, 4, "renderFrame", -1, &deadline)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_push_midi_pitch_bend(engine_, destination_id, group, channel,
+                                                       bend14, deadline));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiChannelPressure(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  uint8_t pressure = 0;
+  int64_t deadline = -1;
+  if (!OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
+      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel) ||
+      !OptionalMidiByteArg(env, info, 3, "pressure", 0, &pressure) ||
+      !OptionalInt64Arg(env, info, 4, "renderFrame", -1, &deadline)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_push_midi_channel_pressure(engine_, destination_id, group,
+                                                             channel, pressure, deadline));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiPolyPressure(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  uint8_t note = 0;
+  uint8_t pressure = 0;
+  int64_t deadline = -1;
+  if (!OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
+      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel) ||
+      !OptionalMidiByteArg(env, info, 3, "note", 0, &note) ||
+      !OptionalMidiByteArg(env, info, 4, "pressure", 0, &pressure) ||
+      !OptionalInt64Arg(env, info, 5, "renderFrame", -1, &deadline)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_push_midi_poly_pressure(engine_, destination_id, group, channel,
+                                                          note, pressure, deadline));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
