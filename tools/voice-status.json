@@ -14,7 +14,15 @@
       "stage": 0.6,
       "stage_name": "fitted",
       "open_candidates": [
-        "tank-3.6"
+        "tank-3.6",
+        "felt-worn",
+        "felt-hard",
+        "decay-short",
+        "decay-long",
+        "board-forward",
+        "strike-eighth",
+        "unison-wide",
+        "treble-sings"
       ],
       "axes": {
         "engine": "piano",
@@ -49,7 +57,7 @@
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6 — then listen to a take and record the verdict in signoff.json"
+      "next": "judge the recorded candidate(s) — tank-3.6, felt-worn, felt-hard, decay-short, decay-long, board-forward, strike-eighth, unison-wide, treble-sings — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p000b001-acoustic-grand-piano",
@@ -163,20 +171,25 @@
       "tone_class": "struck-string",
       "patch": "piano_wide",
       "engine": "piano",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "piano_wide",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "piano_wide",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 13,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -184,13 +197,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -202,7 +211,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p000b016-acoustic-grand-piano",
@@ -368,20 +377,25 @@
       "tone_class": "struck-string",
       "patch": "bright_piano_wide",
       "engine": "piano",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "bright_piano_wide",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "bright_piano_wide",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 9,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -389,13 +403,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -407,7 +417,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p002-electric-grand-piano",
@@ -523,20 +533,25 @@
       "tone_class": "struck-string",
       "patch": "electric_grand_wide",
       "engine": "piano",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "electric_grand_wide",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "electric_grand_wide",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 9,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -544,13 +559,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -562,7 +573,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p003-honky-tonk-piano",
@@ -1242,20 +1253,25 @@
       "tone_class": "struck-string",
       "patch": "e_piano_detuned_2",
       "engine": "fm",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "e_piano_detuned_2",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
         "patch": "e_piano_detuned_2",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 9,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -1263,13 +1279,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -1281,7 +1293,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p005b016-electric-piano-2",
@@ -1544,20 +1556,25 @@
       "tone_class": "struck-string",
       "patch": "harpsichord_octave",
       "engine": "harpsichord",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "harpsichord_octave",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
         "patch": "harpsichord_octave",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 10,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -1565,13 +1582,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -1583,7 +1596,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p006b016-harpsichord",
@@ -1595,20 +1608,25 @@
       "tone_class": "struck-string",
       "patch": "harpsichord_wide",
       "engine": "harpsichord",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "harpsichord_wide",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
         "patch": "harpsichord_wide",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 10,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -1616,13 +1634,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -1634,7 +1648,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p006b024-harpsichord",
@@ -1646,20 +1660,25 @@
       "tone_class": "struck-string",
       "patch": "harpsichord_keyoff",
       "engine": "harpsichord",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "harpsichord_keyoff",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
         "patch": "harpsichord_keyoff",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 10,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -1667,13 +1686,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -1685,7 +1700,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p007-clavinet",
@@ -2058,7 +2073,15 @@
       "stage": 0.6,
       "stage_name": "fitted",
       "open_candidates": [
-        "ring-2.3x"
+        "ring-2.3x",
+        "tube-open",
+        "tube-off",
+        "hard-mallet",
+        "soft-mallet",
+        "modes-two",
+        "modes-four",
+        "ring-short",
+        "bar-even"
       ],
       "axes": {
         "engine": "modal",
@@ -2095,7 +2118,7 @@
         "structure": null,
         "music": null
       },
-      "next": "judge the recorded candidate(s) — ring-2.3x — then listen to a take and record the verdict in signoff.json"
+      "next": "judge the recorded candidate(s) — ring-2.3x, tube-open, tube-off, hard-mallet, soft-mallet, modes-two, modes-four, ring-short, bar-even — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p012b001-marimba",
@@ -2157,33 +2180,34 @@
       "tone_class": "modal",
       "patch": "marimba_wide",
       "engine": "modal",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "marimba_wide",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "marimba_wide",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 7,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "decay",
             "aftersound",
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -2195,7 +2219,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p013-xylophone",
@@ -2412,33 +2436,34 @@
       "tone_class": "modal",
       "patch": "church_bell",
       "engine": "modal",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "church_bell",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "church_bell",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 5,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "decay",
             "aftersound",
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -2450,7 +2475,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p014b009-tubular-bells",
@@ -2462,33 +2487,34 @@
       "tone_class": "modal",
       "patch": "carillon",
       "engine": "modal",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "carillon",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "carillon",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 5,
         "gate_state": null,
         "coverage": {
           "canonical": 12,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "decay",
             "aftersound",
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -2500,7 +2526,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p015-dulcimer",
@@ -2812,31 +2838,32 @@
       "tone_class": "sustained",
       "patch": "organ_sixties",
       "engine": "additive",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "organ_sixties",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "additive",
         "patch": "organ_sixties",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 11,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -2848,7 +2875,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p016b032-drawbar-organ",
@@ -3211,7 +3238,13 @@
       "open_candidates": [
         "tank-3.6",
         "hall",
-        "no-16"
+        "no-16",
+        "foundations-only",
+        "mixtures-forward",
+        "chiff-strong",
+        "chiff-none",
+        "slow-speech",
+        "wind-unsteady"
       ],
       "axes": {
         "engine": "pipe_organ",
@@ -3248,7 +3281,7 @@
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16 — then listen to a take and record the verdict in signoff.json"
+      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16, foundations-only, mixtures-forward, chiff-strong, chiff-none, slow-speech, wind-unsteady — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p019b001-church-organ",
@@ -3356,31 +3389,32 @@
       "tone_class": "sustained",
       "patch": "church_organ_flutes",
       "engine": "pipe_organ",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "church_organ_flutes",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "pipe_organ",
         "patch": "church_organ_flutes",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 11,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -3392,7 +3426,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p019b016-church-organ",
@@ -3404,31 +3438,32 @@
       "tone_class": "sustained",
       "patch": "church_organ_full",
       "engine": "pipe_organ",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "church_organ_full",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "pipe_organ",
         "patch": "church_organ_full",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 11,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -3440,7 +3475,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p020-reed-organ",
@@ -3548,31 +3583,32 @@
       "tone_class": "sustained",
       "patch": "accordion_italian",
       "engine": "free_reed",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "accordion_italian",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
         "patch": "accordion_italian",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 6,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -3584,7 +3620,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p022-harmonica",
@@ -3845,20 +3881,25 @@
       "tone_class": "plucked-string",
       "patch": "ukulele",
       "engine": "karplus_strong",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "ukulele",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "ukulele",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 6,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -3866,13 +3907,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -3884,7 +3921,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p024b016-acoustic-guitar-nylon",
@@ -3896,20 +3933,25 @@
       "tone_class": "plucked-string",
       "patch": "nylon_guitar_keyoff",
       "engine": "karplus_strong",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "nylon_guitar_keyoff",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "nylon_guitar_keyoff",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 5,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -3917,13 +3959,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -3935,7 +3973,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p025-acoustic-guitar-steel",
@@ -4101,20 +4139,25 @@
       "tone_class": "plucked-string",
       "patch": "twelve_string_guitar",
       "engine": "karplus_strong",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "twelve_string_guitar",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "twelve_string_guitar",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 5,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -4122,13 +4165,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -4140,7 +4179,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p025b016-acoustic-guitar-steel",
@@ -4152,20 +4191,25 @@
       "tone_class": "plucked-string",
       "patch": "mandolin",
       "engine": "karplus_strong",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "mandolin",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "mandolin",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 5,
         "gate_state": null,
         "coverage": {
           "canonical": 13,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "decay",
@@ -4173,13 +4217,9 @@
             "doubling",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -4191,7 +4231,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p026-electric-guitar-jazz",
@@ -4289,7 +4329,8 @@
           "gated": 11,
           "excused": [
             "damper",
-            "stereo"
+            "stereo",
+            "vel_range"
           ],
           "gaps": [],
           "complete": true
@@ -5056,31 +5097,32 @@
       "tone_class": "sustained",
       "patch": "violin_slow",
       "engine": "bowed_string",
-      "capture": null,
-      "stage": 0.2,
-      "stage_name": "voiced",
+      "capture": "violin_slow",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "violin_slow",
-        "timbres": 0,
-        "profile_rows": 0,
+        "timbres": 1,
+        "profile_rows": 5,
         "gate_state": null,
         "coverage": {
           "canonical": 10,
           "gated": 0,
-          "excused": [],
+          "excused": [
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
           "gaps": [
             "stretch",
             "body",
             "attack",
-            "stereo",
-            "damper",
             "balance",
             "centroid_pct",
-            "tnr",
-            "vel_range",
-            "register"
+            "tnr"
           ],
           "complete": false
         },
@@ -5092,7 +5134,7 @@
         "structure": null,
         "music": null
       },
-      "next": "capture an oracle: no reference exists for this voice"
+      "next": "write the first gate: `profile.py compare --write-gate` against the profile just measured"
     },
     {
       "slug": "p041-viola",
@@ -6377,7 +6419,11 @@
       "capture": "alto_sax",
       "stage": 0.6,
       "stage_name": "fitted",
-      "open_candidates": [],
+      "open_candidates": [
+        "valve-scale-0.6",
+        "valve-scale-0.25",
+        "valve-scale-0.08"
+      ],
       "axes": {
         "engine": "reed",
         "patch": "alto_sax",
@@ -6417,7 +6463,7 @@
         },
         "music": null
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "judge the recorded candidate(s) — valve-scale-0.6, valve-scale-0.25, valve-scale-0.08 — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p066-tenor-sax",
@@ -6482,7 +6528,11 @@
       "capture": "baritone_sax",
       "stage": 0.6,
       "stage_name": "fitted",
-      "open_candidates": [],
+      "open_candidates": [
+        "valve-scale-0.6",
+        "valve-scale-0.25",
+        "valve-scale-0.08"
+      ],
       "axes": {
         "engine": "reed",
         "patch": "baritone_sax",
@@ -6516,7 +6566,7 @@
         "structure": null,
         "music": null
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "judge the recorded candidate(s) — valve-scale-0.6, valve-scale-0.25, valve-scale-0.08 — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p068-oboe",
@@ -9520,7 +9570,13 @@
       "open_candidates": [
         "vibraslap-thinned",
         "scrapers-speak",
-        "crash2-and-china-reopened"
+        "crash2-and-china-reopened",
+        "snare-wires-open",
+        "snare-wires-off",
+        "hats-tight",
+        "hats-washy",
+        "toms-ring",
+        "kick-deep"
       ],
       "axes": {
         "engine": "percussion",
@@ -9530,16 +9586,21 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 11,
-          "gated": 10,
+          "gated": 5,
           "excused": [
+            "attack",
+            "band_decay",
+            "crest",
+            "level",
+            "ring",
             "stereo"
           ],
           "gaps": [],
           "complete": true
         },
         "agreement": {
-          "inside": 9,
-          "total": 10,
+          "inside": 4,
+          "total": 5,
           "outside": {
             "band_shape": 1.26
           }
@@ -9553,7 +9614,7 @@
         },
         "music": null
       },
-      "next": "judge the recorded candidate(s) — vibraslap-thinned, scrapers-speak, crash2-and-china-reopened — then listen to a take and record the verdict in signoff.json"
+      "next": "judge the recorded candidate(s) — vibraslap-thinned, scrapers-speak, crash2-and-china-reopened, snare-wires-open, snare-wires-off, hats-tight, hats-washy, toms-ring, kick-deep — then listen to a take and record the verdict in signoff.json"
     }
   ]
 }
