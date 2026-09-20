@@ -302,6 +302,53 @@ TEST_CASE("synth patch numeric zero fields keep the base preset", "[project][syn
   REQUIRE(overridden.gain == 0.5f);
 }
 
+TEST_CASE("the patch pitch offset is read only by a caller that declares it",
+          "[project][synth_patch]") {
+  SonareSynthPatch asked{};
+  asked.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  std::strcpy(asked.preset, "clarinet");
+  asked.pitch_offset_cents = 700.0f;
+
+  sonare::midi::synth::NativeSynthConfig read;
+  const char* error = nullptr;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(asked, &read, &error));
+  REQUIRE(error == nullptr);
+  REQUIRE(read.patch.pitch_offset_cents == 700.0f);
+
+  // The version gate is what makes a tail append safe: a caller compiled against
+  // the previous layout has whatever its own struct ended with sitting where
+  // this field now is, so the field must stay unread at its version.
+  SonareSynthPatch older = asked;
+  older.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION - 1;
+  sonare::midi::synth::NativeSynthConfig ignored;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(older, &ignored, &error));
+  REQUIRE(error == nullptr);
+  REQUIRE(ignored.patch.pitch_offset_cents == 0.0f);
+}
+
+TEST_CASE("the patch pitch offset reaches both of the engine pitch sources",
+          "[project][synth_patch]") {
+  SonareProject* project = make_synth_project(3);
+
+  // The two engine classes take their pitch from different places — the
+  // subtractive oscillator from its base frequency, the physical models from
+  // the per-sample pitch factor — and the offset is applied at each. One preset
+  // per side, because a field wired into only one of them moves only one.
+  for (const char* preset : {"clarinet", "saw-lead"}) {
+    SonareSynthPatch base{};
+    base.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    std::strcpy(base.preset, preset);
+    const std::vector<float> reference = bounce_synth(project, base);
+    REQUIRE(peak_of(reference) > 0.0f);
+
+    SonareSynthPatch transposed = base;
+    transposed.pitch_offset_cents = 700.0f;
+    REQUIRE(bounce_synth(project, transposed) != reference);
+  }
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("synth patch mod routing ordinals are clamped at the C ABI boundary",
           "[project][synth_patch]") {
   SonareSynthPatch patch{};

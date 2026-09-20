@@ -506,7 +506,8 @@ typedef struct {
   int struct_version;                        /* 0 or 1 => version 1; 2 => present_fields honoured;
                                                 3 => the sample-engine block at the tail is read too;
                                                 4 => the series highpass at the tail is read too;
-                                                5 => the converter block at the tail is read too */
+                                                5 => the converter block at the tail is read too;
+                                                6 => the pitch offset at the tail is read too */
   char preset[SONARE_SYNTH_PRESET_NAME_MAX]; /* base preset name; "" = init patch */
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
@@ -564,7 +565,7 @@ typedef struct {
      value is zero, which the "0 => base" rule above cannot express; a clear bit
      keeps the version-1 behaviour, so a caller that only fills the fields it
      wants to change needs no mask at all. Honoured from struct_version 2 on.
-     32 bits with 27 in use; a further extension appends a second word under a
+     32 bits with 31 in use; a further extension appends a second word under a
      new struct_version rather than widening this one. */
   uint32_t present_fields;
 
@@ -594,13 +595,24 @@ typedef struct {
      as a value and switch that half off. */
   float sample_hold_hz; /* rate the output is held at; below 100 Hz is raised to it */
   float bit_depth;      /* word length the held value is quantized to, [1,24]; fractional is fine */
+
+  /* --- pitch offset (struct_version 6) --- */
+  /* Constant transposition of the voice's own pitch, in cents, [-4800, 4800].
+     Applied once on every engine, at whichever point that engine takes its
+     pitch from — the oscillator's base frequency on the subtractive engine, the
+     per-sample pitch factor on the rest — so the amount is the same either way.
+     0 => base; set SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS in present_fields to
+     ask for 0 as a value. Automatable under the same name, which is why it is
+     here: every other name @ref sonare_engine_resolve_instrument_automation_id
+     accepts is a field of this struct. */
+  float pitch_offset_cents;
 } SonareSynthPatch;
 
 /* Newest SonareSynthPatch layout. Named rather than written out at each site,
    because every one of them — the reader's upper bound, the writer's stamp, and
    the tests that pin "one past the newest is refused" — has to move together,
    and a literal in any of them goes stale silently. */
-#define SONARE_SYNTH_PATCH_STRUCT_VERSION 5
+#define SONARE_SYNTH_PATCH_STRUCT_VERSION 6
 
 /* Bit positions for SonareSynthPatch.present_fields. The enum fields are absent
    on purpose: their zero is already the reserved "keep base" value and every
@@ -637,6 +649,7 @@ typedef struct {
 #define SONARE_SYNTH_FIELD_HP_CUTOFF_HZ (1u << 27)
 #define SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ (1u << 28)
 #define SONARE_SYNTH_FIELD_BIT_DEPTH (1u << 29)
+#define SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS (1u << 30)
 
 #ifdef __cplusplus
 // Layout guards for the previously-unversioned analysis / feature PODs. Any
@@ -685,8 +698,8 @@ static_assert(offsetof(SonareSynthPatch, gain) ==
 static_assert(offsetof(SonareSynthPatch, present_fields) ==
                   offsetof(SonareSynthPatch, bus_drive) + sizeof(float),
               "SonareSynthPatch present_fields offset changed");
-static_assert(SONARE_SYNTH_FIELD_BIT_DEPTH ==
-                  1u << 29,  // Highest bit in use; widening needs a struct_version bump.
+static_assert(SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS ==
+                  1u << 30,  // Highest bit in use; widening needs a struct_version bump.
               "SonareSynthPatch presence bit range changed");
 #endif
 

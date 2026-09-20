@@ -210,6 +210,7 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
   read_float("hpCutoffHz", SONARE_SYNTH_FIELD_HP_CUTOFF_HZ, &patch->hp_cutoff_hz);
   read_float("sampleHoldHz", SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ, &patch->sample_hold_hz);
   read_float("bitDepth", SONARE_SYNTH_FIELD_BIT_DEPTH, &patch->bit_depth);
+  read_float("pitchOffsetCents", SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS, &patch->pitch_offset_cents);
   read_float("resonanceQ", SONARE_SYNTH_FIELD_RESONANCE_Q, &patch->resonance_q);
   read_float("keyTrack", SONARE_SYNTH_FIELD_KEY_TRACK, &patch->key_track);
   read_float("envToCutoffCents", SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS,
@@ -300,6 +301,7 @@ inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& pa
   out.Set("hpCutoffHz", patch.hp_cutoff_hz);
   out.Set("sampleHoldHz", patch.sample_hold_hz);
   out.Set("bitDepth", patch.bit_depth);
+  out.Set("pitchOffsetCents", patch.pitch_offset_cents);
   out.Set("resonanceQ", patch.resonance_q);
   out.Set("keyTrack", patch.key_track);
   out.Set("envToCutoffCents", patch.env_to_cutoff_cents);

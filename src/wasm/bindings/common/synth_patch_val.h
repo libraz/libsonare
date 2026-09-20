@@ -251,6 +251,7 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   read_float("hpCutoffHz", SONARE_SYNTH_FIELD_HP_CUTOFF_HZ, &patch.hp_cutoff_hz);
   read_float("sampleHoldHz", SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ, &patch.sample_hold_hz);
   read_float("bitDepth", SONARE_SYNTH_FIELD_BIT_DEPTH, &patch.bit_depth);
+  read_float("pitchOffsetCents", SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS, &patch.pitch_offset_cents);
   read_float("resonanceQ", SONARE_SYNTH_FIELD_RESONANCE_Q, &patch.resonance_q);
   read_float("keyTrack", SONARE_SYNTH_FIELD_KEY_TRACK, &patch.key_track);
   read_float("envToCutoffCents", SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS,
@@ -333,6 +334,7 @@ inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   out.set("hpCutoffHz", patch.hp_cutoff_hz);
   out.set("sampleHoldHz", patch.sample_hold_hz);
   out.set("bitDepth", patch.bit_depth);
+  out.set("pitchOffsetCents", patch.pitch_offset_cents);
   out.set("resonanceQ", patch.resonance_q);
   out.set("keyTrack", patch.key_track);
   out.set("envToCutoffCents", patch.env_to_cutoff_cents);

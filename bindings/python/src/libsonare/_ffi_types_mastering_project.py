@@ -651,10 +651,11 @@ SONARE_SYNTH_FIELD_MOD_ROUTINGS = 1 << 26
 SONARE_SYNTH_FIELD_HP_CUTOFF_HZ = 1 << 27
 SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ = 1 << 28
 SONARE_SYNTH_FIELD_BIT_DEPTH = 1 << 29
+SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS = 1 << 30
 
 
 class SonareSynthPatch(CStruct):
-    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 5).
+    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 6).
 
     Versioned NativeSynth patch: the base is the named ``preset`` (or the
     default subtractive patch when empty) and every non-zero field overrides
@@ -662,7 +663,8 @@ class SonareSynthPatch(CStruct):
     names the fields the caller set on purpose, so an explicit zero override is
     representable; it is honoured from ``struct_version`` 2 on. Version 3
     adds the sample-engine block, read only by a sample patch; version 4 adds
-    the series highpass past it; version 5 adds the voice's own converter.
+    the series highpass past it; version 5 adds the voice's own converter;
+    version 6 adds the pitch offset at the tail.
     """
 
     _fields_ = [
@@ -710,6 +712,7 @@ class SonareSynthPatch(CStruct):
         ("hp_cutoff_hz", ctypes.c_float),
         ("sample_hold_hz", ctypes.c_float),
         ("bit_depth", ctypes.c_float),
+        ("pitch_offset_cents", ctypes.c_float),
     ]
 
 

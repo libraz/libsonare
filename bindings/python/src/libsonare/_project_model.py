@@ -54,6 +54,7 @@ from ._ffi_types_mastering_project import (
     SONARE_SYNTH_FIELD_LFO_RATE_HZ,
     SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS,
     SONARE_SYNTH_FIELD_MOD_ROUTINGS,
+    SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS,
     SONARE_SYNTH_FIELD_POLYPHONY,
     SONARE_SYNTH_FIELD_RESONANCE_Q,
     SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ,
@@ -690,6 +691,7 @@ class SynthPatch:
     hp_cutoff_hz: float | None = None
     sample_hold_hz: float | None = None
     bit_depth: float | None = None
+    pitch_offset_cents: float | None = None
     resonance_q: float | None = None
     key_track: float | None = None
     env_to_cutoff_cents: float | None = None
@@ -734,7 +736,7 @@ class SynthPatch:
         if not isinstance(self.preset, str):
             raise TypeError("synth patch preset must be a string")
         c = SonareSynthPatch()
-        c.struct_version = 5
+        c.struct_version = 6
 
         # A field left at None keeps the base; anything supplied — including a
         # zero — is marked present so the core overrides with it.
@@ -767,6 +769,9 @@ class SynthPatch:
         _set_float("hp_cutoff_hz", SONARE_SYNTH_FIELD_HP_CUTOFF_HZ, self.hp_cutoff_hz)
         _set_float("sample_hold_hz", SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ, self.sample_hold_hz)
         _set_float("bit_depth", SONARE_SYNTH_FIELD_BIT_DEPTH, self.bit_depth)
+        _set_float(
+            "pitch_offset_cents", SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS, self.pitch_offset_cents
+        )
         _set_float("resonance_q", SONARE_SYNTH_FIELD_RESONANCE_Q, self.resonance_q)
         _set_float("key_track", SONARE_SYNTH_FIELD_KEY_TRACK, self.key_track)
         _set_float(
@@ -852,6 +857,7 @@ class SynthPatch:
             hp_cutoff_hz=float(c.hp_cutoff_hz),
             sample_hold_hz=float(c.sample_hold_hz),
             bit_depth=float(c.bit_depth),
+            pitch_offset_cents=float(c.pitch_offset_cents),
             resonance_q=float(c.resonance_q),
             key_track=float(c.key_track),
             env_to_cutoff_cents=float(c.env_to_cutoff_cents),

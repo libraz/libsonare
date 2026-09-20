@@ -266,6 +266,10 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
       p.bit_depth = c.bit_depth;
     }
   }
+  if (c.struct_version >= 6 &&
+      (set(SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS) || c.pitch_offset_cents != 0.0f)) {
+    p.pitch_offset_cents = c.pitch_offset_cents;
+  }
   if (c.struct_version >= 3 && p.mode == SynthEngineMode::kSample) {
     p.sample.set_index = c.sample_set;
     if (c.sample_level != 0.0f) p.sample.level = c.sample_level;
@@ -307,7 +311,8 @@ inline constexpr uint32_t kSynthPatchAllFields =
     SONARE_SYNTH_FIELD_GLIDE_MS | SONARE_SYNTH_FIELD_BODY_MIX | SONARE_SYNTH_FIELD_STEREO_SPREAD |
     SONARE_SYNTH_FIELD_GAIN | SONARE_SYNTH_FIELD_POLYPHONY | SONARE_SYNTH_FIELD_BUS_DRIVE |
     SONARE_SYNTH_FIELD_MOD_ROUTINGS | SONARE_SYNTH_FIELD_HP_CUTOFF_HZ |
-    SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ | SONARE_SYNTH_FIELD_BIT_DEPTH;
+    SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ | SONARE_SYNTH_FIELD_BIT_DEPTH |
+    SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS;
 
 /// Fills a versioned C synth patch from a catalog preset (the read direction:
 /// preset name + the wrapper-section values, so hosts can inspect and tweak).
@@ -330,6 +335,7 @@ inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
   out->hp_cutoff_hz = p.hp_cutoff_hz;
   out->sample_hold_hz = p.sample_hold_hz;
   out->bit_depth = p.bit_depth;
+  out->pitch_offset_cents = p.pitch_offset_cents;
   out->resonance_q = p.resonance_q;
   out->key_track = p.key_track;
   out->env_to_cutoff_cents = p.env_to_cutoff_cents;

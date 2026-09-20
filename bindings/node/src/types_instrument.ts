@@ -507,6 +507,22 @@ export interface SynthPatch {
   keyTrack?: number;
   envToCutoffCents?: number;
   velToCutoffCents?: number;
+  // --- pitch offset ---
+  /**
+   * Constant transposition of the voice's own pitch, in cents, clamped to
+   * [-4800, 4800]; 0 leaves the pitch alone. Applied on top of the note, so it
+   * shifts a whole patch without rewriting the part — a detuned layer, a sample
+   * set mapped a semitone off, an instrument pitched to a reference other than
+   * A440. Applied once on every engine, at whichever point that engine takes its
+   * pitch from — the oscillator's base frequency on the `'subtractive'` engine,
+   * the per-sample pitch factor on the rest — so the amount is the same either
+   * way.
+   *
+   * Also automatable under this same name through
+   * {@link RealtimeEngine.resolveInstrumentAutomationId}, which documents when
+   * a change reaches voices that are already sounding.
+   */
+  pitchOffsetCents?: number;
   // --- envelopes (ms / sustain in [0, 1]) ---
   ampAttackMs?: number;
   ampDecayMs?: number;
