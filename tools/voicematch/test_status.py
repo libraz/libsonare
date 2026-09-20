@@ -514,6 +514,43 @@ def test_an_excused_dimension_completes_coverage():
     assert status.coverage(V(), [excused], [gate])["complete"]
 
 
+def test_a_gate_recorded_reason_is_not_a_gap_and_is_not_completion_either():
+    """There are two exclusion registers and they say different things.
+
+    `dimensions_na` is the source not carrying the dimension, which is
+    permanent. A gate's `_unbounded` is this comparison recording no bound,
+    which covers a live model deficiency as readily as a settled limit — so it
+    stops the dimension reading as an oversight and must not promote the voice.
+    """
+
+    class V:
+        program, kit = 0, False
+
+    canon = canonical_dimensions(0)
+    gate = {"bounds": {d: {"median": 1.0} for d in canon if d != "balance"}}
+    assert status.coverage(V(), [{}], [gate])["gaps"] == ["balance"]
+
+    gate["_unbounded"] = {"balance": "the model has nothing on the grid this reads"}
+    got = status.coverage(V(), [{}], [gate])
+    assert got["gaps"] == []
+    assert got["unbounded"] == ["balance"]
+    assert not got["complete"]
+    assert "balance" not in got["excused"]
+
+
+def test_a_bound_outranks_a_reason_recorded_beside_it():
+    """A stale `_unbounded` left behind after a bound lands must not shadow it."""
+
+    class V:
+        program, kit = 0, False
+
+    canon = canonical_dimensions(0)
+    gate = {"bounds": {d: {"median": 1.0} for d in canon},
+            "_unbounded": {"balance": "recorded before the bound existed"}}
+    got = status.coverage(V(), [{}], [gate])
+    assert got["complete"] and "unbounded" not in got
+
+
 def test_agreement_folds_a_gate_that_has_no_spread_to_adjudicate_against():
     """A one-timbre capture's gate reports no `outside` key at all rather than
     an empty one, and three of the standard kit's four captures are that."""

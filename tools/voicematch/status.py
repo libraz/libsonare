@@ -359,19 +359,41 @@ def coverage(voice, cap_raws: list[dict], gates: list[dict]) -> dict:
     it. An excuse is a statement about the source that carries it — `drums.json`
     excuses the colour it handed to the module grids — so it settles a dimension
     only where nothing gates it.
+
+    **There are TWO registers a reason can be written in and they say different
+    things**, so both are read and they are reported apart. A capture's
+    `dimensions_na` says the source cannot carry the dimension at all; a gate's
+    `_unbounded` says the source carries it and no bound could be recorded from
+    this comparison, which is where a live disagreement between model and
+    reference gets written down. Reading only the first reported every such
+    entry as an oversight — the state its own prose had already ruled out.
     """
     canon = canonical_dimensions(voice.program, percussive=voice.kit)
     gated = {d for gate in gates for d in (gate.get("bounds") or {})}
     excused = {d for raw in cap_raws for d in (raw.get("dimensions_na") or {})}
+    unbounded = {d for gate in gates for d in (gate.get("_unbounded") or {})}
     excused -= gated
-    gaps = [d for d in canon if d not in gated and d not in excused]
-    return {
+    unbounded -= gated | excused
+    gaps = [d for d in canon if d not in gated and d not in excused
+            and d not in unbounded]
+    out = {
         "canonical": len(canon),
         "gated": len([d for d in canon if d in gated]),
         "excused": sorted(excused),
         "gaps": gaps,
-        "complete": not gaps,
+        # The two registers part company here, and this is the whole reason they
+        # are read apart. `dimensions_na` is permanent — the source does not
+        # carry the dimension and no later run will change that — so it
+        # completes coverage. `_unbounded` says this comparison recorded no
+        # bound, which covers both "nothing more can be measured" and "the model
+        # has nothing there yet"; the prose says which and no reader can. So it
+        # stops the dimension reading as an oversight and does not let the voice
+        # claim a coverage it does not have.
+        "complete": not gaps and not (unbounded & set(canon)),
     }
+    if unbounded & set(canon):
+        out["unbounded"] = sorted(unbounded & set(canon))
+    return out
 
 
 def profile_facts(ident: str) -> dict:
