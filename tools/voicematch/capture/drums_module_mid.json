@@ -30,11 +30,11 @@
   "rig": "none",
   "room": "none",
   "_note_map": "There is deliberately none. This source IS the GS kit map, so its keys are GM's by construction.",
-  "_dimensions": "The behaviour axis, as `drums_module`. Colour is `drums.json`'s and listing it here would quietly make the module the timbre target.",
+  "_dimensions": "The behaviour axis, as `drums_module`. Colour is the module's too and is read once on `drums_module_hit.json`, which holds 44 keys against this grid's 12; excluding it here keeps the kit from being charged twice for one property rather than assigning it to a modern reference, which is what the older wording said and what the policy no longer does.",
   "dimensions": ["band_decay", "ring", "attack", "crest", "level"],
   "dimensions_na": {
     "vel_range": "the font declares no velocity layers at all - `velRange` is set on none of its zones, so it holds one recording per note at a velocity it does not state. One recording cannot hold a dynamics range.",
-    "band_tilt": "colour, which `policy.json` assigns to the modern reference for a kit and not to the module. `drums.json` gates it.",
+    "band_tilt": "colour, which the kit reads once rather than three times: `drums_module_hit.json` gates it over 44 of the 47 keys, the widest of the module's three grids. Not a policy exclusion - `policy.json` gives a kit the module on the colour axis too - and not an unreadable one, since this grid carries `bands_db`, `flatness_db` and `centroid_hz` on every row. Gating it here as well would charge the kit twice for one property.",
     "band_shape": "colour, as `band_tilt`.",
     "centroid_pct": "colour, as `band_tilt`.",
     "tonality": "colour, as `band_tilt`.",

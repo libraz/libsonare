@@ -29,11 +29,11 @@
   "rig": "none",
   "room": "none",
   "_note_map": "There is deliberately none. The sampled kits in `drums.json` needed one because their toms do not hold GM's pitch order, and the two of them disagree about which order they do hold. This source IS the GS kit map, so its keys are GM's by construction and a remap would be inventing a disagreement.",
-  "_dimensions": "This capture answers the behaviour axis and is excused from the colour axis, which is `drums.json`'s. Listing a dimension here that policy assigns to the other reference would score a kit's colour against a module and quietly make the module the timbre target.",
+  "_dimensions": "This capture answers the behaviour axis. Colour is the module's too - `policy.json` gives a kit the machine on BOTH axes - but it is read once, on `drums_module_hit.json`, whose 44 keys are the widest coverage the module's three grids offer against this one's 17. The exclusion below is therefore about not counting one property twice, and is no longer the older claim that colour belongs to a modern reference; that claim was true under a policy this kit no longer follows.",
   "dimensions": ["band_decay", "ring", "attack", "crest", "level"],
   "dimensions_na": {
     "vel_range": "the font declares no velocity layers at all - `velRange` is set on none of its zones, so it holds one recording per note at a velocity it does not state. One recording cannot hold a dynamics range, and writing it out under several labels would manufacture one.",
-    "band_tilt": "colour, which `policy.json` assigns to the modern reference for a kit and not to the module. `drums.json` gates it.",
+    "band_tilt": "colour, which the kit reads once rather than three times: `drums_module_hit.json` gates it over 44 of the 47 keys, the widest of the module's three grids. Not a policy exclusion - `policy.json` gives a kit the module on the colour axis too - and not an unreadable one, since this grid carries `bands_db`, `flatness_db` and `centroid_hz` on every row. Gating it here as well would charge the kit twice for one property.",
     "band_shape": "colour, as `band_tilt`.",
     "centroid_pct": "colour, as `band_tilt`.",
     "tonality": "colour, as `band_tilt`.",

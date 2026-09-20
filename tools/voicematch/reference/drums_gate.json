@@ -3,47 +3,11 @@
   "timbre": "kit-a",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-18T05:40:50+00:00",
-  "recorded_utc": "2026-09-20T08:35:07+00:00",
+  "recorded_utc": "2026-09-20T16:29:56+00:00",
   "reference_spread": {
-    "band_shape": 9.8461,
-    "band_tilt": 6.0632,
-    "centroid_pct": 21.0013,
-    "tonality": 3.5,
     "vel_range": 4.16
   },
   "bounds": {
-    "band_tilt": {
-      "floor": 6.0632,
-      "floor_from": "measured spread",
-      "median": 6.063,
-      "abs_median": 6.556,
-      "p90": 27.151,
-      "rows": 282
-    },
-    "band_shape": {
-      "floor": 9.8461,
-      "floor_from": "measured spread",
-      "median": 15.566,
-      "abs_median": 15.566,
-      "p90": 27.966,
-      "rows": 282
-    },
-    "centroid_pct": {
-      "floor": 21.0013,
-      "floor_from": "measured spread",
-      "median": 21.001,
-      "abs_median": 26.742,
-      "p90": 103.503,
-      "rows": 282
-    },
-    "tonality": {
-      "floor": 3.5,
-      "floor_from": "measured spread",
-      "median": 3.5,
-      "abs_median": 8.981,
-      "p90": 32.016,
-      "rows": 282
-    },
     "vel_range": {
       "floor": 4.16,
       "floor_from": "measured spread",

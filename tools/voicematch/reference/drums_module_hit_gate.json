@@ -3,23 +3,63 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-20T04:37:52+00:00",
-  "recorded_utc": "2026-09-20T06:28:54+00:00",
+  "recorded_utc": "2026-09-20T16:29:41+00:00",
   "reference_spread": {},
-  "_floor": "Where these bounds' floors come from, since `reference_spread` above is empty: this capture holds one reference, so `write_gate_file` falls back to its hand-written table. `attack` is floored there at 40.0 ms, and every attack bound here sits on that floor rather than on the measurement. `crest` has no entry in that table and would fall through to 1.0, which is a default rather than a decision; it is floored instead at 2.12 dB - the median absolute crest disagreement between the two sampled kits in `reference/drums.json`, read with `percussion_reference_spread`, over the 282 hits they share. That is the tightest a crest bound can be without failing on which kit it was compared against.",
-  "_unbounded": {
-    "level": "the two references do not agree on it. Measured against the second reference over this grid, the two sit a median 5 to 7 dB apart and agree on fewer than half the hits, against a 6 dB tolerance. A bound recorded from one of them would be that reference's own kit balance, which is a mix decision rather than the instrument."
-  },
   "bounds": {
+    "band_tilt": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 1.0,
+      "abs_median": 13.127,
+      "p90": 33.776,
+      "rows": 44
+    },
+    "band_shape": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 19.837,
+      "abs_median": 19.837,
+      "p90": 28.947,
+      "rows": 44
+    },
     "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
       "median": 40.0,
       "abs_median": 40.0,
       "p90": 40.0,
       "rows": 44
     },
     "crest": {
-      "median": 2.12,
-      "abs_median": 3.656,
-      "p90": 8.244,
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 1.594,
+      "abs_median": 3.581,
+      "p90": 7.923,
+      "rows": 44
+    },
+    "centroid_pct": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 3.51,
+      "abs_median": 39.521,
+      "p90": 87.059,
+      "rows": 44
+    },
+    "tonality": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 3.513,
+      "abs_median": 8.644,
+      "p90": 31.785,
+      "rows": 44
+    },
+    "level": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 5.704,
       "rows": 44
     }
   }
