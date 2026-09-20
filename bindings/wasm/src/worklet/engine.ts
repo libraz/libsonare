@@ -840,6 +840,52 @@ export class SonareEngine {
     strips.pushMidiCc(this.stripContext, trackId, group, channel, controller, value, renderFrame);
   }
 
+  pushMidiPitchBend(
+    trackId: string | number,
+    group: number,
+    channel: number,
+    bend14: number,
+    renderFrame = -1,
+  ): void {
+    strips.pushMidiPitchBend(this.stripContext, trackId, group, channel, bend14, renderFrame);
+  }
+
+  pushMidiChannelPressure(
+    trackId: string | number,
+    group: number,
+    channel: number,
+    pressure: number,
+    renderFrame = -1,
+  ): void {
+    strips.pushMidiChannelPressure(
+      this.stripContext,
+      trackId,
+      group,
+      channel,
+      pressure,
+      renderFrame,
+    );
+  }
+
+  pushMidiPolyPressure(
+    trackId: string | number,
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
+    renderFrame = -1,
+  ): void {
+    strips.pushMidiPolyPressure(
+      this.stripContext,
+      trackId,
+      group,
+      channel,
+      note,
+      pressure,
+      renderFrame,
+    );
+  }
+
   pushMidiUmp(trackId: string | number, word0: number, renderFrame = -1): void {
     strips.pushMidiUmp(this.stripContext, trackId, word0, renderFrame);
   }
@@ -920,6 +966,58 @@ export class SonareEngine {
       channel,
       data0: controller,
       data1: value,
+      portTimeSamples,
+    });
+  }
+
+  pushMidiInputPitchBend(
+    group: number,
+    channel: number,
+    bend14: number,
+    portTimeSamples = 0,
+  ): void {
+    this.offlineEngine.pushMidiInputPitchBend(group, channel, bend14, portTimeSamples);
+    this.postSync({
+      type: 'syncMidiInputPitchBend',
+      group,
+      channel,
+      data0: bend14,
+      data1: 0,
+      portTimeSamples,
+    });
+  }
+
+  pushMidiInputChannelPressure(
+    group: number,
+    channel: number,
+    pressure: number,
+    portTimeSamples = 0,
+  ): void {
+    this.offlineEngine.pushMidiInputChannelPressure(group, channel, pressure, portTimeSamples);
+    this.postSync({
+      type: 'syncMidiInputChannelPressure',
+      group,
+      channel,
+      data0: pressure,
+      data1: 0,
+      portTimeSamples,
+    });
+  }
+
+  pushMidiInputPolyPressure(
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
+    portTimeSamples = 0,
+  ): void {
+    this.offlineEngine.pushMidiInputPolyPressure(group, channel, note, pressure, portTimeSamples);
+    this.postSync({
+      type: 'syncMidiInputPolyPressure',
+      group,
+      channel,
+      data0: note,
+      data1: pressure,
       portTimeSamples,
     });
   }

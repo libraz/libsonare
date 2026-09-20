@@ -1526,6 +1526,25 @@ export interface WasmRealtimeEngine {
     value: number,
     portTimeSamples: number,
   ) => void;
+  pushMidiInputPitchBend: (
+    group: number,
+    channel: number,
+    bend14: number,
+    portTimeSamples: number,
+  ) => void;
+  pushMidiInputChannelPressure: (
+    group: number,
+    channel: number,
+    pressure: number,
+    portTimeSamples: number,
+  ) => void;
+  pushMidiInputPolyPressure: (
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
+    portTimeSamples: number,
+  ) => void;
   pushMidiNoteOn: (
     destinationId: number,
     group: number,
@@ -1548,6 +1567,28 @@ export interface WasmRealtimeEngine {
     channel: number,
     controller: number,
     value: number,
+    renderFrame: number,
+  ) => void;
+  pushMidiPitchBend: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    bend14: number,
+    renderFrame: number,
+  ) => void;
+  pushMidiChannelPressure: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    pressure: number,
+    renderFrame: number,
+  ) => void;
+  pushMidiPolyPressure: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
     renderFrame: number,
   ) => void;
   pushMidiUmp: (destinationId: number, word0: number, renderFrame: number) => void;

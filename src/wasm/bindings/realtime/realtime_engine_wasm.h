@@ -23,6 +23,7 @@
 #include "wasm/bindings/common/common.h"
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "midi/synth/sf2_player.h"
+#include "midi/ump.h"
 #endif
 
 // Paged audio provider backing lazily-streamed clips; the full definition lives
@@ -168,9 +169,28 @@ class RealtimeEngineWasm {
   void pushMidiNoteOff(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                        const emscripten::val& channel_val, const emscripten::val& note_val,
                        const emscripten::val& velocity_val, int64_t render_frame);
+  void pushMidiInputPitchBend(const emscripten::val& group_val, const emscripten::val& channel_val,
+                              const emscripten::val& bend_val, int64_t port_time_samples);
+  void pushMidiInputChannelPressure(const emscripten::val& group_val,
+                                    const emscripten::val& channel_val,
+                                    const emscripten::val& pressure_val, int64_t port_time_samples);
+  void pushMidiInputPolyPressure(const emscripten::val& group_val,
+                                 const emscripten::val& channel_val,
+                                 const emscripten::val& note_val,
+                                 const emscripten::val& pressure_val, int64_t port_time_samples);
   void pushMidiCc(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                   const emscripten::val& channel_val, const emscripten::val& controller_val,
                   const emscripten::val& value_val, int64_t render_frame);
+  void pushMidiPitchBend(const emscripten::val& destination_id_val,
+                         const emscripten::val& group_val, const emscripten::val& channel_val,
+                         const emscripten::val& bend_val, int64_t render_frame);
+  void pushMidiChannelPressure(const emscripten::val& destination_id_val,
+                               const emscripten::val& group_val, const emscripten::val& channel_val,
+                               const emscripten::val& pressure_val, int64_t render_frame);
+  void pushMidiPolyPressure(const emscripten::val& destination_id_val,
+                            const emscripten::val& group_val, const emscripten::val& channel_val,
+                            const emscripten::val& note_val, const emscripten::val& pressure_val,
+                            int64_t render_frame);
   void pushMidiUmp(const emscripten::val& destination_id_val, const emscripten::val& word0_val,
                    int64_t render_frame);
   void pushMidiSysex(const emscripten::val& destination_id_val, emscripten::val data,
@@ -337,6 +357,16 @@ class RealtimeEngineWasm {
                     int64_t render_frame, sonare::rt::CommandType type);
   void pushMidiInputEvent(int group, int channel, int note, int velocity, int64_t port_time_samples,
                           bool note_on);
+  /// Queues one single-word MIDI 1.0 UMP to a destination. Takes the raw word
+  /// rather than a Ump so it stays compilable with the arrangement feature off,
+  /// where the MIDI headers are not included.
+  void queueMidiUmp(uint32_t destination_id, uint32_t word0, int64_t render_frame);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  /// Enqueues one single-word MIDI 1.0 UMP on the live input source. @p what
+  /// names the entry point in the refusal, which is the only thing the three
+  /// per-note dimensions do not share.
+  void pushMidiInputUmp(const sonare::midi::Ump& ump, int64_t port_time_samples, const char* what);
+#endif
 
   sonare::engine::RealtimeEngine engine_{};
   /// Engine-owned instrument per destination (built-in synth or SF2 player).

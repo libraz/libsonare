@@ -658,6 +658,50 @@ export class RealtimeEngine {
     this.native.pushMidiInputCc(group, channel, controller, value, portTimeSamples);
   }
 
+  /**
+   * Push a live MIDI pitch bend to the engine-owned MIDI input source.
+   *
+   * `bend14` is unsigned 14-bit with centre 8192 (0..16383) — the dimension is
+   * not 7-bit, so a value past 16383 is refused rather than narrowed. The input
+   * source must be enabled with {@link setMidiInputSource} first.
+   */
+  pushMidiInputPitchBend(
+    group: number,
+    channel: number,
+    bend14: number,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputPitchBend(group, channel, bend14, portTimeSamples);
+  }
+
+  /**
+   * Push a live MIDI channel pressure to the engine-owned MIDI input source.
+   * `pressure` is 7-bit (0..127). Under MPE this is the member channel's
+   * per-note pressure.
+   */
+  pushMidiInputChannelPressure(
+    group: number,
+    channel: number,
+    pressure: number,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputChannelPressure(group, channel, pressure, portTimeSamples);
+  }
+
+  /**
+   * Push a live MIDI polyphonic key pressure to the engine-owned MIDI input
+   * source. `note` and `pressure` are 7-bit (0..127).
+   */
+  pushMidiInputPolyPressure(
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputPolyPressure(group, channel, note, pressure, portTimeSamples);
+  }
+
   pushMidiNoteOn(
     destinationId: number,
     group: number,
@@ -695,6 +739,54 @@ export class RealtimeEngine {
     renderFrame = -1,
   ): void {
     this.native.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
+  }
+
+  /**
+   * Queue an immediate (live) MIDI pitch bend to a MIDI destination. `bend14`
+   * is unsigned 14-bit with centre 8192 (0..16383); `renderFrame` is the frame
+   * to fire at, or -1 for immediate. Mirrors the Node/Python/C-ABI
+   * `pushMidiPitchBend`.
+   */
+  pushMidiPitchBend(
+    destinationId: number,
+    group: number,
+    channel: number,
+    bend14: number,
+    renderFrame = -1,
+  ): void {
+    this.native.pushMidiPitchBend(destinationId, group, channel, bend14, renderFrame);
+  }
+
+  /**
+   * Queue an immediate (live) MIDI channel pressure to a MIDI destination.
+   * `pressure` is 7-bit (0..127); `renderFrame` is the frame to fire at, or -1
+   * for immediate. Mirrors the Node/Python/C-ABI `pushMidiChannelPressure`.
+   */
+  pushMidiChannelPressure(
+    destinationId: number,
+    group: number,
+    channel: number,
+    pressure: number,
+    renderFrame = -1,
+  ): void {
+    this.native.pushMidiChannelPressure(destinationId, group, channel, pressure, renderFrame);
+  }
+
+  /**
+   * Queue an immediate (live) MIDI polyphonic key pressure to a MIDI
+   * destination. `note` and `pressure` are 7-bit (0..127); `renderFrame` is the
+   * frame to fire at, or -1 for immediate. Mirrors the Node/Python/C-ABI
+   * `pushMidiPolyPressure`.
+   */
+  pushMidiPolyPressure(
+    destinationId: number,
+    group: number,
+    channel: number,
+    note: number,
+    pressure: number,
+    renderFrame = -1,
+  ): void {
+    this.native.pushMidiPolyPressure(destinationId, group, channel, note, pressure, renderFrame);
   }
 
   /** Queue one immediate MIDI 1.0 channel-voice UMP word for a destination. */

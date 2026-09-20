@@ -557,6 +557,22 @@ export interface SonareEngineSyncMidiUmpMessage {
   renderFrame: number;
 }
 
+/**
+ * One of the three per-note expression dimensions, addressed to a destination.
+ * `data0`/`data1` carry the dimension's own payload the way the live-input
+ * message beside this one does: bend14 / 0, pressure / 0, or note / pressure.
+ * A bend is 14-bit, which is why these do not ride the 7-bit CC message.
+ */
+export interface SonareEngineSyncMidiExpressionMessage {
+  type: 'syncMidiPitchBend' | 'syncMidiChannelPressure' | 'syncMidiPolyPressure';
+  destinationId: number;
+  group: number;
+  channel: number;
+  data0: number;
+  data1: number;
+  renderFrame: number;
+}
+
 export interface SonareEngineSyncMidiSysexMessage {
   type: 'syncMidiSysex';
   destinationId: number;
@@ -595,7 +611,13 @@ export interface SonareEngineSyncMidiCcBindingMessage {
 }
 
 export interface SonareEngineSyncMidiInputEventMessage {
-  type: 'syncMidiInputNoteOn' | 'syncMidiInputNoteOff' | 'syncMidiInputCc';
+  type:
+    | 'syncMidiInputNoteOn'
+    | 'syncMidiInputNoteOff'
+    | 'syncMidiInputCc'
+    | 'syncMidiInputPitchBend'
+    | 'syncMidiInputChannelPressure'
+    | 'syncMidiInputPolyPressure';
   group: number;
   channel: number;
   data0: number;
@@ -653,6 +675,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMidiNoteMessage
   | SonareEngineSyncMidiCcMessage
   | SonareEngineSyncMidiUmpMessage
+  | SonareEngineSyncMidiExpressionMessage
   | SonareEngineSyncMidiSysexMessage
   | SonareEngineSyncMidiPanicMessage
   | SonareEngineSyncMidiDestinationExternalMessage

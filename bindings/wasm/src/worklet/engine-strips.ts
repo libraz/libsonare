@@ -243,6 +243,77 @@ export function pushMidiCc(
   });
 }
 
+export function pushMidiPitchBend(
+  ctx: EngineStripContext,
+  trackId: string | number,
+  group: number,
+  channel: number,
+  bend14: number,
+  renderFrame: number,
+): void {
+  const destinationId = ctx.resolveTargetId(trackId);
+  ctx.offlineEngine.pushMidiPitchBend(destinationId, group, channel, bend14, renderFrame);
+  ctx.postSync({
+    type: 'syncMidiPitchBend',
+    destinationId,
+    group,
+    channel,
+    data0: bend14,
+    data1: 0,
+    renderFrame,
+  });
+}
+
+export function pushMidiChannelPressure(
+  ctx: EngineStripContext,
+  trackId: string | number,
+  group: number,
+  channel: number,
+  pressure: number,
+  renderFrame: number,
+): void {
+  const destinationId = ctx.resolveTargetId(trackId);
+  ctx.offlineEngine.pushMidiChannelPressure(destinationId, group, channel, pressure, renderFrame);
+  ctx.postSync({
+    type: 'syncMidiChannelPressure',
+    destinationId,
+    group,
+    channel,
+    data0: pressure,
+    data1: 0,
+    renderFrame,
+  });
+}
+
+export function pushMidiPolyPressure(
+  ctx: EngineStripContext,
+  trackId: string | number,
+  group: number,
+  channel: number,
+  note: number,
+  pressure: number,
+  renderFrame: number,
+): void {
+  const destinationId = ctx.resolveTargetId(trackId);
+  ctx.offlineEngine.pushMidiPolyPressure(
+    destinationId,
+    group,
+    channel,
+    note,
+    pressure,
+    renderFrame,
+  );
+  ctx.postSync({
+    type: 'syncMidiPolyPressure',
+    destinationId,
+    group,
+    channel,
+    data0: note,
+    data1: pressure,
+    renderFrame,
+  });
+}
+
 export function pushMidiUmp(
   ctx: EngineStripContext,
   trackId: string | number,

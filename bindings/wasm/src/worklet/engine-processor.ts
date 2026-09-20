@@ -586,6 +586,34 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.renderFrame,
         );
         break;
+      case 'syncMidiPitchBend':
+        this.engine.pushMidiPitchBend(
+          message.destinationId,
+          message.group,
+          message.channel,
+          message.data0,
+          message.renderFrame,
+        );
+        break;
+      case 'syncMidiChannelPressure':
+        this.engine.pushMidiChannelPressure(
+          message.destinationId,
+          message.group,
+          message.channel,
+          message.data0,
+          message.renderFrame,
+        );
+        break;
+      case 'syncMidiPolyPressure':
+        this.engine.pushMidiPolyPressure(
+          message.destinationId,
+          message.group,
+          message.channel,
+          message.data0,
+          message.data1,
+          message.renderFrame,
+        );
+        break;
       case 'syncMidiUmp':
         this.engine.pushMidiUmp(message.destinationId, message.word0, message.renderFrame);
         break;
@@ -633,6 +661,31 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       case 'syncMidiInputCc':
         this.engine.pushMidiInputCc(
+          message.group,
+          message.channel,
+          message.data0,
+          message.data1,
+          message.portTimeSamples,
+        );
+        break;
+      case 'syncMidiInputPitchBend':
+        this.engine.pushMidiInputPitchBend(
+          message.group,
+          message.channel,
+          message.data0,
+          message.portTimeSamples,
+        );
+        break;
+      case 'syncMidiInputChannelPressure':
+        this.engine.pushMidiInputChannelPressure(
+          message.group,
+          message.channel,
+          message.data0,
+          message.portTimeSamples,
+        );
+        break;
+      case 'syncMidiInputPolyPressure':
+        this.engine.pushMidiInputPolyPressure(
           message.group,
           message.channel,
           message.data0,
