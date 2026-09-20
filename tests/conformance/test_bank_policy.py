@@ -64,6 +64,12 @@ class _CopiedTree(unittest.TestCase):
         129 real ones, so a case about the source classification carries only
         the definitions it is about. Given none, the directory is absent — which
         the floors report and every case here therefore switches off.
+
+        The cases below are written about `machine_defined`, which was the only
+        branch aiming programs at the machine when they were. Any other branch
+        that aims some is emptied before the case's own edit runs, so a case
+        still names every machine-aimed slot it is about rather than inheriting
+        one it never mentions and counting it as a reference nobody captured.
         """
         root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, root)
@@ -83,6 +89,11 @@ class _CopiedTree(unittest.TestCase):
                 shutil.copyfile(source, destination)
                 continue
             loaded = json.loads(source.read_text(encoding="utf-8"))
+            if relative == POLICY:
+                for name, branch in (loaded.get("reference_layer") or {}).items():
+                    if (isinstance(branch, dict) and name != "machine_defined"
+                            and branch.get("timbre") == check.MACHINE_TIMBRE):
+                        branch.pop("programs", None)
             edit(loaded)
             destination.write_text(json.dumps(loaded, indent=2, ensure_ascii=False) + "\n",
                                    encoding="utf-8")
@@ -504,7 +515,8 @@ class SourceClassTest(_CopiedTree):
         got = check.machine_answers(check.Scan())
         self.assertEqual(got["uncaptured"], 0)
         self.assertEqual(got["unclassified"], 0)
-        self.assertEqual(sum(got.values()), len(check.Scan().layer_slots))
+        self.assertEqual(sum(got.values()),
+                         len(check.machine_slots(check.Scan().policy)))
 
 
 class MachineRatchetTest(_CopiedTree):

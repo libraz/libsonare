@@ -82,6 +82,10 @@ SOURCE_CLASSES = ("module", "dedicated", "library")
 #: be made of, so the module is the only source that can be its target.
 MACHINE_SOURCE = "module"
 
+#: The value of a `reference_layer` branch's timbre axis that aims its slots at
+#: the machine. Several branches reach it by different routes.
+MACHINE_TIMBRE = "machine"
+
 #: A capture's `room` saying the recording carries a space. The module is
 #: captured with every effect off, so this and `module` cannot both be true —
 #: `capture.py`'s ROOM_PRESENT, spelled here rather than imported because this
@@ -235,6 +239,25 @@ def layer_slots(policy: dict) -> list[Slot]:
     return out
 
 
+def machine_slots(policy: dict) -> list[Slot]:
+    """The programs aimed at the machine, from whichever branch aims them.
+
+    Read off the timbre axis rather than off one branch's name. `machine_defined`
+    was the only branch naming programs when the census below was written, so
+    reading it by name and reading it by what it wants gave the same answer; a
+    second branch reaching the machine by a different route — a slot whose
+    modern source answers a different instrument — parts them, and the census
+    would stop covering exactly the slot it exists to make visible.
+    """
+    out: list[Slot] = []
+    for name, branch in _objects(policy.get("reference_layer")).items():
+        if name.startswith(DOC_PREFIX) or branch.get("timbre") != MACHINE_TIMBRE:
+            continue
+        out += [Slot(f"reference_layer.{name}", "program", n)
+                for n in branch.get("programs") or [] if isinstance(n, int)]
+    return out
+
+
 def read_captures(root: Path) -> tuple[dict[str, dict], list[str]]:
     """Every tracked capture definition by id, and the files that did not parse.
 
@@ -282,9 +305,7 @@ def machine_answers(scan: Scan) -> dict[str, int]:
     of what a warm pad is passes every gate, every test and every audit, and
     reads as finished.
     """
-    layer = (scan.policy.get("reference_layer") or {})
-    branch = layer.get("machine_defined") if isinstance(layer, dict) else None
-    programs = (branch or {}).get("programs") or [] if isinstance(branch, dict) else []
+    programs = [slot.number for slot in machine_slots(scan.policy)]
     by_program = {c["program"]: c for c in scan.captures.values() if not c["bank"]}
     out = dict.fromkeys((*SOURCE_CLASSES, "unclassified", "uncaptured"), 0)
     for number in programs:
