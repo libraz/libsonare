@@ -20,12 +20,18 @@
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "midi/controller_profile.h"
 #include "midi/instrument.h"
+#include "midi/mpe.h"
 #endif
 
 using namespace sonare;
 using namespace sonare_c_detail;
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+static_assert(SONARE_NOTE_TRACKING_COUNT == sonare::midi::kNoteTrackingCount,
+              "note tracking ordinals out of step with midi::NoteTracking");
+static_assert(SONARE_MPE_DIMENSION_COUNT == sonare::midi::kMpeDimensionCount,
+              "MPE dimension ordinals out of step with midi::MpeDimension");
+
 namespace {
 
 /// The instrument bound to @p destination_id, or nullptr. Split out because
@@ -59,6 +65,22 @@ SonareError install(SonareRealtimeEngine* engine, uint32_t destination_id,
   sonare::midi::MidiInstrument* instrument = instrument_of(engine, destination_id);
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   return instrument->set_controller_profile(profile) ? SONARE_OK : SONARE_ERROR_NOT_SUPPORTED;
+}
+
+/// The tracking field @p dimension names. A pointer rather than a copy so the
+/// setter and the getter share one mapping: three fields spelled out twice is
+/// where the two would drift apart. @p dimension has already been range-checked
+/// by the entry point, which is where an out-of-domain value is refused.
+sonare::midi::NoteTracking* note_tracking_field(sonare::midi::ControllerProfile* profile,
+                                                int dimension) noexcept {
+  switch (dimension) {
+    case SONARE_MPE_DIMENSION_PRESSURE:
+      return &profile->pressure_tracking;
+    case SONARE_MPE_DIMENSION_TIMBRE:
+      return &profile->timbre_tracking;
+    default:
+      return &profile->bend_tracking;
+  }
 }
 
 }  // namespace
@@ -235,6 +257,54 @@ SonareError sonare_engine_controller_velocity_meaningful(SonareRealtimeEngine* e
   const SonareError status = profile_of(engine, destination_id, &profile);
   if (status != SONARE_OK) return status;
   *out_meaningful = profile.velocity_meaningful ? 1 : 0;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_controller_note_tracking(SonareRealtimeEngine* engine,
+                                                       uint32_t destination_id, int dimension,
+                                                       int tracking) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (dimension < 0 || dimension >= SONARE_MPE_DIMENSION_COUNT) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (tracking < 0 || tracking >= SONARE_NOTE_TRACKING_COUNT) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  sonare::midi::ControllerProfile profile;
+  const SonareError status = profile_of(engine, destination_id, &profile);
+  if (status != SONARE_OK) return status;
+  *note_tracking_field(&profile, dimension) = static_cast<sonare::midi::NoteTracking>(tracking);
+  return install(engine, destination_id, profile);
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_controller_note_tracking(SonareRealtimeEngine* engine,
+                                                   uint32_t destination_id, int dimension,
+                                                   int* out_tracking) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_tracking) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_tracking = SONARE_NOTE_TRACKING_LAST;
+  if (dimension < 0 || dimension >= SONARE_MPE_DIMENSION_COUNT) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  sonare::midi::ControllerProfile profile;
+  const SonareError status = profile_of(engine, destination_id, &profile);
+  if (status != SONARE_OK) return status;
+  *out_tracking = static_cast<int>(*note_tracking_field(&profile, dimension));
   return SONARE_OK;
   SONARE_C_CATCH
 #endif

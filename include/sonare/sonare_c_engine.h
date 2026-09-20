@@ -956,6 +956,56 @@ SonareError sonare_engine_controller_velocity_meaningful(SonareRealtimeEngine* e
                                                          uint32_t destination_id,
                                                          int* out_meaningful);
 
+/// @brief The three dimensions MPE carries per note. Mirrors midi::MpeDimension.
+typedef enum SONARE_ENUM_BASE {
+  SONARE_MPE_DIMENSION_BEND = 0,
+  SONARE_MPE_DIMENSION_PRESSURE = 1,
+  /// Carried on CC#74.
+  SONARE_MPE_DIMENSION_TIMBRE = 2
+} SonareMpeDimension;
+
+/// @brief Values in @ref SonareMpeDimension.
+#define SONARE_MPE_DIMENSION_COUNT 3
+
+/// @brief Which note a channel-addressed value belongs to when several are
+///        sounding on one channel. Mirrors midi::NoteTracking.
+/// @details MPE poses the question and declines to answer it — "When there is
+///          more than one concurrent Active Note on a Member Channel,
+///          implementation of how controllers affect the notes is up to the
+///          Device" — so this is a choice a host makes rather than a rule it
+///          follows. A released note is never selected, whatever the rule and
+///          however long a pedal keeps it sounding.
+typedef enum SONARE_ENUM_BASE {
+  /// The most recently started. The default.
+  SONARE_NOTE_TRACKING_LAST = 0,
+  SONARE_NOTE_TRACKING_LOWEST = 1,
+  SONARE_NOTE_TRACKING_HIGHEST = 2,
+  /// Every sounding note, which is the rule under which the ambiguity does not
+  /// arise.
+  SONARE_NOTE_TRACKING_ALL = 3
+} SonareNoteTracking;
+
+/// @brief Values in @ref SonareNoteTracking.
+#define SONARE_NOTE_TRACKING_COUNT 4
+
+/// @brief Sets the note-attribution rule for one per-note dimension.
+/// @details Control-thread API. Set per dimension because the useful answers
+///          differ: pressure following the newest note while bend reaches every
+///          one is a real configuration, not a mistake. It is read only inside
+///          an MPE zone — outside one a channel-addressed value is channel-wide
+///          by definition — and only while more than one note is sounding on
+///          the channel, which an MPE sender avoids by giving each note its own
+///          member channel. Returns SONARE_ERROR_NOT_SUPPORTED for a
+///          destination whose instrument has nowhere to put a profile.
+SonareError sonare_engine_set_controller_note_tracking(SonareRealtimeEngine* engine,
+                                                       uint32_t destination_id, int dimension,
+                                                       int tracking);
+
+/// @brief Reads back @ref sonare_engine_set_controller_note_tracking.
+SonareError sonare_engine_controller_note_tracking(SonareRealtimeEngine* engine,
+                                                   uint32_t destination_id, int dimension,
+                                                   int* out_tracking);
+
 /// @brief Articulation ordinals. Mirrors midi::ArticulationMode.
 /// @details What a channel does with a note-on while another note on the same
 ///          channel is still held.

@@ -194,7 +194,11 @@ typedef enum SONARE_ENUM_BASE {
   /// What a gesture means (@ref SonareControllerAxis).
   SONARE_SYNTH_ENUM_CONTROLLER_AXIS = 9,
   /// What a channel does with an overlapping note-on (@ref SonareArticulation).
-  SONARE_SYNTH_ENUM_ARTICULATION = 10
+  SONARE_SYNTH_ENUM_ARTICULATION = 10,
+  /// The per-note dimensions MPE carries (@ref SonareMpeDimension).
+  SONARE_SYNTH_ENUM_MPE_DIMENSION = 11,
+  /// Which note a channel-addressed value belongs to (@ref SonareNoteTracking).
+  SONARE_SYNTH_ENUM_NOTE_TRACKING = 12
 } SonareSynthEnumKind;
 
 /// @brief Returns the canonical names for one synth enum separated by '\n'.

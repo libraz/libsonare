@@ -72,6 +72,8 @@ const char* sonare_synth_enum_names(int kind) {
   constexpr const char* kControllerAxes =
       "none\nexcitation\nposition\nbrightness\nmorph\nloudness\npitch-cents\nvibrato-depth";
   constexpr const char* kArticulations = "poly\nmono-retrigger\nmono-legato";
+  constexpr const char* kMpeDimensions = "bend\npressure\ntimbre";
+  constexpr const char* kNoteTrackings = "last\nlowest\nhighest\nall";
 
   static_assert(name_count(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
                 "engine mode names out of step with the enum");
@@ -93,6 +95,10 @@ const char* sonare_synth_enum_names(int kind) {
                 "controller axis names out of step with the enum");
   static_assert(name_count(kArticulations) == SONARE_ARTICULATION_COUNT,
                 "articulation names out of step with the enum");
+  static_assert(name_count(kMpeDimensions) == SONARE_MPE_DIMENSION_COUNT,
+                "MPE dimension names out of step with the enum");
+  static_assert(name_count(kNoteTrackings) == SONARE_NOTE_TRACKING_COUNT,
+                "note tracking names out of step with the enum");
 
   switch (kind) {
     case SONARE_SYNTH_ENUM_ENGINE_MODE:
@@ -115,6 +121,10 @@ const char* sonare_synth_enum_names(int kind) {
       return kControllerAxes;
     case SONARE_SYNTH_ENUM_ARTICULATION:
       return kArticulations;
+    case SONARE_SYNTH_ENUM_MPE_DIMENSION:
+      return kMpeDimensions;
+    case SONARE_SYNTH_ENUM_NOTE_TRACKING:
+      return kNoteTrackings;
     case SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM:
       return kBuiltinWaveforms;
     default:
