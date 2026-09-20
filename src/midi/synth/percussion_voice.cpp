@@ -58,6 +58,11 @@ float radius_for(double sample_rate, float t60_s) noexcept {
   return std::exp(-6.907755279f / (static_cast<float>(sample_rate) * std::max(0.005f, t60_s)));
 }
 
+/// Longest a single mode may ring, mirroring the ceiling `mode_decay_s` itself
+/// carries. A mode far below the base divides the patch's decay by a small
+/// number, and without this a low enough ratio reaches a radius of exactly 1.
+constexpr float kMaxModeDecayS = 30.0f;
+
 /// Magnitude spectrum of a raised-cosine contact force of duration tau, read at
 /// x = f * tau and normalised to unity at DC: |sinc(x) / (1 - x^2)|.
 float contact_spectrum(float x) noexcept {
@@ -128,14 +133,19 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   // is keyed on it and a compacted index would re-voice every piece with a gap.
   const auto place = [&](int index, float ratio, int m, float alpha, bool dipole) {
     if (placed >= kMaxPercussionModes) return;
-    const float freq = base_hz * std::max(0.01f, ratio);
+    const float placed_ratio = std::max(0.01f, ratio);
+    const float freq = base_hz * placed_ratio;
     if (freq <= 0.0f || freq >= nyquist_limit) return;
     Mode& mode = modes_[static_cast<size_t>(placed)];
     mode = Mode{};
     mode.omega = kTwoPi * freq / static_cast<float>(sr);
-    // Upper membrane modes die faster than the fundamental.
-    const float damping = std::pow(std::max(1.0f, ratio), decay_exp);
-    mode.r = radius_for(sr, std::max(0.005f, params.mode_decay_s) / damping);
+    // Damping rises with frequency, read against the base. Unclamped below 1 so
+    // that moving the base rescales every mode together and `mode_decay_s`
+    // absorbs it — pinning the low modes would make the base's placement, which
+    // is free, decide the decay of a fixed set of frequencies.
+    const float damping = std::pow(placed_ratio, decay_exp);
+    mode.r =
+        radius_for(sr, std::min(kMaxModeDecayS, std::max(0.005f, params.mode_decay_s) / damping));
     // Strike-point weighting: each membrane mode is excited by the value of
     // its shape J_m(alpha_mn * r) * cos(m * theta) at the strike. A centre
     // hit (strike_r == 0) is the legacy uniform excitation.
