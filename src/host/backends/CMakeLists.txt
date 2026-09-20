@@ -62,3 +62,17 @@ if(BUILD_AU_HOST)
   target_compile_definitions(sonare_host_plughost PRIVATE SONARE_HOST_WITH_AU=1)
   message(STATUS "libsonare: building Audio Unit plugin host (sonare_host_plughost)")
 endif()
+
+# The live session binds one audio output to one MIDI input, so it exists only
+# where both backends do, and it points the engine at that input, which is an
+# arrangement-gated entry point. Its source sits one directory up beside the
+# SDK-free seam headers — its own header includes no SDK header — but the target
+# is declared here, where the backends it links are defined.
+if(BUILD_COREAUDIO AND BUILD_COREMIDI AND BUILD_ARRANGEMENT)
+  add_library(sonare_host_live_session STATIC ${CMAKE_CURRENT_SOURCE_DIR}/../live_session.cpp)
+  target_link_libraries(sonare_host_live_session PUBLIC sonare_host_coreaudio
+                                                        sonare_host_coremidi)
+  target_compile_options(sonare_host_live_session PRIVATE ${SONARE_WARNING_FLAGS})
+  set_target_properties(sonare_host_live_session PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  message(STATUS "libsonare: building live session (sonare_host_live_session)")
+endif()

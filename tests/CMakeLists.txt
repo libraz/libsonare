@@ -622,6 +622,10 @@ if(APPLE AND (BUILD_COREAUDIO OR BUILD_COREMIDI OR BUILD_AU_HOST))
     target_link_libraries(sonare_tests PRIVATE sonare_host_plughost)
     target_compile_definitions(sonare_tests PRIVATE SONARE_HOST_TEST_AU=1)
   endif()
+  if(TARGET sonare_host_live_session)
+    target_sources(sonare_tests PRIVATE host/live_session_test.cpp)
+    target_link_libraries(sonare_tests PRIVATE sonare_host_live_session)
+  endif()
 endif()
 
 # The CLI tests shell out to the built `sonare` binary, which only exists when
