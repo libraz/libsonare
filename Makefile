@@ -524,6 +524,8 @@ conformance:
 	python3 -m unittest tests/conformance/test_chord_quality_tables.py
 	python3 tests/conformance/check_documented_bound_mirrors.py
 	python3 -m unittest tests/conformance/test_documented_bound_mirrors.py
+	python3 tests/conformance/check_synth_param_surface.py
+	python3 -m unittest tests/conformance/test_synth_param_surface.py
 	python3 -m unittest tests/conformance/test_ts_surface_walk.py
 	python3 tests/conformance/check_mastering_param_surfaces.py
 	python3 -m unittest tests/conformance/test_mastering_param_surfaces.py
