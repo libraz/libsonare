@@ -1,0 +1,62 @@
+{
+  "id": "vibraphone_wide",
+  "label": "Vib.w, the GS variation tone, read out of a module's own recordings",
+  "program": 11,
+  "bank": 8,
+  "takes": "sustained",
+  "audition_title": "libsonare Vib.w vs the module's own recordings",
+  "_notes": "The GS variation Vib.w sits at program 11, Bank Select MSB 8; `gm_fallback_map.cpp` voices it apart from its capital and this is the reference that patch is fitted against. The grid sits on the source's own lattice - it holds one recording every three semitones from 24 to 96 and nothing between - at six-semitone steps. The span is the capital capture's compass, 53 to 77, rounded onto that lattice, so the variation and the tone it is a copy of are read over the same register. Both ends speak: the peaks run -2.20, -4.35 and -7.00 dBFS at the low, middle and high probe notes.",
+  "notes": [
+    54,
+    60,
+    66,
+    72,
+    78
+  ],
+  "_velocities": "One, and 100 is a label rather than a measurement: the font records no velocity and the importer refuses a grid asking for more than one layer. `vel_range` and the dynamics it feeds are excused in `dimensions_na` for that reason.",
+  "velocities": [
+    100
+  ],
+  "_dry": "Nothing played this, so nothing was switched off. What the file holds is the module's own PCM with no effect in front of it, which is what `source_class: module` asks for.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "The gate is the recording itself. Over this grid the cells run 2.99 to 4.28 s, falling as the bar rises, so 2990 ms is the longest window all 5 of them hold.",
+  "gate_ms": 2990,
+  "tail": "0s",
+  "_realtime": "Read rather than played: `import_sf2.py` extracts the recorded frames, so there is no host to settle and no lead-in to strip. `preroll_ms` is 0 because a recording begins at its own first frame.",
+  "realtime": false,
+  "warmup": false,
+  "settle_ms": 0,
+  "preroll_ms": 0,
+  "sample_rate": 44100,
+  "_timbres": "One. The source holds exactly one recording per note of this tone, so there is no second of it to disagree with and this capture cannot move the voice past `voiced` however complete its coverage.",
+  "timbres": [
+    {
+      "id": "t0",
+      "label": "Vib.w, module recording"
+    }
+  ],
+  "_dimensions": "Coverage is read against `toneclass.canonical_dimensions`, which for program 11 is 12 dimensions. The three below are what this source cannot carry, each argued from what the font sets rather than from its being a font.",
+  "_dimensions_register": "`register` is gated here and excused on the sibling marimba variation, and the difference is measured rather than assumed. The font sets no `initialAttenuation` anywhere, so what one recording's peak is against the next is what the module puts out. Over this grid that fall is 4.81 dB and strictly monotonic from note 54 to note 78; the marimba's is 1.95 dB and changes direction three times, which is the headroom each recording was normalised into rather than a bar getting quieter as it rises.",
+  "dimensions_na": {
+    "vel_range": "the font declares no velocity layers at all - `velRange` is set on none of its zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads",
+    "stereo": "the recordings are mono (`sampleType` 1) and the font sets no `pan`, so the image is absent by construction rather than by voicing. This one costs more here than on the siblings: the `w` in Vib.w is the width, so the one thing that separates this variation from its capital is the thing the recording cannot hold. What is left to fit is the tone under it",
+    "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from"
+  },
+  "dimensions": [
+    "decay",
+    "aftersound",
+    "doubling",
+    "body",
+    "attack",
+    "balance",
+    "centroid_pct",
+    "tnr",
+    "register"
+  ],
+  "rig": "none",
+  "room": "none",
+  "_room": "The module is recorded with reverb, chorus, delay and the insertion effect all off, and `import_sf2.py --report` plus its own dryness check measure the imported corpus rather than taking this declaration's word for it.",
+  "source_class": "module",
+  "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `vibraphone_wide.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/vibraphone_wide.json`."
+}

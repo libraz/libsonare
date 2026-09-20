@@ -1,0 +1,82 @@
+{
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "timbre": "t0",
+  "margin": 1.25,
+  "reference_measured_utc": "2026-09-19T16:35:40+00:00",
+  "recorded_utc": "2026-09-20T19:34:16+00:00",
+  "reference_spread": {},
+  "bounds": {
+    "stretch": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.738,
+      "p90": 17.207,
+      "rows": 13
+    },
+    "decay": {
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 2.3,
+      "abs_median": 2.85,
+      "p90": 14.253,
+      "rows": 13
+    },
+    "tnr": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 7.85,
+      "abs_median": 7.85,
+      "p90": 15.483,
+      "rows": 13
+    },
+    "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 40.0,
+      "rows": 13
+    },
+    "aftersound": {
+      "floor": 1.81,
+      "floor_from": "guess",
+      "median": 1.81,
+      "abs_median": 4.375,
+      "p90": 19.903,
+      "rows": 13
+    },
+    "doubling": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 13.838,
+      "abs_median": 29.175,
+      "p90": 43.793,
+      "rows": 13
+    },
+    "balance": {
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 6.688,
+      "abs_median": 13.23,
+      "p90": 24.653,
+      "rows": 13
+    },
+    "centroid_pct": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 76.746,
+      "abs_median": 76.746,
+      "p90": 202.813,
+      "rows": 13
+    },
+    "body": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 15.85,
+      "abs_median": 15.85,
+      "p90": 27.003,
+      "rows": 9
+    }
+  }
+}
