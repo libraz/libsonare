@@ -656,6 +656,42 @@ TEST_CASE("the dynamic valve speaks the note from the tongue's release", "[midi]
   }
 }
 
+TEST_CASE("the dynamic valve does not detune the note it speaks", "[midi][synth][reed]") {
+  // The opening now lags its drive by the reed's group delay at DC, which
+  // lengthens the driven loop and drops the pitch if nothing removes it — by 36
+  // cents at the top of this grid, growing with pitch because the lag is a fixed
+  // sample count against a shrinking loop. The loop-delay compensation carries
+  // that term, so the dynamic valve has to land no further from the note than
+  // the static one it replaces: the speed is not allowed to be bought with
+  // tuning. The bound is the ESTIMATOR's own resolution rather than a fixed
+  // number of cents, because one FFT bin spans 174 cents at the bottom of this
+  // grid and 22 at the top — a few-cent claim down there would be unsupported,
+  // and a fixed bound would read as a pass for the same reason.
+  for (bool conical : {false, true}) {
+    for (uint8_t note : {34, 46, 58, 70}) {
+      const double expected = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+      NativeSynthPatch statics = reed_base_patch();
+      statics.reed.conical = conical;
+      statics.reed.closing_pressure = 2.0f;
+      statics.reed.flow_gain = 1.0f;
+      NativeSynthPatch dynamic = statics;
+      dynamic.reed.dynamic_reed = true;
+      const double c_static =
+          1200.0 *
+          std::log2(fft_fundamental(render_patch(statics, note, 110, 48000), 24000, expected) /
+                    expected);
+      const double c_dynamic =
+          1200.0 *
+          std::log2(fft_fundamental(render_patch(dynamic, note, 110, 48000), 24000, expected) /
+                    expected);
+      const double bin_cents = 1200.0 * std::log2(1.0 + (kRate / kFft) / expected);
+      INFO("conical " << conical << " note " << int(note) << ": static " << c_static
+                      << " cents, dynamic " << c_dynamic << " cents, bin " << bin_cents);
+      CHECK(std::fabs(c_dynamic - c_static) < 0.3 * bin_cents);
+    }
+  }
+}
+
 TEST_CASE("the dynamic valve lets the bore, not the reed, choose the pitch",
           "[midi][synth][reed]") {
   // A reed light enough to ring outruns the bore's round-trip gain at its own

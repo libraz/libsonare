@@ -113,6 +113,10 @@ SONARE_TUNABLE(kReedValveDamping, 1.2f);
 // is pinned shut, so it starts its swing from a closed channel rather than from
 // equilibrium. 0 = the tongue is already off at note-on.
 SONARE_TUNABLE(kTongueReleaseLevel, 0.5f);
+// Fraction of the dynamic valve's group delay that turns into a pitch shift.
+// Only the opening is delayed and the flow's square root is not, so the loop
+// sees far less lag than the reed alone carries — read against the cone.
+SONARE_TUNABLE(kReedValveCompScale, 0.15f);
 
 // --- 4b register vent (only when params.register_vent > 0) ---
 // Low-band follower corner (Hz): the follower tracks the loop's low content so
@@ -251,8 +255,11 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
     reed_b0_ = 1.0f - reed_a1_ - reed_a2_;
     tongue_release_ = std::clamp(kTongueReleaseLevel, 0.0f, 0.99f);
     tongue_held_ = true;
-    // The opening lags its drive by the reed's group delay at DC.
-    valve_tau = qr * srf / (kTwoPi * f_reed);
+    // The opening lags its drive by the reed's group delay at DC. A cylinder's
+    // loop is half the period, so the same lag is twice the share of it and the
+    // cone-referenced fraction doubles there.
+    const float topology = params.conical ? 1.0f : 2.0f;
+    valve_tau = kReedValveCompScale * topology * qr * srf / (kTwoPi * f_reed);
   }
 
   // Bell loop lowpass: brightness -> pole a (y += (1-a)(x - y)).
