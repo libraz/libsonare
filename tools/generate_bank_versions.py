@@ -12,7 +12,14 @@ makes it true rather than a claim. Every unit's values are read from the library
 itself under `SONARE_TUNING_DUMP` — the same code the render uses, so a parse
 cannot drift from it — and fingerprinted. A unit whose fingerprint has moved
 gets its version incremented and a history line; a run with `--check` fails
-instead, which is what stops a voice changing without its version saying so.
+instead, which is what stops a voice's VALUES changing without its version
+saying so.
+
+What that leaves out is engine code. The dump reports the knobs a render
+consulted and what they held, so editing the code that reads them moves no
+fingerprint at all — the bank can sound different at an unchanged generation.
+The synth golden manifests under `tests/midi/golden/` are the instrument for
+that half, and the two are complementary rather than redundant.
 
 WHAT A UNIT IS. Three kinds, and every knob the library reports belongs to
 exactly one:
@@ -136,9 +143,10 @@ DOC = (
     "do not edit by hand. Each unit is a voice, a drum note or a group of shared "
     "calibration constants, carrying the generation it is on, a fingerprint of its "
     "values and the history of its bumps. `make bank-versions-check` fails when a "
-    "unit's values have moved without its version following, so a change to what "
-    "the bank sounds like cannot ship unversioned. The values are here so the diff "
-    "of a bump says what moved."
+    "unit's values have moved without its version following. It fingerprints values "
+    "only: an edit to an engine's code moves nothing here, and the synth golden "
+    "manifests under tests/midi/golden/ are what catch that. The values are here so "
+    "the diff of a bump says what moved."
 )
 
 
