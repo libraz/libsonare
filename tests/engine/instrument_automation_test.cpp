@@ -2,6 +2,7 @@
 /// @brief Realtime PPQ automation of hosted-instrument parameters routed
 ///        through the reserved instrument-automation id namespace.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -16,7 +17,9 @@
 #include "midi/instrument.h"
 #include "midi/midi_event.h"
 #include "midi/synth/native_synth.h"
+#include "midi/ump.h"
 #include "rt/command.h"
+#include "support/midi_render.h"
 
 using sonare::engine::instrument_param_param;
 using sonare::engine::instrument_param_slot;
@@ -322,6 +325,38 @@ TEST_CASE("NativeSynth exposes its continuous patch fields and rejects structura
   REQUIRE(
       synth.apply_parameter(static_cast<unsigned int>(NativeSynthParamId::kHpCutoffHz), 1.0e9f));
   REQUIRE(synth.patch().hp_cutoff_hz == 22000.0f);
+}
+
+TEST_CASE("A pitch-offset lane reaches a voice that is already sounding", "[engine][automation]") {
+  using sonare::midi::synth::NativeSynth;
+  using sonare::midi::synth::NativeSynthConfig;
+  using sonare::midi::synth::NativeSynthParamId;
+
+  // The subtractive engine is the one this can be wrong on, because it is the
+  // only engine started from a frequency rather than from a note number: a
+  // pitch term carried in that frequency is fixed when the voice starts, and a
+  // lane moving it would go nowhere until the next note. Same run twice, one
+  // with the parameter applied mid-note, so the difference is the lane and
+  // nothing else.
+  const auto tail = [](bool apply) {
+    NativeSynthConfig cfg;
+    NativeSynth synth(cfg);
+    synth.prepare(48000.0, 256);
+    synth.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    sonare::test::render_left(synth, 4096);
+    if (apply) {
+      REQUIRE(synth.apply_parameter(
+          static_cast<unsigned int>(NativeSynthParamId::kPitchOffsetCents), 1200.0f));
+    }
+    return sonare::test::render_left(synth, 4096);
+  };
+
+  const std::vector<float> held = tail(false);
+  const std::vector<float> moved = tail(true);
+  REQUIRE(held.size() == moved.size());
+  // Audible in the first place, so "they differ" is not two silences differing.
+  REQUIRE(std::abs(*std::max_element(held.begin(), held.end())) > 1.0e-3f);
+  REQUIRE(held != moved);
 }
 
 TEST_CASE("An instrument swap retires the previous instrument's automation slots",

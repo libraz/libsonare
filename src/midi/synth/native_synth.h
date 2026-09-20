@@ -83,6 +83,9 @@ struct NativeSynthPatch {
   float drift_cents = 0.0f;
   float drift_rate_hz = 0.3f;
   /// Coarse tune applied to the played note (cents; e.g. -1200 = sub octave).
+  /// Carried in the render's per-sample pitch sum, like every other constant
+  /// pitch term here, so it reaches every engine and an automation lane moving
+  /// it reaches voices that are already sounding.
   float pitch_offset_cents = 0.0f;
 
   // --- amplitude ---

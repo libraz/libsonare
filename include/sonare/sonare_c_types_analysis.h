@@ -598,9 +598,9 @@ typedef struct {
 
   /* --- pitch offset (struct_version 6) --- */
   /* Constant transposition of the voice's own pitch, in cents, [-4800, 4800].
-     Applied once on every engine, at whichever point that engine takes its
-     pitch from — the oscillator's base frequency on the subtractive engine, the
-     per-sample pitch factor on the rest — so the amount is the same either way.
+     Carried in the per-sample pitch factor every engine's render already takes,
+     so it applies the same amount on all of them and a lane moving it reaches a
+     voice that is already sounding.
      0 => base; set SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS in present_fields to
      ask for 0 as a value. Automatable under the same name, which is why it is
      here: every other name @ref sonare_engine_resolve_instrument_automation_id

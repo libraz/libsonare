@@ -187,8 +187,11 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   VoiceRandomSequence seq;
   seq.reseed(voice_index, voiced_note, age);
 
-  base_freq_hz =
-      synth_note_to_hz(static_cast<float>(voiced_note & 0x7Fu) + p.pitch_offset_cents / 100.0f);
+  // The coarse tune is NOT folded in here: it joins the render's pitch sum with
+  // the other constant offsets, for the reason gs_scale_cents gives — every
+  // engine but the subtractive one is started from the note number, so a term
+  // carried in the frequency reaches one engine of thirteen.
+  base_freq_hz = synth_note_to_hz(static_cast<float>(voiced_note & 0x7Fu));
 
   const bool osc_less = p.mode != SynthEngineMode::kSubtractive;
   unison = osc_less ? 0 : std::clamp(p.unison, 1, kMaxUnisonOscs);
@@ -481,10 +484,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   if (gs_vib_depth_cents != 0.0f) vib_depth = std::max(0.0f, vib_depth + gs_vib_depth_cents);
   const float vib =
       lfo1_value * (vib_depth + mod.extra_vibrato_cents + offsets.vibrato_depth_cents);
-  const float mode_pitch_offset =
-      patch->mode == SynthEngineMode::kSubtractive ? 0.0f : patch->pitch_offset_cents;
-  const float pitch_cents = mode_pitch_offset + mod.pitch_cents + gs_scale_cents + vib + drift +
-                            offsets.pitch_cents + glide_cents + retune_cents;
+  const float pitch_cents = patch->pitch_offset_cents + mod.pitch_cents + gs_scale_cents + vib +
+                            drift + offsets.pitch_cents + glide_cents + retune_cents;
   float common = pitch_cents != 0.0f ? std::exp2(pitch_cents * (1.0f / 1200.0f)) : 1.0f;
   // Shared organ wind: the tremulant / wind-sag pitch factor (1.0 for every
   // non-pipe voice, which the host always passes through).

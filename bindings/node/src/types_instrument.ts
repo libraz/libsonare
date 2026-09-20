@@ -513,14 +513,13 @@ export interface SynthPatch {
    * [-4800, 4800]; 0 leaves the pitch alone. Applied on top of the note, so it
    * shifts a whole patch without rewriting the part — a detuned layer, a sample
    * set mapped a semitone off, an instrument pitched to a reference other than
-   * A440. Applied once on every engine, at whichever point that engine takes its
-   * pitch from — the oscillator's base frequency on the `'subtractive'` engine,
-   * the per-sample pitch factor on the rest — so the amount is the same either
-   * way.
+   * A440. Carried in the per-sample pitch factor every engine's render already
+   * takes, so it applies the same amount on all of them.
    *
    * Also automatable under this same name through
-   * {@link RealtimeEngine.resolveInstrumentAutomationId}, which documents when
-   * a change reaches voices that are already sounding.
+   * {@link RealtimeEngine.resolveInstrumentAutomationId}; it is one of the names
+   * that reaches a voice that is already sounding, rather than waiting for the
+   * next note.
    */
   pitchOffsetCents?: number;
   // --- envelopes (ms / sustain in [0, 1]) ---
