@@ -1,0 +1,28 @@
+{
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "timbre": "t0",
+  "margin": 1.25,
+  "reference_measured_utc": "2026-09-20T04:37:51+00:00",
+  "recorded_utc": "2026-09-20T06:28:48+00:00",
+  "reference_spread": {},
+  "_floor": "Where these bounds' floors come from, since `reference_spread` above is empty: this capture holds one reference, so `write_gate_file` falls back to its hand-written table. `attack` is floored there at 40.0 ms, and every attack bound here sits on that floor rather than on the measurement. `crest` has no entry in that table and would fall through to 1.0, which is a default rather than a decision; it is floored instead at 2.12 dB - the median absolute crest disagreement between the two sampled kits in `reference/drums.json`, read with `percussion_reference_spread`, over the 282 hits they share. That is the tightest a crest bound can be without failing on which kit it was compared against.",
+  "_unbounded": {
+    "band_decay": "no second reference reaches it. `AGREEMENT_TOLERANCE` covers six dimensions and this is not one of them, so there is no verdict to record a bound from. A comparison that did not run is not a comparison that agreed.",
+    "ring": "no second reference reaches it, as `band_decay`.",
+    "level": "the two references do not agree on it. Measured against the second reference over this grid, the two sit a median 5 to 7 dB apart and agree on fewer than half the hits, against a 6 dB tolerance. A bound recorded from one of them would be that reference's own kit balance, which is a mix decision rather than the instrument."
+  },
+  "bounds": {
+    "attack": {
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 50.265,
+      "rows": 12
+    },
+    "crest": {
+      "median": 3.369,
+      "abs_median": 4.406,
+      "p90": 7.955,
+      "rows": 12
+    }
+  }
+}
