@@ -25,6 +25,9 @@ from ._project_synth import (
     _articulation_value,
     _controller_axis_value,
     _controller_input_value,
+    _mpe_dimension_value,
+    _note_tracking_name,
+    _note_tracking_value,
 )
 from ._runtime import (
     SonareValueError,
@@ -459,6 +462,64 @@ class _EngineMidiMixin:
             )
         )
         return out.value != 0
+
+    def set_controller_note_tracking(
+        self, destination_id: int, dimension: str | int, tracking: str | int
+    ) -> None:
+        """Say which note a channel-addressed value of one dimension belongs to.
+
+        ``dimension`` is one of ``synth_enum_tables()["mpe_dimensions"]``
+        (``"bend"``, ``"pressure"``, ``"timbre"``) and ``tracking`` one of
+        ``synth_enum_tables()["note_trackings"]`` (``"last"``, ``"lowest"``,
+        ``"highest"``, ``"all"``). Set per dimension because the useful answers
+        differ: pressure following the newest note while bend reaches every one
+        is a real configuration, not a mistake.
+
+        MPE poses this question and declines to answer it -- how a controller
+        affects the notes when more than one is active on a member channel is
+        left to the device -- so this is a choice rather than a rule. It is read
+        only inside an MPE zone, and only while more than one note is sounding
+        on the channel, which an MPE sender avoids by giving each note its own
+        member channel.
+
+        Raises :class:`SonareValueError` for an unknown spelling,
+        :class:`SonareError` for a destination nothing is bound to, and
+        :class:`SonareError` with :attr:`ErrorCode.NOT_SUPPORTED` for an
+        instrument that holds no controller profile.
+
+        Control-thread only: do not call concurrently with :meth:`process`.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_controller_note_tracking"):
+            raise RuntimeError("libsonare was built without the controller-profile ABI")
+        _check(
+            lib.sonare_engine_set_controller_note_tracking(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_int(_mpe_dimension_value(dimension), "dimension"),
+                _to_c_int(_note_tracking_value(tracking), "tracking"),
+            )
+        )
+
+    def controller_note_tracking(self, destination_id: int, dimension: str | int) -> str | int:
+        """Read back :meth:`set_controller_note_tracking` as its canonical name.
+
+        Returns the raw ordinal for a value this binding has no name for, so a
+        rule added to the library reaches a caller rather than raising.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_controller_note_tracking"):
+            raise RuntimeError("libsonare was built without the controller-profile ABI")
+        out = ctypes.c_int()
+        _check(
+            lib.sonare_engine_controller_note_tracking(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_int(_mpe_dimension_value(dimension), "dimension"),
+                ctypes.byref(out),
+            )
+        )
+        return _note_tracking_name(int(out.value))
 
     # -- articulation --------------------------------------------------------
 

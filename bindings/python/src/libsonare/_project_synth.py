@@ -172,6 +172,20 @@ _ARTICULATIONS = {
     "mono-retrigger": 1,
     "mono-legato": 2,
 }
+# The per-note dimensions MPE carries (mirror SonareMpeDimension), and which
+# note a channel-addressed value of one belongs to when several are sounding on
+# the channel (mirror SonareNoteTracking).
+_MPE_DIMENSIONS = {
+    "bend": 0,
+    "pressure": 1,
+    "timbre": 2,
+}
+_NOTE_TRACKINGS = {
+    "last": 0,
+    "lowest": 1,
+    "highest": 2,
+    "all": 3,
+}
 SYNTH_ENUM_TABLES = {
     "engine_modes": tuple(_SYNTH_ENGINE_MODES),
     "waveforms": tuple(_SYNTH_OSC_WAVEFORMS),
@@ -184,6 +198,8 @@ SYNTH_ENUM_TABLES = {
     "controller_inputs": tuple(_CONTROLLER_INPUTS),
     "controller_axes": tuple(_CONTROLLER_AXES),
     "articulations": tuple(_ARTICULATIONS),
+    "mpe_dimensions": tuple(_MPE_DIMENSIONS),
+    "note_trackings": tuple(_NOTE_TRACKINGS),
 }
 _SYNTH_ENUM_KINDS = {
     "engine_modes": 0,
@@ -197,6 +213,8 @@ _SYNTH_ENUM_KINDS = {
     "controller_inputs": 8,
     "controller_axes": 9,
     "articulations": 10,
+    "mpe_dimensions": 11,
+    "note_trackings": 12,
 }
 
 
@@ -254,6 +272,21 @@ def _articulation_value(value: str | int) -> int:
 def _articulation_name(value: int) -> str | int:
     """Spell a C articulation ordinal, or return it unchanged if unknown."""
     return _synth_enum_name(value, _ARTICULATIONS)
+
+
+def _mpe_dimension_value(value: str | int) -> int:
+    """Resolve an MPE dimension spelling to its C ordinal."""
+    return _synth_enum_value(value, _MPE_DIMENSIONS, "MPE dimension")
+
+
+def _note_tracking_value(value: str | int) -> int:
+    """Resolve a note-tracking spelling to its C ordinal."""
+    return _synth_enum_value(value, _NOTE_TRACKINGS, "note tracking")
+
+
+def _note_tracking_name(value: int) -> str | int:
+    """Spell a C note-tracking ordinal, or return it unchanged if unknown."""
+    return _synth_enum_name(value, _NOTE_TRACKINGS)
 
 
 def _sample_desc_loop_value(mode: str | int) -> int:

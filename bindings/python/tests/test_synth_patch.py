@@ -96,6 +96,17 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "mono-retrigger",
         "mono-legato",
     ),
+    "mpe_dimensions": (
+        "bend",
+        "pressure",
+        "timbre",
+    ),
+    "note_trackings": (
+        "last",
+        "lowest",
+        "highest",
+        "all",
+    ),
 }
 
 

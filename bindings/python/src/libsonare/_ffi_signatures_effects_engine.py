@@ -1344,6 +1344,22 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint32,
             ctypes.POINTER(ctypes.c_int),
         ]
+    if hasattr(lib, "sonare_engine_set_controller_note_tracking"):
+        lib.sonare_engine_set_controller_note_tracking.restype = ctypes.c_int32
+        lib.sonare_engine_set_controller_note_tracking.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_controller_note_tracking"):
+        lib.sonare_engine_controller_note_tracking.restype = ctypes.c_int32
+        lib.sonare_engine_controller_note_tracking.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int),
+        ]
     if hasattr(lib, "sonare_engine_set_articulation"):
         lib.sonare_engine_set_articulation.restype = ctypes.c_int32
         lib.sonare_engine_set_articulation.argtypes = [

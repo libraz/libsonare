@@ -180,6 +180,28 @@ def test_controller_velocity_meaningfulness_round_trips() -> None:
         assert engine.controller_velocity_meaningful(DESTINATION) is True
 
 
+def test_controller_note_tracking_round_trips_per_dimension() -> None:
+    with _reed_engine() as engine:
+        for dimension in ("bend", "pressure", "timbre"):
+            assert engine.controller_note_tracking(DESTINATION, dimension) == "last"
+        # Per dimension, so setting one leaves the other two on their default.
+        engine.set_controller_note_tracking(DESTINATION, "pressure", "highest")
+        assert engine.controller_note_tracking(DESTINATION, "pressure") == "highest"
+        assert engine.controller_note_tracking(DESTINATION, "bend") == "last"
+        assert engine.controller_note_tracking(DESTINATION, "timbre") == "last"
+        engine.set_controller_note_tracking(DESTINATION, "bend", "all")
+        assert engine.controller_note_tracking(DESTINATION, "bend") == "all"
+        assert engine.controller_note_tracking(DESTINATION, "pressure") == "highest"
+
+        # A misspelling is refused rather than resolved to a default, which would
+        # configure a dimension the caller never named with a rule they never
+        # asked for.
+        with pytest.raises(SonareValueError):
+            engine.set_controller_note_tracking(DESTINATION, "no-such-dimension", "last")
+        with pytest.raises(SonareValueError):
+            engine.set_controller_note_tracking(DESTINATION, "bend", "no-such-rule")
+
+
 def test_controller_calls_name_the_destination_that_has_no_instrument() -> None:
     engine = RealtimeEngine()
     try:
@@ -190,6 +212,8 @@ def test_controller_calls_name_the_destination_that_has_no_instrument() -> None:
             lambda: engine.clear_controller_bindings(5),
             lambda: engine.controller_binding_count(5),
             lambda: engine.controller_velocity_meaningful(5),
+            lambda: engine.controller_note_tracking(5, "bend"),
+            lambda: engine.set_controller_note_tracking(5, "bend", "all"),
         ):
             with pytest.raises(SonareError):
                 call()
