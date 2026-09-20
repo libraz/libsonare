@@ -271,6 +271,25 @@ def load_config(path: Path) -> dict:
                 f"{PERCUSSION_CHANNEL} (a note selects an instrument) or 1 (a note "
                 f"selects a pitch)"
             )
+        mapped = timbre_key_map(timbre)
+        if mapped and timbre.get("key_offset"):
+            raise ValueError(
+                f"{cfg.get('id', path.name)}: timbre {timbre.get('id', '?')!r} declares "
+                f"both `key_offset` and `key_map`, which are two answers to which key "
+                f"sounds a note. `key_map` is the general form; fold the offset into it"
+            )
+        # A grid note this timbre cannot sound is refused here rather than at the
+        # render, which is hours in and one note at a time.
+        unreachable = [n for n in cfg.get("notes") or ()
+                       if int(n) not in {sounding for sounding, _ in mapped}]
+        if mapped and unreachable:
+            raise ValueError(
+                f"{cfg.get('id', path.name)}: timbre {timbre.get('id', '?')!r} has no "
+                f"key for grid note{'s' if len(unreachable) > 1 else ''} "
+                f"{', '.join(str(n) for n in unreachable)}. An instrument mapped by "
+                f"table has gaps in its compass, so the grid is written from the map "
+                f"rather than the map extended to reach a grid"
+            )
         if timbre.get("keyswitch") and not cfg["keyswitch_lead_ms"]:
             raise ValueError(
                 f"{cfg.get('id', path.name)}: timbre {timbre.get('id', '?')!r} is "
@@ -408,6 +427,19 @@ def slot_channel(timbre: dict) -> int:
     return int(timbre.get("slot_channel", timbre.get("channel", 1)))
 
 
+def timbre_key_map(timbre: dict) -> tuple[tuple[int, int], ...]:
+    """A timbre's `key_map` as the sorted (sounding note, key) pairs `AuSource` holds.
+
+    Written in the definition as an object keyed by the sounding note, because
+    that is the direction every caller asks in and it makes a duplicate
+    impossible to write. Several keys reaching one pitch is the instrument's
+    normal case, so the choice between them is the capture's to state rather
+    than the loader's to make.
+    """
+    raw = timbre.get("key_map") or {}
+    return tuple(sorted((int(note), int(key)) for note, key in raw.items()))
+
+
 def source_for(cfg: dict, timbre: dict, **overrides) -> AuSource:
     """The `AuSource` that records one timbre of a capture definition."""
     src = AuSource(
@@ -424,6 +456,10 @@ def source_for(cfg: dict, timbre: dict, **overrides) -> AuSource:
         # Where the instrument sits on the keyboard, which is not where it
         # sounds; the grid is written in sounding pitch either way.
         key_offset=int(timbre.get("key_offset", 0)),
+        # The general form of the line above, for an instrument whose mapping is
+        # neither chromatic nor complete. Per timbre for the same reason the
+        # offset is: which keys sound what IS the timbre.
+        key_map=timbre_key_map(timbre),
         # The third route to a timbre, for a library that selects its variants
         # from the keyboard rather than by preset or by channel. Per timbre
         # because it IS the timbre; the lead is per capture, because every

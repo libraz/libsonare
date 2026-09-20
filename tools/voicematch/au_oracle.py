@@ -194,6 +194,17 @@ class AuSource:
     #: sent. Every grid, every metric and every note label stays the sounding
     #: pitch — the model's own — and this is the one place the two part company.
     key_offset: int = 0
+    #: Which key sounds each note, as pairs of (sounding note, key). Empty is
+    #: none, and `key_offset` answers instead; the two are exclusive.
+    #:
+    #: The general form of `key_offset`, for a mapping that is neither chromatic
+    #: nor complete. One sampled guitar's natural harmonics reach some thirty
+    #: discrete pitches from forty-eight keys: several keys sound the same pitch
+    #: on different strings, and most pitches are reachable from none. So which
+    #: key answers a note is a choice the capture makes rather than arithmetic,
+    #: and a note the instrument cannot sound is refused rather than transposed
+    #: to the nearest — that would measure the sampler's stretch.
+    key_map: tuple[tuple[int, int], ...] = ()
     #: A silent key struck before the note, to select which of the instrument's
     #: variants answers it. Zero is none.
     #:
@@ -212,6 +223,13 @@ class AuSource:
     keyswitch_lead_ms: int = 0
 
     def __post_init__(self) -> None:
+        # Both answer which key sounds a note, so two of them is two answers.
+        if self.key_map and self.key_offset:
+            raise ValueError(
+                f"key_offset {self.key_offset} and a {len(self.key_map)}-entry key_map "
+                f"both say which key sounds a note: a map that needs a constant added "
+                f"to it is a map written in the wrong keys"
+            )
         if bool(self.keyswitch) != bool(self.keyswitch_lead_ms):
             raise ValueError(
                 "a key switch needs a lead and a lead needs a key switch: a switch "
@@ -237,8 +255,24 @@ class AuSource:
         return self.preroll_ms - self.keyswitch_lead_ms
 
     def key(self, note: int) -> int:
-        """The key that makes this source sound `note`."""
-        return note + self.key_offset
+        """The key that makes this source sound `note`.
+
+        A note outside a `key_map` raises rather than falling back to the offset
+        path. An instrument mapped by table has gaps in its compass by
+        construction, so the nearest reachable key is a different pitch and the
+        offset path would record it under the label of the one that was asked
+        for — a grid silently measuring notes it never played.
+        """
+        if not self.key_map:
+            return note + self.key_offset
+        for sounding, key in self.key_map:
+            if sounding == note:
+                return key
+        raise ValueError(
+            f"note {note} is not in this timbre's key map, which sounds "
+            f"{len(self.key_map)} pitches between {self.key_map[0][0]} and "
+            f"{self.key_map[-1][0]}"
+        )
 
     def identity(self) -> dict:
         """The dict that goes into the cache key and the capture manifest.
@@ -279,6 +313,8 @@ class AuSource:
         # capture made before the field existed keeps its digest.
         if self.key_offset:
             identity["key_offset"] = self.key_offset
+        if self.key_map:
+            identity["key_map"] = [list(pair) for pair in self.key_map]
         if self.keyswitch:
             identity["keyswitch"] = self.keyswitch
             identity["keyswitch_lead_ms"] = self.keyswitch_lead_ms

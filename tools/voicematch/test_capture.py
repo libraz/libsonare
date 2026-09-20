@@ -470,6 +470,67 @@ def test_the_key_offset_reaches_the_cache_key_and_only_when_it_is_set():
     assert "key_offset" not in json.loads(_identity())
 
 
+def test_a_key_map_sounds_the_key_it_names_rather_than_the_note_plus_a_constant():
+    """The general form of the offset: a table, for a mapping with gaps in it.
+
+    An instrument selecting natural harmonics reaches a handful of pitches out
+    of its key range, several keys sound one pitch on different strings, and the
+    steps between them are not equal — so no constant expresses the mapping and
+    which key answers a note is the capture's choice.
+    """
+    src = AuSource(plugin="x:y:z", key_map=((40, 5), (47, 7), (52, 12)))
+    assert [src.key(n) for n in (40, 47, 52)] == [5, 7, 12]
+
+
+def test_a_note_outside_the_key_map_raises_instead_of_falling_back():
+    """The whole point of the table is that most pitches are NOT reachable.
+
+    Falling through to `note + key_offset` would send key 45 for note 45 and
+    record whatever answered it under note 45's label — a grid measuring notes
+    the instrument never played, with nothing anywhere saying so.
+    """
+    src = AuSource(plugin="x:y:z", key_map=((40, 5), (52, 12)))
+    with pytest.raises(ValueError, match="not in this timbre's key map"):
+        src.key(45)
+
+
+def test_an_offset_and_a_map_are_two_answers_to_one_question():
+    with pytest.raises(ValueError, match="both say which key sounds a note"):
+        AuSource(plugin="x:y:z", key_offset=-12, key_map=((40, 5),))
+
+
+def test_the_key_map_reaches_the_cache_key_and_only_when_it_is_set():
+    """Same rule as the channel, the offset and the key switch.
+
+    A map is what the render was made through, so two maps are two recordings;
+    and a source without one has to hash exactly as it did before the field
+    existed, or every capture in the tree re-renders.
+    """
+    assert _identity(key_map=((40, 5),)) != _identity(key_map=((40, 6),))
+    assert "key_map" not in json.loads(_identity())
+
+
+def test_a_grid_note_no_key_can_sound_is_refused_at_load(tmp_path):
+    """Found when the definition is read, not one note at a time hours into a run.
+
+    A table-mapped instrument has gaps by construction, so this is the ordinary
+    authoring mistake rather than a rare one, and the grid is what moves.
+    """
+    path = tmp_path / "harm.json"
+    path.write_text(json.dumps({
+        "id": "harm", "plugin": "x:y:z", "dry": False, "notes": [40, 45, 52],
+        "timbres": [{"id": "t", "key_map": {"40": 5, "52": 12}}],
+    }))
+    with pytest.raises(ValueError, match="no key for grid note 45"):
+        capture.load_config(path)
+    path.write_text(json.dumps({
+        "id": "harm", "plugin": "x:y:z", "dry": False, "notes": [40, 52],
+        "timbres": [{"id": "t", "key_map": {"40": 5, "52": 12}}],
+    }))
+    cfg = capture.load_config(path)
+    assert capture.source_for(cfg, cfg["timbres"][0]).key(52) == 12
+
+
 def test_sends_must_name_all_three_controllers():
     with pytest.raises(ValueError):
         capture.config_sends({"id": "x", "sends": [0, 0]})
