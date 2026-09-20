@@ -960,18 +960,26 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[61].percussion.tone_direct = 0.915486f;
   t[61].resonance_q = 0.854144f;
   t[61].gain = 1.0607f;
-  t[62] = make_membrane(220.0f, 0.08f, 0.20f, 0.0f, 0.70f);  // Mute Hi Conga
+  // base_hz and the five ratios are read from the reference's measured
+  // modal_hz/modal_ratio (drums_module_hit.json note 62): the old 220 Hz base
+  // put every mode at or below 45 Hz, where the reference has no energy.
+  t[62] = make_membrane(117.5f, 0.08f, 0.20f, 0.0f, 0.70f);  // Mute Hi Conga
   t[62].amp_env.attack_ms = 0.0882081f;
   t[62].amp_env.decay_ms = 376.595f;
   t[62].cutoff_hz = 4432.96f;
   t[62].drive = 0.486311f;
   t[62].percussion.contact = 3.37961f;
-  t[62].percussion.mode_decay_s = 0.35067f;
-  t[62].percussion.mode_ratios[0] = 0.204006f;
-  t[62].percussion.mode_ratios[1] = 1.64637f;
-  t[62].percussion.mode_ratios[2] = 0.202695f;
-  t[62].percussion.mode_ratios[3] = 17.5079f;
-  t[62].percussion.mode_ratios[4] = 10.7378f;
+  // mode_decay_exp 0.5 is the membrane-in-air value already used for note 38.
+  // mode_decay_s matches the reference's own extrapolated decay rate (fitted
+  // on n062_v100.wav, R^2 0.88): -60 dB at 171-174 ms against this render's
+  // 195.6 ms, -100 dB at 330-338 ms against 362.2 ms.
+  t[62].percussion.mode_decay_exp = 0.5f;
+  t[62].percussion.mode_decay_s = 0.068f;
+  t[62].percussion.mode_ratios[0] = 1.0f;
+  t[62].percussion.mode_ratios[1] = 1.3402f;
+  t[62].percussion.mode_ratios[2] = 1.5761f;
+  t[62].percussion.mode_ratios[3] = 2.1317f;
+  t[62].percussion.mode_ratios[4] = 8.4009f;
   t[62].percussion.noise_cutoff_hz = 785.897f;
   t[62].percussion.noise_decay_ms = 36.3864f;
   t[62].percussion.noise_gain = 0.681314f;
@@ -984,14 +992,17 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[62].percussion.tone_gain = 1.20114f;
   t[62].stereo_spread = 0.148505f;
   t[62].amp_env.sustain = 0.498882f;
-  t[62].percussion.contact_ms = 2.07134f;
+  // Lengthened from 2.07 (this is the period of a one-cycle sine burst, so
+  // longer = lower-frequency): band_tilt read +9.1 dB there and now +0.3,
+  // moving the tilt fix off mode_decay_s so the tail stays at the rate above.
+  t[62].percussion.contact_ms = 11.0f;
   t[62].percussion.num_modes = 5;
   t[62].percussion.plate_hf_ratio = 0.873691f;
   t[62].percussion.plate_low_hz = 459.58f;
   t[62].percussion.plate_t60_s = 0.0709381f;
   t[62].percussion.tone_direct = 0.204074f;
   t[62].resonance_q = 2.23469f;
-  t[62].gain = 0.4905f;
+  t[62].gain = 0.4184f;
   t[63] = make_membrane(200.0f, 0.25f, 0.30f, 0.0f, 1.1847f);  // Open Hi Conga
   t[63].amp_env.attack_ms = 6.1927f;
   t[63].amp_env.decay_ms = 217.078f;
@@ -1028,27 +1039,38 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // re-voicing and the piece was heard as it stands.
   t[63].percussion.wire_buzz = 3.0f;
   t[63].percussion.wire_threshold = 0.4f;
-  t[64] = make_membrane(130.0f, 0.30f, 0.35f, 0.0f, 1.4014f);  // Low Conga
+  // base_hz is the reference's loudest partial (222.11 Hz): with contact > 0
+  // the excitation is monotonic in frequency, so the lowest placed mode is
+  // always loudest, and its quieter 167.84/182.1/204.85 Hz partials (35-37 dB
+  // under peak) cannot be placed without becoming the loudest. Left out.
+  t[64] = make_membrane(222.11f, 0.30f, 0.35f, 0.0f, 1.4014f);  // Low Conga
   // The module reads a 6.98 ms attack against the fitted envelope's 0.1.
   t[64].amp_env.attack_ms = 6.98f;
   t[64].amp_env.decay_ms = 92.8306f;
-  t[64].amp_env.sustain = 0.466948f;
+  // Lowered from 0.467 measuring decay_ms on drums_module_hit's 360.77 ms
+  // window (module: 169.6 ms): 0.18 reads 166.1 ms against the same target.
+  t[64].amp_env.sustain = 0.18f;
   t[64].cutoff_hz = 11671.9f;
   t[64].drive = 0.895751f;
   t[64].percussion.contact = 0.346301f;
-  // -204 dB/s averaged over the module's octaves is a 0.29 s t60, against the
-  // fitted 0.69; shortened toward it.
-  t[64].percussion.mode_decay_s = 0.22f;
-  t[64].percussion.mode_ratios[0] = 0.113204f;
-  t[64].percussion.mode_ratios[1] = 1.94495f;
-  t[64].percussion.mode_ratios[2] = 2.06324f;
-  t[64].percussion.mode_ratios[3] = 11.7225f;
-  t[64].percussion.mode_ratios[4] = 1.2523f;
+  // mode_decay_exp 0.5 is the membrane-in-air value already used for note 38.
+  // mode_decay_s measured against band_tilt on drums_module_hit: 0.45 with
+  // the sustain above reads +2.1 dB there (pre-re-base: +8.4).
+  t[64].percussion.mode_decay_exp = 0.5f;
+  t[64].percussion.mode_decay_s = 0.45f;
+  t[64].percussion.mode_ratios[0] = 1.0f;
+  t[64].percussion.mode_ratios[1] = 1.1346f;
+  t[64].percussion.mode_ratios[2] = 1.3865f;
+  t[64].percussion.mode_ratios[3] = 1.6246f;
+  t[64].percussion.mode_ratios[4] = 1.7602f;
   t[64].percussion.noise_cutoff_hz = 400.224f;
-  t[64].percussion.noise_decay_ms = 52.7828f;
+  // This is the RC time constant `noise_level_` decays by, not a t60.
+  t[64].percussion.noise_decay_ms = 45.0f;
   t[64].percussion.noise_gain = 3.2458f;
   t[64].percussion.noise_q = 10.0505f;
-  t[64].percussion.num_modes = 2;
+  // All 5 slots now carry a real measured partial rather than 2 of them going
+  // unused: see the ratio comment above.
+  t[64].percussion.num_modes = 5;
   t[64].percussion.pitch_drop = 4.21119f;
   t[64].percussion.pitch_drop_ms = 33.5273f;
   t[64].percussion.strike_r = 0.474688f;
@@ -1058,7 +1080,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[64].percussion.contact_ms = 0.072924f;
   t[64].percussion.plate_gain = 0.00894634f;
   t[64].resonance_q = 0.639576f;
-  t[64].gain = 1.286f;
+  t[64].gain = 1.2860f;
   t[65] = make_membrane(250.0f, 0.22f, 0.20f, 700.0f, 1.1120f);  // High Timbale
   t[65].amp_env.attack_ms = 0.0703342f;
   // A 2.16 s decay held the piece loud across the whole window, so the strike
