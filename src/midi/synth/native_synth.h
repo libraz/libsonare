@@ -1089,8 +1089,12 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.percussion.shimmer_attack_ms, 40.0f), 1.0f, 2000.0f);
   p.percussion.shimmer_cutoff_hz = std::clamp(
       patch_clamp_detail::sanitize(p.percussion.shimmer_cutoff_hz, 8000.0f), 20.0f, 20000.0f);
+  // Up to 16, the same ceiling `gain` carries. Four was under the plate's own
+  // peak on every cymbal here, so a stick's radiation could not be the strike's
+  // loudest moment - which on a ride played with the tip is most of what there
+  // is to hear.
   p.percussion.contact =
-      std::clamp(patch_clamp_detail::sanitize(p.percussion.contact, 0.0f), 0.0f, 4.0f);
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.contact, 0.0f), 0.0f, 16.0f);
   // The ceiling is a felt mallet and the floor is the sample period at 96 kHz,
   // below which the pulse is a single sample whatever is asked for.
   p.percussion.contact_ms =
