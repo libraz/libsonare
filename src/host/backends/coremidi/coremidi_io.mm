@@ -461,6 +461,23 @@ CoreMidiInput::~CoreMidiInput() { close(); }
 
 size_t CoreMidiInput::source_count() { return MIDIGetNumberOfSources(); }
 
+bool CoreMidiInput::source_name(size_t index, char* out, size_t capacity) {
+  if (out == nullptr || capacity == 0 || index >= MIDIGetNumberOfSources()) return false;
+  const MIDIEndpointRef source = MIDIGetSource(index);
+  if (source == 0) return false;
+  // kMIDIPropertyDisplayName is the name a user recognises: it carries the
+  // device the endpoint belongs to, where kMIDIPropertyName is the bare port.
+  CFStringRef name = nullptr;
+  if (MIDIObjectGetStringProperty(source, kMIDIPropertyDisplayName, &name) != noErr ||
+      name == nullptr) {
+    return false;
+  }
+  const bool copied =
+      CFStringGetCString(name, out, static_cast<CFIndex>(capacity), kCFStringEncodingUTF8);
+  CFRelease(name);
+  return copied;
+}
+
 bool CoreMidiInput::open(size_t source_index) {
   if (impl_->client != 0) return false;
   if (source_index >= MIDIGetNumberOfSources()) return false;

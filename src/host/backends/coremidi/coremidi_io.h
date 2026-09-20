@@ -46,6 +46,12 @@ class CoreMidiInput final : public MidiInputSource {
   /// CONTROL thread: number of CoreMIDI source endpoints currently present.
   static size_t source_count();
 
+  /// CONTROL thread: writes source @p index's display name into @p out as
+  /// NUL-terminated UTF-8, truncated to @p capacity. False on a bad index, a
+  /// zero capacity, or an endpoint that publishes no name; @p out is left
+  /// untouched in that case.
+  static bool source_name(size_t index, char* out, size_t capacity);
+
   /// CONTROL thread: attach CoreAudioDevice::midi_time_mapper() (or another
   /// mapper driven by the active audio backend). Not owned; it must outlive
   /// this input while connected.
