@@ -28,7 +28,7 @@ Three of those are anchored on `n·f0·√(1+B·n²)`, which describes a **stiff
 
 - `vib_cents` / `vib_rate_hz` — vibrato, as peak-to-peak cents of the tracked fundamental and its rate
 - `trem_db` / `trem_rate_hz` — the same for amplitude, 3–9 Hz
-- `beat_db` / `beat_rate_hz` — amplitude modulation from 0.3 to 3 Hz, which is what a unison pair, a string section and a chorused pad all are
+- `beat_db` / `beat_rate_hz` — amplitude modulation from 0.3 to 3 Hz, which is what a unison pair, a string section and a chorused pad all are. **The band's low edge is asked for rather than reached**: the modulation spectrum's bin spacing is the frame rate over the frame count, so the longest window this takes (2.35 s, the cap in `MOD_WINDOW_S`) resolves 0.43 Hz and a note under about 1.2 s leaves one bin inside the whole band. Both fields are `None` there rather than that bin's frequency and whatever leaked into it — the vibrato band is resolved over the same window, so the two are asked separately
 - `f0_width_cents` — how wide the fundamental is. One string radiates one frequency; several a few cents apart radiate a band, and the width is how far apart they are. It is the one property of an ensemble patch a single note can carry.
 
 ### Two attack readings, on different grids

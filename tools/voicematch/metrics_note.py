@@ -10,6 +10,7 @@ from metrics_modal import modal_profile
 from metrics_modulation import f0_width_cents, modulation_note
 from metrics_partials import estimate_inharmonicity_b, ladder_present, partial_hz
 from metrics_signal import (
+    DB_FLOOR,
     N_HARMONICS,
     _db,
     _peak_near,
@@ -54,7 +55,11 @@ class NoteMetrics:
     odd_even_db: float
     tnr_db: float
     attack_ms: float
-    sustain_slope_db_s: float
+    #: None where the sustain window sat on the dB clamp: a note that reached
+    #: digital zero fits a flat line through `DB_FLOOR` and comes out at 0.0,
+    #: which is also what a note held perfectly gets. Absent rather than 0.0 so
+    #: a reader charges for it instead of reading it as the best case.
+    sustain_slope_db_s: float | None
     release_ms: float
     release_capped: bool
     sustain_rms_db: float
@@ -226,12 +231,17 @@ def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float,
             attack_ms = max(0.0, (times[above90[0]] - times[above10[0]]) * 1000.0)
 
     sus_mask = (times >= 0.3 * note_dur) & (times <= 0.9 * note_dur)
-    slope = 0.0
+    slope: float | None = None
     sustain_rms_db = float(_db(np.sqrt(np.mean(sustain**2))))
     if np.count_nonzero(sus_mask) >= 4:
         t_s = times[sus_mask]
-        e_db = np.asarray(_db(env[sus_mask]), dtype=np.float64)
-        slope = float(np.polyfit(t_s, e_db, 1)[0])
+        e = env[sus_mask]
+        # The same four frames, but of signal: under the clamp every frame
+        # converts to -240, so the fit returns 0.0 and a note that died reads
+        # as one that never moved.
+        if np.count_nonzero(e > DB_FLOOR) >= 4:
+            e_db = np.asarray(_db(e), dtype=np.float64)
+            slope = float(np.polyfit(t_s, e_db, 1)[0])
 
     # Release: from the level just before note-off, time to fall 40 dB.
     off_t = note_dur
@@ -279,7 +289,7 @@ def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float,
         odd_even_db=round(odd_even, 2),
         tnr_db=round(float(tnr), 2),
         attack_ms=round(attack_ms, 1),
-        sustain_slope_db_s=round(slope, 2),
+        sustain_slope_db_s=None if slope is None else round(slope, 2),
         release_ms=round(release_ms, 1),
         release_capped=capped,
         sustain_rms_db=round(sustain_rms_db, 2),
@@ -395,7 +405,9 @@ def compare_note(model: NoteMetrics, oracle: NoteMetrics) -> dict:
         "odd_even_delta_db": round(model.odd_even_db - oracle.odd_even_db, 2),
         "tnr_delta_db": round(model.tnr_db - oracle.tnr_db, 2),
         "attack_delta_ms": round(model.attack_ms - oracle.attack_ms, 1),
-        "sustain_slope_delta_db_s": round(model.sustain_slope_db_s - oracle.sustain_slope_db_s, 2),
+        "sustain_slope_delta_db_s": (
+            None if model.sustain_slope_db_s is None or oracle.sustain_slope_db_s is None
+            else round(model.sustain_slope_db_s - oracle.sustain_slope_db_s, 2)),
         "release_delta_ms": round(model.release_ms - oracle.release_ms, 1),
         "level_delta_db": round(model.sustain_rms_db - oracle.sustain_rms_db, 2),
     }

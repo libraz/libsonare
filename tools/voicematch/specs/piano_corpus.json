@@ -1,7 +1,7 @@
 {
   "_": "The piano fit against a captured single-note corpus. Run it with --corpus pointed at the capture directory; the probe, its velocities and its eight-second gate then come from the manifest, so this fit and the reference profile score the same stimulus.",
 
-  "_weights": "Every term here except the first three defaults to zero, which is why a fit run without them scores only a time-averaged harmonic ladder, an intonation error and a noise floor. tail and crest carry most of what a piano is: crest sees a note whose envelope never falls after its attack, and tail is the aftersound, which no probe shorter than the capture's gate can reach at all. level scores how the loudness is distributed across the grid with the grid's own offset removed, and hf watches the first 120 ms above 4 kHz, where a strike-noise path announces itself as a tick.",
+  "_weights": "What this block sets is what the struck-string class defaults got wrong, not the whole vector: a term left out of it is weighted at the class's own value rather than at zero, so env, init, lf and stiff are scored on this fit without appearing below. tail and crest carry most of what a piano is: crest sees a note whose envelope never falls after its attack, and tail is the aftersound, which no probe shorter than the capture's gate can reach at all. level scores how the loudness is distributed across the grid with the grid's own offset removed, and hf watches the first 120 ms above 4 kHz, where a strike-noise path announces itself as a tick.",
   "weights": {
     "harm": 1.0,
     "cents": 0.5,

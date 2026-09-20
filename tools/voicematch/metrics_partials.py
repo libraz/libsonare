@@ -239,8 +239,17 @@ def harmonic_share(seg: np.ndarray, sr: int, f0_hz: float, *,
     instrument that tracks perfectly. A share needs no such decision.
 
     Reported against the power below the highest partial searched, so a dark
-    instrument and a bright one are comparable; `None` when the segment is too
-    short to resolve the tolerance.
+    instrument and a bright one are comparable; `None` for a segment under
+    4096 samples.
+
+    **That floor is a sample count and not the tolerance it reads as.** The
+    tolerance is a ratio, so the window it opens is `f0 * 0.0693` wide and
+    narrows with pitch, while the bin spacing is `sr / n`: at the floor, 85 ms
+    at 48 kHz, one bin is 11.7 Hz against a 9.07 Hz window at the lowest note
+    `capture.py` probes, so the fundamental's own window holds no bin of its
+    own. Resolving two bins there needs 0.22 s, which is inside the 0.5 s this
+    reads and so costs the callers nothing — but a caller handing it a short
+    segment gets a share biased down by its bottom partials rather than a None.
     """
     n = min(len(seg), int(HARMONIC_SHARE_WINDOW_S * sr))
     if n < 4096 or f0_hz <= 0.0:

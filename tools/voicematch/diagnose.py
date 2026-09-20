@@ -42,23 +42,26 @@ from __future__ import annotations
 import json
 import math
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-from loss import LOSS_TERMS, TERM_FLOORS, measured_terms
+from loss import LOSS_TERMS, TERM_UNITS, measured_terms, unmeasurable_terms
 
-# Below this many multiples of its own floor, a term is as matched as the probe
-# can tell. The floors are already "one unit of this term that anyone would
-# notice" — 1 dB of harmonic error, 1 cent, 0.1 dB/s of slope.
+# Below this many of its own perceptual units, a term is as matched as the probe
+# can tell. `TERM_UNITS` is "one unit of this term that anyone would notice" —
+# 1 dB of harmonic error, 1 cent, 0.1 dB/s of slope — and the objective divides
+# by the same table, so a term diagnosed as matched is a term the fit charges
+# one unit for.
 MATCHED_UNITS = 1.0
 
 # A knob counts as connected to a term when moving it over its range shifts the
-# term by at least this fraction of the term's floor. A tenth of the smallest
+# term by at least this fraction of one perceptual unit. A tenth of the smallest
 # difference anyone would notice: generous, because the cost of calling a live
 # knob dead is a mechanism removed from a model that had it, and the cost of
 # calling a dead knob live is one more thing to check.
 CONNECTED_UNITS = 0.1
 
-# What one knob has to buy, as a share of the gap above the floor, for the gap
+# What one knob has to buy, as a share of the gap above one unit, for the gap
 # to count as reachable by fitting alone. A single knob closing the whole gap
 # by itself is a strong statement and a rare one; most real headroom is spread
 # over several, which is why the middle band exists rather than a threshold.
@@ -68,7 +71,7 @@ PARTIAL_SHARE = 0.1
 VERDICT_ORDER = ("unreachable", "unscored", "spent", "partial", "reachable",
                  "matched", "not computed")
 
-TERM_UNITS = {
+TERM_UNIT_NAMES = {
     "harm": "dB", "cents": "cents", "tnr": "dB", "env": "composite",
     "init": "dB", "slope": "dB/s ÷10", "tail": "dB/s ÷10", "hf": "dB",
     "lf": "dB", "dyn": "dB per 64 velocity", "stiff": "cents",
@@ -209,7 +212,7 @@ def _reach(term: str, base: float, probes: list[tuple[str, str, dict | None, str
     best: KnobReach | None = None
     strongest: KnobReach | None = None
     movers: set[str] = set()
-    floor = TERM_FLOORS[term]
+    unit_size = TERM_UNITS[term]
     for label, ends in by_knob.items():
         swing = max((abs(v - base) for v in ends.values()), default=0.0)
         gains = {end: base - v for end, v in ends.items()}
@@ -217,7 +220,7 @@ def _reach(term: str, base: float, probes: list[tuple[str, str, dict | None, str
         gain = max(0.0, gain)
         reach = KnobReach(knob=label, swing=swing, gain=gain,
                           at=at if gain > 0.0 else "", source=source.get(label, "auto"))
-        if swing >= CONNECTED_UNITS * floor:
+        if swing >= CONNECTED_UNITS * unit_size:
             movers.add(label)
         if best is None or gain > best.gain:
             best = reach
@@ -229,13 +232,13 @@ def _reach(term: str, base: float, probes: list[tuple[str, str, dict | None, str
 def _classify(term: str, weight: float, residual: float, best: KnobReach | None,
               strongest: KnobReach | None, movers: int) -> tuple[str, str]:
     """The verdict for one term, and the sentence a reader is meant to act on."""
-    floor = TERM_FLOORS[term]
-    units = residual / floor
-    unit = TERM_UNITS.get(term, "")
+    unit_size = TERM_UNITS[term]
+    units = residual / unit_size
+    unit = TERM_UNIT_NAMES.get(term, "")
     if units <= MATCHED_UNITS:
         return "matched", (f"{residual:.3g} {unit} — at or under the smallest difference "
                            f"this term resolves.")
-    gap = residual - floor
+    gap = residual - unit_size
     if movers == 0:
         source = strongest.source if strongest else "auto"
         where = {
@@ -295,13 +298,19 @@ def _classify(term: str, weight: float, residual: float, best: KnobReach | None,
 def diagnose(base_terms: dict[str, float],
              probes: list[tuple[str, str, dict | None, str]],
              weights: dict[str, float], *, percussive: bool = False,
-             axes: str = "") -> Diagnosis:
+             axes: str = "",
+             unmeasurable: Iterable[tuple[str, str]] = ()) -> Diagnosis:
     """Reduce a base render and its 2n probe renders to a verdict per term.
 
     Pure: `base_terms` and each probe's terms are what `score_terms` returns, and
     `probes` is one entry per (knob, range end) as
     `(knob label, "lo"|"hi", terms or None, "clamp"|"spec"|"auto")`.
+
+    `unmeasurable` is `(term, why)` for anything this probe's shape produced no
+    cell for. Those arrive as a 0.0 residual, which is also the best value a
+    term has, so without it a term that compared nothing reads as matched.
     """
+    absent = dict(unmeasurable)
     out = Diagnosis(axes=axes)
     out.unscorable = sorted(f"{label}:{end}" for label, end, terms, _ in probes
                             if not scorable(terms))
@@ -313,6 +322,14 @@ def diagnose(base_terms: dict[str, float],
         weight = float(weights.get(term, 0.0))
         residual = float(base_terms.get(term, 0.0))
         if not math.isfinite(residual):
+            continue
+        if term in absent:
+            out.terms.append(TermVerdict(
+                term=term, weight=weight, residual=0.0, units=0.0,
+                verdict="not computed", movers=0, probed=0,
+                note=f"not computed — {absent[term]}, so no cell was compared "
+                     f"and the 0.0 below is an absence rather than a match.",
+            ))
             continue
         if term == "mss" and weight <= 0.0:
             # Unlike every other term, this one is not computed unless it is
@@ -331,7 +348,7 @@ def diagnose(base_terms: dict[str, float],
         verdict, note = _classify(term, weight, residual, best, strongest, len(movers))
         out.terms.append(TermVerdict(
             term=term, weight=weight, residual=residual,
-            units=residual / TERM_FLOORS[term],
+            units=residual / TERM_UNITS[term],
             verdict=verdict, movers=len(movers), probed=probed,
             best=best, strongest=strongest, note=note,
         ))
@@ -485,6 +502,7 @@ def run_diagnosis(evaluator, knobs, args, catalogue=None, *, out_path: str = "")
               for label, end, values in trials]
     diag = diagnose(base_terms, probes, evaluator.loss.weights,
                     percussive=bool(getattr(args, "percussive", False)),
-                    axes=probe_axes(evaluator.oracle, getattr(args, "pattern", "")))
+                    axes=probe_axes(evaluator.oracle, getattr(args, "pattern", "")),
+                    unmeasurable=unmeasurable_terms(args))
     print_report(diag, out_path=out_path)
     return diag

@@ -7,9 +7,17 @@ import math
 import numpy as np
 from metrics import (
     MIN_PARTIALS_FOR_B,
+    N_HARMONICS,
     THIRD_OCTAVE_CENTERS,
     stretch_cents,
 )
+
+#: How far up the ladder `harm` compares. `analyze_note` measures exactly
+#: `N_HARMONICS` bins, so this is the whole of what the measurement offers
+#: rather than a preference — a caller asking for fewer leaves the bins above
+#: its number charged by nothing, since `tnr`'s harmonic mask treats them as
+#: partials and excludes them from the noise it prices.
+HARM_REACH = N_HARMONICS
 
 # The terms the loss is built from, in report order. `harm`/`cents`/`tnr`/`init`/
 # `slope`/`tail`/`hf`/`lf` come from the harmonic metric set and `band`/`bdecay`
@@ -25,6 +33,11 @@ LOSS_TERMS = ("harm", "modes", "cents", "tnr", "mod", "env", "init", "slope",
 # no energy in — and an uncapped delta against one of those decides the whole
 # objective on its own.
 TAIL_DELTA_CAP_DB_S = 20.0
+
+# What a model note whose sustain window sat on the dB clamp costs `env`. Same
+# 30 dB/s the skeleton's early/late bands are capped at, because it is the same
+# quantity; the absence it charges for is a note that stopped being there.
+SUSTAIN_SLOPE_CAP_DB_S = 30.0
 HF_DELTA_CAP_DB = 24.0
 # Same cap as the high bands, and it binds far more often. A reference's 20-60
 # Hz share on a treble note is genuinely tiny, so an uncapped delta there would
@@ -262,7 +275,8 @@ def _pair_modes(m_hz, o_hz) -> list[tuple[int, int, float]]:
     return pairs
 
 
-def _modes_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float, int]:
+def _modes_terms(model_rows: list[dict], oracle_rows_: list[dict],
+                 tally: CellCount | None = None) -> tuple[float, int]:
     """How differently the two instruments place their partials, and on how many notes.
 
     The harmonic ladder searches for partial n at `n*f0*sqrt(1+B*n^2)`, which
@@ -290,10 +304,19 @@ def _modes_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[floa
         cost = 0.0
         for i, j, cents in pairs:
             cost += min(cents, MODE_CENTS_CAP) / MODE_CENTS_PER_DB
-            if i < len(m_db) and j < len(o_db):
-                cost += min(abs(m_db[i] - o_db[j]), MODE_DB_CAP)
-        cost += MODE_UNMATCHED_DB * (len(m_hz) - len(pairs))   # spurious modes
-        cost += MODE_UNMATCHED_DB * (len(o_hz) - len(pairs))   # missing modes
+            db = abs(m_db[i] - o_db[j]) if i < len(m_db) and j < len(o_db) else 0.0
+            cost += min(db, MODE_DB_CAP)
+            if tally is not None:
+                capped = cents >= MODE_CENTS_CAP or db >= MODE_DB_CAP
+                tally.clipped += capped
+                tally.compared += not capped
+        # A mode present on one side only. It is not a comparison — there was
+        # nothing to compare it with — so it counts as a cap the same way an
+        # absent value does in `_absent_or`.
+        unmatched = (len(m_hz) - len(pairs)) + (len(o_hz) - len(pairs))
+        cost += MODE_UNMATCHED_DB * unmatched
+        if tally is not None:
+            tally.absent += unmatched
         total += cost / len(o_hz)
         used += 1
     return (total / used if used else 0.0), used
@@ -318,7 +341,8 @@ MOD_RATE_MIN_CENTS = 5.0
 MOD_RATE_MIN_DB = 1.0
 
 
-def _mod_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float, int]:
+def _mod_terms(model_rows: list[dict], oracle_rows_: list[dict],
+               tally: CellCount | None = None) -> tuple[float, int]:
     """How differently the two voices move, and how many notes said so.
 
     A sampled reference is a recording of a player, so it carries vibrato,
@@ -332,6 +356,16 @@ def _mod_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float,
     An absent measurement on the MODEL side where the reference has one is
     charged the cap rather than skipped, for the reason `_absent_or` gives: a
     note too dead to track is the defect, not the absence of evidence about one.
+
+    **A rate is skipped on the reference's depth alone and never on the model's.**
+    Both were once required to clear the floor, which handed a model a discount
+    for going still: the parts are summed, so dropping one is a straight
+    subtraction. Against a reference at 20 cents and 2 dB, a model at 5.1 cents
+    and 1.1 dB scored 10.88 and one at 4.9 and 0.9 — dimmer on both axes —
+    scored 4.12, because falling under the floor dropped two rate parts worth
+    7.0 between them. The term added to charge a model for being too still had a
+    cliff in it rewarding exactly that, and a decaying note reads as still by
+    construction, since `measure_modulation` detrends the level track.
     """
     total = 0.0
     used = 0
@@ -347,15 +381,31 @@ def _mod_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float,
             if ov is None:
                 continue
             scored = True
-            parts.append(_absent_or(mv, ov, cap) / scale)
+            parts.append(_absent_or(mv, ov, cap, tally) / scale)
         for depth, rate, floor in (("vib_cents", "vib_rate_hz", MOD_RATE_MIN_CENTS),
                                    ("trem_db", "trem_rate_hz", MOD_RATE_MIN_DB),
                                    ("beat_db", "beat_rate_hz", MOD_RATE_MIN_DB)):
             md, od = m.get(depth), o.get(depth)
             mr, orr = m.get(rate), o.get(rate)
-            if None in (md, od, mr, orr) or md < floor or od < floor:
+            if od is None or orr is None or od < floor:
+                # The reference does not have this modulation, so the rate it
+                # reports is whichever bin its noise floor peaked in and there
+                # is nothing here to compare against.
                 continue
-            parts.append(min(abs(mr - orr), MOD_RATE_CAP_HZ))
+            if md is None or mr is None or md < floor:
+                # The reference moves and the model does not, so the model has
+                # no rate to be right or wrong about. Charged the cap, exactly
+                # as an absent value is above — never skipped, because the parts
+                # are summed and a skip is a discount for the defect itself.
+                parts.append(MOD_RATE_CAP_HZ)
+                if tally is not None:
+                    tally.absent += 1
+                continue
+            offset = abs(mr - orr)
+            parts.append(min(offset, MOD_RATE_CAP_HZ))
+            if tally is not None:
+                tally.clipped += offset >= MOD_RATE_CAP_HZ
+                tally.compared += offset < MOD_RATE_CAP_HZ
         if scored:
             total += sum(parts)
             used += 1
@@ -414,7 +464,58 @@ def _rows_comparable(model_rows: list[dict], oracle_rows_: list[dict]) -> bool |
     return bool(model_rows)
 
 
-def _absent_or(model, oracle, cap: float) -> float:
+class CellCount:
+    """What happened to each cell of a summed term — four outcomes, not two.
+
+    A capped aggregate's raw value cannot tell them apart, and they mean
+    opposite things:
+
+    - **compared** — both sides had a value and the difference was inside the
+      cap. The only one of the four that is a measurement.
+    - **clipped** — both sides had a value and the difference reached the cap.
+      A comparison, but its magnitude is the cap rather than the distance.
+    - **absent** — the reference had a value and the model did not. No
+      comparison happened; the cap stands in for one, which is right (a model
+      that stopped sounding is the defect) and is not evidence about how far
+      apart they are.
+    - **skipped** — the reference had no value, so there was nothing to compare
+      against and nothing is charged. Scores 0.0, which is the term's BEST.
+
+    Both ends are invisible in the raw value and they fail in opposite
+    directions. A term made of caps reads as its worst, which no empty-set
+    guard looks for: two voices' `slope` came to 24 cells with not one
+    comparison among them, and one kit's `modes` to 72. A term made of skips
+    reads as its best: `tail` was 546 cells of 546 skipped across the bank's
+    rendered probes, because its band opens at 2.0 s and the default probe
+    holds 2.0 s.
+
+    Reported as `<term>_cells` (what the reference offered), `<term>_capped`,
+    `<term>_absent` and `<term>_skipped`, read exactly as `harm_bins` is.
+    Nothing in the objective divides by any of them: the cap is still charged
+    and the skip is still free.
+    """
+
+    __slots__ = ("absent", "clipped", "compared", "skipped")
+
+    def __init__(self) -> None:
+        self.compared = 0
+        self.clipped = 0
+        self.absent = 0
+        self.skipped = 0
+
+    @property
+    def capped(self) -> int:
+        """Cells whose value is the cap — a clip or a stand-in for an absence."""
+        return self.clipped + self.absent
+
+    def out(self, term: str) -> dict[str, float]:
+        return {f"{term}_cells": float(self.compared + self.capped),
+                f"{term}_capped": float(self.capped),
+                f"{term}_absent": float(self.absent),
+                f"{term}_skipped": float(self.skipped)}
+
+
+def _absent_or(model, oracle, cap: float, tally: CellCount | None = None) -> float:
     """Compare one measured value with its reference, charging for an absence.
 
     A band the *model* has nothing in, where the oracle has something, is the
@@ -428,11 +529,24 @@ def _absent_or(model, oracle, cap: float) -> float:
     So an absent model value costs the cap. An absent *oracle* value is a
     different thing and still skipped: it means the reference has nothing there
     to match, which on a short probe is most of the aftersound band and is a
-    property of the probe rather than of the voice.
+    property of the probe rather than of the voice — and it is not a cell of
+    this term at all, so `tally` does not count it either way.
     """
     if oracle is None:
+        if tally is not None:
+            tally.skipped += 1
         return 0.0
-    return cap if model is None else min(abs(model - oracle), cap)
+    if model is None:
+        if tally is not None:
+            tally.absent += 1
+        return cap
+    delta = abs(model - oracle)
+    if tally is not None:
+        if delta >= cap:
+            tally.clipped += 1
+        else:
+            tally.compared += 1
+    return min(delta, cap)
 
 
 def _fell_silent(model_rows: list[dict], oracle_rows_: list[dict]) -> bool:

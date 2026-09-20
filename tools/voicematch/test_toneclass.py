@@ -8,6 +8,7 @@ rather than measured.
 
 from __future__ import annotations
 
+import itertools
 import sys
 from pathlib import Path
 
@@ -222,6 +223,22 @@ def test_a_note_too_short_to_track_withholds_rather_than_reporting_zero():
     assert got["vib_cents"] is None
 
 
+def test_a_band_the_window_cannot_resolve_withholds_rather_than_its_one_bin():
+    """A band is covered when the window is long enough, not because it was named.
+
+    The frame spectrum's spacing is the frame rate over the frame count, so a
+    note just past the frame floor leaves a single bin inside the 0.3-3 Hz beat
+    band: `argmax` then returns that bin's frequency whatever the note did, and
+    its magnitude as a depth. The vibrato band is resolved over the very same
+    window, which is why the two are asked separately rather than together.
+    """
+    n = int(SR * 0.7)
+    t = np.arange(n) / SR
+    got = modulation_note(np.sin(2 * np.pi * 440 * t), SR, Note(69, 100, 0.0, 0.7), 440.0)
+    assert (got["beat_db"], got["beat_rate_hz"]) == (None, None)
+    assert got["vib_cents"] is not None and got["trem_db"] is not None
+
+
 def test_the_movement_term_asks_for_vibrato_the_noise_term_never_could():
     """`tnr` charges the model only for being NOISIER, so a dead note is free there."""
     still = analyze_note(_vibrato(440.0, 0.0, 5.5), SR, Note(69, 100, 0.0, 3.0), 3.0).to_dict()
@@ -238,6 +255,54 @@ def test_an_absent_movement_reading_on_the_model_side_is_charged_not_skipped():
     dead = {"vib_cents": None, "vib_rate_hz": None, "trem_db": None,
             "beat_db": None, "f0_width_cents": None}
     assert _mod_terms([dead], [ref])[0] > _mod_terms([ref], [ref])[0]
+
+
+def _moving(vib: float | None, trem: float | None, rate: float = 2.0) -> dict:
+    return {"vib_cents": vib, "vib_rate_hz": rate, "trem_db": trem,
+            "trem_rate_hz": rate, "beat_db": None, "beat_rate_hz": None,
+            "f0_width_cents": None}
+
+
+def test_going_still_can_never_buy_a_discount_on_the_movement_term():
+    """The term exists to charge a model for being too still, so it must not pay.
+
+    The rate parts are summed with the depth parts, so a rate part that is
+    dropped is a straight subtraction — and they were once dropped when EITHER
+    side fell under the depth floor. Against a reference moving at 20 cents and
+    2 dB, a model at 5.1 and 1.1 scored 10.88 and one at 4.9 and 0.9 scored
+    4.12: dimmer on both axes, and 2.6x better, because crossing the floor
+    dropped both rate parts. A decaying note reads as still by construction —
+    `measure_modulation` detrends the level track — so this was a cliff a fit
+    could fall down by letting the note die.
+    """
+    reference = _moving(20.0, 2.0, rate=5.5)
+    ladder = [_moving(6.0, 2.0), _moving(5.1, 1.1), _moving(4.9, 0.9),
+              _moving(0.0, 0.0), _moving(None, None)]
+    scores = [_mod_terms([m], [reference])[0] for m in ladder]
+    assert scores == sorted(scores), f"stiller must never score better: {scores}"
+    # Each step is a real one rather than a rounding difference.
+    assert all(b - a > 0.5 for a, b in itertools.pairwise(scores))
+
+
+def test_a_rate_the_reference_does_not_have_is_still_skipped():
+    """The other side of the gate, and it stays: an absent oracle value is skipped.
+
+    A reference that does not tremolo reports whichever bin its own noise floor
+    peaked in as a rate, so comparing against it is arithmetic on noise.
+    """
+    still_reference = _moving(20.0, 0.0, rate=5.5)
+
+    def model(trem_rate: float) -> dict:
+        return _moving(20.0, 3.0, rate=5.5) | {"trem_rate_hz": trem_rate}
+
+    # The model tremolos and the reference does not, so the depth is charged
+    # and the rate is not: moving the model's tremolo rate by five hertz must
+    # change nothing at all.
+    assert _mod_terms([model(5.5)], [still_reference])[0] == pytest.approx(
+        _mod_terms([model(0.5)], [still_reference])[0])
+    # The vibrato rate, which the reference does have, is compared as before.
+    assert (_mod_terms([_moving(20.0, 0.0, rate=0.5)], [still_reference])[0]
+            > _mod_terms([_moving(20.0, 0.0, rate=5.5)], [still_reference])[0])
 
 
 def test_a_unison_pair_is_wider_and_beats_where_one_string_does_neither():
@@ -659,6 +724,24 @@ def test_a_term_that_goes_unmeasurable_is_charged_rather_than_scored_perfect():
     # Not better: no modes were found at all, so the term measured nothing.
     blind = weights.combine(_terms(modes=0.0, modes_notes=0.0))
     assert blind > 1.0
+
+
+def test_going_blind_costs_more_the_further_out_the_term_started():
+    """The penalty is a multiple of the start, not a flat number of units.
+
+    With every term scaled by a fixed perceptual unit, a flat charge would be
+    trivially cheap for a term already tens of units out — exactly the terms a
+    search is most tempted to blind — so it is charged against what that term
+    was actually scoring.
+    """
+    near, far = LossWeights({"modes": 1.0}), LossWeights({"modes": 1.0})
+    near.calibrate(_terms(modes=2.0))
+    far.calibrate(_terms(modes=40.0))
+    blind = _terms(modes=0.0, modes_notes=0.0)
+    assert near.combine(blind) * near.reference < far.combine(blind) * far.reference
+    # And on both, going blind is worse than staying exactly where it started.
+    assert near.combine(blind) > 1.0
+    assert far.combine(blind) > 1.0
 
 
 def test_a_term_that_never_had_data_is_not_charged_for_still_not_having_it():

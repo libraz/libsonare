@@ -10,6 +10,7 @@
        voice-readiness voice-status-refresh voice-status-check spec-check \
        voicematch-substitution voicematch-substitution-all voicematch-determinism \
        voicematch-reextract-check voicematch-sf2-corpus voicematch-sustain-check \
+       voicematch-loss-sensitivity voicematch-loss-cells \
        spec-liveness spec-liveness-census spec-liveness-census-check \
        excerpts excerpts-check test-voicematch \
        check-c-api-out-param-init check-c-api-pointer-contracts check-c-api-header-self-contained \
@@ -736,6 +737,35 @@ voicematch-reextract-check:
 voicematch-sustain-check:
 	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
 		tools/voicematch/sustain_check.py
+
+# Whether the loss charges for a change a listener would name. Perturbs a
+# captured REFERENCE by a known amount -- raising partials 15-30, slowing the
+# attack, adding tremolo, negating the velocity response, adding hiss, cutting
+# the output -- and reads the result against the same capture's own timbre
+# spread, so a score under 1.0 means the change sits inside the distance two
+# recordings of the instrument already are apart. The perturbation is applied to
+# audio rather than to a knob, because a null through a knob cannot say which of
+# the two was blind. Every perturbation is also run at amplitude zero, and a
+# zero that does not score exactly 0.0 is plumbing. Needs the cached corpus
+# under `.cache/voicematch/` (or `SONARE_VOICEMATCH_ROOT`); reads nothing else,
+# renders nothing, builds nothing, exits 0 whatever it finds, and stays out of
+# CI on the same terms as `voicematch-substitution`.
+voicematch-loss-sensitivity:
+	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+		tools/voicematch/loss_sensitivity.py
+
+# What happened to every cell the loss aggregates, over the rendered probes in
+# `tools/voicematch/out/`. Half the terms are sums over a ladder, a band profile
+# or a slice grid, and a raw value cannot say whether its cells were
+# comparisons, caps standing in for a model that produced nothing, or skips
+# where the reference offered nothing -- and the last two read as the term's
+# worst and its best respectively, so neither shows up in a results table.
+# Renders nothing, builds nothing, exits 0 whatever it finds, and stays out of
+# CI for the reason `voicematch-loss-sensitivity` does: a gate built on this
+# would be a gate on how short the probes happen to be.
+voicematch-loss-cells:
+	@$(RYE) run --pyproject bindings/python/pyproject.toml python \
+		tools/voicematch/loss_cells.py
 
 # Rebuild the corpus of every capture whose untracked overlay names a SoundFont.
 # Which captures those are is a question only the overlay can answer, so a clone

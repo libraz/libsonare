@@ -21,7 +21,14 @@ from corpus import (
     load_corpus,
 )
 from knobs import load_spec_weights
-from loss import KIT_MIN_MEMBERS, LOSS_TERMS, cli_weights
+from loss import (
+    KIT_MIN_MEMBERS,
+    LOSS_TERMS,
+    SKELETON_BANDS,
+    SKELETON_MAX_S,
+    band_min_note_s,
+    cli_weights,
+)
 from metrics import measure_band_edge
 from patterns import build_pattern, pattern_length
 from render_oracle import check_oracle_rig
@@ -227,6 +234,24 @@ def resolve_probe(args) -> None:
     # the grid to one drum note has none either — the term is about a family,
     # and one member is not one. Supplied as a class default, so it is dropped
     # rather than refused; an explicit --w-kit is refused below.
+    # Whether any pitch is sounded at two velocities, which is the whole of what
+    # the dynamics term fits. Same treatment again, and for the same reason the
+    # kit one gets it: fitting a `sustain` probe is an ordinary thing to run, so
+    # the class default is dropped rather than supplied and then refused, while
+    # an explicit --w-dyn is still refused below.
+    velocities: dict[int, set[int]] = {}
+    for n in pattern.analysis_notes:
+        velocities.setdefault(n.note, set()).add(n.velocity)
+    args.has_velocity_spread = any(len(v) >= 2 for v in velocities.values())
+    # Whether any note is held long enough for the aftersound band to have
+    # frames in it. Same treatment for the fourth time, and this one is the
+    # quietest of the four: `tail` reads a band that opens at 2.0 s, the default
+    # probe holds 2.0 s, and a band with no frames is skipped rather than
+    # charged — so the term scored exactly 0.0, its BEST value, on every
+    # candidate of every fit that ever weighted it.
+    tail_min = band_min_note_s("tail_db_s")
+    args.has_tail_window = any(min(n.dur, SKELETON_MAX_S) >= tail_min
+                               for n in pattern.analysis_notes)
     probe_notes = {n.note for n in pattern.analysis_notes}
     args.has_kit_groups = any(
         len(probe_notes.intersection(members)) >= KIT_MIN_MEMBERS
@@ -248,16 +273,26 @@ def resolve_probe(args) -> None:
     # scored, because its unmeasurable value is 0.0 and 0.0 is also its best
     # possible score: weighted on a `sustain` probe it would report a perfect
     # dynamics match on every candidate and quietly dilute the whole objective.
-    if cli_weights(args).get("dyn", 0.0) > 0.0:
-        spread = {n.note: set() for n in pattern.analysis_notes}
-        for n in pattern.analysis_notes:
-            spread[n.note].add(n.velocity)
-        if not any(len(v) >= 2 for v in spread.values()):
-            raise ValueError(
-                f"--w-dyn fits brightness against velocity per pitch, and pattern "
-                f"{args.pattern!r} sounds each note at a single velocity, so there is no "
-                f"curve to fit. Use --pattern velocity, a drum probe, or drop --w-dyn."
-            )
+    # Only what was asked for explicitly reaches here: a class default is already
+    # gone, dropped by `cli_weights` off `has_velocity_spread`.
+    if getattr(args, "w_dyn", None) and not args.has_velocity_spread:
+        raise ValueError(
+            f"--w-dyn fits brightness against velocity per pitch, and pattern "
+            f"{args.pattern!r} sounds each note at a single velocity, so there is no "
+            f"curve to fit. Use --pattern velocity, a drum probe, or drop --w-dyn."
+        )
+    # The same again on the time axis, and the reason it is worth a refusal: an
+    # unreachable `tail` is 0.0, which is also its best score, so a run
+    # weighting it would report a perfect aftersound on every candidate.
+    if getattr(args, "w_tail", None) and not args.has_tail_window:
+        longest = max((n.dur for n in pattern.analysis_notes), default=0.0)
+        raise ValueError(
+            f"--w-tail reads the {SKELETON_BANDS['tail_db_s'][0]:g}-"
+            f"{SKELETON_BANDS['tail_db_s'][1]:g} s decay band, and the longest note "
+            f"pattern {args.pattern!r} holds is {longest:g} s, so the band has no frames "
+            f"in it on any note. Hold the notes past {band_min_note_s('tail_db_s'):g} s "
+            f"(--dur), fit against a corpus whose gate is longer, or drop --w-tail."
+        )
     # Same shape as the dynamics refusal, on the other between-note axis. An
     # unscorable `kit` is 0.0, which is also its best value, so a run weighting
     # it against a probe with no family in it would report a perfect kit on
@@ -283,12 +318,10 @@ def resolve_probe(args) -> None:
 def apply_spec_weights(args, argv: list[str]) -> None:
     """Let a spec set the term weights it needs, unless the command line said otherwise.
 
-    Most of the `--w-*` flags default to zero, which means a fit run without
-    them scores only the harmonic ladder, the intonation and the noise floor —
-    every envelope, decay, level and attack term silent. That default is right
-    for nothing in particular and has to be overridden per voice, from memory,
-    on every run. A spec that carries its own weights makes the run
-    reproducible from one file.
+    A term the spec omits is not zero: `cli_weights` fills it from the
+    instrument's class, so this block says what the class got wrong rather than
+    what the run scores. Reading it as the whole vector is how a class default
+    reaches a fit unargued, including one a spec's own prose argues against.
 
     An explicit flag always wins, decided by whether it appears in argv rather
     than by comparing against the default, so passing a flag its own default

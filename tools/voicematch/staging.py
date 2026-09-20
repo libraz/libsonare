@@ -18,6 +18,7 @@ parent and a staged fit accounts for its evaluations exactly as a plain one does
 from __future__ import annotations
 
 import argparse
+import itertools
 import math
 import sys
 from dataclasses import replace
@@ -85,6 +86,69 @@ class SubEvaluator:
         self.parent.quiet = value
 
 
+#: Decade edges the screening histogram buckets effects into. Coarse on purpose:
+#: what the reader needs is whether the threshold sits on a cliff or inside a
+#: continuum, not the shape of the distribution to three figures.
+EFFECT_BUCKETS = (1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1)
+
+#: Thresholds the report prices alongside the one in force, so "what would a
+#: different bar have kept" is answered from the same probe rather than by a
+#: second screening run.
+THRESHOLD_LADDER = (0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02)
+
+
+def report_effect_distribution(effects: list[tuple[str, float]], threshold: float) -> None:
+    """Print where every knob's effect sits relative to the bar that cut them.
+
+    The dropped list alone cannot answer whether the threshold is in the right
+    place: it names what fell below the bar and says nothing about how far the
+    survivors cleared it, so a bar cutting through the middle of a continuum
+    reads exactly like one sitting in a gap.
+
+    Two readings make the difference visible. The histogram and the pair
+    straddling the bar say whether anything separates the last knob kept from
+    the first dropped. The `share` column — each effect over the largest effect
+    on this voice — says where the bar falls in terms the voice itself sets:
+    every term the loss saturates adds a constant no candidate moves, which
+    scales every effect down together, so an absolute bar cuts deeper on a voice
+    whose loss is mostly saturated while the share of the largest effect is
+    unchanged. A default that keeps 90 % of one voice's knobs and 50 % of
+    another's is reporting that, and it cannot be read off the count.
+    """
+    values = sorted(e for _, e in effects)
+    if not values:
+        return
+    largest = values[-1]
+    edges = [0.0, *EFFECT_BUCKETS, math.inf]
+    print(f"  effect distribution ({len(values)} knobs, threshold {threshold:g}, "
+          f"largest effect {largest:.4g}):", file=sys.stderr)
+    for lo, hi in itertools.pairwise(edges):
+        count = sum(1 for v in values if lo <= v < hi)
+        if not count:
+            continue
+        span = f"{lo:g}..{hi:g}" if hi != math.inf else f">={lo:g}"
+        mark = "  <- the bar is in this bucket" if lo <= threshold < hi else ""
+        print(f"    {span:>16}  {count:>4}  {'#' * min(count, 40)}{mark}", file=sys.stderr)
+
+    ladder = "  ".join(f"{t:g}->{sum(1 for v in values if v >= t)}" for t in THRESHOLD_LADDER)
+    print(f"    another bar would keep: {ladder}", file=sys.stderr)
+
+    below = [(lbl, e) for lbl, e in effects if e < threshold]
+    above = [(lbl, e) for lbl, e in effects if e >= threshold]
+    if below and above:
+        last_out = max(below, key=lambda kv: kv[1])
+        first_in = min(above, key=lambda kv: kv[1])
+        apart = (f" ({first_in[1] / last_out[1]:.1f}x apart)" if last_out[1] > 0
+                 else " (the dropped one moved nothing at all)")
+        print(f"    straddling the bar: {last_out[0]} {last_out[1]:.5f} dropped, "
+              f"{first_in[0]} {first_in[1]:.5f} kept{apart}", file=sys.stderr)
+    if largest > 0:
+        print(f"    the bar is {threshold / largest * 100:.2f}% of this voice's largest "
+              f"effect; knobs kept by share: "
+              + "  ".join(f"{s:g}%->{sum(1 for v in values if v >= s / 100 * largest)}"
+                          for s in (0.1, 0.5, 1.0, 5.0)), file=sys.stderr)
+
+
 def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
     """Keep only the knobs that measurably move the loss; report the rest.
 
@@ -126,11 +190,13 @@ def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
 
     keep: list[int] = []
     dropped: list[tuple[str, float]] = []
+    effects: list[tuple[str, float]] = []
     for i, knob in enumerate(knobs):
         pair = losses[2 * i : 2 * i + 2]
         effect = max(abs(v - baseline) for v in pair if math.isfinite(v)) if any(
             math.isfinite(v) for v in pair
         ) else 0.0
+        effects.append((knob.label, effect))
         if effect >= args.screen_threshold:
             keep.append(i)
         else:
@@ -138,6 +204,7 @@ def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
 
     print(f"screening: {len(keep)}/{len(knobs)} knobs move the loss by at least "
           f"{args.screen_threshold} over their range", file=sys.stderr)
+    report_effect_distribution(effects, args.screen_threshold)
     if dropped:
         print("  dropped (largest effect first):", file=sys.stderr)
         for label, effect in sorted(dropped, key=lambda kv: -kv[1]):

@@ -1,11 +1,16 @@
 """The two search strategies, over a knob vector and an evaluator.
 
-`optimize` is coordinate descent with a golden-section line search per knob:
-cheap, readable when a knob has an obvious optimum, inherently serial, and it
-stalls on knobs that trade against each other. `cma_es` learns that correlation
-in a covariance and steps along it, restarting with a doubled population when a
-run stagnates, and scores a whole generation in one batch so the renders run
-concurrently.
+`optimize` is multi-start coordinate descent with a golden-section line search
+per knob: cheap, readable when a knob has an obvious optimum, inherently
+serial, and it stalls on knobs that trade against each other. `cma_es` learns
+that correlation in a covariance and steps along it, restarting with a doubled
+population when a run stagnates, and scores a whole generation in one batch so
+the renders run concurrently.
+
+Both loops end on the budget and on nothing else. A converged descent, a
+collapsed CMA-ES distribution and an exhausted restart ladder each leave a
+start finished rather than the search finished, so what follows is another
+start from a fresh random point sharing the same best-so-far.
 
 The `evaluator` argument is duck-typed on purpose, because both an `Evaluator`
 and a stage's `SubEvaluator` view of one are passed here. What is required:
@@ -36,6 +41,20 @@ def _to_opt(knob: Knob, value: float) -> float:
 
 def _from_opt(knob: Knob, t: float) -> float:
     return math.exp(t) if knob.log else t
+
+
+#: How far a coordinate pass narrows each knob's bracket for the next pass.
+#: A pass searches a window centred on the knob's current value; without the
+#: narrowing every pass re-probes the same points, which a cached evaluator
+#: answers for free, so the search ends on its second pass however much budget
+#: is left. Measured on a synthetic Rosenbrock: budgets of 30, 400 and 4000 all
+#: stopped after 13 evaluations at the same loss.
+PASS_SHRINK = 0.5
+
+#: Consecutive starts that may consume no budget at all before a loop gives up.
+#: Both loops terminate on the budget, so a start that scores nothing new is the
+#: only way either can fail to terminate.
+BARREN_STARTS = 3
 
 
 def golden_section(objective, a: float, b: float, max_evals: int, tol: float):
@@ -83,6 +102,20 @@ def _value_to_unit(knob: Knob, v: float) -> float:
     return (v - knob.lo) / (knob.hi - knob.lo)
 
 
+def _fold_into_cube(x):
+    """Fold a sample back into the unit cube by reflection rather than clipping.
+
+    Clipping stacks every out-of-range sample onto the bound itself, so a wide
+    sigma near an edge manufactures pinned knobs: the report reads "at its
+    maximum", which is the one annotation that says a search range was too
+    narrow. Reflection keeps the bound reachable without ever concentrating mass
+    there — a knob whose optimum really is the bound still gets there, because
+    the mean converges onto it from the inside.
+    """
+    y = np.mod(np.abs(x), 2.0)
+    return np.where(y > 1.0, 2.0 - y, y)
+
+
 def cma_es(evaluator, knobs: list[Knob], args) -> list[float]:
     """CMA-ES over the knobs, restarted with a doubled population on stagnation.
 
@@ -96,10 +129,18 @@ def cma_es(evaluator, knobs: list[Knob], args) -> list[float]:
     The restarts share one best-so-far, so the answer is the best point any of
     them found. They also share the budget: `--max-evals` is the total across
     every restart, not per restart.
+
+    **`--restarts` caps the population doublings, not the restarts.** A run ends
+    on convergence or stagnation long before the budget does, so a fixed number
+    of them discards whatever is left — which is how `--restarts 3` over 4000
+    evaluations stopped at 679. Restarting continues from a fresh random point
+    at the base population once the ladder of doublings is spent, and the loop
+    ends only when the budget is gone or a start scores nothing new.
     """
     n = len(knobs)
     rng = np.random.default_rng(args.seed)
-    lam = max(args.population if args.population > 0 else 4 + int(3 * math.log(n)), 4)
+    base_lam = max(args.population if args.population > 0 else 4 + int(3 * math.log(n)), 4)
+    lam = base_lam
     x0 = np.array([_value_to_unit(k, k.start_value) for k in knobs], dtype=np.float64)
 
     # The start point, scored before anything else and outside the budget check.
@@ -109,15 +150,23 @@ def cma_es(evaluator, knobs: list[Knob], args) -> list[float]:
     # out of budget must still leave that point as its best rather than nothing.
     evaluator([k.start_value for k in knobs])
 
-    for attempt in range(args.restarts + 1):
-        if len(evaluator.trajectory) >= args.max_evals:
+    attempt = 0
+    barren = 0
+    while True:
+        next_lam = lam * 2 if 0 < attempt <= args.restarts else lam
+        if args.max_evals - len(evaluator.trajectory) < max(2, next_lam // 2):
             break
         if attempt > 0:
-            lam *= 2
+            lam = next_lam
             x0 = rng.random(n)
             print(f"  restart {attempt}: population {lam}, from a fresh random point",
                   file=sys.stderr)
+        before = len(evaluator.trajectory)
         _cma_run(evaluator, knobs, args, x0, lam, rng)
+        attempt += 1
+        barren = barren + 1 if len(evaluator.trajectory) == before else 0
+        if barren >= BARREN_STARTS:
+            break
 
     return list(evaluator.best_values or [k.start_value for k in knobs])
 
@@ -131,9 +180,11 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
     correlation in its covariance and steps along it instead — which is what
     makes a runtime-knob spec worth the evaluations it now affords.
 
-    Samples are clipped into the cube rather than resampled or penalised: a
-    knob's range is a modelling decision, and an optimum pinned to a bound is a
-    result worth seeing rather than an infeasibility to hide.
+    Samples are folded into the cube by reflection rather than clipped,
+    resampled or penalised: a knob's range is a modelling decision, and an
+    optimum pinned to a bound is a result worth seeing — but only when the
+    search put it there, which clipping cannot distinguish from a wide sigma
+    near an edge.
 
     The whole population of a generation is scored in one batch, so the renders
     run concurrently: they are independent subprocesses and nothing in a
@@ -160,7 +211,11 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
     cov = np.eye(n)
     generation = 0
     stall = 0
-    stall_limit = 6 + n // 4
+    # CMA-ES's own stagnation criterion. The previous `6 + n // 4` was short
+    # enough to abort a run still adapting its covariance, which only stayed
+    # harmless because it was disabled at `--restarts 0`; now that a restart
+    # always follows, cutting a converging run short costs the whole answer.
+    stall_limit = 10 + int(30 * n / lam)
     since_best = evaluator.best_loss
 
     while len(evaluator.trajectory) < args.max_evals:
@@ -171,7 +226,7 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
         take = min(lam, args.max_evals - len(evaluator.trajectory))
         if take < mu:
             break
-        xs = [np.clip(xmean + sigma * (bd @ rng.standard_normal(n)), 0.0, 1.0)
+        xs = [_fold_into_cube(xmean + sigma * (bd @ rng.standard_normal(n)))
               for _ in range(take)]
         before = len(evaluator.trajectory)
         losses = evaluator.evaluate_batch(
@@ -232,48 +287,96 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
             stall += 1
         print(f"  gen {generation}: sigma={sigma:.4f} best={evaluator.best_loss:.4f}"
               f"{f' (stalled {stall})' if stall else ''}", file=sys.stderr)
-        if stall >= stall_limit and args.restarts > 0:
+        if stall >= stall_limit:
             print(f"  no improvement in {stall} generations — ending this run",
                   file=sys.stderr)
             return
 
 
-def optimize(evaluator, knobs: list[Knob], args) -> list[float]:
-    """Coordinate descent over knobs; each pass golden-sections one knob.
+def _descend(evaluator, knobs: list[Knob], args, current: list[float]) -> None:
+    """Coordinate descent from one start point, until the budget or the point runs out.
 
-    Inherently serial — a golden-section step chooses its next probe from the
-    previous one's result — so `--workers` does not speed this optimiser up.
-    Use `--optimizer cmaes` when there are workers to spend.
+    Each pass line-searches one knob at a time over a window centred on that
+    knob's current value, and narrows the window by `PASS_SHRINK` for the next
+    pass. The first pass sees the whole range, so a knob with an obvious optimum
+    is found as directly as it ever was; later passes refine around what the
+    earlier ones chose instead of re-probing the same golden-section points, and
+    the descent ends once the narrowing has taken a pass down to points already
+    scored.
+
+    `current` is updated in place and is the only point the line search moves
+    around. It is deliberately not the run's best-so-far: reading that would
+    drag every later start onto the first one's basin, which is the whole of
+    what a multi-start is for.
     """
-    current = [k.start_value for k in knobs]
-    evaluator(current)  # baseline
+    n = len(knobs)
+    opt_bounds = [(_to_opt(k, k.lo), _to_opt(k, k.hi)) for k in knobs]
+    widths = [1.0] * n
+    f_current = evaluator(current)
     while len(evaluator.trajectory) < args.max_evals:
         before = len(evaluator.trajectory)
-        improved = False
         for i, knob in enumerate(knobs):
             if len(evaluator.trajectory) >= args.max_evals:
                 break
             budget = min(args.per_knob_evals, args.max_evals - len(evaluator.trajectory))
             if budget < 2:
                 break
-            a, b = _to_opt(knob, knob.lo), _to_opt(knob, knob.hi)
-            tol = (b - a) * 1e-3
+            lo_t, hi_t = opt_bounds[i]
+            tol = (hi_t - lo_t) * 1e-3
+            half = 0.5 * (hi_t - lo_t) * widths[i]
+            centre = _to_opt(knob, current[i])
+            a, b = max(lo_t, centre - half), min(hi_t, centre + half)
+            if b - a <= tol:
+                continue
 
-            def objective(t: float, _i=i, _knob=knob, _current=current) -> float:
-                trial = list(evaluator.best_values or _current)
+            def objective(t: float, _i=i, _knob=knob) -> float:
+                trial = list(current)
                 trial[_i] = min(max(_from_opt(_knob, t), _knob.lo), _knob.hi)
                 return evaluator(trial)
 
             best_t, best_f = golden_section(objective, a, b, budget, tol)
-            if best_f < evaluator.best_loss + 1e-9 and evaluator.best_values is not None:
-                best_val = min(max(_from_opt(knob, best_t), knob.lo), knob.hi)
-                if abs(current[i] - best_val) > 0:
-                    improved = True
-                current[i] = best_val
-        current = list(evaluator.best_values or current)
-        # A pass that scored nothing it had not already scored cannot have
-        # learned anything the next pass would not repeat — and it did not
-        # consume the budget the loop terminates on.
-        if not improved or len(evaluator.trajectory) == before:
+            if best_f <= f_current:
+                current[i] = min(max(_from_opt(knob, best_t), knob.lo), knob.hi)
+                f_current = best_f
+            widths[i] *= PASS_SHRINK
+        # A pass that scored nothing new has converged at this width, and the
+        # descent ends there rather than re-widening its windows for another
+        # sweep of the whole range. Re-widening is the stronger search and that
+        # is exactly why it is not done: on the violin at 4000 evaluations it
+        # took the training loss from 0.6299 to 0.5864 and the held-out loss
+        # from 0.7177 to 0.7788, spending the extra power on the probe. What
+        # follows instead is a fresh random start, which cannot.
+        if len(evaluator.trajectory) == before:
+            break
+
+
+def optimize(evaluator, knobs: list[Knob], args) -> list[float]:
+    """Multi-start coordinate descent; each pass golden-sections one knob.
+
+    One descent converges into whichever basin its start sits in and then has
+    nothing left to spend, so the remaining budget goes to a descent from a
+    fresh random point — the same argument IPOP makes for CMA-ES, and the same
+    shared best-so-far. `--max-evals` is the total across every start.
+
+    Inherently serial — a golden-section step chooses its next probe from the
+    previous one's result — so `--workers` does not speed this optimiser up.
+    Use `--optimizer cmaes` when there are workers to spend.
+    """
+    rng = np.random.default_rng(args.seed)
+    n = len(knobs)
+    current = [k.start_value for k in knobs]
+    evaluator(current)  # baseline
+
+    start = 0
+    barren = 0
+    while len(evaluator.trajectory) < args.max_evals:
+        if start > 0:
+            current = [_unit_to_value(k, u) for k, u in zip(knobs, rng.random(n))]
+            print(f"  start {start}: descending from a fresh random point", file=sys.stderr)
+        before = len(evaluator.trajectory)
+        _descend(evaluator, knobs, args, current)
+        barren = 0 if len(evaluator.trajectory) > before else barren + 1
+        start += 1
+        if barren >= BARREN_STARTS:
             break
     return list(evaluator.best_values or current)

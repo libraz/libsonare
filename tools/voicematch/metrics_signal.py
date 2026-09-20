@@ -94,7 +94,14 @@ def normalize_rms(audio: np.ndarray, target_rms: float = 0.05) -> np.ndarray:
     return audio * (target_rms / rms)
 
 
-def _db(x: np.ndarray | float, floor: float = 1e-12) -> np.ndarray | float:
+#: Where `_db` clamps. Named because a reader has to be able to ask whether a
+#: value came from the signal or from this: everything at or under it converts
+#: to the same -240 dB, so any shape fitted across it is the clamp's and not the
+#: voice's.
+DB_FLOOR = 1e-12
+
+
+def _db(x: np.ndarray | float, floor: float = DB_FLOOR) -> np.ndarray | float:
     return 20.0 * np.log10(np.maximum(x, floor))
 
 

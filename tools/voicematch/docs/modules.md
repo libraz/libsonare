@@ -36,11 +36,13 @@
 - `catalogue.py` — what the library reports about its own knob space under `SONARE_TUNING_DUMP` (defaults, program→patch map, clamp bounds), plus the `SONARE_TUNABLE` declaration scan the write-back needs
 - `corpus.py` — the captured single-note grid as a probe timeline and as the oracle for one: the bridge between the capture `profile.py` reports against and the search `autofit.py` runs
 - `knobs.py` — what a fit may move and over what range: the spec forms, the clamp-derived search ranges, `--spec auto`, and the one rule for what counts as sitting on a bound
-- `loss.py` — from a render to the number being minimised: `probe_rows`, `skeleton_note`, the harmonic and percussion term sets, the level terms, and the start-point normalisation
+- `loss.py` — from a render to the number being minimised: `probe_rows`, `skeleton_note`, the harmonic and percussion term sets, the level terms, and the fixed-unit normalisation
 - `optimizers.py` — coordinate descent with a golden-section line search, and CMA-ES with IPOP restarts
 - `eval_cache.py` — raw loss terms kept across runs, keyed on the library's bytes, the harness source, the probe and the oracle, so a re-run pays for the setup and not the renders
 - `staging.py` — cutting the problem down: knob screening and the excitation/decay/all staged fit
 - `diagnose.py` — the same probe read per term instead of per loss: what the residual is made of, and which of it no knob reaches
+- `loss_sensitivity.py` — `make voicematch-loss-sensitivity`: the loss read against a change of known size instead of against a model. Perturbs a captured reference in the audio domain and scores the result on the same capture's own timbre spread, so the answer arrives as a multiple of the distance two of its references already sit apart. Renders nothing and builds nothing. See [loss.md](loss.md#whether-a-term-is-weighted-is-not-whether-it-is-measured)
+- `loss_cells.py` — `make voicematch-loss-cells`: what happened to every cell the loss aggregates, over the rendered probes in `out/`. A summed term's raw value cannot say whether its cells were comparisons, caps standing in for a model that produced nothing, or skips where the reference offered nothing — and the last two read as the term's worst and its best respectively, so neither shows up in a results table. Renders nothing and builds nothing. See [loss.md](loss.md#a-term-that-stops-being-measurable-is-charged-not-credited)
 - `dataset.py` — the corpus of (knob vector → measurement) pairs an amortized inverse would train on
 - `writeback.py` — putting a fitted value back: literal splicing, the program table, the drum table
 - `report.py` — the end-of-run report and the diff it applies

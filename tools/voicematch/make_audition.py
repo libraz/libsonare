@@ -282,6 +282,10 @@ def build_sources(voice: Voice, timbres: list[dict],
         sources["model-di"] = {
             "label": "libsonare NativeSynth (GM fallback), direct",
             "role": "model",
+            # The signal path is an axis rather than a choice: the same setting
+            # heard down two paths is not two candidates, and a switch that
+            # interleaves them asks one question where there are two.
+            "path": "direct",
             "detail": "the same voice with the bank's rig cleared, which is where "
                       "the instrument itself stops. `model` is what ships and what "
                       "the reference is comparable with, since a module's samples "
@@ -296,16 +300,19 @@ def build_sources(voice: Voice, timbres: list[dict],
             # never says what it was trying to fix, and a page is read weeks
             # after the question that built it.
             "detail": variant.detail,
+            **calibration.source_text(variant),
         }
         if di and moves_the_instrument(variant.overrides):
             sources[f"{variant.name}-di"] = {
                 "label": f"libsonare NativeSynth (GM fallback), {variant.name}, direct",
                 "role": "model",
+                "path": "direct",
                 "detail": "the same candidate with the bank's rig cleared. A setting "
                           "that moves the instrument is judged where the instrument "
                           "ends, since an amplifier in front of it both hides a change "
                           "and invents one: it compresses, so it narrows whatever the "
                           "candidate did to the decay. — " + variant.detail,
+                **calibration.source_text(variant, direct=True),
             }
     reference_of = voice.capture.label.split(",")[0] if voice.capture else ""
     for t in timbres:
@@ -443,6 +450,16 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
         if timbre["id"] in held:
             renders[timbre["id"]] = held[timbre["id"]]
             print(f"  {timbre['id']} (archived)", file=sys.stderr)
+            continue
+        if "plugin" not in cfg.raw:
+            # A capture whose reference came from a SoundFont rather than from a
+            # hosted plugin, which this path has no renderer for. Named and
+            # skipped rather than raised: the model side of this page is what a
+            # listener is here for, and one voice with no renderable reference
+            # took the whole run down with it — including every voice after it.
+            print(f"  {timbre['id']}: {cfg.id} names no plugin, so its reference cannot be "
+                  f"rendered here — the archive under --reference-from is the only route, "
+                  f"and it does not hold this take", file=sys.stderr)
             continue
         # Built through the same helper the capture path uses, so a timbre
         # selected by preset reaches the plugin here too.

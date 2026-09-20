@@ -59,10 +59,10 @@ def _spec_document(spec_path: Path) -> dict:
 
         { "weights": {"harm": 1, "tail": 2, "crest": 2}, "knobs": [ ... ] }
 
-    That block is the difference between a fit that anyone can run and one that
-    only works if you already know which of eleven `--w-*` flags this voice
-    needs off their default of zero. A spec knows what evidence its knobs are
-    supposed to be answering to; the command line should not have to carry it.
+    It sets what the instrument's class defaults got wrong, not the whole
+    vector: a term it omits keeps the class's own weight. A spec knows what
+    evidence its knobs are supposed to be answering to; the command line should
+    not have to carry it.
     """
     data = json.loads(spec_path.read_text())
     if isinstance(data, list):
@@ -288,6 +288,16 @@ def _auto_range(
     if any(key.endswith(s) for s in AUTO_SKIP_SUFFIXES):
         return None
 
+    if leaf.startswith("mode_ratios"):
+        # Ahead of the reported bound, which is the clamp's 0..64 and is what
+        # lets the window ratchet a round at a time.
+        floor, ceiling = MODE_RATIO_RANGE
+        if value <= 0.0:
+            return None
+        lo = max(floor, value / MODE_RATIO_SPAN)
+        hi = min(ceiling, value * MODE_RATIO_SPAN)
+        return (lo, hi, True) if hi > lo else (floor, ceiling, True)
+
     if bound is not None:
         lo, hi = bound
         if hi <= lo:
@@ -360,7 +370,39 @@ UNIDENTIFIABLE_FIELDS = frozenset({"gain"})
 #: them, taking the low timbale's head from 200 Hz to 6682, the cowbell's from
 #: 587 to 4487 and the open hi-hat's from 315 to 16, which is not a retuned drum
 #: but a different object that happens to match the reference's band profile.
-STRUCTURAL_FIELD_PREFIXES = ("mode_alpha", "base_freq_hz", "shell_freq_hz")
+#:
+#: `mode_ratios0` is `base_freq_hz` under another name and has to be pinned with
+#: it: the first mode sounds at `base_hz * mode_ratios[0]`, so a fit denied the
+#: base frequency moves this instead. 36 kit notes carry one fitted away from 1,
+#: from 0.0251 to 41.0 — five octaves either side of the pitch the drum table
+#: states. The ratios above it stay fittable, over the window below.
+#:
+#: `head_diameter_m` and `shell_depth_m` are the drum's dimensions in metres — a
+#: 12-inch rack tom is 0.30, a 14x5.5 snare is 0.36 by 0.14 — so they are a data
+#: edit off the instrument, not a search. Offered, the head diameter is a tilt
+#: control: it weights every m >= 1 mode by (ka)^m, which is monotone in
+#: frequency and capped at 1, so a fit reaches for it wherever the model is too
+#: bright and lands on a drum of whatever size that needed. `air_spring` is
+#: deliberately NOT here: it has a geometric estimate to check a value against
+#: but the estimate runs 30-40% high, so it is a fitted scalar by design.
+STRUCTURAL_FIELD_PREFIXES = ("mode_alpha", "base_freq_hz", "shell_freq_hz", "mode_ratios0",
+                             "head_diameter_m", "shell_depth_m")
+
+#: How far either side of its compiled default a mode ratio above the
+#: fundamental is searched, and the interval no number of rounds leaves.
+#:
+#: The clamp accepts 0..64 and a ratio is offered as a magnitude, so a fit that
+#: writes back re-anchors the window on what it just wrote: each round multiplies
+#: the reach, and the table now holds ratios of 44.9 and 41.4. Those are not
+#: detunings. A ratio scales the mode's decay as well as its frequency
+#: (`mode.r` is taken at `mode_decay_s / ratio`), so a ratio far above the set is
+#: how a search switches a mode off while every amplitude knob stays where the
+#: voicing put it. The absolute window is what a struck head or plate can put
+#: above its fundamental — twelve membrane modes end at 4.06, a bell's octave
+#: partial at 4 — and a ratio outside it is re-searched over the whole of it
+#: rather than held, since holding it would keep the escape and change nothing.
+MODE_RATIO_SPAN = 2.0
+MODE_RATIO_RANGE = (0.2, 8.0)
 
 
 def _offered(field: str) -> bool:

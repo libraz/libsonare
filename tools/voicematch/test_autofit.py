@@ -36,15 +36,19 @@ import autofit_resolve
 import build_lib
 import eval_cache
 import loss as loss_module
+import loss_cells
 import metrics as metrics_module
 import report as report_module
 import voicematch
 from _repo import REPO_ROOT
 from autofit import (
+    SUSTAIN_DRIFT_PENALTY_PER_DB_S,
+    SUSTAIN_SLOPE_CAP_DB_S,
     Evaluator,
     check_holdout_oracle,
     reference_band_edge,
     resolve_probe,
+    sustain_excess_db_s,
     validate,
     winner_or_defaults,
 )
@@ -61,6 +65,7 @@ from catalogue import Catalogue
 from corpus import corpus_oracle, corpus_pattern, load_corpus
 from eval_cache import open_cache
 from knobs import (
+    MODE_RATIO_RANGE,
     Knob,
     _auto_range,
     at_bound,
@@ -71,12 +76,16 @@ from knobs import (
     tunable_overrides,
 )
 from loss import (
+    HARM_REACH,
     LOSS_TERMS,
+    TERM_UNITS,
     LossWeights,
     _refine_grid,
     _refine_partial,
     _refine_partial_direct,
+    band_min_note_s,
     cli_weights,
+    dropped_weights,
     loss_terms,
     percussion_terms,
     probe_rows,
@@ -99,6 +108,7 @@ from patterns import (
     analysis_window_end,
     build_pattern,
     pattern_length,
+    sustain_pattern,
 )
 from render_model import DEFAULT_DYLIB, check_gm_fallback
 from render_oracle import oracle_may_carry_room
@@ -192,22 +202,135 @@ def test_the_start_point_scores_exactly_one():
     assert weights.combine(start) == pytest.approx(1.0)
 
 
-def test_a_term_below_its_floor_cannot_swamp_the_others():
-    """A noise penalty of exactly zero at the start must not divide by nothing."""
+def test_a_term_that_starts_at_zero_costs_exactly_what_it_grows_to():
+    """A noise penalty of exactly zero at the start must not divide by nothing.
+
+    It used to divide by its own start value, which is why it needed a floor.
+    Now it divides by a fixed perceptual unit, so the case is arithmetic rather
+    than a special one: a dB of new noise is a dB of new noise.
+    """
     weights = LossWeights({"harm": 1.0, "tnr": 1.0})
-    weights.calibrate(_terms(harm=40.0, tnr=0.0))
-    # One dB of new noise is one floor unit, not an infinity.
-    assert weights.combine(_terms(harm=40.0, tnr=1.0)) < 3.0
+    start = _terms(harm=40.0, tnr=0.0)
+    weights.calibrate(start)
+    grown = weights.combine(_terms(harm=40.0, tnr=1.0)) - weights.combine(start)
+    assert grown == pytest.approx(1.0 / TERM_UNITS["tnr"] / weights.reference)
 
 
 def test_normalisation_makes_unequal_units_comparable():
-    """Halving each term in turn moves the loss by the same amount."""
+    """Moving any term by one perceptual unit moves the loss by the same amount.
+
+    What this has always guarded is that `--w-harm 1` and `--w-cents 1` mean the
+    same amount of pull, rather than the term that happens to be numerically
+    larger deciding the objective on its own. It guarded it by dividing each
+    term by its value at the start point, which bought comparability at the
+    start and nowhere else: one raw unit then pulled by `w / start`, so the
+    dimension that began furthest out was the one the objective was flattest
+    along. The comparability is now in the units themselves and holds
+    everywhere, so the check is one unit rather than one half.
+    """
     weights = LossWeights({"harm": 1.0, "cents": 1.0})
     start = _terms(harm=60.0, cents=8.0)
     weights.calibrate(start)
+    base = weights.combine(start)
+    by_harm = base - weights.combine(_terms(harm=60.0 - TERM_UNITS["harm"], cents=8.0))
+    by_cents = base - weights.combine(_terms(harm=60.0, cents=8.0 - TERM_UNITS["cents"]))
+    assert by_harm == pytest.approx(by_cents)
+    # And the property the old normalisation could not have: halving the term
+    # that is further out buys more than halving the one that is closer in.
+    # Here that is `cents` at eight units against `harm` at five, which the raw
+    # numbers say the other way round — the units are what decides.
+    assert 8.0 / TERM_UNITS["cents"] > 60.0 / TERM_UNITS["harm"]
     halved_harm = weights.combine(_terms(harm=30.0, cents=8.0))
     halved_cents = weights.combine(_terms(harm=60.0, cents=4.0))
-    assert halved_harm == pytest.approx(halved_cents)
+    assert halved_cents < halved_harm
+
+
+def test_a_term_is_scaled_by_its_unit_and_never_by_its_start_value():
+    """The start value must not decide how hard the objective pulls on a term.
+
+    Two voices whose harmonic ladder is 6 dB out and 60 dB out have to feel the
+    same pull per dB, or the objective is flattest exactly where the voice is
+    worst — and the reported number means nothing across voices, since both
+    start at 1.0 whatever they started from.
+    """
+    near, far = LossWeights({"harm": 1.0}), LossWeights({"harm": 1.0})
+    near.calibrate(_terms(harm=6.0))
+    far.calibrate(_terms(harm=60.0))
+    assert near.scales["harm"] == far.scales["harm"] == TERM_UNITS["harm"]
+    # One dB off the ladder is worth the same on both, before the display layer
+    # each divides by.
+    assert (near.combine(_terms(harm=5.0)) - near.combine(_terms(harm=6.0))) * near.reference \
+        == pytest.approx(
+            (far.combine(_terms(harm=59.0)) - far.combine(_terms(harm=60.0))) * far.reference)
+
+
+def test_a_term_made_entirely_of_caps_is_reported_as_unreached():
+    """A capped aggregate reads its WORST when nothing could be compared.
+
+    Every empty-set guard here looks for a term that has fallen to zero, which
+    is what an averaged term does when its points run out. A term whose cells
+    are charged the cap instead does the opposite — it saturates — so no guard
+    sees it, and under a fixed perceptual scale its size is the cap rather than
+    a distance. Measured on the bank's rendered probes, two voices' `slope` came
+    to 24 cells with not one comparison among them.
+    """
+    weights = LossWeights({"slope": 1.0, "harm": 1.0})
+    start = _terms(harm=40.0, slope=36.0)
+    start |= {"slope_cells": 24.0, "slope_capped": 24.0}
+    weights.calibrate(start)
+    unreached = weights.unreached(start)
+    assert [e[0] for e in unreached] == ["slope"]
+    assert unreached[0][2] == 24.0
+    # And it is still charged: reporting is not excusing, because a cell nothing
+    # could compare must not be dropped from the mean.
+    assert weights.combine(start) == pytest.approx(1.0)
+    assert weights.combine(_terms(harm=40.0, slope=0.0)) < 1.0
+
+
+def test_a_term_whose_reference_offered_no_cells_is_reported_too():
+    """`tail` on a two-second probe: 0.0, its best score, from nothing at all."""
+    weights = LossWeights({"tail": 1.0, "harm": 1.0})
+    start = _terms(harm=40.0, tail=0.0) | {"tail_cells": 0.0, "tail_capped": 0.0}
+    weights.calibrate(start)
+    assert [e[0] for e in weights.unreached(start)] == ["tail"]
+    assert weights.unreached(start)[0][2] == 0.0
+
+
+def test_a_term_with_comparisons_behind_it_is_not_reported():
+    weights = LossWeights({"slope": 1.0})
+    start = _terms(slope=12.0) | {"slope_cells": 24.0, "slope_capped": 23.0}
+    weights.calibrate(start)
+    assert weights.unreached(start) == []
+
+
+def test_every_loss_term_has_a_perceptual_unit():
+    """A term with no unit divides by nothing and takes the objective with it."""
+    missing = [t for t in LOSS_TERMS if t not in TERM_UNITS]
+    assert not missing, f"no perceptual unit for {missing}"
+    assert all(TERM_UNITS[t] > 0.0 for t in LOSS_TERMS)
+
+
+def test_the_harmonic_term_reaches_every_bin_the_ladder_measures():
+    """A bin above `n_harm` is charged by nothing at all.
+
+    `harm` stops at `n_harm` and `tnr`'s harmonic mask treats the bins above it
+    as partials rather than as noise, so the difference between the two is a
+    band of the spectrum no term prices in either direction.
+    """
+    ladder = [0.0, -6.0, -12.0, -18.0, -24.0, -30.0,
+              -36.0, -42.0, -48.0, -54.0, -60.0, -66.0]
+    assert HARM_REACH == len(ladder)
+
+    def row(top: float) -> dict:
+        out = list(ladder)
+        out[-1] = out[-2] = top
+        return {"harmonics_db": out, "f0_cents_err": 0.0, "tnr_db": 40.0,
+                "f0_hz": 440.0, "note": 69, "velocity": 100,
+                "sustain_slope_db_s": 0.0, "release_ms": 0.0, "attack_ms": 0.0}
+
+    quiet, loud = row(-66.0), row(-50.0)
+    assert loss_terms([quiet], [loud], n_harm=10)["harm"] == pytest.approx(0.0)
+    assert loss_terms([quiet], [loud])["harm"] > 0.0
 
 
 def test_raw_weighting_is_left_alone_without_calibration():
@@ -767,6 +890,70 @@ def test_a_modes_bessel_zero_is_not_offered_but_its_ratio_is():
     assert not any(k.startswith("d036.percussion.mode_alpha") for k in offered)
     assert "d036.percussion.mode_ratios1" in offered
     assert "d036.percussion.mode_decay_s" in offered
+
+
+def test_the_first_modes_ratio_is_the_base_frequency_and_is_not_offered():
+    """`base_freq_hz * mode_ratios[0]` is where the first mode sounds.
+
+    Pinning only the first factor leaves the second one carrying it: 36 kit notes
+    hold a fitted `mode_ratios[0]`, from 0.0251 to 41.0, which is the stated pitch
+    moved five octaves either way.
+    """
+    cat = Catalogue(
+        defaults={"d036.percussion.mode_ratios0": 1.0,
+                  "d036.percussion.mode_ratios1": 1.59},
+        programs={},
+        bounds={},
+    )
+    offered = {e["tunable"] for e in auto_spec(0, cat, drum_note=36)}
+    assert "d036.percussion.mode_ratios0" not in offered
+    assert "d036.percussion.mode_ratios1" in offered
+
+
+def test_the_drums_dimensions_are_read_off_it_but_the_air_spring_is_fitted():
+    """Metres of head and shell are what the drum is; the cavity's stiffness is not.
+
+    The head diameter weights every m >= 1 mode by (ka)^m — monotone in frequency
+    and capped at 1 — so a search reaches for it wherever the model is too bright
+    and lands on a drum of whatever size that needed. `air_spring` has a
+    geometric estimate, but one that runs 30-40% high against the two measured
+    drums, so it is a scalar a fit lands rather than a number read off the shell.
+    """
+    cat = Catalogue(
+        defaults={"d038.percussion.head_diameter_m": 0.36,
+                  "d038.percussion.shell_depth_m": 0.14,
+                  "d038.percussion.air_spring": 2.0,
+                  "d038.percussion.mallet_ms": 2.0},
+        programs={},
+        bounds={"d038.percussion.air_spring": (0.0, 8.0),
+                "d038.percussion.mallet_ms": (0.0, 50.0)},
+    )
+    offered = {e["tunable"] for e in auto_spec(0, cat, drum_note=38)}
+    assert "d038.percussion.head_diameter_m" not in offered
+    assert "d038.percussion.shell_depth_m" not in offered
+    assert {"d038.percussion.air_spring", "d038.percussion.mallet_ms"} <= offered
+
+
+def test_a_mode_ratio_is_searched_over_a_window_a_write_back_cannot_widen():
+    """Around the default, and never outside what a struck head can put up there.
+
+    The clamp accepts 0..64, so a ratio offered as a magnitude re-anchors on
+    whatever the last round wrote and reaches further every time — which is how
+    the table came to hold 44.9. A ratio already outside the window is re-searched
+    over the whole of it rather than held there.
+    """
+    lo, hi, log = _auto_range("d036.percussion.mode_ratios1", 1.59, (0.0, 64.0))
+    assert (round(lo, 4), round(hi, 4)) == (0.795, 3.18)
+    assert log
+
+    floor, ceiling = MODE_RATIO_RANGE
+    for escaped in (44.9033, 0.0251234):
+        assert _auto_range("d036.percussion.mode_ratios1", escaped, (0.0, 64.0)) == (
+            floor, ceiling, True
+        )
+
+    # A mode switched off is off: a range would turn a silent slot into a partial.
+    assert _auto_range("d036.percussion.mode_ratios3", 0.0, (0.0, 64.0)) is None
 
 
 def test_the_pitch_a_drum_is_built_with_is_not_offered_but_its_voicing_is():
@@ -3392,3 +3579,251 @@ def test_a_profile_that_recorded_no_ceiling_does_not_invent_one(tmp_path, monkey
     corpus = load_corpus(_write_corpus(tmp_path / "c"))
     _committed_profile(tmp_path, monkeypatch, corpus.capture_id, None)
     assert reference_band_edge(corpus, _rows_discriminating_to(22)) == 8000.0
+
+
+def _slope_row(note: int, velocity: int, slope: float) -> dict:
+    return {"note": note, "velocity": velocity, "sustain_slope_db_s": slope}
+
+
+def test_the_sustain_excess_is_the_worst_note_not_the_average():
+    """One note falling away is a broken voice; the mean of the grid hides it."""
+    model = [_slope_row(48, 100, 0.0), _slope_row(60, 100, -40.0), _slope_row(72, 100, 0.0)]
+    oracle = [_slope_row(48, 100, -1.0), _slope_row(60, 100, -1.0), _slope_row(72, 100, -1.0)]
+    worst, pairs = sustain_excess_db_s(model, oracle)
+    assert pairs == 3
+    assert worst == pytest.approx(-39.0)
+
+
+def test_the_sustain_excess_pairs_on_the_note_not_the_position():
+    """A probe whose rows came back reordered must not subtract register from register."""
+    model = [_slope_row(72, 100, -2.0), _slope_row(48, 100, -2.0)]
+    oracle = [_slope_row(48, 100, -2.0), _slope_row(72, 100, -20.0)]
+    worst, pairs = sustain_excess_db_s(model, oracle)
+    assert pairs == 2
+    # Paired by position this would read -18.0 on one side and +18.0 on the
+    # other; paired by note both notes hold exactly where their reference does.
+    assert worst == pytest.approx(0.0)
+
+
+def test_a_probe_with_nothing_comparable_reports_zero_pairs():
+    """Zero is this quantity's best value, so the count is what tells them apart."""
+    worst, pairs = sustain_excess_db_s([{"note": 60, "velocity": 100}], [_slope_row(60, 100, -1.0)])
+    assert (worst, pairs) == (0.0, 0)
+    assert sustain_excess_db_s([], [])[1] == 0
+
+
+def test_a_note_that_reached_digital_zero_is_charged_rather_than_skipped():
+    """The case the fence exists for, and the one it could not see.
+
+    `analyze_note` fits the sustain slope through the dB clamp, so a note that
+    died returns None instead of a number. Skipped, a render whose every note
+    fell silent scored +1.00 against a reference falling 1 dB/s — better than a
+    render holding exactly like it.
+    """
+    oracle = [_slope_row(60, 100, -1.0), _slope_row(64, 100, -1.0)]
+    gone = [{"note": 60, "velocity": 100, "sustain_slope_db_s": None},
+            {"note": 64, "velocity": 100, "sustain_slope_db_s": None}]
+    worst, pairs = sustain_excess_db_s(gone, oracle)
+    assert (worst, pairs) == (-SUSTAIN_SLOPE_CAP_DB_S, 2)
+    # And it must stay worse than any voice that is actually sounding.
+    held = [_slope_row(60, 100, -1.0), _slope_row(64, 100, -1.0)]
+    assert worst < sustain_excess_db_s(held, oracle)[0]
+    # A row that never carried the measurement at all is the probe's shape, not
+    # a dead note, and is still skipped.
+    assert sustain_excess_db_s([{"note": 60, "velocity": 100}], oracle) == (0.0, 0)
+
+
+def test_the_sustain_excess_is_not_clamped_on_the_holding_side():
+    """The fence subtracts two readings, so a clamp on one would become a charge."""
+    model = [_slope_row(60, 100, -1.0)]
+    oracle = [_slope_row(60, 100, -5.0)]
+    assert sustain_excess_db_s(model, oracle)[0] == pytest.approx(4.0)
+
+
+def _fence(start: float | None, limit: float = 3.0, unit: float = 1.0):
+    ev = Evaluator.__new__(Evaluator)
+    ev.args = argparse.Namespace(max_sustain_drift_db_s=limit)
+    ev.start_sustain_excess_db_s = start
+    ev.fence_unit = unit
+    return ev
+
+
+def test_the_sustain_fence_charges_nothing_at_the_point_it_is_anchored_on():
+    """Anchored on the start, so the start itself is always inside it.
+
+    Including a voice that already falls away: repairing a mechanism that
+    cannot oscillate is not something a knob can be asked for, and a fence
+    charging the start would spend the whole fit's budget asking.
+    """
+    for start in (0.0, -92.36):
+        assert _fence(start)._sustain_drift_penalty({"sustain_excess_db_s": start}) == 0.0
+
+
+def test_the_sustain_fence_charges_a_candidate_that_falls_further():
+    ev = _fence(-2.0, limit=3.0)
+    # Inside the allowance, exactly as before.
+    assert ev._sustain_drift_penalty({"sustain_excess_db_s": -5.0}) == 0.0
+    # One dB/s past it, at the documented rate.
+    assert ev._sustain_drift_penalty({"sustain_excess_db_s": -6.0}) == pytest.approx(
+        autofit.SUSTAIN_DRIFT_PENALTY_PER_DB_S)
+    # And it is one-sided: holding better than the start is never charged.
+    assert ev._sustain_drift_penalty({"sustain_excess_db_s": +40.0}) == 0.0
+
+
+def test_the_sustain_fence_is_off_when_it_has_no_anchor_or_no_reading():
+    """Both halves come from the same render, so neither arrives alone by design.
+
+    Asserted anyway, because the alternative to returning zero here is charging
+    a candidate the difference between a measurement and a missing value.
+    """
+    assert _fence(None)._sustain_drift_penalty({"sustain_excess_db_s": -50.0}) == 0.0
+    assert _fence(-2.0)._sustain_drift_penalty({}) == 0.0
+    assert _fence(-2.0)._sustain_drift_penalty(None) == 0.0
+    assert _fence(-2.0, limit=0.0)._sustain_drift_penalty({"sustain_excess_db_s": -50.0}) == 0.0
+
+
+def test_the_sustain_fence_is_charged_in_the_units_the_run_reports():
+    """The rate is per unit of a loss the start scores 1.0, so it has to scale.
+
+    A `--raw-loss` run scores its start as a weighted sum of raw terms, two
+    orders of magnitude up, and an unscaled fence there is a rounding error on
+    the one path that also has no normalisation to catch the trade.
+    """
+    one = _fence(-2.0, unit=1.0)._sustain_drift_penalty({"sustain_excess_db_s": -13.0})
+    raw = _fence(-2.0, unit=112.0)._sustain_drift_penalty({"sustain_excess_db_s": -13.0})
+    assert one == pytest.approx(SUSTAIN_DRIFT_PENALTY_PER_DB_S * 8.0)
+    assert raw == pytest.approx(one * 112.0)
+
+
+def _anchoring_evaluator(normalize: bool, start_terms: dict):
+    ev = Evaluator.__new__(Evaluator)
+    ev.normalize = normalize
+    ev.quiet = True
+    ev._offset_reported = True
+    ev._anchored = False
+    ev.fence_unit = 1.0
+    ev.start_level_offset_db = None
+    ev.start_sustain_excess_db_s = None
+    ev.baseline_terms = None
+
+    class _Loss:
+        scales = None
+
+        def calibrate(self, terms):
+            self.scales = {}
+
+        def combine(self, terms):
+            return 112.0 if not normalize else 1.0
+
+    ev.loss = _Loss()
+    ev._calibrate_once(start_terms)
+    return ev
+
+
+def test_both_fences_anchor_whether_or_not_the_terms_are_normalised():
+    """A guard that holds on the default path and lets go on the other one.
+
+    Anchoring inside the normalisation branch left `--raw-loss` with both
+    anchors at None, which turns every fence off — and off silently, since a
+    fence that never charges prints exactly what a fit that never needed one
+    does.
+    """
+    terms = {"level_offset_db": -41.6, "sustain_excess_db_s": -88.44}
+    for normalize in (True, False):
+        ev = _anchoring_evaluator(normalize, terms)
+        assert ev.start_level_offset_db == pytest.approx(-41.6)
+        assert ev.start_sustain_excess_db_s == pytest.approx(-88.44)
+    assert _anchoring_evaluator(True, terms).fence_unit == pytest.approx(1.0)
+    assert _anchoring_evaluator(False, terms).fence_unit == pytest.approx(112.0)
+
+
+def test_a_class_default_the_probe_cannot_fit_is_dropped_and_named():
+    """`dyn` on a `sustain` probe: no curve to fit, and 0.0 is its best score.
+
+    Carried at its class weight it would report a perfect dynamics match on
+    every candidate and dilute the objective by its share of it. Dropped
+    silently is how a weight the instrument asked for goes missing with nothing
+    to say so, which is what `dropped_weights` exists to print.
+    """
+    args = _probe_args(program=70, percussive=False, has_velocity_spread=False)
+    # Could this have gone red: the class does ask for it on a probe that can.
+    assert cli_weights(_probe_args(program=70, percussive=False,
+                                   has_velocity_spread=True))["dyn"] > 0.0
+    assert "dyn" not in cli_weights(args)
+    assert [t for t, _ in dropped_weights(args)] == ["dyn"]
+    # Named on the command line it is refused by the caller instead, so the two
+    # reports never say the same thing twice.
+    args.w_dyn = 1.0
+    assert dropped_weights(args) == []
+
+
+def test_a_probe_with_a_velocity_axis_keeps_the_dynamics_default():
+    args = _probe_args(program=70, percussive=False, has_velocity_spread=True)
+    assert cli_weights(args)["dyn"] > 0.0
+    assert dropped_weights(args) == []
+
+
+def test_the_aftersound_band_is_dropped_when_no_note_reaches_it():
+    """`tail` reads a band opening at 2.0 s; the default probe holds 2.0 s.
+
+    A band with no frames in it is skipped on both sides, which scores exactly
+    0.0 — the term's best value — so every candidate of every fit that weighted
+    it reported a perfect aftersound. Measured across the bank's rendered
+    probes, `tail` came to 546 cells of which 546 were skipped.
+    """
+    args = _probe_args(program=0, percussive=False, has_tail_window=False)
+    assert cli_weights(_probe_args(program=0, percussive=False,
+                                   has_tail_window=True))["tail"] > 0.0
+    assert "tail" not in cli_weights(args)
+    assert [t for t, _ in dropped_weights(args)] == ["tail"]
+
+
+def test_the_shortest_note_that_reaches_a_band_is_derived_from_the_grid():
+    """Hand-copied, this number describes a window the code no longer uses."""
+    assert band_min_note_s("tail_db_s") == pytest.approx(2.07)
+    assert band_min_note_s("early_db_s") < band_min_note_s("late_db_s")
+    # And the default probe falls under it, which is the whole finding.
+    assert sustain_pattern(0).analysis_notes[0].dur < band_min_note_s("tail_db_s")
+
+
+def test_the_cell_census_reads_what_the_loss_reported():
+    """The instrument must not re-derive the loop it is auditing.
+
+    A census computed from its own copy of the aggregation would agree with the
+    loss right up until one of them changed, and the one that drifted would be
+    the one nobody was reading.
+    """
+    terms = {"slope_cells": 24.0, "slope_capped": 24.0, "slope_absent": 13.0,
+             "slope_skipped": 0.0,
+             "tail_cells": 0.0, "tail_capped": 0.0, "tail_absent": 0.0,
+             "tail_skipped": 18.0}
+    got = loss_cells.census(terms)
+    assert dict(got["slope"]) == {"compared": 0, "clipped": 11, "absent": 13,
+                                  "skipped": 0}
+    assert dict(got["tail"]) == {"compared": 0, "clipped": 0, "absent": 0,
+                                 "skipped": 18}
+    # A term that reports no cells at all is absent from the census rather than
+    # present with four zeros, which would read as a term that was looked at.
+    assert "harm" not in got
+
+
+def test_the_four_cell_outcomes_are_what_the_loss_actually_emits():
+    """A round trip through the real reducer, so the key names cannot drift."""
+    ladder = [0.0, -6.0, -12.0, -18.0, -24.0, -30.0,
+              -36.0, -42.0, -48.0, -54.0, -60.0, -66.0]
+    base = {"harmonics_db": ladder, "f0_cents_err": 0.0, "tnr_db": 40.0,
+            "f0_hz": 440.0, "note": 69, "velocity": 100,
+            "sustain_slope_db_s": 0.0, "release_ms": 0.0, "attack_ms": 0.0}
+    skeleton = {"init_db": [0.0] * 12, "early_db_s": [-1.0] * 12,
+                "late_db_s": [-1.0] * 12, "tail_db_s": [None] * 12}
+    model = {**base, "skeleton": skeleton}
+    # The oracle's aftersound band is empty, exactly as a two-second probe
+    # leaves it; its early and late bands are 100 dB/s away, past the cap.
+    oracle = {**base, "skeleton": {**skeleton, "early_db_s": [-101.0] * 12,
+                                   "late_db_s": [-101.0] * 12}}
+    terms = loss_terms([model], [oracle])
+    assert terms is not None
+    census = loss_cells.census(terms)
+    assert census["slope"]["clipped"] == 12 and census["slope"]["compared"] == 0
+    assert census["tail"]["skipped"] == 6 and census["tail"]["compared"] == 0
+    assert terms["tail"] == 0.0, "a band with no cells scores the term's best"

@@ -42,11 +42,15 @@ MOD_FRAME_WIN_S = 0.05
 #: struck note has decayed into its own floor.
 MOD_WINDOW_S = (0.15, 2.5)
 #: Fewest frames that make a modulation spectrum a measurement. At a 10 ms hop
-#: this is 0.4 s, which is two and a half cycles of the slowest beat the band
-#: covers — under that the peak found is the window rather than the note.
+#: this is 0.44 s, a cycle and a third of the slowest vibrato — under that the
+#: peak found is the window rather than the note.
 MOD_MIN_FRAMES = 40
 VIBRATO_BAND_HZ = (3.0, 9.0)
 BEAT_BAND_HZ = (0.3, 3.0)
+#: Fewest bins a band must hold for its peak to be a measurement. Spacing is the
+#: frame rate over the frame count, so `MOD_MIN_FRAMES` leaves the beat band one
+#: bin wide, where `argmax` returns that bin whatever the note did.
+MOD_MIN_BAND_BINS = 2
 #: How far either side of the nominal pitch the tracker looks. Wider than the
 #: deepest vibrato any instrument uses, so the track cannot be clipped by its
 #: own search range and report a shallow one.
@@ -55,17 +59,24 @@ MOD_TRACK_POINTS = 49
 
 
 def _band_peak(spectrum: np.ndarray, rate_hz: float, band: tuple[float, float],
-               n: int) -> tuple[float, float]:
-    """Strongest component of a modulation spectrum inside `band`.
+               n: int) -> tuple[float, float] | None:
+    """Strongest component of a modulation spectrum inside `band`, or None.
 
     Returns (peak-to-peak amplitude in the input's own units, rate in Hz).
     The amplitude conversion assumes the Hann window the caller applied: a
     sinusoid of amplitude A lands at |X| = A*n/4, so peak-to-peak is 8|X|/n.
+
+    None, rather than the zero this used to return, where the window resolved
+    fewer than `MOD_MIN_BAND_BINS` of the band: a zero depth claims the note is
+    dead still, which this module's own contract reserves for a note that was
+    looked at. A band is covered when the window is long enough for it and not
+    because it was named — the longest window here is 2.35 s, so the beat band's
+    0.3 Hz edge is under the 0.43 Hz spacing and is never itself reachable.
     """
     freqs = np.fft.rfftfreq(n, 1.0 / rate_hz)
     mask = (freqs >= band[0]) & (freqs <= band[1])
-    if not mask.any():
-        return 0.0, 0.0
+    if int(np.count_nonzero(mask)) < MOD_MIN_BAND_BINS:
+        return None
     idx = np.where(mask)[0]
     k = idx[int(np.argmax(spectrum[idx]))]
     return float(8.0 * spectrum[k] / n), float(freqs[k])
@@ -137,13 +148,18 @@ def modulation_note(mono: np.ndarray, sr: int, note: Note, f0: float,
     rate = 1.0 / MOD_FRAME_HOP_S
     fm = np.abs(np.fft.rfft(cents * window))
     am = np.abs(np.fft.rfft(level_db * window))
-    vib_cents, vib_rate = _band_peak(fm, rate, VIBRATO_BAND_HZ, n_frames)
-    trem_db, trem_rate = _band_peak(am, rate, VIBRATO_BAND_HZ, n_frames)
-    beat_db, beat_rate = _band_peak(am, rate, BEAT_BAND_HZ, n_frames)
+    # Per band, because they are not resolved together: the same window that
+    # carries fourteen bins of vibrato carries one of beat.
+    def _pair(peak: tuple[float, float] | None) -> tuple[float | None, float | None]:
+        return (None, None) if peak is None else (round(peak[0], 2), round(peak[1], 2))
+
+    vib_cents, vib_rate = _pair(_band_peak(fm, rate, VIBRATO_BAND_HZ, n_frames))
+    trem_db, trem_rate = _pair(_band_peak(am, rate, VIBRATO_BAND_HZ, n_frames))
+    beat_db, beat_rate = _pair(_band_peak(am, rate, BEAT_BAND_HZ, n_frames))
     return {
-        "vib_cents": round(vib_cents, 2), "vib_rate_hz": round(vib_rate, 2),
-        "trem_db": round(trem_db, 2), "trem_rate_hz": round(trem_rate, 2),
-        "beat_db": round(beat_db, 2), "beat_rate_hz": round(beat_rate, 2),
+        "vib_cents": vib_cents, "vib_rate_hz": vib_rate,
+        "trem_db": trem_db, "trem_rate_hz": trem_rate,
+        "beat_db": beat_db, "beat_rate_hz": beat_rate,
     }
 
 

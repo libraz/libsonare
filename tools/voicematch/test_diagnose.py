@@ -18,20 +18,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from diagnose import (
     CONNECTED_UNITS,
     TERM_MEANS,
-    TERM_UNITS,
+    TERM_UNIT_NAMES,
     Diagnosis,
     diagnose,
     print_report,
     probe_axes,
 )
-from loss import LOSS_TERMS, TERM_FLOORS, measured_terms
+from loss import LOSS_TERMS, TERM_UNITS, measured_terms
 
 PITCHED_WEIGHTS = {"harm": 1.0, "cents": 1.0, "slope": 1.0, "env": 1.0}
 
 
 def terms(**over: float) -> dict[str, float]:
-    """A full term dict, so a test states only the term it is about."""
-    return {name: 0.0 for name in LOSS_TERMS} | over
+    """A full term dict, so a test states only the term it is about.
+
+    Values are given in the term's own perceptual units and converted here,
+    because that is what every threshold in `diagnose` is expressed in. Stated
+    raw, a case reading "well above matched" would silently become "matched"
+    the day a term's unit moved, and the verdict logic these tests are about
+    would go untested while they still passed.
+    """
+    scaled = {k: v * TERM_UNITS.get(k, 1.0) for k, v in over.items()}
+    return {name: 0.0 for name in LOSS_TERMS} | scaled
 
 
 def probes(*rows: tuple[str, str, dict | None, str]) -> list:
@@ -124,7 +132,7 @@ def test_a_knob_that_closes_a_little_of_the_gap_is_partial():
     assert verdict_of(diag, "harm") == "partial"
 
 
-def test_a_term_inside_its_own_floor_is_matched():
+def test_a_term_inside_one_perceptual_unit_is_matched():
     diag = diagnose(terms(cents=0.4), probes(
         ("a.x", "lo", terms(cents=0.4), "clamp"),
         ("a.x", "hi", terms(cents=0.4), "clamp"),
@@ -166,6 +174,28 @@ def test_a_percussion_probe_does_not_report_the_harmonic_terms():
     assert reported == set(measured_terms(percussive=True))
 
 
+def test_a_term_the_probe_produced_no_cell_for_is_absent_rather_than_matched():
+    """A residual over nothing is 0.0, and 0.0 is also the term's best score.
+
+    The stimulus decides this, not the weight: `tail`'s band opens at 2 s, so a
+    shorter note compares nothing while still reporting a number. Read off the
+    number alone it says the aftersound is right, which is the one thing the
+    probe cannot know.
+    """
+    shape = probes(
+        ("a.x", "lo", terms(), "clamp"),
+        ("a.x", "hi", terms(), "clamp"),
+    )
+    weights = {"harm": 1.0, "tail": 1.0}
+    why = "no note is held long enough to reach the 2-6 s band"
+    told = diagnose(terms(), shape, weights, unmeasurable=[("tail", why)])
+    assert verdict_of(told, "tail") == "not computed"
+    assert "absence rather than a match" in row(told, "tail").note
+    # The same probe with nothing declared is the state this guards against.
+    untold = diagnose(terms(), shape, weights)
+    assert verdict_of(untold, "tail") == "matched"
+
+
 def test_the_multiscale_term_is_absent_rather_than_matched_when_unweighted():
     """It is the one term not computed unless weighted, so its zero is a gap."""
     diag = diagnose(terms(), probes(
@@ -181,22 +211,20 @@ def test_the_multiscale_term_is_absent_rather_than_matched_when_unweighted():
 
 def test_connectivity_counts_movement_in_either_direction():
     """A knob that only makes a term worse still proves the mechanism is wired."""
-    floor = TERM_FLOORS["harm"]
     base = terms(harm=8.0)
     diag = diagnose(base, probes(
-        ("worse.only", "lo", terms(harm=8.0 + 5 * floor), "clamp"),
-        ("worse.only", "hi", terms(harm=8.0 + 6 * floor), "clamp"),
+        ("worse.only", "lo", terms(harm=13.0), "clamp"),
+        ("worse.only", "hi", terms(harm=14.0), "clamp"),
     ), PITCHED_WEIGHTS)
     assert row(diag, "harm").movers == 1
     assert verdict_of(diag, "harm") == "spent"
 
 
 def test_movement_under_the_connectivity_threshold_does_not_count():
-    floor = TERM_FLOORS["harm"]
     base = terms(harm=8.0)
     diag = diagnose(base, probes(
-        ("a.x", "lo", terms(harm=8.0 - 0.5 * CONNECTED_UNITS * floor), "clamp"),
-        ("a.x", "hi", terms(harm=8.0 + 0.5 * CONNECTED_UNITS * floor), "clamp"),
+        ("a.x", "lo", terms(harm=8.0 - 0.5 * CONNECTED_UNITS), "clamp"),
+        ("a.x", "hi", terms(harm=8.0 + 0.5 * CONNECTED_UNITS), "clamp"),
     ), PITCHED_WEIGHTS)
     assert row(diag, "harm").movers == 0
     assert verdict_of(diag, "harm") == "unreachable"
@@ -346,7 +374,7 @@ def test_every_loss_term_has_a_unit_and_a_meaning_the_report_can_print():
     nothing about that one. Nothing else notices: the report renders, the run
     exits zero, and the gap is a blank column.
     """
-    missing_units = [t for t in LOSS_TERMS if t not in TERM_UNITS]
+    missing_units = [t for t in LOSS_TERMS if t not in TERM_UNIT_NAMES]
     missing_means = [t for t in LOSS_TERMS if t not in TERM_MEANS]
     assert not missing_units, f"no unit for {missing_units}"
     assert not missing_means, f"no explanation for {missing_means}"

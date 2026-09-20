@@ -146,7 +146,7 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
     # the difference between an instrument and an organ pipe imitating one.
     ToneClass.SUSTAINED: {
         "harm": 1.0, "cents": 0.5, "tnr": 1.0, "mod": 1.0, "env": 0.5,
-        "slope": 0.5,
+        "slope": 0.5, "dyn": 1.0,
     },
     # A hammered string: the decay and the strike carry it, and the aftersound
     # is most of the note. `stiff` is weighted because the series itself is a
@@ -154,22 +154,30 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
     ToneClass.STRUCK_STRING: {
         "harm": 1.0, "cents": 0.5, "tnr": 0.5, "env": 1.0, "init": 1.0,
         "slope": 1.0, "tail": 1.0, "hf": 0.5, "lf": 0.5, "stiff": 0.5,
-        "crest": 1.0,
+        "crest": 1.0, "dyn": 1.0,
     },
     # A plucked string: the same shape, weighted toward the onset, since the
     # pluck sets the spectrum and nothing feeds it afterwards.
     ToneClass.PLUCKED_STRING: {
         "harm": 1.0, "cents": 0.5, "tnr": 0.5, "env": 1.0, "init": 1.5,
-        "slope": 1.0, "hf": 0.5, "crest": 1.0, "stiff": 0.5,
+        "slope": 1.0, "hf": 0.5, "crest": 1.0, "stiff": 0.5, "dyn": 1.0,
     },
     # A bar, bell or membrane. `harm` is deliberately absent: the ladder it
     # measures is not this instrument's series, and weighting it would score the
     # difference between two noise floors. `modes` replaces it.
+    #
+    # `dyn` is absent for the same reason rather than by oversight: it is scored
+    # off `_brightness`, which on a pitched row reads the harmonic ladder, so
+    # weighting it here would bring back through the dynamics curve exactly the
+    # measurement dropping `harm` removed. The axis is real on a bar — a harder
+    # strike is brighter — and reaching it needs a brightness read off `modes`.
     ToneClass.MODAL: {
         "modes": 1.0, "env": 1.0, "init": 1.0, "slope": 1.0, "crest": 1.0,
         "hf": 0.5,
     },
-    # Nothing has a pitch, so only the whole-render measures say anything.
+    # Nothing has a pitch, so only the whole-render measures say anything —
+    # which is also why `dyn` is not here: it is fitted per pitch, and this
+    # class has none to hold fixed.
     ToneClass.NOISE: {
         "mss": 1.0, "env": 1.0, "crest": 1.0,
     },
@@ -190,6 +198,11 @@ PERCUSSION_WEIGHTS: dict[str, float] = {
     # it is one region against that profile's twenty-five bands and the kick is
     # the loudest thing in the kit. See `loss._perc_lf_terms`.
     "lf": 1.0,
+    # `dyn` is absent here too. `_brightness`'s percussion branch reads the
+    # upper third of the band profile, which is most of what `band` above
+    # already compares — 0.89 against `band`'s 22 on a synthetic kit — so
+    # weighting it would price one region of that profile twice rather than
+    # add the dynamics axis the pitched classes get from it.
     # The relations between the kit's own families — the tom series, the hi-hat
     # trio, the cymbals — which no per-hit term can hold. Weighted level with
     # the timbre terms rather than under them: a kit whose members are each

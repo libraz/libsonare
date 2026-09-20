@@ -4,9 +4,9 @@ Three layers. `probe_rows` measures a render with whichever metric set the probe
 pattern calls for — the harmonic one for a pitched voice, the percussion one for
 a drum hit. `loss_terms` / `percussion_terms` reduce a model/oracle pair of those
 to the named terms a weight can be put on. `LossWeights` combines them, dividing
-each by its value at the fit's start point so the start scores exactly 1.0 and a
-weight means the same thing across terms whose raw units differ by orders of
-magnitude.
+each by a fixed perceptual unit so a weight means the same thing across terms
+whose raw units differ by orders of magnitude, and scaling the total so the
+start point reads exactly 1.0.
 
 `skeleton_note` lives here rather than in `metrics` because it exists for the
 fit: it separates the excitation spectrum from the loop decay, which is what
@@ -34,6 +34,7 @@ from loss_dimensions import (
     DYN_DELTA_CAP_DB,
     DYN_MIN_VELOCITY_SPREAD,
     DYN_VELOCITY_SPAN,
+    HARM_REACH,
     HF_DELTA_CAP_DB,
     LEVEL_DELTA_CAP_DB,
     LF_DELTA_CAP_DB,
@@ -55,7 +56,9 @@ from loss_dimensions import (
     PERCUSSION_TERMS,
     PITCHED_TERMS,
     STIFF_DELTA_CENTS_CAP,
+    SUSTAIN_SLOPE_CAP_DB_S,
     TAIL_DELTA_CAP_DB_S,
+    CellCount,
     _absent_or,
     _attack_delta_ms,
     _brightness,
@@ -93,11 +96,13 @@ from loss_mss import (
 )
 from loss_weights import (
     TERM_COUNT_KEYS,
-    TERM_FLOORS,
+    TERM_UNITS,
     UNMEASURABLE_PENALTY,
     LossWeights,
     cli_weights,
+    dropped_weights,
     refused_weights,
+    unmeasurable_terms,
 )
 from metrics import (
     MIN_PARTIALS_FOR_B,
@@ -139,6 +144,33 @@ SKELETON_MAX_S = 8.0
 # two-second window could never reach.
 SKELETON_BANDS = {"early_db_s": (0.08, 0.40), "late_db_s": (0.80, 1.80),
                   "tail_db_s": (2.00, 6.00)}
+
+# The envelope grid every band is fitted on, and the fewest frames a fit is
+# allowed to run on. Module constants rather than locals because the shortest
+# note that reaches a band is derived from them below, and a hand-copied mirror
+# of a number that is right here is how a gate comes to describe a window the
+# code no longer uses.
+SKELETON_FRAME_WIN_S = 0.05
+SKELETON_FRAME_HOP_S = 0.01
+SKELETON_MIN_FRAMES = 4
+
+
+def band_min_note_s(band: str) -> float:
+    """Shortest note that puts `SKELETON_MIN_FRAMES` frames inside `band`.
+
+    A note under this reaches the band with nothing in it, and every cell of the
+    term reading that band is then skipped — which scores exactly 0.0, the
+    term's best value, from no comparison at all. `tail` is the one this
+    matters for: its band opens at 2.0 s and the default `sustain` probe holds
+    2.0 s, so it misses by 70 ms and the term has never once been measured on
+    that probe.
+    """
+    start = SKELETON_BANDS[band][0]
+    # A frame is timed at its own centre, so the first one inside the band sits
+    # half a window before it rather than on it.
+    first = math.ceil((start - SKELETON_FRAME_WIN_S / 2.0) / SKELETON_FRAME_HOP_S)
+    return (first + SKELETON_MIN_FRAMES) * SKELETON_FRAME_HOP_S + SKELETON_FRAME_WIN_S
+
 
 # How far under the note's loudest frame a band may sit and still be treated as
 # a measurement rather than as the floor. Generous, since a high partial 70 dB
@@ -202,7 +234,7 @@ def _refine_partial(ref_w: np.ndarray, t_ref: np.ndarray, guess: float) -> float
     return float(cand[int(np.argmax(amps))])
 
 
-def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
+def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> dict:
     """Per-harmonic envelope skeleton of one note.
 
     Separates the two things the time-averaged spectrum conflates:
@@ -218,8 +250,8 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
     seg = np.asarray(
         mono[start : start + int(min(note.dur, SKELETON_MAX_S) * sr)], dtype=np.float64
     )
-    win_n = int(0.05 * sr)
-    hop = int(0.01 * sr)
+    win_n = int(SKELETON_FRAME_WIN_S * sr)
+    hop = int(SKELETON_FRAME_HOP_S * sr)
     empty = {"init_db": [None] * n_harm, **{b: [None] * n_harm for b in SKELETON_BANDS}}
     if len(seg) < win_n + hop:
         return empty
@@ -278,7 +310,7 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
 
     def fit(lo: float, hi: float, col: np.ndarray) -> tuple[float, float] | None:
         mask = (t_frame >= lo) & (t_frame <= hi)
-        if mask.sum() < 4 or float(np.max(col[mask])) < floor_db:
+        if mask.sum() < SKELETON_MIN_FRAMES or float(np.max(col[mask])) < floor_db:
             return None
         m, b = np.polyfit(t_frame[mask], col[mask], 1)
         return float(m), float(b)
@@ -499,8 +531,8 @@ def fixed_resonances(rows: list[dict], *,
 
 
 def loss_terms(
-    model_rows: list[dict], oracle_rows_: list[dict], *, n_harm: int, mss: float = 0.0,
-    audibility: bool = True,
+    model_rows: list[dict], oracle_rows_: list[dict], *,
+    n_harm: int = HARM_REACH, mss: float = 0.0, audibility: bool = True,
 ) -> dict[str, float] | None:
     """Per-term mean mismatch between the model and the oracle, unweighted.
 
@@ -551,9 +583,20 @@ def loss_terms(
     # Those are opposite findings — on a sampled oracle a model measurably
     # cleaner than the reference is usually one missing the reference's own
     # movement — and on a normalised objective the second is worth a full unit
-    # of loss to whichever candidate reaches it first. Counted for the same
-    # reason `stiff_notes` and `dyn_groups` are.
+    # of loss to whichever candidate reaches it first. Reported so a reader can
+    # tell those apart, and deliberately NOT in `TERM_COUNT_KEYS`: unlike
+    # `stiff_notes` and `dyn_groups`, this one moves with the candidate, so
+    # `_went_unmeasurable` would charge a model for getting clean rather than
+    # for going unmeasurable. Starting at 0 is not unusual — a physical model is
+    # cleaner than a sampled recording by default — and on those voices the term
+    # says nothing about any candidate. `loss_cells.py` counts which ones.
     tnr_notes = 0
+    # How many cells of each capped aggregate were a comparison rather than a
+    # cap standing in for one. See `CellCount`: the raw value of a term whose
+    # cells all hit the cap is its worst, not its best, so none of the empty-set
+    # guards above can see it and a reader cannot tell it from a real distance.
+    cells = {t: CellCount() for t in ("init", "slope", "tail", "hf", "lf",
+                                     "mod", "modes")}
     for m, o in zip(model_rows, oracle_rows_):
         pairs = list(zip(m["harmonics_db"][:n_harm], o["harmonics_db"][:n_harm]))
         available += max(0, len(pairs) - 1)
@@ -594,22 +637,32 @@ def loss_terms(
         shortfall = max(0.0, o["tnr_db"] - m["tnr_db"])  # only when the model is noisier
         totals["tnr"] += shortfall
         tnr_notes += shortfall > 0.0
-        totals["env"] += abs(m["sustain_slope_db_s"] - o["sustain_slope_db_s"])
+        totals["env"] += _absent_or(m["sustain_slope_db_s"], o["sustain_slope_db_s"],
+                                    SUSTAIN_SLOPE_CAP_DB_S)
         totals["env"] += abs(m["release_ms"] - o["release_ms"]) / 100.0
         totals["env"] += _attack_delta_ms(m, o) / 10.0
         if "skeleton" in m and "skeleton" in o:
             sm, so = m["skeleton"], o["skeleton"]
             for a, b in zip(sm["init_db"], so["init_db"]):
-                totals["init"] += _absent_or(a, b, 12.0)
+                totals["init"] += _absent_or(a, b, 12.0, cells["init"])
             for key in ("early_db_s", "late_db_s"):
                 for a, b in zip(sm[key][:6], so[key][:6]):
-                    totals["slope"] += _absent_or(a, b, 30.0) / 10.0
+                    totals["slope"] += _absent_or(a, b, 30.0, cells["slope"]) / 10.0
             for a, b in zip(sm.get("tail_db_s", [])[:6], so.get("tail_db_s", [])[:6]):
-                totals["tail"] += _absent_or(a, b, TAIL_DELTA_CAP_DB_S) / 10.0
+                totals["tail"] += _absent_or(a, b, TAIL_DELTA_CAP_DB_S,
+                                             cells["tail"]) / 10.0
         for a, b in zip(m.get("attack_hf_db", []), o.get("attack_hf_db", [])):
-            totals["hf"] += _absent_or(a, b, HF_DELTA_CAP_DB)
-        for a, b in zip(m.get("attack_lf_db", []), o.get("attack_lf_db", [])):
-            totals["lf"] += _absent_or(a, b, LF_DELTA_CAP_DB)
+            totals["hf"] += _absent_or(a, b, HF_DELTA_CAP_DB, cells["hf"])
+        # Averaged over the bands the reference offered, not summed over them,
+        # because the percussion branch of this same term is a mean of one
+        # number per hit: summed, one name would carry two aggregates five
+        # times apart and no single unit could scale both. The denominator is
+        # the ORACLE's band count, so a candidate cannot shrink it.
+        lf_parts = [_absent_or(a, b, LF_DELTA_CAP_DB, cells["lf"])
+                    for a, b in zip(m.get("attack_lf_db", []),
+                                    o.get("attack_lf_db", [])) if b is not None]
+        if lf_parts:
+            totals["lf"] += sum(lf_parts) / len(lf_parts)
     if _fell_silent(model_rows, oracle_rows_):
         # The reference has partials and the model produced none anywhere. That
         # is a render that stopped sounding, and every normalised term scores
@@ -625,8 +678,8 @@ def loss_terms(
     n = len(model_rows)
     out = {name: totals[name] / n for name in LOSS_TERMS}
     out["mss"] = mss
-    out["mod"], mod_notes = _mod_terms(model_rows, oracle_rows_)
-    out["modes"], modes_notes = _modes_terms(model_rows, oracle_rows_)
+    out["mod"], mod_notes = _mod_terms(model_rows, oracle_rows_, cells["mod"])
+    out["modes"], modes_notes = _modes_terms(model_rows, oracle_rows_, cells["modes"])
     out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_)
     # Reported alongside the value because a probe with no velocity axis can
     # only score zero here, and zero is this term's best possible value.
@@ -644,6 +697,8 @@ def loss_terms(
     # bar, a bell, a membrane — and `harm` is then measuring nothing, in which
     # case its zero is not a match. Read it exactly as `dyn_groups` is read.
     out["harm_bins"] = float(compared)
+    for term, tally in cells.items():
+        out.update(tally.out(term))
     out["level_offset_db"] = offset
     out["comparable"] = 1.0
     return out
@@ -681,6 +736,9 @@ def percussion_terms(
         return {**{name: 0.0 for name in LOSS_TERMS}, "mss": mss, "comparable": 0.0}
     totals = {name: 0.0 for name in LOSS_TERMS}
     band_bins = bdecay_bins = tilt_hits = bright_hits = 0
+    # See `CellCount` and the pitched reducer: how much of each capped aggregate
+    # is a comparison rather than a cap standing in for one.
+    cells = {t: CellCount() for t in ("band", "bdecay", "modes")}
     for m, o in zip(model_rows, oracle_rows_):
         tilt_m, tilt_o = band_tilt_db(m.get("bands_db")), band_tilt_db(o.get("bands_db"))
         if tilt_m is not None and tilt_o is not None:
@@ -694,11 +752,16 @@ def percussion_terms(
                 # The reference has floored this band. See
                 # BAND_REFERENCE_FLOOR_DB — the capture cannot resolve it, so
                 # neither can any charge levied here.
+                cells["band"].skipped += 1
                 continue
-            totals["band"] += min(abs(a - b), BAND_DELTA_CAP_DB)
+            delta = abs(a - b)
+            totals["band"] += min(delta, BAND_DELTA_CAP_DB)
             band_bins += 1
+            cells["band"].clipped += delta >= BAND_DELTA_CAP_DB
+            cells["band"].compared += delta < BAND_DELTA_CAP_DB
         for a, b in zip(m["band_decay_db_s"], o["band_decay_db_s"]):
             if b is None or abs(b) < BDECAY_MIN_RATE_DB_S:
+                cells["bdecay"].skipped += 1
                 continue
             bdecay_bins += 1
             if a is None or abs(a) < BDECAY_MIN_RATE_DB_S:
@@ -711,9 +774,12 @@ def percussion_terms(
                 # this band, so a model giving it no rate at all disagrees by at
                 # least the cap.
                 totals["bdecay"] += BDECAY_OCTAVE_CAP
+                cells["bdecay"].absent += 1
                 continue
-            totals["bdecay"] += min(abs(math.log2(abs(a) / abs(b))),
-                                    BDECAY_OCTAVE_CAP)
+            octaves = abs(math.log2(abs(a) / abs(b)))
+            totals["bdecay"] += min(octaves, BDECAY_OCTAVE_CAP)
+            cells["bdecay"].clipped += octaves >= BDECAY_OCTAVE_CAP
+            cells["bdecay"].compared += octaves < BDECAY_OCTAVE_CAP
         totals["env"] += abs(m["attack_ms"] - o["attack_ms"]) / 5.0
         totals["env"] += abs(m["decay_ms"] - o["decay_ms"]) / 100.0
         totals["env"] += abs(m["crest_db"] - o["crest_db"]) / 3.0
@@ -727,7 +793,7 @@ def percussion_terms(
     # The pitch of everything in a kit that has one — see `_modes_terms`. Empty
     # for a cymbal or a shaker, whose rows carry no modes, so the term costs
     # those nothing and prices a mistuned tom.
-    out["modes"], modes_notes = _modes_terms(model_rows, oracle_rows_)
+    out["modes"], modes_notes = _modes_terms(model_rows, oracle_rows_, cells["modes"])
     # The low end as one region rather than as six of twenty-five bands — see
     # `_perc_lf_terms`. Scored on the same profiles `band` reads, so it is a
     # re-weighting of evidence already in hand and not a second measurement.
@@ -742,20 +808,22 @@ def percussion_terms(
     out["modes_notes"] = float(modes_notes)
     out["lf_notes"] = float(lf_notes)
     out["kit_notes"] = float(kit_notes)
-    # How many band cells the comparison actually charged for. Reported for the
-    # same reason `tnr_notes` is: with the reference's floored bands skipped,
-    # a low count means the capture is narrower than the analysis range and the
-    # term is speaking for fewer bands than it looks like. Both count what the
-    # REFERENCE offered, so neither moves with the candidate and the guard in
-    # `_went_unmeasurable` cannot fire for either — it is kept in
-    # `TERM_COUNT_KEYS` so that a skip reintroduced on the model side is caught
-    # rather than silently unguarded.
+    # How many band cells the comparison actually charged for: with the
+    # reference's floored bands skipped, a low count means the capture is
+    # narrower than the analysis range and the term is speaking for fewer bands
+    # than it looks like. This one counts what the REFERENCE offered, so it does
+    # not move with the candidate and `_went_unmeasurable` cannot fire on it —
+    # it is kept in `TERM_COUNT_KEYS` anyway so that a skip reintroduced on the
+    # model side is caught rather than silently unguarded. `tnr_notes` is the
+    # opposite case and is out of that table on purpose; see its own comment.
     out["band_bins"] = float(band_bins)
     out["bdecay_bins"] = float(bdecay_bins)
     # Both skip when either side has no profile or no centroid to read, which a
     # candidate can cause by rendering silence, so both are counted and guarded.
     out["tilt_hits"] = float(tilt_hits)
     out["bright_hits"] = float(bright_hits)
+    for term, tally in cells.items():
+        out.update(tally.out(term))
     out["level_offset_db"] = offset
     out["comparable"] = 1.0
     return out
@@ -763,7 +831,7 @@ def percussion_terms(
 
 def score_terms(
     model_rows: list[dict], oracle_rows_: list[dict],
-    *, n_harm: int, mss: float = 0.0, percussive: bool = False,
+    *, n_harm: int = HARM_REACH, mss: float = 0.0, percussive: bool = False,
     audibility: bool = True, groups: dict[str, list[int]] | None = None,
 ) -> dict[str, float] | None:
     """Reduce a rendered probe to raw loss terms, by the metric set it carries."""

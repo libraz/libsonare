@@ -226,9 +226,16 @@ def format_report(program: int, pattern_name: str, rows: list[dict]) -> str:
             f"  attack    {m['attack_ms']:7.1f} ms  vs {o['attack_ms']:7.1f} ms"
             f"   Δ {d['attack_delta_ms']:+.1f} ms"
         )
+        # "gone" rather than a number: the window sat on the dB clamp, so there
+        # was no slope to read. Printing 0.00 would say the opposite.
+        def _slope(v: float | None) -> str:
+            return "   gone" if v is None else f"{v:+7.2f}"
+
+        slope_delta = d["sustain_slope_delta_db_s"]
+        slope_d = "—" if slope_delta is None else f"{slope_delta:+.2f}"
         lines.append(
-            f"  sus slope {m['sustain_slope_db_s']:+7.2f} dB/s vs {o['sustain_slope_db_s']:+7.2f} dB/s"
-            f"   Δ {d['sustain_slope_delta_db_s']:+.2f}"
+            f"  sus slope {_slope(m['sustain_slope_db_s'])} dB/s vs "
+            f"{_slope(o['sustain_slope_db_s'])} dB/s   Δ {slope_d}"
         )
         rel_m = f"{m['release_ms']:.0f}{'+' if m['release_capped'] else ''}"
         rel_o = f"{o['release_ms']:.0f}{'+' if o['release_capped'] else ''}"

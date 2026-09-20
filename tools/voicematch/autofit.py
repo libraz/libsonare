@@ -131,22 +131,24 @@ Eight more exist because a shape metric cannot see them:
                 are far enough out there is no gradient left pointing at the
                 repair
 
-**Every weight except harm, cents and tnr defaults to zero.** A run left on the
-defaults scores a time-averaged harmonic ladder, an intonation error and a noise
-floor, and nothing else — no envelope, no decay, no level, no attack. Rather
-than remembering which flags a given voice needs, put them in the spec:
+**A weight nobody names comes from the instrument's class, not from zero.**
+`toneclass.py` answers by what the voice IS — a struck string starts with its
+decay and its strike weighted, a modal voice with `modes` in place of `harm` —
+so a spec's `weights` block says what the class got wrong rather than the whole
+vector, and a term it omits is still weighted:
 
     { "weights": {"harm": 1, "slope": 1, "tail": 2, "crest": 2, "level": 2},
       "knobs": [ ... ] }
 
-An explicit `--w-*` on the command line still wins. `specs/piano_corpus.json` is
-the worked example.
+An explicit `--w-*` on the command line still wins, and a run prints what it
+resolved to. `specs/piano_corpus.json` is the worked example.
 
-Each term is normalised to its value at the start point, so the start scores
-exactly 1.0 and a reported 0.85 means 15 % better than the compiled-in values.
-Without that the weights would be dominated by whichever term happens to be
-numerically largest — the harmonic term is an L1 sum in dB and runs to tens
-while the multi-scale term is a fraction. `--raw-loss` restores unit weighting.
+Each term is divided by one perceptual unit of itself — a dB of ladder error, a
+cent, a dB/s — so a weight says what that unit is worth against every other
+term's, and the same number means the same thing on every voice. A second and
+separate layer divides the whole sum by what the start point scored, so the
+start reads exactly 1.0 and a reported 0.85 means 15 % better than the
+compiled-in values. `--raw-loss` skips both.
 
 Ranges
 ------
@@ -298,10 +300,13 @@ from knobs import (
     tunable_overrides,
 )
 from loss import (
+    HARM_REACH,
     KIT_MIN_MEMBERS,
     LOSS_TERMS,
+    SUSTAIN_SLOPE_CAP_DB_S,
     LossWeights,
     cli_weights,
+    dropped_weights,
     mss_distance,
     probe_rows,
     refused_weights,
@@ -329,6 +334,20 @@ from staging import SubEvaluator, run_stages, screen_knobs
 from writeback import materialize, restore, write_edits
 
 SR = 48000
+
+
+def render_rate(corpus) -> int:
+    """The rate this run renders at: the corpus's own, or the default without one.
+
+    `corpus_oracle` refuses a corpus whose rate differs from the render's rather
+    than resampling a reference, so a run against a capture recorded at anything
+    but 48 kHz cannot start until the model moves to meet it. Every capture with
+    `source_class: module` is at 44.1 kHz, so before this none of them could be
+    fitted against at all.
+    """
+    return int(corpus.sample_rate) if corpus is not None else SR
+
+
 #: Under this much inter-channel correlation, summing a stereo reference to mono
 #: comb-filters it enough to matter — a spaced close pair on a piano runs around
 #: 0.5 through the midrange. Reported rather than acted on; see `--mono-mode`.
@@ -338,6 +357,54 @@ STEREO_COMB_CORRELATION = 0.8
 # point scores 1.0. Steep on purpose: the drift the fence exists to stop was
 # 10 to 31 dB, and no shape a fit can buy at that price is worth keeping.
 LEVEL_DRIFT_PENALTY_PER_DB = 0.1
+
+# What a dB/s of extra fall past the allowance costs, on the same 1.0 start.
+# Matched to the level fence because it stops the same class of trade: a shape
+# bought by taking the note away rather than by voicing it.
+SUSTAIN_DRIFT_PENALTY_PER_DB_S = 0.1
+
+# Both rates above are per unit of a loss the start point scores 1.0, so both
+# are multiplied by what one such unit is worth in the units the run reports.
+# The floor is there for a start point that scores zero, which no fence should
+# be able to divide the whole run by.
+FENCE_UNIT_FLOOR = 1e-6
+
+
+def sustain_excess_db_s(model_rows: list[dict], oracle_rows: list[dict]) -> tuple[float, int]:
+    """How much faster than its reference the model's worst note falls away.
+
+    Negative is the model falling faster. Paired on (note, velocity) rather than
+    by position, because a probe whose notes were reordered would otherwise
+    subtract one register from another.
+
+    Returns the pair count too: a probe that carries no comparable note scores
+    0.0 here, which is this quantity's best value, and a fence cannot tell that
+    from a voice that holds.
+    """
+    ref = {(r.get("note"), r.get("velocity")): r.get("sustain_slope_db_s")
+           for r in oracle_rows}
+    deltas = []
+    for row in model_rows:
+        theirs = ref.get((row.get("note"), row.get("velocity")))
+        if theirs is None:
+            continue                      # the reference holds nothing to fall from
+        # Two absences arrive as the same None and mean opposite things. No key
+        # is the probe's shape — this row never carried a sustain slope — and
+        # charging for that would charge a voice for how it was measured. A key
+        # holding None is `analyze_note` saying the window sat on the dB clamp,
+        # which is the note being gone: skip that and the worst case this fence
+        # exists for reads as absent, and a render whose every note died scores
+        # BETTER than one holding exactly like its reference.
+        if "sustain_slope_db_s" not in row:
+            continue
+        mine = row["sustain_slope_db_s"]
+        deltas.append(-SUSTAIN_SLOPE_CAP_DB_S if mine is None
+                      else float(mine) - float(theirs))
+    # Not clamped at zero: a voice holding BETTER than its reference reads
+    # positive here, and the fence subtracting one reading from another needs
+    # the true value on both sides or it would charge the difference between a
+    # clamp and a measurement.
+    return (min(deltas) if deltas else 0.0), len(deltas)
 
 
 # --------------------------------------------------------------------------- #
@@ -368,6 +435,7 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     every band reading would move.
     """
     corpus = resolve_corpus(args)
+    sr = render_rate(corpus)
     pattern, total, _ = _score(
         args.program, args.pattern, args.notes, getattr(args, "velocities", ""), corpus=corpus,
         gate_ms=getattr(args, "drum_gate_ms", 0),
@@ -376,13 +444,13 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
         # Assembled from the capture rather than played: the reference for a
         # corpus run already exists as audio, one file per slot, and nothing
         # about it depends on a plugin still being installed.
-        audio = corpus_oracle(corpus, pattern, SR)
+        audio = corpus_oracle(corpus, pattern, sr)
     else:
         smf_bytes = write_smf(
             pattern.notes, program=args.program, bank=getattr(args, "bank", 0), channel=pattern.channel,
             end_pad=pattern.tail
         )
-        audio = obtain_oracle(args, smf_bytes, total, SR, [n.start for n in pattern.notes])
+        audio = obtain_oracle(args, smf_bytes, total, sr, [n.start for n in pattern.notes])
 
     # Only an oracle rendered outside libsonare's dry path can carry a room —
     # a supplied WAV, or an AudioUnit that was not asked to switch its effects
@@ -400,7 +468,7 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
                       if corpus is not None else oracle_may_carry_room(args))
     if getattr(args, "room", "auto") != "none" and may_carry_room:
         measured = estimate_room(
-            audio, SR, [(n.start, n.start + n.dur) for n in pattern.notes]
+            audio, sr, [(n.start, n.start + n.dur) for n in pattern.notes]
         )
         if measured.is_dry():
             print(f"oracle room: dry (RT60 {measured.rt60_s:.2f}s) — no room correction",
@@ -440,14 +508,14 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     raw = to_mono(audio, mode)
     mono = normalize_rms(raw)
     threads = resolve_metric_threads(args)
-    rows = probe_rows(mono, pattern, SR, raw=raw, threads=threads)
+    rows = probe_rows(mono, pattern, sr, raw=raw, threads=threads)
     edge = reference_band_edge(corpus, rows) if pattern.percussive else None
     if edge is not None:
         # Re-measured rather than patched. The band profile is normalised to the
         # loudest band inside the edge, and that is not a scaling that can be
         # applied to an already-floored profile without inventing the values the
         # floor took away.
-        rows = probe_rows(mono, pattern, SR, raw=raw, max_band_hz=edge, threads=threads)
+        rows = probe_rows(mono, pattern, sr, raw=raw, max_band_hz=edge, threads=threads)
         print(f"reference bandwidth: {edge / 1000.0:.1f} kHz — bands above it are "
               f"the capture chain rather than the kit, and are excluded from the "
               f"band profile on BOTH sides", file=sys.stderr)
@@ -619,6 +687,10 @@ class Evaluator:
         # Where the model's whole-grid level sat at the start point and where
         # the winner left it. The difference is what no loss term charges for.
         self.start_level_offset_db: float | None = None
+        self.start_sustain_excess_db_s: float | None = None
+        self.sustain_fence_bit = False
+        self._anchored = False
+        self.fence_unit = 1.0
         self.best_level_offset_db: float | None = None
         # A rebuild rewrites the shared tree, so its evaluations can only ever
         # run one at a time however many workers were asked for.
@@ -812,9 +884,14 @@ class Evaluator:
         mss = 0.0
         if want_audio and model_audio is not None:
             mss = mss_distance(model_audio, self.oracle_audio)
-        return score_terms(model_rows, self.oracle, n_harm=self.args.n_harm, mss=mss,
-                           percussive=self.percussive, groups=self.groups,
-                           audibility=not getattr(self.args, "flat_partial_weighting", False))
+        terms = score_terms(model_rows, self.oracle, n_harm=self.args.n_harm, mss=mss,
+                            percussive=self.percussive, groups=self.groups,
+                            audibility=not getattr(self.args, "flat_partial_weighting", False))
+        if terms is not None:
+            worst, pairs = sustain_excess_db_s(model_rows, self.oracle)
+            terms["sustain_excess_db_s"] = worst
+            terms["sustain_excess_pairs"] = float(pairs)
+        return terms
 
     def _score_cached(self, values: list[float], terms: dict[str, float] | None) -> float:
         """Score a candidate whose measurement was already in hand.
@@ -852,7 +929,53 @@ class Evaluator:
         if offset is None:
             return 0.0
         excess = abs(offset - self.start_level_offset_db) - limit
-        return LEVEL_DRIFT_PENALTY_PER_DB * excess if excess > 0.0 else 0.0
+        return (LEVEL_DRIFT_PENALTY_PER_DB * excess * self.fence_unit
+                if excess > 0.0 else 0.0)
+
+    def _report_sustain_excess(self, terms: dict[str, float]) -> None:
+        """Name where the start point sits against its reference's own fall, once.
+
+        Printed whether or not the fence is armed, and printed with its pair
+        count, because zero reads the same as a voice that holds.
+        """
+        if self.quiet:
+            return
+        here, pairs = terms.get("sustain_excess_db_s"), int(terms.get("sustain_excess_pairs", 0))
+        if here is None:
+            return
+        if not pairs:
+            print("  sustain: no note of this probe is comparable, so the fence is inert",
+                  file=sys.stderr)
+            return
+        print(f"  sustain: start falls {float(here):+.2f} dB/s against its reference's own "
+              f"slope, worst of {pairs} notes", file=sys.stderr)
+
+    def _sustain_drift_penalty(self, terms: dict[str, float] | None) -> float:
+        """What a candidate pays for letting the note fall away faster than it did.
+
+        Nothing else stops it. `env` does carry the sustain slope, but every
+        normalised term divides by its own value at the start point, so a voice
+        that already falls steeply has a flat objective in exactly the dimension
+        it is worst in — and four shipped reeds ride that all the way down, one
+        of them to digital zero before the key lifts, while their compare tables
+        read normally because every other column is a ratio the signal keeps
+        producing on its way to the noise floor.
+
+        Anchored on the START point rather than on the reference, and one-sided.
+        Repairing a voice that cannot oscillate is a mechanism change, not a
+        knob, so demanding it here would only spend the fit's budget on a
+        dimension it cannot reach. What this stops is the fit taking a note
+        AWAY: inside the allowance the score is exactly what it always was.
+        """
+        limit = float(getattr(self.args, "max_sustain_drift_db_s", 0.0) or 0.0)
+        if limit <= 0.0 or terms is None or self.start_sustain_excess_db_s is None:
+            return 0.0
+        here = terms.get("sustain_excess_db_s")
+        if here is None:
+            return 0.0
+        excess = self.start_sustain_excess_db_s - float(here) - limit
+        return (SUSTAIN_DRIFT_PENALTY_PER_DB_S * excess * self.fence_unit
+                if excess > 0.0 else 0.0)
 
     def _report_level_offset(self, terms: dict[str, float]) -> None:
         """Name the whole-grid level difference once, since the loss removes it.
@@ -891,7 +1014,22 @@ class Evaluator:
         if self.normalize and self.loss.scales is None and terms is not None:
             self.baseline_terms = dict(terms)
             self.loss.calibrate(terms)
+        # The fences anchor here too, and OUTSIDE the branch above: they are
+        # about where the start point sat, which is a fact about the voice and
+        # not about whether the terms are being normalised. Inside it, a
+        # --raw-loss run left both anchors at None and every fence silently off
+        # — a guard that holds on the default path and lets go on the other one,
+        # which is the shape that gets found by walking into it.
+        if not self._anchored and terms is not None:
+            self._anchored = True
             self.start_level_offset_db = terms.get("level_offset_db")
+            self.start_sustain_excess_db_s = terms.get("sustain_excess_db_s")
+            # What one unit of loss is worth in the units this run reports. The
+            # fence rates are per dB on a loss the start scores 1.0, so on a raw
+            # run — where the start scores its own weighted sum, two orders of
+            # magnitude up — the same rate would be a rounding error.
+            self.fence_unit = max(self.loss.combine(terms), FENCE_UNIT_FLOOR)
+            self._report_sustain_excess(terms)
 
     def _record(self, values: list[float], terms: dict[str, float] | None,
                 *, rendered: bool = True) -> float:
@@ -910,7 +1048,21 @@ class Evaluator:
         if rendered:
             self.n_renders += 1
         self._calibrate_once(terms)
-        loss = self.loss.combine(terms) + self._level_drift_penalty(terms)
+        sustain_charge = self._sustain_drift_penalty(terms)
+        if sustain_charge > 0.0 and not self.sustain_fence_bit:
+            # Said once, where it happens. A fence nobody ever sees fire reads
+            # the same as a fence that cannot: this is the line that separates
+            # "the search never offered a note worth taking away" from "the
+            # fence is inert", and a campaign over the bank is the population
+            # that answers it.
+            self.sustain_fence_bit = True
+            if not self.quiet:
+                print(f"  sustain: fence first charged here — this candidate falls "
+                      f"{float(terms['sustain_excess_db_s']):+.2f} dB/s against its "
+                      f"reference, the start point fell "
+                      f"{float(self.start_sustain_excess_db_s):+.2f}", file=sys.stderr)
+        loss = (self.loss.combine(terms) + self._level_drift_penalty(terms)
+                + sustain_charge)
         if loss < self.best_loss:
             self.best_loss = loss
             self.best_values = list(values)
@@ -1203,14 +1355,15 @@ def render_metrics_main(argv: list[str]) -> int:
     # the instrument's own boundary: a fit moves the voice, and the amplifier the
     # bank binds after it is not the voice's to answer for.
     rig = model_rig(corpus.rig) if corpus is not None else False
-    audio = np.asarray(render_model(smf_bytes, total, SR, rig=rig), dtype=np.float32)
+    audio = np.asarray(render_model(smf_bytes, total, render_rate(corpus), rig=rig),
+                       dtype=np.float32)
     if a.room_ir:
         # Applied here rather than in the parent so the per-note metrics and the
         # multi-scale term both see the same roomed signal.
         audio = apply_room(audio, np.load(a.room_ir))
     raw = to_mono(audio, a.mono_mode)
     mono = normalize_rms(raw)
-    rows = probe_rows(mono, pattern, SR, raw=raw,
+    rows = probe_rows(mono, pattern, render_rate(corpus), raw=raw,
                       max_band_hz=a.band_edge_hz or None, threads=a.metric_threads)
     if a.dump_audio:
         np.save(a.dump_audio, mono.astype(np.float32))
@@ -1240,6 +1393,15 @@ def run(args, argv: list[str] | None = None) -> int:
               f"{'that term' if len(refused) == 1 else 'those terms'}, so the weight is "
               f"multiplying a constant zero and the run is the same without it",
               file=sys.stderr)
+    # The other half: a weight nobody named, that the class asked for and the
+    # probe's shape cannot fit. Dropping it is right; dropping it silently is
+    # how a class default goes missing with nothing in the run to say so.
+    dropped = dropped_weights(args)
+    if dropped:
+        kind = "kit" if args.percussive else "instrument"
+        print("  " + "; ".join(f"{t}: dropped from the {kind}'s class defaults "
+                               f"because {why}" for t, why in dropped),
+              file=sys.stderr)
 
     # A catalogue is needed whenever a spec might name a per-program patch field
     # (which has no declaration in src/ to validate against) and always for
@@ -1253,7 +1415,7 @@ def run(args, argv: list[str] | None = None) -> int:
         dylib = dylib_path(build_dir)
         catalogue = dump_catalogue(
             args.program, catalogue_pattern(args), str(dylib) if dylib else None,
-            sr=SR, notes=args.notes, bank=args.bank,
+            sr=render_rate(resolve_corpus(args)), notes=args.notes, bank=args.bank,
         )
         print(f"catalogue: {len(catalogue.defaults)} knobs across "
               f"{len({p for p, _ in catalogue.programs})} programs "
@@ -1274,6 +1436,15 @@ def run(args, argv: list[str] | None = None) -> int:
             print(f"# program {args.program} bank {args.bank} is voiced by patch {key!r}")
             print(f"# program {args.program} has variation banks "
                   f"{catalogue.banks_for(args.program)}")
+        # Not the row count below, and the difference is the whole reason this
+        # line exists: `auto_spec` drops a field the clamp leaves unbounded and
+        # one whose range collapses, so anything scaled off the rows overshoots.
+        try:
+            taken = len(auto_spec(args.program, catalogue, drum_note=args.drum_note,
+                                  bank=args.bank, patch_only=args.program_only))
+            print(f"# fit_knobs\t{taken}\tof {len(rows)} rows, what --spec auto takes")
+        except ValueError as exc:
+            print(f"# fit_knobs\t0\t--spec auto refuses this one: {exc}")
         print("# key\tdefault\tmin\tmax")
         for k, v in rows:
             bound = catalogue.bound_for(k)
@@ -1299,7 +1470,7 @@ def run(args, argv: list[str] | None = None) -> int:
             dylib = dylib_path(build_dir)
             catalogue = dump_catalogue(
                 args.program, catalogue_pattern(args), str(dylib) if dylib else None,
-                sr=SR, notes=args.notes,
+                sr=render_rate(resolve_corpus(args)), notes=args.notes,
             )
 
     pristine: dict[Path, str] = {}
@@ -1341,7 +1512,7 @@ def run(args, argv: list[str] | None = None) -> int:
             pattern, _, _ = _score(args.program, args.pattern, args.notes, args.velocities,
                                    corpus=corpus, gate_ms=getattr(args, "drum_gate_ms", 0))
             spans = [(n.start, n.start + n.dur) for n in pattern.notes]
-            ir = fit_room_ir(dry_model[:, None], SR, spans, room)
+            ir = fit_room_ir(dry_model[:, None], render_rate(corpus), spans, room)
             ir_path = Path(tmp) / "room.npy"
             np.save(ir_path, ir)
         evaluator = Evaluator(
@@ -1573,8 +1744,12 @@ def main() -> int:
     parser.add_argument("--out", default="",
                         help="write the result (knob values, losses, overrides, validation) "
                              "to this JSON path")
-    parser.add_argument("--n-harm", type=int, default=10, dest="n_harm",
-                        help="harmonics counted in the L1 timbre term (default: 10)")
+    # The whole ladder `analyze_note` measures, and the same count `TERM_UNITS`
+    # divides `harm` by — a lower default summed fewer cells than the unit
+    # assumed and understated the term against every other one.
+    parser.add_argument("--n-harm", type=int, default=HARM_REACH, dest="n_harm",
+                        help=f"harmonics counted in the L1 timbre term "
+                             f"(default: {HARM_REACH}, the whole measured ladder)")
     parser.add_argument("--w-harm", type=float, default=None, dest="w_harm",
                         help="weight on the harmonic-profile L1 term")
     parser.add_argument("--w-cents", type=float, default=None, dest="w_cents",
@@ -1666,6 +1841,19 @@ def main() -> int:
                              "as the shape - a filter corner does - has to be fitted with the "
                              "gain beside it, or the fence charges the move by more than the "
                              "corrected shape is worth and the search walks the other way")
+    parser.add_argument("--max-sustain-drift-db-s", type=float, default=3.0,
+                        dest="max_sustain_drift_db_s",
+                        help="how much faster than the start point a winner's worst note may "
+                             "fall away over its held section, in dB/s, before the loss "
+                             "charges it (default 3; 0 disables). The companion fence to "
+                             "--max-level-drift-db, against the trade that takes the note "
+                             "away rather than the gain: `env` does carry the sustain slope, "
+                             "but it is divided by its own value at the start point, so a "
+                             "voice that already falls steeply has a flat objective in the "
+                             "one dimension it is worst in. One-sided and anchored on the "
+                             "START, so a voice whose mechanism cannot sustain is not asked "
+                             "to fix that with a knob - what this stops is the fit making it "
+                             "worse")
     parser.add_argument("--w-crest", type=float, default=None, dest="w_crest",
                         help="weight on peak-minus-held-RMS per note. Gain-invariant, and the "
                              "one term that sees a note whose envelope never falls after its "
