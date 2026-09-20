@@ -36,6 +36,7 @@ const STRINGS = {
     'keys.take': 'previous / next take',
     'keys.version': 'pick a version',
     'keys.swap': 'model ⇄ reference',
+    'keys.rewind': 'back to the top',
     'keys.loop': 'loop',
     'keys.match': 'match loudness',
     'keys.restart': 'restart on switch',
@@ -65,6 +66,8 @@ const STRINGS = {
     'role.model': 'libsonare',
     'role.reference': 'reference',
     'role.other': 'versions',
+    'path.direct': 'no rig',
+    'path.direct.long': 'the same voice with the bank\u2019s rig cleared \u2014 where the instrument itself stops',
     'role.model.long': 'libsonare — what the library produces',
     'role.reference.long': 'reference — what it is being compared against',
 
@@ -96,7 +99,14 @@ const STRINGS = {
     'prov.unclassified': 'the capture does not say what answered it',
 
     'ver.hint': 'Versions of the same take, to be chosen between — the line above says what the selected one is meant to sound like.',
-    'ver.hintBlind': 'Names hidden. Whichever version you leave a take on is your vote for that take.',
+    'ver.baseline': 'as it ships',
+    'ver.baselineDirect': 'as it ships, DI',
+    'ver.baselineDesc': 'The library as it stands, with no overrides applied.',
+    'ver.hintModel': 'Candidates — pick the one CLOSEST TO THE REFERENCE, which is not always the one you like most.',
+    'ver.hintModelAlone': 'No reference for this slot, so there is nothing to be near: pick the one that could pass for the real instrument.',
+    'ver.hintReference': 'The target itself, not candidates: several recordings of the instrument this slot is aimed at.',
+    'ver.hintDirect': 'The same settings with the rig cleared. A path to hear them down, not another set to choose from.',
+    'ver.hintBlind': 'Names hidden. Switching decides nothing — answer each take with “this one” or “could not tell”.',
 
     'now.hidden': 'hidden',
     'now.copy': 'copy what I hear',
@@ -109,6 +119,8 @@ const STRINGS = {
 
     'transport.play': 'play',
     'transport.pause': 'pause',
+    'transport.rewind': 'back to the top',
+    'transport.rewindTitle': 'To the start of the marked region, or of the take when none is marked',
     'transport.loop': 'loop',
     'transport.clearRegion': 'whole take',
 
@@ -124,10 +136,14 @@ const STRINGS = {
     'level.rms': 'rms {db} dBFS',
     'level.gain': 'gain {db} dB applied',
 
-    'blind.pickEach': 'pick a version on each take',
+    'blind.pickEach': 'decide each take, or say you could not tell',
+    'blind.choose': 'this one',
+    'blind.chooseTitle': 'Record the version sounding as this take\u2019s answer. Switching between versions does not decide anything.',
+    'blind.unsure': 'could not tell',
+    'blind.unsureTitle': 'Record that this take could not be separated. That is a result about the voice, not a missing answer.',
     'blind.preferred': 'preferred',
     'blind.record': 'record this result',
-    'blind.decided': 'picked on {n} take(s)',
+    'blind.decided': 'answered on {n} take(s)',
     'blind.result': 'blind listening, {n} take(s): {tally}',
 
     'fb.title': 'tell me what you hear',
@@ -256,6 +272,7 @@ const STRINGS = {
     'keys.take': '前 / 次のテイク',
     'keys.version': 'バージョンを選ぶ',
     'keys.swap': 'libsonare ⇄ リファレンス',
+    'keys.rewind': '頭出し',
     'keys.loop': 'ループ',
     'keys.match': '音量を揃える',
     'keys.restart': '切替時に頭出し',
@@ -285,6 +302,8 @@ const STRINGS = {
     'role.model': 'libsonare',
     'role.reference': 'リファレンス',
     'role.other': 'バージョン',
+    'path.direct': 'リグなし',
+    'path.direct.long': 'バンクのリグを外した同じ音色 — 楽器そのものが終わる地点',
     'role.model.long': 'libsonare — このライブラリが出している音',
     'role.reference.long': 'リファレンス — 目標にしている音',
 
@@ -316,7 +335,14 @@ const STRINGS = {
     'prov.unclassified': 'キャプチャに音源の種別が書かれていない',
 
     'ver.hint': '同じテイクの別バージョンです。聴き比べて良いものを選んでください — 選んだものが何を狙った設定かは上の行が説明します。',
-    'ver.hintBlind': '名前を伏せています。各テイクで最後に選んだものが、そのテイクの一票になります。',
+    'ver.baseline': '出荷状態',
+    'ver.baselineDirect': '出荷状態（DI）',
+    'ver.baselineDesc': '無改変のライブラリそのもの。オーバーライドは一切かかっていません。',
+    'ver.hintModel': '候補です。リファレンスに最も近いものを選んでください（好きなものとは限りません）。',
+    'ver.hintModelAlone': 'このスロットにリファレンスはありません。実在の楽器の音として通用するものを選んでください。',
+    'ver.hintReference': '狙う目標そのものです。候補ではなく、この楽器のリファレンス録音が複数あります。',
+    'ver.hintDirect': '同じ設定をリグなしで鳴らしたものです。選ぶ対象ではなく、聴く経路です。',
+    'ver.hintBlind': '名前を伏せています。切り替えても何も決まりません。テイクごとに「これにする」か「区別できない」で答えてください。',
 
     'now.hidden': '伏せ中',
     'now.copy': 'いま聴いている条件をコピー',
@@ -329,6 +355,8 @@ const STRINGS = {
 
     'transport.play': '再生',
     'transport.pause': '一時停止',
+    'transport.rewind': '頭出し',
+    'transport.rewindTitle': '範囲を指定していればその先頭へ、なければテイクの先頭へ',
     'transport.loop': 'ループ',
     'transport.clearRegion': '全体に戻す',
 
@@ -344,10 +372,14 @@ const STRINGS = {
     'level.rms': 'RMS {db} dBFS',
     'level.gain': '{db} dB 補正',
 
-    'blind.pickEach': 'テイクごとに好きな方を選んでください',
+    'blind.pickEach': 'テイクごとに決めるか、区別できないと答えてください',
+    'blind.choose': 'これにする',
+    'blind.chooseTitle': 'いま鳴っているバージョンを、このテイクの答えとして記録します。バージョンを切り替えるだけでは何も決まりません。',
+    'blind.unsure': '区別できない',
+    'blind.unsureTitle': 'このテイクは聴き分けられなかった、と記録します。答えが無いのではなく、音色についての結果です。',
     'blind.preferred': '選ばれた回数',
     'blind.record': 'この結果を記録する',
-    'blind.decided': '{n} テイクで選択済み',
+    'blind.decided': '{n} テイク回答済み',
     'blind.result': 'ブラインド試聴、{n} テイク: {tally}',
 
     'fb.title': '聞こえたことを教えてください',

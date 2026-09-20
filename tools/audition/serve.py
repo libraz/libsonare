@@ -259,6 +259,83 @@ def drum_names() -> dict[str, str]:
     return {str(note): name for note, name in GM_DRUM_NAMES.items()}
 
 
+def _calibration():
+    """The module that owns the registry, or None where it cannot be read.
+
+    Imported rather than parsed, so the refusal of an unlabelled setting is
+    enforced in one place. None where this is serving a directory outside the
+    repository, which costs the words and nothing else — a page whose buttons
+    fall back to their own keys is the state before any of this existed.
+    """
+    tools = REPO_ROOT / "tools" / "voicematch"
+    if str(tools) not in sys.path:
+        sys.path.append(str(tools))
+    try:
+        import calibration
+    except ImportError:
+        return None
+    return calibration
+
+
+def recorded_variants(slug: str) -> dict:
+    """The named settings recorded for one voice, by name."""
+    calibration = _calibration()
+    if calibration is None:
+        return {}
+    try:
+        table = calibration.load()
+    except (ValueError, OSError):
+        return {}
+    return {v.name: v for v in table.get(slug, [])}
+
+
+def label_sources(manifest: dict, slug: str) -> bool:
+    """Give every version the words and the axis its button needs.
+
+    Three things, all resolved per request for the same reason the slot is: they
+    are tracked facts that move on their own, and the hundred and eighty-odd
+    pages already rendered were written before any of them existed. Re-rendering
+    one to read its own button is hours of audio for a sentence.
+
+    - `title` and `desc`, in both languages, for a version the registry names.
+    - `path`, for a render taken with the rig cleared. The signal path is an
+      axis and not a choice, so the switch has to be able to put it in its own
+      block instead of interleaving it with the candidates.
+    - `detail` with any override string taken off it. A listener shown the knob
+      answers about the knob, and every page rendered so far carries it.
+
+    A manifest that already carries the words keeps them — a render says what
+    the setting was when it was made — and anything the registry does not name
+    (the unmodified build, a reference, a `--variant` typed at a shell) keeps
+    whatever it had.
+    """
+    sources = manifest.get("sources")
+    calibration = _calibration()
+    if not isinstance(sources, dict) or calibration is None:
+        return False
+    variants = recorded_variants(slug)
+    changed = False
+    for key, src in sources.items():
+        if not isinstance(src, dict):
+            continue
+        direct = key.endswith("-di")
+        if direct and not src.get("path"):
+            src["path"] = "direct"
+            changed = True
+        detail = src.get("detail")
+        if isinstance(detail, str) and detail:
+            plain = calibration.strip_overrides(detail)
+            if plain != detail:
+                src["detail"] = plain
+                changed = True
+        found = variants.get(key[:-3] if direct else key)
+        if not found or src.get("title"):
+            continue
+        src.update(calibration.source_text(found, direct=direct))
+        changed = True
+    return changed
+
+
 def _read_json(path: Path) -> dict:
     """A JSON object, or an empty one wherever the file is missing or broken.
 
@@ -676,9 +753,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # mind. A set served from outside this repository gets no block and
             # the page drops the line.
             manifest = read_manifest(root)
-            found = provenance(manifest.get("voice") or {}, rel[2:].split("/", 1)[0])
+            slug = rel[2:].split("/", 1)[0]
+            found = provenance(manifest.get("voice") or {}, slug)
             if found:
                 manifest["provenance"] = found
+            label_sources(manifest, slug)
             self._json(manifest)
             return
         if self._resolve(rel) is None:

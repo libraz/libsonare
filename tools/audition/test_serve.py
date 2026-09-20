@@ -498,6 +498,70 @@ def test_every_capture_this_tree_holds_resolves_to_a_state() -> None:
     assert {"aimed", "off-target"} <= seen, seen
 
 
+def test_a_page_rendered_before_the_words_existed_still_gets_them() -> None:
+    """A candidate's title and line are resolved per request, not per render.
+
+    The registry moves on its own and the pages do not: re-rendering one voice
+    to read its own buttons is hours of audio for a sentence. So a manifest that
+    carries no words gets today's, and one that carries its own keeps them —
+    a render says what the setting was when it was made.
+    """
+    slug = "p019-church-organ"
+    variants = serve.recorded_variants(slug)
+    assert variants, "the shipped registry has no settings for this voice"
+    name = next(iter(variants))
+
+    manifest = {"sources": {
+        "model": {"role": "model"},
+        name: {"role": "model"},
+        f"{name}-di": {"role": "model"},
+        "mine": {"role": "model", "title": {"en": "kept", "ja": "kept"}},
+    }}
+    assert serve.label_sources(manifest, slug)
+    src = manifest["sources"]
+    assert set(src[name]["title"]) == {"en", "ja"}, src[name]
+    assert src[name]["desc"]["ja"], src[name]
+    # The rig-cleared render of a candidate is a different version of it, and
+    # the two sit side by side, so its button may not read the same.
+    assert src[f"{name}-di"]["title"]["ja"] != src[name]["title"]["ja"]
+    # Not everything on a page is a recorded setting.
+    assert "title" not in src["model"], src["model"]
+    assert src["mine"]["title"] == {"en": "kept", "ja": "kept"}
+
+
+def test_the_knob_never_reaches_the_page_and_the_signal_path_does() -> None:
+    """Two facts a rendered manifest gets wrong, both fixed where it is served.
+
+    A listener shown `piano.brightness=0.30` reports on brightness, which is the
+    one thing that knob cannot be asked about — and every page rendered so far
+    carries the override string in the field the banner reads. The signal path
+    is the other way round: it is missing, and without it the switch cannot tell
+    a second path from a second candidate.
+    """
+    manifest = {"sources": {
+        "felt-worn": {"role": "model",
+                      "detail": "the felt is flat — fam0.piano.brightness=0.30"},
+        "felt-worn-di": {"role": "model", "detail": "the same, rig cleared — a.b=1,c.d=2"},
+        "prose": {"role": "model", "detail": "two references — both of them dark"},
+    }}
+    assert serve.label_sources(manifest, "p000-acoustic-grand-piano")
+    src = manifest["sources"]
+    assert src["felt-worn"]["detail"] == "the felt is flat"
+    assert src["felt-worn-di"]["detail"] == "the same, rig cleared"
+    assert src["felt-worn-di"]["path"] == "direct"
+    assert "path" not in src["felt-worn"], src["felt-worn"]
+    # A note is prose and prose has dashes in it.
+    assert src["prose"]["detail"] == "two references — both of them dark"
+
+
+def test_a_set_outside_the_bank_is_left_as_it_is() -> None:
+    """A directory served from anywhere else has no registry behind it, and the
+    page falls back to the keys rather than the response failing."""
+    manifest = {"sources": {"a": {"role": "model"}}}
+    assert not serve.label_sources(manifest, "not-a-voice")
+    assert manifest["sources"]["a"] == {"role": "model"}
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

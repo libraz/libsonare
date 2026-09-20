@@ -163,7 +163,13 @@ On the bank the rows are what is navigated, since nothing is sounding there:
 
 Dragging across the waveform sets a loop region; a click with no drag seeks. The digits count in the order the versions are shown, which is by role, not the order the manifest happens to list them in.
 
-**Blind mode** hides which version is which and shuffles them per take, so a preference is a preference rather than an expectation. Whichever version is selected when you move on is recorded as the pick, and the running tally is in the transport bar. Picks live in this browser's local storage, keyed by the set; re-rendering a set keeps them. `record this result` writes the tally and the per-take picks into the same log as every other note — a run is a result, not an impression, and it used to leave the page only through a download nobody remembered to make.
+**Blind mode** hides which version is which and shuffles them per take, so a judgement is a judgement rather than an expectation.
+
+**Choosing is a separate act from switching, and not choosing is a result.** `this one` records the version sounding as the take's answer; `could not tell` records that the take could not be separated. Moving between versions decides nothing. The earlier behaviour — the pick following the selection — made A/B-ing into voting and left whichever version you happened to stop on standing as the answer, so a take nobody could separate still produced a pick. That matters because `heard.py` files a blind tally as *what the ear actually separated*, kept deliberately apart from a sighted preference: indifference counted as discrimination is the one thing that reading cannot survive.
+
+**A blind run is one question, so it is run on the path that ships.** A candidate rendered again with the rig cleared is the same candidate, and a tally taken across both paths counts a vote for a setting as a vote for a path. Those renders stay on the page and are not in the draw.
+
+Picks live in this browser's local storage, keyed by the set; re-rendering a set keeps them. `record this result` writes the tally, the per-take answers and the takes that could not be separated into the same log as every other note — a run is a result, not an impression, and it used to leave the page only through a download nobody remembered to make.
 
 ## The manifest
 
@@ -190,11 +196,17 @@ Dragging across the waveform sets a loop region; a click with no drag seeks. The
 }
 ```
 
-`tracks` maps a source key to a path relative to the served directory; every key of every take gets its own switch button, labelled with the key. Takes with the same `group` are listed under one heading. Nothing but `id` and `tracks` is required.
+`tracks` maps a source key to a path relative to the served directory; every key of every take gets its own switch button. Takes with the same `group` are listed under one heading. Nothing but `id` and `tracks` is required.
+
+A source may also carry `title` and `desc`, a line per language, which is what the button says and what the banner explains it with — a key is an identifier and a row of nine identifiers is nine guesses. In this repository they are registered in `calibrations.json` and resolved when the page is served, so a page rendered before the fields existed carries today's words; see [`docs/audition.md`](../voicematch/docs/audition.md).
 
 `group` at the top level, beside `title`, is the heading the set picker files this set under. It is optional, and a set that declares none stays in an ungrouped run at the top of the list — which is right for a handful of hand-assembled directories and no use at all once a whole instrument bank is being served.
 
 **`role` is what the colours, the swap key and the take list's markers are built on**, so a manifest that declares it gets all of them and one that does not gets a single unlabelled row of buttons in a neutral colour. `model` is shown first and `reference` second. A source's `label` and `detail` are shown for whichever version is selected, in full — so they can say as much as they need to without a segmented button ellipsising the part that distinguishes them.
+
+**`path: "direct"` marks a render taken with the rig cleared, and it is an axis rather than a choice.** The switch gives each `(role, path)` its own block, because the same setting heard down two paths is not two candidates: interleaved in one strip, three unrelated questions — which recording is the target, which signal path, which calibration candidate — became one list of eighteen that a pick could not be attributed to any of.
+
+**The override string is deliberately not on the page.** A question put in the parameter's own vocabulary gets the parameter's own answer back, so `detail` carries why a setting exists and the knob names stay in the registry. Pages rendered before that have theirs taken off when they are served.
 
 With no `manifest.json`, one is inferred from the layout: each subdirectory is a take and the audio files inside it are its versions.
 

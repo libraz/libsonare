@@ -622,6 +622,17 @@ nav .sub {
   color: var(--role);
 }
 
+/* What the version sounding IS, in the words it was registered under. Set in
+   the page's ink rather than the role's: the role is already said by the chip
+   and the colour, and this is the one part of the line that is new information.
+ */
+.now-title {
+  flex: none;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink);
+}
+
 .now-detail {
   min-width: 0;
   overflow: hidden;
@@ -687,36 +698,61 @@ nav .sub {
 
 /* ---- version switch ---- */
 
+/* Two roles, two blocks, and the gap between them is what says they are two
+   rather than one long switch. */
 .versions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 13px;
 }
 
+/* A block is its own heading over its own control, rather than a label in a
+   column beside it. The label column cost 8.5rem of the row — on a voice with
+   eleven candidates that is the width a name needs to survive — and it left the
+   heading with nowhere to put a sentence, which is how the one sentence the
+   switch had ended up at the foot of the whole thing. */
 .vrow {
-  display: grid;
-  grid-template-columns: 8.5rem minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   min-width: 0;
 }
 
-/* A manifest that declares no roles has no label column to leave room for. */
-.vrow.unlabelled { grid-template-columns: minmax(0, 1fr); }
+.vhead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-size: 11.5px;
+}
 
-.vrow > .role {
+.vhead > .role {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 7px;
-  font-size: 11.5px;
   font-weight: 600;
   color: var(--role);
   white-space: nowrap;
-  overflow: hidden;
+  flex: none;
 }
 
-.vrow > .role .dot { background: var(--role); }
+.vhead > .role .dot { background: var(--role); }
+
+/* The axis a block sits on, beside the role rather than instead of it: both
+   blocks are libsonare and only one of them is the path that ships. */
+.vpath {
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--role) 30%, var(--line));
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--role) 60%, var(--ink-dim));
+}
+
+/* Beside the sentence rather than at the far end of the row: the instruction
+   and the button that answers it are one thing, and a button alone at the other
+   edge of a wide page is a verb with no object. */
+.vhead > button { flex: none; }
 
 /* Bordered in the role's own colour, so a block of buttons says which side of
    the comparison it belongs to before any of them is pressed. */
@@ -770,7 +806,9 @@ nav .sub {
    individually, an incomplete row is just space. */
 .segmented.many {
   grid-auto-flow: row;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  /* Wide enough for a title rather than for a key: a setting's name is an
+     identifier and fits in eight characters, and what it is for is a phrase. */
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   gap: 5px;
   background: transparent;
   border-color: transparent;
@@ -782,21 +820,43 @@ nav .sub {
   border-radius: 5px;
 }
 
-/* The line that says what the switch is for, and the one action it asks for.
-   Together rather than apart: the instruction and the button that answers it
-   read as one thing, and the button alone would be a verb with no object. */
+/* What this block of versions is, beside the role that owns it and above the
+   buttons it describes. */
 .vhint {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin: 1px 0 0;
-  font-size: 11.5px;
+  min-width: 0;
   color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .segmented .key { font-family: var(--mono); opacity: 0.55; flex: none; }
-.segmented .vname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The title over the key it is reached at. Two lines rather than one because
+   they are two different things — a sentence for the ear and an address for the
+   URL — and a button that showed only the address is what made a row of nine
+   candidates unreadable. */
+.segmented .vtext {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+
+.segmented .vname,
+.segmented .vkey {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segmented .vkey {
+  font-family: var(--mono);
+  font-size: 10px;
+  opacity: 0.5;
+}
 
 /* ---- canvases ---- */
 
@@ -1640,6 +1700,4 @@ body.lang-ja .bank-cols { letter-spacing: 0.04em; text-transform: none; font-siz
 @media (max-width: 860px) {
   main { grid-template-columns: 200px minmax(0, 1fr); }
   .fb-choices { grid-template-columns: minmax(0, 1fr); }
-  .vrow { grid-template-columns: minmax(0, 1fr); }
-  .vrow > .role { justify-content: flex-start; }
 }

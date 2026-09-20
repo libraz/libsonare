@@ -14,6 +14,7 @@ which is the same failure as not running it.
 
 from __future__ import annotations
 
+import json
 import re
 from html.parser import HTMLParser
 from pathlib import Path
@@ -178,6 +179,50 @@ def test_every_verdict_the_tree_can_reach_has_a_label() -> None:
     labelled = set(re.findall(r"^  '?([\w/-]+)'?: 'grade\.",
                               (APP_DIR / "feedback.js").read_text(), re.MULTILINE))
     assert verdicts <= labelled, f"no label for: {sorted(verdicts - labelled)}"
+
+
+#: Where the take list's words are written, on the other side of the harness.
+PHRASES = APP_DIR.parent / "voicematch" / "phrases.py"
+EXCERPTS = PHRASES.parent / "excerpts"
+
+
+def _take_strings() -> set[str]:
+    """Every label, group and note a rendered take list can carry.
+
+    Read out of the source rather than out of a rendered manifest, because the
+    manifests live under an untracked scratch root: a clone with nothing
+    rendered would run this against an empty set, which is the way a check
+    quietly stops checking. The `Take(…)` calls are parsed, not imported —
+    `phrases.py` pulls in the metrics package and numpy with it, and this file
+    reads the page rather than running it.
+    """
+    import ast
+
+    out: set[str] = set()
+    for node in ast.walk(ast.parse(PHRASES.read_text())):
+        if not (isinstance(node, ast.Call) and getattr(node.func, "id", "") == "Take"):
+            continue
+        # id, label, group, sub — everything but the id, and only where it is a
+        # literal. The musical take names neither its label nor its note here;
+        # both come from the excerpt, which is read below.
+        for arg in node.args[1:4]:
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                out.add(arg.value)
+    for path in sorted(EXCERPTS.glob("*.json")):
+        data = json.loads(path.read_text())
+        out |= {data["label"], data["note"]}
+    return {s for s in out if s}
+
+
+def test_every_take_string_the_harness_can_render_is_translated() -> None:
+    """A take's label and note are baked into the manifest in English, so the
+    Japanese for them lives on the page. A phrase added without one renders an
+    English line in a Japanese list, which nothing else would report."""
+    text = (APP_DIR / "take-text.js").read_text()
+    keys = set(re.findall(r"^  (?:'([^']*)'|\"([^\"]*)\"):", text, re.MULTILINE))
+    known = {a or b for a, b in keys}
+    missing = _take_strings() - known
+    assert not missing, f"no Japanese for: {sorted(missing)}"
 
 
 def test_every_module_the_page_imports_is_present() -> None:

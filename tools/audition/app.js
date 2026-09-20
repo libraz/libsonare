@@ -14,12 +14,13 @@ import {
   t, applyStatic, initLang, onLang, setLang, currentLang, languages,
 } from './i18n.js';
 import {
-  applyGains, pause, playhead, renderLevels, startAt, togglePlay,
+  applyGains, pause, playhead, renderLevels, rewind, seekTo, startAt, togglePlay,
 } from './player.js';
 import { drawSpec, drawWave, seekFromEvent } from './scope.js';
 import {
   applyRoute, buildSetPicker, closePalette, copyConditions, loadFeedbackIndex,
   loadSet, openPalette, paletteKey, paletteOpen, readRoute, rebuildVersions,
+  abstainBlind, chooseBlind,
   recordBlindResult, refreshListen, renderCaptions, renderScore, renderSubject,
   resetBlindReveal, reshuffleBlind, selectTake, setVersion, stepVersion, swapRole,
 } from './listen.js';
@@ -108,6 +109,7 @@ function onKey(ev) {
   if (k === 'ArrowLeft') { ev.preventDefault(); stepVersion(-1); return; }
   if (k === 'ArrowDown') { ev.preventDefault(); selectTake(state.itemIndex + 1); return; }
   if (k === 'ArrowUp') { ev.preventDefault(); selectTake(state.itemIndex - 1); return; }
+  if (k === 'Home') { ev.preventDefault(); rewind(); return; }
   if (k === 'l' || k === 'L') { $('loopBtn').click(); return; }
   if (k === 'm' || k === 'M') {
     $('matchRms').checked = !$('matchRms').checked;
@@ -145,6 +147,7 @@ function toggleHelp(want) {
 
 function wire() {
   $('playBtn').addEventListener('click', togglePlay);
+  $('rewindBtn').addEventListener('click', rewind);
 
   $('loopBtn').addEventListener('click', () => {
     state.loop = !state.loop;
@@ -172,6 +175,8 @@ function wire() {
   $('helpClose').addEventListener('click', () => toggleHelp(false));
 
   $('copyLink').addEventListener('click', copyConditions);
+  $('blindPick').addEventListener('click', chooseBlind);
+  $('blindUnsure').addEventListener('click', abstainBlind);
   $('blindRecord').addEventListener('click', recordBlindResult);
   $('swapBtn').addEventListener('click', swapRole);
   $('voicePick').addEventListener('click', () => {
@@ -245,8 +250,7 @@ function wire() {
       if (Math.abs(to - dragFrom) <= 0.02) {
         // A click with no drag is a seek, and drops whatever region it lands in.
         state.region = null;
-        state.startOffset = to;
-        if (state.playing) startAt(to);
+        seekTo(to);
       } else if (state.playing) {
         startAt(state.region[0]);
       }

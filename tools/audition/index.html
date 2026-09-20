@@ -90,6 +90,7 @@
       <dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd data-i18n="keys.take">previous / next take</dd>
       <dt class="compare-only"><kbd>tab</kbd></dt><dd class="compare-only" data-i18n="keys.swap">model ⇄ reference</dd>
       <dt class="compare-only"><kbd>1</kbd>…<kbd>9</kbd> <kbd>←</kbd><kbd>→</kbd></dt><dd class="compare-only" data-i18n="keys.version">pick a version</dd>
+      <dt><kbd>home</kbd></dt><dd data-i18n="keys.rewind">back to the top</dd>
       <dt><kbd>L</kbd></dt><dd data-i18n="keys.loop">loop</dd>
       <dt class="compare-only"><kbd>M</kbd></dt><dd class="compare-only" data-i18n="keys.match">match loudness</dd>
       <dt class="compare-only"><kbd>S</kbd></dt><dd class="compare-only" data-i18n="keys.restart">restart on switch</dd>
@@ -199,6 +200,8 @@
       </div>
 
       <div id="transport">
+        <button id="rewindBtn" type="button" data-i18n="transport.rewind"
+                data-i18n-title="transport.rewindTitle">rewind</button>
         <button id="playBtn" type="button" class="play" data-i18n="transport.play">play</button>
         <button id="loopBtn" type="button" data-i18n="transport.loop">loop</button>
         <span id="clock" class="mono">0.00 / 0.00</span>
@@ -208,6 +211,13 @@
         <span id="levels" class="mono"></span>
         <span class="grow"></span>
         <span id="blindScore" class="mono"></span>
+        <!-- Choosing is a separate act from switching. Without these two,
+             moving between versions was voting and the vote left standing was
+             whichever one you happened to stop on. -->
+        <button id="blindPick" type="button" class="ghost" hidden
+                data-i18n="blind.choose" data-i18n-title="blind.chooseTitle">this one</button>
+        <button id="blindUnsure" type="button" class="ghost" hidden
+                data-i18n="blind.unsure" data-i18n-title="blind.unsureTitle">could not tell</button>
         <button id="blindRecord" type="button" class="ghost" hidden
                 data-i18n="blind.record">record this result</button>
       </div>

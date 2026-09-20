@@ -140,6 +140,33 @@ export function playhead() {
   return Math.min(t0, state.take.duration);
 }
 
+/* Move the playhead, whether or not anything is sounding.
+ *
+ * One function for every way the page seeks — a click on a picture, the button
+ * under the transport — because they are the same move and were two copies of
+ * it, which is how a seek came to restart playback from one of them and not
+ * from the other.
+ */
+export function seekTo(offset) {
+  if (!state.take) return;
+  const at = Math.max(0, Math.min(offset, state.take.duration));
+  state.startOffset = at;
+  if (state.playing) startAt(at);
+}
+
+/* Back to the top, which on a page where a take is played twenty times is the
+ * move that was missing: without it the only way back was a click landing on
+ * the first few pixels of a picture, and on an attack the first few pixels are
+ * where the answer is.
+ *
+ * To the region's start rather than the file's where one is marked. A region
+ * is the passage being listened to, and a rewind that leaves it is a rewind
+ * that has to be undone.
+ */
+export function rewind() {
+  seekTo(state.region ? state.region[0] : 0);
+}
+
 export function togglePlay() {
   if (!state.take) return;
   audio().resume();

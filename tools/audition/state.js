@@ -100,6 +100,16 @@ export function roleOf(key) {
   return ROLE_ORDER.includes(r) ? r : '';
 }
 
+/* Which signal path a render was taken down, and it is an AXIS rather than a
+ * choice: `felt-worn` and `felt-worn` with the bank's rig cleared are one
+ * setting heard two ways, not two candidates. Interleaved in one strip they
+ * made a list of eighteen out of a question with six answers, and a pick out of
+ * it could not be attributed to either question. */
+export const pathOf = (key) => (sourceOf(key).path === 'direct' ? 'direct' : '');
+
+/// The block a version belongs to: one question, one block.
+export const blockOf = (key) => `${roleOf(key)}|${pathOf(key)}`;
+
 export const notesKey = () => `audition:picks-note:${state.setId || 'untitled'}`;
 export const picksKey = () => `audition:picks:${state.setId || 'untitled'}`;
 export const SET_KEY = 'audition:set';

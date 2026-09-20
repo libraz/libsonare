@@ -20,10 +20,11 @@
 'use strict';
 
 import {
-  $, el, state, ROLE_ORDER, roleClass, roleOf, sourceOf, sourceLabel,
-  notesKey, picksKey, SET_KEY,
+  $, el, state, ROLE_ORDER, roleClass, roleOf, pathOf, blockOf, sourceOf,
+  sourceLabel, notesKey, picksKey, SET_KEY,
 } from './state.js';
-import { t, applyStatic } from './i18n.js';
+import { t, applyStatic, phrase } from './i18n.js';
+import { takeText } from './take-text.js';
 import {
   activeKey, applyGains, loadTake, pause, playhead, renderLevels,
   startAt, stopSources, hitAt, conditions,
@@ -291,14 +292,15 @@ function buildTakeList() {
   state.items.forEach((item, i) => {
     if (item.group && item.group !== group) {
       group = item.group;
-      nav.appendChild(el('div', 'group', group));
+      nav.appendChild(el('div', 'group', takeText(group)));
     }
     const b = el('button');
     b.type = 'button';
-    b.append(el('span', 'take-name', item.label || item.id));
+    b.append(el('span', 'take-name', takeText(item.label) || item.id));
     // The id is what the URL carries, so it is shown rather than left to be
-    // guessed from a prose label that does not have to resemble it.
-    b.append(el('span', 'sub', item.sub ? `${item.id} — ${item.sub}` : item.id));
+    // guessed from a prose label that does not have to resemble it. The id
+    // stays as it is in both languages; the sentence after it is translated.
+    b.append(el('span', 'sub', item.sub ? `${item.id} — ${takeText(item.sub)}` : item.id));
     // A take that holds a reference is the one worth opening first, and on a
     // voice where only some takes were captured there is otherwise no way to
     // see which from the list.
@@ -351,7 +353,7 @@ export async function selectTake(i) {
   // stepping down the take list keeps auditioning the same candidate.
   const want = state.take.keys.indexOf(state.wantKey);
   state.versionIndex = state.blind
-    ? Math.min(state.versionIndex, state.take.keys.length - 1)
+    ? Math.min(state.versionIndex, state.blindOrder.length - 1)
     : (want >= 0 ? want : Math.min(state.versionIndex, state.take.keys.length - 1));
   buildVersionButtons();
   if (!state.blind) state.wantKey = activeKey();
@@ -364,115 +366,204 @@ export async function selectTake(i) {
   if (wasPlaying) startAt(0);
 }
 
+/* The draw for a blind run: which versions are in it, in an order that says
+ * nothing. Only the shipped path is drawn — see `displayOrder` — so a slot in
+ * blind mode is a position in this list rather than an index into the take. */
 export function reshuffleBlind() {
-  const n = state.take ? state.take.keys.length : 0;
-  state.blindOrder = [...Array(n).keys()];
-  for (let i = n - 1; i > 0; i--) {
+  const order = state.take
+    ? state.take.keys.map((_, i) => i).filter((i) => !pathOf(state.take.keys[i]))
+    : [];
+  for (let i = order.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [state.blindOrder[i], state.blindOrder[j]] = [state.blindOrder[j], state.blindOrder[i]];
+    [order[i], order[j]] = [order[j], order[i]];
   }
+  state.blindOrder = order;
 }
 
 /* -------------------------------------------------------------- versions */
 
-/// Slots in the order they are shown, which is the order `1`…`9` count in.
+/* Slots in the order they are shown, which is the order `1`…`9` count in.
+ *
+ * A blind run is one question, so it is run on the path that ships. The same
+ * candidate rendered again with the rig cleared is the same candidate, and a
+ * tally taken across both paths counts a vote for a setting as a vote for a
+ * path — the two are not comparable and the result cannot be read back apart.
+ * They stay on the page; they are not in the draw.
+ */
 function displayOrder() {
   const slots = state.take.keys.map((_, i) => i);
-  if (state.blind) return slots;
+  if (state.blind) return state.blindOrder.map((_, i) => i);
   const rank = (slot) => {
-    const at = ROLE_ORDER.indexOf(roleOf(state.take.keys[slot]));
-    return at < 0 ? ROLE_ORDER.length : at;
+    const key = state.take.keys[slot];
+    const at = ROLE_ORDER.indexOf(roleOf(key));
+    // The direct path after the shipped one within a role, so the two blocks of
+    // a role sit together rather than either of them splitting the other.
+    return (at < 0 ? ROLE_ORDER.length : at) * 2 + (pathOf(key) ? 1 : 0);
   };
   // Stable, so a role's own versions keep the order the manifest gave them.
   return slots.map((s, i) => [s, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])
     .map(([s]) => s);
 }
 
-/// What goes on the button: the source key, because that is what the URL
-/// carries and what a report has to name. A label is prose and there is no
-/// arranging for prose to be both descriptive and four characters long — the
-/// two references of one instrument differ in the last three words of a
-/// forty-character label, which is the part a button ellipsises away. The
-/// label is not lost: the banner above spells the selected one out in full.
-function versionLabel(slot) {
+/* What goes on a button: what the setting IS, over the key it is reached at.
+ *
+ * The key alone was the button for as long as the switch had one row of them,
+ * and it stopped working the moment a voice carried nine candidates: `no-16`,
+ * `chiff-none`, `foundations-only` and `wind-unsteady` each say which knob
+ * moved and none of them says what it is for, so a lineup of nine is nine
+ * guesses. The title is registered beside the setting and refused if it is not
+ * there — `calibrations.json`, enforced in `calibration.py`.
+ *
+ * The key stays under it rather than being replaced by it. It is the address a
+ * render is reached at, the file stem on disk and the string a listening note
+ * carries, so what is on the button and what is in the URL have to be the same
+ * string in sight of each other.
+ */
+function versionFace(slot) {
   const item = state.items[state.itemIndex];
   const key = state.take.keys[state.blind ? state.blindOrder[slot] : slot];
-  if (!state.blind) return key;
-  const letter = String.fromCharCode(65 + state.display.indexOf(slot));
-  const pick = state.picks[item.id];
-  return pick && pick.revealed ? `${letter} · ${key}` : letter;
+  if (state.blind) {
+    const letter = String.fromCharCode(65 + state.display.indexOf(slot));
+    const pick = state.picks[item.id];
+    return { name: pick && pick.revealed ? `${letter} · ${key}` : letter, key: '' };
+  }
+  const title = sourceTitle(key);
+  return title ? { name: title, key } : { name: key, key: '' };
 }
+
+/// The unmodified build is not a recorded setting and never will be, so its two
+/// keys carry their title on the page rather than in the registry.
+const BASELINE_TITLES = { model: 'ver.baseline', 'model-di': 'ver.baselineDirect' };
+
+const sourceTitle = (key) =>
+  (BASELINE_TITLES[key] ? t(BASELINE_TITLES[key]) : phrase(sourceOf(key).title));
 
 function buildVersionButtons() {
   const box = $('versions');
   box.replaceChildren();
   state.display = displayOrder();
 
-  // One block per role, in the role order and labelled in words, so the
-  // library's own renders and the thing they are measured against are not one
-  // undifferentiated strip of seven buttons. A manifest that declares no roles
-  // gets a single unlabelled block, unchanged.
-  let row = null;
-  let rowRole = null;
+  /* One block per QUESTION, not one strip per page.
+   *
+   * Three unrelated things used to share one list: which recording is the
+   * target, which signal path the library is heard down, and which calibration
+   * candidate. On the clean electric guitar that is eighteen buttons, and a
+   * pick out of eighteen answers none of the three — so the block is keyed by
+   * role and path together, and a manifest declaring neither still gets the
+   * single unlabelled block it always had. */
+  const blocks = [];
+  let seg = null;
+  let segBlock = null;
   state.display.forEach((slot, pos) => {
-    const role = state.blind ? '' : roleOf(state.take.keys[slot]);
-    if (row === null || role !== rowRole) {
-      rowRole = role;
+    const key = state.blind ? '' : state.take.keys[slot];
+    const role = key ? roleOf(key) : '';
+    const path = key ? pathOf(key) : '';
+    const block = key ? blockOf(key) : '';
+    if (seg === null || block !== segBlock) {
+      segBlock = block;
       const wrap = el('div', 'vrow');
       wrap.classList.add(roleClass(role));
-      if (!role) wrap.classList.add('unlabelled');
-      if (role) {
-        const lab = el('span', 'role');
-        lab.append(el('span', 'dot'), el('span', '', t(`role.${role}`)));
-        lab.title = t(`role.${role}.long`);
-        wrap.append(lab);
-      }
-      row = el('div', 'segmented');
-      row.setAttribute('role', 'group');
-      row.setAttribute('aria-label', role ? t(`role.${role}`) : t('role.other'));
-      wrap.append(row);
+      seg = el('div', 'segmented');
+      seg.setAttribute('role', 'group');
+      seg.setAttribute('aria-label', role ? t(`role.${role}`) : t('role.other'));
+      // The head goes in first and is filled once the block's size is known:
+      // what a block asks of a listener depends on how many versions are in it.
+      const head = el('div', 'vhead');
+      wrap.append(head, seg);
       box.append(wrap);
+      blocks.push({ role, path, head, seg });
     }
     const b = el('button');
     b.type = 'button';
     b.dataset.slot = String(slot);
     b.append(el('span', 'key', String(pos + 1)));
-    b.append(el('span', 'vname', versionLabel(slot)));
+    const face = versionFace(slot);
+    const text = el('span', 'vtext');
+    text.append(el('span', 'vname', face.name));
+    if (face.key) text.append(el('span', 'vkey', face.key));
+    b.append(text);
     b.title = versionTitle(slot);
     b.setAttribute('aria-pressed', String(slot === state.versionIndex));
     b.addEventListener('click', () => setVersion(slot));
-    row.append(b);
+    seg.append(b);
   });
+  for (const block of blocks) fillHead(block);
+  markVersion();
+}
+
+/* What a block of versions is, above the block itself.
+ *
+ * The instruction used to be one line at the FOOT of the whole switch, which put
+ * "choose the good one" directly under the reference row — under the two
+ * recordings that are the target and are not anybody's to choose between. A
+ * sentence about candidates cannot sit under the references; each block says
+ * what it is, above itself, or the page is telling the listener to pick the
+ * wrong thing.
+ *
+ * Only a block holding more than one version gets a sentence: one version poses
+ * no question, and the role name already says what it is.
+ */
+function fillHead({ role, path, head, seg }) {
   // A voice with a set of recorded candidates puts eleven buttons in one row,
   // and equal segments across eleven ellipsise every label into uselessness —
   // `foundati…` beside `mixtures…` names neither. Past the point where a name
   // survives, the block wraps instead of narrowing; the segments stay equal,
   // which is the part that matters.
-  for (const seg of box.querySelectorAll('.segmented')) {
-    seg.classList.toggle('many', seg.childElementCount > CROWDED);
+  seg.classList.toggle('many', seg.childElementCount > CROWDED);
+  if (role) {
+    const lab = el('span', 'role');
+    lab.append(el('span', 'dot'), el('span', '', t(`role.${role}`)));
+    if (path) lab.append(el('span', 'vpath', t(`path.${path}`)));
+    lab.title = t(path ? `path.${path}.long` : `role.${role}.long`);
+    head.append(lab);
   }
-  /* A row of eleven buttons is a question the page was not asking out loud.
-   * They are recorded candidate settings and the point of them is to be chosen
-   * between, which nobody infers from a switch — and what each one is is in the
-   * banner above, one at a time, which nobody connects either. So the line says
-   * both, and carries the button that answers it.
-   *
-   * Blind mode has its own answer and it was never written down: whichever
-   * version a take is left on IS the vote for that take. */
-  if (state.display.length > 1) {
-    const hint = el('div', 'vhint');
-    hint.append(el('span', '', t(state.blind ? 'ver.hintBlind' : 'ver.hint')));
-    if (!state.blind) {
-      const pick = el('button', 'ghost', t('fb.prefer'));
-      pick.type = 'button';
-      pick.title = t('fb.preferTitle');
-      pick.addEventListener('click', recordPreference);
-      hint.append(pick);
-    }
-    box.append(hint);
-  }
-  markVersion();
+  if (seg.childElementCount < 2) return;
+  // One line, and it is the first thing given up when the row narrows, so it
+  // also carries itself as a title rather than ending in an ellipsis nothing
+  // can open.
+  const hint = el('span', 'vhint', t(hintKey(role, path)));
+  hint.title = hint.textContent;
+  head.append(hint);
+  if (state.blind) return;
+  // Named for the block it stands in, and shown only in the block the sounding
+  // version belongs to: "keep this one" records whatever is sounding, so in any
+  // other block it would be a button pointing away from itself.
+  const pick = el('button', 'ghost', t('fb.prefer'));
+  pick.type = 'button';
+  pick.dataset.block = `${role}|${path}`;
+  pick.title = t('fb.preferTitle');
+  pick.addEventListener('click', recordPreference);
+  head.append(pick);
 }
+
+/* WHAT IS BEING ASKED FOR, and it is not the same question on every page.
+ *
+ * The page used to ask which version was liked, on pages that also declare a
+ * reference as the target. Those are different questions with different
+ * answers: a voice can move closer to the reference and be liked less, because
+ * accuracy is often duller. A tally collected on preference and adopted moves
+ * the voice away from the thing it is being fitted to.
+ *
+ * So where there is a target the criterion is distance from it, and where there
+ * is none — fifty-six of the pages hold the model alone — it is whether the
+ * thing could pass for the instrument at all. The second is not a weaker form
+ * of the first; it is the only question left when nothing is there to be near.
+ *
+ * The direct path is an axis, so its block says what it is for rather than
+ * asking anything: choosing between two paths is not a judgement about the
+ * voice.
+ */
+function hintKey(role, path) {
+  if (state.blind) return 'ver.hintBlind';
+  if (path) return 'ver.hintDirect';
+  if (role === 'reference') return 'ver.hintReference';
+  if (!role) return 'ver.hint';
+  return hasReference() ? 'ver.hintModel' : 'ver.hintModelAlone';
+}
+
+/// Whether this page has anything to be measured against at all.
+const hasReference = () =>
+  Boolean(state.take) && state.take.keys.some((k) => roleOf(k) === 'reference');
 
 /// Buttons past which a label stops fitting in a shared row.
 const CROWDED = 6;
@@ -493,7 +584,8 @@ function versionTitle(slot) {
   if (state.blind) return '';
   const key = state.take.keys[slot];
   const src = sourceOf(key);
-  return [key, src.label, src.detail].filter(Boolean).join('\n');
+  return [key, sourceTitle(key), phrase(src.desc), src.label, src.detail]
+    .filter(Boolean).join('\n');
 }
 
 /// The slots belonging to a role, in display order.
@@ -530,8 +622,15 @@ function markSwap() {
 }
 
 function markVersion() {
-  [...$('versions').querySelectorAll('button')].forEach((b) =>
+  const box = $('versions');
+  [...box.querySelectorAll('.segmented button')].forEach((b) =>
     b.setAttribute('aria-pressed', String(+b.dataset.slot === state.versionIndex)));
+  // "Keep this one" belongs to the block whose version is sounding, so it moves
+  // with the selection rather than standing under all of them at once.
+  const here = state.take && !state.blind ? blockOf(activeKey()) : null;
+  for (const b of box.querySelectorAll('.vhead button')) {
+    b.hidden = here === null || b.dataset.block !== here;
+  }
   renderNow();
   markSwap();
   renderIdent();
@@ -550,11 +649,6 @@ export function setVersion(slot) {
     state.wantKey = activeKey();
     const role = roleOf(activeKey());
     if (role) state.lastByRole[role] = slot;
-  } else {
-    const id = state.items[state.itemIndex].id;
-    state.picks[id] = { slot, key: state.take.keys[state.blindOrder[slot]], revealed: false };
-    localStorage.setItem(picksKey(), JSON.stringify(state.picks));
-    renderScore();
   }
   markVersion();
   // Two ways to switch, and they answer different questions. Crossfading in
@@ -605,8 +699,14 @@ function renderNow() {
   box.classList.add(roleClass(role));
   box.append(el('span', 'dot'));
   box.append(el('span', 'now-what', role ? t(`role.${role}`) : t('role.other')));
+  // The registered words first where there are any. What a candidate is for is
+  // a sentence written for whoever is listening; the label and the override
+  // string are the record, and they are what the button's tooltip carries.
+  const title = sourceTitle(key);
+  const desc = BASELINE_TITLES[key] ? t('ver.baselineDesc') : phrase(src.desc);
+  if (title) box.append(el('span', 'now-title', title));
   const detail = [src.label, src.detail].filter((s) => s && s !== key).join('  ·  ');
-  box.append(el('span', 'now-detail', detail || sourceLabel(key)));
+  box.append(el('span', 'now-detail', desc || detail || sourceLabel(key)));
 }
 
 function renderIdent() {
@@ -650,18 +750,61 @@ export function renderCaptions() {
   }
 }
 
-/// What was picked, per take, and how it adds up.
+/* CHOOSING IS NOT SWITCHING, and not choosing is a result.
+ *
+ * A blind run used to record a pick on every version change, so A/B-ing between
+ * two versions WAS voting and the vote left standing was whichever one the
+ * listener happened to stop on. A take nobody could separate still produced a
+ * pick, and `heard.py` files a blind tally as what the ear actually separated —
+ * so indifference was being counted as discrimination.
+ *
+ * The narrowing flow has had the answer all along and this one did not inherit
+ * it: "not sure" is an answer. Two explicit acts now, and neither of them is
+ * moving between versions.
+ */
+export function chooseBlind() {
+  if (!state.blind || !state.take) return;
+  const id = state.items[state.itemIndex].id;
+  state.picks[id] = {
+    slot: state.versionIndex,
+    key: state.take.keys[state.blindOrder[state.versionIndex]],
+    revealed: false,
+  };
+  writePicks();
+}
+
+export function abstainBlind() {
+  if (!state.blind || !state.take) return;
+  const id = state.items[state.itemIndex].id;
+  // Recorded rather than left absent, because "could not tell them apart" and
+  // "has not been listened to" are different results and the tally is read as
+  // though every take in it was decided.
+  state.picks[id] = { unseparated: true, revealed: false };
+  writePicks();
+}
+
+function writePicks() {
+  localStorage.setItem(picksKey(), JSON.stringify(state.picks));
+  renderScore();
+  rebuildVersions();
+}
+
+/// What was chosen, per take, what could not be separated, and how it adds up.
 function blindTally() {
   const picks = {};
+  const unsure = [];
   for (const [id, p] of Object.entries(state.picks)) {
-    if (p && p.key) picks[id] = p.key;
+    if (!p) continue;
+    if (p.unseparated) unsure.push(id);
+    else if (p.key) picks[id] = p.key;
   }
   const tally = {};
   for (const key of Object.values(picks)) tally[key] = (tally[key] || 0) + 1;
   const parts = Object.entries(tally)
     .sort((a, b) => b[1] - a[1])
     .map(([k, v]) => `${sourceLabel(k)} ${v}`);
-  return { picks, n: Object.keys(picks).length, parts };
+  if (unsure.length) parts.push(`${t('blind.unsure')} ${unsure.length}`);
+  return { picks, unsure, n: Object.keys(picks).length + unsure.length, parts };
 }
 
 /* The tally names its sources, so it is the answer blind mode is withholding:
@@ -676,7 +819,21 @@ export const resetBlindReveal = () => { blindRevealed = false; };
 
 export function renderScore() {
   const btn = $('blindRecord');
-  if (!state.blind) { $('blindScore').textContent = ''; btn.hidden = true; return; }
+  const choose = $('blindPick');
+  const unsure = $('blindUnsure');
+  if (!state.blind) {
+    $('blindScore').textContent = '';
+    for (const b of [btn, choose, unsure]) b.hidden = true;
+    return;
+  }
+  choose.hidden = false;
+  unsure.hidden = false;
+  // The mark is on the act, not on the switch: it says whether THIS take has
+  // been decided, which is the thing the old flow could not distinguish from
+  // having been listened to.
+  const here = state.picks[state.items[state.itemIndex].id];
+  choose.setAttribute('aria-pressed', String(Boolean(here && here.key)));
+  unsure.setAttribute('aria-pressed', String(Boolean(here && here.unseparated)));
   const { n, parts } = blindTally();
   btn.hidden = n === 0;
   if (!n) { $('blindScore').textContent = t('blind.pickEach'); return; }
@@ -688,9 +845,9 @@ export function renderScore() {
 /// A blind run is a result, so it goes into the same log as everything else
 /// rather than into a download nobody remembers to make.
 export async function recordBlindResult() {
-  const { picks, n, parts } = blindTally();
+  const { picks, unsure, n, parts } = blindTally();
   if (!n) return;
-  await recordBlind(t('blind.result', { n, tally: parts.join(', ') }), picks);
+  await recordBlind(t('blind.result', { n, tally: parts.join(', ') }), picks, unsure);
   blindRevealed = true;
   renderScore();
 }
@@ -875,6 +1032,9 @@ export function refreshListen() {
   applyStatic();
   renderPickLabel();
   if (paletteOpen()) buildSetPicker();
+  // The take list holds translated prose now, so it is rebuilt with everything
+  // else rather than keeping the language it was first drawn in.
+  if (state.items.length) { buildTakeList(); markTakeList(); }
   if (state.take) buildVersionButtons();
   renderHeadStage();
   renderSubject();

@@ -192,14 +192,18 @@ async function send() {
  * ear preferred, on this voice, on this day. The picks ride with it per take,
  * since a tally of four to two does not say which four.
  */
-export async function recordBlind(summary, picks) {
+/* `unseparated` rides beside the picks rather than being folded into them: a
+ * take the ear could not split is a result about the voice — the two versions
+ * are that close — and counting it as a pick for whichever one was sounding is
+ * how a tally comes to claim a discrimination nobody made. */
+export async function recordBlind(summary, picks, unseparated) {
   await post({
     lang: currentLang(),
     grade: '',
     tag: 'blind',
     answers: [],
     text: summary,
-    conditions: { ...conditions(), picks },
+    conditions: { ...conditions(), picks, unseparated: unseparated || [] },
   }, 'fb.sent');
 }
 
