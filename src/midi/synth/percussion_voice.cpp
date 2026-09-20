@@ -45,6 +45,15 @@ SONARE_TUNABLE(kPhisemVelocityFloor, 0.9f);
 /// average of cos(theta) and belongs to this pair and no other.
 constexpr float kDipolePerKl = 0.57735026919f;
 
+/// Below this the piece has stopped radiating. A hundred decibels under a
+/// full-scale strike, so a slot is freed well after the last audible sample
+/// and never while one is still coming.
+constexpr float kSilenceFloor = 1.0e-5f;
+/// Time constant of the peak follower that reads the level above. Short enough
+/// that a dead slot is reclaimed promptly, long enough that the gap between two
+/// collisions of a shaker does not read as the end of the shake.
+constexpr float kSilenceFollowerMs = 40.0f;
+
 float radius_for(double sample_rate, float t60_s) noexcept {
   return std::exp(-6.907755279f / (static_cast<float>(sample_rate) * std::max(0.005f, t60_s)));
 }
@@ -64,6 +73,12 @@ float contact_spectrum(float x) noexcept {
 /// Piston-equivalent area fraction 2 J_1(alpha) / alpha of an axisymmetric mode
 /// — the share of its displacement that moves air, and so what the cavity's
 /// spring acts on. 0.432 for the (0,1), -0.123 for the (0,2).
+/// (2m+1)!!, which is what divides a compact 2m-pole's radiated amplitude down
+/// from the monopole's. Without it the multipole law crosses over at ka = 1 for
+/// every order, so above that a mode with four nodal diameters radiates as well
+/// as the one that moves the whole head — the crossover is at ka ~ m, not 1.
+constexpr float kMultipoleNorm[] = {1.0f, 3.0f, 15.0f, 105.0f, 945.0f, 10395.0f};
+
 float piston_area(float alpha) noexcept {
   if (alpha <= 1.0e-6f) return 1.0f;
   return 2.0f * bessel_j(1, alpha) / alpha;
@@ -76,6 +91,11 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   noise_ = VoiceRandomSequence(seed);
   noise_index_ = 0;
+  // Starts at full scale so the follower has to fall the whole way before a
+  // slot can be reclaimed; a piece that opens quietly cannot read as finished
+  // on its first sample.
+  silence_env_ = 1.0f;
+  silence_coeff_ = std::exp(-1.0f / (kSilenceFollowerMs * 0.001f * static_cast<float>(sr)));
 
   const float base_hz = params.base_freq_hz > 0.0f ? params.base_freq_hz : note_to_hz(note);
   const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
@@ -95,6 +115,11 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
                                                              -std::max(0.0f, params.mallet_vel_exp))
                                               : 0.0f;
   const float air_spring = std::max(0.0f, params.air_spring);
+  // How fast damping rises with frequency. One is the law this engine has
+  // always used and stays the sentinel's meaning; a membrane in air measures
+  // near a half, its octave bands losing about 1.45x the rate of the one below
+  // rather than twice it.
+  const float decay_exp = params.mode_decay_exp > 0.0f ? params.mode_decay_exp : 1.0f;
   int placed = 0;
 
   // The slot a mode lands in is not the slot the patch wrote it in — a ratio of
@@ -108,8 +133,9 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
     Mode& mode = modes_[static_cast<size_t>(placed)];
     mode = Mode{};
     mode.omega = kTwoPi * freq / static_cast<float>(sr);
-    // Upper membrane modes die faster than the fundamental (1/ratio scaling).
-    mode.r = radius_for(sr, std::max(0.005f, params.mode_decay_s) / std::max(1.0f, ratio));
+    // Upper membrane modes die faster than the fundamental.
+    const float damping = std::pow(std::max(1.0f, ratio), decay_exp);
+    mode.r = radius_for(sr, std::max(0.005f, params.mode_decay_s) / damping);
     // Strike-point weighting: each membrane mode is excited by the value of
     // its shape J_m(alpha_mn * r) * cos(m * theta) at the strike. A centre
     // hit (strike_r == 0) is the legacy uniform excitation.
@@ -127,8 +153,10 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
     float radiation = 1.0f;
     const float wavenumber = kTwoPi * freq / kSoundSpeedMps;
     if (m >= 1 && params.head_diameter_m > 0.0f) {
+      const int order = std::min(m, static_cast<int>(std::size(kMultipoleNorm)) - 1);
       radiation = std::min(
-          1.0f, std::pow(wavenumber * 0.5f * params.head_diameter_m, static_cast<float>(m)));
+          1.0f, std::pow(wavenumber * 0.5f * params.head_diameter_m, static_cast<float>(m)) /
+                    kMultipoleNorm[order]);
     } else if (m == 0 && dipole && params.shell_depth_m > 0.0f) {
       radiation = std::min(1.0f, wavenumber * params.shell_depth_m * kDipolePerKl);
     }
@@ -476,7 +504,16 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
 
   if (shell_.active()) mix = shell_.process(mix);
 
+  // Decaying peak of what the piece actually radiated, which is the only
+  // reading that covers every layer at once: a mode still ringing, a burst
+  // train yet to fire and a gourd resonance all reach it the same way.
+  silence_env_ = std::max(std::abs(mix), silence_env_ * silence_coeff_);
+
   return mix;
+}
+
+bool PercussionVoiceCore::silent() const noexcept {
+  return burst_remaining_ == 0 && silence_env_ < kSilenceFloor;
 }
 
 void PercussionVoiceCore::kill() noexcept {
@@ -486,6 +523,7 @@ void PercussionVoiceCore::kill() noexcept {
     mode.gain = 0.0f;
   }
   num_modes_ = 0;
+  silence_env_ = 0.0f;
   noise_level_ = 0.0f;
   noise_peak_ = 0.0f;
   burst_level_ = 0.0f;

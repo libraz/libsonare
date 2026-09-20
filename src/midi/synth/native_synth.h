@@ -1006,6 +1006,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   }
   p.percussion.mode_decay_s =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.mode_decay_s, 0.3f), 0.005f, 30.0f);
+  p.percussion.mode_decay_exp =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.mode_decay_exp, 0.0f), 0.0f, 2.0f);
   p.percussion.tone_gain =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.tone_gain, 1.0f), 0.0f, 4.0f);
   // A share, so the interval is the whole of it: 0 and 1 are both real

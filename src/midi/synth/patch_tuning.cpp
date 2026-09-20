@@ -481,6 +481,7 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
     alpha = f(("percussion.mode_alpha" + index).c_str(), alpha);
   }
   F(percussion.mode_decay_s);
+  F(percussion.mode_decay_exp);
   F(percussion.tone_gain);
   F(percussion.tone_direct);
   F(percussion.base_freq_hz);

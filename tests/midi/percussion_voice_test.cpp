@@ -1081,3 +1081,93 @@ TEST_CASE("radiation weights a mode by its multipole order", "[midi][synth][perc
   REQUIRE(goertzel(s, 150.0 * 1.59) < 0.8 * goertzel(b, 150.0 * 1.59));
   REQUIRE(goertzel(s, 150.0) == Catch::Approx(goertzel(b, 150.0)).epsilon(0.02));
 }
+
+TEST_CASE("a higher multipole order is held down further at the same size",
+          "[midi][synth][percussion]") {
+  // The crossover between a 2m-pole and a monopole is at ka ~ m rather than at
+  // ka = 1, so the orders separate where a bare (ka)^m with a cap does not:
+  // above ka = 1 that form returns unity for every order at once, and the
+  // (2,1) then radiates as well as the mode that moves the whole head. At
+  // 20 inches and 150 Hz the (1,1) sits at ka = 1.09 and the (2,1) at 1.47.
+  NativeSynthPatch p = tom_patch();
+  p.percussion.num_modes = 3;
+  p.percussion.strike_r = 0.5f;
+  p.percussion.head_diameter_m = 0.50f;
+  NativeSynthPatch bare = p;
+  bare.percussion.head_diameter_m = 0.0f;
+
+  const std::vector<float> s = render_patch(p, 50, 100, 8192);
+  const std::vector<float> b = render_patch(bare, 50, 100, 8192);
+  const double m1 = goertzel(s, 150.0 * 1.59) / goertzel(b, 150.0 * 1.59);
+  const double m2 = goertzel(s, 150.0 * 2.14) / goertzel(b, 150.0 * 2.14);
+  REQUIRE(m1 < 1.0);
+  // Both are above ka = 1, where the capped form would have left both at 1.0.
+  REQUIRE(m2 < m1);
+}
+
+TEST_CASE("the mode decay exponent is one wherever it is left unset", "[midi][synth][percussion]") {
+  // The field's sentinel is zero and its meaning is the law every piece was
+  // voiced under before it existed, so a kit that does not set it must render
+  // the same samples it always did.
+  NativeSynthPatch unset = tom_patch();
+  NativeSynthPatch stated = unset;
+  stated.percussion.mode_decay_exp = 1.0f;
+
+  const std::vector<float> a = render_patch(unset, 50, 100, 4096);
+  const std::vector<float> b = render_patch(stated, 50, 100, 4096);
+  REQUIRE(a == b);
+}
+
+TEST_CASE("a shallower decay exponent lets the upper modes outlive the law",
+          "[midi][synth][percussion]") {
+  // Damping proportional to frequency kills the (1,1) at 1.59x in 1/1.59 of
+  // the fundamental's time. A membrane in air measures nearer a square root,
+  // which is the whole of this field: the fundamental is untouched either way,
+  // because it sits at ratio 1 and any exponent of 1 is 1.
+  NativeSynthPatch linear = tom_patch();
+  linear.percussion.num_modes = 2;
+  linear.percussion.strike_r = 0.5f;
+  linear.percussion.mode_decay_exp = 1.0f;
+  NativeSynthPatch root = linear;
+  root.percussion.mode_decay_exp = 0.5f;
+
+  const std::vector<float> l = render_patch(linear, 50, 100, 16384);
+  const std::vector<float> r = render_patch(root, 50, 100, 16384);
+  const std::vector<float> l_tail(l.end() - 4096, l.end());
+  const std::vector<float> r_tail(r.end() - 4096, r.end());
+  REQUIRE(goertzel(r_tail, 150.0 * 1.59) > 1.3 * goertzel(l_tail, 150.0 * 1.59));
+  REQUIRE(goertzel(r_tail, 150.0) == Catch::Approx(goertzel(l_tail, 150.0)).epsilon(0.02));
+}
+
+TEST_CASE("a held one-shot frees its slot once the piece has stopped radiating",
+          "[midi][synth][percussion]") {
+  // A one-shot takes no note-off, so a held sustain - which is what lets the
+  // resonators rather than the envelope set the ring - leaves nothing able to
+  // end the voice. The level reading does, and only for a patch shaped that
+  // way: where the envelope decays to zero it already ends the voice and
+  // nothing here may re-time it.
+  NativeSynthPatch held = tom_patch();
+  held.amp_env.decay_ms = 0.0f;
+  held.amp_env.sustain = 1.0f;
+  held.percussion.mode_decay_s = 0.05f;
+
+  NativeSynthConfig cfg;
+  cfg.patch = held;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 50, 100)));
+  std::vector<float> left(256, 0.0f);
+  std::vector<float> right(256, 0.0f);
+  float* chans[2] = {left.data(), right.data()};
+  // Two seconds is forty t60s of the ring above, so a voice still held here is
+  // held on silence rather than on sound.
+  for (int block = 0; block < 375; ++block) synth.process(chans, 2, 256);
+  REQUIRE(synth.active_voice_count() == 0);
+
+  // The control: the same piece, still ringing, is not reclaimed.
+  NativeSynth ringing(cfg);
+  ringing.prepare(kRate, 256);
+  ringing.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 50, 100)));
+  ringing.process(chans, 2, 256);
+  REQUIRE(ringing.active_voice_count() == 1);
+}

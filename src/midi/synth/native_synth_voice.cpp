@@ -505,6 +505,17 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   } else if (patch->mode == SynthEngineMode::kPercussion) {
     sample = percussion.render(common);
     contact = percussion.next_contact();
+    // A one-shot piece takes no note-off, so an amplitude envelope that holds
+    // has nothing to end it and the slot would stay open on silence forever.
+    // Gated on the held sustain rather than applied to every piece: where the
+    // envelope decays to zero it already ends the voice, and moving that to a
+    // level reading would re-time a voice steal on pieces nothing asked to
+    // change.
+    if (patch->one_shot && patch->amp_env.sustain > 0.0f && percussion.silent()) {
+      active = false;
+      amp_env.kill();
+      return 0.0f;
+    }
   } else if (patch->mode == SynthEngineMode::kPiano) {
     sample = piano.render(common);
   } else if (patch->mode == SynthEngineMode::kPipeOrgan) {

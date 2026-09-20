@@ -122,6 +122,7 @@ constexpr PercussionPatchParams blank_percussion() noexcept {
   z.num_modes = 0;
   for (float& v : z.mode_ratios) v = 0.0f;
   z.mode_decay_s = 0.0f;
+  z.mode_decay_exp = 0.0f;
   z.tone_gain = 0.0f;
   z.tone_direct = 0.0f;
   z.base_freq_hz = 0.0f;

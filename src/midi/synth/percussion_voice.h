@@ -62,6 +62,11 @@ struct PercussionPatchParams {
                                                         0.0f, 0.0f,  0.0f,  0.0f, 0.0f,  0.0f};
   /// Fundamental t60 (seconds) of the tone layer.
   float mode_decay_s = 0.3f;
+  /// How fast damping rises with frequency: a mode at `ratio` holds
+  /// `mode_decay_s / ratio^mode_decay_exp`. Zero means one, which is the law
+  /// every piece was voiced under before the field existed. A membrane in air
+  /// measures near a half.
+  float mode_decay_exp = 0.0f;
   /// Tone layer mix gain.
   float tone_gain = 1.0f;
   /// Share of the tone layer that radiates straight to the listener. The rest
@@ -392,6 +397,13 @@ class PercussionVoiceCore {
     const float p = static_cast<float>(contact_i_++) / static_cast<float>(contact_len_ - 1);
     return contact_ * std::sin(sonare::constants::kTwoPi * p);
   }
+  /// Whether the piece has stopped radiating and its slot can be reclaimed.
+  ///
+  /// A one-shot piece never takes a note-off, so a patch whose amplitude
+  /// envelope holds (sustain above zero, which is what lets the resonators
+  /// rather than the envelope set the ring) has nothing else that can end the
+  /// voice. Read per sample alongside render().
+  bool silent() const noexcept;
   /// Immediate silence.
   void kill() noexcept;
 
@@ -419,6 +431,10 @@ class PercussionVoiceCore {
   float drop_coeff_ = 0.0f;
   float cached_ratio_ = 0.0f;
   bool excite_ = false;
+
+  // Decaying peak of the radiated output, which is what `silent()` reads.
+  float silence_env_ = 0.0f;
+  float silence_coeff_ = 0.0f;
 
   VoiceRandomSequence noise_;
   uint64_t noise_index_ = 0;

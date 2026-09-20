@@ -134,7 +134,11 @@ constexpr DrumPatches build_drum_patches() noexcept {
 
   // Toms: note-tracked membrane (full Rayleigh set) with a pitch drop.
   d.tom = piece;
-  d.tom.amp_env = fallback_env(0.5f, 400.0f, 0.0f, 120.0f);
+  // Held rather than decaying, so what a tom's ring is comes from the head's
+  // own damping. A 400 ms envelope decay was cutting the modes off at a
+  // quarter of the length the module holds them for, and no per-key
+  // `mode_decay_s` could be read back through it.
+  d.tom.amp_env = fallback_env(0.5f, 0.0f, 1.0f, 120.0f);
   d.tom.percussion.num_modes = 5;
   d.tom.percussion.mode_decay_s = 0.3f;
   d.tom.percussion.pitch_drop = 0.6f;
@@ -458,18 +462,24 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
     float air_spring;
     float mode_decay_s;
     float mallet_ms;
+    float pitch_drop;
+    float pitch_drop_ms;
+    float gain;
   };
-  // `mode_decay_s` is the fundamental's t60, taken as 60 dB over the rate the
-  // module loses in the three bands its head sounds in. The upper modes then
-  // die as 1 / ratio, which is the shape the module has as well: its tom bands
-  // run -73, -61, -62, -92, -130, -175, -258, -380 dB/s from low to high.
+  // Four of the seven columns are read off the module's own recordings rather
+  // than derived: `mode_decay_s` is 60 dB over the slowest rate it loses in the
+  // three bands the head sounds in, `air_spring` is its measured axisymmetric
+  // split squared less one, and the pitch drop is the descending strike it
+  // measures at onset. The upper modes die as 1 / ratio, which is the shape the
+  // module has too: a tom's bands run -50 to -100 dB/s at the head and -260 to
+  // -400 at the top of the range.
   constexpr TomSpec kToms[] = {
-      {41, 79.7f, 0.457f, 0.406f, 1.99f, 1.10f, 2.8f},
-      {43, 94.5f, 0.406f, 0.406f, 1.41f, 0.89f, 2.7f},
-      {45, 102.9f, 0.356f, 0.356f, 1.36f, 1.04f, 2.6f},
-      {47, 120.4f, 0.330f, 0.279f, 1.27f, 0.95f, 2.5f},
-      {48, 137.7f, 0.305f, 0.254f, 1.06f, 0.67f, 2.3f},
-      {50, 162.3f, 0.254f, 0.203f, 0.96f, 0.59f, 2.2f},
+      {41, 79.7f, 0.457f, 0.406f, 0.77f, 1.28f, 2.26f, 0.607f, 60.0f, 3.58f},
+      {43, 94.5f, 0.406f, 0.406f, 1.02f, 1.03f, 2.18f, 0.586f, 50.0f, 3.67f},
+      {45, 102.9f, 0.356f, 0.356f, 0.32f, 1.09f, 2.09f, 0.414f, 35.0f, 2.63f},
+      {47, 120.4f, 0.330f, 0.279f, 0.37f, 1.09f, 2.02f, 0.414f, 30.0f, 2.32f},
+      {48, 137.7f, 0.305f, 0.254f, 0.37f, 0.69f, 1.85f, 0.379f, 25.0f, 1.96f},
+      {50, 162.3f, 0.254f, 0.203f, 0.39f, 0.59f, 1.77f, 0.379f, 25.0f, 1.60f},
   };
   // The first eight circular-membrane modes as alpha_mn / alpha_01, which is
   // what a ratio is for. Two of the eight are axisymmetric, so the air spring
@@ -488,20 +498,37 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
     p.percussion.shell_depth_m = tom.depth_m;
     p.percussion.air_spring = tom.air_spring;
     p.percussion.mode_decay_s = tom.mode_decay_s;
+    // Damping rises with frequency, and by well under the proportional law the
+    // engine assumed: the module's tom bands lose about 1.45x the rate of the
+    // band below rather than 2x, and a fit over the whole spectrum settles
+    // shallower still once the dense region is carried by the noise layer.
+    p.percussion.mode_decay_exp = 0.21f;
     p.percussion.mallet_ms = tom.mallet_ms;
-    p.percussion.mallet_vel_exp = 0.2f;
+    p.percussion.mallet_vel_exp = 0.33f;
+    // How far the kit's own members sit apart in level is the module's to say,
+    // and it puts 7.8 dB between the floor tom and the high one where the
+    // voice's own radiation produces 3.
+    p.gain = tom.gain;
     p.percussion.num_modes = 8;
     p.percussion.mode_ratios = kMembraneRatios;
     // Where a stick lands: far enough out to excite the m >= 1 modes the drum's
     // pitch is heard in, short of the rim that kills the fundamental.
-    p.percussion.strike_r = 0.55f;
-    // The head tightens under the stick by a few percent, not by the 60% the
-    // key-tracked archetype carried as a pitch effect.
-    p.percussion.pitch_drop = 0.08f;
-    p.percussion.pitch_drop_ms = 40.0f;
+    p.percussion.strike_r = 0.45f;
+    // The head tightens under the stick, and by a lot: the module measures the
+    // drop at 38% on the high tom and 61% on the floor tom, over 25 to 60 ms.
+    // Bigger drums both drop further and take longer to come back.
+    p.percussion.pitch_drop = tom.pitch_drop;
+    p.percussion.pitch_drop_ms = tom.pitch_drop_ms;
     // The stick's own radiation, which every resonator here is too slow to
     // supply in the first milliseconds.
-    p.percussion.contact = 0.4f;
+    p.percussion.contact = 0.51f;
+    p.percussion.contact_ms = 0.88f;
+    // A membrane's modes run far past the twelve the engine can place, and what
+    // is above them is dense enough to be a band rather than a set of lines.
+    p.percussion.noise_gain = 0.61f;
+    p.percussion.noise_cutoff_hz = 1180.0f;
+    p.percussion.noise_q = 0.70f;
+    p.percussion.shell_mix = 0.26f;
     return p;
   };
   t[41] = tom_patch(kToms[0]);
