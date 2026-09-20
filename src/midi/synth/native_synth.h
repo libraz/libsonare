@@ -260,6 +260,11 @@ struct NativeSynthVoice : VoiceState {
   /// always the SVF highpass tap, so the other three models would be dead
   /// state on every voice.
   TptSvf hp_stage;
+  /// Whether this voice runs that stage, decided with its coefficient at
+  /// note-on. The patch is mutable under a sounding voice — an automation lane
+  /// writes it — and reading the cutoff live would open the stage on a voice
+  /// that never prepared or set it.
+  bool hp_active = false;
   // Converter stage. `hold_step` is how much of a held period one sample
   // advances, so the rate is compared against the mix rate once at note-on
   // rather than per sample.
@@ -472,8 +477,12 @@ struct NativeSynthConfig {
 ///    kPitchOffsetCents
 ///  - applied from the NEXT NOTE-ON: kDrive, kKeyTrack, kVelToCutoffCents, the
 ///    envelope segments, kLfoRateHz, kLfo2RateHz, kGlideMs, kBodyMix,
-///    kStereoSpread, kDetuneCents, kDriftCents (each is precomputed into
-///    per-voice state when the voice starts)
+///    kStereoSpread, kDetuneCents, kDriftCents, kHpCutoffHz, kSampleHoldHz,
+///    kBitDepth (each is precomputed into per-voice state when the voice starts)
+///
+/// The set is the patch's own continuous fields, less the structural ones a
+/// voice pool or a DSP topology depends on; anything continuous the patch grows
+/// belongs here in the same change, or the two disagree in silence.
 enum class NativeSynthParamId : unsigned int {
   kGain = 0,
   kBusDrive = 1,
@@ -500,6 +509,9 @@ enum class NativeSynthParamId : unsigned int {
   kDetuneCents = 22,
   kDriftCents = 23,
   kPitchOffsetCents = 24,
+  kHpCutoffHz = 25,
+  kSampleHoldHz = 26,
+  kBitDepth = 27,
 };
 
 /// JSON-key name for @p id (the same string a SynthPatch object would use), or

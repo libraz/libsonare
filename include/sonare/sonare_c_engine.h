@@ -756,7 +756,8 @@ SonareError sonare_engine_set_synth_instrument_with_bank(SonareRealtimeEngine* e
 ///   `ampDecayMs`, `ampSustain`, `ampReleaseMs`, `filterAttackMs`,
 ///   `filterDecayMs`, `filterSustain`, `filterReleaseMs`, `lfoRateHz`,
 ///   `lfoToPitchCents`, `lfo2RateHz`, `glideMs`, `bodyMix`, `stereoSpread`,
-///   `detuneCents`, `driftCents`, `pitchOffsetCents`.
+///   `detuneCents`, `driftCents`, `pitchOffsetCents`, `hpCutoffHz`,
+///   `sampleHoldHz`, `bitDepth`.
 ///
 ///   Structural patch fields (preset, engine mode, waveform, filter model,
 ///   unison, polyphony, body type, mod routings) are NOT automatable and fail
@@ -768,7 +769,9 @@ SonareError sonare_engine_set_synth_instrument_with_bank(SonareRealtimeEngine* e
 ///   `cutoffHz`, `resonanceQ`, `envToCutoffCents`, `lfoToPitchCents` and
 ///   `pitchOffsetCents` reach voices that are ALREADY SOUNDING from the next
 ///   block. The rest are cached into per-voice state at note-on, so they take
-///   effect from the NEXT NOTE.
+///   effect from the NEXT NOTE — a lane that moves one of them while a note is
+///   held looks inert until the next one speaks, which is the behaviour and not
+///   a dropped write.
 ///
 ///   Returns SONARE_ERROR_INVALID_PARAMETER when no instrument is bound to
 ///   @p destination_id, when the bound instrument exposes no automatable

@@ -298,7 +298,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   filter_env.note_on();
   filter.prepare(sample_rate);
   filter.set_model(p.filter_model);
-  if (p.hp_cutoff_hz > 0.0f) {
+  hp_active = p.hp_cutoff_hz > 0.0f;
+  if (hp_active) {
     hp_stage.prepare(sample_rate);
     hp_stage.set(p.hp_cutoff_hz, constants::kButterworthQ);
   }
@@ -574,7 +575,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   }
 
   // --- series highpass: the other end of a band the main filter cannot make ---
-  if (patch->hp_cutoff_hz > 0.0f) sample = hp_stage.process(sample).hp;
+  if (hp_active) sample = hp_stage.process(sample).hp;
 
   // --- converter: sample and hold, then quantize, in that order ---
   // Ahead of the amplitude envelope, which is where the converter sits in the

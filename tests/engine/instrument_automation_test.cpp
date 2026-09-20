@@ -304,6 +304,24 @@ TEST_CASE("NativeSynth exposes its continuous patch fields and rejects structura
   REQUIRE(synth.patch().cutoff_hz == 10.0f);
   // An id past the table is rejected.
   REQUIRE_FALSE(synth.apply_parameter(9999u, 1.0f));
+
+  // The converter halves carry a floor as well as a range, and a lane has to
+  // land on the same value a patch edit would: zero switches the stage off,
+  // anything under the floor is raised to it rather than nearly switching it
+  // off. Without this the same number means two different sounds.
+  REQUIRE(
+      synth.apply_parameter(static_cast<unsigned int>(NativeSynthParamId::kSampleHoldHz), 40.0f));
+  REQUIRE(synth.patch().sample_hold_hz == 100.0f);
+  REQUIRE(
+      synth.apply_parameter(static_cast<unsigned int>(NativeSynthParamId::kSampleHoldHz), 0.0f));
+  REQUIRE(synth.patch().sample_hold_hz == 0.0f);
+  REQUIRE(synth.apply_parameter(static_cast<unsigned int>(NativeSynthParamId::kBitDepth), 0.25f));
+  REQUIRE(synth.patch().bit_depth == 1.0f);
+  REQUIRE(synth.apply_parameter(static_cast<unsigned int>(NativeSynthParamId::kBitDepth), 99.0f));
+  REQUIRE(synth.patch().bit_depth == 24.0f);
+  REQUIRE(
+      synth.apply_parameter(static_cast<unsigned int>(NativeSynthParamId::kHpCutoffHz), 1.0e9f));
+  REQUIRE(synth.patch().hp_cutoff_hz == 22000.0f);
 }
 
 TEST_CASE("An instrument swap retires the previous instrument's automation slots",

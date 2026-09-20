@@ -460,7 +460,8 @@ export class RealtimeEngine {
    * `ampAttackMs`, `ampDecayMs`, `ampSustain`, `ampReleaseMs`,
    * `filterAttackMs`, `filterDecayMs`, `filterSustain`, `filterReleaseMs`,
    * `lfoRateHz`, `lfoToPitchCents`, `lfo2RateHz`, `glideMs`, `bodyMix`,
-   * `stereoSpread`, `detuneCents`, `driftCents`, `pitchOffsetCents`.
+   * `stereoSpread`, `detuneCents`, `driftCents`, `pitchOffsetCents`,
+   * `hpCutoffHz`, `sampleHoldHz`, `bitDepth`.
    *
    * Structural fields (`preset`, `engineMode`, `waveform`, `filterModel`,
    * `unison`, `polyphony`, `body`, `modRoutings`) are not automatable and
@@ -469,7 +470,8 @@ export class RealtimeEngine {
    * `gain`, `busDrive`, `cutoffHz`, `resonanceQ`, `envToCutoffCents`,
    * `lfoToPitchCents` and `pitchOffsetCents` reach already-sounding voices from
    * the next block; the rest are cached at note-on and take effect from the
-   * next note.
+   * next note, so a lane that moves one of them under a held note looks inert
+   * until the next one speaks — that is the behaviour, not a dropped write.
    */
   resolveInstrumentAutomationId(destinationId: number, paramName: string): number {
     return this.native.resolveInstrumentAutomationId(destinationId, paramName);

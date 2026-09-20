@@ -26,7 +26,7 @@ struct ParamEntry {
 /// absent. Changing them mid-flight would resize the voice pool, reallocate a
 /// waveguide slab or swap a filter topology, none of which is audio-thread
 /// safe; they stay patch edits applied through the instrument sync path.
-constexpr std::array<ParamEntry, 25> kParams{{
+constexpr std::array<ParamEntry, 28> kParams{{
     {"gain", NativeSynthParamId::kGain},
     {"busDrive", NativeSynthParamId::kBusDrive},
     {"cutoffHz", NativeSynthParamId::kCutoffHz},
@@ -52,6 +52,9 @@ constexpr std::array<ParamEntry, 25> kParams{{
     {"detuneCents", NativeSynthParamId::kDetuneCents},
     {"driftCents", NativeSynthParamId::kDriftCents},
     {"pitchOffsetCents", NativeSynthParamId::kPitchOffsetCents},
+    {"hpCutoffHz", NativeSynthParamId::kHpCutoffHz},
+    {"sampleHoldHz", NativeSynthParamId::kSampleHoldHz},
+    {"bitDepth", NativeSynthParamId::kBitDepth},
 }};
 
 float clamp_finite(float value, float lo, float hi, float fallback) noexcept {
@@ -162,6 +165,20 @@ bool NativeSynth::apply_parameter(unsigned int param_id, float value) noexcept {
       return true;
     case NativeSynthParamId::kPitchOffsetCents:
       p.pitch_offset_cents = clamp_finite(value, -4800.0f, 4800.0f, p.pitch_offset_cents);
+      return true;
+    case NativeSynthParamId::kHpCutoffHz:
+      p.hp_cutoff_hz = clamp_finite(value, 0.0f, 22000.0f, p.hp_cutoff_hz);
+      return true;
+    // The two converter halves take the same floor the patch clamp gives
+    // them, so a lane and a patch edit reaching the same value land on the
+    // same sound: zero is off and anything under the floor is raised to it.
+    case NativeSynthParamId::kSampleHoldHz:
+      p.sample_hold_hz = clamp_finite(value, 0.0f, 192000.0f, p.sample_hold_hz);
+      if (p.sample_hold_hz > 0.0f) p.sample_hold_hz = std::max(p.sample_hold_hz, 100.0f);
+      return true;
+    case NativeSynthParamId::kBitDepth:
+      p.bit_depth = clamp_finite(value, 0.0f, 24.0f, p.bit_depth);
+      if (p.bit_depth > 0.0f) p.bit_depth = std::max(p.bit_depth, 1.0f);
       return true;
   }
   return false;

@@ -219,7 +219,8 @@ class _EngineMidiMixin:
         ``filterAttackMs``, ``filterDecayMs``, ``filterSustain``,
         ``filterReleaseMs``, ``lfoRateHz``, ``lfoToPitchCents``, ``lfo2RateHz``,
         ``glideMs``, ``bodyMix``, ``stereoSpread``, ``detuneCents``,
-        ``driftCents``, ``pitchOffsetCents``.
+        ``driftCents``, ``pitchOffsetCents``, ``hpCutoffHz``, ``sampleHoldHz``,
+        ``bitDepth``.
 
         Structural fields (preset, engine mode, waveform, filter model, unison,
         polyphony, body type, mod routings) are not automatable: they resize
@@ -230,7 +231,9 @@ class _EngineMidiMixin:
         ``envToCutoffCents``, ``lfoToPitchCents`` and ``pitchOffsetCents`` reach
         voices that are already sounding from the next block; the rest are
         cached into per-voice state at note-on and take effect from the next
-        note.
+        note, so a lane that moves one of them under a held note looks inert
+        until the next one speaks -- that is the behaviour, not a dropped
+        write.
 
         Raises :class:`SonareError` when the destination has no bound
         instrument, the instrument exposes no automatable parameters, or the
