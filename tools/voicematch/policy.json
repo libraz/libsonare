@@ -23,6 +23,12 @@
       "timbre": "machine",
       "behaviour": "machine",
       "reason": "a GS variation exists because the machine defines it, and what makes it a variation rather than its capital is a difference no instrument library's catalogue is indexed by — no library ships a 'Piano 1w'. This is machine_fallback's first condition and it is a statement about the VARIATION alone: a capital keeps whatever the default gives it, so program 0 can be answered by a dedicated modern product while bank 8 of that same program is answered by the module"
+    },
+    "answers_a_different_instrument": {
+      "timbre": "machine",
+      "behaviour": "machine",
+      "programs": [2],
+      "reason": "machine_fallback's second condition, found by the measurement that condition asks for rather than by an impression. Program 2 is the electric grand: a strung piano heard through its own pickups, whose upper partials stand up where an acoustic grand's fall away. Compared partial by partial against the module's tone at the same address, over the nine notes both grids share, the modern library's capture sits 15.85 dB away — and 7.69 dB from the module's ACOUSTIC grand, which is inside the spread a reference of one instrument shows against itself. Both candidates come from the one source, so the gap between them is not a difference of recording. The library holds an acoustic grand at this address, and a model fitted to it would be a finished-sounding piano of the wrong instrument"
     }
   },
 
