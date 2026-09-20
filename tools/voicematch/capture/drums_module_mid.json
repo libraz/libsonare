@@ -1,0 +1,53 @@
+{
+  "id": "drums_module_mid",
+  "label": "Standard kit, the drums that ring for a sixth of a second, read out of a module's own recordings",
+  "program": 0,
+  "takes": "drums",
+  "audition_title": "libsonare drums vs the module's own recordings, the middle gate",
+  "_why": "The second of three gates over one source. `drums_module` reads the pieces whose recordings fill 400 ms - the toms and the cymbals - and a kick that stops at 160 ms cannot hold that window. These twelve stop between 155 and 395 ms, which is long enough for a decay rate and a ring to be what they are rather than what the window allowed, and that is the whole reason for a second gate rather than one grid at the shortest length in the kit.",
+  "_notes": "A gate is what the analysis window is promised to be, so the grid is cut to the recordings that fill it rather than the gate cut to the shortest recording. Over the kit's forty-seven keys the shortest is 44 ms, and one grid at that length would say nothing about damping anywhere. What is left out here is in `drums_module_hit`, which reads every piece at 60 ms for its attack and its place in the kit's balance.",
+  "notes": [35, 36, 38, 39, 40, 54, 64, 65, 72, 74, 78, 79],
+  "_groups": "Two, and both whole. `snares` here is the two snare strokes and deliberately not the kit's three: the side stick records 67 ms, it is a rim click rather than a stroke on the head, and a relation between a rim click and a snare is not a relation a snare family holds. The low conga, the low timbale and the long guiro are each the only member of theirs that fills this gate, so they carry rows and no group.",
+  "groups": {
+    "kicks": [35, 36],
+    "snares": [38, 40],
+    "cuica": [78, 79]
+  },
+  "_velocities": "One, and 100 is a label rather than a measurement: the font sets `velRange` on no zone, so it holds one recording per note at a velocity it does not state. A grid asking for more would write that one recording out under several velocity labels and manufacture the axis a dynamics fit reads.",
+  "velocities": [100],
+  "_stimulus": "Nothing played this. The recordings are read out of the source, so there is no preroll to strip, no settle to wait out and no warmup to play in.",
+  "gate_ms": 150,
+  "tail": "0s",
+  "warmup": false,
+  "realtime": false,
+  "settle_ms": 0,
+  "preroll_ms": 0,
+  "onset_slack_ms": 0,
+  "sample_rate": 44100,
+  "params": [],
+  "_dry": "Nothing played this, so nothing was switched off. What the file holds is the module's own PCM with no effect in front of it, which the importer re-measures rather than trusts.",
+  "dry": false,
+  "rig": "none",
+  "room": "none",
+  "_note_map": "There is deliberately none. This source IS the GS kit map, so its keys are GM's by construction.",
+  "_dimensions": "The behaviour axis, as `drums_module`. Colour is `drums.json`'s and listing it here would quietly make the module the timbre target.",
+  "dimensions": ["band_decay", "ring", "attack", "crest", "level"],
+  "dimensions_na": {
+    "vel_range": "the font declares no velocity layers at all - `velRange` is set on none of its zones, so it holds one recording per note at a velocity it does not state. One recording cannot hold a dynamics range.",
+    "band_tilt": "colour, which `policy.json` assigns to the modern reference for a kit and not to the module. `drums.json` gates it.",
+    "band_shape": "colour, as `band_tilt`.",
+    "centroid_pct": "colour, as `band_tilt`.",
+    "tonality": "colour, as `band_tilt`.",
+    "stereo": "the recordings are single-channel, so a width is zero by construction rather than by voicing. `drums.json`'s second kit is where a width is read."
+  },
+  "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `drums_module_mid.local.json`.",
+  "source_class": "module",
+  "_timbres": "`channel` is what makes a note number select an instrument rather than a pitch, and it is what `profile.py` reads to choose the percussion metric set over the pitched one.",
+  "timbres": [
+    {
+      "id": "t0",
+      "label": "Standard kit, module recording",
+      "channel": 10
+    }
+  ]
+}

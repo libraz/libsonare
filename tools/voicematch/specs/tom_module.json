@@ -1,0 +1,93 @@
+{
+  "_": "The tom's free parameters against the module's own recordings. Eleven knobs, not the seventy-one `--spec auto` offers a drum note, because a kit note is ONE cell: the module holds one recording per piece at one velocity, so an automatic spec fits seventy-one values to a single measurement and reproduces the recording rather than the drum.",
+  "_pinned": "Everything the module states outright is absent here and must stay absent. `base_freq_hz`, `head_diameter_m`, `shell_depth_m`, `air_spring`, `mode_decay_s`, `pitch_drop` and `pitch_drop_ms` are read off the reference's own measured row - a frequency, a geometry, a measured axisymmetric split, a measured band decay, a measured descending strike. Offering a measured quantity to a search replaces a measurement with a fit, and the search will take it.",
+  "_transfer": "Fitted on note 45 and read as a law rather than as one drum's settings: the six toms differ in the pinned columns and share these. The other five keys are the held-out set - adopt a value only if `compare` improves on them too, since a knob that helps 45 alone is fitting 45's recording.",
+  "_weights": "`level` is weighted here, where most voices leave it at zero. A kit's members are only as right as they are against each other, and a search free to lose energy will: the toms' own spread across the family is 7.8 dB in the module and the voice's radiation alone produces 3.",
+  "weights": {
+    "band": 1,
+    "bdecay": 1,
+    "tilt": 1,
+    "bright": 1,
+    "crest": 1,
+    "env": 1,
+    "modes": 0.5,
+    "level": 1,
+    "lf": 1
+  },
+  "knobs": [
+    {
+      "_": "Where the stick lands, as a fraction of the radius. Below a third the m >= 1 modes the drum's pitch is heard in are barely excited; at the rim the fundamental goes instead.",
+      "tunable": "d045.percussion.strike_r",
+      "min": 0.25,
+      "max": 0.85
+    },
+    {
+      "_": "Contact time. It is the low-pass the stick itself is: a mode at f keeps |sinc(f*tau)/(1-(f*tau)^2)| of the strike, so this alone sets how far up the series the hit reaches.",
+      "tunable": "d045.percussion.mallet_ms",
+      "min": 0.5,
+      "max": 8.0,
+      "scale": "log"
+    },
+    {
+      "_": "How much shorter the contact gets as the stick is swung harder.",
+      "tunable": "d045.percussion.mallet_vel_exp",
+      "min": 0.0,
+      "max": 0.6
+    },
+    {
+      "_": "How fast damping rises with frequency. Measured near a half on all six toms; searched around that rather than pinned, because it is read off octave bands that hold several modes each.",
+      "tunable": "d045.percussion.mode_decay_exp",
+      "min": 0.2,
+      "max": 0.9
+    },
+    {
+      "_": "The dense region above the modes the engine can place, which a membrane has and twelve resonators cannot reach.",
+      "tunable": "d045.percussion.noise_gain",
+      "min": 0.0,
+      "max": 1.0
+    },
+    {
+      "tunable": "d045.percussion.noise_decay_ms",
+      "min": 5.0,
+      "max": 200.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "d045.percussion.noise_cutoff_hz",
+      "min": 300.0,
+      "max": 6000.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "d045.percussion.noise_q",
+      "min": 0.5,
+      "max": 4.0
+    },
+    {
+      "_": "The stick's own radiation, which reaches the listener without passing through the voice's filter or envelope. It is the first millisecond and nothing after it.",
+      "tunable": "d045.percussion.contact",
+      "min": 0.0,
+      "max": 1.5
+    },
+    {
+      "tunable": "d045.percussion.contact_ms",
+      "min": 0.05,
+      "max": 3.0,
+      "scale": "log"
+    },
+    {
+      "_": "The shell, which is a body the head drives rather than a layer of its own.",
+      "tunable": "d045.percussion.shell_mix",
+      "min": 0.0,
+      "max": 0.6
+    },
+    {
+      "_": "The upper bound on what the noise band radiates. A head is a poor radiator well before the band the strike fills runs out, and without this the dense region arrives at full level all the way to Nyquist - which is most of the brightness the model carries over the module.",
+      "tunable": "d045.percussion.noise_air_hz",
+      "min": 800.0,
+      "max": 14000.0,
+      "scale": "log",
+      "start": 6000.0
+    }
+  ]
+}
