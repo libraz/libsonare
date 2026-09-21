@@ -464,6 +464,23 @@ def _carry_the_unbounded(bounds: dict[str, dict], gate_path: Path) -> dict[str, 
     return {k: v for k, v in recorded.items() if k not in bounds}
 
 
+def _carry_the_annotations(gate_path: Path) -> dict[str, object]:
+    """Carry forward every other hand-written `_`-prefixed key.
+
+    `_unbounded` was rescued from the fixed payload above one key at a time, and
+    the rest of the class was not: a note recorded beside a bound — why a margin
+    is spent, which change consumed it — has no computed counterpart either, and
+    a writer that emits a fixed payload deletes it on the next re-record. That is
+    worse than never writing it, because the note is found until the day it is
+    needed. `_` itself is the writer's own preamble and is regenerated.
+    """
+    if not gate_path.exists():
+        return {}
+    recorded = json.loads(gate_path.read_text())
+    return {k: v for k, v in recorded.items()
+            if k.startswith("_") and k not in ("_", "_unbounded")}
+
+
 def _keep_the_tighter(bounds: dict[str, dict], gate_path: Path) -> list[str]:
     """Hold each bound to the tighter of the recorded one and the new one.
 
@@ -548,6 +565,7 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
         }
     declined = _keep_the_tighter(bounds, gate_path)
     carried = _carry_the_unbounded(bounds, gate_path)
+    annotations = _carry_the_annotations(gate_path)
     gate_path.parent.mkdir(parents=True, exist_ok=True)
     gate_path.write_text(json.dumps({
         "_": "Bounds the compare table is held to. All three are absolute limits: 'median' "
@@ -575,6 +593,9 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
         # Why a dimension this capture asks for carries no bound. Hand-written
         # and carried across a re-record, since nothing measures it.
         **({"_unbounded": carried} if carried else {}),
+        # Any other hand-written note recorded beside these bounds. Nothing
+        # computes one, so the writer preserves rather than regenerates it.
+        **annotations,
         "bounds": bounds,
     }, indent=2) + "\n")
     print(f"\nwrote {gate_path} — {len(bounds)} bounds at {margin:g}x the measured values")

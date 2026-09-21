@@ -1388,6 +1388,27 @@ def test_a_re_record_carries_the_hand_written_unbounded_reasons(tmp_path):
         "ring": "no second reference reaches it"}
 
 
+def test_a_re_record_carries_every_other_hand_written_note_too(tmp_path):
+    """`_unbounded` was rescued one key at a time; the rest of the class was not.
+
+    A note recorded beside a bound — which change spent its margin, and by how
+    much — has no computed counterpart either, and the note a re-record deletes
+    is found right up until the day someone needs it. `_` is the writer's own
+    preamble and is regenerated rather than carried.
+    """
+    gate = tmp_path / "gate.json"
+    profile_module.write_gate_file(_summary(decay=18), gate, "ref", 1.25)
+    held = json.loads(gate.read_text())
+    held["_margin_spent"] = {"decay": "consumed by the loop-loss law"}
+    held["_"] = "clobber me"
+    gate.write_text(json.dumps(held))
+
+    profile_module.write_gate_file(_summary(decay=20), gate, "ref", 1.25)
+    written = json.loads(gate.read_text())
+    assert written["_margin_spent"] == {"decay": "consumed by the loop-loss law"}
+    assert written["_"] != "clobber me"
+
+
 def test_an_unbounded_reason_is_dropped_once_its_dimension_gains_a_bound(tmp_path):
     """Otherwise a stale reason explains away a bound sitting beside it."""
     gate = tmp_path / "gate.json"
