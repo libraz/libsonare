@@ -16,6 +16,7 @@
 
 #include "midi/bowed_string_probe.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -123,29 +124,18 @@ const BowedStringPatchParams& violin_params() {
   return sonare::midi::synth::gm_fallback_patch(0, 40).bowed_string;
 }
 
-/// Bridge loop coefficients the engine derives from @p p at @p note / @p sr.
-/// Mirrors the frequency-referenced law bowed_string_voice.cpp's start()
-/// applies (anchor: violin note 55 @ 48 kHz; reference frequency 2000 Hz,
-/// its kBowLossRefHz) — a change to either moves this control hash.
+/// Bridge loop coefficients the engine derives from @p p at @p sr. Mirrors
+/// bowed_string_voice.cpp's start(): the pole is voiced at kLossVoicedSr and
+/// mapped onto the rate, the gain is per traversal and is not mapped. @p note
+/// no longer enters — a mirror that reintroduced it would disagree with the
+/// engine and move this control hash, which is the point of duplicating it.
 StringLoopFilter patch_bridge_filter(const BowedStringPatchParams& p, uint8_t note, double sr) {
-  constexpr float kAnchorNote = 55.0f;
-  constexpr float kAnchorSr = 48000.0f;
-  constexpr float kRefHz = 2000.0f;
-  const float a_ship = static_cast<float>(1.0 - 0.7 * (1.0 - static_cast<double>(p.brightness)));
-  const float g_ship = static_cast<float>(0.99 - 0.09 * static_cast<double>(p.damping));
-  const float anchor_period = kAnchorSr / note_to_hz(kAnchorNote);
-  const float w0_a = sonare::constants::kTwoPi / anchor_period;
-  const float wref_a = sonare::constants::kTwoPi * kRefHz / kAnchorSr;
-  const float g0_a = g_ship * onepole_magnitude(a_ship, w0_a);
-  const float gr_a = g_ship * onepole_magnitude(a_ship, wref_a);
-  const float k = -6.907755279f * anchor_period / kAnchorSr;
-  const float t60_0 = k / std::log(std::max(sonare::constants::kEpsilon, g0_a));
-  const float t60_ref = k / std::log(std::max(sonare::constants::kEpsilon, gr_a));
-  const float period = static_cast<float>(sr) / note_to_hz(note);
-  const float w0 = sonare::constants::kTwoPi / period;
-  const float wref = sonare::constants::kTwoPi * kRefHz / static_cast<float>(sr);
-  return solve_string_loop_filter(w0, wref, string_loop_gain_for(period, sr, t60_0),
-                                  string_loop_gain_for(period, sr, t60_ref));
+  (void)note;
+  const float a_voiced = (1.0f - std::clamp(p.brightness, 0.0f, 1.0f)) * 0.7f;
+  StringLoopFilter out;
+  out.a = sonare::midi::synth::loss_pole_at_rate(a_voiced, sr);
+  out.g = std::clamp(0.99f - 0.09f * std::clamp(p.damping, 0.0f, 1.0f), 0.80f, 0.999f);
+  return out;
 }
 
 constexpr uint8_t kControlNote = 60;
@@ -278,7 +268,7 @@ TEST_CASE("bowed probe measures the bridge force the output stands in for",
   params.polarization = 0.0f;
   params.sympathetic = 0.0f;
   const std::vector<float> v_plus = render_core(params, 48000);
-  CHECK(fnv1a_quantized(v_plus) == 0xde1134e7e5d7d17cull);  // was 0x7c692eb527199fe0
+  CHECK(fnv1a_quantized(v_plus) == 0x8b1705ace0f25090ull);
   const StringLoopFilter solved = patch_bridge_filter(params, kControlNote, kSr);
   const double violin_g = static_cast<double>(solved.g);
   const double violin_a = 1.0 - static_cast<double>(solved.a);
@@ -301,7 +291,7 @@ TEST_CASE("bowed probe reaches the engine's own output", "[midi][synth][bowed][p
   // on. The numbers are reported rather than asserted — what is asserted is that
   // a stick-slip model slips at all and that the scan ran.
   const std::vector<float> render = render_core(violin_params(), 48000);
-  CHECK(fnv1a_quantized(render) == 0x656683fee32ecbb7ull);  // was 0xa6d63b25826c6403
+  CHECK(fnv1a_quantized(render) == 0x82f13b6cd00c9540ull);
   const double f0 = static_cast<double>(sonare::midi::synth::note_to_hz(kControlNote));
 
   const sonare::test::bowed::SlipRate rate = slips_per_period(render, f0, kSr);
@@ -325,23 +315,22 @@ TEST_CASE("bowed string control hashes", "[midi][synth][bowed][probe]") {
   // values are asserted beside the hash so a moved patch value is told apart
   // from a moved engine when this goes red.
   const BowedStringPatchParams& v = violin_params();
-  CHECK(v.bow_position == 0.169028f);  // was 0.17016
+  CHECK(v.bow_position == 0.17016f);
   CHECK(v.bow_force == 0.0643318f);
   CHECK(v.bow_speed == 0.630748f);
-  CHECK(v.vel_to_speed == 0.312461f);  // was 0.6, the clamp default the field
-                                       // inherited before the loop-loss re-fit
-  CHECK(v.brightness == 0.228986f);    // was 0.47
+  CHECK(v.vel_to_speed == 0.6f);
+  CHECK(v.brightness == 0.47f);
   CHECK(v.damping == 0.0822536f);
-  CHECK(v.attack_ms == 41.9837f);  // was 47.142
-  CHECK(v.release_ms == 147.15f);  // was 165.23
-  CHECK(v.rosin == 0.0875388f);    // was 0.1
+  CHECK(v.attack_ms == 47.142f);
+  CHECK(v.release_ms == 165.23f);
+  CHECK(v.rosin == 0.1f);
   CHECK(v.elasto_plastic);
   CHECK(v.stribeck == 0.7f);
-  CHECK(v.sympathetic == 0.495379f);  // was 0.08
+  CHECK(v.sympathetic == 0.08f);
   CHECK(v.polarization == 0.15f);
 
   const std::vector<float> core = render_core(v, 48000);
-  CHECK(fnv1a_quantized(core) == 0x656683fee32ecbb7ull);  // was 0xa6d63b25826c6403
+  CHECK(fnv1a_quantized(core) == 0x82f13b6cd00c9540ull);
 
   // (b) The body resonator on both of its entry points, driven by the same
   // deterministic excitation. The percussion-shell configuration is written out

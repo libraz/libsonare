@@ -29,37 +29,6 @@ SONARE_TUNABLE(kBuzzSpanBase, 0.35f);
 /// forte pluck lands roughly in [0.3, 0.8] peak).
 SONARE_TUNABLE(kPluckedOutputScale, 0.85f);
 
-/// Second point past which the loop-loss pole's darkening is quoted (Hz), so a
-/// fixed brightness value means the same tilt at every sample rate. Argued from
-/// the family's register (sitar/koto/shamisen run guitar-like, well under this)
-/// rather than measured.
-SONARE_TUNABLE(kPluckedBrightnessRefHz, 2500.0f);
-
-/// The t60-ratio fraction that reproduces the shipped pole's own darkening at
-/// kPluckedBrightnessRefHz, relative to the fundamental's OWN t60 -- read at a
-/// fixed anchor (note 60, 48 kHz, this patch's own decay_s/decay_stretch)
-/// rather than at the note actually playing. t60_ref = t60 * hf: same shape as
-/// ks_voice.cpp's quote_t60, harpsichord_voice.cpp's hf and
-/// piano_voice.cpp's t60_slow/ratio -- the reference partial rings for a fixed
-/// FRACTION of the fundamental's own t60, whatever note is played, rather than
-/// losing a fixed amount of gain per traversal regardless of how long the
-/// fundamental itself is meant to ring.
-float brightness_hf(float brightness, float decay_s, float decay_stretch) noexcept {
-  const float a_ship = (1.0f - std::clamp(brightness, 0.0f, 1.0f)) * 0.7f;
-  constexpr float kAnchorSr = 48000.0f;
-  constexpr uint8_t kAnchorNote = 60;
-  const float anchor_period = kAnchorSr / note_to_hz(static_cast<float>(kAnchorNote));
-  const float w0 = kTwoPi / anchor_period;
-  const float w_ref = kTwoPi * kPluckedBrightnessRefHz / kAnchorSr;
-  const float tilt_a = onepole_magnitude(a_ship, w_ref) / onepole_magnitude(a_ship, w0);
-
-  const float stretch = std::clamp(decay_stretch, 0.0f, 1.0f);
-  const float octaves_below_a4 = (69.0f - static_cast<float>(kAnchorNote)) / 12.0f;
-  const float t60_a = std::max(0.05f, decay_s) * std::exp2(stretch * octaves_below_a4);
-  const float g0_a = string_loop_gain_for(anchor_period, kAnchorSr, t60_a);
-  return 1.0f / (1.0f + std::log(tilt_a) / std::log(g0_a));
-}
-
 }  // namespace
 
 void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, double sample_rate,
@@ -78,22 +47,18 @@ void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, doubl
   const float octaves_below_a4 = (69.0f - static_cast<float>(note & 0x7Fu)) / 12.0f;
   const float t60 = std::max(0.05f, params.decay_s) * std::exp2(stretch * octaves_below_a4);
 
-  // Loop loss: solve the pole from the fundamental's own decay target and the
-  // brightness-set tilt at a reference frequency in Hz, rather than reading
-  // brightness straight into a pole fixed in samples.
-  const float omega = kTwoPi / base_period_;
-  const float omega_ref = kTwoPi * kPluckedBrightnessRefHz / static_cast<float>(sr);
-  const float hf = brightness_hf(params.brightness, params.decay_s, params.decay_stretch);
-  const float g0 = string_loop_gain_for(base_period_, sr, t60);
-  const float g_ref = string_loop_gain_for(base_period_, sr, t60 * hf);
-  const StringLoopFilter loss = solve_string_loop_filter(omega, omega_ref, g0, g_ref);
-  loop_alpha_ = 1.0f - loss.a;
-  loop_gain_ = loss.g;
+  // Loop loss: brightness sets the pole, voiced at kLossVoicedSr and mapped onto
+  // the running rate. The gain is per traversal and already in seconds through
+  // t60, so it needs no mapping.
+  const float a = loss_pole_at_rate((1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f, sr);
+  loop_alpha_ = 1.0f - a;
+  loop_gain_ = string_loop_gain_for(base_period_, sr, t60);
   lp_state_ = 0.0f;
   // Tuning: compensate the EXACT phase delay of the loop filter at the
   // fundamental (not just its DC group delay) plus the one-sample feedback
   // path, so the sounding pitch matches the note to a few cents.
-  const float tau_lp = onepole_group_delay_samples(loss.a, omega);
+  const float omega = kTwoPi / base_period_;
+  const float tau_lp = onepole_group_delay_samples(a, omega);
   loop_comp_ = 1.0f + tau_lp;
 
   release_gain_ = string_loop_gain_for(base_period_, sr, std::max(0.01f, params.release_damp_s));

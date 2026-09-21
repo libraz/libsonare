@@ -301,13 +301,17 @@ class FluteVoiceCore {
   // of the breath band so the upper register wins (the octave jump).
   float overblow_ = 0.0f;
   // 4b: jet turbulence shaping. jet_turb_ == 0 -> skipped. An amplitude-dependent
-  // one-pole shaping of the breath noise.
+  // one-pole shaping of the breath noise. Its coefficient is a pole and so is a
+  // count of samples; both followers here are voiced at kLossVoicedSr and mapped
+  // onto the running rate in start(), the same way the bore's own pole is.
   float jet_turb_ = 0.0f;
   float jet_turb_state_ = 0.0f;
+  float jet_turb_alpha_ = 0.0f;
   // 4c: edge hysteresis. edge_hyst_ == 0 -> skipped. A slow follower of the
   // breath direction that biases the effective jet gain.
   float edge_hyst_ = 0.0f;
   float edge_hyst_state_ = 0.0f;
+  float edge_hyst_alpha_ = 0.0f;
   // 4d: discrete-vortex source. vortex_ == 0 -> skipped. A rougher, amplitude-
   // gated noise burst added to the jet drive.
   float vortex_ = 0.0f;

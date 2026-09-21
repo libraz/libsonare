@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+#include "midi/synth/string_loop.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -591,7 +592,11 @@ void BrassVoiceCore::refresh_excitation_targets() noexcept {
 float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
   float a = (1.0f - std::clamp(bright01, 0.0f, 1.0f)) * kBellPoleSpan;
   if (conical_) a = std::min(a + kConicalDarken, 0.95f);
-  return 1.0f - a;
+  // Voiced at kLossVoicedSr like every other bell and bridge in the bank. The
+  // lip resonator is already quoted in Hz and dominates the timbre, so this one
+  // is masked rather than absent — and a masked pole still moves its corner with
+  // the rate, which is what the mapping removes.
+  return 1.0f - loss_pole_at_rate(a, lip_srf_);
 }
 
 void BrassVoiceCore::snap_excitation() noexcept {

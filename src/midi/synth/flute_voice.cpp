@@ -38,16 +38,8 @@ SONARE_TUNABLE(kJetRatioMax, 0.62f);
 // region; the STK-stable operating point is ~0.5 each.
 SONARE_TUNABLE(kReflectMax, 0.62f);
 
-// Open-end reflection as a loop-loss law rather than a pole fixed in samples: a
-// pole counts samples, so one brightness voiced a different corner in Hz at
-// every rate. The render-time pole comes from solve_string_loop_filter() against
-// two per-traversal gains quoted in Hz (bell_hf() below), whose bare 0.80 / 0.30
-// literals reconstruct the shipped pole shape for the anchor solve.
-//
-// The second point past which the darkening is quoted. Set to the ear-calibrated
-// filter's own implied corner at 48 kHz, -ln(a)*48000/(2*pi), which spans
-// 2625-4031 Hz across the eight patches -- a substitution, not a re-voicing.
-SONARE_TUNABLE(kBellRefHz, 3000.0f);
+// The open-end reflection pole is `0.80 - 0.30*brightness`, voiced by ear at
+// `string_loop.h`'s kLossVoicedSr and mapped onto the running rate there.
 
 // Bore loss from damping: a mild reflection trim on top of the 0.5 reflections
 // (which already keep the loop bounded). High damping quiets the resonance so an
@@ -88,39 +80,6 @@ SONARE_TUNABLE(kOutputTargetPeak, 0.5f);
 SONARE_TUNABLE(kPeakBase, 4.0f);
 SONARE_TUNABLE(kPeakTilt, -0.65f);    // the driven peak falls with pitch (rich bass)
 SONARE_TUNABLE(kPeakRefHz, 261.63f);  // middle C, the flute's home register
-
-// Anchor for the bell loop-loss law, at 48 kHz. Note 76 rather than 60: it is
-// interior to all eight shipped flute patches' voicematch gate grids (measured
-// in seven, interpolated only in piccolo's 74-90), where 60 sits at the bottom
-// edge of six and below two entirely -- a one-signed placement cannot separate
-// a correct law's own divergence from a mis-set kBellRefHz. The solve below
-// reproduces the shipped pole/gain pair exactly at this (f0, sr) for any anchor
-// note; that identity is structural rather than tied to a register.
-constexpr float kBellAnchorSr = 48000.0f;
-constexpr uint8_t kBellAnchorNote = 76;
-
-/// The two decay targets (t60, seconds) a shipped one-pole loss filter
-/// (@p a_ship, @p g_ship) implies at the anchor: reapplying them through
-/// string_loop_gain_for() and solve_string_loop_filter() at that same period
-/// and rate reproduces {a_ship, g_ship} exactly, and at any other note/sample
-/// rate reproduces the LAW rather than the shipped coefficient. Same shape as
-/// bowed_string_voice.cpp's BowLossT60Pair / bow_loss_anchor_t60() -- both
-/// gains are read off the SHIPPED pole's own response (|H(a_ship, w)|) so the
-/// pole's own contribution at the fundamental is not silently dropped.
-struct BellLossT60Pair {
-  float fundamental_s;
-  float reference_s;
-};
-
-BellLossT60Pair bell_loss_anchor_t60(float a_ship, float g_ship) noexcept {
-  const float anchor_period = kBellAnchorSr / note_to_hz(static_cast<float>(kBellAnchorNote));
-  const float w0_a = kTwoPi / anchor_period;
-  const float wref_a = kTwoPi * kBellRefHz / kBellAnchorSr;
-  const float g0_a = g_ship * onepole_magnitude(a_ship, w0_a);
-  const float gr_a = g_ship * onepole_magnitude(a_ship, wref_a);
-  const float k = -6.907755279f * anchor_period / kBellAnchorSr;
-  return {k / std::log(std::max(kEpsilon, g0_a)), k / std::log(std::max(kEpsilon, gr_a))};
-}
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
@@ -201,11 +160,10 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   jet_reflection_ = std::min(std::clamp(params.jet_reflection, 0.0f, 1.0f), kReflectMax);
   end_reflection_ = std::min(std::clamp(params.end_reflection, 0.0f, 1.0f), kReflectMax);
 
-  // Open-end reflection: damping alone sets the per-traversal gain at the
-  // fundamental (a flat scalar, already note/rate invariant -- §3.1); it feeds
-  // the solve inside refresh_excitation_targets() as g_fundamental, so it must
-  // be known before that call. damping is not live-controllable, unlike
-  // brightness, so this is computed once here and never touched again.
+  // Open-end reflection: damping alone sets the per-traversal gain, a flat
+  // scalar that is already note- and rate-invariant because the loop is
+  // traversed f0 times a second whatever the rate. damping is not live-
+  // controllable, unlike brightness, so it is computed once here.
   damping_gain_ = std::clamp(1.0f - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f), 0.5f, 1.0f);
 
   // Open-end reflection lowpass: brightness -> pole a (y += (1-a)(x - y)). A
@@ -285,8 +243,13 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   overblow_ = std::clamp(params.overblow, 0.0f, 1.0f);
   jet_turb_ = std::clamp(params.jet_turbulence, 0.0f, 1.0f);
   jet_turb_state_ = 0.0f;
+  // Both followers are one-poles, so their coefficients are counts of samples
+  // and move their corners with the rate exactly as the bore's pole did. Voiced
+  // at 0.7 and 0.999 respectively, mapped here so the corner stays in Hz.
+  jet_turb_alpha_ = 1.0f - loss_pole_at_rate(0.7f, sr);
   edge_hyst_ = std::clamp(params.edge_hysteresis, 0.0f, 1.0f);
   edge_hyst_state_ = 0.0f;
+  edge_hyst_alpha_ = 1.0f - loss_pole_at_rate(0.999f, sr);
   vortex_ = std::clamp(params.vortex, 0.0f, 1.0f);
 }
 
@@ -324,7 +287,7 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
     float n = noise_.bipolar_at(drive_index_);
     // 4b: amplitude-dependent, one-pole-shaped jet turbulence (gated).
     if (jet_turb_ > 0.0f) {
-      jet_turb_state_ += 0.3f * (n - jet_turb_state_);
+      jet_turb_state_ += jet_turb_alpha_ * (n - jet_turb_state_);
       n = (1.0f - jet_turb_) * n +
           jet_turb_ * (jet_turb_state_ + n) * (0.5f + 0.5f * breath_level_);
     }
@@ -344,7 +307,7 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
     jet_ref *= 1.0f + 0.5f * overblow_ * std::max(0.0f, breath_level_ - 0.5f);
   }
   if (edge_hyst_ > 0.0f) {
-    edge_hyst_state_ += 0.001f * (breath_level_ - edge_hyst_state_);
+    edge_hyst_state_ += edge_hyst_alpha_ * (breath_level_ - edge_hyst_state_);
     jet_ref *= 1.0f + 0.2f * edge_hyst_ * (edge_hyst_state_ - 0.5f);
   }
 
@@ -422,20 +385,14 @@ void FluteVoiceCore::refresh_excitation_targets() noexcept {
   // than at note-on alone; freezing it in start() would silently kill the live
   // control.
   const float br = std::clamp(bright01_base_ + bright_mod01_, 0.0f, 1.0f);
-  // The shipped pole shape: 0.80 / 0.30 were kBellPoleBase / kBellPoleSpan
-  // before this fix retired them as tunables. The clamp is provably slack for
-  // any br in [0,1] -- a_ship ranges [0.50, 0.80], well inside [0, 0.95] -- and
-  // is kept only to reproduce the shipped formula exactly.
-  const float a_ship = std::clamp(0.80f - 0.30f * br, 0.0f, 0.95f);
-  const BellLossT60Pair t60 = bell_loss_anchor_t60(a_ship, damping_gain_);
-  const float period0 = srf_ / std::max(1.0f, f0_);
-  const float omega0 = kTwoPi / period0;
-  const float omega_ref = kTwoPi * kBellRefHz / srf_;
-  const StringLoopFilter solved = solve_string_loop_filter(
-      omega0, omega_ref, string_loop_gain_for(period0, srf_, t60.fundamental_s),
-      string_loop_gain_for(period0, srf_, t60.reference_s));
-  lp_alpha_target_ = 1.0f - solved.a;
-  loss_gain_target_ = solved.g;
+  // The pole the ear voiced, at kLossVoicedSr. The clamp is provably slack for
+  // any br in [0,1] -- it ranges [0.50, 0.80], well inside [0, 0.95] -- and is
+  // kept only to reproduce the shipped formula exactly.
+  const float a_voiced = std::clamp(0.80f - 0.30f * br, 0.0f, 0.95f);
+  lp_alpha_target_ = 1.0f - loss_pole_at_rate(a_voiced, srf_);
+  // The per-traversal gain needs no mapping: the loop is traversed f0 times a
+  // second whatever the rate, so `damping_gain_` already means the same thing.
+  loss_gain_target_ = damping_gain_;
 }
 
 void FluteVoiceCore::set_vibrato(float depth01) noexcept {

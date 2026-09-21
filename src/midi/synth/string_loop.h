@@ -39,6 +39,29 @@ inline float string_loop_gain_for(float period_samples, double sample_rate, floa
   return std::exp(-6.907755279f / loops_to_t60);
 }
 
+/// The sample rate every shipped loss coefficient in this bank was voiced at.
+constexpr double kLossVoicedSr = 48000.0;
+
+/// Re-expresses a loss pole voiced at @ref kLossVoicedSr so it keeps its corner,
+/// in Hz, at @p sample_rate.
+///
+/// The one-pole `y += (1-a)(x-y)` decays by `a` per SAMPLE, so its corner sits
+/// at `-ln(a)*sr/(2*pi)`: holding `a` fixed moves the corner with the rate, and
+/// holding the corner fixed is `a^(kLossVoicedSr/sr)`. Exact at the voiced rate,
+/// and within 0.05 dB of the voiced response up to the corner at 44.1 and 96 kHz
+/// (0.47 dB at 10 kHz), against up to 4.4 dB for the unmapped coefficient.
+///
+/// It takes the rate and NOT the note, which is the whole content of the law: a
+/// bore, a bell or a bridge is a property of the instrument and does not change
+/// its cutoff when a different note is fingered. A mapping that also took the
+/// note would re-voice the register — quoting one note's decay TIME at every
+/// other note swings this bank's flute corner from 1681 Hz at note 60 to 4598 Hz
+/// at note 90, where the instrument has one corner at 3291 Hz.
+inline float loss_pole_at_rate(float a_voiced, double sample_rate) noexcept {
+  if (!(sample_rate > 0.0) || a_voiced <= 0.0f) return a_voiced;
+  return static_cast<float>(std::pow(static_cast<double>(a_voiced), kLossVoicedSr / sample_rate));
+}
+
 /// A solved one-pole loss filter: the feedback coefficient and the gain in
 /// front of it, in the form StringLoop::configure_filter() takes.
 struct StringLoopFilter {

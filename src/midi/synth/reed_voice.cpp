@@ -55,22 +55,6 @@ SONARE_TUNABLE(kLossCeil, 0.999f);
 // pole directly (a pole is a count of samples, not a brightness value).
 SONARE_TUNABLE(kBellPoleSpan, 0.7f);
 
-// --- frequency-referenced bell loop loss ---
-// The bell pole used to be a function of brightness alone (no sr term), so the
-// same value darkened a fundamental differently at every sample rate. The fix
-// re-expresses the shipped pole as two decay targets in Hz, anchored so the
-// anchor cell reproduces the shipped filter exactly. omega_ref cannot be wrong
-// AT the anchor — it only selects the law's behaviour away from it — so it is
-// a fit parameter, not a correctness one. 3000 Hz is argued from register
-// (comfortably above the family's realistic top, a quarter of Nyquist at the
-// lowest sample rate a wind sr-discriminator run tested), not measured.
-SONARE_TUNABLE(kBellLossRefHz, 3000.0f);
-// Tenor sax at note 48 (130.81 Hz): inside a real tenor's written range and an
-// exact cell an earlier sr-discriminator measurement covered. One anchor point
-// serves every reed patch, conical or not.
-constexpr uint8_t kBellLossAnchorNote = 48;
-constexpr double kBellLossAnchorSr = 48000.0;
-
 // Live-control smoothing time (ms): the per-sample ramp of breath / brightness
 // toward their CC targets — fast enough to feel immediate, slow enough to never
 // zipper.
@@ -196,27 +180,6 @@ float reed_natural_hz(float resonance01, float srf) noexcept {
 float ramp_coeff(float ms, double sample_rate) noexcept {
   const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
   return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
-}
-
-/// The two decay targets (t60, seconds) a shipped one-pole loss filter
-/// (@p a_ship, @p g_ship) implies at @p anchor_period_samples and
-/// kBellLossAnchorSr: reapplying them through string_loop_gain_for() and
-/// solve_string_loop_filter() at that same period and rate reproduces
-/// {a_ship, g_ship} exactly, and at any other note/sample-rate/brightness
-/// reproduces the law rather than the shipped coefficient.
-struct ReedLossT60Pair {
-  float fundamental_s;
-  float reference_s;
-};
-
-ReedLossT60Pair reed_loss_anchor_t60(float anchor_period_samples, float a_ship,
-                                     float g_ship) noexcept {
-  const float w0_a = kTwoPi / anchor_period_samples;
-  const float wref_a = kTwoPi * kBellLossRefHz / static_cast<float>(kBellLossAnchorSr);
-  const float g0_a = g_ship * onepole_magnitude(a_ship, w0_a);
-  const float gr_a = g_ship * onepole_magnitude(a_ship, wref_a);
-  const float k = -6.907755279f * anchor_period_samples / static_cast<float>(kBellLossAnchorSr);
-  return {k / std::log(std::max(kEpsilon, g0_a)), k / std::log(std::max(kEpsilon, gr_a))};
 }
 
 }  // namespace
@@ -629,24 +592,12 @@ void ReedVoiceCore::refresh_excitation_targets() noexcept {
   const float b = std::clamp(breath01_base_ + force_mod01_, 0.0f, 1.0f);
   breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
 
-  // Bell loop loss, frequency-referenced: brightness is CC74-live, so the
-  // shipped-pole -> t60-pair -> solve pipeline reruns on every call here, not
-  // only at note-on. loss_gain_ship_ (from damping, fixed at note-on) supplies
-  // the flat-loss half of the pair.
+  // Bell loop loss: brightness is CC74-live, so the pole is remapped on every
+  // call here rather than only at note-on. loss_gain_ship_ (from damping, fixed
+  // at note-on) is per traversal and needs no mapping.
   const float br = std::clamp(bright01_base_ + bright_mod01_, 0.0f, 1.0f);
-  const float a_ship = (1.0f - br) * kBellPoleSpan;
-  const bool conical = sign_ > 0.0f;
-  const float anchor_f0 = note_to_hz(kBellLossAnchorNote);
-  const float anchor_period = conical ? static_cast<float>(kBellLossAnchorSr) / anchor_f0
-                                      : 0.5f * static_cast<float>(kBellLossAnchorSr) / anchor_f0;
-  const ReedLossT60Pair t60 = reed_loss_anchor_t60(anchor_period, a_ship, loss_gain_ship_);
-  const float omega = kTwoPi / std::max(1.0f, bore_period_);
-  const float omega_ref = kTwoPi * kBellLossRefHz / static_cast<float>(sample_rate_);
-  const StringLoopFilter solved = solve_string_loop_filter(
-      omega, omega_ref, string_loop_gain_for(bore_period_, sample_rate_, t60.fundamental_s),
-      string_loop_gain_for(bore_period_, sample_rate_, t60.reference_s));
-  lp_alpha_target_ = 1.0f - solved.a;
-  loss_gain_target_ = solved.g;
+  lp_alpha_target_ = 1.0f - loss_pole_at_rate((1.0f - br) * kBellPoleSpan, sample_rate_);
+  loss_gain_target_ = loss_gain_ship_;
 }
 
 void ReedVoiceCore::snap_excitation() noexcept {
