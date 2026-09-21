@@ -244,6 +244,10 @@ class PipeOrganVoiceCore {
     float bore_period = 0.0f;
     /// Loop delay NOT in the line (feedback register + loop-filter phase delay).
     float comp = 1.0f;
+    /// The same compensation as voiced at kLossVoicedSr, in samples at the
+    /// running rate: the jet delay is a fraction of the line THAT length
+    /// leaves, so its duration does not follow the rate.
+    float jet_comp = 1.0f;
     /// Jet convection delay as a fraction of the bore LINE delay.
     float jet_ratio = 0.5f;
     /// Open-end reflection: one-pole loss lowpass y += alpha*(x - y), its state,
@@ -322,6 +326,8 @@ class PipeOrganVoiceCore {
   float attack_coeff_ = 0.0f;
   float release_coeff_ = 0.0f;
   bool releasing_ = false;
+  /// Wind-hiss depth on the jet drive, the voiced depth at the noise law's gain.
+  float turb_gain_ = 0.0f;
 
   // Live excitation axes (jet drive, radiation brightness): base from the patch
   // or a CC, matrix offset, the composed target and the ramped value. The

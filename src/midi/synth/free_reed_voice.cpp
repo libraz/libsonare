@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+#include "midi/synth/string_loop.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/tunable.h"
@@ -156,7 +157,9 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   // Contour + textures.
   attack_coeff_ = ramp_coeff(params.attack_ms, sr);
   release_coeff_ = ramp_coeff(params.release_ms, sr);
-  breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth;
+  // A per-sample draw voiced at kLossVoicedSr, so it carries the noise law's gain.
+  breath_noise_ =
+      std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain_at_rate(sr);
   // The radiated pair swings wider than the saturated saw it replaces, so the
   // patch gains stay comparable across the two shapers.
   slot_makeup_ = slot_duty_ > 0.0f ? kSlotMakeup : 1.0f;

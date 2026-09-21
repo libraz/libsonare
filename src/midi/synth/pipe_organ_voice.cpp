@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+#include "midi/synth/string_loop.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -224,6 +225,9 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   drive_index_ = 0;
   releasing_ = false;
   breath_level_ = 0.0f;
+  // The wind hiss is a per-sample draw voiced at kLossVoicedSr, so it carries
+  // the noise law's gain.
+  turb_gain_ = kJetTurbulence * noise_gain_at_rate(sr);
 
   // Resolve the registration: an explicit rank list, or a single implicit 8'
   // rank built from the flat {stopped, brightness}.
@@ -372,6 +376,20 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
                            std::atan2(dc_r * std::sin(omega), 1.0f - dc_r * std::cos(omega));
     const float tau_dc = phase_dc / std::max(omega, 1.0e-6f);
     pipe.comp = 1.0f + tau_lp - tau_dc;
+    // The jet's compensation is taken at the voiced rate: a sample count's
+    // duration halves as the rate doubles, and the jet delay is a duration.
+    {
+      const float voiced_srf = static_cast<float>(kLossVoicedSr);
+      const float omega_v = kTwoPi * f0 / voiced_srf;
+      const float alpha_v = std::clamp(1.0f - std::exp(-kTwoPi * corner / voiced_srf), 0.05f, 1.0f);
+      const float dc_r_v = 1.0f - static_cast<float>(kTwoPi * kDcCornerHz / kLossVoicedSr);
+      const float tau_lp_v = onepole_group_delay_samples(1.0f - alpha_v, omega_v);
+      const float phase_dc_v =
+          std::atan2(std::sin(omega_v), 1.0f - std::cos(omega_v)) -
+          std::atan2(dc_r_v * std::sin(omega_v), 1.0f - dc_r_v * std::cos(omega_v));
+      const float tau_dc_v = phase_dc_v / std::max(omega_v, 1.0e-6f);
+      pipe.jet_comp = (1.0f + tau_lp_v - tau_dc_v) * (srf / voiced_srf);
+    }
 
     pipe.breath = mouth;
 
@@ -386,7 +404,8 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     pipe.chiff_lp_state = 0.0f;
     // Keep the burst's energy roughly constant as the band narrows (one-pole
     // filtered unit noise has RMS ~ sqrt(alpha / (2 - alpha))): the low pipes'
-    // chiff is a low "houff", not a vanishing one.
+    // chiff is a low "houff", not a vanishing one. The same normalisation holds
+    // it across the rate, so the noise law's gain is not applied here.
     pipe.chiff_level *= std::sqrt((2.0f - pipe.chiff_lp_alpha) / pipe.chiff_lp_alpha);
 
     // Mouth/radiation high-shelf (post-loop, outside the loop).
@@ -586,12 +605,14 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
     pipe.turb_state +=
         pipe.turb_alpha *
         (noise_.bipolar_at(kTurbIndexBase + pipe.noise_offset + drive_index_) - pipe.turb_state);
-    const float pd =
-        breath - pipe.jet_reflection * temp + kJetTurbulence * breath * pipe.turb_state;
+    const float pd = breath - pipe.jet_reflection * temp + turb_gain_ * breath * pipe.turb_state;
     const float bore_delay = std::clamp(pipe.bore_period / ratio - pipe.comp, 1.0f,
                                         static_cast<float>(span_capacity_ - 4));
+    // The jet rides the line as it was voiced, not the line at the running rate.
+    const float jet_line = std::clamp(pipe.bore_period / ratio - pipe.jet_comp, 1.0f,
+                                      static_cast<float>(span_capacity_ - 4));
     const float jet_delay =
-        std::clamp(pipe.jet_ratio * bore_delay, 1.0f, static_cast<float>(span_capacity_ - 4));
+        std::clamp(pipe.jet_ratio * jet_line, 1.0f, static_cast<float>(span_capacity_ - 4));
     const float pd_j =
         rt::lagrange3_fractional_delay(pipe.jet, static_cast<size_t>(span_capacity_),
                                        pipe.jet_write, static_cast<int>(jet_delay * 256.0f), pd);

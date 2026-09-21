@@ -189,6 +189,12 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   const float omega = kTwoPi * f0 / srf;
   const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, omega);
   comp_ = 1.0f + tau_lp;
+  // The jet's compensation is taken at the voiced rate: a sample count's
+  // duration halves as the rate doubles, and the jet delay is a duration.
+  const float voiced_srf = static_cast<float>(kLossVoicedSr);
+  const float tau_voiced =
+      onepole_group_delay_samples(1.0f - lp_alpha_voiced_, kTwoPi * f0 / voiced_srf);
+  jet_comp_ = (1.0f + tau_voiced) * (srf / voiced_srf);
 
   // Both lines span the whole slab, because the line length is what bounds a
   // downward bend and the clamp enforcing it saturates silently -- a glide
@@ -203,11 +209,13 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   bore_write_ = capacity_ > 0 ? static_cast<size_t>(prefill_span_ % capacity_) : 0;
   jet_write_ = 0;
 
-  // Contour + textures.
+  // Contour + textures. Every seeded level is a per-sample draw voiced at
+  // kLossVoicedSr, so each carries the noise law's gain.
+  const float noise_gain = noise_gain_at_rate(sr);
   attack_coeff_ = ramp_coeff(params.attack_ms, sr);
   release_coeff_ = ramp_coeff(params.release_ms, sr);
-  breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth;
-  chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth;
+  breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain;
+  chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth * noise_gain;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
 
   // Voice-local vibrato LFO.
@@ -223,7 +231,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst so the
   // jet has an f0 component to lock onto rather than swelling up from silence.
   // The jet span starts silent.
-  const float prefill = kBorePrefill * breath_target_;
+  const float prefill = kBorePrefill * breath_target_ * noise_gain;
   if (bore_ != nullptr) {
     // Past the seed the line has to be cleared rather than left alone: it is a
     // slab slot the previous note wrote, and everything outside the seed is
@@ -250,7 +258,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   edge_hyst_ = std::clamp(params.edge_hysteresis, 0.0f, 1.0f);
   edge_hyst_state_ = 0.0f;
   edge_hyst_alpha_ = 1.0f - loss_pole_at_rate(0.999f, sr);
-  vortex_ = std::clamp(params.vortex, 0.0f, 1.0f);
+  vortex_ = std::clamp(params.vortex, 0.0f, 1.0f) * noise_gain;
 }
 
 float FluteVoiceCore::render(float pitch_ratio) noexcept {
@@ -326,8 +334,11 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
   }
   const float bore_delay =
       std::clamp(bore_period_ / ratio - comp_, 1.0f, static_cast<float>(capacity_ - 4));
+  // The jet rides the line as it was voiced, not the line at the running rate.
+  const float jet_line =
+      std::clamp(bore_period_ / ratio - jet_comp_, 1.0f, static_cast<float>(capacity_ - 4));
   const float jet_delay =
-      std::clamp(jet_ratio_ * bore_delay, 1.0f, static_cast<float>(capacity_ - 4));
+      std::clamp(jet_ratio_ * jet_line, 1.0f, static_cast<float>(capacity_ - 4));
   const float pd_j = rt::lagrange3_fractional_delay(
       jet_, static_cast<size_t>(capacity_), jet_write_, static_cast<int>(jet_delay * 256.0f), pd);
   const float jet_out = jet_table(pd_j);
@@ -390,6 +401,7 @@ void FluteVoiceCore::refresh_excitation_targets() noexcept {
   // kept only to reproduce the shipped formula exactly.
   const float a_voiced = std::clamp(0.80f - 0.30f * br, 0.0f, 0.95f);
   lp_alpha_target_ = 1.0f - loss_pole_at_rate(a_voiced, srf_);
+  lp_alpha_voiced_ = 1.0f - loss_pole_at_rate(a_voiced, kLossVoicedSr);
   // The per-traversal gain needs no mapping: the loop is traversed f0 times a
   // second whatever the rate, so `damping_gain_` already means the same thing.
   loss_gain_target_ = damping_gain_;

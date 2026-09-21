@@ -323,18 +323,20 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   // when the line was no longer than that span.
   bore_write_ = capacity_ > 0 ? static_cast<size_t>(prefill_span_ % capacity_) : 0;
 
-  // Contour + textures.
+  // Contour + textures. Every seeded level is a per-sample draw voiced at
+  // kLossVoicedSr, so each carries the noise law's gain.
+  const float noise_gain = noise_gain_at_rate(sr);
   attack_coeff_ = ramp_coeff(params.attack_ms, sr);
   release_coeff_ = ramp_coeff(params.release_ms, sr);
-  breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth;
-  chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth;
+  breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain;
+  chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth * noise_gain;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
   output_scale_ = kOutputScale;
 
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst (the
   // Karplus-Strong trick) so the reed locks onto a resonating column quickly
   // rather than swelling up from silence.
-  const float prefill = kBorePrefill * breath_target_;
+  const float prefill = kBorePrefill * breath_target_ * noise_gain;
   if (bore_ != nullptr) {
     // Past the seed the line has to be cleared rather than left alone: it is a
     // slab slot the previous note wrote, and everything outside the seed is

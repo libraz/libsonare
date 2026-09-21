@@ -39,7 +39,8 @@ inline float string_loop_gain_for(float period_samples, double sample_rate, floa
   return std::exp(-6.907755279f / loops_to_t60);
 }
 
-/// The sample rate every shipped loss coefficient in this bank was voiced at.
+/// The sample rate every shipped loss coefficient and seeded noise level in
+/// this bank was voiced at.
 constexpr double kLossVoicedSr = 48000.0;
 
 /// Re-expresses a loss pole voiced at @ref kLossVoicedSr so it keeps its corner,
@@ -60,6 +61,20 @@ constexpr double kLossVoicedSr = 48000.0;
 inline float loss_pole_at_rate(float a_voiced, double sample_rate) noexcept {
   if (!(sample_rate > 0.0) || a_voiced <= 0.0f) return a_voiced;
   return static_cast<float>(std::pow(static_cast<double>(a_voiced), kLossVoicedSr / sample_rate));
+}
+
+/// Re-expresses a per-sample noise level voiced at @ref kLossVoicedSr so it
+/// keeps its power per Hz at @p sample_rate.
+///
+/// One independent draw per output sample spreads a fixed variance over
+/// `0..sr/2`, so the power landing inside any band quoted in Hz -- a bore, a
+/// formant, a follower's corner -- falls as `1/sr`. The level is therefore
+/// scaled by `sqrt(sr / kLossVoicedSr)`: exactly 1 at the voiced rate, and the
+/// realization is still one draw per sample, so a 48 kHz render is unchanged
+/// bit for bit.
+inline float noise_gain_at_rate(double sample_rate) noexcept {
+  if (!(sample_rate > 0.0)) return 1.0f;
+  return static_cast<float>(std::sqrt(sample_rate / kLossVoicedSr));
 }
 
 /// A solved one-pole loss filter: the feedback coefficient and the gain in

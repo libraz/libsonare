@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+#include "midi/synth/string_loop.h"
 #include "util/constants.h"
 #include "util/tunable.h"
 
@@ -157,8 +158,9 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
   excitation_live_ = false;
 
-  // Aspiration and vibrato.
-  breath_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathDepth;
+  // Aspiration and vibrato. The aspiration is a per-sample draw voiced at
+  // kLossVoicedSr, so it carries the noise law's gain.
+  breath_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathDepth * noise_gain_at_rate(sr);
   vib_depth_ = std::clamp(params.vibrato_depth, 0.0f, 1.0f) * kVibratoMaxFrac;
   vib_phase_ = 0.0f;
   vib_inc_ = vib_depth_ > 0.0f

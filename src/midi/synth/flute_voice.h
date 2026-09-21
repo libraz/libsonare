@@ -212,6 +212,10 @@ class FluteVoiceCore {
   // comp), the STK jet-convection length).
   float bore_period_ = 0.0f;
   float comp_ = 1.0f;
+  /// The same compensation as voiced at kLossVoicedSr, in samples at the
+  /// running rate: the jet delay is a fraction of the line THAT length leaves,
+  /// so its duration does not follow the rate.
+  float jet_comp_ = 1.0f;
   float jet_ratio_ = 0.4f;
   /// The played fundamental (Hz) and the sample rate, held for the bell-loop
   /// loss-law solve (refresh_excitation_targets()), which must be re-run on
@@ -265,6 +269,9 @@ class FluteVoiceCore {
   float ctrl_coeff_ = 1.0f;
   float breath_ctrl_target_ = 0.55f;
   float lp_alpha_target_ = 1.0f;
+  /// lp_alpha_target_ as it is at kLossVoicedSr, for the jet delay's own
+  /// compensation.
+  float lp_alpha_voiced_ = 1.0f;
   float loss_gain_target_ = 1.0f;
   // The normalized bases behind those two targets, and the matrix offsets on
   // them; the targets are always the composed pair.

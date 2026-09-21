@@ -14,13 +14,8 @@
 /// the sample rate alone; a note term reappearing at any of the four call
 /// sites is what the note-invariance cases below are built to catch.
 ///
-/// One residual case at the foot records rather than asserts: on a NativeSynth
-/// flute patch unrelated to this law, the same rate-spread measurement reads
-/// 11.82 dB at note 48 -- against 0.295 dB this file's OWN dark flute patch
-/// reads on the same axis. Neither the loop filter (rate-invariant in Hz,
-/// proven above) nor its exciter poles (inert on that patch) explain it, so a
-/// reader seeing only the low number elsewhere in this file should not
-/// conclude the flute is rate-clean.
+/// What this law does not reach in the flute -- its jet delay and its seeded
+/// noise levels -- is wind_rate_law_test.cpp's.
 
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
@@ -534,111 +529,5 @@ TEST_CASE("the rendered engines' sr-discriminator, with ks_voice as the control"
     // Sensitivity: the two notes' readings differ, so "small spread" above is
     // not "the metric cannot move".
     CHECK(std::fabs(engine_reading[0] - engine_reading[1]) > 1.0);
-  }
-}
-
-TEST_CASE("the rendered flute engine's rate dependence is recorded here, not asserted away",
-          "[midi][synth][flute][loss_law]") {
-  // NOT a property test: a RESIDUAL RECORDING. This is the retired sr-
-  // discriminator's own measurement (a NativeSynth flute voice, Goertzel
-  // h10/h1 tilt, notes 36/48/60 across 24/48/96 kHz) -- deleted above along
-  // with the rest of the retired law's cases because the PROPERTY it
-  // asserted (a 2 dB bound at note 48) was false. The number itself is real
-  // and unexplained: 11.82 dB of rate spread at note 48, unchanged before and
-  // after this file's loop-loss law fix and unchanged before and after
-  // flute_voice.cpp's two exciter poles (jet_turb_alpha_, edge_hyst_alpha_)
-  // were separately corrected to loss_pole_at_rate. Neither fixed mechanism
-  // can be the cause: the bore loop filter is provably rate-invariant in Hz
-  // (this file's own cases), and both exciter poles are provably inert on
-  // this exact patch (breath_noise = 0 skips the whole jet_turb_ block;
-  // edge_hysteresis is never set, so it keeps its 0 default) -- checked below
-  // rather than merely asserted.
-  //
-  // Something else in the flute engine still ties its sounding spectrum to
-  // the sample rate, unidentified, and finding it is out of this file's
-  // scope. This case exists so the number is visible and moves when someone
-  // does: a future reduction is a PASS that should tighten the slack below,
-  // never a failure to relax it.
-  const auto goertzel_mag = [](const std::vector<float>& x, size_t from, size_t count, double freq,
-                               double sr) noexcept -> double {
-    const double w = 2.0 * kTwoPiD * freq / sr;
-    const double coeff = 2.0 * std::cos(w);
-    double s1 = 0.0, s2 = 0.0;
-    for (size_t i = 0; i < count; ++i) {
-      const double sample = (from + i < x.size()) ? static_cast<double>(x[from + i]) : 0.0;
-      const double s0 = sample + coeff * s1 - s2;
-      s2 = s1;
-      s1 = s0;
-    }
-    const double real = s1 - s2 * std::cos(w);
-    const double imag = s2 * std::sin(w);
-    return std::sqrt(real * real + imag * imag) / (static_cast<double>(count) / 2.0);
-  };
-
-  NativeSynthPatch patch;
-  patch.mode = SynthEngineMode::kFlute;
-  patch.cutoff_hz = 20000.0f;
-  patch.amp_env.attack_ms = 5.0f;
-  patch.amp_env.sustain = 1.0f;
-  patch.amp_env.release_ms = 100.0f;
-  patch.flute.breath_pressure = 0.7f;
-  patch.flute.vel_to_breath = 0.0f;
-  patch.flute.jet_ratio = 0.5f;
-  patch.flute.jet_reflection = 0.5f;
-  patch.flute.end_reflection = 0.5f;
-  patch.flute.brightness = 0.20f;
-  patch.flute.damping = 0.0f;
-  patch.flute.attack_ms = 5.0f;
-  patch.flute.release_ms = 50.0f;
-  patch.flute.breath_noise = 0.0f;
-  patch.flute.chiff = 0.0f;
-  patch.flute.vibrato_depth = 0.0f;
-  // The two exciter poles' gates, confirmed off on this exact patch so they
-  // cannot be read as this residual's explanation.
-  REQUIRE(patch.flute.breath_noise == 0.0f);
-  REQUIRE(patch.flute.jet_turbulence == 0.0f);
-  REQUIRE(patch.flute.edge_hysteresis == 0.0f);
-
-  const uint8_t notes[] = {36, 48, 60};
-  const double rates[] = {24000.0, 48000.0, 96000.0};
-  // The spread measured when this case was written, kept as the recorded
-  // value rather than re-derived; kSlack is headroom against host-to-host
-  // float noise, not a bound this case means to enforce.
-  const double kRecordedSpreadDb[] = {4.6424, 11.8204, 5.0395};
-  const double kSlack = 1.0;
-  std::ostringstream report;
-
-  for (size_t ni = 0; ni < 3; ++ni) {
-    const uint8_t note = notes[ni];
-    const double f0 = static_cast<double>(note_to_hz(note));
-    double lo = 0.0, hi = 0.0;
-    for (size_t ri = 0; ri < 3; ++ri) {
-      const double sr = rates[ri];
-      NativeSynthConfig cfg;
-      cfg.patch = patch;
-      NativeSynth synth(cfg);
-      synth.prepare(sr, 256);
-      synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
-      const int total = static_cast<int>(1.5 * sr);
-      std::vector<float> left(static_cast<size_t>(total));
-      std::vector<float> right(static_cast<size_t>(total));
-      float* chans[2] = {left.data(), right.data()};
-      synth.process(chans, 2, total);
-      const int from = static_cast<int>(0.5 * sr);
-      const size_t count = static_cast<size_t>(total - from);
-      const double h1 = goertzel_mag(left, static_cast<size_t>(from), count, f0, sr);
-      const double h10 = goertzel_mag(left, static_cast<size_t>(from), count, 10.0 * f0, sr);
-      const double tilt_db = 20.0 * std::log10(h10 / std::max(1e-12, h1));
-      report << "note " << int{note} << " sr " << sr << " tilt " << tilt_db << " dB\n";
-      if (ri == 0) {
-        lo = hi = tilt_db;
-      }
-      lo = std::min(lo, tilt_db);
-      hi = std::max(hi, tilt_db);
-    }
-    const double spread = hi - lo;
-    INFO(report.str() << "note " << int{note} << " spread " << spread << " recorded "
-                      << kRecordedSpreadDb[ni]);
-    CHECK(spread < kRecordedSpreadDb[ni] + kSlack);
   }
 }
