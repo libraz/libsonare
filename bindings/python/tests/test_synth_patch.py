@@ -467,8 +467,11 @@ def test_engine_set_synth_instrument_renders_live_midi() -> None:
 def test_gs_sets_that_render_as_standard_are_the_ones_that_say_so() -> None:
     """The three states are distinct at the Python boundary: None where no set
     sits, False where a set renders exactly as Standard, True where it is voiced
-    apart. Collapsing the first two is what a plain truthiness check does, and it
-    would report 102 placeholders instead of four."""
+    apart. Collapsing the first two is what a plain truthiness check does: ``not
+    voiced_apart`` is the 102 programs holding no set plus the 5 answering False,
+    so 107 entries read as placeholders where there are four -- Standard answers
+    False about itself and is a real choice, so the count is wrong at both
+    ends."""
     named = {
         p: synth_gs_drum_kit_name(p) for p in range(128) if synth_gs_drum_kit_name(p) is not None
     }
@@ -495,4 +498,13 @@ def test_a_gs_variation_bank_reports_whether_it_is_voiced_or_falls_back() -> Non
     # GS resolving a variation this build does not voice to the capital: the
     # specified behaviour, and only this query separates it from a voiced bank.
     assert synth_gs_variation_is_voiced_apart(24, 16) is False
+    # Both arguments are seven-bit, so both ends of both are refused. The bank's
+    # upper end is the one that matters: bounded by what a uint16_t holds rather
+    # than by what a Bank Select means, 128 and up reached a resolution with no
+    # variation to find and answered False -- the single wrong answer a caller
+    # cannot tell from a real capital-tone result.
+    assert synth_gs_variation_is_voiced_apart(128, 0) is None
+    assert synth_gs_variation_is_voiced_apart(0xFFFF, 0) is None
+    assert synth_gs_variation_is_voiced_apart(127, 0) is not None  # the last in range
+    assert synth_gs_variation_is_voiced_apart(0, -1) is None
     assert synth_gs_variation_is_voiced_apart(0, 128) is None

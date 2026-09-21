@@ -460,7 +460,16 @@ TEST_CASE("a GS variation bank reports whether it is voiced or falls back",
   // Program 16 MSB 24 renders as the capital: GS resolving a variation this
   // build does not voice, which is the specified behaviour and not a gap.
   REQUIRE(sonare_synth_gs_variation_is_voiced_apart(24, 16) == 0);
+  // Both arguments are seven-bit MIDI values, so both ends of both are refused.
+  // The bank's upper end is the one that matters: bounding it by what a uint16_t
+  // holds rather than by what a Bank Select means let 128 and up reach a
+  // resolution with no variation to find, which answers 0 -- the single wrong
+  // answer a caller cannot tell from a real capital-tone result.
   REQUIRE(sonare_synth_gs_variation_is_voiced_apart(-1, 0) == -1);
+  REQUIRE(sonare_synth_gs_variation_is_voiced_apart(128, 0) == -1);
+  REQUIRE(sonare_synth_gs_variation_is_voiced_apart(0xFFFF, 0) == -1);
+  REQUIRE(sonare_synth_gs_variation_is_voiced_apart(127, 0) != -1);  // the last in range
+  REQUIRE(sonare_synth_gs_variation_is_voiced_apart(0, -1) == -1);
   REQUIRE(sonare_synth_gs_variation_is_voiced_apart(0, 128) == -1);
 }
 

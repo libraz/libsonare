@@ -1243,7 +1243,10 @@ describe('Sonare WASM Project', () => {
     it('reports the sets that render as Standard as the ones that say so', () => {
       // The three states stay distinct: null where no set sits, false where a set
       // renders exactly as Standard, true where it is voiced apart. A truthiness
-      // check collapses the first two and reports 102 placeholders instead of four.
+      // check collapses the first two: `!voicedApart` is the 102 programs holding
+      // no set plus the 5 answering false, so 107 entries read as placeholders
+      // where there are four -- Standard answers false about itself and is a real
+      // choice, so the count is wrong at both ends.
       const named = new Map<number, string>();
       for (let program = 0; program < 128; program++) {
         const name = synthGsDrumKitName(program);
@@ -1272,6 +1275,13 @@ describe('Sonare WASM Project', () => {
       expect(synthGsVariationIsVoicedApart(1, 0)).toBe(true);
       // GS resolving a variation this build does not voice to the capital tone.
       expect(synthGsVariationIsVoicedApart(24, 16)).toBe(false);
+      // The bank's upper end was bounded by what a uint16_t holds rather than by
+      // what a Bank Select means, so 128 and up answered false -- indistinguishable
+      // from a real capital-tone resolution.
+      expect(synthGsVariationIsVoicedApart(128, 0)).toBeNull();
+      expect(synthGsVariationIsVoicedApart(0xffff, 0)).toBeNull();
+      expect(synthGsVariationIsVoicedApart(127, 0)).not.toBeNull();
+      expect(synthGsVariationIsVoicedApart(0, -1)).toBeNull();
       expect(synthGsVariationIsVoicedApart(0, 128)).toBeNull();
     });
   });

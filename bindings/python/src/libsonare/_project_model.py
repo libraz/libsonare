@@ -947,8 +947,9 @@ def synth_gs_drum_kit_is_voiced_apart(program: int) -> bool | None:
 def synth_gs_variation_is_voiced_apart(bank: int, program: int) -> bool | None:
     """Whether melodic Bank Select ``bank`` on ``program`` is voiced apart from
     the capital tone: ``True`` when the bank has a patch of its own, ``False``
-    when it resolves to the capital, ``None`` when either argument is out of
-    range.
+    when it resolves to the capital, ``None`` when either argument is outside
+    ``[0, 127]`` -- both are seven-bit MIDI values, so ``128`` is out of range
+    rather than the drum bank here.
 
     Resolving an unvoiced variation to its capital is what GS specifies, so a
     ``False`` is correct behaviour rather than a gap — but only this query

@@ -244,8 +244,9 @@ int sonare_synth_gs_drum_kit_is_voiced_apart(int program);
 
 /// @brief Reports whether melodic Bank Select @p bank on @p program is voiced
 ///        apart from the capital tone: 1 when the bank has a patch of its own,
-///        0 when it resolves to the capital, -1 when either argument is out of
-///        range.
+///        0 when it resolves to the capital, -1 when either argument is outside
+///        [0, 127] -- both are seven-bit MIDI values, so 128 is out of range
+///        rather than the drum bank here.
 /// @details Resolving an unvoiced variation to its capital is what GS
 ///          specifies, so a 0 here is correct behaviour rather than a gap —
 ///          but only this query separates it from a bank that is voiced, which

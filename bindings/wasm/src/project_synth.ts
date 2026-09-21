@@ -60,7 +60,9 @@ export function synthGsDrumKitIsVoicedApart(program: number): boolean | null {
 /**
  * Whether melodic Bank Select `bank` on `program` is voiced apart from the
  * capital tone: `true` when the bank has a patch of its own, `false` when it
- * resolves to the capital, `null` when either argument is out of range.
+ * resolves to the capital, `null` when either argument is outside `[0, 127]` —
+ * both are seven-bit MIDI values, so `128` is out of range rather than the drum
+ * bank here.
  *
  * @remarks
  * Resolving an unvoiced variation to its capital is what GS specifies, so a

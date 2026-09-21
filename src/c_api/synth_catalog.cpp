@@ -200,7 +200,11 @@ int sonare_synth_gs_drum_kit_is_voiced_apart(int program) {
 
 int sonare_synth_gs_variation_is_voiced_apart(int bank, int program) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank < 0 || bank > 0xFFFF || program < 0 || program > 127) return -1;
+  // 127, not the 0xFFFF a uint16_t holds: a Bank Select value is seven bits, and
+  // bounding by the storage type instead of by the domain let 128 and above
+  // through to a resolution that has no variation to find and answers 0 -- the
+  // one wrong answer a caller cannot separate from a real capital-tone result.
+  if (bank < 0 || bank > 127 || program < 0 || program > 127) return -1;
   return sonare::midi::synth::gs_variation_is_voiced_apart(static_cast<uint16_t>(bank),
                                                            static_cast<uint8_t>(program))
              ? 1
