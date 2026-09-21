@@ -144,9 +144,12 @@ def tone_class(program: int, *, drum_note: int | None = None) -> ToneClass:
 _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
     # A bowed or blown note: the spectrum is the identity, and how it moves is
     # the difference between an instrument and an organ pipe imitating one.
+    # `crest` sits at the other four classes' weight because the defect it
+    # catches — a note whose envelope never falls after its attack — is the
+    # characteristic failure of a sustained voice rather than an incidental one.
     ToneClass.SUSTAINED: {
         "harm": 1.0, "cents": 0.5, "tnr": 1.0, "mod": 1.0, "env": 0.5,
-        "slope": 0.5, "dyn": 1.0,
+        "slope": 0.5, "dyn": 1.0, "crest": 1.0,
     },
     # A hammered string: the decay and the strike carry it, and the aftersound
     # is most of the note. `stiff` is weighted because the series itself is a

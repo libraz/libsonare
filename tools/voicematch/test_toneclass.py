@@ -86,6 +86,20 @@ def test_a_modal_voice_is_never_weighted_on_the_harmonic_ladder():
     assert default_weights(0)["harm"] > 0.0
 
 
+def test_every_class_asks_for_the_envelope_shape_it_can_be_broken_on():
+    """`crest` is produced for every probe, so a class not asking for it is a gap.
+
+    It catches a note whose envelope never falls after its attack, which is
+    invisible to every shape metric and to the level residual alike — and which
+    is the characteristic failure of a sustained voice, not an incidental one.
+    Four classes weighted it and SUSTAINED did not, with no comment arguing the
+    absence beside two in this file that are argued.
+    """
+    # One program per class: piano, guitar, flute, marimba, seashore.
+    for program in (0, 24, 73, 12, 122):
+        assert default_weights(program).get("crest", 0.0) > 0.0, program
+
+
 def test_every_program_has_a_register_inside_something_playable():
     """The old table covered three families; the rest fell to C3/C4/C5."""
     from patterns import registers_for_program
