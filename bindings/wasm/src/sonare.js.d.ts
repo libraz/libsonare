@@ -1757,6 +1757,9 @@ export interface SonareModule {
   projectAbiVersion: () => number;
   synthPresetNames: () => string[];
   synthPresetPatch: (name: string) => unknown;
+  synthGsDrumKitName: (program: number) => string | null;
+  synthGsDrumKitIsVoicedApart: (program: number) => number;
+  synthGsVariationIsVoicedApart: (bank: number, program: number) => number;
   controllerProfileNames: () => string[];
   midiGmInstrumentName: (program: number) => string | null;
   midiGmProgramForName: (name: string) => number;

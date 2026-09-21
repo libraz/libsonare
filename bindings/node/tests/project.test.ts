@@ -5,6 +5,9 @@ import {
   MarkerKind,
   Project,
   projectAbiVersion,
+  synthGsDrumKitIsVoicedApart,
+  synthGsDrumKitName,
+  synthGsVariationIsVoicedApart,
 } from '../src/index.js';
 
 /** Build a small deterministic project: a track + an audio clip + a MIDI clip + tempo. */
@@ -1524,5 +1527,42 @@ describe('Project MIR integer arguments are range-checked', () => {
         expect.objectContaining({ name: 'SonareError' }),
       );
     });
+  });
+});
+
+describe('GS voicing queries', () => {
+  it('reports the sets that render as Standard as the ones that say so', () => {
+    // The three states stay distinct: null where no set sits, false where a set
+    // renders exactly as Standard, true where it is voiced apart. A truthiness
+    // check collapses the first two and reports 102 placeholders instead of four.
+    const named = new Map<number, string>();
+    for (let program = 0; program < 128; program++) {
+      const name = synthGsDrumKitName(program);
+      if (name === null) {
+        expect(synthGsDrumKitIsVoicedApart(program)).toBeNull();
+      } else {
+        named.set(program, name);
+      }
+    }
+    expect(named.size).toBe(26);
+    const sameAsStandard = [...named]
+      .filter(([program]) => synthGsDrumKitIsVoicedApart(program) === false)
+      .map(([program, name]) => `${program}:${name}`);
+    expect(sameAsStandard).toEqual([
+      '0:Standard',
+      '53:Cymbal & Claps',
+      '56:SFX',
+      '57:Rhythm FX',
+      '58:Rhythm FX 2',
+    ]);
+  });
+
+  it('reports whether a variation bank is voiced or falls back to the capital', () => {
+    expect(synthGsVariationIsVoicedApart(0, 0)).toBe(false);
+    expect(synthGsVariationIsVoicedApart(8, 0)).toBe(true);
+    expect(synthGsVariationIsVoicedApart(1, 0)).toBe(true);
+    // GS resolving a variation this build does not voice to the capital tone.
+    expect(synthGsVariationIsVoicedApart(24, 16)).toBe(false);
+    expect(synthGsVariationIsVoicedApart(0, 128)).toBeNull();
   });
 });

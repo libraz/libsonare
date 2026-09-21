@@ -222,6 +222,38 @@ int sonare_synth_builtin_waveform_from_name(const char* name);
 ///        exact preset. Unknown names return SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
 
+/// @brief Returns the GS rhythm-set name a rhythm part's @p program selects
+///        ("Standard", "Room", "TR-808", ...), or NULL when the module's own
+///        tone map defines no set at that program.
+/// @details Pointer is owned by libsonare and remains valid for the program
+///          lifetime; the caller must NOT free it. The answer is the module's
+///          own map, which is the newest one and therefore reaches every set
+///          this build voices; a file that selects an older map reaches fewer.
+const char* sonare_synth_gs_drum_kit_name(int program);
+
+/// @brief Reports whether the GS rhythm set at @p program is voiced apart from
+///        Standard: 1 when at least one drum note differs, 0 when the set
+///        renders exactly as Standard, -1 when no set sits at @p program.
+/// @details Derived by applying the set to every note's resolved patch and
+///          comparing, so the answer follows the voicing rather than a list
+///          that has to be kept in step with it. Four sets GS fills with
+///          one-shots share the Standard voicing deliberately, so a host that
+///          offers every set without this query offers four choices that
+///          change nothing. A build without arrangement support returns -1.
+int sonare_synth_gs_drum_kit_is_voiced_apart(int program);
+
+/// @brief Reports whether melodic Bank Select @p bank on @p program is voiced
+///        apart from the capital tone: 1 when the bank has a patch of its own,
+///        0 when it resolves to the capital, -1 when either argument is out of
+///        range.
+/// @details Resolving an unvoiced variation to its capital is what GS
+///          specifies, so a 0 here is correct behaviour rather than a gap —
+///          but only this query separates it from a bank that is voiced, which
+///          otherwise takes rendering both and comparing. Accepts the GS
+///          Bank Select MSB and the GM2 LSB alike, since both address the same
+///          variation. A build without arrangement support returns -1.
+int sonare_synth_gs_variation_is_voiced_apart(int bank, int program);
+
 /// @brief Binds a NativeSynth patch to a MIDI destination id (the value set by
 ///        @ref sonare_project_set_track_midi_destination; default 0).
 typedef struct {

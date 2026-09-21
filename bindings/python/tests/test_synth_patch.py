@@ -13,6 +13,9 @@ from libsonare import (
     SynthModRouting,
     SynthPatch,
     synth_enum_tables,
+    synth_gs_drum_kit_is_voiced_apart,
+    synth_gs_drum_kit_name,
+    synth_gs_variation_is_voiced_apart,
     synth_preset_names,
     synth_preset_patch,
 )
@@ -459,3 +462,37 @@ def test_engine_set_synth_instrument_renders_live_midi() -> None:
             engine.set_synth_instrument("no-such-preset", destination_id=7)
     finally:
         engine.close()
+
+
+def test_gs_sets_that_render_as_standard_are_the_ones_that_say_so() -> None:
+    """The three states are distinct at the Python boundary: None where no set
+    sits, False where a set renders exactly as Standard, True where it is voiced
+    apart. Collapsing the first two is what a plain truthiness check does, and it
+    would report 102 placeholders instead of four."""
+    named = {
+        p: synth_gs_drum_kit_name(p) for p in range(128) if synth_gs_drum_kit_name(p) is not None
+    }
+    assert len(named) == 26
+    same_as_standard = {
+        p: n for p, n in named.items() if synth_gs_drum_kit_is_voiced_apart(p) is False
+    }
+    assert same_as_standard == {
+        0: "Standard",  # the comparison itself
+        53: "Cymbal & Claps",
+        56: "SFX",
+        57: "Rhythm FX",
+        58: "Rhythm FX 2",
+    }
+    for program in range(128):
+        if program not in named:
+            assert synth_gs_drum_kit_is_voiced_apart(program) is None
+
+
+def test_a_gs_variation_bank_reports_whether_it_is_voiced_or_falls_back() -> None:
+    assert synth_gs_variation_is_voiced_apart(0, 0) is False  # the capital is not apart from itself
+    assert synth_gs_variation_is_voiced_apart(8, 0) is True  # Piano 1w carries its own patch
+    assert synth_gs_variation_is_voiced_apart(1, 0) is True  # the same tone via the GM2 LSB
+    # GS resolving a variation this build does not voice to the capital: the
+    # specified behaviour, and only this query separates it from a voiced bank.
+    assert synth_gs_variation_is_voiced_apart(24, 16) is False
+    assert synth_gs_variation_is_voiced_apart(0, 128) is None

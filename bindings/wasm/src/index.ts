@@ -612,6 +612,9 @@ export {
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
   synthEnumTables,
+  synthGsDrumKitIsVoicedApart,
+  synthGsDrumKitName,
+  synthGsVariationIsVoicedApart,
   synthPresetNames,
   synthPresetPatch,
 } from './project';

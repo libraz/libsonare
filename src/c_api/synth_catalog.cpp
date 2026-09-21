@@ -2,13 +2,17 @@
 /// @brief The synth-catalogue C ABI: which presets, enum values and built-in
 ///        waveforms exist, and the patch behind a preset name.
 
+#include <cstdint>
 #include <cstring>
 #include <string>
+#include <string_view>
 
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/synth_patch_common.h"
+#include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/gs_layer.h"
 #include "midi/synth/synth_presets.h"
 
 namespace {
@@ -162,5 +166,48 @@ SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out) {
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(name, out);
+#endif
+}
+
+const char* sonare_synth_gs_drum_kit_name(int program) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (program < 0 || program > 127) return nullptr;
+  // The core hands back a view into a static literal, so the NUL the C surface
+  // promises is already there and the empty view is the "no set here" answer.
+  const std::string_view name =
+      sonare::midi::synth::gs_drum_kit_name(static_cast<uint8_t>(program));
+  return name.empty() ? nullptr : name.data();
+#else
+  (void)program;
+  return nullptr;
+#endif
+}
+
+int sonare_synth_gs_drum_kit_is_voiced_apart(int program) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (program < 0 || program > 127) return -1;
+  const auto p = static_cast<uint8_t>(program);
+  if (sonare::midi::synth::gs_drum_kit_name(p).empty()) return -1;
+  return sonare::midi::synth::gs_drum_kit_is_voiced_apart(
+             sonare::midi::synth::gm_fallback_drum_kit(p))
+             ? 1
+             : 0;
+#else
+  (void)program;
+  return -1;
+#endif
+}
+
+int sonare_synth_gs_variation_is_voiced_apart(int bank, int program) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (bank < 0 || bank > 0xFFFF || program < 0 || program > 127) return -1;
+  return sonare::midi::synth::gs_variation_is_voiced_apart(static_cast<uint16_t>(bank),
+                                                           static_cast<uint8_t>(program))
+             ? 1
+             : 0;
+#else
+  (void)bank;
+  (void)program;
+  return -1;
 #endif
 }

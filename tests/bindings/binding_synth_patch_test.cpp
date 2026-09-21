@@ -418,6 +418,52 @@ TEST_CASE("the drum-kit preset plays the GM drum map on any key", "[project][syn
   sonare_project_destroy(project);
 }
 
+TEST_CASE("the GS sets that render as Standard are the ones that say so",
+          "[project][synth_patch]") {
+  // The list is built from the query rather than compared against one, so a set
+  // that gains a voicing moves this expectation instead of silently agreeing
+  // with a hardcoded exclusion list — which is the thing the query replaces.
+  std::string named;
+  std::string same_as_standard;
+  for (int program = 0; program < 128; ++program) {
+    const char* name = sonare_synth_gs_drum_kit_name(program);
+    const int apart = sonare_synth_gs_drum_kit_is_voiced_apart(program);
+    CAPTURE(program);
+    if (name == nullptr) {
+      REQUIRE(apart == -1);  // no set here, so there is nothing to compare
+      continue;
+    }
+    REQUIRE((apart == 0 || apart == 1));
+    if (!named.empty()) named += ',';
+    named += std::to_string(program);
+    if (apart == 0) {
+      if (!same_as_standard.empty()) same_as_standard += ',';
+      same_as_standard += std::to_string(program);
+      same_as_standard += ':';
+      same_as_standard += name;
+    }
+  }
+  REQUIRE(named == "0,1,2,8,9,10,11,16,24,25,26,27,28,29,30,32,40,48,49,50,52,53,56,57,58,127");
+  // Standard is the comparison, and the other four are the sets GS fills with
+  // one-shots — a bank of extra pieces over an unchanged kit.
+  REQUIRE(same_as_standard == "0:Standard,53:Cymbal & Claps,56:SFX,57:Rhythm FX,58:Rhythm FX 2");
+}
+
+TEST_CASE("a GS variation bank reports whether it is voiced or falls back",
+          "[project][synth_patch]") {
+  // Bank 0 is the capital tone itself, so it is never apart from itself.
+  REQUIRE(sonare_synth_gs_variation_is_voiced_apart(0, 0) == 0);
+  // Piano 1w: the wide variation carries its own patch.
+  REQUIRE(sonare_synth_gs_variation_is_voiced_apart(8, 0) == 1);
+  // The same variation reached through the GM2 bank-select LSB.
+  REQUIRE(sonare_synth_gs_variation_is_voiced_apart(1, 0) == 1);
+  // Program 16 MSB 24 renders as the capital: GS resolving a variation this
+  // build does not voice, which is the specified behaviour and not a gap.
+  REQUIRE(sonare_synth_gs_variation_is_voiced_apart(24, 16) == 0);
+  REQUIRE(sonare_synth_gs_variation_is_voiced_apart(-1, 0) == -1);
+  REQUIRE(sonare_synth_gs_variation_is_voiced_apart(0, 128) == -1);
+}
+
 TEST_CASE("sonare_engine synth instrument renders live MIDI input", "[c_api][synth_patch]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);

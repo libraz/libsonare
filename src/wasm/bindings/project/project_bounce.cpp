@@ -441,6 +441,20 @@ val js_synth_preset_names() {
   return out;
 }
 
+val js_synth_gs_drum_kit_name(const val& program) {
+  return js_nullable_string(sonare_synth_gs_drum_kit_name(checkedIntFromVal(program, "program")));
+}
+
+// 1 / 0 / -1 as the C ABI gives them; the facade turns them into boolean|null.
+int js_synth_gs_drum_kit_is_voiced_apart(const val& program) {
+  return sonare_synth_gs_drum_kit_is_voiced_apart(checkedIntFromVal(program, "program"));
+}
+
+int js_synth_gs_variation_is_voiced_apart(const val& bank, const val& program) {
+  return sonare_synth_gs_variation_is_voiced_apart(checkedIntFromVal(bank, "bank"),
+                                                   checkedIntFromVal(program, "program"));
+}
+
 // Fetches a named catalog preset as a SynthPatch object (the preset name plus
 // its wrapper-section values). A "va:" routing prefix is accepted; unknown
 // names throw.

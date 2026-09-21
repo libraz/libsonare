@@ -434,6 +434,32 @@ Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+// GS rhythm-set name for a rhythm part's program, or null where no set sits.
+Napi::Value SynthGsDrumKitName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  return NullableString(env, sonare_synth_gs_drum_kit_name(info[0].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
+}
+
+// Whether a GS rhythm set is voiced apart from Standard: 1 / 0 / -1.
+Napi::Value SynthGsDrumKitIsVoicedApart(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  return Napi::Number::New(env,
+                           sonare_synth_gs_drum_kit_is_voiced_apart(info[0].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
+}
+
+// Whether a melodic GS variation bank is voiced apart from its capital tone.
+Napi::Value SynthGsVariationIsVoicedApart(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  return Napi::Number::New(env, sonare_synth_gs_variation_is_voiced_apart(
+                                    info[0].As<Napi::Number>(), info[1].As<Napi::Number>()));
+  SONARE_NODE_CATCH(env)
+}
+
 // Controller-profile preset catalog, split from the C ABI's '\n'-joined
 // program-lifetime string like SynthPresetNames.
 Napi::Value ControllerProfileNames(const Napi::CallbackInfo& info) {
@@ -525,6 +551,13 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, ProjectAbiVersion, "projectAbiVersion"));
   exports.Set("synthPresetNames", Napi::Function::New(env, SynthPresetNames, "synthPresetNames"));
   exports.Set("synthPresetPatch", Napi::Function::New(env, SynthPresetPatch, "synthPresetPatch"));
+  exports.Set("synthGsDrumKitName",
+              Napi::Function::New(env, SynthGsDrumKitName, "synthGsDrumKitName"));
+  exports.Set("synthGsDrumKitIsVoicedApart",
+              Napi::Function::New(env, SynthGsDrumKitIsVoicedApart, "synthGsDrumKitIsVoicedApart"));
+  exports.Set(
+      "synthGsVariationIsVoicedApart",
+      Napi::Function::New(env, SynthGsVariationIsVoicedApart, "synthGsVariationIsVoicedApart"));
   exports.Set("controllerProfileNames",
               Napi::Function::New(env, ControllerProfileNames, "controllerProfileNames"));
   exports.Set("_synthEnumTables", Napi::Function::New(env, SynthEnumTables, "_synthEnumTables"));

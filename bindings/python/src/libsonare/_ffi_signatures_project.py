@@ -108,6 +108,19 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(SonareSynthPatch),
             ]
 
+            if hasattr(lib, "sonare_synth_gs_drum_kit_name"):
+                lib.sonare_synth_gs_drum_kit_name.restype = ctypes.c_char_p
+                lib.sonare_synth_gs_drum_kit_name.argtypes = [ctypes.c_int]
+
+                lib.sonare_synth_gs_drum_kit_is_voiced_apart.restype = ctypes.c_int
+                lib.sonare_synth_gs_drum_kit_is_voiced_apart.argtypes = [ctypes.c_int]
+
+                lib.sonare_synth_gs_variation_is_voiced_apart.restype = ctypes.c_int
+                lib.sonare_synth_gs_variation_is_voiced_apart.argtypes = [
+                    ctypes.c_int,
+                    ctypes.c_int,
+                ]
+
             lib.sonare_project_bounce_with_synth_instruments.restype = ctypes.c_int32
             lib.sonare_project_bounce_with_synth_instruments.argtypes = [
                 ctypes.c_void_p,

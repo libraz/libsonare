@@ -4,7 +4,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "midi/synth/gm_fallback_data.h"
@@ -1189,6 +1191,31 @@ float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t 
       break;
   }
   return gain;
+}
+
+bool gs_drum_kit_is_voiced_apart(uint8_t kit) noexcept {
+  // memcpy rather than assignment, and memcmp rather than a field list: the two
+  // sides then share their padding byte for byte, so the comparison stays exact
+  // while covering a field added to either struct without being told about it.
+  static_assert(std::is_trivially_copyable_v<PercussionPatchParams>);
+  static_assert(std::is_trivially_copyable_v<DahdsrConfig>);
+  if (kit == 0) return false;
+  for (int note = 0; note < 128; ++note) {
+    const NativeSynthPatch& standard = gm_fallback_drum_patch(static_cast<uint8_t>(note));
+    PercussionPatchParams perc;
+    DahdsrConfig amp;
+    std::memcpy(&perc, &standard.percussion, sizeof(perc));
+    std::memcpy(&amp, &standard.amp_env, sizeof(amp));
+    const float gain = apply_gs_drum_kit(perc, amp, kit, static_cast<uint8_t>(note));
+    if (gain != 1.0f) return true;
+    if (std::memcmp(&perc, &standard.percussion, sizeof(perc)) != 0) return true;
+    if (std::memcmp(&amp, &standard.amp_env, sizeof(amp)) != 0) return true;
+  }
+  return false;
+}
+
+bool gs_variation_is_voiced_apart(uint16_t bank, uint8_t program, GsToneMap map) noexcept {
+  return &gm_fallback_patch(bank, program, map) != &gm_fallback_patch(0, program, map);
 }
 
 float gm_fallback_max_release_ms() noexcept {

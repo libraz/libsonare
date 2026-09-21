@@ -101,6 +101,25 @@ uint8_t gm_fallback_drum_kit(uint8_t program, GsToneMap map = GsToneMap::kModule
 float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t kit,
                         uint8_t note) noexcept;
 
+/// True when @p kit voices at least one drum note apart from the Standard kit.
+/// Derived by applying the variation to every note's own resolved patch and
+/// comparing, so it answers what a listener would hear rather than what the
+/// table looks like: a set whose case is a deliberate fall-through, and a set
+/// whose case exists but whose every edit is a clamp the current patches
+/// already satisfy, both report false. Kit 0 is the comparison and reports
+/// false for itself. Callers annotate a kit list with it — the four sets GS
+/// fills with one-shots share the Standard voicing, so a host offering all
+/// 26 presents four choices that change nothing.
+bool gs_drum_kit_is_voiced_apart(uint8_t kit) noexcept;
+
+/// True when melodic @p bank on @p program resolves to a patch of its own
+/// rather than to the capital tone. Derived from gm_fallback_patch by identity,
+/// which is exactly the question — a variation the table does not voice returns
+/// the capital's own patch — so a bank the table gains or loses moves this
+/// answer with it. Bank 0 is the capital and reports false for itself.
+bool gs_variation_is_voiced_apart(uint16_t bank, uint8_t program,
+                                  GsToneMap map = GsToneMap::kModuleDefault) noexcept;
+
 /// Per-program ambience weighting for fallback voices: multipliers on the
 /// channel's CC91/CC93-derived sends (clamped to 1 after scaling). SF2 zones
 /// carry their own send generators, so this weighting exists only for the

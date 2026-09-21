@@ -384,6 +384,12 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate, 
 // NativeSynth preset / enum free functions (bodies in project_bounce.cpp).
 val js_synth_preset_names();
 val js_synth_preset_patch(const std::string& name);
+// GS voicing queries: which rhythm set a rhythm-part program selects, and
+// whether that set — or a melodic variation bank — is voiced apart from what
+// it otherwise falls back to.
+val js_synth_gs_drum_kit_name(const val& program);
+int js_synth_gs_drum_kit_is_voiced_apart(const val& program);
+int js_synth_gs_variation_is_voiced_apart(const val& bank, const val& program);
 // Controller-profile preset names (body in project_bounce.cpp), the catalogue
 // RealtimeEngineWasm::setControllerProfile accepts.
 val js_controller_profile_names();

@@ -108,6 +108,7 @@ from ._runtime import (
     _curve_value,
     _get_lib,
     _resolve_enum,
+    _to_c_int,
     _to_c_size_t,
     _validate_c_int_field,
 )
@@ -908,6 +909,60 @@ def synth_preset_names() -> list[str]:
     if not raw:
         return []
     return [name for name in raw.decode("utf-8").split("\n") if name]
+
+
+def synth_gs_drum_kit_name(program: int) -> str | None:
+    """GS rhythm-set name a rhythm part's ``program`` selects (``"Standard"``,
+    ``"Room"``, ``"TR-808"``, ...), or ``None`` when the module's own tone map
+    defines no set there.
+
+    The answer is the module's own map, which is the newest one and reaches
+    every set this build voices; a file selecting an older map reaches fewer.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_synth_gs_drum_kit_name"):
+        raise RuntimeError("libsonare was built without the NativeSynth ABI")
+    raw = lib.sonare_synth_gs_drum_kit_name(_to_c_int(program, "program"))
+    return raw.decode("utf-8") if raw else None
+
+
+def synth_gs_drum_kit_is_voiced_apart(program: int) -> bool | None:
+    """Whether the GS rhythm set at ``program`` is voiced apart from Standard:
+    ``True`` when at least one drum note differs, ``False`` when the set renders
+    exactly as Standard, ``None`` when no set sits at ``program``.
+
+    Derived by applying the set to every note's resolved patch and comparing, so
+    the answer follows the voicing rather than a list kept in step with it. Four
+    sets GS fills with one-shots share the Standard voicing deliberately, so a
+    host offering every set without this query offers four choices that change
+    nothing.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_synth_gs_drum_kit_is_voiced_apart"):
+        raise RuntimeError("libsonare was built without the NativeSynth ABI")
+    r = lib.sonare_synth_gs_drum_kit_is_voiced_apart(_to_c_int(program, "program"))
+    return None if r < 0 else bool(r)
+
+
+def synth_gs_variation_is_voiced_apart(bank: int, program: int) -> bool | None:
+    """Whether melodic Bank Select ``bank`` on ``program`` is voiced apart from
+    the capital tone: ``True`` when the bank has a patch of its own, ``False``
+    when it resolves to the capital, ``None`` when either argument is out of
+    range.
+
+    Resolving an unvoiced variation to its capital is what GS specifies, so a
+    ``False`` is correct behaviour rather than a gap — but only this query
+    separates it from a bank that is voiced, which otherwise takes rendering
+    both and comparing. Accepts the GS Bank Select MSB and the GM2 LSB alike,
+    since both address the same variation.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_synth_gs_variation_is_voiced_apart"):
+        raise RuntimeError("libsonare was built without the NativeSynth ABI")
+    r = lib.sonare_synth_gs_variation_is_voiced_apart(
+        _to_c_int(bank, "bank"), _to_c_int(program, "program")
+    )
+    return None if r < 0 else bool(r)
 
 
 def controller_profile_names() -> list[str]:

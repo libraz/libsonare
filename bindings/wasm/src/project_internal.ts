@@ -284,6 +284,9 @@ export interface ProjectModule {
   projectAbiVersion: () => number;
   synthPresetNames: () => string[];
   synthPresetPatch: (name: string) => SynthPatch;
+  synthGsDrumKitName: (program: number) => string | null;
+  synthGsDrumKitIsVoicedApart: (program: number) => number;
+  synthGsVariationIsVoicedApart: (bank: number, program: number) => number;
   controllerProfileNames: () => string[];
   _synthEnumTables: () => SynthEnumTables;
   _synthPatchRoundTrip: (patch: SynthPatch) => SynthPatch;

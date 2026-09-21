@@ -473,6 +473,9 @@ void registerProjectFreeFunctions() {
   function("alignTakeToReference", &js_align_take_to_reference);
   function("synthPresetNames", &js_synth_preset_names);
   function("synthPresetPatch", &js_synth_preset_patch);
+  function("synthGsDrumKitName", &js_synth_gs_drum_kit_name);
+  function("synthGsDrumKitIsVoicedApart", &js_synth_gs_drum_kit_is_voiced_apart);
+  function("synthGsVariationIsVoicedApart", &js_synth_gs_variation_is_voiced_apart);
   function("controllerProfileNames", &js_controller_profile_names);
   function("_synthEnumTables", &js_synth_enum_tables);
   function("_synthPatchRoundTrip", &js_synth_patch_round_trip);
