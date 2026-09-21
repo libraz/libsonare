@@ -93,6 +93,19 @@ export interface Sf2ProgramStatus {
   presetName: string;
 }
 
+/**
+ * Every NativeSynth engine selector, by ordinal.
+ *
+ * @remarks
+ * Not seventeen interchangeable choices. Selecting a mode blanks every engine
+ * section but its own, and four engines have nothing to voice until a section
+ * is supplied: `'fm'` needs operators, `'modal'` a mode table, `'percussion'` a
+ * kit and `'sample'` a {@link SampleBank}. Each renders exact silence from an
+ * otherwise default patch (measured: peak 0), while the other thirteen sound
+ * and differ from one another. A host offering this array as a control offers
+ * those four as dead entries unless it also supplies the section, which a
+ * preset does.
+ */
 export const SYNTH_ENGINE_MODES = [
   'default',
   'subtractive',

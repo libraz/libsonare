@@ -34,6 +34,11 @@ from ._runtime import _synth_enum_value as _synth_enum_value
 
 # NativeSynth patch enum names (mirror the SonareSynth* enums in
 # sonare_c_types.h; 0 / "default" keeps the base patch's value).
+# Not seventeen interchangeable choices: selecting a mode blanks every engine
+# section but its own, and four engines have nothing to voice until a section is
+# supplied -- "fm" needs operators, "modal" a mode table, "percussion" a kit and
+# "sample" a sample bank. Each renders exact silence from an otherwise default
+# patch; the other thirteen sound and differ from one another.
 _SYNTH_ENGINE_MODES = {
     "default": 0,
     "subtractive": 1,

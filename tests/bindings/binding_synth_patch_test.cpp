@@ -5,6 +5,7 @@
 ///        and the realtime engine entry (sonare_engine_set_synth_instrument).
 
 #include <cstring>
+#include <set>
 #include <utility>
 
 #include "binding_project_parity_test_helpers.h"
@@ -127,6 +128,37 @@ TEST_CASE("synth patch enum counts match the public C ordinals", "[project][synt
   REQUIRE(SONARE_SYNTH_BODY_VOCAL + 1 == SONARE_SYNTH_BODY_TYPE_COUNT);
   REQUIRE(SONARE_SYNTH_MOD_SOURCE_COUNT == 13);
   REQUIRE(SONARE_SYNTH_MOD_DESTINATION_COUNT == 13);
+}
+
+TEST_CASE("four engine modes need a section supplied before they can sound",
+          "[project][synth_patch]") {
+  // Selecting a mode blanks every engine section but its own, so an engine
+  // whose section a default patch leaves empty has nothing to voice. Four are
+  // in that position and the bindings document them by name, which is a claim
+  // that goes stale silently -- this is what stops it. The list is pinned from
+  // both sides: exactly these four render nothing, and every other mode
+  // renders something, so a fifth engine falling silent fails here rather than
+  // reaching a host as a dead entry in a seventeen-value control.
+  SonareProject* project = make_synth_project(3);
+
+  const std::set<int> needs_a_section = {
+      SONARE_SYNTH_ENGINE_FM,          // operators
+      SONARE_SYNTH_ENGINE_MODAL,       // a mode table
+      SONARE_SYNTH_ENGINE_PERCUSSION,  // a kit
+      SONARE_SYNTH_ENGINE_SAMPLE,      // a sample bank
+  };
+
+  std::set<int> silent;
+  for (int mode = 0; mode < SONARE_SYNTH_ENGINE_MODE_COUNT; ++mode) {
+    SonareSynthPatch patch{};
+    patch.engine_mode = mode;
+    patch.gain = 0.5f;
+    CAPTURE(mode);
+    if (peak_of(bounce_synth(project, patch)) == 0.0f) silent.insert(mode);
+  }
+  REQUIRE(silent == needs_a_section);
+
+  sonare_project_destroy(project);
 }
 
 TEST_CASE("synth patch conversion rejects out-of-range enum fields", "[project][synth_patch]") {
