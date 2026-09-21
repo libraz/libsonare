@@ -14,7 +14,7 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _finite_float
+from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
 
 
 def cmd_rhythm(args: argparse.Namespace) -> int:
@@ -316,7 +316,9 @@ def cmd_plp(args: argparse.Namespace) -> int:
     return 0
 
 
-def register_advanced_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+def register_advanced_parsers(
+    sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
+) -> None:
     """Register the rhythm, dynamics and spectral descriptor commands."""
     stdout_options = shared.stdout_options
     fft_stdout_options = shared.fft_stdout_options

@@ -375,11 +375,11 @@ class SharedParsers:
     registrar's signature does not change when a new parent is added.
     """
 
-    common: argparse.ArgumentParser
-    stdout_options: argparse.ArgumentParser
-    fft_options: argparse.ArgumentParser
-    fft_stdout_options: argparse.ArgumentParser
-    mel_options: argparse.ArgumentParser
+    common: _ContractArgumentParser
+    stdout_options: _ContractArgumentParser
+    fft_options: _ContractArgumentParser
+    fft_stdout_options: _ContractArgumentParser
+    mel_options: _ContractArgumentParser
 
 
 def build_shared_parsers() -> SharedParsers:

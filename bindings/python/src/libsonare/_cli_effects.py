@@ -26,7 +26,7 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _finite_float
+from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
 from ._effects_note_ops import _UNMATCHED_POLICIES
 from ._runtime import _C_INT_MAX, _C_INT_MIN
 
@@ -997,7 +997,9 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
     return 0
 
 
-def register_effects_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+def register_effects_parsers(
+    sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
+) -> None:
     """Register the offline effect and voice-preset commands."""
     common = shared.common
     stdout_options = shared.stdout_options

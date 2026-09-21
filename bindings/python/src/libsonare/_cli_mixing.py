@@ -27,7 +27,7 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
-from ._cli_options import SharedParsers
+from ._cli_options import SharedParsers, _ContractArgumentParser
 
 
 def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
@@ -465,7 +465,9 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
     return 0
 
 
-def register_mixing_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+def register_mixing_parsers(
+    sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
+) -> None:
     """Register the mixer scene and channel-strip commands."""
     common = shared.common
     stdout_options = shared.stdout_options

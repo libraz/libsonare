@@ -22,7 +22,7 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _finite_float
+from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
 
 
 def _print_diagnostic_warnings(result: Any) -> None:
@@ -224,7 +224,9 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
     return 0
 
 
-def register_acoustic_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+def register_acoustic_parsers(
+    sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
+) -> None:
     """Register the room-measurement and impulse-response commands."""
     common = shared.common
     stdout_options = shared.stdout_options

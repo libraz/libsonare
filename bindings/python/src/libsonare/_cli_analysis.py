@@ -29,6 +29,7 @@ from ._cli_inventory import _cli_domain
 from ._cli_options import (
     SharedParsers,
     _candidate_count,
+    _ContractArgumentParser,
     _finite_float,
     _nonnegative_finite_float,
     _pitch_threshold,
@@ -630,7 +631,9 @@ def cmd_pitch(args: argparse.Namespace) -> int:
     return 0
 
 
-def register_analysis_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+def register_analysis_parsers(
+    sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
+) -> None:
     """Register the core analysis commands on the top-level subparsers."""
     stdout_options = shared.stdout_options
     fft_stdout_options = shared.fft_stdout_options

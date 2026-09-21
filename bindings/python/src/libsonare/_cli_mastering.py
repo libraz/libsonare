@@ -25,7 +25,12 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _add_wav_bits_argument, _finite_float
+from ._cli_options import (
+    SharedParsers,
+    _add_wav_bits_argument,
+    _ContractArgumentParser,
+    _finite_float,
+)
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset, SoloProcessor
@@ -1298,7 +1303,9 @@ def cmd_mastering_profile(args: argparse.Namespace) -> int:
     return 0
 
 
-def register_mastering_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+def register_mastering_parsers(
+    sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
+) -> None:
     """Register the mastering, repair and processor commands."""
     common = shared.common
     stdout_options = shared.stdout_options

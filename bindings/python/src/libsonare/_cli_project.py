@@ -693,7 +693,9 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
     return 0
 
 
-def register_project_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+def register_project_parsers(
+    sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
+) -> None:
     """Register the project, MIDI render and transcription commands."""
     common = shared.common
 
