@@ -1388,6 +1388,35 @@ def test_a_re_record_carries_the_hand_written_unbounded_reasons(tmp_path):
         "ring": "no second reference reaches it"}
 
 
+def test_a_gate_records_which_library_measured_its_model_side(tmp_path, monkeypatch):
+    """A stale dylib bakes the previous generation's numbers into a live bound.
+
+    The gate records where the reference came from and when it was written, and
+    nothing about the model side — so a `--write-gate` run against a library
+    older than the sources produces bounds indistinguishable from current ones.
+    `warn_if_stale` already detects it and says so on stderr, which is gone by
+    the time anyone opens the file.
+    """
+    lib = tmp_path / "libsonare.dylib"
+    lib.write_bytes(b"")
+    monkeypatch.setenv("SONARE_LIB_PATH", str(lib))
+    import render_model
+    monkeypatch.setattr(render_model, "_newest_source_mtime",
+                        lambda: lib.stat().st_mtime + 3600)
+
+    gate = tmp_path / "gate.json"
+    profile_module.write_gate_file(_summary(decay=18), gate, "ref", 1.25)
+    built = json.loads(gate.read_text())["model_build"]
+    assert built["stale"] is True
+    assert built["built_utc"] and built["newest_source_utc"]
+
+    # And a library newer than the sources is not flagged.
+    monkeypatch.setattr(render_model, "_newest_source_mtime",
+                        lambda: lib.stat().st_mtime - 3600)
+    profile_module.write_gate_file(_summary(decay=18), gate, "ref", 1.25)
+    assert json.loads(gate.read_text())["model_build"]["stale"] is False
+
+
 def test_a_re_record_carries_every_other_hand_written_note_too(tmp_path):
     """`_unbounded` was rescued one key at a time; the rest of the class was not.
 

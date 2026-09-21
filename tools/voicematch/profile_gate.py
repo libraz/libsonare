@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -464,6 +466,34 @@ def _carry_the_unbounded(bounds: dict[str, dict], gate_path: Path) -> dict[str, 
     return {k: v for k, v in recorded.items() if k not in bounds}
 
 
+def _model_build_state() -> dict[str, object]:
+    """Which library produced the model side of these bounds, and was it current.
+
+    A gate records where the REFERENCE came from and when it was written, and
+    nothing at all about the model side — so a `--write-gate` run against a
+    dylib older than the sources bakes the previous generation's numbers into a
+    bound that then looks like every other. `render_model.warn_if_stale` already
+    detects it and says so on stderr once per process, which is gone by the time
+    anyone reads the file. Recorded here so the question is a field rather than
+    an excavation.
+    """
+    import render_model
+    lib = os.environ.get("SONARE_LIB_PATH", "") or str(render_model.DEFAULT_DYLIB)
+    try:
+        built = Path(lib).stat().st_mtime
+    except OSError:
+        return {"library": "unresolved"}
+    newest = render_model._newest_source_mtime()
+    stamp = "%Y-%m-%dT%H:%M:%SZ"
+    return {
+        "built_utc": time.strftime(stamp, time.gmtime(built)),
+        "newest_source_utc": time.strftime(stamp, time.gmtime(newest)) if newest else "",
+        # True means the bounds below were measured through a library older than
+        # the sources in the tree that recorded them.
+        "stale": bool(newest and newest > built),
+    }
+
+
 def _carry_the_annotations(gate_path: Path) -> dict[str, object]:
     """Carry forward every other hand-written `_`-prefixed key.
 
@@ -586,6 +616,11 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
         # profile moved under it, which nobody does until a gate is already red.
         "reference_measured_utc": measured_utc,
         "recorded_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        # And which library produced the MODEL side. Without it a gate recorded
+        # through a dylib older than the sources is indistinguishable from one
+        # recorded through the shipped build, and its bounds are a photograph of
+        # a generation that no longer exists.
+        "model_build": _model_build_state(),
         # What the references disagree with each other by, recorded beside the
         # bounds so a later reader can see which of them are the measured floor
         # rather than the voice's own number times the margin.
