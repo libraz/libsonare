@@ -1050,8 +1050,11 @@ constexpr bool gs_table_is_consistent() noexcept {
       if (gs_efx_parameter_reset_default(kGsEfxTypeThru, 0) != e.def) return false;
       for (const GsEfxTypeDefaults& defaults : kGsEfxTypeDefaults) {
         if (defaults.params.size() != e.size) return false;
+        // One lookup per type rather than one per slot, and holding it to
+        // &defaults also refuses a duplicated type the per-slot call cannot see.
+        if (gs_efx_type_defaults(defaults.type) != &defaults) return false;
         for (uint8_t slot = 0; slot < e.size; ++slot) {
-          const uint8_t reset = gs_efx_parameter_reset_default(defaults.type, slot);
+          const uint8_t reset = defaults.params[slot];
           if (reset < e.lo || reset > e.hi) return false;
         }
       }
