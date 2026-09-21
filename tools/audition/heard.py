@@ -359,13 +359,114 @@ def render(voices: list[dict], full: bool) -> str:
     return "\n".join(lines)
 
 
+def bank_generation_at(day: str) -> int:
+    """The registry's generation as it stood on a given day, not today's.
+
+    The highest generation any unit's history carries at or before that day --
+    the registry records bumps rather than every day's value, so a day with no
+    bump of its own correctly inherits the last one below it.
+    """
+    try:
+        raw = json.loads(BANK_VERSIONS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    return max((int(h.get("generation") or 0)
+                for u in (raw.get("units") or {}).values() if isinstance(u, dict)
+                for h in (u.get("history") or []) if isinstance(h, dict)
+                and str(h.get("date") or "") <= day),
+               default=0)
+
+
+def _standing_note(voice: dict) -> dict:
+    """The one note behind a voice's own headline verdict.
+
+    Reads the same pool `digest` reduces to its headline -- current notes, or
+    every note once none of them carry a grade at all -- so this can never
+    name a note the summary line itself would not point to.
+    """
+    notes = voice["notes"]
+    pool = notes if voice["worst_predates_last_move"] else \
+        [n for n in notes if not n["predates_last_move"]]
+    return next(n for n in pool if n["grade"] == voice["worst"])
+
+
+def _entry_for(entries: list[dict], note: dict) -> dict:
+    """The raw log line a computed note in `digest`'s output came from.
+
+    `at` is recorded to the second, so two notes in the same second with the
+    same grade are indistinguishable here; the first in log order wins.
+    """
+    for entry in entries:
+        if (str(entry.get("at") or "") == note["at"]
+                and str(entry.get("grade") or "") == note["grade"]):
+            return entry
+    return {}
+
+
+def signoff(set_id: str) -> dict:
+    """The `music` block for one voice, filled from what is already on disk.
+
+    Raises `ValueError` naming the reason nothing can be signed off -- no
+    verdict stands, the standing one says it is not the instrument, or the
+    note behind it predates the voice's own last move -- rather than handing
+    back a record with the gap papered over. `by` and `note` are the human's
+    words and are never guessed; they come back empty.
+    """
+    entries = logs().get(set_id)
+    if not entries:
+        raise ValueError(f"no notes for {set_id}")
+    voice = digest(set_id, entries)
+    worst = voice["worst"]
+    if worst not in ("ok", "acceptable"):
+        if not worst:
+            raise ValueError(f"{set_id}: nothing but a preference tag -- "
+                              "a preference carries no grade")
+        chosen = _standing_note(voice)
+        raise ValueError(f"{set_id}: standing verdict is {worst} ({chosen['at'][:10]}) -- "
+                          f"{MEANS.get(worst, worst)}")
+    chosen = _standing_note(voice)
+    if chosen["predates_last_move"]:
+        raise ValueError(
+            f"{set_id}: note taken {chosen['at'][:10]} predates "
+            f"{'/'.join(chosen['units'])}'s last move on {chosen['last_moved']}")
+    entry = _entry_for(entries, chosen)
+    take = str((entry.get("conditions") or {}).get("take") or "")
+    facts = unit_facts()
+    units = chosen["units"]
+    # The unit whose bump dated this note, so the version reported and the
+    # date it is checked against describe the same unit.
+    unit = max(units, key=lambda u: facts.get(u, (0, ""))[1]) if units else ""
+    return {
+        "provenance": {
+            "date": chosen["at"][:10],
+            "bank_generation": bank_generation_at(chosen["at"][:10]),
+            "patch_version": facts.get(unit, (0, ""))[0],
+        },
+        "take": take,
+        "by": "",
+        "note": "",
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("sets", nargs="*", help="set ids; default every voice with notes")
     ap.add_argument("--grade", default="", choices=("", *GRADES),
                     help="only notes carrying this verdict")
     ap.add_argument("--json", action="store_true", help="the same, structured")
+    ap.add_argument("--signoff", metavar="SET",
+                     help="print a `music` block for one voice, ready to paste into "
+                          "tools/voicematch/signoff.json")
     args = ap.parse_args(argv)
+
+    if args.signoff:
+        try:
+            block = signoff(args.signoff)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+        print(f'"music": {json.dumps(block, ensure_ascii=False, indent=2)}')
+        return 0
 
     voices = collect(args.sets, args.grade)
     if args.json:

@@ -39,11 +39,21 @@ def _hit(n: int, *notes: int) -> dict:
 
 
 def _bank(root: Path, units: dict[str, list[str]]) -> None:
-    """One entry per unit, each carrying the dates it moved on."""
+    """One entry per unit, each carrying the dates it moved on.
+
+    Generations are assigned bank-wide by date order, as the real registry's
+    are -- a bump to any one unit advances the same counter every other unit's
+    history is read against.
+    """
     heard.BANK_VERSIONS = root / "bank-versions.json"
+    bumps = sorted(
+        ((name, i, d) for name, dates in units.items() for i, d in enumerate(dates)),
+        key=lambda t: (t[2], t[0], t[1]))
+    generation = {(name, i): g + 1 for g, (name, i, _) in enumerate(bumps)}
     heard.BANK_VERSIONS.write_text(json.dumps({"units": {
         name: {"kind": "patch", "version": len(dates),
-               "history": [{"date": d, "version": i + 1} for i, d in enumerate(dates)]}
+               "history": [{"date": d, "version": i + 1, "generation": generation[(name, i)]}
+                           for i, d in enumerate(dates)]}
         for name, dates in units.items()
     }}), encoding="utf-8")
 
@@ -280,6 +290,143 @@ def test_what_was_sounding_is_carried_through_to_the_line() -> None:
         _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
         blind = heard.collect([], "")[0]["notes"][0]["where"]
         assert "blind" in blind and "gm041" not in blind, blind
+
+
+@_with_scratch
+def test_a_clean_verdict_signs_off_with_both_provenance_numbers_resolved() -> None:
+    """The common case: one `ok` note, one patch, both numbers filled in."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin")
+        _bank(root, {"violin": ["2026-08-15", "2026-09-11"]})
+        entry = _note("2026-09-19T10:00:00+00:00", "ok")
+        entry["conditions"]["take"] = "single-long"
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
+        block = heard.signoff("p040-violin")
+        assert block == {
+            "provenance": {"date": "2026-09-19", "bank_generation": 2, "patch_version": 2},
+            "take": "single-long", "by": "", "note": "",
+        }, block
+
+
+@_with_scratch
+def test_acceptable_signs_off_the_same_way_as_ok() -> None:
+    """`acceptable` means the instrument too, and is not a lesser case."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin")
+        _bank(root, {"violin": ["2026-09-11"]})
+        entry = _note("2026-09-19T10:00:00+00:00", "acceptable")
+        entry["conditions"]["take"] = "single-long"
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
+        block = heard.signoff("p040-violin")
+        assert block["take"] == "single-long", block
+
+
+@_with_scratch
+def test_no_notes_at_all_refuses() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin")
+        _bank(root, {"violin": ["2026-09-11"]})
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "no notes" in str(e), e
+
+
+@_with_scratch
+def test_wrong_instrument_or_broken_refuses_naming_the_verdict_and_its_date() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin")
+        _bank(root, {"violin": ["2026-09-11"]})
+        _log(heard.FEEDBACK_ROOT, "p040-violin",
+             [_note("2026-09-19T10:00:00+00:00", "wrong-instrument")])
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "wrong-instrument" in str(e) and "2026-09-19" in str(e), e
+
+
+@_with_scratch
+def test_a_preference_tag_alone_refuses() -> None:
+    """A `prefer` note carries no grade and is not a verdict."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin")
+        _bank(root, {"violin": ["2026-09-11"]})
+        _log(heard.FEEDBACK_ROOT, "p040-violin",
+             [_note("2026-09-19T10:00:00+00:00", "", "prefer")])
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "preference" in str(e), e
+
+
+@_with_scratch
+def test_a_note_predating_the_last_bump_refuses() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin")
+        _bank(root, {"violin": ["2026-08-15", "2026-09-11"]})
+        _log(heard.FEEDBACK_ROOT, "p040-violin",
+             [_note("2026-08-01T10:00:00+00:00", "ok")])
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "2026-08-01" in str(e) and "2026-09-11" in str(e), e
+
+
+@_with_scratch
+def test_a_kit_note_resolves_its_version_from_its_drum_unit() -> None:
+    """A kit has no patch unit -- the version comes from the note it was struck on."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "kit000-standard-kit", "", kit=True)
+        _bank(root, {"d038": ["2026-09-11"]})
+        entry = _note("2026-09-19T10:00:00+00:00", "ok", hit=_hit(1, 38))
+        entry["conditions"]["take"] = "groove"
+        _log(heard.FEEDBACK_ROOT, "kit000-standard-kit", [entry])
+        block = heard.signoff("kit000-standard-kit")
+        assert block["provenance"]["bank_generation"] == 1, block
+        assert block["provenance"]["patch_version"] == 1, block
+        assert block["take"] == "groove", block
+
+
+@_with_scratch
+def test_bank_generation_is_the_note_days_not_the_signoffs_own_day() -> None:
+    """A unit unrelated to this voice bumping later must not inflate the record.
+
+    The record's `bank_generation` is a watermark: `signoff.py` reads a later
+    generation than the one stored as a sign that something may have moved
+    under this voice since. Stamping today's generation instead of the day the
+    note was taken sets that watermark too high, so a bump between listening
+    and writing the record would silently stop reading as anything.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin")
+        # violin's own bump predates the note; reed's comes after it and must
+        # not count -- it is what a later sign-off day would wrongly include.
+        _bank(root, {"violin": ["2026-08-15"], "reed": ["2026-09-25"]})
+        entry = _note("2026-09-19T10:00:00+00:00", "ok")
+        entry["conditions"]["take"] = "single-long"
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
+        block = heard.signoff("p040-violin")
+        assert block["provenance"]["bank_generation"] == 1, block
 
 
 def _run_all() -> int:
