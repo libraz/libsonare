@@ -1,0 +1,110 @@
+{
+  "_": "Auto-generated from auto_spec(program=40, patch_only=True), filtered to the bowed_string.* engine block only -- the mechanism the frequency-referenced loop loss changed. Deliberately narrower than the full program-scoped set (which also carries amp_env/filter_env/cutoff_hz/lfo/etc.): a wide fit can cover a loop-loss residual with a static filter and read as improved while being physically wronger (docs/objective.md). Widen only on evidence that the loop's own fields cannot reach a residual. Run with --max-evals 60 (15 knobs x 4 per-knob evals, one full coordinate-descent pass). attack_noise, corpus_scale and polarization stay in the spec but their fitted values were not adopted: they are excitation and body fields the loop change does not touch, so what moved them was the loop's residual rather than their own.",
+  "knobs": [
+    {
+      "tunable": "violin.bowed_string.attack_ms",
+      "min": 5.89275,
+      "max": 377.136,
+      "scale": "log",
+      "start": 47.142
+    },
+    {
+      "tunable": "violin.bowed_string.attack_noise",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.0
+    },
+    {
+      "tunable": "violin.bowed_string.bow_force",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.0643318
+    },
+    {
+      "tunable": "violin.bowed_string.bow_position",
+      "min": 0.02,
+      "max": 0.5,
+      "scale": "linear",
+      "start": 0.17016
+    },
+    {
+      "tunable": "violin.bowed_string.bow_speed",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.630748
+    },
+    {
+      "tunable": "violin.bowed_string.brightness",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.47
+    },
+    {
+      "tunable": "violin.bowed_string.corpus_scale",
+      "min": 0.1,
+      "max": 4.0,
+      "scale": "linear",
+      "start": 1.0
+    },
+    {
+      "tunable": "violin.bowed_string.damping",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.0822536
+    },
+    {
+      "tunable": "violin.bowed_string.elasto_plastic",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 1.0
+    },
+    {
+      "tunable": "violin.bowed_string.polarization",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.15
+    },
+    {
+      "tunable": "violin.bowed_string.release_ms",
+      "min": 20.65375,
+      "max": 1321.84,
+      "scale": "log",
+      "start": 165.23
+    },
+    {
+      "tunable": "violin.bowed_string.rosin",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.1
+    },
+    {
+      "tunable": "violin.bowed_string.stribeck",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.7
+    },
+    {
+      "tunable": "violin.bowed_string.sympathetic",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.08
+    },
+    {
+      "tunable": "violin.bowed_string.vel_to_speed",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.6
+    }
+  ]
+}
