@@ -3827,3 +3827,165 @@ def test_the_four_cell_outcomes_are_what_the_loss_actually_emits():
     assert census["slope"]["clipped"] == 12 and census["slope"]["compared"] == 0
     assert census["tail"]["skipped"] == 6 and census["tail"]["compared"] == 0
     assert terms["tail"] == 0.0, "a band with no cells scores the term's best"
+
+
+# --------------------------------------------------------------------------- #
+# The tree-state precondition: whatever is in src/ at fit startup is what
+# gets compiled and fit against, silently, and this tree routinely has several
+# sessions editing src/ at once.
+# --------------------------------------------------------------------------- #
+def _init_git_repo(root: Path) -> None:
+    """A scratch git repo with a tracked src/ file, for repo_tree_state's own
+    git plumbing — a real `git status`/`rev-parse`, not a stand-in for one."""
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    (root / "src").mkdir()
+    (root / "src" / "a.cpp").write_text("int a = 1;\n")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
+         "commit", "-q", "-m", "init"],
+        cwd=root, check=True,
+    )
+
+
+def test_repo_tree_state_reports_a_clean_tree(tmp_path, monkeypatch):
+    _init_git_repo(tmp_path)
+    monkeypatch.setattr(autofit, "REPO_ROOT", tmp_path)
+    head, dirty = autofit.repo_tree_state()
+    assert dirty == []
+    assert head and len(head) == 40  # a real HEAD sha, not a placeholder
+
+
+def test_repo_tree_state_names_the_dirty_path(tmp_path, monkeypatch):
+    _init_git_repo(tmp_path)
+    (tmp_path / "src" / "a.cpp").write_text("int a = 2;  // edited\n")
+    monkeypatch.setattr(autofit, "REPO_ROOT", tmp_path)
+    head, dirty = autofit.repo_tree_state()
+    assert head and len(head) == 40
+    assert any("a.cpp" in line for line in dirty)
+
+
+def _precondition_args(**kwargs) -> argparse.Namespace:
+    """The minimum a Namespace needs to reach `run()`'s own tree-state guard."""
+    base = {"build_dir": "build-precondition-test"}
+    base.update(kwargs)
+    return argparse.Namespace(**base)
+
+
+class _PastGuard(Exception):
+    """Raised by a stand-in for the first call after the guard, so a test can
+    tell "the guard let this through" apart from "the guard never ran"."""
+
+
+def test_a_clean_tree_proceeds(monkeypatch):
+    monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", []))
+    monkeypatch.setattr(autofit, "resolve_probe",
+                        lambda args: (_ for _ in ()).throw(_PastGuard()))
+    with pytest.raises(_PastGuard):
+        autofit.run(_precondition_args())
+
+
+def test_a_dirty_tree_refuses_and_names_the_paths(monkeypatch):
+    """The message carries the actual paths, not a count — the user needs to
+    tell "my own edit" from "someone else's" apart, which a count cannot say."""
+    dirty = ["M src/midi/synth/bowed_string_voice.cpp", "?? src/midi/synth/new.cpp"]
+    monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", dirty))
+    monkeypatch.setattr(autofit, "resolve_probe",
+                        lambda args: pytest.fail("the guard let a dirty tree through"))
+    with pytest.raises(RuntimeError) as exc:
+        autofit.run(_precondition_args())
+    assert "bowed_string_voice.cpp" in str(exc.value)
+    assert "new.cpp" in str(exc.value)
+
+
+def test_allow_dirty_src_proceeds_past_the_guard(monkeypatch):
+    dirty = ["M src/midi/synth/bowed_string_voice.cpp"]
+    monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", dirty))
+    monkeypatch.setattr(autofit, "resolve_probe",
+                        lambda args: (_ for _ in ()).throw(_PastGuard()))
+    with pytest.raises(_PastGuard):
+        autofit.run(_precondition_args(allow_dirty_src=True))
+
+
+def test_fold_tree_provenance_adds_to_an_existing_out_artifact(tmp_path):
+    out = tmp_path / "result.json"
+    out.write_text(json.dumps({"loss": {"best": 0.5}}))
+    autofit._fold_tree_provenance(str(out), "deadbeef",
+                                  ["M src/midi/synth/bowed_string_voice.cpp"])
+    record = json.loads(out.read_text())
+    assert record["loss"] == {"best": 0.5}  # what was already there survives
+    assert record["tree"] == {"head": "deadbeef",
+                              "dirty_src": ["M src/midi/synth/bowed_string_voice.cpp"]}
+
+
+def test_fold_tree_provenance_is_a_noop_without_an_out_path(tmp_path):
+    autofit._fold_tree_provenance("", "deadbeef", [])  # must not raise
+
+
+def test_allow_dirty_src_run_records_provenance_in_out(tmp_path, monkeypatch):
+    """The opt-out path all the way through `run()`: the artifact --diagnose
+    writes carries the dirty paths and the sha, not just a warning on stderr
+    that a long backgrounded run's log goes unread past."""
+    dirty = ["M src/midi/synth/bowed_string_voice.cpp"]
+    monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", dirty))
+    monkeypatch.setattr(autofit, "resolve_probe", lambda args: None)
+    monkeypatch.setattr(autofit, "apply_spec_weights", lambda args, argv: None)
+    monkeypatch.setattr(autofit, "load_spec", lambda path: [])
+    monkeypatch.setattr(autofit, "configure_build", lambda *a, **k: None)
+    monkeypatch.setattr(autofit, "resolve_corpus", lambda args: None)
+    monkeypatch.setattr(autofit, "CORPUS_ROOT", tmp_path / "scratch")
+    monkeypatch.setattr(
+        autofit, "oracle_reference",
+        lambda args: ([], np.zeros(4, dtype=np.float32), None, None),
+    )
+
+    def fake_diagnosis(evaluator, knobs, args, catalogue, out_path=""):
+        if out_path:
+            Path(out_path).write_text(json.dumps({"terms": []}))
+
+    monkeypatch.setattr(autofit, "run_diagnosis", fake_diagnosis)
+
+    out = tmp_path / "diag.json"
+    args = _fit_args(
+        spec="ignored", program=0, drum_note=None, dump_knobs=False,
+        program_only=False, bank=0, build_dir="build-precondition-test",
+        screen=False, stages=False, diagnose=True, grid=0, optimizer="coord",
+        metric_threads=0, out=str(out), dry_run=True, allow_dirty_src=True,
+        drum_gate_ms=0,
+    )
+    assert autofit.run(args) == 0
+    record = json.loads(out.read_text())
+    assert record["terms"] == []  # what the (faked) diagnosis wrote survives
+    assert record["tree"] == {"head": "deadbeef", "dirty_src": dirty}
+
+
+def test_the_guard_never_runs_inside_the_rebuild_path():
+    """The precondition belongs ONCE at startup and nowhere a rebuilding fit's
+    own candidates pass through afterwards.
+
+    `Evaluator.needs_rebuild` is true whenever a knob has no `SONARE_TUNABLE`
+    behind it, and that fit writes every candidate's values into src/ and
+    rebuilds, so src/ is dirty by design for the whole run once it starts. A
+    check placed inside `build_shared` or a per-candidate call site would see
+    that self-made dirt on the fit's own second candidate and refuse it for
+    doing exactly what it is supposed to.
+
+    If `repo_tree_state()` were ever added to one of these, this fails with
+    e.g. "build_shared calls repo_tree_state() — that refuses a rebuilding fit
+    on its own second candidate, since src/ is dirty by design once one
+    starts" instead of a rebuilding fit silently refusing itself.
+    """
+    import inspect
+
+    sites = {
+        "build_shared": build_lib.build_shared,
+        "Evaluator.__call__": Evaluator.__call__,
+        "Evaluator._ensure_built": Evaluator._ensure_built,
+        "Evaluator.evaluate_batch": Evaluator.evaluate_batch,
+    }
+    for name, fn in sites.items():
+        assert "repo_tree_state" not in inspect.getsource(fn), (
+            f"{name} calls repo_tree_state() — that refuses a rebuilding fit on "
+            f"its own second candidate, since src/ is dirty by design once one "
+            f"starts"
+        )

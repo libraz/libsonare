@@ -238,6 +238,12 @@ knobs. Each model render runs in a fresh subprocess with SONARE_LIB_PATH
 pointed at that dir's dylib, so a rebuilding run never reads a dylib already
 mapped into this process. Do not point this at build-python-shared — that dir
 is shared with other tooling.
+
+A run refuses to start with src/ dirty, since whatever is there is what gets
+compiled and fit against with nothing in the output saying so — this tree
+routinely has several sessions editing src/ at once. `--allow-dirty-src` fits
+against it anyway (the normal case when it is your own in-flight engine edit),
+and either way `--out` records HEAD's sha and the dirty paths, if any.
 """
 
 from __future__ import annotations
@@ -1374,10 +1380,69 @@ def render_metrics_main(argv: list[str]) -> int:
 # --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
+def repo_tree_state() -> tuple[str | None, list[str]]:
+    """HEAD's sha and any dirty path under src/, read once before a run touches anything.
+
+    This has to run before the fit's own edits, not inside `build_shared` or at
+    any of its per-candidate call sites: a rebuilding fit (a source knob with no
+    `SONARE_TUNABLE` behind it) writes candidate values into src/ and rebuilds
+    per candidate, so src/ is dirty by design for the run's whole duration once
+    it starts — a check placed later would refuse that fit on its own second
+    candidate.
+
+    `git` missing or failing is reported and treated as absent provenance rather
+    than refused: a tool that cannot run outside a checkout is a worse defect
+    than the one this guards against.
+    """
+    try:
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--", "src/"],
+            cwd=REPO_ROOT, capture_output=True, check=True, text=True,
+        )
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=REPO_ROOT, capture_output=True, check=True, text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"tree state: git unavailable ({exc}); proceeding with no provenance",
+              file=sys.stderr)
+        return None, []
+    dirty = [line for line in status.stdout.splitlines() if line.strip()]
+    return head.stdout.strip(), dirty
+
+
+def _fold_tree_provenance(out_path: str, head: str | None, dirty: list[str]) -> None:
+    """Add this run's src/ tree state to an --out artifact already written to disk.
+
+    A post-write step rather than a field threaded through report.py's or
+    diagnose.py's own record shape, so every --out path carries the same two
+    facts without each of them having to remember to.
+    """
+    if not out_path or not Path(out_path).exists():
+        return
+    path = Path(out_path)
+    record = json.loads(path.read_text())
+    record["tree"] = {"head": head, "dirty_src": dirty}
+    path.write_text(json.dumps(record, indent=2) + "\n")
+
+
 def run(args, argv: list[str] | None = None) -> int:
     build_dir = (REPO_ROOT / args.build_dir).resolve()
     if build_dir.name == "build-python-shared":
         raise ValueError("refusing to use build-python-shared; pick a private build dir")
+
+    head_sha, dirty_src = repo_tree_state()
+    if dirty_src and not getattr(args, "allow_dirty_src", False):
+        raise RuntimeError(
+            "refusing to fit with src/ dirty — whatever is there right now is what "
+            "this run would compile and fit against, silently, with nothing in the "
+            "output saying so:\n  " + "\n  ".join(dirty_src) +
+            "\nCommit it, or pass --allow-dirty-src if this is your own in-flight "
+            "engine edit."
+        )
+    if dirty_src:
+        print("src/ is dirty and --allow-dirty-src was given; fitting against it "
+              "anyway:\n  " + "\n  ".join(dirty_src), file=sys.stderr)
 
     resolve_probe(args)
     apply_spec_weights(args, argv if argv is not None else sys.argv[1:])
@@ -1534,6 +1599,7 @@ def run(args, argv: list[str] | None = None) -> int:
                 run_diagnosis(evaluator, knobs, args, catalogue, out_path=args.out or "")
             finally:
                 restore(pristine, evaluator.written)
+            _fold_tree_provenance(args.out, head_sha, dirty_src)
             return 0
         if args.grid:
             # Also instead of fitting: the point is to look at the surface the
@@ -1590,6 +1656,7 @@ def run(args, argv: list[str] | None = None) -> int:
             "validation": validation,
         }
     report_result(knobs, pristine, best_values, evaluator, args, extra)
+    _fold_tree_provenance(args.out, head_sha, dirty_src)
     return 0
 
 
@@ -1904,6 +1971,14 @@ def main() -> int:
                              "sum because every committed profile in reference/ "
                              "was measured through one and cannot be re-measured "
                              "without the plugin it came from")
+    parser.add_argument("--allow-dirty-src", action="store_true", dest="allow_dirty_src",
+                        help="fit anyway when src/ has uncommitted changes. Refused by "
+                             "default: this tree routinely has several sessions working "
+                             "in src/ at once, and whatever is there at build time is "
+                             "compiled and fit against with nothing in the output saying "
+                             "so. The normal reason to pass this is fitting against your "
+                             "own in-flight engine edit. The dirty paths and HEAD's sha "
+                             "are recorded in --out either way")
     parser.add_argument("--build-dir", default="build-autofit", dest="build_dir",
                         help="isolated build dir (default: build-autofit)")
     parser.add_argument("--jobs", type=int, default=8, help="parallel build jobs")
