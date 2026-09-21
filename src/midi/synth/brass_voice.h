@@ -110,6 +110,17 @@ struct BrassPatchParams {
   float chiff_ms = 10.0f;
 
   // --- off-by-default advanced physics (Phase 4; C-ABI non-exposed, gated) ---
+  /// Lip aperture at rest in [0,1]: how far the lips stand open with no signal,
+  /// as a fraction of fully open — the same unit as @c reed.reed_opening. Above
+  /// 0 the lip stops being a symmetric clamp on a reflection coefficient and
+  /// becomes a one-sided valve: the aperture follows the lip resonator, the flow
+  /// follows the square root of the mouth-to-bore pressure difference, and a
+  /// closed lip passes nothing at all. A swinging-door valve is asymmetric by
+  /// definition, so a symmetric clamp cannot express the one thing that makes it
+  /// one, and the bore stays close to a sinusoid for want of it. 0 = off -> the
+  /// symmetric path is taken and the render is bit-identical.
+  float lip_aperture = 0.0f;
+
   /// Bell radiation cutoff (Hz): the flare's cutoff frequency, a property of the
   /// bell's geometry and so the same for every note. A bell reflects the long
   /// wavelengths back down the bore and radiates the short ones, which makes the
@@ -123,6 +134,18 @@ struct BrassPatchParams {
   /// 0 = off -> the core emits the bore pressure and the render is
   /// bit-identical.
   float bell_radiation_hz = 0.0f;
+
+  /// Bell corner frequency (Hz) for the coupled bell: above 0 the loop
+  /// reflection lowpass and the radiation highpass are both derived from this
+  /// one corner and tied by |R|² + |T|² = 1, so what the bell keeps and what it
+  /// radiates can no longer be set apart from each other — independence is the
+  /// defect, and the exact coupling is the lesser question. @c brightness and
+  /// CC74 still move it, as an octave mapping rather than a pole offset, and a
+  /// conical bore sits lower. Naming the corner in Hz is also what keeps it from
+  /// changing meaning with the sample rate, which a pole radius in samples does.
+  /// 0 = off -> the two filters stay independent and the render is
+  /// bit-identical.
+  float bell_cutoff_hz = 0.0f;
 
   /// Cuivré / brassiness in [0,1]: the bright, blaring "brassy" edge of a loud
   /// brass. Physically it is the cumulative NONLINEAR wave steepening as a
@@ -148,6 +171,16 @@ struct BrassPatchParams {
   /// does not track dynamics), so the played breath is the source. 0 = off ->
   /// @c brassiness is static and the render is bit-identical.
   float cuivre_dynamics = 0.0f;
+
+  /// Amplitude-dependent propagation in [0,1]: a loud wave travels the bore
+  /// faster where it is compressed than where it is rarefied, so above 0 the
+  /// delay the bore reads is scaled by one plus this fraction of the normalised
+  /// bore pressure, and the wavefront steepens as it travels. That is the
+  /// mechanism @c brassiness approximates with a static shaper on the way out;
+  /// carrying it in the propagation instead is what lets the brightness follow a
+  /// crescendo inside one note, and a longer bore blare at a lower effort.
+  /// 0 = off -> the delay is constant and the render is bit-identical.
+  float bore_nonlinearity = 0.0f;
 
   /// Mute in [0,1]: a straight / cup / harmon mute over the bell reshapes its
   /// radiation into a nasal, honky timbre with a strong upper formant and a

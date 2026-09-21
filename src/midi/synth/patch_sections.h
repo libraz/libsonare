@@ -279,8 +279,12 @@ constexpr BrassPatchParams blank_brass() noexcept {
   z.breath_noise = 0.0f;
   z.chiff = 0.0f;
   z.chiff_ms = 0.0f;
+  z.lip_aperture = 0.0f;
+  z.bell_radiation_hz = 0.0f;
+  z.bell_cutoff_hz = 0.0f;
   z.brassiness = 0.0f;
   z.cuivre_dynamics = 0.0f;
+  z.bore_nonlinearity = 0.0f;
   z.mute = 0.0f;
   z.half_valve = 0.0f;
   z.dynamic_lip = 0.0f;

@@ -1300,12 +1300,21 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.brass.chiff = std::clamp(patch_clamp_detail::sanitize(p.brass.chiff, 0.35f), 0.0f, 1.0f);
   p.brass.chiff_ms =
       std::clamp(patch_clamp_detail::sanitize(p.brass.chiff_ms, 10.0f), 1.0f, 500.0f);
+  p.brass.lip_aperture =
+      std::clamp(patch_clamp_detail::sanitize(p.brass.lip_aperture, 0.0f), 0.0f, 1.0f);
   p.brass.bell_radiation_hz =
       std::clamp(patch_clamp_detail::sanitize(p.brass.bell_radiation_hz, 0.0f), 0.0f, 8000.0f);
+  // Wider than bell_radiation_hz above, which is a fitted radiation corner: this
+  // one is the flare itself and has to reach the corner a bore with no bell
+  // would have, so the fit can be asked whether a bell is there at all.
+  p.brass.bell_cutoff_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.brass.bell_cutoff_hz, 0.0f), 0.0f, 20000.0f);
   p.brass.brassiness =
       std::clamp(patch_clamp_detail::sanitize(p.brass.brassiness, 0.0f), 0.0f, 1.0f);
   p.brass.cuivre_dynamics =
       std::clamp(patch_clamp_detail::sanitize(p.brass.cuivre_dynamics, 0.0f), 0.0f, 1.0f);
+  p.brass.bore_nonlinearity =
+      std::clamp(patch_clamp_detail::sanitize(p.brass.bore_nonlinearity, 0.0f), 0.0f, 1.0f);
   p.brass.mute = std::clamp(patch_clamp_detail::sanitize(p.brass.mute, 0.0f), 0.0f, 1.0f);
   p.brass.half_valve =
       std::clamp(patch_clamp_detail::sanitize(p.brass.half_valve, 0.0f), 0.0f, 1.0f);

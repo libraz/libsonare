@@ -498,6 +498,9 @@ TEST_CASE("clamp_synth_patch sanitizes every field a bare std::clamp leaves NaN-
   p.amp_env.delay_ms = nan;
   p.filter_env.sustain = nan;
   p.piano.strike_position = nan;
+  p.brass.lip_aperture = nan;
+  p.brass.bell_cutoff_hz = nan;
+  p.brass.bore_nonlinearity = nan;
 
   const NativeSynthPatch clamped = clamp_synth_patch(p);
 
@@ -510,6 +513,17 @@ TEST_CASE("clamp_synth_patch sanitizes every field a bare std::clamp leaves NaN-
   // than spelled again here: a second copy of the value is what lets the two
   // drift, and on a strike point the drift is audible.
   REQUIRE(clamped.piano.strike_position == sonare::midi::synth::PianoPatchParams{}.strike_position);
+  // Same reading for the gated brass physics, where the default is also the
+  // switch: a fallback that drifted off 0 would turn a mechanism on for a patch
+  // that never asked for one, and only on the non-finite path, so nothing else
+  // in the suite would be looking.
+  const sonare::midi::synth::BrassPatchParams brass_defaults{};
+  REQUIRE(clamped.brass.lip_aperture == brass_defaults.lip_aperture);
+  REQUIRE(clamped.brass.bell_cutoff_hz == brass_defaults.bell_cutoff_hz);
+  REQUIRE(clamped.brass.bore_nonlinearity == brass_defaults.bore_nonlinearity);
+  REQUIRE(brass_defaults.lip_aperture == 0.0f);
+  REQUIRE(brass_defaults.bell_cutoff_hz == 0.0f);
+  REQUIRE(brass_defaults.bore_nonlinearity == 0.0f);
 }
 
 TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi][synth]") {
@@ -1027,6 +1041,35 @@ TEST_CASE("the tuning field table reaches every percussion field", "[midi][synth
   // over the same value, with the later walk step silently winning.
   const std::set<std::string> unique(paths.begin(), paths.end());
   REQUIRE(unique.size() == paths.size());
+}
+
+TEST_CASE("the tuning field table reaches every gated brass physics field",
+          "[midi][synth][tuning]") {
+  // Each of these is off at 0 and carries a whole mechanism behind it, so one
+  // missing from the table leaves its mechanism at the default forever: the fit
+  // cannot address it and reports nothing about the restriction. Named one by
+  // one rather than counted, so adding a field cannot quietly satisfy this.
+  using sonare::midi::synth::NativeSynthPatch;
+  using sonare::midi::synth::patch_tuning_field_paths;
+
+  NativeSynthPatch p;
+  p.mode = SynthEngineMode::kBrass;
+  const std::vector<std::string> paths = patch_tuning_field_paths(p);
+  const auto has = [&paths](const char* path) {
+    return std::find(paths.begin(), paths.end(), path) != paths.end();
+  };
+  REQUIRE(has("brass.lip_aperture"));
+  REQUIRE(has("brass.bell_cutoff_hz"));
+  REQUIRE(has("brass.bore_nonlinearity"));
+  REQUIRE(has("brass.bell_radiation_hz"));
+  REQUIRE(has("brass.brassiness"));
+  REQUIRE(has("brass.cuivre_dynamics"));
+  REQUIRE(has("brass.mute"));
+  REQUIRE(has("brass.half_valve"));
+  REQUIRE(has("brass.dynamic_lip"));
+  // Negative control: without one, a lookup that answered yes to everything
+  // would satisfy every line above and read exactly like a registered table.
+  REQUIRE_FALSE(has("brass.not_a_field"));
 }
 
 TEST_CASE("the tuning field table reaches the switch beside every field it gates",
