@@ -55,10 +55,12 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     ks_buffers_.assign(pool_.size() * static_cast<size_t>(ks_slab_capacity(sample_rate_)), 0.0f);
     // Sympathetic-string "sound halo": a shared bank tuned to the standard-
     // tuning open strings (E2 A2 D3 G3 B3 E4) plus their low harmonics — the
-    // undamped strings ringing behind the played note. Plucked strings have no
-    // dampers, so the bank is held open (process() passes damper_open == true).
-    // Bus-level, so it follows the configured patch: a GM render mixes many
-    // programs through one bus and cannot carry one program's halo.
+    // undamped strings ringing behind the played note. Gated by the same
+    // sustain-pedal state as the piano board's bank (process_impl's
+    // damper_open): a guitarist's hand damps the open strings unless
+    // something is holding them open. Bus-level, so it follows the configured
+    // patch: a GM render mixes many programs through one bus and cannot carry
+    // one program's halo.
     if (config_.patch.mode == SynthEngineMode::kKarplusStrong && config_.patch.ks.sympathetic) {
       resonance_.prepare_guitar_sympathetic(sample_rate_);
       sympathetic_active_ = true;
@@ -953,9 +955,10 @@ void NativeSynth::process_impl(float* const* channels,
 
   // Sympathetic resonance is gated by the dampers being lifted on any channel
   // (sustain pedal down). Sustain state is fixed for the block (events are
-  // applied before process()).
+  // applied before process()). Shared by the piano board and the guitar
+  // halo below -- one bus-level bank, one gate rule.
   bool damper_open = false;
-  if (piano_body_active_) {
+  if (piano_body_active_ || sympathetic_active_) {
     for (const ChannelState& ch : channels_) {
       if (ch.sustain) {
         damper_open = true;
@@ -1054,11 +1057,13 @@ void NativeSynth::process_impl(float* const* channels,
       mix_l += kPianoDirectGain * piano_l + body + side + symp;
       mix_r += kPianoDirectGain * piano_r + body - side + symp;
     } else if (sympathetic_active_) {
-      // Plucked-string sound halo: the open strings ring behind the note. Held
-      // open (no dampers). Skipped entirely for KS patches that did not opt in,
-      // so every existing KS voicing renders bit-identically.
+      // Plucked-string sound halo: the open strings ring behind the note,
+      // gated by damper_open exactly as the piano board is above -- a guitar's
+      // open strings are damped unless the sustain pedal is holding them open.
+      // Skipped entirely for KS patches that did not opt in, so every existing
+      // KS voicing renders bit-identically.
       const float dry_mono = 0.5f * (mix_l + mix_r);
-      const float symp = resonance_.process(dry_mono, /*damper_open=*/true);
+      const float symp = resonance_.process(dry_mono, damper_open);
       mix_l += symp;
       mix_r += symp;
     }

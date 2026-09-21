@@ -796,9 +796,13 @@ class NativeSynth final : public MidiInstrument {
   int piano_string_capacity_ = 0;
   /// Shared sympathetic resonance bank. Piano patches drive it pedal-gated (the
   /// sustain-pedal sound halo); Karplus-Strong patches that opt in (patch.ks.
-  /// sympathetic) reuse the same bank tuned to the open-string set, held open
-  /// (plucked strings have no dampers). kPiano and kKarplusStrong are mutually
-  /// exclusive modes, so one bank serves both without a second allocation.
+  /// sympathetic) reuse the same bank tuned to the open-string set, driven by the
+  /// same sustain state — a hand damping the played string damps the open ones
+  /// with it. kPiano and kKarplusStrong are mutually exclusive modes, so one bank
+  /// serves both without a second allocation. The Karplus-Strong side is armed in
+  /// prepare() from this synth's own configured patch, so it is silent when the
+  /// synth is driven by per-note GM program resolution; Sf2Player arms its own
+  /// copy per part at note-on instead.
   PianoResonanceBank resonance_;
   /// Shared modal soundboard body (piano patches only).
   PianoSoundboard soundboard_;

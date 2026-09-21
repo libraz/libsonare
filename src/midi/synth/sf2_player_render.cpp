@@ -298,7 +298,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     // Shared body resonators, fed by the part's summed fallback dry signal and
     // folded back centre-panned (the same bus-level coupling the NativeSynth
     // host applies): the piano's soundboard + pedal-gated sympathetic bank,
-    // the plucked halo held open (no dampers).
+    // and the plucked halo on the same per-part sustain gate.
     if (any_body) {
       for (int part = 0; part < 16; ++part) {
         if (!body_active[part]) continue;
@@ -316,7 +316,10 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
                     board.last_diffused(), channels_[static_cast<size_t>(part)].sustain);
           side = board.last_side();
         } else {
-          add = fallback_reso_[static_cast<size_t>(part)].process(dry, /*damper_open=*/true);
+          // Plucked-string halo: damped exactly like the piano's bank above,
+          // by whichever channel on this part is holding the sustain pedal.
+          add = fallback_reso_[static_cast<size_t>(part)].process(
+              dry, channels_[static_cast<size_t>(part)].sustain);
         }
         if (add == 0.0f && side == 0.0f) continue;
         if (part_bussed[part]) {

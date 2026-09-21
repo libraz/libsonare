@@ -131,8 +131,9 @@ struct KsPatchParams {
   /// bank tuned to the open strings, which rings behind it — the "sound halo" of
   /// a classical guitar or harp (Karjalainen, Välimäki & Jánosy 1998; Lehtonen
   /// et al. 2007). This is a host-level (per-instrument) effect, not per-voice:
-  /// NativeSynth reuses the piano sympathetic bank, held open (plucked strings
-  /// have no dampers). Not carried in the per-voice core state.
+  /// NativeSynth and Sf2Player each reuse the piano sympathetic bank, gated by
+  /// the same sustain-pedal state as the piano board rather than held open.
+  /// Not carried in the per-voice core state.
   bool sympathetic = false;
   /// Magnetic-pickup position in [0, 0.5] (off-by-default; 0 = no pickup, render
   /// bit-identical — the electric-guitar model). A magnetic pickup senses the

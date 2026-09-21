@@ -651,9 +651,9 @@ void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, 
                                         float ring_t60_s, float out_gain) noexcept {
   const float sr = sample_rate > 0.0 ? static_cast<float>(sample_rate) : 48000.0f;
   const int n = std::min(count, kResonanceModes);
-  // Plucked open strings have no dampers either, but this path is driven with
-  // damper_open held true, so the gate is transparent and the split the piano
-  // path needs would be a distinction without a difference here.
+  // No "undamped treble" split for this path: every mode goes through gate_,
+  // so a plucked-string caller's sustain-pedal state reaches every string in
+  // the bank, not just the ones a piano would leave ungated.
   ungated_count_ = 0;
   const float t60 = std::max(0.02f, ring_t60_s);
   const float r = std::exp(-6.907755279f / (sr * t60));
@@ -674,8 +674,9 @@ void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, 
     m.y2 = 0.0f;
   }
   gate_ = 0.0f;
-  // Held open by the caller (plucked strings have no dampers), so the fall-time
-  // coefficient is only the ~10 ms lift; reuse the piano smoothing constants.
+  // Same lift/fall smoothing as the piano board (~10 ms open, ~60 ms close):
+  // the caller drives process() with a real sustain-pedal state, not a
+  // constant, so both coefficients are exercised.
   gate_open_coeff_ = 1.0f - std::exp(-1.0f / (0.010f * sr));
   gate_close_coeff_ = 1.0f - std::exp(-1.0f / (0.060f * sr));
   ringout_ = std::exp(-6.907755279f / (sr * 0.15f));
