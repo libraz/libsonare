@@ -61,6 +61,20 @@ TEST_CASE("fix_frames adds bounds and removes duplicates", "[util][padding]") {
   REQUIRE(r == std::vector<int>{0, 1, 3, 5, 10});
 }
 
+TEST_CASE("fix_frames keeps a frame sitting exactly on x_max", "[util][padding][edge]") {
+  // pad must be off for this to be observable at all: with pad on, x_max is
+  // appended whether or not a frame reached it, so the inclusive and exclusive
+  // readings produce the same vector and no padded case can tell them apart.
+  // That is why the librosa reference row -- frames {1,3,3,5,7,9} against
+  // x_max 10 -- does not decide it either, and why the header was free to say
+  // exclusive while the code kept the frame.
+  const std::vector<int> frames{5, 10, 15};
+  REQUIRE(fix_frames(frames, 0, 10, false) == std::vector<int>{5, 10});
+  // Measured against librosa
+  // (librosa.util.fix_frames([5,10,15], x_min=0, x_max=10, pad=False) -> [5 10]);
+  // its own docstring bounds the result to the closed interval [x_min, x_max].
+}
+
 TEST_CASE("fix_frames rejects an empty frame list instead of padding it", "[util][padding][edge]") {
   SECTION("a non-empty list is still padded") {
     const std::vector<int> frames{2, 4};

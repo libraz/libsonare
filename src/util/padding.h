@@ -32,7 +32,9 @@ std::vector<float> fix_length(const std::vector<float>& x, std::size_t size,
 /// @brief Adjust frame indices to fit within bounds (librosa.util.fix_frames).
 /// @param frames Sorted (ascending) frame indices
 /// @param x_min Minimum allowed value (inclusive)
-/// @param x_max Maximum allowed value (exclusive). If negative, only x_min is enforced.
+/// @param x_max Maximum allowed value (INCLUSIVE, as in librosa's own
+///        `[x_min, x_max]`): a frame equal to it is kept, and @p pad appends it.
+///        If negative, only x_min is enforced.
 /// @param pad If true, prepend x_min and append x_max (when set) if missing.
 /// @return New vector with bounds applied and duplicates removed. Never empty.
 /// @throw sonare::SonareException if @p frames is empty, is not non-decreasing,
