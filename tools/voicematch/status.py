@@ -551,8 +551,14 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
             return (f"the gate is {axes['gate_state']}: re-record it against the "
                     f"current profile")
         gaps = axes["coverage"]["gaps"]
-        return (f"{len(gaps)} canonical dimension(s) neither gated nor excused: "
-                f"{', '.join(gaps)}")
+        if gaps:
+            return (f"{len(gaps)} canonical dimension(s) neither gated nor excused: "
+                    f"{', '.join(gaps)}")
+        # No gap left, so what holds the voice here is a reason already written down.
+        unbounded = axes["coverage"].get("unbounded") or []
+        return (f"{len(unbounded)} dimension(s) recorded unbounded in the gate: "
+                f"{', '.join(unbounded)} — read the reason there, then either record a "
+                f"bound that became measurable or fix what the model is missing")
     if stage == 3:
         listen = "listen to a take and record the verdict in signoff.json"
         if candidates:

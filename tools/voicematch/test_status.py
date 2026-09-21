@@ -348,6 +348,21 @@ def test_a_gate_that_was_never_written_is_named_as_one_to_write():
     assert "re-record" in stale
 
 
+def test_a_voice_held_only_by_an_unbounded_reason_is_told_what_holds_it():
+    """The state `_unbounded` creates prints as an action with nothing in it.
+
+    Coverage is incomplete while no dimension is a gap, so a message built from
+    the gap list alone reads `0 canonical dimension(s) ...:` and names nothing —
+    the voice sits at this stage with its next step invisible.
+    """
+    held = _axes(coverage={"complete": False, "gaps": [], "unbounded": ["decay", "body"]})
+    gap = _axes(coverage={"complete": False, "gaps": ["damper"], "unbounded": []})
+    assert "decay, body" in status.next_action(held, 2, [])
+    assert "unbounded" in status.next_action(held, 2, [])
+    assert not status.next_action(held, 2, []).startswith("0 ")
+    assert "neither gated nor excused: damper" in status.next_action(gap, 2, [])
+
+
 def test_a_stale_diagnosis_names_what_moved_and_a_kit_has_no_patch_to_name():
     """"the patch has moved" is a sentence a kit's entry cannot say truthfully."""
     stale = {"state": "stale", "date": "", "unreachable": [], "accepted": [],
