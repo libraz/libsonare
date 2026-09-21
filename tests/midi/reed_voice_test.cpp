@@ -630,6 +630,14 @@ TEST_CASE("the dynamic valve speaks the note from the tongue's release", "[midi]
   // reed's inertia, which is an order below the seed — that speaks the note.
   // Measured with the onset chiff off, so the only thing starting the column is
   // the valve itself.
+  struct Cell {
+    bool conical;
+    int note;
+    size_t t_static, t_dynamic;
+    float s_static, s_dynamic;
+    bool alive = true;
+  };
+  std::vector<Cell> cells;
   for (bool conical : {false, true}) {
     for (uint8_t note : {34, 50, 70}) {
       NativeSynthPatch statics = reed_base_patch();
@@ -641,23 +649,50 @@ TEST_CASE("the dynamic valve speaks the note from the tongue's release", "[midi]
       dynamic.reed.dynamic_reed = true;
       const std::vector<float> a = render_patch(statics, note, 110, 48000);
       const std::vector<float> b = render_patch(dynamic, note, 110, 48000);
-      const size_t t_static = speak_samples(a, 0.5);
-      const size_t t_dynamic = speak_samples(b, 0.5);
-      const float s_static = rms(a, a.size() - 1024, a.size());
-      const float s_dynamic = rms(b, b.size() - 1024, b.size());
-      INFO("conical " << conical << " note " << int(note) << ": static " << t_static << "/"
-                      << s_static << " dynamic " << t_dynamic << "/" << s_dynamic);
-      REQUIRE(t_dynamic < a.size());
-      REQUIRE(t_dynamic < t_static);
-      // The onset halves while the steady level does not rise: the valve is
-      // normalised to DC gain 1, so what changed is where the column started
-      // rather than how much the loop returns. Over this grid the steady level
-      // moves between -22% and +5%, the larger side DOWNWARD — the opposite
-      // direction from a note that spoke sooner because it was driven harder,
-      // which is what separates the two explanations for the speed.
-      REQUIRE(s_dynamic > 0.65f * s_static);
-      REQUIRE(s_dynamic < 1.5f * s_static);
+      cells.push_back({conical, note, speak_samples(a, 0.5), speak_samples(b, 0.5),
+                       rms(a, a.size() - 1024, a.size()), rms(b, b.size() - 1024, b.size())});
     }
+  }
+  // The static arm is the reference the whole test is scored against, so check
+  // it is alive BEFORE reading any ratio off it. A valve that stops oscillating
+  // at one note and a valve driving harder than its reference produce the same
+  // red on the ratio below, and only the second is what this test is named for.
+  // Read against the same arm's own register rather than an absolute level, so
+  // the check carries no engine constant that could go stale: a reed's steady
+  // level barely moves across three octaves — the spread here is 1.1x when the
+  // loop is healthy — and an order of magnitude below the others is a note that
+  // never reached oscillation at all.
+  for (bool conical : {false, true}) {
+    float loudest = 0.0f;
+    for (const Cell& c : cells) {
+      if (c.conical == conical) loudest = std::max(loudest, c.s_static);
+    }
+    for (Cell& c : cells) {
+      if (c.conical != conical) continue;
+      c.alive = c.s_static > 0.125f * loudest;
+      INFO("static arm, conical " << conical << " note " << c.note << ": " << c.s_static
+                                  << " against this topology's loudest " << loudest);
+      CHECK(c.alive);
+    }
+  }
+  for (const Cell& c : cells) {
+    // A cell whose reference arm is dead is not compared: both readings below
+    // are taken against that arm, so they would report the collapse a second
+    // time under a name that says the dynamic valve misbehaved. One cause, one
+    // finding.
+    if (!c.alive) continue;
+    INFO("conical " << c.conical << " note " << c.note << ": static " << c.t_static << "/"
+                    << c.s_static << " dynamic " << c.t_dynamic << "/" << c.s_dynamic);
+    CHECK(c.t_dynamic < 48000u);
+    CHECK(c.t_dynamic < c.t_static);
+    // The onset speeds up while the steady level does not rise: the valve is
+    // normalised to DC gain 1, so what changed is where the column started
+    // rather than how much the loop returns. A note that reached its level
+    // sooner by being driven harder fails the upper bound, which is what
+    // separates the two explanations for the speed — provided the arm it is
+    // measured against is still oscillating, which the loop above establishes.
+    CHECK(c.s_dynamic > 0.65f * c.s_static);
+    CHECK(c.s_dynamic < 1.5f * c.s_static);
   }
 }
 
