@@ -4,6 +4,7 @@
   "margin": 1.25,
   "reference_measured_utc": "2026-09-19T16:35:37+00:00",
   "recorded_utc": "2026-09-20T19:34:10+00:00",
+  "_approximation": "The reference side is genuinely this tone: font-level check (2026-09-22) confirms 'Detuned EP 2' and 'E.Piano 2' are distinct PIANO.sf2 instruments (indices 23 and 22) with different sample lengths and audio content at every grid note, so the capture is not reading the capital's recording under this voice's name. The model side is thin by construction instead: `gm_fallback_programs_variations.h` sets `o.e_piano_detuned_2 = o.e_piano_detuned_1` (itself `= o.e_piano` plus two numbers) and adds two more - `drift_cents` and one FM operator's `detune_cents`. `policy.json.approximated` already records program 5's own capital as answered by program 4's patch for the same underlying reason; this voice inherits that gap one layer down rather than repeating it, since no patch was written for 'Detuned EP 2' specifically. So every bound below, tnr included, measures the distance from that inherited two-number sketch to a real recording - not a mistuning of a patch this voice owns. Compounded by `capture/e_piano_detuned_2.json`'s own rig classification, which is terminal-unclassified: even a dedicated patch fitted here could never be verified free of the module's own recording chain. Bounds are kept rather than moved to `dimensions_na` because the measurement itself is sound and will still show whether a future dedicated patch narrows the gap.",
   "reference_spread": {},
   "bounds": {
     "stretch": {

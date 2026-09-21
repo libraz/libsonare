@@ -4,6 +4,7 @@
   "margin": 1.25,
   "reference_measured_utc": "2026-09-02T06:37:15+00:00",
   "recorded_utc": "2026-09-09T16:48:51+00:00",
+  "_register_margin": "register reached a full 35-row verdict throughout the fdff77ef/16d89962 loop-loss regression and its fix, not a censored one: p90 was 3.43 dB before fdff77ef, rose to 5.40 against this file's 5.457 bound during the regression (fdff77ef's own commit message), and returned to 3.43 after 16d89962 (confirmed 2026-09-22 against the current dylib, all three stats and rows=35 unchanged). The note grid straddles the note-48 anchor and per-note the tilt runs -2.5 (n36) to +3.4 (n44) to -2.3 (n60), not a monotone -3.81/+1.17 ramp end to end - the shape genuinely stayed under the 1.25x margin, spending nearly all of it. This is a margin question, not a reader defect: no fix to the reader is needed.",
   "reference_spread": {},
   "bounds": {
     "stretch": {

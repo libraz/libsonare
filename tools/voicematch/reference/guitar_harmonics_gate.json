@@ -4,6 +4,7 @@
   "margin": 1.25,
   "reference_measured_utc": "2026-09-02T06:37:59+00:00",
   "recorded_utc": "2026-09-20T23:54:11+00:00",
+  "_fossil": "This recording sits 3h17m after 2babd0d2 moved this patch's ks.decay_s, through the documented SONARE_LIB_PATH fallback to a stale build/lib/libsonare.dylib that predated the fix. Confirmed 2026-09-22 against the current, verified-non-stale build-python-shared dylib: tnr reads 39.57/39.57/55.27 against this file's 20.538/22.763/45.985 (median/abs_median/p90), and centroid_pct, doubling and vel_range also exceed their recorded bounds. Not re-recorded here because src/midi/synth/string_loop.h and ks_voice.h - the exact engine this patch's Karplus-Strong loop runs on - are under live edit by a concurrent agent; re-recording now risks a second fossil within the hour. Re-record once that work lands.",
   "reference_spread": {},
   "bounds": {
     "stretch": {
