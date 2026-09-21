@@ -38,23 +38,20 @@ def _hit(n: int, *notes: int) -> dict:
             "notes": [{"note": note, "velocity": 100} for note in notes]}
 
 
-def _bank(root: Path, units: dict[str, list[str]]) -> None:
-    """One entry per unit, each carrying the dates it moved on.
+def _bank(root: Path, units: dict[str, dict[str, int]]) -> None:
+    """One entry per unit, each date it moved on paired with the generation
+    the bump landed at.
 
-    Generations are assigned bank-wide by date order, as the real registry's
-    are -- a bump to any one unit advances the same counter every other unit's
-    history is read against.
+    Named explicitly rather than derived from position: a test that has to
+    point at a specific generation needs the fixture to say which number that
+    is, not compute one a reader has to re-derive to check the assertion.
     """
     heard.BANK_VERSIONS = root / "bank-versions.json"
-    bumps = sorted(
-        ((name, i, d) for name, dates in units.items() for i, d in enumerate(dates)),
-        key=lambda t: (t[2], t[0], t[1]))
-    generation = {(name, i): g + 1 for g, (name, i, _) in enumerate(bumps)}
     heard.BANK_VERSIONS.write_text(json.dumps({"units": {
-        name: {"kind": "patch", "version": len(dates),
-               "history": [{"date": d, "version": i + 1, "generation": generation[(name, i)]}
-                           for i, d in enumerate(dates)]}
-        for name, dates in units.items()
+        name: {"kind": "patch", "version": len(bumps),
+               "history": [{"date": d, "version": i + 1, "generation": g}
+                           for i, (d, g) in enumerate(sorted(bumps.items()))]}
+        for name, bumps in units.items()
     }}), encoding="utf-8")
 
 
@@ -92,7 +89,7 @@ def test_a_note_taken_before_the_voice_moved_is_marked() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": ["2026-08-15", "2026-09-11"]})
+        _bank(root, {"violin": {"2026-08-15": 1, "2026-09-11": 2}})
         _log(heard.FEEDBACK_ROOT, "p040-violin", [
             _note("2026-08-01T10:00:00+00:00", "wrong-instrument"),
             _note("2026-09-19T10:00:00+00:00", "acceptable"),
@@ -117,7 +114,7 @@ def test_the_headline_verdict_is_the_worst_one_still_standing() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": ["2026-09-11"]})
+        _bank(root, {"violin": {"2026-09-11": 1}})
         _log(heard.FEEDBACK_ROOT, "p040-violin", [
             _note("2026-08-01T10:00:00+00:00", "wrong-instrument"),
             _note("2026-09-19T10:00:00+00:00", "acceptable"),
@@ -149,7 +146,7 @@ def test_a_kit_note_is_about_the_drum_it_was_struck_on() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "kit000-standard-kit", "", kit=True)
-        _bank(root, {"d038": ["2026-09-11"], "d042": ["2026-05-01"]})
+        _bank(root, {"d038": {"2026-09-11": 2}, "d042": {"2026-05-01": 1}})
         _log(heard.FEEDBACK_ROOT, "kit000-standard-kit", [
             # The snare has moved since this was said; the hi-hat has not.
             _note("2026-08-01T10:00:00+00:00", "wrong-instrument", hit=_hit(1, 38)),
@@ -179,7 +176,7 @@ def test_a_fill_is_stale_as_soon_as_any_drum_under_it_moves() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "kit000-standard-kit", "", kit=True)
-        _bank(root, {"d043": ["2026-01-01"], "d041": ["2026-09-11"]})
+        _bank(root, {"d043": {"2026-01-01": 1}, "d041": {"2026-09-11": 2}})
         _log(heard.FEEDBACK_ROOT, "kit000-standard-kit",
              [_note("2026-08-01T10:00:00+00:00", "acceptable", hit=_hit(1, 43, 41))])
         note = heard.collect([], "")[0]["notes"][0]
@@ -200,7 +197,7 @@ def test_a_voice_nothing_can_be_dated_against_is_never_marked() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p007-clavi", "")
-        _bank(root, {"violin": ["2026-09-11"]})
+        _bank(root, {"violin": {"2026-09-11": 1}})
         _log(heard.FEEDBACK_ROOT, "p007-clavi",
              [_note("2026-01-01T10:00:00+00:00", "broken")])
         voice = heard.collect([], "")[0]
@@ -223,7 +220,7 @@ def test_the_versions_put_forward_to_keep_are_counted_apart_from_the_verdicts() 
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p019-church-organ", "church_organ")
-        _bank(root, {"church_organ": ["2026-09-11"]})
+        _bank(root, {"church_organ": {"2026-09-11": 1}})
 
         def prefer(version: str, take: str, blind: bool = False) -> dict:
             entry = _note("2026-09-19T10:00:00+00:00", "", "prefer")
@@ -256,7 +253,7 @@ def test_a_log_survives_a_line_that_is_not_one() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": ["2026-09-11"]})
+        _bank(root, {"violin": {"2026-09-11": 1}})
         _log(heard.FEEDBACK_ROOT, "p040-violin", [_note("2026-09-19T10:00:00+00:00", "ok")])
         with (heard.FEEDBACK_ROOT / "p040-violin.jsonl").open("a", encoding="utf-8") as fh:
             fh.write('{"grade": "brok')
@@ -275,7 +272,7 @@ def test_what_was_sounding_is_carried_through_to_the_line() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": ["2026-09-11"]})
+        _bank(root, {"violin": {"2026-09-11": 1}})
         entry = _note("2026-09-19T10:00:00+00:00", "acceptable", "tone/dark")
         entry["conditions"].update({"take_label": "Legato — a scale", "version": "gm041",
                                     "hit": _hit(3, 67), "playhead": 2.25})
@@ -299,7 +296,7 @@ def test_a_clean_verdict_signs_off_with_both_provenance_numbers_resolved() -> No
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": ["2026-08-15", "2026-09-11"]})
+        _bank(root, {"violin": {"2026-08-15": 1, "2026-09-11": 2}})
         entry = _note("2026-09-19T10:00:00+00:00", "ok")
         entry["conditions"]["take"] = "single-long"
         _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
@@ -317,7 +314,7 @@ def test_acceptable_signs_off_the_same_way_as_ok() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": ["2026-09-11"]})
+        _bank(root, {"violin": {"2026-09-11": 1}})
         entry = _note("2026-09-19T10:00:00+00:00", "acceptable")
         entry["conditions"]["take"] = "single-long"
         _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
@@ -331,7 +328,7 @@ def test_no_notes_at_all_refuses() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": ["2026-09-11"]})
+        _bank(root, {"violin": {"2026-09-11": 1}})
         try:
             heard.signoff("p040-violin")
             raise AssertionError("expected a refusal")
@@ -345,7 +342,7 @@ def test_wrong_instrument_or_broken_refuses_naming_the_verdict_and_its_date() ->
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": ["2026-09-11"]})
+        _bank(root, {"violin": {"2026-09-11": 1}})
         _log(heard.FEEDBACK_ROOT, "p040-violin",
              [_note("2026-09-19T10:00:00+00:00", "wrong-instrument")])
         try:
@@ -362,7 +359,7 @@ def test_a_preference_tag_alone_refuses() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": ["2026-09-11"]})
+        _bank(root, {"violin": {"2026-09-11": 1}})
         _log(heard.FEEDBACK_ROOT, "p040-violin",
              [_note("2026-09-19T10:00:00+00:00", "", "prefer")])
         try:
@@ -378,7 +375,7 @@ def test_a_note_predating_the_last_bump_refuses() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        _bank(root, {"violin": ["2026-08-15", "2026-09-11"]})
+        _bank(root, {"violin": {"2026-08-15": 1, "2026-09-11": 2}})
         _log(heard.FEEDBACK_ROOT, "p040-violin",
              [_note("2026-08-01T10:00:00+00:00", "ok")])
         try:
@@ -395,7 +392,7 @@ def test_a_kit_note_resolves_its_version_from_its_drum_unit() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "kit000-standard-kit", "", kit=True)
-        _bank(root, {"d038": ["2026-09-11"]})
+        _bank(root, {"d038": {"2026-09-11": 1}})
         entry = _note("2026-09-19T10:00:00+00:00", "ok", hit=_hit(1, 38))
         entry["conditions"]["take"] = "groove"
         _log(heard.FEEDBACK_ROOT, "kit000-standard-kit", [entry])
@@ -419,14 +416,17 @@ def test_bank_generation_is_the_note_days_not_the_signoffs_own_day() -> None:
         root = Path(tmp)
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
-        # violin's own bump predates the note; reed's comes after it and must
-        # not count -- it is what a later sign-off day would wrongly include.
-        _bank(root, {"violin": ["2026-08-15"], "reed": ["2026-09-25"]})
+        # violin's own bump predates the note, at generation 40; reed's comes
+        # after it, at 70, and must not count -- it is what a later sign-off
+        # day would wrongly include. The two numbers are chosen apart on
+        # purpose: a fixture deriving them from position could not tell this
+        # case from the bug it exists to catch.
+        _bank(root, {"violin": {"2026-08-15": 40}, "reed": {"2026-09-20": 70}})
         entry = _note("2026-09-19T10:00:00+00:00", "ok")
         entry["conditions"]["take"] = "single-long"
         _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
         block = heard.signoff("p040-violin")
-        assert block["provenance"]["bank_generation"] == 1, block
+        assert block["provenance"]["bank_generation"] == 40, block
 
 
 def _run_all() -> int:
