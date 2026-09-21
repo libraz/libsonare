@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "midi/synth/gs_efx_tables.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/gs_system_effects.h"
 
@@ -1119,13 +1120,38 @@ struct EfxOutcome {
   bool touched = false;
 };
 
+/// The twenty bytes @p type powers up holding, or nullptr where the archive
+/// never measured that type.
+///
+/// Its own scan of the generated table rather than a call to the layer's lookup:
+/// the MEASUREMENT is shared and has to be, but the lookup, the resolution point
+/// and the order the pour happens in are the thing under test and are written
+/// out twice on purpose.
+const std::array<uint8_t, 20>* efx_defaults_for(uint16_t type) {
+  for (const auto& entry : sonare::midi::synth::kGsEfxTypeDefaults) {
+    if (entry.type == type) return &entry.params;
+  }
+  return nullptr;
+}
+
 /// The state @p before must reach when a run of @p data lands from block offset
 /// @p start_lo.
+///
+/// Written from the contract in gs_layer.h rather than from apply_gs_efx_sysex,
+/// because a mirror that reads the implementation is the implementation twice.
+/// The rule it models, in full:
+///   - Bytes apply in address order, so what a byte does can depend on what an
+///     earlier byte of the same message did.
+///   - `00` stores the TYPE MSB and resolves nothing.
+///   - `01` resolves the type as (stored MSB, this LSB) and loads that type's
+///     twenty power-on parameters. A type the archive never measured has none,
+///     so the block stands.
+///   - `03`-`16` land in EFX PARAMETER 1-20, `17`-`19` in the three sends.
+///   - Every other offset is ignored, and never drops the message.
+///   - The unit is `assigned` once any byte reached a field.
 EfxOutcome expected_efx(const GsEfx& before, unsigned start_lo, const std::vector<uint8_t>& data) {
   EfxOutcome out;
   out.efx = before;
-  uint8_t type_msb = static_cast<uint8_t>(before.type >> 8);
-  uint8_t type_lsb = static_cast<uint8_t>(before.type & 0x7Fu);
   for (size_t i = 0; i < data.size(); ++i) {
     const unsigned offset = start_lo + static_cast<unsigned>(i);
     const uint8_t value = static_cast<uint8_t>(data[i] & 0x7Fu);
@@ -1134,11 +1160,15 @@ EfxOutcome expected_efx(const GsEfx& before, unsigned start_lo, const std::vecto
     out.touched = true;
     switch (field) {
       case EfxField::kTypeMsb:
-        type_msb = value;
+        out.efx.type_msb = value;
         break;
-      case EfxField::kTypeLsb:
-        type_lsb = value;
+      case EfxField::kTypeLsb: {
+        out.efx.type =
+            static_cast<uint16_t>((static_cast<uint16_t>(out.efx.type_msb) << 8) | value);
+        const std::array<uint8_t, 20>* defaults = efx_defaults_for(out.efx.type);
+        if (defaults != nullptr) out.efx.params = *defaults;
         break;
+      }
       case EfxField::kParameter:
         out.efx.params[offset - 0x03] = value;
         break;
@@ -1155,16 +1185,14 @@ EfxOutcome expected_efx(const GsEfx& before, unsigned start_lo, const std::vecto
         break;
     }
   }
-  if (out.touched) {
-    out.efx.type = static_cast<uint16_t>((static_cast<uint16_t>(type_msb) << 8) | type_lsb);
-    out.efx.assigned = true;
-  }
+  if (out.touched) out.efx.assigned = true;
   return out;
 }
 
 bool same_efx(const GsEfx& a, const GsEfx& b) {
-  return a.type == b.type && a.params == b.params && a.send_reverb == b.send_reverb &&
-         a.send_chorus == b.send_chorus && a.send_delay == b.send_delay && a.assigned == b.assigned;
+  return a.type == b.type && a.type_msb == b.type_msb && a.params == b.params &&
+         a.send_reverb == b.send_reverb && a.send_chorus == b.send_chorus &&
+         a.send_delay == b.send_delay && a.assigned == b.assigned;
 }
 
 struct EfxCase {
@@ -1236,6 +1264,10 @@ void check_efx_cases(const std::vector<EfxCase>& cases) {
   // preserved" are both visible.
   GsEfx populated;
   populated.type = 0x0122;
+  // The stored MSB is the resolved type's, which is the only pairing a wire
+  // write can leave behind; a fixture that let them disagree would start the
+  // case in a state the machine cannot be in.
+  populated.type_msb = 0x01;
   populated.params.fill(0x05);
   populated.send_reverb = 0x11;
   populated.send_chorus = 0x22;

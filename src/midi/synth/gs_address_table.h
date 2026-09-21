@@ -24,6 +24,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/synth/gs_efx_tables.h"
+
 namespace sonare::midi::synth {
 
 /// What an address promises (docs/gs.md). Every address carries exactly one.
@@ -394,6 +396,10 @@ inline constexpr std::array<GsAddressEntry, 178> kGsAddressTable = {{
 
     // EFX (40 03 xx), insertion unit 0.
     {0x400300, 0, GsParam::kEfxType, GsLevel::kAudible, 2, 0x00, 0x7F, 0x00, nullptr},
+    // Selecting a type loads that type's own twenty bytes, so this row's default
+    // is a function of the TYPE and not of the address; `def` is defined as the
+    // Thru state at the row's base slot and gs_efx_parameter_reset_default owns
+    // the other sixty-four types, which the table self-check enforces.
     {0x400303, 0, GsParam::kEfxParameter, GsLevel::kAudible, 20, 0x00, 0x7F, 0x00, nullptr},
     {0x400317, 0, GsParam::kEfxSendToReverb, GsLevel::kAudible, 1, 0x00, 0x7F, 0x28, nullptr},
     {0x400318, 0, GsParam::kEfxSendToChorus, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
@@ -921,6 +927,42 @@ constexpr uint8_t gs_reset_default(const GsAddressEntry& entry, uint32_t addr) n
   }
 }
 
+/// The EFX type a unit powers on holding: no insertion effect.
+inline constexpr uint16_t kGsEfxTypeThru = 0x0000;
+
+/// The twenty bytes @p type powers up holding, or nullptr for a type the
+/// archive behind gs_efx_tables.h never measured.
+constexpr const GsEfxTypeDefaults* gs_efx_type_defaults(uint16_t type) noexcept {
+  for (const GsEfxTypeDefaults& entry : kGsEfxTypeDefaults) {
+    if (entry.type == type) return &entry;
+  }
+  return nullptr;
+}
+
+/// The value EFX PARAMETER @p slot resets to once @p type is selected.
+///
+/// The EFX PARAMETER row is the one whose default is a function of the TYPE
+/// rather than of the address, and sixty-five types cannot fit in one byte. This
+/// function is the contract; the row's `def` is defined as its answer for Thru
+/// at the row's base slot, which is what the table self-check below holds it to.
+/// A type with no measurement has no reset value and answers 0 — ask
+/// gs_efx_type_defaults to tell that apart from a byte measured as zero.
+constexpr uint8_t gs_efx_parameter_reset_default(uint16_t type, uint8_t slot) noexcept {
+  const GsEfxTypeDefaults* defaults = gs_efx_type_defaults(type);
+  if (defaults == nullptr || slot >= defaults->params.size()) return 0;
+  return defaults->params[slot];
+}
+
+/// The whole EFX PARAMETER block as it powers on — the Thru type's twenty bytes,
+/// which is what the row's `def` is defined as.
+constexpr std::array<uint8_t, 20> gs_efx_power_on_params() noexcept {
+  std::array<uint8_t, 20> params{};
+  for (size_t slot = 0; slot < params.size(); ++slot) {
+    params[slot] = gs_efx_parameter_reset_default(kGsEfxTypeThru, static_cast<uint8_t>(slot));
+  }
+  return params;
+}
+
 // --- Decode ---
 
 /// One decoded data byte.
@@ -998,6 +1040,20 @@ constexpr bool gs_table_is_consistent() noexcept {
       for (uint32_t block = 0; block < 16; ++block) {
         const uint8_t reset = gs_reset_default(e, e.addr | (block << 8));
         if (reset < e.lo || reset > e.hi) return false;
+      }
+    }
+    // The type axis, for the one row that has one. `def` is the Thru state at
+    // the row's base slot, every type answers within the row's own range, and
+    // the row and the defaults table agree on how many slots there are — the
+    // three things a comment beside the row could not be held to.
+    if (e.param == GsParam::kEfxParameter) {
+      if (gs_efx_parameter_reset_default(kGsEfxTypeThru, 0) != e.def) return false;
+      for (const GsEfxTypeDefaults& defaults : kGsEfxTypeDefaults) {
+        if (defaults.params.size() != e.size) return false;
+        for (uint8_t slot = 0; slot < e.size; ++slot) {
+          const uint8_t reset = gs_efx_parameter_reset_default(defaults.type, slot);
+          if (reset < e.lo || reset > e.hi) return false;
+        }
       }
     }
     if (i > 0 && kGsAddressTable[i - 1].addr >= e.addr) return false;

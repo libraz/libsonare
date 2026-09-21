@@ -8,16 +8,38 @@
 /// oversight; a row makes it a reviewed decision that expires when the type is
 /// mapped, since mapping one without deleting its reason fails here.
 ///
-/// The cases enforce four things the mapping cannot check about itself: every
+/// The cases enforce six things the mapping cannot check about itself: every
 /// type resolves to a chain or to a listed refusal; no mapping exists for a type
 /// with no row (an exhaustive sweep of the type-number space, so a mapping added
 /// without a row fails by name); every stage name is one insert_factory can
 /// actually build, which is what separates a mapping that looks complete from
-/// one that produces sound; and two types realising the identical chain are
-/// listed as such with the reason they are indistinguishable.
+/// one that produces sound; two types realising the identical chain are listed
+/// as such with the reason they are indistinguishable; every byte the
+/// measurement archive gives a conversion to is either translated onto a control
+/// that exists or counted as STATE with the reason no control does; and the set
+/// of bytes that move a chain at all is exactly that translated set plus a
+/// listed set of reads nothing measured. The last is the one that can see a
+/// WRONG slot, which a sweep of the byte a case names never can.
+///
+/// **Parameter combinations.** The sweep below has five axes: the EFX type (65
+/// numbers, the 64 plus the alias), the parameter slot (20), the conversion
+/// class (11), the byte value (the boundaries 0, 1, 63, 64, 65, 126, 127), and
+/// which table of the class applies (2 rate ranges, 5 delay ladders, 3 frequency
+/// columns). Past the three-parameter threshold, so the set is a model rather
+/// than a hand-picked list. The constraint that decides the model: the class and
+/// the table are FUNCTIONS of (type, slot) — the generated header assigns them —
+/// so they are not free axes, and a set generated as if they were would carry
+/// cells no wire state can reach. What is left free is (type, slot) x byte, and
+/// that product is small enough to run whole: the 85 (type, slot) pairs the
+/// header names, each over all 128 byte values, which contains every realisable
+/// pair of the five axes rather than a covering subset of them. The shape-only
+/// case below takes the seven boundary values across all 65 types x 20 slots for
+/// the same reason.
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <map>
@@ -26,6 +48,7 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "midi/synth/gs_efx_tables.h"
 #include "midi/synth/gs_layer.h"
 #include "rt/processor_base.h"
 
@@ -35,8 +58,12 @@ using sonare::midi::synth::apply_gs_efx_sysex;
 using sonare::midi::synth::gs_efx_insert_chain;
 using sonare::midi::synth::gs_efx_insert_name;
 using sonare::midi::synth::gs_efx_insert_params;
+using sonare::midi::synth::gs_efx_type_defaults;
 using sonare::midi::synth::GsEfx;
 using sonare::midi::synth::GsEfxStage;
+using sonare::midi::synth::GsEfxTypeDefaults;
+
+namespace s = sonare::midi::synth;
 
 /// One EFX type: its number, the manual's name, and — when the type is refused
 /// — why. A mapped type carries a null reason.
@@ -159,14 +186,24 @@ struct EfxCollision {
 
 const std::vector<EfxCollision>& collisions() {
   static const std::vector<EfxCollision> kCollisions = {
-      {"the step flanger's stepped LFO is not modelled", {0x0123, 0x0124}},
-      {"Space-D's unmodulated voicing and 3D Chorus's binaural stage are not modelled",
-       {0x0142, 0x0143, 0x0144}},
-      {"the modulation LFO, the tap counts and the 3D stage are not modelled, so every "
-       "delay variant reduces to the stereo delay",
-       {0x0150, 0x0151, 0x0152, 0x0153, 0x0154, 0x0157}},
+      // The step flanger and the two delay groups were here while every delay
+      // and rate byte read zero. Each is separated now by a byte the archive
+      // reaches: the step flanger's own rate byte carries no conversion where
+      // the stereo flanger's does, and the delay variants power up on different
+      // times. What is not modelled is unchanged; what it no longer does is make
+      // the types indistinguishable.
+      {"Space-D and 3D Chorus power up on the same chorus rate, and neither "
+       "Space-D's unmodulated voicing nor 3D Chorus's binaural stage is modelled",
+       {0x0143, 0x0144}},
+      {"the 3-tap delay's first two taps and the 3D delay's land on the same two times at "
+       "their power-on bytes, and neither the tap counts nor the 3D stage is modelled",
+       {0x0152, 0x0157}},
       {"the gate reverb's gate stage is not modelled", {0x0155, 0x0156}},
-      {"the feedback pitch shifter's feedback loop is not modelled", {0x0160, 0x0161}},
+      // The two pitch shifters were here while every block read zero. They are
+      // separable now without the feedback loop being modelled: the two types
+      // power up on different effect balances (48 against 64), and the balance
+      // is translated. The modelling gap is unchanged; what it no longer does is
+      // make the pair indistinguishable.
       {"Lo-Fi 1 and Lo-Fi 2 differ in degradation parameters that are not translated",
        {0x0172, 0x0173}},
       {"one effect the manual prints under two type numbers", {0x020C, 0x0300}},
@@ -174,9 +211,16 @@ const std::vector<EfxCollision>& collisions() {
   return kCollisions;
 }
 
+/// A unit holding @p type, in the state selecting it over the wire leaves: the
+/// type's own twenty power-on parameters, not a block of zeros. Built directly
+/// rather than through apply_gs_efx_sysex, so the round-trip case below still
+/// compares two ways of arriving at the state instead of one way twice.
 GsEfx make_efx(uint16_t type) {
   GsEfx efx;
   efx.type = type;
+  efx.type_msb = static_cast<uint8_t>(type >> 8);
+  const GsEfxTypeDefaults* defaults = gs_efx_type_defaults(type);
+  if (defaults != nullptr) efx.params = defaults->params;
   efx.assigned = true;
   return efx;
 }
@@ -232,6 +276,282 @@ std::string hex4(uint16_t type) {
   for (int shift = 12; shift >= 0; shift -= 4) out += kDigits[(type >> shift) & 0xF];
   return out;
 }
+
+/// Where a conversion's physical quantity lands on the insert the type maps to.
+/// Written by hand: the generated header names the (type, slot) pairs and their
+/// conversion classes, param_field_tables.h and the insert factory name the
+/// controls, and nothing in the tree joins the two. A pair is TRANSLATABLE when
+/// the chain its type realises carries a control of the same physical unit, and
+/// counted as STATE when it does not -- an engine that does not read a byte owes
+/// it STATE rather than AUDIBLE (docs/gs.md). A STATE row carries the reason.
+struct EfxJoin {
+  uint16_t type;
+  uint8_t slot;
+  const char* conversion;    ///< class.table, as gs_efx_tables.h spells it.
+  const char* stage;         ///< The chain stage the control lives on.
+  const char* key;           ///< Its JSON key. Null where no control exists.
+  const char* state_reason;  ///< Why none does. Null where one does.
+};
+
+constexpr const char* kPhaser = "effects.modulation.phaser";
+constexpr const char* kFlanger = "effects.modulation.flanger";
+constexpr const char* kChorus = "effects.modulation.chorus";
+constexpr const char* kRingMod = "effects.modulation.ringModulator";
+constexpr const char* kAutoPan = "stereo.autoPan";
+constexpr const char* kEnsemble = "effects.modulation.ensemble";
+constexpr const char* kDelay = "effects.delay.stereo";
+constexpr const char* kEq = "eq.parametric";
+constexpr const char* kAmpSim = "saturation.ampSim";
+constexpr const char* kRotary = "effects.modulation.rotary";
+
+/// One row per entry of kGsEfxSlotConversions, in the header's own order.
+constexpr std::array<EfxJoin, 85> kJoin = {{
+    {0x0100, 1, "gain.tone", kEq, "band0.gainDb", nullptr},
+    {0x0100, 3, "gain.tone", kEq, "band3.gainDb", nullptr},
+    {0x0100, 4, "freq.eq", kEq, "band1.frequencyHz", nullptr},
+    {0x0100, 5, "width.section", kEq, "band1.q", nullptr},
+    {0x0100, 6, "gain.tone", kEq, "band1.gainDb", nullptr},
+    {0x0100, 7, "freq.eq", kEq, "band2.frequencyHz", nullptr},
+    {0x0100, 8, "width.section", kEq, "band2.q", nullptr},
+    {0x0100, 9, "gain.tone", kEq, "band2.gainDb", nullptr},
+    {0x0100, 19, "level.output", nullptr, nullptr, "eq.parametric has no output gain"},
+    {0x0101, 18, "pan.output", nullptr, nullptr, "eq.graphic has no pan"},
+    {0x0103, 18, "pan.output", nullptr, nullptr,
+     "a vowel formant filter has no insert, so the type realises no chain at all"},
+    {0x0111, 19, "level.output", kAmpSim, "levelDb", nullptr},
+    {0x0120, 1, "rate.wide", kPhaser, "rateHz", nullptr},
+    {0x0121, 4, "rate.wide", nullptr, nullptr,
+     "the auto-wah insert follows an envelope and carries no LFO rate"},
+    {0x0122, 2, "accel.rotor", kRotary, "drumUndershootHz", nullptr},
+    {0x0122, 6, "accel.rotor", kRotary, "undershootHz", nullptr},
+    {0x0123, 3, "rate.wide", kFlanger, "rateHz", nullptr},
+    {0x0125, 0, "wave.modulator", nullptr, nullptr,
+     "the ring modulator's carrier is a sine and takes no shape selector"},
+    {0x0125, 1, "rate.wide", kRingMod, "carrierHz", nullptr},
+    {0x0126, 0, "wave.modulator", nullptr, nullptr,
+     "the auto-pan insert's LFO takes no shape selector"},
+    {0x0126, 1, "rate.wide", kAutoPan, "rateHz", nullptr},
+    {0x0130, 18, "pan.output", nullptr, nullptr, "the compressor insert has no pan"},
+    {0x0140, 0, "delay_time.pre_delay", kEnsemble, "centerDelayMs", nullptr},
+    {0x0140, 19, "level.output", nullptr, nullptr, "the ensemble insert has no output level"},
+    {0x0142, 1, "freq.pre_filter", kChorus, "preFilterHz", nullptr},
+    {0x0142, 3, "rate.wide", kChorus, "rateHz", nullptr},
+    {0x0142, 16, "gain.tone", nullptr, nullptr, "the chorus insert has no output EQ"},
+    {0x0142, 17, "gain.tone", nullptr, nullptr, "the chorus insert has no output EQ"},
+    {0x0143, 1, "rate.wide", kChorus, "rateHz", nullptr},
+    {0x0144, 1, "rate.wide", kChorus, "rateHz", nullptr},
+    {0x0150, 0, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
+    {0x0150, 1, "delay_time.time3", kDelay, "delayTimeRMs", nullptr},
+    {0x0150, 7, "freq.damping", kDelay, "dampingHz", nullptr},
+    {0x0150, 15, "balance.effect", nullptr, nullptr,
+     "the insert's mix is a crossfade, dry = 1 - wet; the measured law is two independent "
+     "gains that meet at full in the middle of the byte, which the record calls the opposite "
+     "sign to a crossfade"},
+    {0x0150, 16, "gain.tone", nullptr, nullptr, "the stereo-delay insert has no output EQ"},
+    {0x0150, 17, "gain.tone", nullptr, nullptr, "the stereo-delay insert has no output EQ"},
+    {0x0151, 0, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
+    {0x0151, 1, "delay_time.time3", kDelay, "delayTimeRMs", nullptr},
+    {0x0151, 4, "rate.wide", nullptr, nullptr, "the stereo-delay insert carries no modulation LFO"},
+    {0x0152, 0, "delay_time.time1", kDelay, "delayTimeLMs", nullptr},
+    {0x0152, 1, "delay_time.time1", kDelay, "delayTimeRMs", nullptr},
+    {0x0152, 2, "delay_time.time1", nullptr, nullptr,
+     "the stereo-delay insert has two taps and this is a third"},
+    {0x0153, 0, "delay_time.time1", kDelay, "delayTimeLMs", nullptr},
+    {0x0153, 1, "delay_time.time1", kDelay, "delayTimeRMs", nullptr},
+    {0x0153, 2, "delay_time.time1", nullptr, nullptr,
+     "the stereo-delay insert has two taps and this is a third"},
+    {0x0153, 3, "delay_time.time1", nullptr, nullptr,
+     "the stereo-delay insert has two taps and this is a fourth"},
+    {0x0154, 15, "balance.effect", nullptr, nullptr,
+     "the insert's mix is a crossfade, dry = 1 - wet; the measured law is two independent "
+     "gains that meet at full in the middle of the byte, which the record calls the opposite "
+     "sign to a crossfade"},
+    {0x0157, 0, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
+    {0x0157, 1, "delay_time.time3", kDelay, "delayTimeRMs", nullptr},
+    {0x0157, 2, "delay_time.time3", nullptr, nullptr,
+     "the stereo-delay insert has two taps and this is a third"},
+    {0x0157, 15, "balance.effect", nullptr, nullptr,
+     "the insert's mix is a crossfade, dry = 1 - wet; the measured law is two independent "
+     "gains that meet at full in the middle of the byte, which the record calls the opposite "
+     "sign to a crossfade"},
+    {0x0170, 0, "azimuth.placement", nullptr, nullptr,
+     "a binaural panner has no insert, so the type realises no chain at all"},
+    {0x0170, 1, "rate.wide", nullptr, nullptr,
+     "a binaural panner has no insert, so the type realises no chain at all"},
+    {0x0171, 0, "azimuth.placement", nullptr, nullptr,
+     "a binaural panner has no insert, so the type realises no chain at all"},
+    {0x0200, 6, "rate.wide", kChorus, "rateHz", nullptr},
+    {0x0201, 6, "rate.wide", kFlanger, "rateHz", nullptr},
+    {0x0203, 6, "rate.wide", kChorus, "rateHz", nullptr},
+    {0x0204, 6, "rate.wide", kFlanger, "rateHz", nullptr},
+    {0x0206, 6, "rate.wide", kChorus, "rateHz", nullptr},
+    {0x0207, 6, "rate.wide", kFlanger, "rateHz", nullptr},
+    {0x0208, 5, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
+    {0x0209, 0, "delay_time.pre_delay", kChorus, "centerDelayMs", nullptr},
+    {0x0209, 5, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
+    {0x020A, 1, "rate.wide", kFlanger, "rateHz", nullptr},
+    {0x0400, 12, "rate.narrow", kChorus, "rateHz", nullptr},
+    {0x0400, 16, "delay_time.time4", kDelay, "delayTimeLMs", nullptr},
+    {0x0401, 9, "gain.tone", kEq, "band0.gainDb", nullptr},
+    {0x0401, 10, "freq.eq", kEq, "band1.frequencyHz", nullptr},
+    {0x0401, 11, "width.section", kEq, "band1.q", nullptr},
+    {0x0401, 12, "gain.tone", kEq, "band1.gainDb", nullptr},
+    {0x0401, 13, "gain.tone", kEq, "band2.gainDb", nullptr},
+    {0x0403, 4, "gain.tone", kEq, "band0.gainDb", nullptr},
+    {0x0403, 5, "freq.eq", kEq, "band1.frequencyHz", nullptr},
+    {0x0403, 6, "width.section", kEq, "band1.q", nullptr},
+    {0x0403, 7, "gain.tone", kEq, "band1.gainDb", nullptr},
+    {0x0403, 8, "gain.tone", kEq, "band2.gainDb", nullptr},
+    {0x0403, 10, "rate.narrow", kChorus, "rateHz", nullptr},
+    {0x0403, 16, "freq.damping", kDelay, "dampingHz", nullptr},
+    {0x0406, 15, "wave.modulator", nullptr, nullptr,
+     "the auto-pan insert's LFO takes no shape selector"},
+    {0x0500, 12, "rate.narrow", kPhaser, "rateHz", nullptr},
+    {0x1100, 0, "delay_time.pre_delay", nullptr, nullptr,
+     "a parallel-2 type realises no chain at all"},
+    {0x1100, 5, "delay_time.time3", nullptr, nullptr, "a parallel-2 type realises no chain at all"},
+    {0x1101, 0, "delay_time.pre_delay", nullptr, nullptr,
+     "a parallel-2 type realises no chain at all"},
+    {0x1101, 5, "delay_time.time3", nullptr, nullptr, "a parallel-2 type realises no chain at all"},
+    {0x1105, 6, "rate.wide", nullptr, nullptr, "a parallel-2 type realises no chain at all"},
+}};
+
+/// The conversion class and table numbers spelled out, so a header that moves a
+/// pair to a different class fails here rather than being joined to a control of
+/// a unit it no longer carries.
+struct ConversionName {
+  uint8_t conversion_class;
+  uint8_t table;
+  const char* name;
+};
+
+constexpr std::array<ConversionName, 18> kConversionNames = {{
+    {s::kGsEfxClassRate, 0, "rate.narrow"},
+    {s::kGsEfxClassRate, 1, "rate.wide"},
+    {s::kGsEfxClassDelayTime, 0, "delay_time.pre_delay"},
+    {s::kGsEfxClassDelayTime, 1, "delay_time.time1"},
+    {s::kGsEfxClassDelayTime, 2, "delay_time.time2"},
+    {s::kGsEfxClassDelayTime, 3, "delay_time.time3"},
+    {s::kGsEfxClassDelayTime, 4, "delay_time.time4"},
+    {s::kGsEfxClassFreq, 0, "freq.eq"},
+    {s::kGsEfxClassFreq, 1, "freq.pre_filter"},
+    {s::kGsEfxClassFreq, 2, "freq.damping"},
+    {s::kGsEfxClassGain, 0, "gain.tone"},
+    {s::kGsEfxClassLevel, 0, "level.output"},
+    {s::kGsEfxClassWidth, 0, "width.section"},
+    {s::kGsEfxClassWave, 0, "wave.modulator"},
+    {s::kGsEfxClassPan, 0, "pan.output"},
+    {s::kGsEfxClassBalance, 0, "balance.effect"},
+    {s::kGsEfxClassAzimuth, 0, "azimuth.placement"},
+    {s::kGsEfxClassAccel, 0, "accel.rotor"},
+}};
+
+/// A (type, slot) the translation reads although the archive gives it no
+/// conversion. Every one is a reviewed exception with its reason: the list is
+/// what separates "reads a byte nothing measured" from "reads the wrong byte",
+/// and the sweep below fails on a read that is on neither list.
+struct UnmeasuredRead {
+  uint16_t type;
+  uint8_t slot;
+  const char* reason;
+};
+
+constexpr std::array<UnmeasuredRead, 8> kUnmeasuredReads = {{
+    {0x0110, 0,
+     "Drive, measured as a gain in front of one fixed curve but with no byte-to-dB "
+     "conversion derived; the amp-sim drive knob takes the fraction"},
+    {0x0110, 19,
+     "output level; the level reading is unit-scoped at this address and names three "
+     "types, of which this is not one"},
+    {0x0111, 0, "Drive, as for the overdrive above"},
+    {0x0142, 0,
+     "the pre-filter's shape selector, measured as an enumeration rather than a "
+     "conversion, so the derivation gives it no class"},
+    {0x0160, 0, "Coarse Pitch, a 64-centred semitone offset the archive does not reach"},
+    {0x0160, 15,
+     "Effect Balance; the measured two-ramp law names three delay types and not "
+     "this one, so what stands here is the older linear reading"},
+    {0x0161, 0, "Coarse Pitch, as for the 2-voice shifter above"},
+    {0x0161, 15, "Effect Balance, as for the 2-voice shifter above"},
+}};
+
+/// The EQ block's gain slots for one type, taken from the header rather than
+/// written here.
+struct EqSlots {
+  uint16_t type;
+  int low;
+  int high;
+  int count;
+};
+
+/// Every composite type the header gives gain slots to, with the first and last
+/// of them: a composite's EQ is a three-gain block whose shelves bracket one
+/// peaking section, and the archive lists the three in that order. `count` is
+/// carried so a type that stopped being a three-gain block fails rather than
+/// being read as one. The single-effect types are excluded because their gain
+/// pair sits on an output EQ their insert does not have.
+std::vector<EqSlots> gain_slots_by_type() {
+  std::map<uint16_t, std::vector<int>> slots;
+  for (const s::GsEfxSlotConversion& entry : s::kGsEfxSlotConversions) {
+    if (entry.conversion_class != s::kGsEfxClassGain) continue;
+    if ((entry.type >> 8) < 0x02) continue;
+    slots[entry.type].push_back(entry.parameter);
+  }
+  std::vector<EqSlots> out;
+  for (const auto& entry : slots) {
+    out.push_back({entry.first, entry.second.front(), entry.second.back(),
+                   static_cast<int>(entry.second.size())});
+  }
+  return out;
+}
+
+/// The floor the translated count may not fall below, and the ceiling the
+/// untranslated count may not rise above. Both hand-written from the run that
+/// first measured them, and hand-written on purpose: the population comes from
+/// the generated header, so a derivation that dropped a class would shrink it
+/// and a one-sided ratchet would go green on the loss.
+constexpr int kGsEfxTranslatedFloor = 56;
+constexpr int kGsEfxStateCeiling = 29;
+
+std::string conversion_name(uint8_t conversion_class, uint8_t table) {
+  for (const ConversionName& row : kConversionNames) {
+    if (row.conversion_class == conversion_class && row.table == table) return row.name;
+  }
+  return "unknown";
+}
+
+/// The params of the one stage named @p name, or an empty string when the chain
+/// carries no such stage or more than one (which would make the lookup silently
+/// pick a side).
+std::string stage_params(const std::vector<GsEfxStage>& chain, const std::string& name) {
+  const std::string* found = nullptr;
+  for (const GsEfxStage& stage : chain) {
+    if (stage.name != name) continue;
+    if (found != nullptr) return {};
+    found = &stage.params_json;
+  }
+  return found != nullptr ? *found : std::string{};
+}
+
+/// Counts what it checked, so a run that stopped reaching the population reports
+/// as a smaller number rather than as a clean one.
+class Tally {
+ public:
+  void same(bool held, const std::string& what) {
+    ++count_;
+    INFO(what);
+    CHECK(held);
+  }
+
+  int count() const { return count_; }
+
+ private:
+  int count_ = 0;
+};
+
+/// The byte values the boundary axis takes: the two ends, the centre and its
+/// neighbours, which is where every conversion in the archive has a knot.
+constexpr uint8_t kValues[] = {0, 1, 63, 64, 65, 126, 127};
 
 /// Every type the table declares, mapped and refused alike.
 std::vector<EfxType> all_rows() {
@@ -390,7 +710,6 @@ TEST_CASE("a parameter-only edit never changes an EFX chain's shape", "[midi][sf
   // no pairwise generator is available here and the space is small enough to
   // enumerate whole. Structure comes from the type alone: parameters voice the
   // stages, they never add or remove one.
-  static constexpr uint8_t kValues[] = {0, 1, 63, 64, 65, 126, 127};
   for (const EfxType& row : all_rows()) {
     const std::vector<std::string> shape = stage_names(gs_efx_insert_chain(make_efx(row.type)));
     for (size_t index = 0; index < GsEfx{}.params.size(); ++index) {
@@ -409,14 +728,17 @@ TEST_CASE("EFX parameter translations move their insert control monotonically", 
   // Only the confirmed parameter positions are translated, so only they are
   // swept. Each sweep asserts the direction the manual gives, over every byte
   // value rather than a sampled few.
-  SECTION("Overdrive drive rises with EFX PARAMETER 2") {
+  SECTION("Overdrive drive rises with EFX PARAMETER 1") {
+    // PARAMETER 1 is the Drive byte and PARAMETER 2 the amp selector, which is
+    // the way round the archive read them at these two types (40 03 03 answers
+    // a gain in front of one fixed curve; 40 03 04 picks one of four curves).
     GsEfx efx = make_efx(0x0110);
     double previous = -1.0;
     for (int value = 0; value <= 127; ++value) {
-      efx.params[1] = static_cast<uint8_t>(value);
+      efx.params[0] = static_cast<uint8_t>(value);
       double drive = 0.0;
       REQUIRE(json_number(gs_efx_insert_params(efx), "drive", drive));
-      INFO("PARAMETER 2 = " << value);
+      INFO("PARAMETER 1 = " << value);
       REQUIRE(drive > previous);
       previous = drive;
     }
@@ -427,24 +749,25 @@ TEST_CASE("EFX parameter translations move their insert control monotonically", 
     GsEfx ds = make_efx(0x0111);
     double previous = -1.0;
     for (int value = 0; value <= 127; ++value) {
-      od.params[1] = ds.params[1] = static_cast<uint8_t>(value);
+      od.params[0] = ds.params[0] = static_cast<uint8_t>(value);
       double od_drive = 0.0;
       double ds_drive = 0.0;
       REQUIRE(json_number(gs_efx_insert_params(od), "drive", od_drive));
       REQUIRE(json_number(gs_efx_insert_params(ds), "drive", ds_drive));
-      INFO("PARAMETER 2 = " << value);
+      INFO("PARAMETER 1 = " << value);
       REQUIRE(ds_drive > od_drive);
       REQUIRE(ds_drive > previous);
       previous = ds_drive;
     }
   }
 
-  SECTION("output level rises with EFX PARAMETER 20, and 0 leaves it unset") {
+  SECTION("output level rises with EFX PARAMETER 20, and 0 is the value zero") {
     GsEfx efx = make_efx(0x0110);
-    double unused = 0.0;
-    REQUIRE_FALSE(json_number(gs_efx_insert_params(efx), "levelDb", unused));
+    // Swept from 0, because 0 is a level a file can ask for rather than an
+    // absence: selecting the type loads this slot's own default, so no state of
+    // the block means "unset".
     double previous = -1000.0;
-    for (int value = 1; value <= 127; ++value) {
+    for (int value = 0; value <= 127; ++value) {
       efx.params[19] = static_cast<uint8_t>(value);
       double level = 0.0;
       REQUIRE(json_number(gs_efx_insert_params(efx), "levelDb", level));
@@ -472,12 +795,12 @@ TEST_CASE("EFX parameter translations move their insert control monotonically", 
     REQUIRE(centre == 0.0);
   }
 
-  SECTION("effect balance rises with EFX PARAMETER 16, and 0 leaves it unset") {
+  SECTION("effect balance rises with EFX PARAMETER 16, and 0 is the value zero") {
     GsEfx efx = make_efx(0x0160);
-    double unused = 0.0;
-    REQUIRE_FALSE(json_number(gs_efx_insert_params(efx), "dryWet", unused));
+    // Swept from 0, for the reason the output level is: a balance of 0 is all
+    // direct signal, which is a setting rather than a silence.
     double previous = -1.0;
-    for (int value = 1; value <= 127; ++value) {
+    for (int value = 0; value <= 127; ++value) {
       efx.params[15] = static_cast<uint8_t>(value);
       double wet = 0.0;
       REQUIRE(json_number(gs_efx_insert_params(efx), "dryWet", wet));
@@ -487,15 +810,20 @@ TEST_CASE("EFX parameter translations move their insert control monotonically", 
     }
   }
 
-  SECTION("the guitar multis' EQ shelves follow PARAMETER 17 and 18") {
-    // The one confirmed per-block layout in the composite types: EQ Low Gain and
-    // Hi Gain, centred at 64 over +-12 dB.
-    for (uint16_t type : {uint16_t{0x0401}, uint16_t{0x0403}, uint16_t{0x0405}}) {
+  SECTION("the guitar multis' EQ shelves follow the slots their own type uses") {
+    // A composite's parameter block is laid out per type, and the slots come
+    // from the generated header rather than from numbers written here. Sweeping
+    // a byte this case names is a check that the code reads the byte the case
+    // reads, which is true of every layout; taking the slots from the archive's
+    // own classification is what makes the case able to see a wrong one. Bass
+    // Multi has no gain slot in the header at all, so it drops out by itself.
+    for (const EqSlots& row : gain_slots_by_type()) {
       double previous_low = -1000.0;
       double previous_high = -1000.0;
-      for (int value = 1; value <= 127; ++value) {
-        GsEfx efx = make_efx(type);
-        efx.params[16] = efx.params[17] = static_cast<uint8_t>(value);
+      for (int value = 0; value <= 127; ++value) {
+        GsEfx efx = make_efx(row.type);
+        efx.params[static_cast<size_t>(row.low)] = static_cast<uint8_t>(value);
+        efx.params[static_cast<size_t>(row.high)] = static_cast<uint8_t>(value);
         const auto chain = gs_efx_insert_chain(efx);
         const auto eq = std::find_if(chain.begin(), chain.end(), [](const GsEfxStage& stage) {
           return stage.name == "eq.parametric";
@@ -504,15 +832,23 @@ TEST_CASE("EFX parameter translations move their insert control monotonically", 
         double low = 0.0;
         double high = 0.0;
         REQUIRE(json_number(eq->params_json, "band0.gainDb", low));
-        REQUIRE(json_number(eq->params_json, "band1.gainDb", high));
-        INFO(hex4(type) << " EQ gain byte " << value);
+        REQUIRE(json_number(eq->params_json, "band2.gainDb", high));
+        INFO(hex4(row.type) << " EQ gain byte " << value);
         REQUIRE(low >= previous_low);
         REQUIRE(high >= previous_high);
         previous_low = low;
         previous_high = high;
       }
+      // The window's ends, which the byte reaches at 0x34 and 0x4C and holds
+      // outside: a byte of 0 is the cut and not an absence.
       REQUIRE(previous_low == 12.0);
       REQUIRE(previous_high == 12.0);
+      GsEfx zeroed = make_efx(row.type);
+      zeroed.params[static_cast<size_t>(row.low)] = 0;
+      double floor_db = 0.0;
+      REQUIRE(json_number(stage_params(gs_efx_insert_chain(zeroed), "eq.parametric"),
+                          "band0.gainDb", floor_db));
+      REQUIRE(floor_db == -12.0);
     }
   }
 }
@@ -541,12 +877,21 @@ TEST_CASE("Tremolo realises as amplitude modulation, not as a ring modulator", "
   REQUIRE(wet < 0.5);
 
   // Tremolo Chorus is the chorus with that same modulation on its output, so
-  // the two cannot drift apart into different depths.
+  // the two cannot drift apart into different DEPTHS. Their rates do part
+  // company and that is the wire speaking: the standalone type's rate byte
+  // carries a conversion and the chain's does not, so the chain keeps a voicing
+  // where the standalone type reads a setting.
   const auto tremolo_chorus = gs_efx_insert_chain(make_efx(0x0141));
   REQUIRE(
       stage_names(tremolo_chorus) ==
       std::vector<std::string>{"effects.modulation.chorus", "effects.modulation.ringModulator"});
-  REQUIRE(tremolo_chorus[1].params_json == chain[0].params_json);
+  double chain_wet = 0.0;
+  REQUIRE(json_number(tremolo_chorus[1].params_json, "dryWet", chain_wet));
+  REQUIRE(chain_wet == wet);
+  double chain_carrier = 0.0;
+  REQUIRE(json_number(tremolo_chorus[1].params_json, "carrierHz", chain_carrier));
+  REQUIRE(chain_carrier > 0.0);
+  REQUIRE(chain_carrier < 20.0);
 }
 
 #if defined(SONARE_WITH_FX) && defined(SONARE_WITH_MASTERING)
@@ -620,4 +965,160 @@ TEST_CASE("an EFX type set over the wire reads back the same chain", "[midi][sf2
       REQUIRE(stage_names(gs_efx_insert_chain(efx)) == shape);
     }
   }
+}
+
+TEST_CASE("every reached EFX byte is translated or counted as STATE", "[midi][sf2][gs]") {
+  Tally tally;
+
+  // The join table and the generated header have to name the same pairs in the
+  // same order. A header row with no join row is a byte nobody classified; a
+  // join row with no header row excuses nothing and would keep the arithmetic
+  // looking whole after the derivation stopped producing the pair.
+  REQUIRE(kJoin.size() == s::kGsEfxSlotConversions.size());
+  for (size_t i = 0; i < kJoin.size(); ++i) {
+    const EfxJoin& row = kJoin[i];
+    const s::GsEfxSlotConversion& entry = s::kGsEfxSlotConversions[i];
+    const std::string label = hex4(row.type) + " slot " + std::to_string(row.slot);
+    tally.same(row.type == entry.type && row.slot == entry.parameter,
+               label + " is not the header's entry at this position");
+    tally.same(conversion_name(entry.conversion_class, entry.table) == row.conversion,
+               label + " has moved to another conversion class or table");
+    tally.same((row.key == nullptr) != (row.state_reason == nullptr),
+               label + " is neither translated onto a control nor given a reason none exists");
+  }
+
+  int translatable = 0;
+  int translated = 0;
+  int state = 0;
+  std::map<uint16_t, int> state_by_type;
+  for (const EfxJoin& row : kJoin) {
+    const std::string label =
+        hex4(row.type) + " slot " + std::to_string(row.slot) + " (" + row.conversion + ")";
+    const auto chain = gs_efx_insert_chain(make_efx(row.type));
+
+    if (row.key == nullptr) {
+      ++state;
+      ++state_by_type[row.type];
+      // A STATE row is not a note: the byte has to be inert. Were it reaching a
+      // control after all, the row would be stale and the count wrong in the
+      // direction that flatters it.
+      std::set<std::string> shapes;
+      for (uint8_t value : kValues) {
+        GsEfx efx = make_efx(row.type);
+        efx.params[row.slot] = value;
+        shapes.insert(signature(gs_efx_insert_chain(efx)));
+      }
+      tally.same(shapes.size() == 1, label + " is counted as STATE and yet moves its chain");
+      continue;
+    }
+
+    ++translatable;
+    // The stage has to be in the chain exactly once, or reading a key off "the"
+    // stage of that name is reading whichever one came first.
+    int named = 0;
+    for (const GsEfxStage& stage : chain) {
+      if (stage.name == row.stage) ++named;
+    }
+    tally.same(named == 1, label + " does not name exactly one stage of the chain");
+
+    // Translated is MEASURED: sweep the byte over its whole domain and require
+    // the emitted value to be there every time and to move. A key written at a
+    // constant is a key the wire cannot reach, and it reads exactly like a
+    // translation to anything that greps for the key.
+    std::set<double> emitted;
+    bool always_present = true;
+    for (int value = 0; value <= 127; ++value) {
+      GsEfx efx = make_efx(row.type);
+      efx.params[row.slot] = static_cast<uint8_t>(value);
+      double number = 0.0;
+      if (!json_number(stage_params(gs_efx_insert_chain(efx), row.stage), row.key, number)) {
+        always_present = false;
+        break;
+      }
+      emitted.insert(number);
+    }
+    tally.same(always_present, label + " does not emit " + row.key + " at every byte value");
+    tally.same(emitted.size() >= 2,
+               label + " emits " + row.key + " at a constant, which is not a translation");
+    if (always_present && emitted.size() >= 2) ++translated;
+  }
+
+  // Success condition 1. The first is the one that says the wiring is complete;
+  // the two after it are the ratchet, pinned from both sides because the
+  // population is generated and a one-sided ratchet goes green when it shrinks.
+  tally.same(translatable - translated == 0, "a translatable byte is not translated");
+  tally.same(translated >= kGsEfxTranslatedFloor, "the translated count fell below its floor");
+  tally.same(state <= kGsEfxStateCeiling, "the untranslated count rose above its ceiling");
+  tally.same(translatable + state == s::kGsEfxReached,
+             "translatable and STATE do not account for every reached pair");
+
+  std::string breakdown;
+  for (const auto& entry : state_by_type) {
+    breakdown += hex4(entry.first) + ":" + std::to_string(entry.second) + " ";
+  }
+  WARN("reached: " << s::kGsEfxReached << "  translatable: " << translatable
+                   << "  translated: " << translated << "  STATE: " << state);
+  WARN("STATE by type: " << breakdown);
+  WARN("comparisons: " << tally.count());
+  REQUIRE(tally.count() >= 300);
+}
+
+TEST_CASE("the translation reads exactly the bytes the archive named", "[midi][sf2][gs]") {
+  // The inverse of the case above, and the one that can see a wrong slot. A
+  // sweep of the byte a test names only shows that the code reads the byte the
+  // test reads, which is true of every layout: what separates a right layout
+  // from a wrong one is WHICH bytes move the chain. So every slot of every type
+  // is swept, and each one that moves anything has to be either a translatable
+  // pair the archive named or a listed exception with its reason.
+  //
+  // This is what the zeroed block hid. While every params byte read 0, a slot
+  // the code read and a slot it did not read produced the same output, so no
+  // check of this shape could have been written; the defaults pour is what made
+  // the two separable.
+  Tally tally;
+  std::set<std::pair<uint16_t, int>> named;
+  for (const EfxJoin& row : kJoin) {
+    if (row.key != nullptr) named.insert({row.type, row.slot});
+  }
+  std::set<std::pair<uint16_t, int>> excepted;
+  for (const UnmeasuredRead& row : kUnmeasuredReads) {
+    excepted.insert({row.type, row.slot});
+  }
+
+  std::set<std::pair<uint16_t, int>> moved;
+  for (const EfxType& type_row : all_rows()) {
+    const std::string base = signature(gs_efx_insert_chain(make_efx(type_row.type)));
+    for (size_t slot = 0; slot < GsEfx{}.params.size(); ++slot) {
+      bool moves = false;
+      for (uint8_t value : kValues) {
+        GsEfx efx = make_efx(type_row.type);
+        efx.params[slot] = value;
+        if (signature(gs_efx_insert_chain(efx)) != base) moves = true;
+      }
+      if (!moves) continue;
+      moved.insert({type_row.type, static_cast<int>(slot)});
+      const std::string label = hex4(type_row.type) + " slot " + std::to_string(slot);
+      tally.same(named.count({type_row.type, static_cast<int>(slot)}) == 1 ||
+                     excepted.count({type_row.type, static_cast<int>(slot)}) == 1,
+                 label + " moves the chain and the archive gives it no conversion");
+    }
+  }
+
+  // Both directions. A translatable pair that moves nothing is a translation
+  // aimed at a byte the type does not carry; an exception that moves nothing is
+  // a note about code that has gone away.
+  for (const auto& pair : named) {
+    tally.same(moved.count(pair) == 1, hex4(pair.first) + " slot " + std::to_string(pair.second) +
+                                           " is counted as translated and moves nothing");
+  }
+  for (const UnmeasuredRead& row : kUnmeasuredReads) {
+    tally.same(moved.count({row.type, row.slot}) == 1,
+               hex4(row.type) + " slot " + std::to_string(row.slot) +
+                   " is excused as an unmeasured read and is not read at all");
+  }
+
+  WARN("slots that move a chain: " << moved.size() << "  named by the archive: " << named.size()
+                                   << "  listed exceptions: " << kUnmeasuredReads.size());
+  WARN("comparisons: " << tally.count());
+  REQUIRE(tally.count() >= 120);
 }

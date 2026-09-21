@@ -34,9 +34,10 @@ using sonare::test::Sf2Builder;
 
 constexpr double kOutRate = 48000.0;
 
-// GS SysEx (Roland DT1, framed) shared with tests/midi/sf2_effects_test.cpp:
-// enable EFX on part 1 (channel 0), select Overdrive (01 10), set OD Drive
-// (EFX PARAMETER 2 = 40 03 04) to max. Checksums per the DT1 rule.
+// GS SysEx (Roland DT1, framed): enable EFX on part 1 (channel 0), select
+// Overdrive (01 10), write EFX PARAMETER 2 (40 03 04) at max. Checksums per the
+// DT1 rule. That slot is the amp selector rather than the drive, which is at
+// PARAMETER 1; what the case needs of it is only that it is a parameter write.
 constexpr uint8_t kPartOn[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
 constexpr uint8_t kOdType[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                                0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
@@ -99,8 +100,9 @@ float rms(const std::vector<float>& buf, size_t from, size_t to) {
 
 /// A minimal insert processor that only counts lifecycle/parameter calls, so a
 /// test can tell an in-place parameter update (set_parameter, no prepare/reset)
-/// apart from a full rebuild (a fresh processor, prepare()). Its named
-/// parameters match the keys the Overdrive EFX translation emits.
+/// apart from a full rebuild (a fresh processor, prepare()). The named
+/// parameters are supplied by the case, so each one stands in for the insert the
+/// type it selects would really build.
 struct EfxCounters {
   int prepares = 0;
   int resets = 0;
@@ -109,7 +111,8 @@ struct EfxCounters {
 
 class CountingInsert final : public sonare::rt::ProcessorBase {
  public:
-  explicit CountingInsert(std::shared_ptr<EfxCounters> counters) : counters_(std::move(counters)) {}
+  CountingInsert(std::shared_ptr<EfxCounters> counters, std::vector<std::string> keys)
+      : counters_(std::move(counters)), keys_(std::move(keys)) {}
   void prepare(double, int) override { ++counters_->prepares; }
   void process(float* const*, int, int) override {}
   void reset() override { ++counters_->resets; }
@@ -118,12 +121,49 @@ class CountingInsert final : public sonare::rt::ProcessorBase {
     return true;
   }
   std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
-    return {{"drive", 1}, {"ampModel", 2}, {"levelDb", 3}};
+    std::vector<sonare::rt::ParamDescriptor> out;
+    for (size_t i = 0; i < keys_.size(); ++i) {
+      out.push_back({keys_[i], static_cast<unsigned int>(i)});
+    }
+    return out;
   }
 
  private:
   std::shared_ptr<EfxCounters> counters_;
+  std::vector<std::string> keys_;
 };
+
+/// The keys the Overdrive translation emits.
+const std::vector<std::string> kAmpSimKeys = {"drive", "ampModel", "levelDb"};
+
+/// The stereo delay's automatable keys, which the delay types' translations now
+/// write into.
+const std::vector<std::string> kStereoDelayKeys = {"delayTimeLMs", "delayTimeRMs", "feedback",
+                                                   "pingPong",     "dryWet",       "dampingHz"};
+
+/// The rotary's automatable keys. Its acceleration fields are deliberately NOT
+/// among them: they size and shape the glide rather than ride it, so the rotary
+/// translation's edits fall back to a rebuild by construction.
+const std::vector<std::string> kRotaryKeys = {"rateHz", "depthMs", "tremolo", "dryWet",
+                                              "drumRateHz"};
+
+/// A framed GS DT1 write of one byte into the EFX parameter block at @p offset,
+/// with the checksum. Offset 0x03 is EFX PARAMETER 1.
+std::array<uint8_t, 11> efx_param_write(uint8_t offset, uint8_t value) {
+  std::array<uint8_t, 11> m = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, offset, value, 0x00, 0xF7};
+  const uint32_t sum = m[5] + m[6] + m[7] + m[8];
+  m[9] = static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu);
+  return m;
+}
+
+/// A framed EFX type selection.
+std::array<uint8_t, 12> efx_type_write(uint8_t msb, uint8_t lsb) {
+  std::array<uint8_t, 12> m = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                               0x03, 0x00, msb,  lsb,  0x00, 0xF7};
+  const uint32_t sum = m[5] + m[6] + m[7] + m[8] + m[9];
+  m[10] = static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu);
+  return m;
+}
 
 }  // namespace
 
@@ -178,7 +218,7 @@ TEST_CASE("a GS EFX parameter-only change updates the insert in place", "[midi][
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
   cfg.insert_factory = [counters](std::string_view, std::string_view) {
-    return std::unique_ptr<sonare::rt::ProcessorBase>(new CountingInsert(counters));
+    return std::unique_ptr<sonare::rt::ProcessorBase>(new CountingInsert(counters, kAmpSimKeys));
   };
   Sf2Player player(cfg);
   player.prepare(kOutRate, 256);
@@ -191,10 +231,11 @@ TEST_CASE("a GS EFX parameter-only change updates the insert in place", "[midi][
   const int prepares_after_build = counters->prepares;
   const int set_params_before = counters->set_params;
 
-  // A parameter-only edit (OD Drive, 40 03 04) must NOT rebuild the chain: it is
-  // resolved on the control thread and applied to the live processor on the
-  // audio thread at the next block. on_control_sysex enqueues but does not touch
-  // the processor; the set_parameter lands during the following process() call.
+  // A parameter-only edit (40 03 04, the byte beside the drive) must NOT rebuild
+  // the chain: it is resolved on the control thread and applied to the live
+  // processor on the audio thread at the next block. on_control_sysex enqueues
+  // but does not touch the processor; the set_parameter lands during the
+  // following process() call.
   player.on_control_sysex(kOdDrive, sizeof(kOdDrive));
   REQUIRE(counters->prepares == prepares_after_build);  // not rebuilt
   REQUIRE(counters->set_params == set_params_before);   // not applied synchronously
@@ -212,4 +253,62 @@ TEST_CASE("a GS EFX parameter-only change updates the insert in place", "[midi][
   // hence another prepare()): exact behaviour is preserved when it is needed.
   player.on_control_sysex(kChorusType, sizeof(kChorusType));
   REQUIRE(counters->prepares > prepares_after_build);
+}
+
+TEST_CASE("the measured EFX translations reach automatable insert parameters",
+          "[midi][sf2][gsefx]") {
+  // The failure this is the net for: a field added to an insert for a measured
+  // conversion, wired into the translation, and never given a descriptor. The
+  // edit is not lost — enqueue_efx_param_updates falls back to a rebuild — but
+  // every parameter edit then zeroes the delay and reverb tails it was written
+  // to preserve, and nothing else in the tree can see that happen.
+  auto run = [](const std::vector<std::string>& keys, const std::array<uint8_t, 12>& type,
+                const std::array<uint8_t, 11>& edit) {
+    auto counters = std::make_shared<EfxCounters>();
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.insert_factory = [counters, keys](std::string_view, std::string_view) {
+      return std::unique_ptr<sonare::rt::ProcessorBase>(new CountingInsert(counters, keys));
+    };
+    Sf2Player player(cfg);
+    player.prepare(kOutRate, 256);
+    player.on_control_sysex(kPartOn, sizeof(kPartOn));
+    player.on_control_sysex(type.data(), type.size());
+    REQUIRE(counters->prepares >= 1);
+    const int prepares_after_build = counters->prepares;
+    player.on_control_sysex(edit.data(), edit.size());
+    std::vector<float> left(256, 0.0f);
+    std::vector<float> right(256, 0.0f);
+    float* chans[2] = {left.data(), right.data()};
+    player.process(chans, 2, 256);
+    return std::pair<int, int>{counters->prepares - prepares_after_build, counters->set_params};
+  };
+
+  SECTION("a delay time edit is applied in place") {
+    // Stereo Delay (01 50), EFX PARAMETER 1 at 40 03 03: the left tap's time.
+    const auto result =
+        run(kStereoDelayKeys, efx_type_write(0x01, 0x50), efx_param_write(0x03, 40));
+    REQUIRE(result.first == 0);  // no rebuild
+    REQUIRE(result.second > 0);  // applied through set_parameter
+  }
+
+  SECTION("a damping edit is applied in place") {
+    // Same type, EFX PARAMETER 8 at 40 03 0A: the corner of the pole inside the
+    // feedback loop, which is the field the damping measurement added.
+    const auto result =
+        run(kStereoDelayKeys, efx_type_write(0x01, 0x50), efx_param_write(0x0A, 40));
+    REQUIRE(result.first == 0);
+    REQUIRE(result.second > 0);
+  }
+
+  SECTION("a rotary acceleration edit rebuilds, because the glide is structure") {
+    // Rotary (01 22), EFX PARAMETER 7 at 40 03 09: the horn rotor's acceleration
+    // byte. It reaches accelTauS / undershootHz, neither of which the rotary
+    // publishes as an automatable parameter, so the edit costs a rebuild. Pinned
+    // rather than fixed: a time constant read on the audio thread mid-glide has
+    // no defined arrival, and the insert says so by not offering the id.
+    const auto result = run(kRotaryKeys, efx_type_write(0x01, 0x22), efx_param_write(0x09, 40));
+    REQUIRE(result.first > 0);
+    REQUIRE(result.second == 0);
+  }
 }

@@ -474,10 +474,10 @@ TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf
 
 TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][sf2][gslayer]") {
   GsEfx od;
-  od.type = 0x0110;  // Overdrive -> amp model, drive rising with EFX PARAMETER 2
-  od.params[1] = 0;
+  od.type = 0x0110;  // Overdrive -> amp model, drive rising with EFX PARAMETER 1
+  od.params[0] = 0;
   const std::string low = gs_efx_insert_params(od);
-  od.params[1] = 127;
+  od.params[0] = 127;
   const std::string high = gs_efx_insert_params(od);
   REQUIRE(low.find("\"drive\"") != std::string::npos);
   REQUIRE(low.find("\"ampModel\":0") != std::string::npos);  // classic-crunch voicing
@@ -485,16 +485,18 @@ TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][s
 
   GsEfx dist;
   dist.type = 0x0111;  // Distortion -> amp model on its high-gain voicing
-  dist.params[1] = 127;
+  dist.params[0] = 127;
   REQUIRE(gs_efx_insert_params(dist).find("\"ampModel\":2") != std::string::npos);
 
-  // Output Level (EFX PARAMETER 20) -> levelDb: an untouched level is unset
-  // (0 -> no levelDb, the insert's 0 dB default) and a below-unity level cuts.
+  // Output Level (EFX PARAMETER 20) -> levelDb, the multiplier the unit stores
+  // for the byte read in dB over a -24 dB floor. A byte of 0 is the value zero
+  // and takes the floor rather than reading as an absence: selecting a type
+  // loads that type's own twenty bytes, so a zero here is one the file asked for.
   GsEfx lvl;
   lvl.type = 0x0110;
-  lvl.params[1] = 100;
+  lvl.params[0] = 100;
   lvl.params[19] = 0;
-  REQUIRE(gs_efx_insert_params(lvl).find("levelDb") == std::string::npos);  // unset
+  REQUIRE(gs_efx_insert_params(lvl).find("\"levelDb\":-24") != std::string::npos);
   lvl.params[19] = 64;  // ~half of unity -> a negative levelDb
   const std::string cut = gs_efx_insert_params(lvl);
   REQUIRE(cut.find("\"levelDb\":-") != std::string::npos);
@@ -516,11 +518,15 @@ TEST_CASE("gs_efx_insert_params translates the pitch shifter coarse and balance"
   up.params[0] = 52;  // 64 - 12 -> -12 semitones
   REQUIRE(gs_efx_insert_params(up).find("\"semitones\":-12") != std::string::npos);
 
-  // An untouched block reads 0: unset -> 0 st, never a -64 -> clamped -24 st drop.
-  GsEfx untouched;
-  untouched.type = 0x0161;  // Feedback Pitch Shifter shares the translation
-  REQUIRE(gs_efx_insert_params(untouched).find("\"semitones\":0") != std::string::npos);
-  REQUIRE(gs_efx_insert_params(untouched).find("dryWet") == std::string::npos);  // balance unset
+  // Neither byte reads 0 as "unset". A coarse byte of 0 is 64 steps below centre
+  // and clamps to the -24 st floor; a balance byte of 0 is all direct signal and
+  // is emitted as such. Both keys are always present.
+  GsEfx zeroed;
+  zeroed.type = 0x0161;  // Feedback Pitch Shifter shares the translation
+  zeroed.params[0] = 0;
+  zeroed.params[15] = 0;
+  REQUIRE(gs_efx_insert_params(zeroed).find("\"semitones\":-24") != std::string::npos);
+  REQUIRE(gs_efx_insert_params(zeroed).find("\"dryWet\":0") != std::string::npos);
 
   // Effect Balance (PARAMETER 16 = params[15]) -> dry/wet when set.
   GsEfx mixed;
@@ -542,10 +548,12 @@ TEST_CASE("gs_efx_insert_chain expands a composite type into its block chain",
   REQUIRE(single[0].name == "saturation.ampSim");
 
   // GTR Multi 2 (04 01) yields its Cmp-OD-EQ-CF block chain, in signal order.
+  // A composite's parameter block is laid out per type: this type's EQ gains sit
+  // at slots 9 and 13, not at the 16/17 the single-effect types use.
   GsEfx gtr;
   gtr.type = 0x0401;
-  gtr.params[16] = 52;  // EQ Low Gain -12 dB (0x34, centre 64)
-  gtr.params[17] = 76;  // EQ Hi Gain  +12 dB (0x4C)
+  gtr.params[9] = 52;   // EQ Low Gain -12 dB (0x34, centre 64)
+  gtr.params[13] = 76;  // EQ Hi Gain  +12 dB (0x4C)
   const auto chain = gs_efx_insert_chain(gtr);
   REQUIRE(chain.size() == 4);
   REQUIRE(chain[0].name == "dynamics.compressor");
@@ -554,12 +562,15 @@ TEST_CASE("gs_efx_insert_chain expands a composite type into its block chain",
   REQUIRE(chain[3].name == "effects.modulation.chorus");
   // The EQ block is the composite's true tone control: Low/Hi Gain -> shelves.
   REQUIRE(chain[2].params_json.find("\"band0.gainDb\":-12") != std::string::npos);
-  REQUIRE(chain[2].params_json.find("\"band1.gainDb\":12") != std::string::npos);
+  REQUIRE(chain[2].params_json.find("\"band2.gainDb\":12") != std::string::npos);
 
-  // An untouched EQ gain is unset -> flat (0 dB), never a -12 dB cut.
+  // A zero gain byte is the bottom of the window and not an absence: the type
+  // loads its own twenty bytes when it is selected, so no state means "unset".
   GsEfx flat;
   flat.type = 0x0401;
-  REQUIRE(gs_efx_insert_chain(flat)[2].params_json.find("\"band0.gainDb\":0") != std::string::npos);
+  flat.params[9] = 0;
+  REQUIRE(gs_efx_insert_chain(flat)[2].params_json.find("\"band0.gainDb\":-12") !=
+          std::string::npos);
 
   // A type with no faithful mapping yields an empty chain (bypass). The
   // parallel-2 composites (MSB 11) are intentionally left unmapped: they mix two

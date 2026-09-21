@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "midi/synth/channel_param_state.h"
+#include "midi/synth/gs_address_table.h"
 #include "midi/synth/sf2_voice.h"
 
 namespace sonare::midi::synth {
@@ -416,10 +417,19 @@ GsDrumNoteParams gs_layer_drum_note_params(const GsDrumNoteParams& stored,
 /// adapter over the same bytes — no parser, struct or ABI change.
 struct GsEfx {
   /// EFX type number: (MSB << 8) | LSB, matching the two-byte GS notation
-  /// (e.g. 0x0110). 0 = the power-on default (Thru / no insertion effect).
+  /// (e.g. 0x0110). 0 = the power-on default (Thru / no insertion effect). This
+  /// is the RESOLVED type: a type resolves when its LSB arrives, so between an
+  /// MSB-only write and its LSB this still holds the previous type.
   uint16_t type = 0;
-  /// EFX PARAMETER 1..20 (GS address 40 03 03..16), raw 0..127.
-  std::array<uint8_t, 20> params{};
+  /// The TYPE MSB (40 03 00) as last written, which is not yet part of `type`
+  /// when it arrived on its own. Held apart so an MSB-only write cannot realise
+  /// the effect under (new MSB, old LSB) — a type number that does not exist.
+  uint8_t type_msb = 0;
+  /// EFX PARAMETER 1..20 (GS address 40 03 03..16), raw 0..127. Selecting a type
+  /// loads that type's twenty power-on bytes over these, so 0 is the value zero
+  /// and never "unset": almost none of the machine's defaults is zero. Initially
+  /// the Thru type's own, which is what the block powers on holding.
+  std::array<uint8_t, 20> params = gs_efx_power_on_params();
   /// EFX -> reverb send (40 03 17). Its reset default is 40, not 0: the address
   /// table's row carries the same value, and a file that selects a type without
   /// writing the sends is entitled to it (docs/gs.md, reset defaults).
@@ -462,6 +472,18 @@ int gs_efx_addressed_unit(const uint8_t* data, size_t size) noexcept;
 /// entirely on the block's IGNORE rows — the two control-source assignments and
 /// the send EQ switch (docs/gs.md) — addresses the block and still returns
 /// false, because nothing was applied and there is nothing to rebuild for.
+///
+/// A TYPE resolves on its LSB (40 03 01), pairing the arriving byte with the
+/// stored MSB, and selecting a type loads that type's twenty power-on
+/// parameters. Three consequences, all the machine's:
+/// - A bulk DT1 applies bytes in address order, so the parameters that follow
+///   the type in the same message survive the load rather than being overwritten
+///   by it.
+/// - An MSB-only write changes nothing: resolving there would load the defaults
+///   of (new MSB, old LSB), a type that does not exist.
+/// - A file that writes a parameter BEFORE its type loses that byte.
+/// A type the archive behind gs_efx_tables.h never measured loads nothing and
+/// leaves the block as it stood — a measurement gap rather than a rule.
 ///
 /// @param out_type_changed  Optional out-flag: set to true when the write
 ///   changed the EFX TYPE (address 40 03 00/01), false when it touched only

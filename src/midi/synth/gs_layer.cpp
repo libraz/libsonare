@@ -6,6 +6,7 @@
 #include <tuple>
 
 #include "midi/synth/gs_address_table.h"
+#include "midi/synth/gs_efx_convert.h"
 #include "midi/synth/pitch.h"
 #include "util/constants.h"
 
@@ -42,6 +43,19 @@ constexpr uint8_t gs_efx_parameter_row_size() noexcept {
 
 static_assert(gs_efx_parameter_row_size() == std::tuple_size<decltype(GsEfx::params)>::value,
               "EFX PARAMETER row and GsEfx::params disagree on the parameter count");
+
+/// Element-wise, because std::array::operator== is not constexpr before C++20.
+constexpr bool gs_efx_starts_at_power_on() noexcept {
+  const GsEfx efx{};
+  const std::array<uint8_t, 20> expected = gs_efx_power_on_params();
+  for (size_t slot = 0; slot < expected.size(); ++slot) {
+    if (efx.params[slot] != expected[slot]) return false;
+  }
+  return true;
+}
+
+static_assert(gs_efx_starts_at_power_on(),
+              "GsEfx does not start in the state the EFX PARAMETER row calls its default");
 
 /// The size the TONE MODIFY row claims, for the same reason.
 constexpr uint8_t gs_tone_modify_row_size() noexcept {
@@ -366,19 +380,25 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
       std::min(gs_decode_writes(frame, writes.data(), writes.size(), nullptr), writes.size());
 
   const uint16_t old_type = efx.type;
-  uint8_t type_msb = static_cast<uint8_t>(efx.type >> 8);
-  uint8_t type_lsb = static_cast<uint8_t>(efx.type & 0x7Fu);
   bool touched = false;
   // A byte landing on a reserved offset, or on a block address GsEfx holds no
   // field for, is ignored (preserved) rather than dropping the whole message.
+  // Bytes are applied in address order, which is what lets a type's defaults
+  // land before the parameters that follow it in the same message.
   for (size_t i = 0; i < decoded; ++i) {
     const GsWrite& write = writes[i];
     switch (write.param) {
       case GsParam::kEfxType:
         if (write.index == 0) {
-          type_msb = write.value;
+          // The MSB alone resolves nothing; it waits for its LSB.
+          efx.type_msb = write.value;
         } else {
-          type_lsb = write.value;
+          efx.type = static_cast<uint16_t>((static_cast<uint16_t>(efx.type_msb) << 8) |
+                                           (write.value & 0x7Fu));
+          // The block is the type's, whole. A type the archive never measured
+          // has nothing to pour and leaves it as it stood.
+          const GsEfxTypeDefaults* defaults = gs_efx_type_defaults(efx.type);
+          if (defaults != nullptr) efx.params = defaults->params;
         }
         touched = true;
         break;
@@ -402,10 +422,7 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
         break;
     }
   }
-  if (touched) {
-    efx.type = static_cast<uint16_t>((static_cast<uint16_t>(type_msb) << 8) | type_lsb);
-    efx.assigned = true;
-  }
+  if (touched) efx.assigned = true;
   // A type change restructures the insert chain (the caller rebuilds); a write
   // that leaves the type value untouched is a parameter/send-only edit the
   // caller can apply to the live processors in place.
@@ -486,70 +503,227 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
 
 namespace {
 
-/// Tremolo voicing, shared by the standalone type (0x0125) and the Tremolo
-/// Chorus chain (0x0141) so the two cannot drift: ~5 Hz at a ~10 dB depth.
-constexpr const char* kGsTremoloJson = "{\"carrierHz\":5.0,\"dryWet\":0.35}";
+/// One insert's params object, built key by key. A key is written only where a
+/// conversion produced it, so a slot the archive gives no conversion to leaves
+/// its insert on its own default rather than on a value nothing measured.
+class ParamsJson {
+ public:
+  void number(const char* key, float value) { append(key, std::to_string(value)); }
+  void integer(const char* key, int value) { append(key, std::to_string(value)); }
+  std::string str() const { return out_.empty() ? "{}" : out_ + "}"; }
+
+ private:
+  void append(const char* key, const std::string& value) {
+    out_ += out_.empty() ? '{' : ',';
+    out_ += '"';
+    out_ += key;
+    out_ += "\":";
+    out_ += value;
+  }
+
+  std::string out_;
+};
+
+/// The wire byte at a slot of the EFX parameter block.
+uint8_t efx_byte(const GsEfx& efx, int slot) noexcept {
+  return static_cast<uint8_t>(efx.params[static_cast<size_t>(slot)] & 0x7Fu);
+}
+
+/// An output-level byte as a gain in dB over a -24 dB floor. The multiplier is
+/// the unit's own measured table rather than the byte over 127, which reads a
+/// median 1.61 dB high (gs_efx_level_mul).
+float gs_efx_level_db(uint8_t value) noexcept {
+  // std::max returns its first argument for the silent byte's -inf.
+  return std::max(-24.0f, 20.0f * std::log10(gs_efx_level_mul(value)));
+}
+
+/// The corners the EQ blocks put their shelves on. The byte that selects a
+/// shelf corner has two states and the archive does not read which frequency
+/// either names, so these are this tree's choice and not a measurement.
+constexpr float kGsEqLowShelfHz = 100.0f;
+constexpr float kGsEqHighShelfHz = 8000.0f;
+
+/// eq.parametric band-type selectors, in the order processor_params.h decodes.
+constexpr int kEqBandPeak = 0;
+constexpr int kEqBandLowShelf = 1;
+constexpr int kEqBandHighShelf = 2;
+
+/// Writes one shelf band: a fixed corner, the gain byte read through the
+/// measured window.
+void append_shelf(ParamsJson& out, int band, int type, float corner_hz, uint8_t gain_byte) {
+  const std::string prefix = "band" + std::to_string(band) + ".";
+  out.integer((prefix + "type").c_str(), type);
+  out.number((prefix + "frequencyHz").c_str(), corner_hz);
+  out.number((prefix + "gainDb").c_str(), gs_efx_gain_db(gain_byte));
+}
+
+/// Writes one peaking band: centre, width and gain, each from its own byte.
+void append_peak(ParamsJson& out, int band, uint8_t freq_byte, uint8_t width_byte,
+                 uint8_t gain_byte) {
+  const std::string prefix = "band" + std::to_string(band) + ".";
+  out.integer((prefix + "type").c_str(), kEqBandPeak);
+  out.number((prefix + "frequencyHz").c_str(), gs_efx_freq_hz(freq_byte, GsFreqColumn::kColumn0));
+  out.number((prefix + "q").c_str(), gs_efx_width_q(width_byte));
+  out.number((prefix + "gainDb").c_str(), gs_efx_gain_db(gain_byte));
+}
+
+/// Stereo-EQ (0x0100): a low shelf, two peaking sections sharing one law, a
+/// high shelf. The output-gain byte has no control on eq.parametric and stays
+/// untranslated. Slot order is the archive's: the two shelves come first, each
+/// as a corner selector followed by its gain, then the two peaking triples.
+std::string gs_stereo_eq_json(const GsEfx& efx) {
+  ParamsJson out;
+  append_shelf(out, 0, kEqBandLowShelf, kGsEqLowShelfHz, efx_byte(efx, 1));
+  append_peak(out, 1, efx_byte(efx, 4), efx_byte(efx, 5), efx_byte(efx, 6));
+  append_peak(out, 2, efx_byte(efx, 7), efx_byte(efx, 8), efx_byte(efx, 9));
+  append_shelf(out, 3, kEqBandHighShelf, kGsEqHighShelfHz, efx_byte(efx, 3));
+  return out.str();
+}
+
+/// The wet depth the tremolo voicing runs at. The ring modulator's dry and wet
+/// terms multiply the same input, so the pair collapses to one envelope whose
+/// minimum is 1 - 2*wet: 0.35 is a ~10 dB depth with a unity peak.
+constexpr float kGsTremoloDryWet = 0.35f;
+
+/// The rate the Tremolo Chorus's modulator runs at. Its own rate byte carries
+/// no conversion, unlike the standalone type's.
+constexpr float kGsTremoloChainHz = 5.0f;
+
+/// Tremolo as sinusoidal amplitude modulation: dry*x + wet*x*sin = x*(dry +
+/// wet*sin), so the ring modulator realises the type exactly.
+std::string gs_tremolo_json(float carrier_hz) {
+  ParamsJson out;
+  out.number("carrierHz", carrier_hz);
+  out.number("dryWet", kGsTremoloDryWet);
+  return out.str();
+}
+
+/// Amp-sim JSON for the two drive types. Drive is EFX PARAMETER 1 and the byte
+/// beside it picks one of four fixed response curves whose values the archive
+/// does not hold, so the voicing's own curve stands and only the drive and the
+/// output level are translated.
+std::string gs_drive_json(const GsEfx& efx, int amp_model, float drive_floor, float drive_span) {
+  const float drive = static_cast<float>(efx_byte(efx, 0)) / 127.0f;
+  ParamsJson out;
+  out.integer("ampModel", amp_model);
+  out.number("drive", std::clamp(drive_floor + drive_span * drive, 0.0f, 1.0f));
+  out.number("levelDb", gs_efx_level_db(efx_byte(efx, 19)));
+  return out.str();
+}
 
 /// Pitch-shifter parameter translation (SC-88Pro 2-voice / feedback pitch
-/// shifter). Coarse Pitch is EFX PARAMETER 1 — a 64-centred semitone offset
-/// over -24..+12 st; an untouched block reads 0, treated as unset -> 0 st so it
-/// never becomes a -64 -> clamped -24 st two-octave drop. Effect Balance
-/// (PARAMETER 16) maps the direct/effect mix to dry/wet, with 0 = unset -> the
-/// insert's wet default. Output Level (PARAMETER 20) has no matching pitch-
-/// shifter parameter, so it is not translated.
+/// shifter). Coarse Pitch is EFX PARAMETER 1 — a 64-centred semitone offset over
+/// -24..+12 st. Effect Balance (PARAMETER 16) maps the direct/effect mix to
+/// dry/wet; no measurement reaches this type's balance byte, so that mapping is
+/// the older linear reading rather than the measured two-ramp law. Neither byte
+/// reads 0 as "unset": selecting the type loads its own defaults, so a zero here
+/// is a zero the file asked for.
 std::string gs_pitch_shift_json(const GsEfx& efx) {
-  const int coarse = efx.params[0] & 0x7F;
-  const float semitones =
-      coarse == 0 ? 0.0f : std::clamp(static_cast<float>(coarse - 64), -24.0f, 12.0f);
-  std::string out = "{\"semitones\":" + std::to_string(semitones);
-  const unsigned balance = efx.params[15] & 0x7Fu;
-  if (balance != 0) {
-    out += ",\"dryWet\":" + std::to_string(static_cast<float>(balance) / 127.0f);
-  }
-  out += "}";
-  return out;
+  const int coarse = efx_byte(efx, 0);
+  ParamsJson out;
+  out.number("semitones", std::clamp(static_cast<float>(coarse - 64), -24.0f, 12.0f));
+  out.number("dryWet", static_cast<float>(efx_byte(efx, 15)) / 127.0f);
+  return out.str();
+}
+
+/// A stereo-delay stage whose two taps come from two time bytes of one ladder.
+std::string gs_delay_pair_json(const GsEfx& efx, int left_slot, int right_slot,
+                               GsTimeLadder ladder) {
+  ParamsJson out;
+  out.number("delayTimeLMs", gs_efx_delay_ms(efx_byte(efx, left_slot), ladder));
+  out.number("delayTimeRMs", gs_efx_delay_ms(efx_byte(efx, right_slot), ladder));
+  return out.str();
 }
 
 }  // namespace
 
 std::string gs_efx_insert_params(const GsEfx& efx) {
-  // SC-88Pro Overdrive/Distortion parameter map (owner's manual appendix):
-  // PARAMETER 1 (40 03 03) = OD Sel (Odrv/Dist — redundant here, the EFX type
-  // already selects the family), PARAMETER 2 (40 03 04) = OD Drive (0..127),
-  // PARAMETER 20 (40 03 16) = output Level (0..127). The basic OD/Dist has no
-  // tone/EQ parameters (those live in the combined OD->EQ / GTR-Multi types);
-  // the tone comes from the amp voicing itself.
-  const float drive = static_cast<float>(efx.params[1] & 0x7Fu) / 127.0f;
-  // Output Level -> levelDb. The GS default is unity (127), and an untouched
-  // block reads 0; treat 0 as "unset -> 0 dB" (so a type+drive-only setup is
-  // not silenced) and otherwise map the fraction to dB with a -24 dB floor.
-  const auto level_db = [&]() -> std::string {
-    const unsigned level = efx.params[19] & 0x7Fu;
-    if (level == 0) return "";  // unset -> the insert's default (0 dB)
-    const float db = std::max(-24.0f, 20.0f * std::log10(static_cast<float>(level) / 127.0f));
-    return ",\"levelDb\":" + std::to_string(db);
-  };
   switch (efx.type) {
-    case 0x0110: {
+    case 0x0100:  // Stereo-EQ -> four bands of the parametric EQ.
+      return gs_stereo_eq_json(efx);
+    case 0x0110:
       // Overdrive -> the amp model on its classic-crunch voicing (ampModel 0).
       // A light setting already breaks up (0.25 floor), the top reaches full
       // crunch. The amp's cab EQ is left on so the tone is amp-shaped.
-      const float amp_drive = std::clamp(0.25f + 0.6f * drive, 0.0f, 1.0f);
-      return "{\"ampModel\":0,\"drive\":" + std::to_string(amp_drive) + level_db() + "}";
-    }
-    case 0x0111: {
+      return gs_drive_json(efx, 0, 0.25f, 0.6f);
+    case 0x0111:
       // Distortion -> the amp model on its high-gain voicing (ampModel 2), which
       // saturates earlier and harder; a higher drive floor than the overdrive.
-      const float amp_drive = std::clamp(0.45f + 0.55f * drive, 0.0f, 1.0f);
-      return "{\"ampModel\":2,\"drive\":" + std::to_string(amp_drive) + level_db() + "}";
+      return gs_drive_json(efx, 2, 0.45f, 0.55f);
+    case 0x0120: {  // Phaser: the sweep's LFO rate.
+      ParamsJson out;
+      out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 1), GsRateRange::kWide));
+      return out.str();
     }
-    case 0x0125:
-      // Tremolo. The ring modulator computes dry*x + wet*x*sin = x*(dry + wet*
-      // sin), which IS sinusoidal amplitude modulation, so the type is realised
-      // exactly rather than approximated; wet 0.35 is a ~10 dB depth. Rate and
-      // depth read no EFX parameter: the Effect list that gives the Tremolo's
-      // parameter positions is not transcribed (see gs_efx_insert_chain).
-      return kGsTremoloJson;
+    case 0x0122: {
+      // Rotary. Each rotor's acceleration byte gives how far short of its target
+      // that rotor settles on the way up; the glide's own time constant is one
+      // control for the pair, so it follows the horn's byte. The archive times
+      // no rotor — the divisor is read from where a rotor stopped — so the
+      // constant follows from the loop the acceleration claim names.
+      const uint8_t horn = efx_byte(efx, 6);
+      ParamsJson out;
+      out.number("accelTauS", gs_efx_accel_tau_s(horn));
+      out.number("decelTauS", gs_efx_accel_tau_s(horn));
+      out.number("undershootHz", gs_efx_accel_undershoot_hz(horn));
+      out.number("drumUndershootHz", gs_efx_accel_undershoot_hz(efx_byte(efx, 2)));
+      return out.str();
+    }
+    case 0x0123: {  // Stereo Flanger: the sweep's LFO rate.
+      ParamsJson out;
+      out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 3), GsRateRange::kWide));
+      return out.str();
+    }
+    case 0x0125:  // Tremolo: the modulator's rate byte drives the carrier.
+      return gs_tremolo_json(gs_efx_rate_hz(efx_byte(efx, 1), GsRateRange::kWide));
+    case 0x0126: {  // Auto Pan: the sweep's LFO rate.
+      ParamsJson out;
+      out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 1), GsRateRange::kWide));
+      return out.str();
+    }
+    case 0x0140: {
+      // Hexa Chorus -> the ensemble, whose nominal delay is the block's own
+      // pre-delay. Its output-level byte has no control on the ensemble.
+      ParamsJson out;
+      out.number("centerDelayMs", gs_efx_delay_ms(efx_byte(efx, 0), GsTimeLadder::kLadder0));
+      return out.str();
+    }
+    case 0x0142: {
+      // Stereo Chorus. The section in front of the delay is one pole whose shape
+      // the type byte picks and whose corner the byte beside it selects. Three
+      // of the byte's states were measured — 0 flat, 1 low pass, 2 high pass —
+      // and PreFilterMode is declared in that order. A fourth state exists and
+      // was not asked, so it writes no key and the section stays out of the path
+      // rather than taking whichever shape a cast would land on.
+      ParamsJson out;
+      if (efx_byte(efx, 0) <= 2) out.integer("preFilterMode", efx_byte(efx, 0));
+      out.number("preFilterHz", gs_efx_freq_hz(efx_byte(efx, 1), GsFreqColumn::kColumn1));
+      out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 3), GsRateRange::kWide));
+      return out.str();
+    }
+    case 0x0143:    // Space-D
+    case 0x0144: {  // 3D Chorus
+      ParamsJson out;
+      out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 1), GsRateRange::kWide));
+      return out.str();
+    }
+    case 0x0150: {
+      // Stereo Delay. Damping is a one-pole inside the feedback loop; the
+      // column's sixteenth entry is the printed bypass and comes back as 0 Hz,
+      // which is the insert's own bypass.
+      ParamsJson out;
+      out.number("delayTimeLMs", gs_efx_delay_ms(efx_byte(efx, 0), GsTimeLadder::kLadder3));
+      out.number("delayTimeRMs", gs_efx_delay_ms(efx_byte(efx, 1), GsTimeLadder::kLadder3));
+      out.number("dampingHz", gs_efx_freq_hz(efx_byte(efx, 7), GsFreqColumn::kColumn2));
+      return out.str();
+    }
+    case 0x0151:  // Modulation Delay: the two taps; its LFO has no control here.
+      return gs_delay_pair_json(efx, 0, 1, GsTimeLadder::kLadder3);
+    case 0x0157:  // 3D Delay: the first two taps; the third has no control.
+      return gs_delay_pair_json(efx, 0, 1, GsTimeLadder::kLadder3);
+    case 0x0152:  // 3 Tap Delay: taps beyond the second have no control.
+    case 0x0153:  // 4 Tap Delay, likewise.
+      return gs_delay_pair_json(efx, 0, 1, GsTimeLadder::kLadder1);
     case 0x0160:  // 2-voice Pitch Shifter -> Coarse Pitch + Balance translated.
     case 0x0161:  // Feedback Pitch Shifter (feedback approximated as a plain shift).
       return gs_pitch_shift_json(efx);
@@ -558,91 +732,113 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
   }
 }
 
-namespace {
-
-/// GS EQ gain byte -> dB. The GS EQ Low/Hi Gain is centred at 64 (0 dB) with a
-/// +-12 dB range (values 0x34..0x4C). An untouched block reads 0, which is
-/// treated as unset -> flat (0 dB), never a -64 -> clamped -12 dB cut.
-float gs_eq_gain_db(uint8_t value) noexcept {
-  const int v = value & 0x7F;
-  if (v == 0) return 0.0f;  // unset -> flat
-  return std::clamp(static_cast<float>(v - 64), -12.0f, 12.0f);
-}
-
-/// eq.parametric JSON: a low shelf (100 Hz) + high shelf (8 kHz) driven by the
-/// GS EQ block's Low/Hi Gain — the composite guitar effects' tone control.
-std::string gs_eq_block_json(float low_db, float high_db) {
-  return "{\"band0.type\":1,\"band0.frequencyHz\":100,\"band0.gainDb\":" + std::to_string(low_db) +
-         ",\"band1.type\":2,\"band1.frequencyHz\":8000,\"band1.gainDb\":" +
-         std::to_string(high_db) + "}";
-}
-
-}  // namespace
-
 std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
   // Composite guitar/bass multi effects (SC-88Pro MSB 04): a whole rig realised
   // as an insert chain in signal order. The block STRUCTURE and the type numbers
   // are faithful to the manual (GTR Multi 2 = 04 01 and Clean Gt Multi 2 = 04 04
-  // are confirmed hex anchors that bracket the ordered block). The EQ Low/Hi
-  // Gain (EFX PARAMETER 17/18, shared across the multi effects) is translated to
-  // a real shelving EQ — the composite's true tone control. Every block now has
-  // a matching insert (Wah / Auto-Wah realised by the wah / auto-wah inserts);
-  // the compressor, chorus, delay and wah run at their defaults and the OD uses
-  // a musical mid drive, pending confirmed per-block parameter positions
-  // (documented approximation — only the shared EQ has a confirmed layout).
+  // are confirmed hex anchors that bracket the ordered block). Every block has a
+  // matching insert (Wah / Auto-Wah realised by the wah / auto-wah inserts).
+  //
+  // A composite's parameter block is laid out per type, not per block, so a slot
+  // number carries no meaning until the type says which block owns it: the
+  // guitar multis' EQ sits at different slots in each of them and nowhere near
+  // the slots the single-effect types put their own EQ at. Only the slots the
+  // archive gives a conversion to are read, and they are passed in at the call
+  // site below so the type and its layout stay in one place.
   const auto comp = [] { return GsEfxStage{"dynamics.compressor", "{}"}; };
   const auto od = [](bool bass) {
     return GsEfxStage{"saturation.ampSim", bass ? "{\"ampModel\":0,\"drive\":0.6,\"cabModel\":1}"
                                                 : "{\"ampModel\":0,\"drive\":0.6}"};
   };
-  const auto eq = [&efx] {
-    return GsEfxStage{"eq.parametric", gs_eq_block_json(gs_eq_gain_db(efx.params[16]),
-                                                        gs_eq_gain_db(efx.params[17]))};
+  // The guitar multis' tone stack: a low shelf, one peaking section, a high
+  // shelf. Untranslated where the archive reaches none of the type's own slots.
+  const auto eq = [&efx](int low_gain, int mid_freq, int mid_width, int mid_gain, int high_gain) {
+    ParamsJson out;
+    append_shelf(out, 0, kEqBandLowShelf, kGsEqLowShelfHz, efx_byte(efx, low_gain));
+    append_peak(out, 1, efx_byte(efx, mid_freq), efx_byte(efx, mid_width), efx_byte(efx, mid_gain));
+    append_shelf(out, 2, kEqBandHighShelf, kGsEqHighShelfHz, efx_byte(efx, high_gain));
+    return GsEfxStage{"eq.parametric", out.str()};
   };
   const auto cf = [] { return GsEfxStage{"effects.modulation.chorus", "{}"}; };
+  // A chorus or flanger block whose LFO rate byte the archive reaches.
+  const auto cf_rate = [&efx](int slot, GsRateRange range) {
+    ParamsJson out;
+    out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, slot), range));
+    return GsEfxStage{"effects.modulation.chorus", out.str()};
+  };
+  const auto fl_rate = [&efx](int slot, GsRateRange range) {
+    ParamsJson out;
+    out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, slot), range));
+    return GsEfxStage{"effects.modulation.flanger", out.str()};
+  };
+  // A chorus block whose pre-delay byte the archive reaches: the nominal delay
+  // the modulation swings around.
+  const auto cf_pre_delay = [&efx](int slot) {
+    ParamsJson out;
+    out.number("centerDelayMs", gs_efx_delay_ms(efx_byte(efx, slot), GsTimeLadder::kLadder0));
+    return GsEfxStage{"effects.modulation.chorus", out.str()};
+  };
   const auto delay = [] { return GsEfxStage{"effects.delay.stereo", "{}"}; };
+  // A delay block carrying one printed delay time, which drives both taps, and
+  // optionally the damping corner. A negative slot is one the archive does not
+  // reach, and nothing is written for it.
+  const auto delay_block = [&efx](int time_slot, GsTimeLadder ladder, int damping_slot) {
+    ParamsJson out;
+    if (time_slot >= 0) {
+      const float ms = gs_efx_delay_ms(efx_byte(efx, time_slot), ladder);
+      out.number("delayTimeLMs", ms);
+      out.number("delayTimeRMs", ms);
+    }
+    if (damping_slot >= 0) {
+      out.number("dampingHz", gs_efx_freq_hz(efx_byte(efx, damping_slot), GsFreqColumn::kColumn2));
+    }
+    return GsEfxStage{"effects.delay.stereo", out.str()};
+  };
   const auto wah = [] { return GsEfxStage{"effects.modulation.wah", "{}"}; };
   const auto autowah = [] { return GsEfxStage{"effects.modulation.autoWah", "{}"}; };
-  // Series-2 / multi building blocks. Sub-block parameters stay at their insert
-  // defaults for now (the mapping is the coverage deliverable; per-block param
-  // translation is follow-up work); only the shared guitar-multi EQ, above,
-  // reads a confirmed layout.
   const auto ds = [] { return GsEfxStage{"saturation.ampSim", "{\"ampModel\":2,\"drive\":0.7}"}; };
   const auto eh = [] { return GsEfxStage{"spectral.presenceEnhancer", "{}"}; };
   const auto fl = [] { return GsEfxStage{"effects.modulation.flanger", "{}"}; };
   const auto rot = [] { return GsEfxStage{"effects.modulation.rotary", "{}"}; };
   const auto ph = [] { return GsEfxStage{"effects.modulation.phaser", "{}"}; };
+  const auto ph_rate = [&efx](int slot, GsRateRange range) {
+    ParamsJson out;
+    out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, slot), range));
+    return GsEfxStage{"effects.modulation.phaser", out.str()};
+  };
   const auto pan = [] { return GsEfxStage{"stereo.autoPan", "{}"}; };
   const auto rm = [] { return GsEfxStage{"effects.modulation.ringModulator", "{}"}; };
   const auto ps = [] { return GsEfxStage{"effects.modulation.pitchShifter", "{}"}; };
   const auto eq3 = [] { return GsEfxStage{"eq.parametric", "{}"}; };
-  const auto trem = [] { return GsEfxStage{"effects.modulation.ringModulator", kGsTremoloJson}; };
+  const auto trem = [] {
+    return GsEfxStage{"effects.modulation.ringModulator", gs_tremolo_json(kGsTremoloChainHz)};
+  };
   switch (efx.type) {
     case 0x0141:  // Tremolo Chorus: the chorus with its output amplitude-modulated.
       return {cf(), trem()};
     // Series-2 composites (SC-88Pro MSB 02): two stock effects in signal order.
     case 0x0200:  // OD -> Chorus
-      return {od(false), cf()};
+      return {od(false), cf_rate(6, GsRateRange::kWide)};
     case 0x0201:  // OD -> Flanger
-      return {od(false), fl()};
+      return {od(false), fl_rate(6, GsRateRange::kWide)};
     case 0x0202:  // OD -> Delay
       return {od(false), delay()};
     case 0x0203:  // DS -> Chorus
-      return {ds(), cf()};
+      return {ds(), cf_rate(6, GsRateRange::kWide)};
     case 0x0204:  // DS -> Flanger
-      return {ds(), fl()};
+      return {ds(), fl_rate(6, GsRateRange::kWide)};
     case 0x0205:  // DS -> Delay
       return {ds(), delay()};
     case 0x0206:  // EH -> Chorus
-      return {eh(), cf()};
+      return {eh(), cf_rate(6, GsRateRange::kWide)};
     case 0x0207:  // EH -> Flanger
-      return {eh(), fl()};
+      return {eh(), fl_rate(6, GsRateRange::kWide)};
     case 0x0208:  // EH -> Delay
-      return {eh(), delay()};
+      return {eh(), delay_block(5, GsTimeLadder::kLadder3, -1)};
     case 0x0209:  // Cho -> Delay
-      return {cf(), delay()};
+      return {cf_pre_delay(0), delay_block(5, GsTimeLadder::kLadder3, -1)};
     case 0x020A:  // FL -> Delay
-      return {fl(), delay()};
+      return {fl_rate(1, GsRateRange::kWide), delay()};
     case 0x020B:  // Cho -> Flanger
       return {cf(), fl()};
     // Rotary Multi: OD -> 3-band EQ -> Rotary. The manual prints two type numbers
@@ -651,22 +847,24 @@ std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
     case 0x0300:
       return {od(false), eq3(), rot()};
     case 0x0400:  // GTR Multi 1: Cmp-OD-CF-Dly
-      return {comp(), od(false), cf(), delay()};
+      return {comp(), od(false), cf_rate(12, GsRateRange::kNarrow),
+              delay_block(16, GsTimeLadder::kLadder4, -1)};
     case 0x0401:  // GTR Multi 2: Cmp-OD-EQ-CF
-      return {comp(), od(false), eq(), cf()};
+      return {comp(), od(false), eq(9, 10, 11, 12, 13), cf()};
     case 0x0402:  // GTR Multi 3: Wah-OD-CF-Dly
       return {wah(), od(false), cf(), delay()};
     case 0x0403:  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD block)
-      return {comp(), eq(), cf(), delay()};
+      return {comp(), eq(4, 5, 6, 7, 8), cf_rate(10, GsRateRange::kNarrow),
+              delay_block(-1, GsTimeLadder::kLadder0, 16)};
     case 0x0404:  // Clean GTR Multi 2: AW-EQ-CF-Dly (Auto-Wah at the front)
-      return {autowah(), eq(), cf(), delay()};
+      return {autowah(), eq3(), cf(), delay()};
     case 0x0405:  // Bass Multi: Cmp-OD-EQ-CF (the OD block on the bass cab)
-      return {comp(), od(true), eq(), cf()};
+      return {comp(), od(true), eq3(), cf()};
     case 0x0406:  // Rhodes Multi: Enhancer -> Phaser -> Chorus -> Tremolo/Pan
       return {eh(), ph(), cf(), pan()};
     case 0x0500:  // Keyboard Multi: Ring Mod -> EQ -> Pitch Shifter -> Phaser -> Delay.
                   // The only GS type that binds the ring-modulator insert.
-      return {rm(), eq3(), ps(), ph(), delay()};
+      return {rm(), eq3(), ps(), ph_rate(12, GsRateRange::kNarrow), delay()};
     default: {
       // Single-effect types: a one-stage chain from the name/param mapping.
       // The parallel-2 types (MSB 11) fall through here to the empty chain and
