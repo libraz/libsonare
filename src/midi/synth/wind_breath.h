@@ -57,9 +57,13 @@ struct BreathContour {
 /// Storage for one engine's force/brightness excitation axes: the base a
 /// patch or CC sets, and the mod-matrix offset composed on top of it.
 ///
-/// Deliberately does not clamp on store — which base is clamped where differs
-/// per engine (brass leaves brightness to its point of use, reed clamps it
-/// here) and a value clamped twice is not the value clamped once.
+/// set_base() clamps both axes to [0,1], which is what every adopting engine
+/// does on force and what all but one does on brightness. The exception is
+/// brass, which stores brightness raw because bell_alpha_for_brightness()
+/// clamps the base+mod SUM at its point of use — clamping the base here would
+/// move that sum (base 1.5 with mod -0.6 reaches 0.9 rather than 0.4). An
+/// engine with that shape passes `present & ~kAxisBrightness` and writes
+/// bright01_base itself, so the exception is visible at the site that has it.
 ///
 /// The zeros below are placeholders, NOT defaults: every adopting engine sets
 /// its own before the first note-on, and they do not agree — the force base
@@ -77,11 +81,14 @@ struct ExcitationBases {
   float force_mod01 = 0.0f;
   float bright_mod01 = 0.0f;
 
-  /// Stores whichever axes @p present names; an axis the caller has not
-  /// supplied a controller value for yet is left alone rather than zeroed.
+  /// Stores whichever axes @p present names, clamped to [0,1]; an axis the
+  /// caller has not supplied a controller value for yet is left alone rather
+  /// than zeroed.
   void set_base(const ExcitationAxes& base, uint32_t present) noexcept {
-    if ((present & kAxisForce) != 0u) force01_base = base.force;
-    if ((present & kAxisBrightness) != 0u) bright01_base = base.brightness;
+    if ((present & kAxisForce) != 0u) force01_base = std::clamp(base.force, 0.0f, 1.0f);
+    if ((present & kAxisBrightness) != 0u) {
+      bright01_base = std::clamp(base.brightness, 0.0f, 1.0f);
+    }
   }
 
   /// Stores the mod-matrix offset for both axes unconditionally.
