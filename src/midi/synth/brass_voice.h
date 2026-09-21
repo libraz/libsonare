@@ -34,6 +34,8 @@
 
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
+#include "midi/synth/wind_bore.h"
+#include "midi/synth/wind_breath.h"
 #include "rt/adaa.h"
 #include "rt/nonlinearities.h"
 
@@ -179,8 +181,8 @@ class BrassVoiceCore {
   /// hands the core its bore delay span (@p capacity samples). The slab outlives
   /// the voice.
   void attach(float* bore, int capacity) noexcept {
-    bore_ = bore;
-    capacity_ = capacity;
+    bore_.buffer = bore;
+    bore_.capacity = capacity;
   }
 
   /// Configures the bore / lip for @p note / @p velocity and zeroes / seeds the
@@ -226,21 +228,14 @@ class BrassVoiceCore {
   // Recomposes the two smoothing targets from their bases and the offsets.
   void refresh_excitation_targets() noexcept;
 
-  // Bore delay line (host-owned): the travelling-wave air column.
-  float* bore_ = nullptr;
-  int capacity_ = 0;
-  /// How much of the line the onset seeds — the note's own loop period plus
-  /// the margin the seed needs, which is shorter than the line itself.
-  int prefill_span_ = 0;
-  size_t bore_write_ = 0;
-  // Last delay-line output (the pressure returning to the lips next sample).
-  float bore_out_ = 0.0f;
-
-  // Tuning: the loop period (samples) and the delay not carried in the line
+  // Bore delay line (host-owned): the travelling-wave air column. period is
+  // the loop period (samples); comp the delay not carried in the line
   // (feedback register + loop-filter phase). Brass uses the full period (a
-  // positive-feedback comb, full harmonics).
-  float bore_period_ = 0.0f;
-  float comp_ = 1.0f;
+  // positive-feedback comb, full harmonics). prefill_span is how much of the
+  // line the onset seeds — the note's own loop period plus the margin the
+  // seed needs, which is shorter than the line itself. out is the last
+  // delay-line output (the pressure returning to the lips next sample).
+  WindBore bore_{nullptr, 0, 0, 0, 0.0f, 1.0f, 0.0f};
   // Feedback sign: +1 (full harmonics), the brass bore reinforced by the bell /
   // mouthpiece correction. Kept as a field for symmetry with the reed core.
   float sign_ = 1.0f;
@@ -302,10 +297,7 @@ class BrassVoiceCore {
   // level (1 while blowing, 0 once tongued off). breath_target_ is the steady
   // mouth pressure (live-smoothed toward breath_ctrl_target_).
   float breath_target_ = 0.7f;
-  float breath_level_ = 0.0f;
-  float attack_coeff_ = 0.0f;
-  float release_coeff_ = 0.0f;
-  bool releasing_ = false;
+  BreathContour breath_{};
 
   // Live-control smoothing: the render ramps breath_target_ / lp_alpha_ toward
   // these CC targets so a moving controller never zippers. Initialised equal to
@@ -314,11 +306,10 @@ class BrassVoiceCore {
   float breath_ctrl_target_ = 0.7f;
   float lp_alpha_target_ = 1.0f;
   // The normalized bases behind those two targets, and the matrix offsets on
-  // them; the targets are always the composed pair.
-  float breath01_base_ = 0.7f;
-  float bright01_base_ = 0.5f;
-  float force_mod01_ = 0.0f;
-  float bright_mod01_ = 0.0f;
+  // them; the targets are always the composed pair. force01_base/bright01_base
+  // start at brass's own 0.7/0.5 (ExcitationBases's in-class defaults are
+  // placeholders shared with other engines, not this one's).
+  ExcitationBases excite_{0.7f, 0.5f, 0.0f, 0.0f};
 
   // Breath turbulence (deterministic mouth-pressure noise; 0 = steady breath).
   float breath_noise_ = 0.0f;
