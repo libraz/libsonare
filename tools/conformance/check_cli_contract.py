@@ -37,6 +37,7 @@ from cli_contract_inventory import (
     _tolerated_paths,
     _validate_inventory,
 )
+from cli_contract_manifest import validate_manifest
 from cli_contract_payload import (
     _compare_payloads,
     _compare_values,
@@ -52,7 +53,6 @@ from cli_contract_schema import (
     UNKNOWN_COMMAND_EXIT,
     _normalized_option_inventory,
     _validate_option,  # noqa: F401
-    validate_manifest,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
