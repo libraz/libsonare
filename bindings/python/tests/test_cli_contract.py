@@ -173,8 +173,19 @@ def _run_console(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def _cli_tree() -> ast.AST:
-    source = Path(__file__).parents[1] / "src" / "libsonare" / "cli.py"
-    return ast.parse(source.read_text(encoding="utf-8"))
+    """One tree over the entry point and every command-family module.
+
+    Each family registers its own subcommands, so a route lives in the module
+    owning its handler while the dispatch table stays in the entry point.
+    Globbed rather than named, so a family added later is read without editing
+    this file -- a route that silently stopped being seen would take its
+    handler-coverage assertion with it.
+    """
+    package = Path(__file__).parents[1] / "src" / "libsonare"
+    body: list[ast.stmt] = []
+    for source in (package / "cli.py", *sorted(package.glob("_cli_*.py"))):
+        body.extend(ast.parse(source.read_text(encoding="utf-8")).body)
+    return ast.Module(body=body, type_ignores=[])
 
 
 def _project_tree() -> ast.AST:

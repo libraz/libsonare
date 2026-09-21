@@ -26,6 +26,8 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
+from ._cli_inventory import _cli_domain
+from ._cli_options import SharedParsers, _add_wav_bits_argument, _finite_float
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset, SoloProcessor
@@ -1753,3 +1755,394 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
         if args.output:
             print(f"    Wrote: {args.output}")
     return 0
+
+
+def register_mastering_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+    """Register the mastering, repair and processor commands."""
+    common = shared.common
+    stdout_options = shared.stdout_options
+
+    # Mastering commands
+    mastering_p = sub.add_parser(
+        "mastering", parents=[common], help="Loudness-normalize with a true-peak ceiling"
+    )
+    mastering_p.add_argument("--preset", default="")
+    # "--chain-config" names a complete chain config in the core's own
+    # ``{params, version}`` form. It is the canonical spelling because the bare
+    # ``--config`` carries a second meaning on this CLI (preset overrides on
+    # ``master``); that original spelling stays accepted here as an alias, and
+    # the handler's destination keeps its own name.
+    mastering_p.add_argument("--chain-config", "--config", dest="config", default=None)
+    mastering_p.add_argument("--target-lufs", type=_finite_float, default=-14.0)
+    mastering_p.add_argument("--ceiling-db", type=_finite_float, default=-1.0)
+    mastering_p.add_argument("--params", default="")
+    _add_wav_bits_argument(mastering_p)
+    mastering_p.add_argument(
+        "--true-peak-oversample", type=int, choices=(1, 2, 4, 8, 16), default=4
+    )
+    mastering_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
+    mastering_p.add_argument("--assistant", action="store_true")
+    mastering_p.add_argument("--enable-repair", action="store_true")
+    mastering_p.add_argument("--explain", action="store_true")
+    # The remaining assistant controls. The accepted delivery-target names are
+    # the rows of the table in src/mastering/assistant/platform_targets.h, which
+    # the native CLI reads directly; the cross-surface option-domain comparison
+    # is what keeps this restatement pinned to it. ``prefer_streaming_safe``
+    # defaults to true in the library, so the reachable control is the one that
+    # turns it off. ``--speech-mono-amount`` declares no domain because the
+    # suggester clamps it to [0, 1] rather than refusing an outside value.
+    mastering_p.add_argument(
+        "--target-platform",
+        default="streaming",
+        choices=(
+            "streaming",
+            "youtube",
+            "broadcast",
+            "podcast",
+            "audiobook",
+            "cinema",
+            "club",
+            "cd",
+        ),
+        help="Delivery target the assistant masters for (default: streaming)",
+    )
+    mastering_p.add_argument(
+        "--no-streaming-safe",
+        action="store_true",
+        help="Let the assistant suggest treatments it withholds for streaming delivery",
+    )
+    mastering_p.add_argument(
+        "--speech-mono-amount",
+        type=_finite_float,
+        default=1.0,
+        help="How far speech-like material is collapsed toward mono (0-1; default: 1)",
+    )
+    mproc_p = sub.add_parser(
+        "mastering-processor", parents=[common], help="Apply a named mastering processor"
+    )
+    mproc_p.add_argument("--processor", required=True, help="Processor name")
+    mproc_p.add_argument("--params", default="", help="Params as k=v,k=v (floats)")
+    _add_wav_bits_argument(mproc_p)
+    eq_p = sub.add_parser("eq", parents=[common], help="Apply the unified equalizer")
+    eq_p.add_argument("--params", default="", help="Params as k=v,k=v (overrides band shortcuts)")
+    # Each of these selects an enumerator by index. cmd_eq refuses an index
+    # outside the enumeration after parsing, which is why the published domain
+    # records the invalid-parameter class rather than the usage one; without the
+    # refusal the underlying switch answers an unknown index with its first
+    # enumerator, so a typo applies a different filter and exits 0.
+    _cli_domain(
+        eq_p.add_argument(
+            "--type",
+            type=int,
+            default=0,
+            help=(
+                "Band type enum: 0 peak, 1 low shelf, 2 high shelf, 3 low pass, "
+                "4 high pass, 5 band pass, 6 notch, 7 tilt, 8 flat tilt"
+            ),
+        ),
+        choices=range(_EQ_ENUM_BOUNDS["type"] + 1),
+        reject_exit="invalid_parameter",
+    )
+    eq_p.add_argument("--frequency-hz", type=_finite_float, default=1000.0)
+    eq_p.add_argument("--gain-db", type=_finite_float, default=0.0)
+    eq_p.add_argument("--q", type=_finite_float, default=1.0)
+    _cli_domain(
+        eq_p.add_argument("--coeff-mode", type=int, default=0, help="0 RBJ, 1 Vicanek"),
+        choices=range(_EQ_ENUM_BOUNDS["coeff_mode"] + 1),
+        reject_exit="invalid_parameter",
+    )
+    eq_p.add_argument("--slope-db-oct", type=int, default=12)
+    _cli_domain(
+        eq_p.add_argument(
+            "--placement", type=int, default=0, help="0 stereo, 1 left, 2 right, 3 mid, 4 side"
+        ),
+        choices=range(_EQ_ENUM_BOUNDS["placement"] + 1),
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        eq_p.add_argument(
+            "--phase-mode",
+            type=int,
+            default=1,
+            help="0 inherit, 1 zero latency, 2 natural, 3 linear",
+        ),
+        choices=range(_EQ_ENUM_BOUNDS["phase_mode"] + 1),
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        eq_p.add_argument(
+            "--resolution",
+            type=int,
+            default=0,
+            help="0 custom/default, 1 low, 2 medium, 3 high, 4 very high, 5 maximum",
+        ),
+        choices=range(_EQ_ENUM_BOUNDS["resolution"] + 1),
+        reject_exit="invalid_parameter",
+    )
+    eq_p.add_argument("--auto-gain", action="store_true")
+    eq_p.add_argument("--gain-scale", type=_finite_float, default=1.0)
+    eq_p.add_argument("--output-gain-db", type=_finite_float, default=0.0)
+    eq_p.add_argument("--output-pan", type=_finite_float, default=0.0)
+    eq_p.add_argument("--proportional-q", action="store_true")
+    eq_p.add_argument("--dynamic", action="store_true")
+    eq_p.add_argument("--threshold-db", type=_finite_float, default=-24.0)
+    eq_p.add_argument("--auto-threshold", action="store_true")
+    eq_p.add_argument("--ratio", type=_finite_float, default=2.0)
+    eq_p.add_argument("--range-db", type=_finite_float, default=-6.0)
+    eq_p.add_argument("--attack-ms", type=_finite_float, default=5.0)
+    eq_p.add_argument("--release-ms", type=_finite_float, default=50.0)
+    # "--lookahead-ms" is the flag's former (misleading) spelling; still
+    # accepted, both writing to the same destination, so a stored script
+    # keeps working.
+    eq_p.add_argument(
+        "--detector-delay-ms",
+        "--lookahead-ms",
+        dest="lookahead_ms",
+        type=_finite_float,
+        default=0.0,
+    )
+    eq_p.add_argument("--sidechain-freq-hz", type=_finite_float, default=-1.0)
+    eq_p.add_argument("--sidechain-q", type=_finite_float, default=1.0)
+    _add_wav_bits_argument(eq_p)
+    sub.add_parser(
+        "mastering-processors", parents=[stdout_options], help="List mastering processor names"
+    )
+    sub.add_parser(
+        "mastering-pair-processors",
+        parents=[stdout_options],
+        help="List two-input mastering processor names",
+    )
+    sub.add_parser(
+        "mastering-pair-analyses",
+        parents=[stdout_options],
+        help="List two-input mastering analysis names",
+    )
+    mpa_p = sub.add_parser(
+        "mastering-pair-analyze",
+        parents=[stdout_options],
+        help="Run a two-input mastering analysis (always JSON output)",
+    )
+    mpa_p.add_argument("--reference", required=True, help="Reference audio file")
+    mpa_p.add_argument("--analysis", required=True, help="Analysis name")
+    mpa_p.add_argument("--params", default="")
+    mpp_p = sub.add_parser(
+        "mastering-pair-processor",
+        parents=[common],
+        help="Apply a two-input mastering processor",
+    )
+    mpp_p.add_argument("--processor", required=True, help="Pair processor name")
+    mpp_p.add_argument("--reference", required=True, help="Reference audio file")
+    mpp_p.add_argument("--params", default="")
+    _add_wav_bits_argument(mpp_p)
+    msa_p = sub.add_parser(
+        "mastering-stereo-analyze",
+        parents=[stdout_options],
+        help="Run a stereo mastering analysis (always JSON output)",
+    )
+    msa_p.add_argument("--reference", required=True, help="Right-channel audio file")
+    msa_p.add_argument("--analysis", required=True, help="Analysis name")
+    msa_p.add_argument("--params", default="")
+    mchain_p = sub.add_parser(
+        "mastering-chain", parents=[common], help="Run a configurable mastering chain"
+    )
+    mchain_p.add_argument("--config", default=None, help="Chain config as a JSON object")
+    mchain_p.add_argument("--config-file", default=None, help="Chain config JSON file")
+    mchain_p.add_argument("--params", default="", help="Flat params as k=v,k=v (floats)")
+    mchain_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
+    master_p = sub.add_parser("master", parents=[common], help="Apply a named mastering preset")
+    master_p.add_argument("--preset", default="pop", help="Mastering preset name")
+    master_p.add_argument("--config", default=None, help="Preset overrides as a JSON object")
+    master_p.add_argument("--config-file", default=None, help="Preset override JSON file")
+    # A whole chain rather than a base to override: the file is a complete chain
+    # config in the core's own ``{params, version}`` form, the one
+    # ``mastering-suggest --config-out`` writes and the native CLI reads. It
+    # replaces the preset instead of layering on it, which is why it is a third
+    # spelling rather than a meaning added to --config / --config-file.
+    master_p.add_argument(
+        "--chain-config", default=None, help="Complete chain config JSON file (replaces --preset)"
+    )
+    master_p.add_argument(
+        "--assistant",
+        action="store_true",
+        help="Master with the chain the assistant suggests for this file",
+    )
+    master_p.add_argument("--params", default="", help="Flat overrides as k=v,k=v (floats)")
+    master_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
+    mstream_p = sub.add_parser(
+        "mastering-streaming",
+        parents=[stdout_options],
+        help="Preview streaming-platform normalization as JSON",
+    )
+    mstream_p.add_argument(
+        "--platforms",
+        default=None,
+        help="Platform targets as JSON array of {name,targetLufs,ceilingDb}",
+    )
+    mstream_p.add_argument("--platforms-file", default=None, help="Platform targets JSON file")
+    repair_p = sub.add_parser(
+        "repair",
+        parents=[common],
+        help=(
+            "Measure and repair defects only "
+            "(declip/declick/decrackle/dehum/denoise/dereverb, in that order)"
+        ),
+    )
+    repair_p.add_argument(
+        "--preset", default="", help="Repair preset name (omitted: measure and choose)"
+    )
+    repair_p.add_argument(
+        "--params",
+        default="",
+        help="Repair config overrides as repair.<stage>.<field>=value,...",
+    )
+    repair_p.add_argument(
+        "--detect",
+        action="store_true",
+        help="Measure and report only; no processing, --output not required",
+    )
+    repair_p.add_argument(
+        "--explain", action="store_true", help="Say why each repair stage was chosen"
+    )
+    _add_wav_bits_argument(repair_p)
+    declip_p = sub.add_parser("declip", parents=[common], help="Repair clipped audio")
+    declip_p.add_argument("--clip-threshold", type=_finite_float, default=0.98)
+    declip_p.add_argument("--lpc-order", type=int, default=36)
+    declip_p.add_argument("--iterations", type=int, default=2)
+    declip_p.add_argument("--lpc-blend", type=_finite_float, default=0.65)
+    sub.add_parser(
+        "mastering-presets", parents=[stdout_options], help="List mastering preset names"
+    )
+    msuggest_p = sub.add_parser(
+        "mastering-suggest", parents=[stdout_options], help="Suggest a mastering chain as JSON"
+    )
+    msuggest_p.add_argument("--params", default="", help="Assistant params as k=v,k=v")
+    msuggest_p.add_argument(
+        "--config-out",
+        default="",
+        help="Write the suggested chain config where --chain-config reads it back",
+    )
+    mprofile_p = sub.add_parser(
+        "mastering-profile",
+        parents=[stdout_options],
+        help="Analyze a mastering audio profile as JSON",
+    )
+    mprofile_p.add_argument("--params", default="", help="Profile params as k=v,k=v")
+
+
+def register_mixing_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+    """Register the mixer scene and channel-strip commands."""
+    common = shared.common
+    stdout_options = shared.stdout_options
+
+    # Mixing commands
+    sub.add_parser(
+        "mixing-presets", parents=[stdout_options], help="List built-in mixer scene presets"
+    )
+    mixing_preset_p = sub.add_parser(
+        "mixing-preset", parents=[stdout_options], help="Print a built-in mixer scene preset"
+    )
+    mixing_preset_p.add_argument(
+        "--preset", default="vocalReverbSend", help="Built-in scene preset name"
+    )
+
+    suggest_mix_p = sub.add_parser(
+        "suggest-mix",
+        parents=[stdout_options],
+        help="Suggest a mixer scene from several tracks as JSON",
+    )
+    # One assignment per occurrence, as --set and --edit do: an id written with
+    # the path keeps the pairing in one token, so no second repeatable option has
+    # to be kept in step with this one.
+    suggest_mix_p.add_argument(
+        "--input",
+        action="append",
+        default=[],
+        metavar="[ID=]WAV",
+        help=(
+            "Per-track input WAV (repeat once per track); a stereo file keeps both "
+            "channels and more than two are downmixed, then resampled to "
+            "--sample-rate; ID defaults to the file's base name"
+        ),
+    )
+    suggest_mix_p.add_argument(
+        "--sample-rate",
+        type=int,
+        default=48000,
+        help="Shared analysis sample rate (default: 48000)",
+    )
+    suggest_mix_p.add_argument(
+        "--params", default="", help="Assistant params as k=v,k=v (default: the library's own)"
+    )
+    suggest_mix_p.add_argument(
+        "--tempo-bpm",
+        default="",
+        metavar="BPM|auto",
+        help=(
+            "Tempo the suggested delay times are voiced against; 'auto' detects it "
+            "from the first --input (omitted: the transport's fallback tempo)"
+        ),
+    )
+    suggest_mix_p.add_argument(
+        "--scene-out",
+        default="",
+        metavar="FILE",
+        help="Also write just the suggested scene, in the form 'mix --scene' reads",
+    )
+
+    mix_p = sub.add_parser(
+        "mix",
+        parents=[common],
+        help="Load a mixer scene (JSON file or preset) and optionally render inputs",
+        description=(
+            "A stereo input keeps its own two channels and a mono one is carried "
+            "on both; an input with more channels than a strip has is downmixed, "
+            "with a warning. Inputs at a different sample rate are resampled to "
+            "--sample-rate before mixing."
+        ),
+    )
+    mix_group = mix_p.add_mutually_exclusive_group(required=True)
+    mix_group.add_argument("--scene", default="", help="Path to a scene JSON file")
+    mix_group.add_argument("--preset", default="", help="Built-in scene preset name")
+    mix_p.add_argument(
+        "--input",
+        action="append",
+        default=[],
+        metavar="[ID=]WAV",
+        help=(
+            "Input WAV for one strip (repeat once per fed strip); resampled to "
+            "--sample-rate; requires --output to render. ID names the strip and "
+            "defaults to the file's base name, and a strip no entry names is fed "
+            "silence. Entries that name no strip at all are taken positionally "
+            "instead, one per strip in scene order"
+        ),
+    )
+    mix_p.add_argument(
+        "--sample-rate", type=int, default=48000, help="Mixer sample rate (default: 48000)"
+    )
+    mix_p.add_argument(
+        "--block-size", type=int, default=512, help="Mixer max block size (default: 512)"
+    )
+
+    mix_strip_p = sub.add_parser(
+        "mix-strip",
+        parents=[common],
+        help="Run one channel strip over a file and write the stereo result",
+        description=(
+            "A stereo input keeps its own two channels and a mono one is carried "
+            "on both. The output is always stereo, and --width requires a stereo "
+            "input because a duplicated mono pair carries no side signal to widen."
+        ),
+    )
+    mix_strip_p.add_argument(
+        "--input-trim-db", type=float, default=0.0, help="Input trim in dB (default: 0)"
+    )
+    mix_strip_p.add_argument("--fader-db", type=float, default=0.0, help="Fader in dB (default: 0)")
+    mix_strip_p.add_argument(
+        "--pan", type=float, default=0.0, help="Pan position, -1 to 1 (default: 0)"
+    )
+    mix_strip_p.add_argument(
+        "--pan-mode",
+        default="balance",
+        help="Pan mode: balance, stereo-pan or dual-pan (default: balance)",
+    )
+    mix_strip_p.add_argument("--width", type=float, default=1.0, help="Stereo width (default: 1.0)")

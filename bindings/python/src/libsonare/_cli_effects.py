@@ -25,6 +25,8 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
+from ._cli_inventory import _cli_domain
+from ._cli_options import SharedParsers, _finite_float
 from ._effects_note_ops import _UNMATCHED_POLICIES
 from ._runtime import _C_INT_MAX, _C_INT_MIN
 
@@ -1192,3 +1194,505 @@ def cmd_room_morph(args: argparse.Namespace) -> int:
     else:
         print(f"  Saved morphed audio ({len(result.audio)} samples) to {args.output}")
     return 0
+
+
+def register_effects_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+    """Register the offline effect, voice-preset and acoustic commands."""
+    common = shared.common
+    stdout_options = shared.stdout_options
+    fft_options = shared.fft_options
+    fft_stdout_options = shared.fft_stdout_options
+
+    hpss_p = sub.add_parser("hpss", parents=[fft_options], help="Harmonic-percussive separation")
+    hpss_p.add_argument(
+        "--kernel-harmonic", type=int, default=31, help="Harmonic median-filter kernel"
+    )
+    hpss_p.add_argument(
+        "--kernel-percussive", type=int, default=31, help="Percussive median-filter kernel"
+    )
+    hpss_p.add_argument("--harmonic-only", action="store_true")
+    hpss_p.add_argument("--percussive-only", action="store_true")
+    hpss_p.add_argument(
+        "--with-residual",
+        action="store_true",
+        help="Also write what neither component claimed. Silent without --hard-mask, "
+        "whose masks are the ones that leave anything over",
+    )
+    hpss_p.add_argument(
+        "--hard-mask",
+        action="store_true",
+        help="Assign each cell to whichever component dominates instead of blending them",
+    )
+
+    stems_p = sub.add_parser(
+        "decompose-stems",
+        parents=[fft_options],
+        help="Separate into NMF components that keep the original phase",
+    )
+    stems_p.add_argument(
+        "--n-components", type=int, default=4, help="Number of NMF components (default: 4)"
+    )
+    stems_p.add_argument(
+        "--n-iter", type=int, default=100, help="NMF update iterations (default: 100)"
+    )
+    stems_p.add_argument(
+        "--beta",
+        type=_finite_float,
+        default=2.0,
+        help="Beta divergence: 2 Frobenius, 1 Kullback-Leibler (default: 2.0)",
+    )
+    _cli_domain(
+        stems_p.add_argument(
+            "--init",
+            default="random",
+            help="NMF initialisation: random or nndsvd (default: random)",
+        ),
+        choices=("random", "nndsvd"),
+        reject_exit="invalid_parameter",
+    )
+    stems_p.add_argument(
+        "--mask-power",
+        type=_finite_float,
+        default=1.0,
+        help="Soft-mask exponent, >= 1; 2 is the Wiener-style power ratio (default: 1.0)",
+    )
+
+    # Editing commands
+    pitch_correct_p = sub.add_parser(
+        "pitch-correct", parents=[common], help="Pitch-correct from a current to a target MIDI note"
+    )
+    pitch_correct_p.add_argument(
+        "--current-midi",
+        type=_finite_float,
+        default=69.0,
+        help="Current pitch as a MIDI note number",
+    )
+    pitch_correct_p.add_argument(
+        "--target-midi", type=_finite_float, default=69.0, help="Target pitch as a MIDI note number"
+    )
+    pitch_tv_p = sub.add_parser(
+        "pitch-correct-timevarying",
+        parents=[common],
+        help="Track pYIN contour and correct toward a note or scale",
+    )
+    pitch_tv_p.add_argument("--mode", choices=["midi", "scale"], default="midi")
+    # The scale arguments are checked whichever target mode is selected, and
+    # --target-midi names a note in both, so each declares its range once rather
+    # than on the branch that happens to read it. --reference-midi stays
+    # undeclared: this path validates the anchor for finiteness only, and a
+    # range here would refuse a value the library accepts.
+    _cli_domain(
+        pitch_tv_p.add_argument("--target-midi", type=_finite_float, default=69.0),
+        minimum=0,
+        maximum=127,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        pitch_tv_p.add_argument("--hop-length", type=int, default=512),
+        minimum=0,
+        exclusive_minimum=True,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        pitch_tv_p.add_argument("--scale-root", type=int, default=0),
+        minimum=0,
+        maximum=11,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        pitch_tv_p.add_argument(
+            "--scale-mode-mask", type=lambda value: int(value, 0), default=0xAB5
+        ),
+        minimum=1,
+        maximum=4095,
+        reject_exit="invalid_parameter",
+    )
+    pitch_tv_p.add_argument("--reference-midi", type=_finite_float, default=69.0)
+    note_move_p = sub.add_parser("note-move", parents=[common], help="Move one note region")
+    note_move_p.add_argument("--onset", type=int, default=0)
+    note_move_p.add_argument("--offset", type=int, default=None)
+    # The library's own default, not None: note_move takes an int, so an absent
+    # --target-onset reached ctypes as None and the command could not run with
+    # its own defaults at all. --offset keeps None because the handler resolves
+    # it to the end of the buffer, which is not a number a default can spell.
+    note_move_p.add_argument("--target-onset", type=int, default=0)
+    scale_quantize_p = sub.add_parser(
+        "scale-quantize", parents=[stdout_options], help="Quantize one MIDI value to a scale"
+    )
+    scale_quantize_p.add_argument("midi", type=_finite_float)
+    # The parser accepts all three and the library refuses them after parsing,
+    # so their accepted sets are declared here rather than left for a reader to
+    # infer from where the refusal happens to live. ``--reference-midi`` takes 0
+    # as the sentinel for the library default, which is why the range is closed
+    # at the bottom instead of starting above it.
+    _cli_domain(
+        scale_quantize_p.add_argument("--root", type=int, default=0),
+        minimum=0,
+        maximum=11,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        scale_quantize_p.add_argument(
+            "--mode-mask", type=lambda value: int(value, 0), default=0xAB5
+        ),
+        minimum=1,
+        maximum=4095,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        scale_quantize_p.add_argument("--reference-midi", type=_finite_float, default=69.0),
+        minimum=0,
+        maximum=127,
+        reject_exit="invalid_parameter",
+    )
+    note_stretch_p = sub.add_parser(
+        "note-stretch", parents=[common], help="Time-stretch a single note region"
+    )
+    note_stretch_p.add_argument(
+        "--onset", type=int, default=0, help="Start sample index of the note region"
+    )
+    note_stretch_p.add_argument(
+        "--offset", type=int, default=0, help="End sample index of the note region"
+    )
+    note_stretch_p.add_argument(
+        "--ratio",
+        type=_finite_float,
+        default=1.0,
+        help="Stretch factor for the region (>1 lengthens)",
+    )
+    tune_to_midi_p = sub.add_parser(
+        "tune-to-midi",
+        parents=[common],
+        help="Tune a take to the reference melody a MIDI file carries",
+    )
+    tune_to_midi_p.add_argument(
+        "--reference-smf",
+        required=True,
+        metavar="PATH",
+        help="Standard MIDI File holding the reference melody",
+    )
+    # Indexes the MIDI-bearing tracks, not the SMF's own numbering, so a file
+    # whose first track is a conductor track has its melody at 0.
+    _cli_domain(
+        tune_to_midi_p.add_argument(
+            "--track",
+            type=int,
+            default=0,
+            metavar="N",
+            help="MIDI-bearing track the melody is read from (default: 0)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
+    # Declared rather than given to argparse as choices=: an unknown name is
+    # refused by the handler, which carries the invalid-parameter class the
+    # command's other value domains carry rather than argparse's usage class.
+    _cli_domain(
+        tune_to_midi_p.add_argument(
+            "--unmatched-policy",
+            default=_DEFAULT_UNMATCHED_POLICY,
+            metavar="{" + ",".join(_UNMATCHED_POLICY_NAMES) + "}",
+            help=(
+                "What to do with a note that has a pitch and no target: "
+                + ", ".join(_UNMATCHED_POLICY_NAMES)
+                + f" (default: {_DEFAULT_UNMATCHED_POLICY})"
+            ),
+        ),
+        choices=_UNMATCHED_POLICY_NAMES,
+        reject_exit="invalid_parameter",
+    )
+    # Neither of the next two carries a CLI default: 0 is a legal value for both,
+    # so an absent flag has to reach the handler as None and leave the library's
+    # own default in place.
+    _cli_domain(
+        tune_to_midi_p.add_argument(
+            "--min-overlap-ratio",
+            type=_finite_float,
+            default=None,
+            metavar="R",
+            help="Fraction of a note that must overlap a target (library default: 0.5)",
+        ),
+        minimum=0.0,
+        maximum=1.0,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        tune_to_midi_p.add_argument(
+            "--max-correction-semitones",
+            type=_finite_float,
+            default=None,
+            metavar="S",
+            help="Where an assigned pitch shift saturates (library default: 12)",
+        ),
+        minimum=0.0,
+        reject_exit="invalid_parameter",
+    )
+    sub.add_parser(
+        "polyphonic-notes",
+        parents=[stdout_options],
+        help="List the notes a polyphonic analysis found",
+    )
+    polyphonic_render_p = sub.add_parser(
+        "polyphonic-render",
+        parents=[common],
+        help="Re-render a polyphonic analysis with per-note edits",
+    )
+    # One assignment per occurrence, as --set does: the value reaches the field
+    # parser as written, so no separator a fold could pick has to be reserved.
+    polyphonic_render_p.add_argument(
+        "--edit",
+        action="append",
+        default=[],
+        metavar="NOTE.FIELD=VALUE",
+        help=(
+            "Edit one field of one note, repeatable; FIELD is one of "
+            + ", ".join(_POLYPHONIC_EDIT_FIELDS)
+        ),
+    )
+    # Effect commands that map directly to the Python effects API. The C++ CLI
+    # still exposes some low-level converters and section/melody analyses that
+    # are not mirrored here; this set covers the common offline edits.
+    pitch_shift_p = sub.add_parser(
+        "pitch-shift", parents=[common], help="Shift pitch by a number of semitones"
+    )
+    pitch_shift_p.add_argument(
+        "--semitones", type=_finite_float, help="Semitones to shift (positive = up)"
+    )
+    # The spectral backend repairs a non-positive geometry into the librosa
+    # defaults instead of refusing it, so the refusal a caller gets is the
+    # handler's; these two commands are where it is reachable from a command line.
+    for _geometry_option, _geometry_default in (("--n-fft", 2048), ("--hop-length", 512)):
+        _cli_domain(
+            pitch_shift_p.add_argument(_geometry_option, type=int, default=_geometry_default),
+            minimum=0,
+            exclusive_minimum=True,
+            reject_exit="invalid_parameter",
+        )
+    time_stretch_p = sub.add_parser(
+        "time-stretch", parents=[common], help="Time-stretch without changing pitch"
+    )
+    time_stretch_p.add_argument(
+        "--rate", type=_finite_float, help="Stretch factor (>1 speeds up, <1 slows down)"
+    )
+    for _geometry_option, _geometry_default in (("--n-fft", 2048), ("--hop-length", 512)):
+        _cli_domain(
+            time_stretch_p.add_argument(_geometry_option, type=int, default=_geometry_default),
+            minimum=0,
+            exclusive_minimum=True,
+            reject_exit="invalid_parameter",
+        )
+    normalize_p = sub.add_parser(
+        "normalize", parents=[common], help="Peak-normalize audio to a target dB level"
+    )
+    normalize_p.add_argument("--mode", default="peak", help="Normalization mode (default: peak)")
+    normalize_p.add_argument(
+        "--target-db", type=_finite_float, default=None, help="Target peak level in dB"
+    )
+    trim_silence_p = sub.add_parser(
+        "trim-silence", parents=[common], help="Trim leading/trailing silence"
+    )
+    trim_silence_p.add_argument(
+        "--threshold-db",
+        type=_finite_float,
+        default=None,
+        help="Silence threshold in dB (default: -60)",
+    )
+    # ``--threshold-db`` and ``--top-db`` select two handler paths. Leave the
+    # alternate selector absent by default so the handler can distinguish the
+    # default threshold mode from an explicit top-dB request.
+    trim_silence_p.add_argument("--top-db", type=_finite_float, default=None)
+    trim_silence_p.add_argument("--n-fft", type=int, default=2048)
+    trim_silence_p.add_argument("--hop-length", type=int, default=512)
+    split_silence_p = sub.add_parser(
+        "split-silence", parents=[fft_stdout_options], help="List non-silent intervals"
+    )
+    # One take per occurrence, as suggest-mix --input does. The positional is the
+    # first take, so this option names the further ones.
+    split_silence_p.add_argument(
+        "--input",
+        action="append",
+        default=[],
+        metavar="WAV",
+        help=(
+            "Another take of the same part (repeat once per take); the intervals "
+            "become the union, so a cut falls only where every take is quiet"
+        ),
+    )
+    split_silence_p.add_argument(
+        "--top-db",
+        type=_finite_float,
+        default=60.0,
+        help="Silence threshold below the peak in dB (default: 60)",
+    )
+    split_silence_p.add_argument(
+        "--write-takes",
+        metavar="PREFIX",
+        help=("Write every take sliced at every interval as PREFIX{take:02d}_{interval:03d}.wav"),
+    )
+    split_silence_p.add_argument(
+        "--report",
+        action="store_true",
+        help=(
+            "Also say why those are the intervals: the largest --top-db at which every "
+            "take still shows silence, read against the one in use. One interval covering "
+            "everything answers three situations and the intervals cannot say which"
+        ),
+    )
+    resample_p = sub.add_parser(
+        "resample", parents=[common], help="Resample audio to a target sample rate"
+    )
+    resample_p.add_argument(
+        "--target-rate",
+        "--target-sr",
+        dest="target_rate",
+        type=int,
+        required=True,
+        help="Target sample rate in Hz",
+    )
+    voice_change_p = sub.add_parser(
+        "voice-change", parents=[common], help="Apply a voice-change effect"
+    )
+    voice_change_p.add_argument(
+        "--pitch-semitones", type=_finite_float, help="Pitch shift in semitones"
+    )
+    voice_change_p.add_argument(
+        "--formant-factor",
+        type=_finite_float,
+        help="Formant scaling factor (1.0 = unchanged)",
+    )
+    voice_change_p.add_argument("--preset", default="", help="Realtime voice changer preset id")
+    voice_change_p.add_argument("--preset-json", help="Realtime voice changer preset JSON file")
+    voice_change_p.add_argument(
+        "--preset-pack", help="Realtime voice changer preset pack JSON file"
+    )
+    voice_change_p.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="PATH=VALUE",
+        help="Override preset JSON fields, e.g. dsp.outputGainDb=-2",
+    )
+    sub.add_parser(
+        "voice-presets", parents=[stdout_options], help="List realtime voice changer presets"
+    )
+    voice_preset_p = sub.add_parser(
+        "voice-preset", help="Print a realtime voice changer preset (always JSON)"
+    )
+    voice_preset_p.add_argument("--preset", default="neutral-monitor", help="Preset id")
+    voice_preset_p.add_argument(
+        "--json", action="store_true", help="No-op; a preset is always printed as JSON"
+    )
+    # Not a parents=[common] subcommand: it consumes a JSON preset, not audio,
+    # so the analysis flags (--n-fft/--hop-length/--n-mels) do not apply and the
+    # positional argument is a preset file rather than an audio file.
+    voice_preset_validate_p = sub.add_parser(
+        "voice-preset-validate", help="Validate and normalize voice preset JSON"
+    )
+    voice_preset_validate_p.add_argument("--json", action="store_true", help="Output JSON")
+    voice_preset_validate_p.add_argument(
+        "--preset-json",
+        help="Voice preset JSON file (takes precedence over the positional path)",
+    )
+    voice_preset_validate_p.add_argument(
+        "--preset", default="", help="Preset id when validating a pack"
+    )
+    voice_preset_validate_p.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="PATH=VALUE",
+        help="Override preset JSON fields before validation",
+    )
+    voice_preset_validate_p.add_argument("file", nargs="?", help="Voice preset JSON file")
+
+    # Analysis commands
+    acoustic_p = sub.add_parser(
+        "acoustic", parents=[stdout_options], help="Estimate acoustic parameters"
+    )
+    acoustic_p.add_argument("--ir", action="store_true", help="Treat input as an impulse response")
+    acoustic_p.add_argument("--n-bands", type=int, default=6)
+    acoustic_p.add_argument("--min-decay-db", type=_finite_float, default=30.0)
+    acoustic_p.add_argument("--noise-floor-margin-db", type=_finite_float, default=10.0)
+
+    def _add_room_geometry(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--length", type=_finite_float, default=7.0, help="Room length (m)")
+        p.add_argument("--width", type=_finite_float, default=5.0, help="Room width (m)")
+        p.add_argument("--height", type=_finite_float, default=3.0, help="Room height (m)")
+        # The room builder clamps rather than validates, so the refusal comes from
+        # the material check beside it -- an invalid parameter, not a usage error.
+        _cli_domain(
+            p.add_argument(
+                "--absorption", type=_finite_float, default=0.2, help="Uniform wall absorption"
+            ),
+            minimum=0,
+            maximum=1,
+            reject_exit="invalid_parameter",
+        )
+        p.add_argument("--source-x", type=_finite_float, default=1.0)
+        p.add_argument("--source-y", type=_finite_float, default=1.0)
+        p.add_argument("--source-z", type=_finite_float, default=1.2)
+        p.add_argument("--listener-x", type=_finite_float, default=5.0)
+        p.add_argument("--listener-y", type=_finite_float, default=4.0)
+        p.add_argument("--listener-z", type=_finite_float, default=1.7)
+        p.add_argument("--ism-order", type=int, default=3, help="Image-source reflection order")
+        # The C field is a uint32 and 0 is its library-default sentinel, so the
+        # range is closed at both ends rather than refusing only a negative.
+        _cli_domain(
+            p.add_argument("--seed", type=int, default=1, help="Deterministic late-tail seed"),
+            minimum=0,
+            maximum=0xFFFFFFFF,
+            reject_exit="invalid_parameter",
+        )
+        p.add_argument(
+            "--max-seconds",
+            type=_finite_float,
+            default=0.0,
+            help="Hard cap on RIR/tail length in seconds (0 = natural length)",
+        )
+        p.add_argument(
+            "--sabine",
+            action="store_true",
+            help="Use the Sabine late-reverb model (default Eyring)",
+        )
+
+    estimate_room_p = sub.add_parser(
+        "estimate-room", parents=[stdout_options], help="Estimate equivalent room from a recording"
+    )
+    estimate_room_p.add_argument(
+        "--aspect-lw", type=_finite_float, default=1.0, help="length/width prior"
+    )
+    estimate_room_p.add_argument(
+        "--aspect-lh", type=_finite_float, default=1.0, help="length/height prior"
+    )
+    estimate_room_p.add_argument(
+        "--reference-absorption", type=_finite_float, default=0.15, help="absorption prior"
+    )
+    estimate_room_p.add_argument(
+        "--sabine", action="store_true", help="Use the Sabine model (default Eyring)"
+    )
+    estimate_room_p.add_argument(
+        "--n-octave-bands",
+        "--n-bands",
+        type=int,
+        default=None,
+        dest="n_octave_bands",
+        metavar="N",
+        help="Analyzer octave-band count (0 = library default)",
+    )
+
+    synth_rir_p = sub.add_parser(
+        "synthesize-rir", parents=[common], help="Synthesize a room impulse response from geometry"
+    )
+    _add_room_geometry(synth_rir_p)
+    synth_rir_p.add_argument("--sample-rate", type=int, default=48000, help="Output sample rate")
+
+    room_morph_p = sub.add_parser(
+        "room-morph", parents=[common], help="Morph reverberation toward a target room"
+    )
+    _add_room_geometry(room_morph_p)
+    room_morph_p.add_argument(
+        "--wet", type=_finite_float, default=0.5, help="Target-room mix [0,1]"
+    )
+    room_morph_p.add_argument(
+        "--suppression", type=_finite_float, default=0.5, help="Source-tail suppression [0,1]"
+    )

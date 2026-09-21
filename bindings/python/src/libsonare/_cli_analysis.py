@@ -25,6 +25,16 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
+from ._cli_inventory import _cli_domain
+from ._cli_options import (
+    SharedParsers,
+    _candidate_count,
+    _finite_float,
+    _nonnegative_finite_float,
+    _pitch_threshold,
+    _positive_int,
+    _positive_pitch_frequency,
+)
 
 
 def cmd_version(args: argparse.Namespace) -> int:
@@ -618,3 +628,222 @@ def cmd_pitch(args: argparse.Namespace) -> int:
         print(f"    Median F0: {result.median_f0:.1f} Hz")
         print(f"    Mean F0:   {result.mean_f0:.1f} Hz")
     return 0
+
+
+def register_analysis_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+    """Register the core analysis commands on the top-level subparsers."""
+    stdout_options = shared.stdout_options
+    fft_stdout_options = shared.fft_stdout_options
+    mel_options = shared.mel_options
+
+    sub.add_parser("version", parents=[stdout_options], help="Show version")
+    sub.add_parser("doctor", parents=[stdout_options], help="Show build and runtime diagnostics")
+    sub.add_parser("info", parents=[stdout_options], help="Show audio file information")
+    sub.add_parser("bpm", parents=[stdout_options], help="Detect BPM")
+    key_p = sub.add_parser("key", parents=[stdout_options], help="Detect musical key")
+    # Key detection keeps a 4096-sample analysis default (better low-frequency
+    # resolution) rather than the shared 2048. A None sentinel distinguishes
+    # "left at the default" from an explicit value, matching the native CLI and
+    # the detect_key() library default. These FFT options are declared here
+    # instead of inherited from fft_options: parents= shares the actual argument
+    # objects, so a set_defaults override would mutate the shared --n-fft used by
+    # the other analysis commands.
+    key_p.add_argument(
+        "--n-fft", type=int, default=4096, help="FFT size (default: 4096 for key analysis)"
+    )
+    key_p.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
+    key_p.add_argument(
+        "--candidates",
+        type=_candidate_count,
+        default=None,
+        metavar="N",
+        help="Also show the top N key candidates",
+    )
+    key_p.add_argument(
+        "--use-hpss",
+        "--hpss",
+        dest="use_hpss",
+        action="store_true",
+        help="Use harmonic audio for key chroma",
+    )
+    key_p.add_argument(
+        "--loudness-weighted", action="store_true", help="Weight key chroma frames by RMS"
+    )
+    key_p.add_argument(
+        "--high-pass-hz",
+        type=_finite_float,
+        default=0.0,
+        help="High-pass cutoff before key analysis",
+    )
+    key_p.add_argument(
+        "--modes",
+        type=str,
+        default="",
+        help="Candidate modes: major-minor, all, or comma-separated mode names",
+    )
+    key_p.add_argument(
+        "--profile",
+        type=str,
+        default="",
+        help="Key profile: ks, temperley, shaath, edmt, edma, edmm, or bellman",
+    )
+    key_p.add_argument(
+        "--genre-hint",
+        type=str,
+        default="",
+        help="Genre hint for key profile selection, e.g. auto, edm, pop, classical, jazz",
+    )
+    sub.add_parser("beats", parents=[stdout_options], help="Detect beat times")
+    sub.add_parser("downbeats", parents=[stdout_options], help="Detect downbeat times")
+    sub.add_parser("onsets", parents=[stdout_options], help="Detect onset times")
+    chords_p = sub.add_parser(
+        "chords", parents=[fft_stdout_options], help="Detect chord progression"
+    )
+    chords_p.add_argument(
+        "--min-duration", type=_finite_float, default=0.3, help="Minimum chord duration in seconds"
+    )
+    _cli_domain(
+        chords_p.add_argument(
+            "--smoothing-window",
+            type=_finite_float,
+            default=2.0,
+            help="Chroma smoothing window in seconds",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+        reject_exit="invalid_parameter",
+    )
+    chords_p.add_argument(
+        "--threshold", type=_finite_float, default=0.5, help="Chord detection confidence threshold"
+    )
+    chords_p.add_argument(
+        "--triads-only", action="store_true", help="Restrict output to triad qualities"
+    )
+    chords_p.add_argument(
+        "--nnls", action="store_true", help="Use NNLS chroma instead of the STFT chroma"
+    )
+    chords_p.add_argument(
+        "--no-beat-sync", action="store_true", help="Disable beat-synchronous chroma pooling"
+    )
+    chords_p.add_argument(
+        "--use-hmm", action="store_true", help="Decode the chord sequence with an HMM"
+    )
+    # 0 keeps the full search rather than disabling the decoder, so the range is
+    # closed at the bottom and only a negative width is refused.
+    _cli_domain(
+        chords_p.add_argument(
+            "--hmm-beam-width", type=int, default=24, help="HMM decoder beam width"
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
+    chords_p.add_argument(
+        "--key-context", action="store_true", help="Bias detection with a key context"
+    )
+    chords_p.add_argument(
+        "--key-root", default="C", help="Key-context root pitch class (e.g. C, F#)"
+    )
+    chords_p.add_argument(
+        "--key-mode", default="major", help="Key-context mode (e.g. major, minor)"
+    )
+    chords_p.add_argument(
+        "--detect-inversions", action="store_true", help="Report chord inversions (bass note)"
+    )
+    sections_p = sub.add_parser(
+        "sections", parents=[fft_stdout_options], help="Detect song structure"
+    )
+    sections_p.add_argument(
+        "--min-duration",
+        type=_finite_float,
+        default=4.0,
+        help="Minimum section duration in seconds (default: 4.0)",
+    )
+    analyze_p = sub.add_parser("analyze", parents=[stdout_options], help="Full music analysis")
+    analyze_p.add_argument(
+        "--with-seventh", action="store_true", help="Include seventh chords in the analysis"
+    )
+    analyze_p.add_argument(
+        "--no-hpss", action="store_true", help="Disable harmonic-percussive separation"
+    )
+    analyze_p.add_argument(
+        "--chroma-highpass",
+        type=_nonnegative_finite_float,
+        default=80.0,
+        help="High-pass cutoff for chroma analysis in Hz (default: 80.0)",
+    )
+    # An odd meter is only ever reported if its numerator was asked for, so
+    # without this option the CLI could not reach one at all.
+    analyze_p.add_argument(
+        "--meter-candidates",
+        type=str,
+        default="",
+        help="Comma-separated meter numerators to score, e.g. 3,4,5,7 (default: 3,4,6)",
+    )
+    analyze_p.add_argument(
+        "--meter-denominator",
+        type=_positive_int,
+        default=4,
+        help="Beat unit reported for the detected meter (default: 4)",
+    )
+    mel_p = sub.add_parser("mel", parents=[mel_options], help="Compute mel spectrogram")
+    # 0 is the librosa default both bounds are spelled with, so the range is
+    # closed at the bottom rather than starting above it. Declared on the action
+    # rather than on the type callable: argparse takes any finite number here and
+    # the filterbank is what refuses a negative, so the refusal is the
+    # invalid-parameter class, not the usage one.
+    _cli_domain(
+        mel_p.add_argument(
+            "--fmin", type=_finite_float, default=0.0, help="Lowest mel band frequency in Hz"
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        mel_p.add_argument(
+            "--fmax",
+            type=_finite_float,
+            default=0.0,
+            help="Highest mel band frequency in Hz (0 = Nyquist)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
+    mel_p.add_argument(
+        "--htk", action="store_true", help="Use the HTK mel formula instead of Slaney"
+    )
+    sub.add_parser("chroma", parents=[fft_stdout_options], help="Compute chromagram")
+    sub.add_parser("spectral", parents=[fft_stdout_options], help="Compute spectral features")
+    # Pitch is a stdout-only analysis command. Its frequency/threshold domains
+    # mirror the PitchConfig checks in the core API.
+    pitch_p = sub.add_parser("pitch", parents=[stdout_options], help="Track pitch")
+    # cmd_pitch raises for any other name, so the accepted set is declared here
+    # even though argparse itself does not enforce it.
+    _cli_domain(
+        pitch_p.add_argument("--algorithm", default="pyin"),
+        choices=("yin", "pyin"),
+        reject_exit="invalid_parameter",
+    )
+    pitch_p.add_argument(
+        "--threshold",
+        type=_pitch_threshold,
+        default=0.1,
+        help="YIN threshold (> 0 and <= 1; default: 0.1)",
+    )
+    pitch_p.add_argument(
+        "--hop-length",
+        type=_positive_int,
+        default=512,
+        help="Hop length in samples (default: 512)",
+    )
+    pitch_p.add_argument(
+        "--fmin",
+        type=_positive_pitch_frequency,
+        default=65.0,
+        help="Minimum frequency in Hz (default: 65.0)",
+    )
+    pitch_p.add_argument(
+        "--fmax",
+        type=_positive_pitch_frequency,
+        default=2093.0,
+        help="Maximum frequency in Hz (default: 2093.0)",
+    )

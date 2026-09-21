@@ -24,6 +24,8 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
+from ._cli_inventory import _cli_domain
+from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
 from ._runtime import ErrorCode, SonareError
 
 # A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
@@ -689,3 +691,266 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
         print(f"  Transcribed {note_count} notes at {tempo_bpm:.2f} BPM")
         print(f"    Wrote: {args.output}")
     return 0
+
+
+def register_project_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+    """Register the project, MIDI render and transcription commands."""
+    common = shared.common
+
+    # Project / MIDI commands
+    project_p = sub.add_parser("project", parents=[common], help="Headless project / SMF commands")
+    project_sub = project_p.add_subparsers(dest="project_command", required=True)
+    # The project-level parser owns the common defaults.  Child parsers must
+    # accept the same flags without installing their own defaults, otherwise a
+    # value before the project subcommand (for example `project --json abi`)
+    # is overwritten by the child parser's false/empty default.
+    project_common = _ContractArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
+    project_common.add_argument("--json", action="store_true")
+    project_common.add_argument("-o", "--output", type=str)
+    project_stdout_common = _ContractArgumentParser(
+        add_help=False, argument_default=argparse.SUPPRESS
+    )
+    project_stdout_common.add_argument("--json", action="store_true")
+
+    project_sub.add_parser(
+        "abi", parents=[project_stdout_common], help="Print the project ABI version"
+    )
+    pnew = project_sub.add_parser(
+        "new", parents=[project_common], help="Create an empty project JSON"
+    )
+    pnew.add_argument("--sample-rate", type=int, default=0, help="Project sample rate")
+    for pname in ("validate", "compile"):
+        if pname == "validate":
+            # Keep the active validation route's action order aligned with the
+            # public contract. Child defaults remain suppressed so flags
+            # supplied before the project subcommand are not overwritten by
+            # child-parser defaults.
+            pp = project_sub.add_parser(pname, help="Project validate")
+            pp.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+            pp.add_argument(
+                "--strict",
+                action="store_true",
+                help="Fail (non-zero exit) when the project loads with diagnostics",
+            )
+            pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
+            pp.add_argument("-o", "--output", type=str, default=argparse.SUPPRESS)
+        else:
+            pp = project_sub.add_parser(
+                pname, parents=[project_stdout_common], help="Project compile"
+            )
+            pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    sf2_cli_note = (
+        "SF2 / SoundFont and per-destination synth JSON are not wired through this CLI command; "
+        "use the Project API for SoundFont-backed bounces."
+    )
+    pbounce = project_sub.add_parser(
+        "bounce",
+        parents=[project_common],
+        help="Render project to WAV",
+        description=sf2_cli_note,
+    )
+    pbounce.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    pbounce.add_argument(
+        "--sample-rate",
+        type=int,
+        default=None,
+        help="Render sample rate (default: the project's own sample rate)",
+    )
+    pbounce.add_argument("--frames", type=int, default=0, help="Render length in frames")
+    pbounce.add_argument("--block-size", type=int, default=0, help="Render block size")
+    pbounce.add_argument("--channels", type=int, default=2, help="Render channel count")
+    pbounce.add_argument("--instrument-latency", type=int, default=0)
+    # One assignment per occurrence, as --set / --edit / suggest-mix --input do:
+    # the id written with the path keeps the pairing in one token, so no second
+    # repeatable option has to be kept in step with this one.
+    pbounce.add_argument(
+        "--audio",
+        action="append",
+        default=[],
+        metavar="SOURCE_ID=WAV",
+        help=(
+            "Bind decoded PCM to one of the project's audio sources (repeat once per "
+            "source); project JSON carries a URI reference only, so a document with "
+            "audio clips renders from nothing until its sources are bound"
+        ),
+    )
+    pbounce.add_argument(
+        "--resolve-audio",
+        action="store_true",
+        help=(
+            "Open the file:// URIs the document's unresolved audio sources already "
+            "carry; any other scheme is refused by name"
+        ),
+    )
+    pbounce.add_argument(
+        "--synth",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "Bare flag uses GM program/channel routing and channel-10 drums; a value selects "
+            "a fixed NativeSynth preset; "
+            "no --sf2 or --synth-json CLI wiring"
+        ),
+    )
+    palign = project_sub.add_parser(
+        "align-takes",
+        parents=[project_common],
+        help="Align every take in a project against one reference source",
+    )
+    palign.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    # The value domains stay out of argparse: `type=` / `choices=` would report
+    # them as usage errors, and each one is an invalid parameter.
+    _cli_domain(
+        palign.add_argument(
+            "--reference-source",
+            type=int,
+            required=True,
+            help="Audio source id whose timeline every take is aligned to",
+        ),
+        minimum=1,
+        reject_exit="invalid_parameter",
+    )
+    palign.add_argument(
+        "--audio",
+        action="append",
+        default=[],
+        metavar="SOURCE_ID=WAV",
+        help=(
+            "Supply the file one of the project's audio sources reads from (repeat once "
+            "per source); project JSON carries a URI reference only, so a document's "
+            "takes cannot be decoded until their files are named"
+        ),
+    )
+    palign.add_argument(
+        "--resolve-audio",
+        action="store_true",
+        help="Read the file:// URIs the document's audio sources already carry",
+    )
+    # 0 asks for the library value on both, so only a negative is refused here;
+    # the resolution's own grid is the core's to enforce.
+    _cli_domain(
+        palign.add_argument(
+            "--hop-length",
+            type=int,
+            default=0,
+            help="Chroma hop in samples (0: the library value)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
+    _cli_domain(
+        palign.add_argument(
+            "--bins-per-octave",
+            type=int,
+            default=0,
+            help="Chroma bins per octave (0: the library value)",
+        ),
+        minimum=0,
+        reject_exit="invalid_parameter",
+    )
+    pexport_smf = project_sub.add_parser("export-smf", parents=[project_common], help="Export SMF")
+    pexport_smf.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    pimport_smf = project_sub.add_parser("import-smf", parents=[project_common], help="Import SMF")
+    pimport_smf.add_argument("--smf", required=True, help="Input Standard MIDI File")
+    pexport_midi2 = project_sub.add_parser(
+        "export-midi2", parents=[project_common], help="Export MIDI 2.0 Clip File"
+    )
+    pexport_midi2.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    pimport_midi2 = project_sub.add_parser(
+        "import-midi2", parents=[project_common], help="Import MIDI 2.0 Clip File"
+    )
+    pimport_midi2.add_argument("--midi2", required=True, help="Input MIDI 2.0 Clip File")
+    project_sub.add_parser(
+        "synth-presets", parents=[project_stdout_common], help="List NativeSynth presets"
+    )
+
+    midi_render_p = sub.add_parser(
+        "midi-render",
+        parents=[common],
+        help="Render a MIDI project through NativeSynth",
+        description=sf2_cli_note,
+    )
+    midi_render_p.add_argument("--in", dest="input", required=True, help="Input project JSON")
+    midi_render_p.add_argument(
+        "--sample-rate",
+        type=int,
+        default=None,
+        help="Render sample rate (default: the project's own sample rate)",
+    )
+    midi_render_p.add_argument("--frames", type=int, default=0, help="Render length in frames")
+    midi_render_p.add_argument("--block-size", type=int, default=0, help="Render block size")
+    midi_render_p.add_argument("--channels", type=int, default=2, help="Render channel count")
+    midi_render_p.add_argument("--instrument-latency", type=int, default=0)
+    midi_render_p.add_argument(
+        "--synth",
+        default="",
+        help=(
+            "NativeSynth preset (default: GM program/channel routing); "
+            "no --sf2 or --synth-json CLI wiring"
+        ),
+    )
+
+    transcribe_p = sub.add_parser(
+        "transcribe", parents=[common], help="Transcribe audio to a Standard MIDI File"
+    )
+    transcribe_p.add_argument(
+        "--tempo-bpm",
+        type=_finite_float,
+        default=None,
+        help="Tempo the PPQ grid is built on (default: detected from the audio)",
+    )
+    transcribe_p.add_argument(
+        "--polyphonic",
+        action="store_true",
+        help="Read the multi-F0 chain, which finds overlapping notes",
+    )
+    transcribe_p.add_argument(
+        "--reference-hz",
+        type=_finite_float,
+        default=None,
+        help="Tuning reference the MIDI note numbers are measured against (default: 440)",
+    )
+    transcribe_p.add_argument(
+        "--fmin",
+        type=_finite_float,
+        default=None,
+        help="Lowest pitch the monophonic tracker looks for, in Hz (default: 65)",
+    )
+    transcribe_p.add_argument(
+        "--fmax",
+        type=_finite_float,
+        default=None,
+        help="Highest pitch the monophonic tracker looks for, in Hz (default: 2093)",
+    )
+    transcribe_p.add_argument(
+        "--min-note-ms",
+        type=_finite_float,
+        default=None,
+        help="Shortest span kept as a note, in ms (default: 30)",
+    )
+    transcribe_p.add_argument(
+        "--segmentation-threshold-cents",
+        type=_finite_float,
+        default=None,
+        help="Pitch movement that ends one note and starts the next (default: 50)",
+    )
+    transcribe_p.add_argument(
+        "--velocity-floor-db",
+        type=_finite_float,
+        default=None,
+        help="Level mapped to velocity 1; must be negative (default: -48)",
+    )
+    transcribe_p.add_argument(
+        "--fixed-velocity",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Give every note velocity N (1-127) and skip the level measurement",
+    )
+    transcribe_p.add_argument(
+        "--group", type=int, default=0, help="UMP group the events are emitted on (default: 0)"
+    )
+    transcribe_p.add_argument(
+        "--channel", type=int, default=0, help="MIDI channel the events are emitted on (default: 0)"
+    )

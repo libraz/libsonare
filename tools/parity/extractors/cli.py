@@ -2,9 +2,11 @@
 
 Two CLIs exist and neither maps 1:1 onto C function names:
 
-* Python ``cli.py`` — argparse with ``sub.add_parser("bpm", ...)`` subcommands
-  and per-subcommand ``add_argument("--hop-length", default=512)`` options. We
-  parse it with ``ast`` to recover subcommand names and their option defaults.
+* The Python CLI — argparse with ``sub.add_parser("bpm", ...)`` subcommands and
+  per-subcommand ``add_argument("--hop-length", default=512)`` options. We parse
+  it with ``ast`` to recover subcommand names and their option defaults. Each
+  command family registers its own subcommands, so the walk covers the family
+  modules and not only the entry point.
 * The native C++ CLI under ``tools/`` — commands are declared as
   ``add_command(registry, "name", ...)`` records, which we read directly.
   Command names only: their option specs are built by helper calls whose
@@ -44,21 +46,46 @@ def _kw(call: ast.Call, name: str) -> ast.expr | None:
     return None
 
 
-def _extract_python_cli(root: Path, ex: Extraction) -> None:
-    path = root / "bindings" / "python" / "src" / "libsonare" / "cli.py"
-    if not path.exists():
-        return
+# The Python CLI's package directory and the glob covering its command-family
+# modules. Globbed rather than named, as the native leg is, so a family added or
+# renamed keeps being read instead of silently leaving the surface.
+_PYTHON_CLI_DIR = ("bindings", "python", "src", "libsonare")
+_PYTHON_CLI_ENTRY = "cli.py"
+_PYTHON_CLI_FAMILY_GLOB = "_cli_*.py"
+
+# The modules matching that glob which carry no subcommand registration: the
+# entry point composes the parser, and these three are the shared layers every
+# family draws on. Every other match must yield at least one command, and these
+# must yield none -- both directions are checked, so an exemption that stopped
+# excusing anything is retired rather than left asserting a stale fact.
+#
+# The check matters because the two front-ends merge into one ``cli`` surface: a
+# family that stopped being read does not empty the surface, the native commands
+# stand in for it, the report stays green, and every per-option default that
+# family contributed is gone with nothing reporting it. A count floor cannot
+# catch it either -- the smallest family is smaller than the slack a floor needs.
+_PYTHON_CLI_NON_REGISTERING = frozenset(
+    {
+        "_cli_common.py",
+        "_cli_inventory.py",
+        "_cli_options.py",
+    }
+)
+
+
+def _collect_python_cli_file(path: Path, root: Path, commands: dict[str, FunctionSig]) -> bool:
+    """Collect one module's subcommands into ``commands``; False on a parse error.
+
+    Subparser variable names are resolved within the file that assigns them, so
+    two families reusing a name register against their own commands.
+    """
     text = path.read_text(encoding="utf-8")
     try:
         tree = ast.parse(text, filename=str(path))
-    except SyntaxError as e:
-        ex.unparsed += 1
-        ex.unparsed_notes.append(f"cli.py: parse error {e}")
-        return
+    except SyntaxError:
+        return False
 
-    # Map the python variable holding each subparser -> (command, params, line).
-    commands: dict[str, FunctionSig] = {}
-    # Track which variable name a subparser was assigned to.
+    # Track which variable name a subparser was assigned to, within this file.
     var_to_cmd: dict[str, str] = {}
 
     for node in ast.walk(tree):
@@ -140,6 +167,48 @@ def _extract_python_cli(root: Path, ex: Extraction) -> None:
                     enum_values=enum_values,
                 )
             )
+
+    return True
+
+
+def _extract_python_cli(root: Path, ex: Extraction) -> None:
+    base = root.joinpath(*_PYTHON_CLI_DIR)
+    if not (base / _PYTHON_CLI_ENTRY).exists():
+        return
+
+    # Map each subcommand -> (command, params, line), merged across the family
+    # modules. A command is registered once, so the merge cannot collide.
+    commands: dict[str, FunctionSig] = {}
+    silent: list[str] = []
+    registering_exempt: list[str] = []
+    for path in [base / _PYTHON_CLI_ENTRY, *sorted(base.glob(_PYTHON_CLI_FAMILY_GLOB))]:
+        before = len(commands)
+        if not _collect_python_cli_file(path, root, commands):
+            ex.unparsed += 1
+            ex.unparsed_notes.append(f"{path.name}: parse error")
+        collected = len(commands) > before
+        if path.name == _PYTHON_CLI_ENTRY:
+            continue
+        if path.name in _PYTHON_CLI_NON_REGISTERING:
+            if collected:
+                registering_exempt.append(path.name)
+        elif not collected:
+            silent.append(path.name)
+
+    if silent or registering_exempt:
+        detail = []
+        if silent:
+            detail.append(
+                "collected no command from " + ", ".join(silent) + ", so that family "
+                "reads as absent from the CLI surface while the native front-end "
+                "keeps the surface non-empty"
+            )
+        if registering_exempt:
+            detail.append(
+                "collected commands from " + ", ".join(registering_exempt) + ", which "
+                "_PYTHON_CLI_NON_REGISTERING claims register nothing"
+            )
+        raise CliScopeError("Python CLI walk " + "; and ".join(detail) + ".")
 
     ex.functions.extend(commands.values())
 

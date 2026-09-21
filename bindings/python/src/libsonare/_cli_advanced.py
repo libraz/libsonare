@@ -13,6 +13,8 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
+from ._cli_inventory import _cli_domain
+from ._cli_options import SharedParsers, _finite_float
 
 
 def cmd_rhythm(args: argparse.Namespace) -> int:
@@ -312,3 +314,55 @@ def cmd_plp(args: argparse.Namespace) -> int:
         print(f"    Mean:   {stats['mean']:.6f}")
         print(f"    Max:    {stats['max']:.6f}")
     return 0
+
+
+def register_advanced_parsers(sub: argparse._SubParsersAction, shared: SharedParsers) -> None:
+    """Register the rhythm, dynamics and spectral descriptor commands."""
+    stdout_options = shared.stdout_options
+    fft_stdout_options = shared.fft_stdout_options
+    mel_options = shared.mel_options
+
+    rhythm_p = sub.add_parser(
+        "rhythm", parents=[fft_stdout_options], help="Analyze rhythm primitives"
+    )
+    for _tempo_option, _tempo_default in (
+        ("--start-bpm", 120.0),
+        ("--bpm-min", 60.0),
+        ("--bpm-max", 200.0),
+    ):
+        _cli_domain(
+            rhythm_p.add_argument(_tempo_option, type=_finite_float, default=_tempo_default),
+            minimum=0,
+            exclusive_minimum=True,
+            reject_exit="invalid_parameter",
+        )
+    dynamics_p = sub.add_parser(
+        "dynamics", parents=[stdout_options], help="Analyze dynamics/loudness"
+    )
+    _cli_domain(
+        dynamics_p.add_argument("--window-sec", type=_finite_float, default=0.4),
+        minimum=0,
+        exclusive_minimum=True,
+        reject_exit="invalid_parameter",
+    )
+    # Dynamics windows the loudness series but runs no FFT, so it takes the hop
+    # control without the matching --n-fft.
+    dynamics_p.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
+    sub.add_parser("timbre", parents=[mel_options], help="Analyze timbre/spectral shape")
+    lufs_p = sub.add_parser("lufs", parents=[stdout_options], help="Compute LUFS loudness")
+    lufs_p.add_argument(
+        "--series", action="store_true", help="Also emit momentary/short-term LUFS series"
+    )
+    sub.add_parser(
+        "onset-envelope", parents=[mel_options], help="Compute the onset strength envelope"
+    )
+    nnls_p = sub.add_parser("nnls-chroma", parents=[stdout_options], help="Compute NNLS chroma")
+    nnls_p.add_argument("--hop-length", type=int, default=512)
+    tempogram_p = sub.add_parser(
+        "tempogram", parents=[mel_options], help="Compute autocorrelation tempogram"
+    )
+    tempogram_p.add_argument("--win-length", type=int, default=384)
+    plp_p = sub.add_parser("plp", parents=[mel_options], help="Compute predominant local pulse")
+    plp_p.add_argument("--tempo-min", type=_finite_float, default=30.0)
+    plp_p.add_argument("--tempo-max", type=_finite_float, default=300.0)
+    plp_p.add_argument("--win-length", type=int, default=384)

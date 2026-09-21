@@ -11,6 +11,7 @@ can read it rather than assume.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import math
 import sys
 from collections.abc import Iterable
@@ -364,3 +365,61 @@ def _reject_stdout_output(args: argparse.Namespace, parser: argparse.ArgumentPar
         parser.error(
             f"project {args.project_command} does not produce an output file; remove --output"
         )
+
+
+@dataclasses.dataclass(frozen=True)
+class SharedParsers:
+    """The parent parsers each command family draws its common options from.
+
+    They are passed as one object rather than as five arguments so a family
+    registrar's signature does not change when a new parent is added.
+    """
+
+    common: argparse.ArgumentParser
+    stdout_options: argparse.ArgumentParser
+    fft_options: argparse.ArgumentParser
+    fft_stdout_options: argparse.ArgumentParser
+    mel_options: argparse.ArgumentParser
+
+
+def build_shared_parsers() -> SharedParsers:
+    """Construct the parent parsers shared across every command family."""
+    # Keep stdout-only and artifact-producing leaves on separate parents. A
+    # shared output option would make ``--output`` look valid on analysis
+    # commands and defer the usage error until handler dispatch.
+    json_options = _ContractArgumentParser(add_help=False)
+    json_options.add_argument("--json", action="store_true", help="Output JSON")
+    common = _ContractArgumentParser(add_help=False, parents=[json_options])
+    common.add_argument("-o", "--output", type=str, default=None, help="Output file path")
+
+    # Accept the spelling solely long enough to issue the established
+    # stdout-only diagnostic below.  It is deliberately hidden from the
+    # public inventory: these commands do not produce audio artifacts.
+    stdout_options = _ContractArgumentParser(add_help=False, parents=[json_options])
+    stdout_options.add_argument(
+        "-o", "--output", type=str, default=argparse.SUPPRESS, help=argparse.SUPPRESS
+    )
+
+    fft_options = _ContractArgumentParser(add_help=False, parents=[common])
+    fft_options.add_argument("--n-fft", type=int, default=2048, help="FFT size (default: 2048)")
+    fft_options.add_argument(
+        "--hop-length", type=int, default=512, help="Hop length (default: 512)"
+    )
+    fft_stdout_options = _ContractArgumentParser(add_help=False, parents=[stdout_options])
+    fft_stdout_options.add_argument(
+        "--n-fft", type=int, default=2048, help="FFT size (default: 2048)"
+    )
+    fft_stdout_options.add_argument(
+        "--hop-length", type=int, default=512, help="Hop length (default: 512)"
+    )
+    mel_options = _ContractArgumentParser(add_help=False, parents=[fft_stdout_options])
+    mel_options.add_argument(
+        "--n-mels", type=int, default=128, help="Number of mel bands (default: 128)"
+    )
+    return SharedParsers(
+        common=common,
+        stdout_options=stdout_options,
+        fft_options=fft_options,
+        fft_stdout_options=fft_stdout_options,
+        mel_options=mel_options,
+    )
