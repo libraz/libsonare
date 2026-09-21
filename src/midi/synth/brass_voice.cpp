@@ -81,6 +81,12 @@ SONARE_TUNABLE(kLossCeil, 0.999f);
 // reflects more upper partials). The conical bias darkens a conical brass.
 SONARE_TUNABLE(kBellPoleSpan, 0.7f);
 SONARE_TUNABLE(kConicalDarken, 0.12f);  // extra pole for conical (horn / tuba)
+// One-flare bell: how far brightness and the bore shape move the corner, in
+// octaves. Both seeded off the mapping they replace, read at its midpoint --
+// its slope there is 2.75 octaves per unit brightness, and the conical bias is
+// 0.48 octaves down.
+SONARE_TUNABLE(kBellBrightOct, 2.75f);
+SONARE_TUNABLE(kConicalOct, 0.48f);
 
 // How much of the bell highpass's loss at the fundamental is given back, as an
 // exponent: 1 restores it exactly, 0 leaves the radiated level as the filter made
@@ -237,6 +243,8 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // reflects a touch darker, so the bore shape is remembered for the live
   // mapping.
   conical_ = params.conical;
+  // Read before the mapping below runs, because the mapping branches on it.
+  bell_cutoff_hz_ = std::max(0.0f, params.bell_cutoff_hz);
   excite_.bright01_base = params.brightness;
   // Both axes are derived here and nowhere else. A note-on copy of the mapping
   // is free to drift from the control-rate one, and a single rounding apart is
@@ -289,8 +297,16 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   rad_state_ = 0.0f;
   rad_alpha_ = 0.0f;
   rad_scale_ = 1.0f;
-  if (params.bell_radiation_hz > 0.0f) {
+  if (bell_cutoff_hz_ > 0.0f) {
+    // One flare: what the bell radiates is what it did not reflect, so the two
+    // filters run on the same pole and render() carries the gain that closes
+    // |R|^2 + |T|^2 = 1. The level and register terms below are not part of
+    // that identity and stay.
+    rad_alpha_ = lp_alpha_;
+  } else if (params.bell_radiation_hz > 0.0f) {
     rad_alpha_ = 1.0f - std::exp(-kTwoPi * std::min(params.bell_radiation_hz, 0.45f * srf) / srf);
+  }
+  if (rad_alpha_ > 0.0f) {
     const float pole = 1.0f - rad_alpha_;
     const float w0 = kTwoPi * f0 / srf;
     const float num = pole * 2.0f * std::fabs(std::sin(0.5f * w0));
@@ -528,7 +544,17 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
   // Bell radiation (gated): the part the bell did not reflect. After the shock
   // shaper, which steepens inside the bore, and before the mute, which sits on
   // the bell's mouth.
-  if (rad_alpha_ > 0.0f) {
+  if (bell_cutoff_hz_ > 0.0f) {
+    // The reflection's own smoothed pole, read live, so a moving controller can
+    // never leave the two halves of the bell on different corners. The 1/sqrt
+    // is what makes this highpass the power complement of that lowpass: for a
+    // one-pole pair, 1 - |a/(1-pz^-1)|^2 is exactly |sqrt(p)(1-z^-1)/(1-pz^-1)|^2,
+    // and the plain difference below carries p rather than sqrt(p).
+    rad_alpha_ = lp_alpha_;
+    const float pole = std::max(1.0f - rad_alpha_, 1.0e-4f);
+    rad_state_ += rad_alpha_ * (outp - rad_state_);
+    outp = rad_scale_ * (outp - rad_state_) / std::sqrt(pole);
+  } else if (rad_alpha_ > 0.0f) {
     rad_state_ += rad_alpha_ * (outp - rad_state_);
     outp = rad_scale_ * (outp - rad_state_);
   }
@@ -595,6 +621,16 @@ void BrassVoiceCore::refresh_excitation_targets() noexcept {
 }
 
 float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
+  if (bell_cutoff_hz_ > 0.0f) {
+    // One flare, named in hertz. Brightness opens it and a conical bore sits
+    // lower, both as octave offsets on the same corner rather than as biases on
+    // a pole — which is what makes the corner mean the same thing at every rate
+    // and leaves nothing for the two halves of the bell to disagree about.
+    float octaves = kBellBrightOct * (std::clamp(bright01, 0.0f, 1.0f) - 0.5f);
+    if (conical_) octaves -= kConicalOct;
+    const float f_eff = std::min(bell_cutoff_hz_ * std::exp2(octaves), 0.45f * lip_srf_);
+    return 1.0f - std::exp(-kTwoPi * f_eff / lip_srf_);
+  }
   float a = (1.0f - std::clamp(bright01, 0.0f, 1.0f)) * kBellPoleSpan;
   if (conical_) a = std::min(a + kConicalDarken, 0.95f);
   // Voiced at kLossVoicedSr like every other bell and bridge in the bank. The

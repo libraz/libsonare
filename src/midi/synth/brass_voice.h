@@ -261,6 +261,17 @@ class BrassVoiceCore {
   /// host's current CC positions without an audible glide).
   void snap_excitation() noexcept;
 
+  /// The two one-pole coefficients the bell is running on right now: the loop
+  /// reflection's and the radiation's. Both are what render() last used rather
+  /// than a recomputation, so a reader cannot agree with the mapping by sharing
+  /// it. A corner in hertz is -ln(1 - alpha) * sr / (2*pi); the conversion is
+  /// deliberately left to the caller, for the same reason.
+  struct BellCoefficients {
+    float reflect_alpha;
+    float radiate_alpha;
+  };
+  BellCoefficients bell_coefficients() const noexcept { return {lp_alpha_, rad_alpha_}; }
+
  private:
   // Recomposes the two smoothing targets from their bases and the offsets.
   void refresh_excitation_targets() noexcept;
@@ -290,6 +301,9 @@ class BrassVoiceCore {
   // Retained from start() so live brightness updates apply the same conical
   // darkening bias as the note-on seed (a conical bore reflects darker).
   bool conical_ = false;
+  // One-flare bell corner in Hz. 0 -> the two filters keep their own unrelated
+  // corners (bit-identical); above 0 both are derived from this one.
+  float bell_cutoff_hz_ = 0.0f;
   // In-loop DC blocker (the positive-feedback comb has a DC mode that does not
   // radiate, and the breath DC drives the lips, so the loop must shed the offset).
   float dc_x1_ = 0.0f;

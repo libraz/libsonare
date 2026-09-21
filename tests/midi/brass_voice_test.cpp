@@ -21,12 +21,14 @@
 
 #include "core/fft.h"
 #include "midi/midi_event.h"
+#include "midi/synth/excitation_axes.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
 #include "support/midi_render.h"
+#include "util/constants.h"
 
 namespace {
 
@@ -590,7 +592,9 @@ TEST_CASE("bore harmonic ratios against causes that are not the lip", "[.][midi]
       hi4 = std::max(hi4, x.second);
     }
     WARN(label << "  h2/h1 " << m.first << " dB (frame span " << (hi2 - lo2) << ")"
-               << "  h4/h1 " << m.second << " dB (frame span " << (hi4 - lo4) << ")");
+               << "  h4/h1 " << m.second << " dB (frame span " << (hi4 - lo4) << ")"
+               << "  centroid " << spectral_centroid(render_patch(p, note, vel, 48000), 14400)
+               << " Hz");
     return m;
   };
 
@@ -622,6 +626,186 @@ TEST_CASE("bore harmonic ratios against causes that are not the lip", "[.][midi]
     report(
         corner < 2000.0f ? "bell corner 1 kHz               " : "bell corner 13 kHz              ",
         p, 60, 100);
+  }
+}
+
+namespace {
+
+using sonare::midi::synth::BrassPatchParams;
+using sonare::midi::synth::BrassVoiceCore;
+using sonare::midi::synth::ExcitationAxes;
+using sonare::midi::synth::kAxisBrightness;
+
+/// Runs a brass core standalone and reports the two bell coefficients it ends
+/// up on. @p cc74 below 0 leaves the note at the patch's own brightness;
+/// otherwise it is sent after the note has started, which is the path a moving
+/// controller takes.
+BrassVoiceCore::BellCoefficients bell_coefficients(const BrassPatchParams& params, double sr,
+                                                   uint8_t note, float cc74 = -1.0f) {
+  std::vector<float> slab(16384, 0.0f);
+  BrassVoiceCore core;
+  core.attach(slab.data(), static_cast<int>(slab.size()));
+  core.start(params, sr, note, 100, 1u);
+  if (cc74 >= 0.0f) {
+    ExcitationAxes axes;
+    axes.brightness = cc74;
+    core.set_excitation_base(axes, kAxisBrightness);
+  }
+  // Long enough for the control ramp to settle: it is a one-pole of a few
+  // milliseconds, and this is tens of time constants at every rate tested.
+  const int samples = static_cast<int>(sr * 0.5);
+  for (int i = 0; i < samples; ++i) core.render(1.0f);
+  return core.bell_coefficients();
+}
+
+/// The hertz corner a one-pole coefficient stands for. Computed here rather
+/// than read from the engine so the check does not share its source with what
+/// it checks.
+double corner_hz(float alpha, double sr) {
+  return -std::log(1.0 - static_cast<double>(alpha)) * sr / sonare::constants::kTwoPiD;
+}
+
+BrassPatchParams bell_base_params() {
+  BrassPatchParams p;
+  p.breath_pressure = 0.8f;
+  p.vel_to_breath = 0.5f;
+  p.lip_tension = 0.5f;
+  p.lip_damping = 0.5f;
+  p.brightness = 0.5f;
+  p.damping = 0.3f;
+  p.conical = false;
+  return p;
+}
+
+}  // namespace
+
+TEST_CASE("one bell corner drives both of the bell's filters", "[midi][synth][brass]") {
+  // A bell reflects what it does not radiate, so the two filters are one
+  // object. Giving each its own corner lets a fit reach a bell that reflects
+  // and radiates at unrelated frequencies, which no flare does.
+  //
+  // This reads the coefficients rather than the sound because the sound cannot
+  // separate them: both act on the same signal. That the pairing is
+  // unreachable rather than merely unused is the grep in this unit's checks,
+  // not something a run can show.
+  BrassPatchParams dark = bell_base_params();
+  dark.bell_cutoff_hz = 1200.0f;
+  BrassPatchParams bright = bell_base_params();
+  bright.bell_cutoff_hz = 9000.0f;
+
+  const auto a = bell_coefficients(dark, 48000.0, 60);
+  const auto b = bell_coefficients(bright, 48000.0, 60);
+  INFO("reflect " << a.reflect_alpha << " -> " << b.reflect_alpha);
+  INFO("radiate " << a.radiate_alpha << " -> " << b.radiate_alpha);
+  REQUIRE(b.reflect_alpha > a.reflect_alpha * 1.5f);
+  REQUIRE(b.radiate_alpha > a.radiate_alpha * 1.5f);
+
+  // The live path. rad_alpha_ used to be written only by start(), so a bell
+  // that moves under CC74 moved one of its two halves.
+  const auto closed = bell_coefficients(dark, 48000.0, 60, 0.1f);
+  const auto opened = bell_coefficients(dark, 48000.0, 60, 0.9f);
+  INFO("live reflect " << closed.reflect_alpha << " -> " << opened.reflect_alpha);
+  INFO("live radiate " << closed.radiate_alpha << " -> " << opened.radiate_alpha);
+  REQUIRE(opened.reflect_alpha > closed.reflect_alpha * 1.5f);
+  REQUIRE(opened.radiate_alpha > closed.radiate_alpha * 1.5f);
+}
+
+TEST_CASE("the bell corner is a frequency, not a coefficient", "[midi][synth][brass]") {
+  // The coefficient is expected to differ at each rate; the corner it stands
+  // for is not. Requiring the coefficient to hold still would be green on the
+  // defect this guards and red on the fix.
+  BrassPatchParams params = bell_base_params();
+  params.bell_cutoff_hz = 2400.0f;
+  double reference = 0.0;
+  for (double sr : {24000.0, 48000.0, 96000.0}) {
+    const auto c = bell_coefficients(params, sr, 60);
+    const double reflect = corner_hz(c.reflect_alpha, sr);
+    const double radiate = corner_hz(c.radiate_alpha, sr);
+    INFO("sr " << sr << " reflect " << reflect << " Hz radiate " << radiate << " Hz");
+    REQUIRE(std::fabs(radiate / reflect - 1.0) < 0.01);
+    if (reference == 0.0)
+      reference = reflect;
+    else
+      REQUIRE(std::fabs(reflect / reference - 1.0) < 0.01);
+  }
+}
+
+TEST_CASE("the bell corner does not move with the note", "[midi][synth][brass]") {
+  // A regression guard rather than a success condition: a bell is a fixed piece
+  // of brass, and today's mapping already has no note term. It exists so that
+  // naming the corner in hertz does not quietly introduce one.
+  BrassPatchParams params = bell_base_params();
+  params.bell_cutoff_hz = 2400.0f;
+  const double low = corner_hz(bell_coefficients(params, 48000.0, 41).reflect_alpha, 48000.0);
+  const double high = corner_hz(bell_coefficients(params, 48000.0, 65).reflect_alpha, 48000.0);
+  INFO("note 41 " << low << " Hz, note 65 " << high << " Hz");
+  REQUIRE(std::fabs(high / low - 1.0) < 0.01);
+}
+
+namespace {
+
+/// Renders the trumpet with the lip valve open and the cuivre shaper off, and
+/// reports where the radiated energy sits. The bell is the only thing allowed
+/// to differ between calls.
+double bell_centroid_hz(float corner) {
+  NativeSynthPatch p = gm_fallback_patch(0, 56);
+  p.brass.brassiness = 0.0f;
+  p.cutoff_hz = 20000.0f;
+  p.brass.lip_aperture = 0.7f;
+  p.brass.bell_cutoff_hz = corner;
+  return spectral_centroid(render_patch(p, 60, 100, 48000), 14400);
+}
+
+}  // namespace
+
+TEST_CASE("closing the bell darkens the radiated sound", "[midi][synth][brass]") {
+  // The audible half, read as where the radiated energy sits rather than as one
+  // harmonic's share of the fundamental.
+  //
+  // A harmonic ratio is the wrong lens for a bell that is ONE object: what the
+  // flare stops radiating it starts reflecting, so the bore loses the partial
+  // at the same time the radiation stage stops attenuating it, and the two
+  // nearly cancel. Measured, h4/h1 moves 1.00 dB across the whole corner range
+  // and is flat above 4 kHz, which is not a quantity anything should be gated
+  // on. The centroid does not cancel, because it reads the redistribution both
+  // effects agree about.
+  //
+  // The margin is a ratio because the centroid scales with the note. Its floor
+  // is measured by the sibling case tagged [null]: repeated renders move it
+  // 0.000%, the whole velocity range 0.159%, and the hand-written shaper the
+  // bell competes with 11.3%. A factor of 1.5 is roughly half an octave — well
+  // clear of all three, and audible rather than merely detectable.
+  const double flared = bell_centroid_hz(1000.0f);  // a real flare
+  const double open = bell_centroid_hz(13000.0f);   // what a bore with no bell keeps
+  INFO("centroid " << flared << " Hz -> " << open << " Hz");
+  REQUIRE(open >= flared * 1.5);
+}
+
+TEST_CASE("radiated energy against the bell corner", "[.][midi][synth][null]") {
+  // Not a gate. Where the margin in the case above comes from, and the record
+  // that a harmonic ratio saturates while the centroid does not.
+  const double f0 = 261.6256;  // C4, note 60
+  NativeSynthPatch patch = gm_fallback_patch(0, 56);
+  patch.brass.brassiness = 0.0f;
+  patch.cutoff_hz = 20000.0f;
+  patch.brass.lip_aperture = 0.7f;
+  for (float corner : {1000.0f, 2000.0f, 4000.0f, 8000.0f, 13000.0f}) {
+    NativeSynthPatch p = patch;
+    p.brass.bell_cutoff_hz = corner;
+    const std::vector<float> tone = render_patch(p, 60, 100, 48000);
+    double h1 = 0.0, h2 = 0.0, h4 = 0.0, h8 = 0.0;
+    for (int frame = 0; frame < 4; ++frame) {
+      const std::size_t from = 14400 + static_cast<std::size_t>(frame) * 5269;
+      const std::vector<double> ps = power_spectrum(tone, from);
+      h1 += harmonic_power(ps, f0, 1);
+      h2 += harmonic_power(ps, f0, 2);
+      h4 += harmonic_power(ps, f0, 4);
+      h8 += harmonic_power(ps, f0, 8);
+    }
+    const auto db = [](double a, double b) { return 10.0 * std::log10(a / b + 1e-30); };
+    WARN(corner << " Hz  h2/h1 " << db(h2, h1) << "  h4/h1 " << db(h4, h1) << "  h8/h1 "
+                << db(h8, h1) << "  rms " << 20.0 * std::log10(rms(tone, 14400, 38400) + 1e-30)
+                << "  centroid " << spectral_centroid(tone, 14400) << " Hz");
   }
 }
 
