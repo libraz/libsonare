@@ -77,6 +77,27 @@ inline float noise_gain_at_rate(double sample_rate) noexcept {
   return static_cast<float>(std::sqrt(sample_rate / kLossVoicedSr));
 }
 
+/// Exact rate correction for noise shaped by ONE one-pole lowpass whose
+/// output goes straight to the mix (no further resonator downstream): holds
+/// that pole's own output RMS at @p cutoff_hz equal to what it was at
+/// kLossVoicedSr, for any corner-to-Nyquist ratio.
+///
+/// White noise of unit per-sample variance through y += a(x-y) has output
+/// variance a/(2-a). noise_gain_at_rate assumes a is small (the corner sits
+/// far below Nyquist) and is only asymptotically correct; this holds exactly
+/// at any rate, including a low sample rate where the corner is a sizeable
+/// fraction of Nyquist. Exactly 1 at kLossVoicedSr, so a 48 kHz render is
+/// still bit-identical.
+inline float onepole_noise_rate_gain(float cutoff_hz, double sample_rate) noexcept {
+  if (!(sample_rate > 0.0) || !(cutoff_hz > 0.0f)) return 1.0f;
+  const auto pole_variance = [](float fc, double sr) noexcept {
+    const float a =
+        std::clamp(1.0f - std::exp(-constants::kTwoPi * fc / static_cast<float>(sr)), 0.01f, 1.0f);
+    return a / (2.0f - a);
+  };
+  return std::sqrt(pole_variance(cutoff_hz, kLossVoicedSr) / pole_variance(cutoff_hz, sample_rate));
+}
+
 /// A solved one-pole loss filter: the feedback coefficient and the gain in
 /// front of it, in the form StringLoop::configure_filter() takes.
 struct StringLoopFilter {

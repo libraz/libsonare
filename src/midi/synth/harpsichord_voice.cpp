@@ -308,12 +308,16 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
   pluck_span_ = std::max({eight_a_.inject_len, eight_b_.inject_len, four_.inject_len});
 
   // Mechanism. Both bursts are inert at 0 and are skipped rather than scaled.
-  chiff_amount_ = std::clamp(params.pluck_noise, 0.0f, 1.0f);
+  // Each is a single one-pole lowpass whose output goes straight to the mix,
+  // so the exact per-pole correction applies (not the PSD approximation).
+  chiff_amount_ =
+      std::clamp(params.pluck_noise, 0.0f, 1.0f) * onepole_noise_rate_gain(kChiffCutoffHz, sr);
   chiff_len_ = std::max(1, static_cast<int>(kChiffMs * 0.001f * static_cast<float>(sr)));
   chiff_pos_ = chiff_amount_ > 0.0f ? 0 : chiff_len_;
   chiff_lp_ = 0.0f;
   chiff_alpha_ = onepole_alpha(kChiffCutoffHz, sr);
-  jack_amount_ = std::clamp(params.jack_noise, 0.0f, 1.0f);
+  jack_amount_ =
+      std::clamp(params.jack_noise, 0.0f, 1.0f) * onepole_noise_rate_gain(kJackCutoffHz, sr);
   jack_len_ = std::max(1, static_cast<int>(kJackMs * 0.001f * static_cast<float>(sr)));
   jack_pos_ = jack_len_;  // inactive until release()
   jack_lp_ = 0.0f;
@@ -367,9 +371,12 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
 
   // The soundboard's diffuse field. Off by default and skipped entirely there,
   // so a patch that does not ask for one renders exactly as it did before.
+  // The lowpass-of-a-highpass is a two-pole cascade, not the single pole
+  // onepole_noise_rate_gain solves exactly -> the PSD-in-a-fixed-band form.
   diffuse_level_ = params.board_diffuse_db <= kDiffuseOffDb
                        ? 0.0f
-                       : std::pow(10.0f, std::min(0.0f, params.board_diffuse_db) / 20.0f);
+                       : std::pow(10.0f, std::min(0.0f, params.board_diffuse_db) / 20.0f) *
+                             noise_gain_at_rate(sr);
   diffuse_env_ = 0.0f;
   diffuse_lp_ = 0.0f;
   diffuse_top_ = 0.0f;

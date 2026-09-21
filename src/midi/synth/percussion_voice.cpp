@@ -6,6 +6,7 @@
 
 #include "midi/synth/bessel.h"
 #include "midi/synth/pitch.h"
+#include "midi/synth/string_loop.h"
 #include "util/constants.h"
 #include "util/tunable.h"
 
@@ -220,6 +221,9 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   noise_coeff_ =
       std::exp(-1.0f / (std::max(1.0f, params.noise_decay_ms) * 0.001f * static_cast<float>(sr)));
   noise_output_ = params.noise_output;
+  // The highpass output's broadband energy is already rate-invariant; the
+  // lowpass and bandpass outputs are fixed-Hz bands and need the law.
+  noise_rate_gain_ = noise_output_ == SynthFilterOutput::kHighpass ? 1.0f : noise_gain_at_rate(sr);
   noise_filter_.prepare(sr);
   noise_filter_.set(params.noise_cutoff_hz, std::max(0.5f, params.noise_q));
   noise_filter_.reset();
@@ -322,6 +326,8 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   // — no draws, no state advance).
   phisem_beans_ = std::max(0.0f, params.phisem_beans);
   phisem_sr_ = static_cast<float>(sr);
+  // Both bandpass consumers of the particle draw are fixed-Hz bands.
+  phisem_bp_gain_ = noise_gain_at_rate(sr);
   phisem_prob_index_ = 0;
   phisem_noise_index_ = 0;
   phisem_sound_level_ = 0.0f;
@@ -440,7 +446,8 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
   }
   const float noise_env = noise_level_ + burst_level_;
   if (noise_env > 1.0e-5f) {
-    const float burst = noise_.bipolar_at(kNoiseIndexBase + noise_index_++) * noise_env;
+    const float burst =
+        noise_.bipolar_at(kNoiseIndexBase + noise_index_++) * noise_env * noise_rate_gain_;
     noise_level_ *= noise_coeff_;
     burst_level_ *= burst_coeff_;
     const TptSvf::Outputs out = noise_filter_.process(burst);
@@ -491,14 +498,14 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
         const float c = phisem_res_hz_ * (1.0f + phisem_glide_state_);
         phisem_filter_.set(std::clamp(c, 20.0f, 0.45f * phisem_sr_), phisem_res_q_);
       }
-      particle = phisem_filter_.process(particle).bp;
+      particle = phisem_filter_.process(particle * phisem_bp_gain_).bp;
     }
     mix += particle;
     // The body is driven by the collisions themselves, not by the band above
     // it: the two are parallel radiation paths from one excitation, and
     // cascading them would leave the gourd with nothing left to resonate.
     if (phisem_body_gain_ > 0.0f) {
-      const float b = phisem_body_.process(raw).bp;
+      const float b = phisem_body_.process(raw * phisem_bp_gain_).bp;
       mix += phisem_body2_.process(b).bp * phisem_body_gain_;
     }
   }

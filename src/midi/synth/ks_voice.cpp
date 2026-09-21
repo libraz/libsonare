@@ -299,8 +299,10 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
 
   // Key-off / damper noise. 0 disables it (release() never arms the burst, output
   // bit-identical). Precompute the burst length and its lowpass corner; the burst
-  // itself is triggered at note-off.
-  keyoff_amount_ = std::clamp(params.keyoff_noise, 0.0f, 1.0f);
+  // itself is triggered at note-off. A single one-pole lowpass straight to the
+  // mix -> the exact per-pole correction, not the PSD approximation.
+  keyoff_amount_ =
+      std::clamp(params.keyoff_noise, 0.0f, 1.0f) * onepole_noise_rate_gain(kKsKeyoffCutoffHz, sr);
   keyoff_len_ = std::max(1, static_cast<int>(kKsKeyoffMs * 0.001f * static_cast<float>(sr)));
   keyoff_pos_ = keyoff_len_;  // inactive until release()
   keyoff_lp_ = 0.0f;

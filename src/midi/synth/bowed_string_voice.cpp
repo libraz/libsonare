@@ -217,7 +217,9 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
                                                     static_cast<float>(sr))
                         : 0.0f;
 
-  rosin_level_ = std::clamp(params.rosin, 0.0f, 1.0f) * kRosinDepth;
+  // Rosin jitter is a per-sample draw voiced at kLossVoicedSr, feeding the
+  // resonant string loop -> carries the noise law's gain.
+  rosin_level_ = std::clamp(params.rosin, 0.0f, 1.0f) * kRosinDepth * noise_gain_at_rate(sr);
 
   // Elasto-plastic friction (off by default -> render() keeps the static-table
   // branch bit-identical). Derive the bristle constants from the same force /

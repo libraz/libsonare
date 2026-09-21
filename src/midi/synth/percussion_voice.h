@@ -442,6 +442,10 @@ class PercussionVoiceCore {
   float noise_coeff_ = 0.0f;
   TptSvf noise_filter_;
   SynthFilterOutput noise_output_ = SynthFilterOutput::kBandpass;
+  // noise_gain_at_rate(sr) for the lowpass/bandpass outputs (a fixed-Hz band
+  // loses level as sr rises); 1 for the highpass output, whose broadband
+  // energy is already rate-invariant and would be OVER-corrected by the law.
+  float noise_rate_gain_ = 1.0f;
 
   // Burst train: a second envelope over the SAME noise source and the same
   // band, summed with the tail before the filter — one source and one filter,
@@ -520,6 +524,10 @@ class PercussionVoiceCore {
   float phisem_glide_state_ = 0.0f;
   float phisem_glide_coeff_ = 0.0f;
   float phisem_sr_ = 48000.0f;
+  // noise_gain_at_rate(sr): both the resonant-band particle path and the
+  // body bandpass are fixed-Hz filters; the raw (unfiltered) particle path
+  // does not use this.
+  float phisem_bp_gain_ = 1.0f;
   uint64_t phisem_prob_index_ = 0;
   uint64_t phisem_noise_index_ = 0;
   TptSvf phisem_filter_;
