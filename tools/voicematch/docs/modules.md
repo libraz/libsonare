@@ -69,10 +69,10 @@ The division of labour, until that decision is made:
 python -m pytest tools/voicematch/
 ```
 
-One file per module, and none of them renders anything.
+One file per module — or, where a module is covered from several angles, one file per angle — and none of them renders anything.
 
 - `test_toneclass.py` covers everything that is not a stiff string — the measured partial series, the movement set, audibility weighting, the drum pitch and its overshoot, the band-validity rule, the capture's measured bandwidth and the low-end balance — all on synthesised signals, since the captured corpora cannot be committed and a test that needed one would be a test that never runs.
-- `test_autofit.py` covers the range rules, loss normalisation, stage classification, write-back path translation and the two guards that prove a probe reached the code.
+- `test_autofit_*.py` cover the fitter one angle at a time: `search` the range rules, the stage classification, a spec's weights and termination; `loss` the normalisation and the ceiling a residual is scored under; `drums` the kit terms and their write-back; `corpus` the captured probe, the room it carries and the per-note window; `tree` the write-back path translation, the build directory and startup; `metrics` what is read off a rendered note; `run` the guards that prove a probe reached the code and the tree state it compiled. `autofit_test_fixtures.py` holds only the builders more than one of them reaches.
 - `test_diagnose.py` gives every verdict a case, including the two that look identical when only improvement is measured.
 - `test_profile.py` covers the measurements that are not tied to one instrument, the captured-to-model note map, and the dimension that can see gain.
 - `test_phrases.py` builds every set for all 128 programs, because a generic set fills its notes in from a register table and the way that fails is a note number MIDI has no room for — which renders as silence on one side and a transposition on the other, and reads as a voicing difference. It also holds the drum channel to the kit set alone.
