@@ -4,9 +4,8 @@
 /// @brief Seeded, deterministic per-voice variation ("analog" detune / drift /
 ///        pan scatter) for the voice toolkit.
 ///
-/// Determinism contract (§0 of the instrument build plan): no RNG, no wall
-/// clock. All variation derives from a (voice_index, note, age) seed through a
-/// fixed integer hash, so the same project bounces bit-identically within one
+/// Determinism contract: no RNG, no wall clock. All variation derives from a (voice_index, note,
+/// age) seed through a fixed integer hash, so the same project bounces bit-identically within one
 /// build while distinct voices still decorrelate.
 
 #include <cstdint>
