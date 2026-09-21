@@ -497,6 +497,7 @@ TEST_CASE("clamp_synth_patch sanitizes every field a bare std::clamp leaves NaN-
   // Clamped but NaN-transparent (Group B): std::clamp alone let NaN through.
   p.amp_env.delay_ms = nan;
   p.filter_env.sustain = nan;
+  p.piano.strike_position = nan;
 
   const NativeSynthPatch clamped = clamp_synth_patch(p);
 
@@ -505,6 +506,10 @@ TEST_CASE("clamp_synth_patch sanitizes every field a bare std::clamp leaves NaN-
   REQUIRE(clamped.pipe_organ.keytrack == 0.0f);
   REQUIRE(clamped.amp_env.delay_ms == 0.0f);    // default 0, inside [0, 5000]
   REQUIRE(clamped.filter_env.sustain == 0.7f);  // default 0.7, inside [0, 1]
+  // A fallback is the field's own struct default, read from the struct rather
+  // than spelled again here: a second copy of the value is what lets the two
+  // drift, and on a strike point the drift is audible.
+  REQUIRE(clamped.piano.strike_position == sonare::midi::synth::PianoPatchParams{}.strike_position);
 }
 
 TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi][synth]") {

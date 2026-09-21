@@ -1174,7 +1174,7 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.piano.dispersion =
       std::clamp(patch_clamp_detail::sanitize(p.piano.dispersion, 1.0f), 0.0f, 1.0f);
   p.piano.strike_position =
-      std::clamp(patch_clamp_detail::sanitize(p.piano.strike_position, 0.12f), 0.0f, 0.5f);
+      std::clamp(patch_clamp_detail::sanitize(p.piano.strike_position, 0.085f), 0.0f, 0.5f);
   p.piano.hammer_exponent =
       std::clamp(patch_clamp_detail::sanitize(p.piano.hammer_exponent, 2.5f), 1.5f, 4.0f);
   p.piano.hammer_contact_ms =
