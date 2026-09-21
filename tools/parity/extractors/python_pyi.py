@@ -240,6 +240,8 @@ _SCANNED: tuple[str, ...] = (
     "_features.py",
     "_features_core.py",
     "_features_metering.py",
+    "_features_pitch.py",
+    "_features_segmentation.py",
     "_features_transforms.py",
     "_engine_conversions.py",
     "_engine_io.py",

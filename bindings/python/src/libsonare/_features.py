@@ -20,6 +20,8 @@ from ._features_metering import (
 from ._features_metering import (
     _waveform_peaks_from_c as _waveform_peaks_from_c,
 )
+from ._features_pitch import *  # noqa: F403
+from ._features_segmentation import *  # noqa: F403
 from ._features_transforms import *  # noqa: F403
 from ._features_transforms import (
     _cqt_result_from_c as _cqt_result_from_c,
