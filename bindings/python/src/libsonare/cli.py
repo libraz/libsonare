@@ -162,6 +162,7 @@ from ._cli_mastering import *  # noqa: F403
 from ._cli_mastering import (
     _EQ_ENUM_BOUNDS as _EQ_ENUM_BOUNDS,
 )
+from ._cli_mixing import *  # noqa: F403
 from ._cli_options import (
     _FALSE_FLAG_LITERALS as _FALSE_FLAG_LITERALS,
 )

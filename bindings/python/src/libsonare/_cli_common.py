@@ -83,6 +83,28 @@ def _strict_json_dumps(value: object, **kwargs: Any) -> str:
     return json.dumps(_sanitize_json_value(value), allow_nan=False, **kwargs)
 
 
+def _json_key_to_snake_case(key: str) -> str:
+    """Rewrite one camelCase JSON key as snake_case ("gainToMatchDb" -> "gain_to_match_db")."""
+    out: list[str] = []
+    for char in key:
+        if char.isupper():
+            if out:
+                out.append("_")
+            out.append(char.lower())
+        else:
+            out.append(char)
+    return "".join(out)
+
+
+def _json_keys_to_snake_case(value: Any) -> Any:
+    """Recursively re-key a parsed JSON payload from camelCase to snake_case."""
+    if isinstance(value, dict):
+        return {_json_key_to_snake_case(k): _json_keys_to_snake_case(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_keys_to_snake_case(item) for item in value]
+    return value
+
+
 def _color_enabled() -> bool:
     """Whether human-readable CLI output may include ANSI color sequences."""
     return "NO_COLOR" not in os.environ and sys.stdout.isatty() and sys.stderr.isatty()

@@ -364,7 +364,7 @@ def test_mixing_preset_uses_stable_default(monkeypatch, capsys) -> None:
     unreachable. What the contract actually promises is this end-to-end path.
     """
     import libsonare
-    from libsonare import _cli_mastering, cli
+    from libsonare import _cli_mixing, cli
 
     calls: list[str] = []
     monkeypatch.setattr(
@@ -373,7 +373,7 @@ def test_mixing_preset_uses_stable_default(monkeypatch, capsys) -> None:
         lambda name: calls.append(name) or "{}",
     )
     args = cli._build_parser().parse_args(["mixing-preset"])
-    assert _cli_mastering.cmd_mixing_preset(args) == 0
+    assert _cli_mixing.cmd_mixing_preset(args) == 0
     assert calls == ["vocalReverbSend"]
     assert capsys.readouterr().out == "{}\n"
 
