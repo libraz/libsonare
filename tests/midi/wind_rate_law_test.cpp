@@ -39,6 +39,7 @@ using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::noise_gain_at_rate;
 using sonare::midi::synth::note_to_hz;
+using sonare::midi::synth::onepole_noise_rate_gain;
 using sonare::midi::synth::SynthEngineMode;
 using sonare::test::event;
 
@@ -147,6 +148,31 @@ TEST_CASE("noise_gain_at_rate is the identity at the voiced rate and holds power
   CHECK(noise_gain_at_rate(2.0 * kLossVoicedSr) == static_cast<float>(std::sqrt(2.0)));
   CHECK(noise_gain_at_rate(0.5 * kLossVoicedSr) == static_cast<float>(std::sqrt(0.5)));
   CHECK(noise_gain_at_rate(0.0) == 1.0f);
+}
+
+TEST_CASE(
+    "onepole_noise_rate_gain is the identity at the voiced rate and diverges from "
+    "noise_gain_at_rate where the corner is a sizeable fraction of Nyquist",
+    "[midi][synth][rate_law]") {
+  // Bit equality at the voiced rate, for every shipped corner: KS keyoff,
+  // harpsichord chiff and jack noise.
+  for (const float fc : {5200.0f, 2200.0f, 1500.0f}) {
+    CHECK(onepole_noise_rate_gain(fc, kLossVoicedSr) == 1.0f);
+  }
+  CHECK(onepole_noise_rate_gain(2200.0f, 0.0) == 1.0f);
+  CHECK(onepole_noise_rate_gain(0.0f, 48000.0) == 1.0f);
+  CHECK(onepole_noise_rate_gain(-5.0f, 48000.0) == 1.0f);
+
+  // Output variance falls as the rate rises, so the compensation rises with it.
+  CHECK(onepole_noise_rate_gain(2200.0f, 2.0 * kLossVoicedSr) > 1.0f);
+  CHECK(onepole_noise_rate_gain(2200.0f, 0.5 * kLossVoicedSr) < 1.0f);
+
+  // 5200 Hz is 43% of Nyquist at 24 kHz and the two forms part company there
+  // (0.037); 200 Hz is far below it and they agree (6e-5). Both sides, so the
+  // divergence is the corner's doing rather than a blanket disagreement.
+  const float approx_24k = noise_gain_at_rate(24000.0);
+  CHECK(std::abs(onepole_noise_rate_gain(5200.0f, 24000.0) - approx_24k) > 0.02f);
+  CHECK(std::abs(onepole_noise_rate_gain(200.0f, 24000.0) - approx_24k) < 0.0005f);
 }
 
 namespace {
