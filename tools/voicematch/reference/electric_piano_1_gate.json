@@ -3,7 +3,13 @@
   "timbre": "gm005",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-02T06:37:50+00:00",
-  "recorded_utc": "2026-09-20T20:59:38+00:00",
+  "recorded_utc": "2026-09-21T17:15:56+00:00",
+  "_recorded_while_stale": "model_build.stale is true and does not apply to this voice. The flag is whole-tree: it compares the dylib against the newest source anywhere in src/, and at recording time that was concurrent work on the wind engines, the Karplus-Strong sympathetic path and the effects inserts. This voice renders through fm_voice.{cpp,h} and gm_fallback_programs_variations.h, all three older than the dylib, and the FM path never enters the branch the sympathetic edit touches. The bound it replaces was a genuine fossil: recorded through a library that predated 2babd0d2, it read tnr 3.075/11.212/19.245 where the same voice measures 12.48/12.48/24.00 today. Re-recording required deleting the old tnr bound by hand first, because _keep_the_tighter keeps whichever bound is numerically tighter and a fossil recorded through a quieter library is always the tighter one.",
+  "model_build": {
+    "built_utc": "2026-09-21T12:00:43Z",
+    "newest_source_utc": "2026-09-21T17:14:20Z",
+    "stale": true
+  },
   "reference_spread": {},
   "bounds": {
     "stretch": {
@@ -25,9 +31,9 @@
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 3.075,
-      "abs_median": 11.212,
-      "p90": 19.245,
+      "median": 15.6,
+      "abs_median": 15.6,
+      "p90": 30.005,
       "rows": 45
     },
     "damper": {
