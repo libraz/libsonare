@@ -150,9 +150,9 @@ export interface WasmProject {
     events: ReadonlyArray<ProjectMidiEvent | readonly [number, number, number]>,
   ) => void;
   importSmf: (data: Uint8Array) => number;
-  exportSmf: () => Uint8Array;
+  exportSmf: () => Uint8Array<ArrayBuffer>;
   importClipFile: (data: Uint8Array) => number;
-  exportClipFile: () => Uint8Array;
+  exportClipFile: () => Uint8Array<ArrayBuffer>;
   setProgram: (clipId: number, program: number, bank: number) => void;
   setProgramOnChannel: (
     clipId: number,

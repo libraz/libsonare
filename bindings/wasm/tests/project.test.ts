@@ -834,6 +834,12 @@ describe('Sonare WASM Project', () => {
       project.setProgramOnChannel(clipId, 0, 3, 24, 0x0123);
       const smf = project.exportSmf();
       expect(smf[0]).toBe(0x4d);
+      // The export goes straight into a Blob, which is how a browser consumer
+      // offers it as a download. A Uint8Array over an unspecified buffer is not
+      // a BlobPart, so this assignment is what stops the declared return type
+      // losing its buffer parameter and sending every caller through a copy.
+      const downloadable: BlobPart = smf;
+      expect(new Blob([downloadable]).size).toBe(smf.byteLength);
       const bytes = Array.from(smf).join(',');
       expect(bytes).toContain('192,42');
       expect(bytes).toContain('195,24');

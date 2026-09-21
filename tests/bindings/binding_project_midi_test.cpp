@@ -970,6 +970,47 @@ TEST_CASE("project C surface preserves SMF SysEx through project serialization",
   sonare_project_destroy(project);
 }
 
+TEST_CASE("replacing a clip's event list drops the SysEx the import kept", "[project]") {
+  // Which operation loses a GS setup block is the question a caller actually
+  // has, and the two halves answer it together: import and export preserve the
+  // payload, and one set_midi_events call destroys it, because the flat event
+  // POD carries no handle to refer to it by. Asserting only the second half
+  // would agree with a build that never carried the SysEx at all.
+  const std::vector<uint8_t> smf = make_project_sysex_smf();
+
+  const auto exported_holds_sysex = [](SonareProject* p) {
+    uint8_t* bytes = nullptr;
+    size_t len = 0;
+    REQUIRE(sonare_project_export_smf(p, &bytes, &len) == SONARE_OK);
+    REQUIRE(bytes != nullptr);
+    const auto reimported = sonare::midi::import_smf(bytes, len);
+    sonare_free_bytes(bytes);
+    REQUIRE(reimported.ok());
+    REQUIRE(reimported.clips.size() == 1);
+    for (const auto& event : reimported.clips[0].events()) {
+      if (event.ump.sysex_handle != 0) return true;
+    }
+    return false;
+  };
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  uint32_t first_clip = 0;
+  REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), &first_clip) == SONARE_OK);
+  REQUIRE(first_clip != 0);
+  REQUIRE(exported_holds_sysex(project));
+
+  SonareMidiEventPod events[2]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 64, 100, &events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(1.0, 0, 0, 64, 0, &events[1]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, first_clip, events, 2) == SONARE_OK);
+
+  REQUIRE_FALSE(exported_holds_sysex(project));
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface rejects saturated SysEx handle allocation", "[project]") {
   const std::vector<uint8_t> smf = make_project_sysex_smf();
 

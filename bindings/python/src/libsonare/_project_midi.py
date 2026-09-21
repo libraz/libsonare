@@ -65,6 +65,14 @@ class _ProjectMidiMixin:
 
         Each event is ``(ppq, data0, data1)`` (the first two UMP-1.0 words of a
         channel-voice message; stored opaquely). Pass an empty sequence to clear.
+
+        Drops the clip's SysEx, which :meth:`import_smf` and :meth:`export_smf`
+        both keep. The payloads sit beside the event list and are reached by a
+        handle this triple does not carry, so replacing the list leaves nothing
+        referring to them: a GS setup block that survives an import and an
+        export byte for byte is gone after one call here. Nothing reads the
+        handles back either, so a caller that must keep the setup edits the
+        exported file rather than the event list.
         """
         rows = list(events)
         count = len(rows)

@@ -268,6 +268,14 @@ export interface ProjectMidiClipResult {
  * project side store; it is not constructible through this flat event object.
  * The tuple form `[ppq, data0, data1]` is also accepted.
  */
+/**
+ * One MIDI event in a clip's list: a position plus the first two UMP words.
+ *
+ * Channel-voice messages only. A clip's SysEx payloads live beside the event
+ * list and are reached by a handle this type does not carry — they survive
+ * `Project.importSmf`, `Project.exportSmf` and project serialization, and are
+ * destroyed by `Project.setMidiEvents`.
+ */
 export interface ProjectMidiEvent {
   ppq: number;
   data0: number;

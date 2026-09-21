@@ -126,6 +126,14 @@ typedef struct {
 /// @brief Replaces a MIDI clip's entire event list in the content store. Pass
 ///        @p count == 0 to clear. Events are stored opaquely (see
 ///        @ref SonareMidiEventPod).
+/// @warning Drops the clip's SysEx, which import and export both keep. The
+///          payloads are reached by a handle on the core's own event record and
+///          @ref SonareMidiEventPod carries none, so replacing the list leaves
+///          nothing referring to them: a GS setup block that survives
+///          @ref sonare_project_import_smf and @ref sonare_project_export_smf
+///          byte for byte is gone after one call here. No entry point reads the
+///          handles back, so a caller that must keep the SysEx edits the
+///          exported file rather than the event list.
 SonareError sonare_project_set_midi_events(SonareProject* project, uint32_t clip_id,
                                            const SonareMidiEventPod* events, size_t count);
 

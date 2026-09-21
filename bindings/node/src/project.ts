@@ -934,6 +934,14 @@ export class Project {
    * `{ ppq, data0, data1? }` (or a `[ppq, data0, data1]` tuple); pass an empty
    * array to clear. `data0`/`data1` are the first two UMP-1.0 words of a
    * channel-voice message (stored opaquely).
+   *
+   * Drops the clip's SysEx, which {@link importSmf} and {@link exportSmf} both
+   * keep. The payloads sit beside the event list and are reached by a handle
+   * `ProjectMidiEvent` does not carry, so replacing the list leaves nothing
+   * referring to them: a GS setup block that survives an import and an export
+   * byte for byte is gone after one call here. Nothing reads the handles back
+   * either, so a caller that must keep the setup edits the exported file
+   * rather than the event list.
    */
   setMidiEvents(
     clipId: number,

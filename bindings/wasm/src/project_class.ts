@@ -579,7 +579,18 @@ export class Project {
     this.native.setMaxHistoryBytes(bytes);
   }
 
-  /** Replace a MIDI clip's entire event list. */
+  /**
+   * Replace a MIDI clip's entire event list.
+   *
+   * @remarks
+   * Drops the clip's SysEx, which {@link importSmf} and {@link exportSmf} both
+   * keep. A clip's SysEx payloads sit beside the event list and are reached by
+   * a handle {@link ProjectMidiEvent} does not carry, so replacing the list
+   * leaves nothing referring to them: a GS setup block that survives an import
+   * and an export byte for byte is gone after one call here. Nothing reads the
+   * handles back either, so a caller that must keep the setup edits the
+   * exported file rather than the event list.
+   */
   setMidiEvents(
     clipId: number,
     events: ReadonlyArray<ProjectMidiEvent | readonly [number, number, number]>,
@@ -597,8 +608,15 @@ export class Project {
     return this.native.importSmf(data);
   }
 
-  /** Export the project's tempo map + MIDI clips to an SMF byte buffer. */
-  exportSmf(): Uint8Array {
+  /**
+   * Export the project's tempo map + MIDI clips to an SMF byte buffer.
+   *
+   * @remarks
+   * The buffer owns a plain `ArrayBuffer`, which is what the `Blob` / `File`
+   * constructors accept — so `new Blob([project.exportSmf()])` compiles without
+   * a copy through `new Uint8Array(...)` first.
+   */
+  exportSmf(): Uint8Array<ArrayBuffer> {
     return this.native.exportSmf();
   }
 
@@ -616,8 +634,12 @@ export class Project {
    * Export the project's tempo map + MIDI clips to a MIDI 2.0 Clip File
    * (`SMF2CLIP`) byte buffer. MIDI 2.0-only events are written without loss —
    * prefer this over {@link exportSmf} when MIDI 2.0 fidelity matters.
+   *
+   * @remarks
+   * As with {@link exportSmf}, the buffer owns a plain `ArrayBuffer` and goes
+   * straight into a `Blob`.
    */
-  exportClipFile(): Uint8Array {
+  exportClipFile(): Uint8Array<ArrayBuffer> {
     return this.native.exportClipFile();
   }
 

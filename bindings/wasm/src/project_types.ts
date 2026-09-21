@@ -485,6 +485,15 @@ export interface ProjectMidiClipResult {
 }
 
 /** Flat MIDI event accepted by {@link Project.setMidiEvents}. */
+/**
+ * One MIDI event in a clip's list: a position plus the first two UMP words.
+ *
+ * @remarks
+ * Channel-voice messages only. A clip's SysEx payloads live beside the event
+ * list and are reached by a handle this type does not carry — they survive
+ * {@link Project.importSmf}, {@link Project.exportSmf} and project
+ * serialization, and are destroyed by {@link Project.setMidiEvents}.
+ */
 export interface ProjectMidiEvent {
   ppq: number;
   data0: number;
