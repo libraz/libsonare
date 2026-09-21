@@ -340,7 +340,15 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   random_value = seq.bipolar_at(103);
 
   // Body/formant resonance + seeded stereo scatter (realism polish).
-  body.start(p.body, sample_rate, base_freq_hz, p.body_mix);
+  // corpus_scale/corpus_tilt_hz live in the bowed_string engine block (never
+  // on the C ABI), so a patch using BodyType::kViolin without being the
+  // bowed-string engine itself (pizzicato, the bowed pad) must not inherit
+  // them: those patches' bowed_string section is blanked to zero by
+  // strip_unvoiced_sections(), and 0 is not the identity for corpus_scale.
+  const bool bowed_corpus = p.mode == SynthEngineMode::kBowedString;
+  body.start(p.body, sample_rate, base_freq_hz, p.body_mix,
+             bowed_corpus ? p.bowed_string.corpus_scale : 1.0f,
+             bowed_corpus ? p.bowed_string.corpus_tilt_hz : 0.0f);
   pan_spread_units = 500.0f * p.stereo_spread * seq.bipolar_at(104);
   // A keymap zone places its sample, which is a constant for the voice's life
   // and so joins the scatter rather than the per-sample pan sum.

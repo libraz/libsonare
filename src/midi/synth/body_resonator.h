@@ -70,10 +70,14 @@ class BodyResonator {
   /// Configures the bank from an explicit mode list (drum shells and other
   /// data-free voicings own their specs). @p mix in [0,1] blends the
   /// resonated path over the dry voice. Up to kMaxModes specs are used.
-  void start_specs(const Spec* specs, int count, double sample_rate, float mix) noexcept {
+  /// @p corpus_tilt_hz is a one-pole cutoff on the dry floor; 0 (default)
+  /// bypasses it so every existing caller stays bit-identical.
+  void start_specs(const Spec* specs, int count, double sample_rate, float mix,
+                   float corpus_tilt_hz = 0.0f) noexcept {
     const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
     mix_ = std::clamp(mix, 0.0f, 1.0f);
     num_modes_ = 0;
+    configure_tilt(sr, corpus_tilt_hz);
     if (mix_ <= 0.0f || count <= 0 || specs == nullptr) return;
     count = std::min(count, kMaxModes);
     for (int k = 0; k < count; ++k) {
@@ -100,10 +104,15 @@ class BodyResonator {
 
   /// Configures the bank. @p note_hz tracks the played note (kWoodTube);
   /// @p mix in [0,1] blends the resonated path over the dry voice.
-  void start(BodyType type, double sample_rate, float note_hz, float mix) noexcept {
+  /// @p corpus_scale uniformly scales the mode bank's centre frequencies
+  /// (kViolin only; identity at 1.0, its default). @p corpus_tilt_hz is the
+  /// dry-floor cutoff passed through to start_specs().
+  void start(BodyType type, double sample_rate, float note_hz, float mix, float corpus_scale = 1.0f,
+             float corpus_tilt_hz = 0.0f) noexcept {
     if (type == BodyType::kNone) {
       mix_ = std::clamp(mix, 0.0f, 1.0f);
       num_modes_ = 0;
+      configure_tilt(sample_rate > 0.0 ? sample_rate : 48000.0, corpus_tilt_hz);
       return;
     }
     std::array<Spec, kMaxModes> specs{};
@@ -117,7 +126,7 @@ class BodyResonator {
         count = 4;
         break;
       case BodyType::kViolin:
-        count = fill_from_modal(specs, kViolinBank, kViolinLevel);
+        count = fill_from_modal(specs, kViolinBank, kViolinLevel, corpus_scale);
         break;
       case BodyType::kWoodTube:
         specs = {{{std::max(20.0f, note_hz), 0.08f, 1.2f},
@@ -148,13 +157,22 @@ class BodyResonator {
         break;
     }
 
-    start_specs(specs.data(), count, sample_rate, mix);
+    start_specs(specs.data(), count, sample_rate, mix, corpus_tilt_hz);
   }
 
   bool active() const noexcept { return num_modes_ > 0; }
 
-  /// One sample through the bank: dry + mixed body response.
+  /// One sample through the bank: (tilted) dry floor + mixed body response.
   float process(float x) noexcept {
+    // Real radiativity keeps a broadband floor between the modes, but that
+    // floor falls above a few kHz where this dry path was flat. Branch past
+    // the filter at the identity (tilt off) rather than run it at alpha = 1:
+    // a one-pole update is not bit-identical to a plain pass-through.
+    float floor_x = x;
+    if (tilt_active_) {
+      floor_y_ += tilt_alpha_ * (x - floor_y_);
+      floor_x = floor_y_;
+    }
     const float bp_in = x - x2_;
     x2_ = x1_;
     x1_ = x;
@@ -166,7 +184,7 @@ class BodyResonator {
       mode.y1 = y;
       body += y;
     }
-    return x + mix_ * body;
+    return floor_x + mix_ * body;
   }
 
   void reset() noexcept {
@@ -176,10 +194,21 @@ class BodyResonator {
     }
     x1_ = 0.0f;
     x2_ = 0.0f;
+    floor_y_ = 0.0f;
     num_modes_ = 0;
   }
 
  private:
+  /// Sets up the dry-floor one-pole from a cutoff in Hz; 0 leaves it inactive
+  /// so process() takes the branch that skips it entirely.
+  void configure_tilt(double sample_rate, float corpus_tilt_hz) noexcept {
+    tilt_active_ = corpus_tilt_hz > 0.0f;
+    tilt_alpha_ = tilt_active_ ? 1.0f - std::exp(-sonare::constants::kTwoPi * corpus_tilt_hz /
+                                                 static_cast<float>(sample_rate))
+                               : 0.0f;
+    floor_y_ = 0.0f;
+  }
+
   // t60 (s) of a two-pole resonator of quality factor q at frequency f:
   // Q = f / BW and BW ≈ ln(1000) / (pi * t60), so t60 = (ln(1000)/pi) * q / f.
   static constexpr float kT60SecPerQHz = 2.19848f;  // ln(1000) / pi
@@ -189,14 +218,19 @@ class BodyResonator {
   /// Expands a literature modal table (freq/Q/weight) into resonator Specs,
   /// scaling every weight by @p level so the bank's broadband contribution
   /// stays matched to the earlier hand-placed voicing (the per-preset body_mix
-  /// was calibrated against it). Returns the number of Specs written.
+  /// was calibrated against it), and every centre frequency by @p scale — a
+  /// dimension ratio (identity at 1.0) that can only ever place A0, since rib
+  /// depth does not scale with body length the way A0 does; Q is held fixed so
+  /// t60 is rebuilt from the scaled frequency. Returns the number of Specs
+  /// written.
   template <size_t N>
   static int fill_from_modal(std::array<Spec, kMaxModes>& out, const std::array<ModeQ, N>& bank,
-                             float level) noexcept {
+                             float level, float scale) noexcept {
     const int count = static_cast<int>(std::min<size_t>(N, kMaxModes));
     for (int k = 0; k < count; ++k) {
       const ModeQ& m = bank[static_cast<size_t>(k)];
-      out[static_cast<size_t>(k)] = {m.freq_hz, q_to_t60(m.freq_hz, m.q), m.weight * level};
+      const float freq_hz = m.freq_hz * scale;
+      out[static_cast<size_t>(k)] = {freq_hz, q_to_t60(freq_hz, m.q), m.weight * level};
     }
     return count;
   }
@@ -240,6 +274,11 @@ class BodyResonator {
   float x2_ = 0.0f;
   int num_modes_ = 0;
   float mix_ = 0.0f;
+  // Dry-floor one-pole (corpus_tilt_hz): state and coefficient, inactive
+  // unless configure_tilt() was given a positive cutoff.
+  float floor_y_ = 0.0f;
+  float tilt_alpha_ = 0.0f;
+  bool tilt_active_ = false;
 };
 
 }  // namespace sonare::midi::synth
