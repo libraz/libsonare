@@ -47,17 +47,30 @@ std::vector<float> run(StereoDelay& delay, int warmup, int measure) {
   return out;
 }
 
+/// Names every field instead of relying on positional aggregate initialisation.
+/// A field added anywhere but the end of the struct would otherwise rebind the
+/// remaining arguments silently, with nothing red to show for it.
+StereoDelayConfig delay_config(float ping_pong) {
+  StereoDelayConfig config;
+  config.delay_time_l_ms = kDelayMs;
+  config.delay_time_r_ms = kDelayMs;
+  config.feedback = kFeedback;
+  config.ping_pong = ping_pong;
+  config.dry_wet = kDryWet;
+  return config;
+}
+
 }  // namespace
 
 TEST_CASE("StereoDelay ping_pong automation converges toward the target", "[fx]") {
   // Reference: constructed already at the target ping_pong, so its smoothed
   // value is settled at 1 after warmup.
-  StereoDelay reference(StereoDelayConfig{kDelayMs, kDelayMs, kFeedback, 1.0f, kDryWet});
+  StereoDelay reference(delay_config(1.0f));
   reference.prepare(kSampleRate, 1);
 
   // Under test: constructed at ping_pong = 0, warmed up, then stepped to 1. The
   // smoothed weight must ramp toward the reference rather than jump.
-  StereoDelay stepped(StereoDelayConfig{kDelayMs, kDelayMs, kFeedback, 0.0f, kDryWet});
+  StereoDelay stepped(delay_config(0.0f));
   stepped.prepare(kSampleRate, 1);
 
   constexpr int kWarmup = 3000;
@@ -97,7 +110,7 @@ TEST_CASE("StereoDelay ping_pong step produces no single-sample spike", "[fx]") 
   // into the wet output at the step. With per-sample smoothing the largest
   // adjacent-sample change after the step stays on the order of the ambient
   // per-sample change already present in the steady-state signal.
-  StereoDelay delay(StereoDelayConfig{kDelayMs, kDelayMs, kFeedback, 0.0f, kDryWet});
+  StereoDelay delay(delay_config(0.0f));
   delay.prepare(kSampleRate, 1);
 
   constexpr int kWarmup = 3000;

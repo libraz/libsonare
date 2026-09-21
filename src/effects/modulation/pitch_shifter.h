@@ -10,14 +10,24 @@
 
 namespace sonare::effects::modulation {
 
+/// The processor splices twice per grain, so the drift between splices -- the
+/// window -- is half the grain span.
+constexpr float kDefaultWindowMs = 22.5f;
+
 struct PitchShifterConfig {
   float semitones = 0.0f;  ///< shift amount; +12 = one octave up.
   float dry_wet = 1.0f;
+  /// Distance the read-out drifts between splices, in milliseconds, and the
+  /// distance the two taps sit apart in the delay line. The output repeats once
+  /// per window of drift, so its beat period is `window_ms / |ratio - 1|`.
+  float window_ms = kDefaultWindowMs;
 };
 
-/// A classic H910-style pitch shifter: a delay line read by two taps a
-/// half-window apart, each tap's delay ramped at the pitch ratio and the two
-/// crossfaded by an equal-power window so the wrap discontinuity is masked.
+/// A classic H910-style pitch shifter: a delay line read by two taps one window
+/// apart, each tap's delay ramped at the pitch ratio and the two crossfaded by
+/// an equal-power grain so the wrap discontinuity is masked. Each tap wraps once
+/// per grain and they are staggered by half of one, so the splice rate -- and
+/// with it the audible beat -- is one per window of drift.
 /// No FFT, so it is realtime-safe and low-latency (offline, higher-quality
 /// spectral pitch shifting lives in effects/pitch_shift.h).
 class PitchShifter : public rt::ProcessorBase {
@@ -39,8 +49,8 @@ class PitchShifter : public rt::ProcessorBase {
 
   PitchShifterConfig config_{};
   double sample_rate_ = 48000.0;
-  int window_ = 2048;   ///< grain window length in samples.
-  float phase_ = 0.0f;  ///< tap-1 delay position in [0, window_).
+  int grain_ = 2048;    ///< grain length in samples: two of config_.window_ms.
+  float phase_ = 0.0f;  ///< tap-1 delay position in [0, grain_).
   std::array<std::vector<float>, 2> buffers_;
   std::array<int, 2> write_pos_{{0, 0}};
 };

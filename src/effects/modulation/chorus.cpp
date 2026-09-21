@@ -43,6 +43,9 @@ void Chorus::prepare(double sample_rate, int) {
   lfos_[1].prepare(sample_rate_);
   lfos_[0].set_rate_hz(config_.rate_hz);
   lfos_[1].set_rate_hz(config_.rate_hz);
+  for (auto& pre_filter : pre_filters_) {
+    pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
+  }
   reset();
 }
 
@@ -67,8 +70,9 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
                           0.001f * static_cast<float>(sample_rate_);
     const float delay_r = (config_.center_delay_ms + config_.depth_ms * lfos_[1].process()) *
                           0.001f * static_cast<float>(sample_rate_);
-    const float wet_l = delays_[0].process(in_l, delay_l);
-    const float wet_r = delays_[1].process(in_r, delay_r);
+    // The section sits in front of the delay, not across the dry path.
+    const float wet_l = delays_[0].process(pre_filters_[0].process(in_l), delay_l);
+    const float wet_r = delays_[1].process(pre_filters_[1].process(in_r), delay_r);
     if (stereo) {
       left[i] = dry * in_l + wet * wet_l;
       right[i] = dry * in_r + wet * wet_r;
@@ -100,6 +104,17 @@ bool Chorus::set_parameter(unsigned int param_id, float value) {
     case 3:
       config_.dry_wet = value;
       return true;
+    case 4: {
+      config_.pre_filter_hz = value;
+      // Re-derives the pole from the new corner and keeps the running sample, so
+      // a moved corner does not put a step through the delay.
+      for (auto& pre_filter : pre_filters_) {
+        const float carried = pre_filter.state();
+        pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
+        pre_filter.set_state(carried);
+      }
+      return true;
+    }
     default:
       return false;
   }
@@ -109,16 +124,19 @@ bool Chorus::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar/coefficient update; the
   // delay lines are pre-sized to kMaxChorusDelayMs at prepare(), so no id
   // allocates or resets audio state. Unknown ids are rejected by set_parameter.
-  return param_id <= 3;
+  return param_id <= 4;
 }
 
 std::vector<rt::ParamDescriptor> Chorus::parameter_descriptors() const {
-  return {{"rateHz", 0}, {"depthMs", 1}, {"centerDelayMs", 2}, {"dryWet", 3}};
+  return {{"rateHz", 0}, {"depthMs", 1}, {"centerDelayMs", 2}, {"dryWet", 3}, {"preFilterHz", 4}};
 }
 
 void Chorus::reset() {
   for (auto& delay : delays_) {
     delay.reset();
+  }
+  for (auto& pre_filter : pre_filters_) {
+    pre_filter.reset();
   }
   lfos_[0].reset(0.0);
   lfos_[1].reset(0.25);

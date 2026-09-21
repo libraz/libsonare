@@ -38,6 +38,9 @@ void Flanger::prepare(double sample_rate, int) {
   lfos_[1].prepare(sample_rate_);
   lfos_[0].set_rate_hz(config_.rate_hz);
   lfos_[1].set_rate_hz(config_.rate_hz);
+  for (auto& pre_filter : pre_filters_) {
+    pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
+  }
   reset();
 }
 
@@ -61,8 +64,12 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
                           0.001f * static_cast<float>(sample_rate_);
     const float delay_r = (config_.center_delay_ms + config_.depth_ms * lfos_[1].process()) *
                           0.001f * static_cast<float>(sample_rate_);
-    const float wet_l = delays_[0].process(in_l + fb * feedback_[0], delay_l);
-    const float wet_r = delays_[1].process(in_r + fb * feedback_[1], delay_r);
+    // The section sits in front of the delay; the loop closes around the delay
+    // alone, so the return re-enters after the filter rather than through it.
+    const float wet_l =
+        delays_[0].process(pre_filters_[0].process(in_l) + fb * feedback_[0], delay_l);
+    const float wet_r =
+        delays_[1].process(pre_filters_[1].process(in_r) + fb * feedback_[1], delay_r);
     feedback_ = {wet_l, wet_r};
     feedback_non_finite_ |= !std::isfinite(wet_l) || !std::isfinite(wet_r);
     if (stereo) {
@@ -84,6 +91,9 @@ void Flanger::discard_non_finite() noexcept {
   // Each line is fed by the feedback cell that reads it, so the poison
   // recirculates instead of flowing out. O(line), recovery only.
   for (auto& delay : delays_) delay.reset();
+  // The section in front of the line holds a sample of its own, and a poisoned
+  // one would re-contaminate the line the moment the next block arrived.
+  for (auto& pre_filter : pre_filters_) pre_filter.reset();
   // Counted on the flag, not on the cell: the cell holds the block's last sample
   // and is often finite again while the line the reset above wiped still carried
   // the poison.
@@ -114,6 +124,17 @@ bool Flanger::set_parameter(unsigned int param_id, float value) {
     case 4:
       config_.dry_wet = value;
       return true;
+    case 5: {
+      config_.pre_filter_hz = value;
+      // Re-derives the pole from the new corner and keeps the running sample, so
+      // a moved corner does not put a step into the loop.
+      for (auto& pre_filter : pre_filters_) {
+        const float carried = pre_filter.state();
+        pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
+        pre_filter.set_state(carried);
+      }
+      return true;
+    }
     default:
       return false;
   }
@@ -123,16 +144,20 @@ bool Flanger::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar/coefficient update; the
   // delay lines are pre-sized to kMaxFlangerDelayMs at prepare(), so no id
   // allocates or resets audio state. Unknown ids are rejected by set_parameter.
-  return param_id <= 4;
+  return param_id <= 5;
 }
 
 std::vector<rt::ParamDescriptor> Flanger::parameter_descriptors() const {
-  return {{"rateHz", 0}, {"depthMs", 1}, {"centerDelayMs", 2}, {"feedback", 3}, {"dryWet", 4}};
+  return {{"rateHz", 0},   {"depthMs", 1}, {"centerDelayMs", 2},
+          {"feedback", 3}, {"dryWet", 4},  {"preFilterHz", 5}};
 }
 
 void Flanger::reset() {
   for (auto& delay : delays_) {
     delay.reset();
+  }
+  for (auto& pre_filter : pre_filters_) {
+    pre_filter.reset();
   }
   lfos_[0].reset(0.0);
   lfos_[1].reset(0.5);

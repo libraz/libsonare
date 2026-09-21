@@ -5,9 +5,13 @@
 #include <limits>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::delay {
+
+using constants::kTwoPiD;
+
 namespace {
 
 constexpr float kDelaySmoothingTimeSeconds = 0.010f;
@@ -23,12 +27,19 @@ StereoDelayConfig sanitize_config(StereoDelayConfig config) noexcept {
   config.feedback = std::clamp(config.feedback, 0.0f, 0.95f);
   config.ping_pong = std::clamp(config.ping_pong, 0.0f, 1.0f);
   config.dry_wet = std::clamp(config.dry_wet, 0.0f, 1.0f);
+  // std::clamp leaves NaN intact and an infinite corner has no pole, so both
+  // fall back to the bypass rather than reaching the exp() below.
+  if (!std::isfinite(config.damping_hz) || config.damping_hz <= 0.0f) {
+    config.damping_hz = 0.0f;
+  }
   return config;
 }
 
 }  // namespace
 
-StereoDelay::StereoDelay(StereoDelayConfig config) : config_(sanitize_config(config)) {}
+StereoDelay::StereoDelay(StereoDelayConfig config) : config_(sanitize_config(config)) {
+  update_damping();
+}
 
 void StereoDelay::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
@@ -36,7 +47,17 @@ void StereoDelay::prepare(double sample_rate, int) {
   for (auto& delay : delays_) {
     delay.prepare(max_delay);
   }
+  update_damping();
   reset();
+}
+
+void StereoDelay::update_damping() noexcept {
+  if (config_.damping_hz <= 0.0f || sample_rate_ <= 0.0) {
+    damping_gain_ = 0.0f;
+    return;
+  }
+  const double pole = std::exp(-kTwoPiD * config_.damping_hz / sample_rate_);
+  damping_gain_ = static_cast<float>(1.0 - pole);
 }
 
 void StereoDelay::process(float* const* channels, int num_channels, int num_samples) {
@@ -72,8 +93,17 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
                                                       ping_pong * feedback_state_[1]);
     const float feed_r = in_r + smoothed_feedback_ * ((1.0f - ping_pong) * feedback_state_[1] +
                                                       ping_pong * feedback_state_[0]);
-    const float delayed_l = delays_[0].process(feed_l, delay_samples_[0]);
-    const float delayed_r = delays_[1].process(feed_r, delay_samples_[1]);
+    float delayed_l = delays_[0].process(feed_l, delay_samples_[0]);
+    float delayed_r = delays_[1].process(feed_r, delay_samples_[1]);
+    if (damping_gain_ > 0.0f) {
+      // One multiply and one state, with no zero at Nyquist, sitting inside the
+      // recirculation so every pass takes one helping of it. Which side of the
+      // line it sits on is not observable once round.
+      damping_state_[0] += damping_gain_ * (delayed_l - damping_state_[0]);
+      damping_state_[1] += damping_gain_ * (delayed_r - damping_state_[1]);
+      delayed_l = damping_state_[0];
+      delayed_r = damping_state_[1];
+    }
     feedback_state_ = {delayed_l, delayed_r};
     feedback_non_finite_ |= !std::isfinite(delayed_l) || !std::isfinite(delayed_r);
     if (stereo) {
@@ -94,6 +124,10 @@ void StereoDelay::discard_non_finite() noexcept {
     feedback_non_finite_ = false;
     static_cast<void>(
         discard_run_if_non_finite(feedback_state_.begin(), feedback_state_.end(), 0.0f));
+    // The damping cell sits in the same loop, so a poisoned one would feed the
+    // recirculation straight back out again.
+    static_cast<void>(
+        discard_run_if_non_finite(damping_state_.begin(), damping_state_.end(), 0.0f));
     // Both lines are fed by the feedback cells that read them, so the poison
     // recirculates instead of flowing out. O(line), recovery only.
     for (auto& delay : delays_) delay.reset();
@@ -138,6 +172,7 @@ void StereoDelay::reset() {
   delay_samples_ = {config_delay_samples(config_.delay_time_l_ms, sample_rate_),
                     config_delay_samples(config_.delay_time_r_ms, sample_rate_)};
   feedback_state_ = {0.0f, 0.0f};
+  damping_state_ = {0.0f, 0.0f};
   feedback_non_finite_ = false;
   smoothed_feedback_ = std::clamp(config_.feedback, 0.0f, 0.95f);
   smoothed_dry_wet_ = std::clamp(config_.dry_wet, 0.0f, 1.0f);
@@ -146,6 +181,7 @@ void StereoDelay::reset() {
 
 void StereoDelay::set_config(const StereoDelayConfig& config) noexcept {
   config_ = sanitize_config(config);
+  update_damping();
 }
 
 bool StereoDelay::set_parameter(unsigned int param_id, float value) {
@@ -172,6 +208,13 @@ bool StereoDelay::set_parameter(unsigned int param_id, float value) {
     case 4:
       config_.dry_wet = std::clamp(value, 0.0f, 1.0f);
       return true;
+    case 5:
+      // The corner is stored and the pole rebuilt here, the fourth live path
+      // into it. A non-positive corner has to reach the branch that skips the
+      // filter, not a gain of one, which is not bit-identical to a bypass.
+      config_.damping_hz = value > 0.0f ? value : 0.0f;
+      update_damping();
+      return true;
     default:
       return false;
   }
@@ -180,14 +223,15 @@ bool StereoDelay::set_parameter(unsigned int param_id, float value) {
 bool StereoDelay::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar update; the delay lines are
   // sized for up to kMaxDelayMs at prepare() and delay-time automation is
-  // smoothed in process(), so no id allocates or resets audio state. Unknown ids
-  // are rejected by set_parameter.
-  return param_id <= 4;
+  // smoothed in process(), so no id allocates or resets audio state. The damping
+  // corner recomputes one coefficient and leaves its cell where it stood, so it
+  // is in-place too. Unknown ids are rejected by set_parameter.
+  return param_id <= 5;
 }
 
 std::vector<rt::ParamDescriptor> StereoDelay::parameter_descriptors() const {
-  return {
-      {"delayTimeLMs", 0}, {"delayTimeRMs", 1}, {"feedback", 2}, {"pingPong", 3}, {"dryWet", 4}};
+  return {{"delayTimeLMs", 0}, {"delayTimeRMs", 1}, {"feedback", 2},
+          {"pingPong", 3},     {"dryWet", 4},       {"dampingHz", 5}};
 }
 
 }  // namespace sonare::effects::delay

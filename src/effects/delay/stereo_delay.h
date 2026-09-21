@@ -17,6 +17,10 @@ struct StereoDelayConfig {
   float feedback = 0.25f;
   float ping_pong = 0.0f;
   float dry_wet = 0.5f;
+  /// Corner of the one-pole damping inside the feedback loop, in Hz. Zero (the
+  /// default) bypasses it, which is both today's behaviour and the state the
+  /// parameter's printed range carries beside its span.
+  float damping_hz = 0.0f;
 };
 
 class StereoDelay : public rt::ProcessorBase {
@@ -37,6 +41,7 @@ class StereoDelay : public rt::ProcessorBase {
   //   2 = feedback (clamped to [0, 0.95], smoothed in process())
   //   3 = ping_pong (clamped to [0, 1], smoothed in process())
   //   4 = dry_wet (clamped to [0, 1], smoothed in process())
+  //   5 = damping_hz (corner in Hz, <= 0 bypasses; rebuilds one coefficient)
   bool set_parameter(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
@@ -46,6 +51,11 @@ class StereoDelay : public rt::ProcessorBase {
   /// non-finite value has reached them, once per block (see
   /// util/non_finite_state.h).
   void discard_non_finite() noexcept;
+
+  /// Derives the damping pole from config_.damping_hz and the current sample
+  /// rate. The corner is what is stored; the pole is non-linear in the rate and
+  /// so is rebuilt rather than scaled whenever either changes.
+  void update_damping() noexcept;
 
   StereoDelayConfig config_{};
   double sample_rate_ = 48000.0;
@@ -57,6 +67,11 @@ class StereoDelay : public rt::ProcessorBase {
   /// cell -- a tap reads it for a sample or two per lap and the cell is finite
   /// again by the end of the block -- so the block latches it as it passes.
   bool feedback_non_finite_ = false;
+  /// The damping's single multiply, one minus its pole. Zero means the filter
+  /// is out: a gain of one would read as a pass-through but is not bit-exact,
+  /// so the bypass is a branch rather than a value.
+  float damping_gain_ = 0.0f;
+  std::array<float, 2> damping_state_{{0.0f, 0.0f}};
   float smoothed_feedback_ = 0.0f;
   float smoothed_dry_wet_ = 0.5f;
   float smoothed_ping_pong_ = 0.0f;

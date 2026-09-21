@@ -11,18 +11,33 @@ namespace sonare::effects::modulation {
 
 namespace {
 
-constexpr float kWindowMs = 45.0f;
+// The grain is derived from the window, never the other way round: two taps one
+// window apart splice once each per grain, so a grain is two windows.
+constexpr double kWindowsPerGrain = 2.0;
+
+// Window bounds. The floor keeps the window positive (prepare()'s own 64-sample
+// floor takes over below it); the ceiling keeps the grain allocation bounded,
+// well clear of the longest window a caller selects.
+constexpr float kMinWindowMs = 0.5f;
+constexpr float kMaxWindowMs = 1000.0f;
 
 }  // namespace
 
 PitchShifter::PitchShifter(PitchShifterConfig config) : config_(config) {
   config_.semitones = std::clamp(config_.semitones, -24.0f, 24.0f);
+  // Rejected before the clamp below: std::clamp leaves NaN intact and the
+  // window sizes an allocation (see delay_param_acceptable).
+  if (!delay_param_acceptable(config_.window_ms)) {
+    config_.window_ms = kDefaultWindowMs;
+  }
+  config_.window_ms = std::clamp(config_.window_ms, kMinWindowMs, kMaxWindowMs);
 }
 
 void PitchShifter::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
-  window_ = std::max(64, static_cast<int>(sample_rate_ * static_cast<double>(kWindowMs) * 0.001));
-  const size_t len = static_cast<size_t>(window_ + 4);
+  const double grain_ms = kWindowsPerGrain * static_cast<double>(config_.window_ms);
+  grain_ = std::max(64, static_cast<int>(sample_rate_ * grain_ms * 0.001));
+  const size_t len = static_cast<size_t>(grain_ + 4);
   for (auto& buffer : buffers_) {
     buffer.assign(len, 0.0f);
   }
@@ -59,10 +74,10 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   const float ratio = std::exp2(config_.semitones / 12.0f);
-  const float window = static_cast<float>(window_);
-  const float half = 0.5f * window;
+  const float grain = static_cast<float>(grain_);
+  const float half = 0.5f * grain;
   // The read position drifts relative to the write head at (1 - ratio) samples
-  // per sample; wrapping it in [0, window) is what repitches the grain.
+  // per sample; wrapping it in [0, grain) is what repitches the grain.
   const float step = 1.0f - ratio;
   // Stereo-pair processor: grain buffers exist for two planes only, so planes
   // beyond the pair pass through dry (see the registry's stereoPairOnly
@@ -70,10 +85,10 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   const int active = std::min(num_channels, 2);
   if (ratio == 1.0f) {
     // At unity ratio the phase never advances, so both taps sit at a fixed
-    // offset and the "no shift" default would delay the signal by half a grain
-    // window (22.5 ms) while reporting zero latency. Pass the input through
-    // instead, and keep filling the grain buffers so a later shift starts from
-    // real history rather than silence.
+    // offset and the "no shift" default would delay the signal by one window
+    // while reporting zero latency. Pass the input through instead, and keep
+    // filling the grain buffers so a later shift starts from real history
+    // rather than silence.
     for (int i = 0; i < num_samples; ++i) {
       for (int ch = 0; ch < active; ++ch) {
         if (channels[ch] == nullptr) continue;
@@ -88,10 +103,10 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   for (int i = 0; i < num_samples; ++i) {
     // Advance the shared grain phase and derive the two tap positions/gains.
     float phase = phase_ + step;
-    while (phase >= window) phase -= window;
-    while (phase < 0.0f) phase += window;
+    while (phase >= grain) phase -= grain;
+    while (phase < 0.0f) phase += grain;
     const float phase2 = phase >= half ? phase - half : phase + half;
-    const float norm = phase / window;
+    const float norm = phase / grain;
     const float g1 = std::sin(::sonare::constants::kPi * norm);
     const float g2 =
         std::sin(::sonare::constants::kPi * (norm >= 0.5f ? norm - 0.5f : norm + 0.5f));

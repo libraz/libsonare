@@ -790,31 +790,49 @@ TEST_CASE("VelvetReverb mono output folds both tap tables instead of clobbering"
   REQUIRE(right_only_diff > 1e-2);  // Not just the (buggy) right tap table.
 }
 
+namespace {
+
+/// Checks one processor against the RT-safe parameter contract: every id it
+/// publishes is applicable from the audio callback, and an id it never
+/// published is refused. The out-of-range probe is derived from the published
+/// set rather than written down, so it stays out of range as a processor gains
+/// parameters — a hardcoded bound silently becomes an in-range id instead.
+template <typename Fx>
+void require_rt_parameter_contract(Fx& fx) {
+  const std::vector<sonare::rt::ParamDescriptor> descriptors = fx.parameter_descriptors();
+  REQUIRE_FALSE(descriptors.empty());  // A processor publishing nothing would pass vacuously.
+  unsigned int highest = 0;
+  for (const sonare::rt::ParamDescriptor& descriptor : descriptors) {
+    REQUIRE(fx.parameter_is_realtime_safe(descriptor.id));
+    if (descriptor.id > highest) highest = descriptor.id;
+  }
+  REQUIRE_FALSE(fx.parameter_is_realtime_safe(highest + 1));
+}
+
+}  // namespace
+
 TEST_CASE("Modulation and delay inserts report their RT-safe parameter contract",
           "[fx][realtime]") {
   // Every automatable id on these effects is an in-place scalar/coefficient
   // update (LFO rates, clamped delay/depth, dry/wet), so the RT-safe query must
-  // return true for each known id and false for an out-of-range id — the same
+  // return true for each published id and false for one out of range — the same
   // contract the automation engine relies on before applying from the audio
-  // callback.
+  // callback. A parameter that selects a structure rather than a value is not
+  // published here at all, because changing it rebuilds the processor.
   SECTION("Chorus") {
     sonare::effects::modulation::Chorus fx;
-    for (unsigned int id = 0; id <= 3; ++id) REQUIRE(fx.parameter_is_realtime_safe(id));
-    REQUIRE_FALSE(fx.parameter_is_realtime_safe(4));
+    require_rt_parameter_contract(fx);
   }
   SECTION("Flanger") {
     sonare::effects::modulation::Flanger fx;
-    for (unsigned int id = 0; id <= 4; ++id) REQUIRE(fx.parameter_is_realtime_safe(id));
-    REQUIRE_FALSE(fx.parameter_is_realtime_safe(5));
+    require_rt_parameter_contract(fx);
   }
   SECTION("Phaser") {
     sonare::effects::modulation::Phaser fx;
-    for (unsigned int id = 0; id <= 3; ++id) REQUIRE(fx.parameter_is_realtime_safe(id));
-    REQUIRE_FALSE(fx.parameter_is_realtime_safe(4));
+    require_rt_parameter_contract(fx);
   }
   SECTION("StereoDelay") {
     sonare::effects::delay::StereoDelay fx;
-    for (unsigned int id = 0; id <= 4; ++id) REQUIRE(fx.parameter_is_realtime_safe(id));
-    REQUIRE_FALSE(fx.parameter_is_realtime_safe(5));
+    require_rt_parameter_contract(fx);
   }
 }

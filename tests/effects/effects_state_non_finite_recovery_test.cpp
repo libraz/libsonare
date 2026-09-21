@@ -349,6 +349,10 @@ TEST_CASE("the stereo delay's feedback path is returned to rest", "[effects][non
   config.feedback = 0.5f;
   config.ping_pong = 0.5f;
   config.dry_wet = 0.5f;
+  // Non-zero so the in-loop damping filter actually runs: at the bypass default
+  // its state is never written, and the recovery this case is named for would be
+  // checked on a cell nothing had poisoned.
+  config.damping_hz = 1250.0f;
 
   const auto make = prepared<StereoDelay>(config);
   check_recovery(make, make()->tail_samples());
@@ -463,6 +467,7 @@ TEST_CASE("an insert counts the state it discarded", "[effects][non_finite]") {
     config.feedback = 0.5f;
     config.ping_pong = 0.5f;
     config.dry_wet = 0.5f;
+    config.damping_hz = 1250.0f;  // See the recovery case above: bypass leaves the cell unwritten.
     const auto make = prepared<delay::StereoDelay>(config);
     check_discard_is_counted(make, make()->tail_samples());
   }
