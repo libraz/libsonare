@@ -10,11 +10,13 @@ from dataclasses import dataclass
 from enum import IntEnum
 
 from ._types_analysis import (
+    TimeSignature,
+)
+from ._types_enums import (
     AutomationCurve,
     EngineTelemetryError,
     EngineTelemetryType,
     SectionType,
-    TimeSignature,
 )
 
 

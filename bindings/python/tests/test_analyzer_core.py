@@ -49,7 +49,7 @@ def test_capabilities_typed_dicts_match_the_payload() -> None:
     both files.
     """
     import libsonare
-    from libsonare._types_analysis import (
+    from libsonare._types_capabilities import (
         CapabilitiesAbi,
         CapabilitiesDecode,
         CapabilitiesFeatures,

@@ -304,7 +304,12 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "types.py",
             "types.pyi",
+            "_types_acoustic.py",
             "_types_analysis.py",
+            "_types_capabilities.py",
+            "_types_enums.py",
+            "_types_mastering.py",
+            "_types_repair.py",
             "_types_engine.py",
             "_types_streaming.py",
         ),

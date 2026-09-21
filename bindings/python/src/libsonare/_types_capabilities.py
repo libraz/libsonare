@@ -1,0 +1,124 @@
+"""Capability and catalogue shapes the library reports about itself.
+
+These describe what the loaded build can do -- ABI versions, compiled-in
+features, decoders and the mastering processor catalogue -- rather than the
+result of analysing any audio.
+"""
+
+from __future__ import annotations
+
+from typing import Literal, TypedDict
+
+MasteringProcessorKind = Literal["realtime", "offline", "pair"]
+MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
+
+
+class CapabilitiesAbi(TypedDict):
+    """ABI versions reported by :func:`libsonare.capabilities`."""
+
+    project: int
+    engine: int
+
+
+class CapabilitiesFeatures(TypedDict):
+    """Feature-family switches reported by :func:`libsonare.capabilities`."""
+
+    mastering: bool
+    mixing: bool
+    # Separate from ``mixing``: the assistant can be dropped on its own, and its
+    # entry points stay exported either way -- they answer NOT_SUPPORTED rather
+    # than disappearing, so probing the library for a symbol tells a host
+    # nothing. Key stays camelCase for the same reason as the one below.
+    mixingAssistant: bool
+    fx: bool
+    ffmpeg: bool
+    # Key stays camelCase: capabilities() returns the C ABI JSON verbatim.
+    instrumentParamAutomation: bool
+    # The four below name the remaining build options that change which
+    # commands and entry points a binary answers. Without them a caller can
+    # observe that a capability is missing but not that it was never built.
+    arrangement: bool
+    acousticSim: bool
+    pitchEditor: bool
+    voiceChanger: bool
+
+
+class CapabilitiesDecode(TypedDict):
+    """Built-in and FFmpeg-backed decoder lists for the loaded library."""
+
+    builtin: list[str]
+    ffmpeg: list[str]
+
+
+class Capabilities(TypedDict):
+    """Build and runtime descriptor returned by :func:`libsonare.capabilities`."""
+
+    version: str
+    abi: CapabilitiesAbi
+    platform: str
+    features: CapabilitiesFeatures
+    decode: CapabilitiesDecode
+    simd: str
+    hardwareConcurrency: int
+
+
+class MasteringInsertParamInfo(TypedDict):
+    """Metadata for one automatable mastering-insert parameter."""
+
+    name: str
+    id: int
+    rtSafe: bool
+    type: Literal["boolean", "number"]
+    min: float | None
+    max: float | None
+    default: float | bool | None
+    unit: str | None
+
+
+MasteringProcessorCategory = Literal[
+    "dynamics",
+    "effects",
+    "eq",
+    "final",
+    "maximizer",
+    "multiband",
+    "other",
+    "reference",
+    "repair",
+    "saturation",
+    "spectral",
+    "stereo",
+]
+
+
+class MasteringProcessorCatalogEntry(TypedDict):
+    """Capabilities exposed by :func:`mastering_processor_catalog`."""
+
+    id: str
+    kind: MasteringProcessorKind
+    realtimeInsertable: bool
+    stereoOnly: bool
+    latencySamples: int
+    tailSamples: int
+    realtimeCost: Literal["low", "moderate", "high"] | None
+    channelPolicy: MasteringChannelPolicy
+    category: MasteringProcessorCategory
+    params: list[MasteringInsertParamInfo]
+
+
+class CapabilityCatalogPresets(TypedDict):
+    """Built-in preset identifiers grouped by public feature family."""
+
+    mastering: list[str]
+    synth: list[str]
+    mixingScene: list[str]
+    voiceChanger: list[str]
+
+
+class CapabilityCatalog(TypedDict):
+    """Machine-readable catalog returned by :func:`capability_catalog`."""
+
+    version: str
+    abi: CapabilitiesAbi
+    processors: list[MasteringProcessorCatalogEntry]
+    presets: CapabilityCatalogPresets
