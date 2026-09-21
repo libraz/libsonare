@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import libsonare
+import libsonare._cli_acoustic as acoustic
 import libsonare._cli_effects as effects
 
 
@@ -243,7 +244,7 @@ def test_resample_accepts_target_sr_alias_as_canonical_target_rate(
 def test_acoustic_handlers_forward_ir_and_blind_controls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(effects, "_load_audio", lambda _path: ([0.1], 48000))
+    monkeypatch.setattr(acoustic, "_load_audio", lambda _path: ([0.1], 48000))
     calls: list[tuple[str, dict[str, object]]] = []
     result = SimpleNamespace(
         rt60=0.1,
@@ -270,13 +271,13 @@ def test_acoustic_handlers_forward_ir_and_blind_controls(
     )
 
     assert (
-        effects.cmd_acoustic(
+        acoustic.cmd_acoustic(
             _args(ir=True, n_bands=4, min_decay_db=24.0, noise_floor_margin_db=8.0)
         )
         == 0
     )
     assert (
-        effects.cmd_acoustic(
+        acoustic.cmd_acoustic(
             _args(ir=False, n_bands=5, min_decay_db=18.0, noise_floor_margin_db=6.0)
         )
         == 0
@@ -301,7 +302,7 @@ def test_acoustic_handlers_forward_ir_and_blind_controls(
 def test_estimate_room_forwards_band_controls_and_uses_zero_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(effects, "_load_audio", lambda _path: ([0.1], 48000))
+    monkeypatch.setattr(acoustic, "_load_audio", lambda _path: ([0.1], 48000))
     calls: list[dict[str, object]] = []
     result = SimpleNamespace(
         volume=10.0,
@@ -326,7 +327,7 @@ def test_estimate_room_forwards_band_controls_and_uses_zero_default(
         sabine=False,
         n_octave_bands=None,
     )
-    assert effects.cmd_estimate_room(args) == 0
+    assert acoustic.cmd_estimate_room(args) == 0
     assert calls == [
         {
             "sample_rate": 48000,

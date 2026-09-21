@@ -287,6 +287,7 @@ _NOT_SCANNED: tuple[tuple[str, tuple[str, ...]], ...] = (
         "CLI surface: extracted by extractors/cli.py, whose own file set is being reworked",
         (
             "cli.py",
+            "_cli_acoustic.py",
             "_cli_advanced.py",
             "_cli_analysis.py",
             "_cli_common.py",

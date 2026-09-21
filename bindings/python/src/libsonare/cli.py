@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 
+from ._cli_acoustic import *  # noqa: F403
 from ._cli_advanced import *  # noqa: F403
 from ._cli_analysis import *  # noqa: F403
 from ._cli_common import (
@@ -246,6 +247,7 @@ def _build_parser() -> _ContractArgumentParser:
     # subcommands appear where its registrar runs, not where its module sorts.
     register_analysis_parsers(sub, shared)
     register_effects_parsers(sub, shared)
+    register_acoustic_parsers(sub, shared)
     register_advanced_parsers(sub, shared)
     register_mastering_parsers(sub, shared)
     register_project_parsers(sub, shared)
