@@ -114,9 +114,14 @@ class RoomMorphResult:
     raises, so every entry in ``diagnostics`` is a warning. Each says the morph
     went through a room other than the one requested — an image-source order
     reduced to the safe maximum (``acoustic.ism_order_clamped``), a tail cut
-    against ``max_seconds`` (``acoustic.rir_length_clamped``), a request that
-    produced no diffuse tail (``acoustic.no_late_tail``) — and is otherwise
-    invisible.
+    against ``max_seconds`` (``acoustic.rir_length_clamped``), a ``max_seconds``
+    shorter than the direct sound's flight time and extended to fit it
+    (``acoustic.rir_length_floored``), a request that produced no diffuse tail
+    (``acoustic.no_late_tail``) — and is otherwise invisible.
+
+    These are the four codes the synthesis can emit here, so a ``match`` over
+    them needs no fall-through case. :func:`room_morph` forwards ``max_seconds``
+    unchanged, which is why the floored one reaches a morph at all.
     """
 
     audio: list[float]
