@@ -1,0 +1,1005 @@
+"""The render a profile is measured from: the window it is taken over, what
+the readings inside that window may claim, the room the model is placed
+in, and the bank a variation selects.
+
+    rye run --pyproject bindings/python/pyproject.toml \\
+        python -m pytest tools/voicematch/test_profile_render.py -q
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import profile as profile_module
+
+import profile_percussion
+from profile_test_fixtures import (
+    SR,
+    _hit_row,
+)
+
+
+# --------------------------------------------------------------------------- #
+# The dimension that sees gain
+# --------------------------------------------------------------------------- #
+def test_the_compare_table_has_a_dimension_that_moves_when_a_gain_does():
+    """Every other column is normalised, and so is blind to output level.
+
+    Rewriting eighteen of the kit's output levels moved not one of the others by
+    a digit. `vel_range` is a span and cancels an offset by construction, so it
+    is not this either.
+    """
+    assert "level" in profile_module.DELTA_LABELS
+    normalised = {"band_tilt", "band_shape", "band_decay", "attack", "crest",
+                  "centroid_pct", "vel_range"}
+    assert "level" not in normalised
+
+
+# --------------------------------------------------------------------------
+# the model is rendered over the window its reference was captured in
+
+
+def test_the_model_grid_stops_where_the_capture_says_its_reference_did(tmp_path, monkeypatch):
+    """A capture measured at the instrument's boundary renders the model there too.
+
+    The bank binds an amplifier after an electric guitar's voice, so a model
+    render carries one by default. Compared against a direct reference that is
+    the amplifier measured as if it were the string — and nothing downstream can
+    see it, because both sides are audio and both look plausible.
+    """
+    seen: list[bool] = []
+
+    def fake_render(smf, seconds, sr, *, rig=True):
+        seen.append(rig)
+        return np.zeros((int(seconds * sr), 1), dtype=np.float32)
+
+    monkeypatch.setattr(profile_module, "render_model", fake_render)
+    monkeypatch.setattr(profile_module, "write_wav", lambda *a, **k: None)
+
+    cfg = {"id": "g", "notes": [52], "velocities": [100], "sample_rate": 48000,
+           "gate_ms": 50, "preroll_ms": 100, "tail": "1s", "program": 30,
+           "timbres": [{"id": "t"}]}
+    profile_module.render_grid({**cfg, "rig": "none"}, tmp_path / "di", timbre="t", program=30)
+    profile_module.render_grid({**cfg, "rig": "baked"}, tmp_path / "amp", timbre="t", program=30)
+    # And a capture that never answered gets the product sound, since comparing
+    # is what an unclassified reference is still allowed to do.
+    profile_module.render_grid(cfg, tmp_path / "u", timbre="t", program=30)
+    assert seen == [False, True, True]
+
+
+def test_the_model_grid_is_rendered_over_each_note_s_own_tail(tmp_path, monkeypatch):
+    """A kit records eight seconds for a ride and two for a kick; so must the model.
+
+    Both sides of every band and decay column are measured over a window, and
+    the columns only mean something when it is the same window. Rendering the
+    model at one flat length against a grid captured at several compares two
+    seconds of model against two seconds of reference on the short notes and
+    against eight on the long ones, where the six seconds the model never
+    rendered read as a wash that died.
+    """
+    asked: dict[int, float] = {}
+
+    def fake_render(smf, seconds, sr, *, rig=True):
+        asked[fake_render.note] = seconds
+        return np.zeros((int(seconds * sr), 1), dtype=np.float32)
+
+    monkeypatch.setattr(profile_module, "render_model", fake_render)
+    monkeypatch.setattr(profile_module, "write_wav", lambda *a, **k: None)
+
+    real_smf = profile_module.write_smf
+
+    def spy_smf(notes, **kw):
+        fake_render.note = notes[0].note
+        return real_smf(notes, **kw)
+
+    monkeypatch.setattr(profile_module, "write_smf", spy_smf)
+
+    cfg = {"id": "kit", "notes": [35, 51, 81], "velocities": [100],
+           "sample_rate": 48000, "gate_ms": 50, "preroll_ms": 100,
+           "tail": "2s", "tail_by_note": {"49-59": "8s", "80-81": "6s"},
+           "channel": 10, "timbres": [{"id": "t", "channel": 10}]}
+    profile_module.render_grid(cfg, tmp_path, timbre="model", program=0)
+
+    # preroll 0.1 + gate 0.05 + the note's own tail.
+    assert asked[35] == pytest.approx(2.15)
+    assert asked[51] == pytest.approx(8.15)
+    assert asked[81] == pytest.approx(6.15)
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    recorded = {r["note"]: r["seconds"] for r in manifest["renders"]}
+    # And the manifest records it, which is what `load_corpus` reads the
+    # analysis window back out of.
+    assert recorded == {35: pytest.approx(2.15), 51: pytest.approx(8.15),
+                        81: pytest.approx(6.15)}
+
+
+def _recorded_corpus(root: Path, *, timbre: str, seconds: dict[int, float],
+                     gate_ms: int, preroll_ms: int, tail: str,
+                     channel: int = 10) -> Path:
+    """A manifest whose slots carry their own recorded lengths, with no audio.
+
+    `load_corpus` resolves render paths and never opens them, so the lengths are
+    all that has to be there for the window to be read back.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "manifest.json").write_text(json.dumps({
+        "id": "w", "sample_rate": 48000, "gate_ms": gate_ms, "tail": tail,
+        "preroll_ms": preroll_ms, "notes": sorted(seconds), "velocities": [100],
+        "timbres": [{"id": timbre, "channel": channel}],
+        "renders": [{"id": f"{timbre}/n{n:03d}_v100", "timbre": timbre, "note": n,
+                     "velocity": 100, "path": f"{timbre}/n{n:03d}_v100.wav",
+                     "seconds": s} for n, s in sorted(seconds.items())],
+    }))
+    return root
+
+
+def _spy_render(monkeypatch, rows=None):
+    """Record the length every model render was asked for, keyed by note."""
+    asked: dict[int, float] = {}
+
+    def fake_render(smf, seconds, sr, *, rig=True):
+        asked[fake_render.note] = seconds
+        return np.zeros((max(int(seconds * sr), 1), 2), dtype=np.float32)
+
+    real_smf = profile_module.write_smf
+
+    def spy_smf(notes, **kw):
+        fake_render.note = notes[0].note
+        return real_smf(notes, **kw)
+
+    monkeypatch.setattr(profile_module, "render_model", fake_render)
+    monkeypatch.setattr(profile_module, "write_smf", spy_smf)
+    if rows is not None:
+        monkeypatch.setattr(profile_module, "measure_hit",
+                            lambda audio, sr, note, vel, **kw: dict(rows[note]))
+    return asked
+
+
+def test_a_hit_is_rendered_over_the_window_its_reference_was_recorded_in(tmp_path, monkeypatch):
+    """A recording read out of a module is as long as the instrument rang.
+
+    Its row is measured over the whole file, so a model rendered for
+    `preroll + gate + tail` is read over a different span than the row it is
+    differenced against. Seventeen keys captured at one 400 ms gate hold 0.42 s
+    to 2.09 s of audio, and against a 400 ms model buffer the cymbals reported a
+    decay of 397.6 ms — the length of the buffer, not the voice.
+    """
+    corpus = _recorded_corpus(tmp_path / "c", timbre="t", gate_ms=400,
+                              preroll_ms=0, tail="0s",
+                              seconds={41: 0.66, 49: 2.09})
+    profile = {"id": "w", "label": "W",
+               "capture": {"program": 0, "gate_ms": 400, "preroll_ms": 0,
+                           "sample_rate": 48000, "channel": 10},
+               "rows": [{"timbre": "t", "note": n, "velocity": 100}
+                        for n in (41, 49)]}
+    cfg = {"id": "w", "notes": [41, 49], "velocities": [100], "gate_ms": 400,
+           "preroll_ms": 0, "tail": "0s", "program": 0,
+           "timbres": [{"id": "t", "channel": 10}]}
+
+    asked = _spy_render(monkeypatch)
+    profile_module.compare_percussion(cfg, profile, timbre="t", notes_filter=set(),
+                                      gate_path="", write_gate="", margin=1.25,
+                                      corpus_dir=corpus)
+    assert asked == {41: pytest.approx(0.66), 49: pytest.approx(2.09)}
+
+
+def test_a_grid_the_manifest_records_at_the_declared_length_does_not_move(tmp_path, monkeypatch):
+    """The no-op half: a rendered oracle records exactly `preroll + gate + tail`.
+
+    Its slots and the declared window are then the same number, so reading the
+    window off the manifest has to produce what the declared arithmetic already
+    produced — including on a grid with a per-note tail, which is where one flat
+    slot length would round the two together.
+    """
+    declared = {35: 0.1 + 0.05 + 2.0, 51: 0.1 + 0.05 + 8.0}
+    corpus = _recorded_corpus(tmp_path / "c", timbre="t", gate_ms=50,
+                              preroll_ms=100, tail="2s", seconds=declared)
+    profile = {"id": "w", "label": "W",
+               "capture": {"program": 0, "gate_ms": 50, "preroll_ms": 100,
+                           "sample_rate": 48000, "channel": 10},
+               "rows": [{"timbre": "t", "note": n, "velocity": 100}
+                        for n in (35, 51)]}
+    cfg = {"id": "w", "notes": [35, 51], "velocities": [100], "gate_ms": 50,
+           "preroll_ms": 100, "tail": "2s", "tail_by_note": {"49-59": "8s"},
+           "program": 0, "timbres": [{"id": "t", "channel": 10}]}
+
+    with_corpus = _spy_render(monkeypatch)
+    profile_module.compare_percussion(cfg, profile, timbre="t", notes_filter=set(),
+                                      gate_path="", write_gate="", margin=1.25,
+                                      corpus_dir=corpus)
+    without = _spy_render(monkeypatch)
+    profile_module.compare_percussion(cfg, profile, timbre="t", notes_filter=set(),
+                                      gate_path="", write_gate="", margin=1.25,
+                                      corpus_dir=None)
+    assert with_corpus == {35: pytest.approx(2.15), 51: pytest.approx(8.15)}
+    assert with_corpus == without
+
+
+def test_a_note_is_rendered_over_its_recorded_window_on_the_pitched_path_too(tmp_path, monkeypatch):
+    """The same pair, one comparator over: a damper release is read to the end of
+    the buffer, so a pitched reference recorded past its gate is differenced
+    against a model that stopped at one."""
+    corpus = _recorded_corpus(tmp_path / "c", timbre="t", gate_ms=1000,
+                              preroll_ms=0, tail="0s", seconds={60: 3.4},
+                              channel=1)
+    profile = {"id": "w", "label": "W",
+               "capture": {"program": 0, "gate_ms": 1000, "preroll_ms": 0,
+                           "sample_rate": 48000, "channel": 1},
+               "rows": [{"timbre": "t", "note": 60, "velocity": 100,
+                         "f0_hz": 261.6, "cents_vs_et": 0.0}]}
+    cfg = {"id": "w", "notes": [60], "velocities": [100], "gate_ms": 1000,
+           "preroll_ms": 0, "tail": "0s", "program": 0,
+           "timbres": [{"id": "t", "channel": 1}]}
+    path = tmp_path / "ref.json"
+    path.write_text(json.dumps(profile))
+
+    asked = _spy_render(monkeypatch)
+    profile_module.compare(cfg, path, timbre="t", notes_filter=set(),
+                           corpus_dir=corpus)
+    assert asked == {60: pytest.approx(3.4)}
+
+
+def test_a_capped_hit_is_censored_from_the_decay_column_and_counted(tmp_path, monkeypatch):
+    """A reading that never fell 20 dB inside the window is the window, not the hit.
+
+    `ring` has always refused one; the per-octave rates are slopes fitted over
+    that same truncated span and were being differenced anyway. Censored on both
+    columns now — and named, because a row silently absent from a median reads as
+    a row that agreed.
+    """
+    rows = {
+        41: _hit_row(decay_ms=300.0, decay_capped=False),
+        49: _hit_row(decay_ms=2000.0, decay_capped=True, band_decay_db_s=[-1.0] * 8),
+    }
+    corpus = _recorded_corpus(tmp_path / "c", timbre="t", gate_ms=400,
+                              preroll_ms=0, tail="0s", seconds={41: 0.66, 49: 2.09})
+    profile = {"id": "w", "label": "W",
+               "capture": {"program": 0, "gate_ms": 400, "preroll_ms": 0,
+                           "sample_rate": 48000, "channel": 10},
+               "rows": [{"timbre": "t", "note": n, "velocity": 100,
+                         **_hit_row(decay_ms=400.0)} for n in (41, 49)]}
+    cfg = {"id": "w", "notes": [41, 49], "velocities": [100], "gate_ms": 400,
+           "preroll_ms": 0, "tail": "0s", "program": 0,
+           "dimensions": ["band_decay", "ring"],
+           "timbres": [{"id": "t", "channel": 10}]}
+
+    _spy_render(monkeypatch, rows=rows)
+    printed: list[str] = []
+    monkeypatch.setattr("builtins.print",
+                        lambda *a, **k: printed.append(" ".join(str(x) for x in a)))
+    profile_module.compare_percussion(cfg, profile, timbre="t", notes_filter=set(),
+                                      gate_path="", write_gate="", margin=1.25,
+                                      corpus_dir=corpus)
+    text = "\n".join(printed)
+    # Named and counted, with the side that ran out said rather than left to be
+    # inferred from a row that is simply missing.
+    assert "1 of 2 rows never fell 20 dB" in text
+    assert "1 on the model side" in text
+    assert "n49v100" in text
+    # One row left in the two columns the cap reaches, not two — and the row it
+    # cost them is carried as `unscored` rather than left to be worked out from
+    # a count with nothing to read it against.
+    decay = next(line for line in printed if "per-octave decay rate" in line)
+    ring = next(line for line in printed if "ring length" in line)
+    assert decay.split()[-2:] == ["1", "1"]
+    assert ring.split()[-2:] == ["1", "1"]
+
+
+def test_a_ring_that_has_collapsed_to_nothing_is_reported_rather_than_dropped(tmp_path,
+                                                                             monkeypatch):
+    """`decay_ms` 0.0 is a piece that stopped ringing, and no ratio of it exists.
+
+    `ring_doublings` refuses a zero, and a refusal reduced with a skip takes the
+    row OUT of the median instead of failing it — so a change that collapses the
+    two rides to a click reads as the kit improving, because its worst members
+    stopped being counted. It has to be counted as unscorable and named.
+    """
+    rows = {
+        41: _hit_row(decay_ms=300.0),
+        51: _hit_row(decay_ms=0.0),
+        59: _hit_row(decay_ms=0.0),
+    }
+    corpus = _recorded_corpus(tmp_path / "c", timbre="t", gate_ms=400, preroll_ms=0,
+                              tail="0s", seconds={41: 0.66, 51: 1.16, 59: 1.09})
+    profile = {"id": "w", "label": "W",
+               "capture": {"program": 0, "gate_ms": 400, "preroll_ms": 0,
+                           "sample_rate": 48000, "channel": 10},
+               "rows": [{"timbre": "t", "note": n, "velocity": 100,
+                         **_hit_row(decay_ms=400.0)} for n in (41, 51, 59)]}
+    cfg = {"id": "w", "notes": [41, 51, 59], "velocities": [100], "gate_ms": 400,
+           "preroll_ms": 0, "tail": "0s", "program": 0, "dimensions": ["ring"],
+           "timbres": [{"id": "t", "channel": 10}]}
+
+    _spy_render(monkeypatch, rows=rows)
+    printed: list[str] = []
+    monkeypatch.setattr("builtins.print",
+                        lambda *a, **k: printed.append(" ".join(str(x) for x in a)))
+    profile_module.compare_percussion(cfg, profile, timbre="t", notes_filter=set(),
+                                      gate_path="", write_gate="", margin=1.25,
+                                      corpus_dir=corpus)
+    text = "\n".join(printed)
+    assert "2 of 3 scored rows report NO ring at all" in text
+    assert "model side" in text
+    assert "n51v100, n59v100" in text
+    # And the median that remains says how much of the grid it was taken over:
+    # one row scored, two unscored. Without the count the same line reads as a
+    # clean kit measured on everything.
+    ring = next(line for line in printed if "ring length" in line)
+    assert ring.split()[-2:] == ["1", "2"]
+
+
+def test_a_dimension_that_scored_no_row_at_all_is_named_rather_than_absent(capsys):
+    """The limit case of `unscored`: at zero there is no line to carry a count.
+
+    A column that scored nothing does not appear in the table, and an empty
+    column reads exactly like one that agreed — which is the shape that scored a
+    silent render as a perfect harmonic ladder. `select_dimensions` says so only
+    where the capture declares its dimensions, and a capture declaring none is
+    judged on all of them, so those are the runs with nothing said at all.
+    """
+    from profile_gate import print_vanished_dimensions
+
+    offered = {"ring", "band_decay", "stereo"}
+    summary = {"band_decay": {"median": 0.0, "abs_median": 0.0, "p90": 0.0, "n": 4}}
+    # Nothing declared: judged on all of them, so both absentees are findings.
+    print_vanished_dimensions(offered, summary, [], {})
+    named = capsys.readouterr().out
+    assert "2 dimension(s) scored no row at all" in named
+    assert "ring length" in named
+
+    # An excused dimension is not one of them, and neither is one the capture
+    # does not claim: an exclusion with a reason already says why it is absent.
+    print_vanished_dimensions(offered, summary, [], {"stereo": "mono capture"})
+    one = capsys.readouterr().out
+    assert "1 dimension(s) scored no row at all" in one
+    assert "stereo" not in one
+    print_vanished_dimensions(offered, summary, ["band_decay"], {})
+    assert capsys.readouterr().out == ""
+
+
+def test_a_row_the_measurement_never_offered_is_not_a_collapsed_ring(tmp_path):
+    """The two have to stay apart: one is a voice without a ring, the other a
+    profile without the field, and only the first is a finding."""
+    collapsed = profile_percussion.ring_collapsed
+    assert collapsed({"decay_ms": 0.0}, {"decay_ms": 200.0}) == "model"
+    assert collapsed({"decay_ms": 200.0}, {"decay_ms": 0.0}) == "reference"
+    assert collapsed({"decay_ms": 0.0}, {"decay_ms": 0.0}) == "model+reference"
+    assert collapsed({"decay_ms": 300.0}, {"decay_ms": 200.0}) == ""
+    # Absent on either side is a profile measured before the field existed.
+    assert collapsed({}, {"decay_ms": 200.0}) == ""
+    assert collapsed({"decay_ms": 200.0}, {}) == ""
+
+
+def test_a_stamp_moves_only_when_the_measurement_does(tmp_path):
+    """Re-measuring an unchanged corpus must leave the file byte-identical.
+
+    The stamp is the one field that is not read off the audio, so it is the one
+    field that can make an unchanged measurement look changed. Two things depend
+    on it not doing that: an analysis edit is judged safe by whether it moved a
+    committed reference, and a gate records the stamp of the reference its
+    bounds were read against, so a no-op re-measure would otherwise report every
+    gate as predating its own reference.
+    """
+    out = tmp_path / "ref.json"
+    body = {"id": "x", "label": "X", "capture": {"program": 0},
+            "rows": [{"note": 60, "f0_hz": 261.6}], "summary": {}}
+    # A stamp from the past rather than one taken here: the resolution is one
+    # second, so a "changed" case written in the same second as the file it is
+    # compared against would read as unchanged and prove nothing.
+    first = "2026-01-01T00:00:00+00:00"
+    out.write_text(json.dumps({**body, "measured_utc": first}, indent=1,
+                              ensure_ascii=False) + "\n")
+
+    # Same numbers, later run: the stamp is carried forward.
+    assert profile_module.measurement_stamp({**body, "measured_utc": ""}, out) == first
+
+    # A number moves: the stamp moves with it.
+    moved = dict(body, rows=[{"note": 60, "f0_hz": 261.7}])
+    assert profile_module.measurement_stamp({**moved, "measured_utc": ""}, out) != first
+
+    # A dimension that did not exist before is a change, not a carry-forward —
+    # this is the shape the piano reference had, with tnr_db absent throughout.
+    grown = dict(body, rows=[{"note": 60, "f0_hz": 261.6, "tnr_db": 12.0}])
+    assert profile_module.measurement_stamp({**grown, "measured_utc": ""}, out) != first
+
+    # No file yet, and an unreadable one, both mean "stamp it now" rather than
+    # an exception — a first measure and a half-written file are both normal.
+    assert profile_module.measurement_stamp({**body, "measured_utc": ""},
+                                            tmp_path / "absent.json") != first
+    out.write_text("{ not json")
+    assert profile_module.measurement_stamp({**body, "measured_utc": ""}, out) != first
+
+
+def test_a_profile_read_back_compares_equal_to_the_one_that_wrote_it(tmp_path):
+    """The comparison is on the serialized body, so a round trip is not a change.
+
+    Comparing the dicts directly would call a tuple that became a list, or a
+    float that printed at a different width, a changed measurement — and the
+    stamp would then move on every run, which is the defect this replaces.
+    """
+    out = tmp_path / "ref.json"
+    profile = {"id": "x", "label": "X", "measured_utc": "",
+               "capture": {"notes": (60, 72), "band_edge_hz": None},
+               "rows": [{"note": 60, "partials_db": [0.0, -12.5, -18.25]}],
+               "summary": {}}
+    stamp = "2026-01-01T00:00:00+00:00"
+    out.write_text(json.dumps({**profile, "measured_utc": stamp}, indent=1,
+                              ensure_ascii=False) + "\n")
+    assert profile_module.measurement_stamp(profile, out) == stamp
+
+
+def test_a_faded_sample_does_not_have_the_slope_of_its_silence_read_as_an_aftersound():
+    """`decay_late_db_s` past the audible range measures the file, not the string.
+
+    A trimmed sample is faded to digital zero at its end, and a knee search over
+    the whole gate puts the split at the fade and fits the flat -240 dBFS floor
+    below it. The rate that comes back is the flatness of the silence -- on this
+    corpus, a C7 whose aftersound is 12 s read as 54.
+    """
+    t = np.linspace(0.0, 8.0, 400)
+    real = -28.0 - 5.0 * t                     # a 12 s aftersound, unbroken
+    faded = np.where(t < 3.0, real, -240.0)    # the same note, cut at 3 s
+
+    end = profile_module.usable_decay_end(faded, 0)
+    assert t[end - 1] == pytest.approx(3.0, abs=0.1)
+    kept = profile_module.double_decay(faded[:end], t[:end])
+    assert kept["decay_late_db_s"] == pytest.approx(-5.0, abs=0.5)
+
+    whole = profile_module.double_decay(faded, t)
+    assert abs(whole["decay_late_db_s"]) < 1.0
+
+
+def test_a_held_note_arrives_where_it_got_loud_not_where_it_wobbled():
+    """`argmax` is an onset only on an envelope that decays.
+
+    The plateau is the harmonica's shape and the numbers are its measured ones:
+    a 25 ms rise, then three seconds within a decibel of level. The loudest
+    window lands wherever the tremolo crested, so an attack read off it reports
+    seconds; the decay fitted from there has a fraction of the note left.
+    """
+    sr = 200  # the envelope's own 5 ms grid
+    t = np.linspace(0.0, 3.0, int(3.0 * sr))
+    rise = np.clip(t / 0.025, 0.0, 1.0)
+    # A tremolo alone crests first at its own first period; what puts the maximum
+    # late is the slow wander under it, which is what the level actually does.
+    env_db = (20.0 * np.log10(np.maximum(rise, 1e-6))
+              + 0.9 * np.sin(2.0 * np.pi * 5.0 * t)
+              + 0.6 * np.sin(2.0 * np.pi * 0.2 * t - 1.194))
+
+    late = int(np.argmax(env_db))
+    assert t[late] > 1.0, "the fixture has to crest late to be a test"
+
+    onset = profile_module.arrival_index(env_db)
+    assert t[onset] == pytest.approx(0.025, abs=0.02)
+    # The decay origin travels with it: fitted from the crest there is almost
+    # nothing left of a three-second note to fit over.
+    origin = profile_module.decay_origin_index(env_db, float(t[1] - t[0]))
+    assert t[origin] < profile_module.RISE_WINDOW_S + 0.03
+    span = t[profile_module.usable_decay_end(env_db, origin) - 1] - t[origin]
+    assert span > 2.7
+    assert t[profile_module.usable_decay_end(env_db, late) - 1] - t[late] < 2.0
+
+
+def test_a_struck_notes_decay_is_still_fitted_from_its_peak():
+    """The origin may not slide onto the rising edge, or a fall reads as a climb.
+
+    The shape and the numbers are the synth drum's: it arrives at 10 ms, takes
+    the last 3 dB over the 30 ms after that, and then falls at 63 dB/s. Fitting
+    the early segment from the arrival crosses the top of the rise, and the rate
+    it reports for the fall is +54 dB/s -- a decay measured as a climb.
+    """
+    sr = 200
+    t = np.linspace(0.0, 3.0, int(3.0 * sr))
+    env_db = np.piecewise(
+        t, [t < 0.01, (t >= 0.01) & (t < 0.04), t >= 0.04],
+        [lambda u: -40.0 + 3700.0 * u, lambda u: -3.0 + 100.0 * (u - 0.01),
+         lambda u: -63.0 * (u - 0.04)])
+    peak = int(np.argmax(env_db))
+
+    onset = profile_module.arrival_index(env_db)
+    assert t[onset] < t[peak], "the fixture needs the arrival on the rising edge"
+    origin = profile_module.decay_origin_index(env_db, float(t[1] - t[0]))
+    assert origin == pytest.approx(peak, abs=1)
+
+    knee = int(0.05 * sr)
+    assert np.polyfit(t[onset:onset + knee], env_db[onset:onset + knee], 1)[0] > 0.0, \
+        "fitting from the arrival is what reports a climb"
+    assert np.polyfit(t[origin:origin + knee], env_db[origin:origin + knee], 1)[0] < -60.0
+
+
+def test_a_beating_unison_dips_below_the_range_without_having_stopped():
+    """The end is the LAST point inside the range, not the first one outside it."""
+    t = np.linspace(0.0, 8.0, 400)
+    env = -20.0 - 9.0 * t + 14.0 * np.sin(2.0 * np.pi * t)
+    peak = int(np.argmax(env))
+    end = profile_module.usable_decay_end(env, peak)
+    dips = peak + np.where(env[peak:end] < env[peak] - profile_module.DECAY_RANGE_DB)[0]
+    assert dips.size > 0, "the fixture has to dip below the line to be a test"
+    assert t[end - 1] > t[dips[0]]
+
+
+def test_a_render_that_outlasts_its_reference_is_not_differenced_against_it():
+    """Two slopes compare only when they were fitted over comparable spans."""
+    agree = profile_module.DECAY_SPAN_AGREEMENT
+    assert min(8.0, 7.0) >= agree * max(8.0, 7.0)
+    assert min(8.0, 3.8) < agree * max(8.0, 3.8)
+
+
+def test_the_body_reading_is_a_ratio_and_a_gain_cannot_answer_it():
+    """Scaling a render leaves it where it was; adding energy under the note moves it."""
+    sr = SR
+    t = np.arange(int(1.5 * sr)) / sr
+    note = 0.5 * np.sin(2 * np.pi * 1000.0 * t)
+    quiet = profile_module.body_below_f0_db(note * 0.01, sr, 1000.0)
+    loud = profile_module.body_below_f0_db(note, sr, 1000.0)
+    assert quiet == pytest.approx(loud, abs=0.5)
+
+    with_body = note + 0.5 * np.sin(2 * np.pi * 120.0 * t)
+    assert profile_module.body_below_f0_db(with_body, sr, 1000.0) > loud + 20.0
+
+
+def test_a_note_too_low_to_have_a_band_under_it_is_not_given_a_body_number():
+    """Under 120 Hz the band below the note is thinner than an octave."""
+    sr = SR
+    t = np.arange(int(1.5 * sr)) / sr
+    assert profile_module.body_below_f0_db(np.sin(2 * np.pi * 80.0 * t), sr, 80.0) is None
+    assert profile_module.body_below_f0_db(np.sin(2 * np.pi * 400.0 * t), sr, 400.0) is not None
+
+
+def test_a_recording_gain_is_not_a_register_error():
+    """Two takes of one keyboard at different gains have the same register profile."""
+    quiet = {n: {88: -60.0 + 0.2 * n} for n in range(60, 100, 6)}
+    loud = {n: {88: v[88] + 17.0} for n, v in quiet.items()}
+    deltas = [d for _n, _v, d in profile_module.register_deltas(loud, quiet)]
+    assert deltas and max(abs(d) for d in deltas) < 1e-9
+
+
+def test_one_register_that_is_quiet_is_charged_to_that_register():
+    """A model short at the top reads as the top being short, not as a keyboard offset."""
+    ref = {n: {88: -40.0} for n in range(60, 108, 6)}
+    model = {n: {88: -40.0 - (12.0 if n >= 96 else 0.0)} for n in ref}
+    by_note = {n: d for n, _v, d in profile_module.register_deltas(model, ref)}
+    assert all(abs(by_note[n]) < 1e-6 for n in by_note if n < 96)
+    assert all(by_note[n] == pytest.approx(-12.0) for n in by_note if n >= 96)
+
+
+def test_a_velocity_with_too_few_notes_has_no_register_profile():
+    """A median over two notes normalises them against themselves."""
+    thin = {60: {88: -40.0}, 72: {88: -50.0}}
+    assert profile_module.register_deltas(thin, thin) == []
+    wide = {n: {88: -40.0} for n in range(60, 60 + 6 * profile_module.REGISTER_MIN_NOTES, 6)}
+    assert profile_module.register_deltas(wide, wide) != []
+
+
+def test_a_long_note_is_not_a_loud_one():
+    """Same peak, different decay: `rms_dbfs` calls the long one louder, the body level does not."""
+    sr = SR
+    t = np.arange(int(3.0 * sr)) / sr
+    tone = np.sin(2 * np.pi * 440.0 * t)
+
+    def measured(rate):
+        x = (tone * np.exp(-rate * t)).astype(np.float32)
+        return profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
+                                           preroll_s=0.0, gate_s=2.5)
+
+    quick, sustained = measured(6.0), measured(0.2)
+    assert quick["held_peak_dbfs"] == pytest.approx(sustained["held_peak_dbfs"], abs=1.0)
+    assert sustained["rms_dbfs"] > quick["rms_dbfs"] + 5.0
+
+
+def test_the_hammer_reaches_the_body_level_only_through_the_window():
+    """A click owns `peak_dbfs` outright and reaches a windowed RMS by its energy share."""
+    sr = SR
+    t = np.arange(int(3.0 * sr)) / sr
+    tone = (0.2 * np.sin(2 * np.pi * 440.0 * t) * np.exp(-1.0 * t)).astype(np.float32)
+    clicked = tone.copy()
+    clicked[:8] += 1.0
+
+    def measured(x):
+        return profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
+                                           preroll_s=0.0, gate_s=2.5)
+
+    plain, hammered = measured(tone), measured(clicked)
+    on_peak = hammered["peak_dbfs"] - plain["peak_dbfs"]
+    on_body = hammered["held_peak_dbfs"] - plain["held_peak_dbfs"]
+    assert on_peak > 10.0
+    assert 0.0 < on_body < on_peak / 4.0
+
+
+def _ramped_tone(sr: int, seconds: float, ramp_s: float = 0.05,
+                 decay: float = 1.0, hz: float = 440.0) -> np.ndarray:
+    t = np.arange(int(seconds * sr)) / sr
+    env = np.minimum(1.0, t / ramp_s) * np.exp(-decay * t)
+    return (np.sin(2 * np.pi * hz * t) * env).astype(np.float32)
+
+
+def test_a_note_the_host_sounded_late_measures_the_same_as_one_it_sounded_on_time():
+    """The gate window follows the onset, because a hosted plugin's does not follow the note-on.
+
+    The percussion path has anchored on the located strike since it was
+    written; this is the same anchor for a held note. What made it matter here
+    is the size of the offset against the size of the reading: a capture's
+    guard refuses a render for sounding LATE and cannot refuse one for being
+    early, so the residue is one-sided rather than noise, and the envelope is
+    read on a 5 ms grid that 40 % of the committed reference rows report an
+    attack within two of. The offset below is larger than the guard's own
+    ceiling so that the failure is unambiguous rather than one quantum.
+    """
+    sr = SR
+    tone = _ramped_tone(sr, 3.0)
+    preroll = np.zeros(int(0.1 * sr), dtype=np.float32)
+
+    def measured(lead_s: float) -> dict:
+        x = np.concatenate([preroll, np.zeros(int(lead_s * sr), dtype=np.float32), tone])
+        return profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
+                                           preroll_s=0.1, gate_s=2.0)
+
+    on_time, late = measured(0.0), measured(0.04)
+    assert on_time["onset_ms"] == pytest.approx(0.0, abs=3.0)
+    assert late["onset_ms"] == pytest.approx(40.0, abs=3.0)
+    assert late["attack_ms"] == pytest.approx(on_time["attack_ms"], abs=5.0)
+    assert late["decay_db_s"] == pytest.approx(on_time["decay_db_s"], abs=0.5)
+    assert late["held_peak_dbfs"] == pytest.approx(on_time["held_peak_dbfs"], abs=0.5)
+
+
+def test_the_window_never_opens_inside_the_preroll():
+    """Whatever is in a preroll is not the note — that is what the preroll is for.
+
+    Two shapes, both from the cached corpus: `electric_grand` leaves a click in
+    the first 70 ms of its file, and `english_horn` carries a previous note's
+    tail decaying from 43 dB under its peak across the whole preroll. Both sit
+    over a floor set 50 dB under a quiet note's own crest, so a detector asked
+    to find the sound in the FILE answers with them and the gate window opens
+    up to a preroll early.
+    """
+    sr = SR
+    tone = _ramped_tone(sr, 3.0, ramp_s=0.01)
+    preroll = np.zeros(int(0.1 * sr), dtype=np.float32)
+
+    click = preroll.copy()
+    click[int(0.02 * sr):int(0.03 * sr)] = 0.2
+    bed = preroll + (0.01 * np.sin(2 * np.pi * 300.0 * np.arange(len(preroll)) / sr)
+                     ).astype(np.float32)
+
+    for lead in (click, bed):
+        x = np.concatenate([lead, tone])
+        row = profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
+                                          preroll_s=0.1, gate_s=2.0)
+        assert row["onset_ms"] >= 0.0
+        assert row["onset_ms"] == pytest.approx(0.0, abs=3.0)
+
+
+def test_the_ladder_is_reported_against_its_fundamental_not_its_loudest_partial():
+    """One ladder, one zero.
+
+    `harmonics_db` is relative to h1 on the live path, and both readers of
+    `partials_db` subtract its first entry before using it — so anchoring the
+    profile on the loudest partial left the same ladder held at two zeroes and
+    bought nothing. It is not a stable choice of zero either: measured over the
+    committed references the loudest partial sits above h1 on 30 % of rows and
+    within 1 dB of the runner-up on 9 %, so which partial it lands on can turn
+    over between two takes of one note.
+    """
+    sr = SR
+    t = np.arange(int(3.0 * sr)) / sr
+    x = (0.25 * np.sin(2 * np.pi * 440.0 * t)
+         + 0.5 * np.sin(2 * np.pi * 880.0 * t)).astype(np.float32)
+
+    row = profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
+                                      preroll_s=0.0, gate_s=2.5)
+
+    assert row["partials_db"][0] == pytest.approx(0.0, abs=0.05)
+    assert row["partials_db"][1] == pytest.approx(6.0, abs=1.0)
+
+
+def test_a_tail_window_stops_where_the_references_do():
+    """A render that finishes before its file does must not lend its silence to the window."""
+    sr = SR
+    ran_out = np.concatenate([np.ones(int(2.0 * sr), dtype=np.float32),
+                              np.zeros(int(2.0 * sr), dtype=np.float32)])
+    full = np.ones(int(4.0 * sr), dtype=np.float32)
+    assert profile_module.signal_end_s(ran_out, sr) == pytest.approx(2.0, abs=0.01)
+    assert profile_module.usable_tail([ran_out, full], sr, (1.0, 4.0)) == \
+        pytest.approx((1.0, 2.0), abs=0.01)
+    # The model's own length never widens it, and a window with nothing left is None.
+    assert profile_module.usable_tail([full], sr, (1.0, 4.0)) == (1.0, 4.0)
+    assert profile_module.usable_tail([ran_out], sr, (2.5, 4.0)) is None
+
+
+def test_a_take_reading_does_not_answer_to_what_no_instrument_radiates():
+    """Rumble under the subsonic line changes a tail level; content above it does not."""
+    sr = SR
+    t = np.arange(int(3.0 * sr)) / sr
+    note = (np.sin(2 * np.pi * 440.0 * t) * np.exp(-2.0 * t)).astype(np.float32)
+    windows = {"tail": (2.0, 2.9)}
+
+    def tail_of(x):
+        return profile_module.measure_take(np.stack([x] * 2, axis=1), sr, windows)["tail"]
+
+    # The same amplitude either side of the line: one is the recording chain,
+    # the other is an instrument, and only the second may move the reading.
+    rumble = (0.02 * np.sin(2 * np.pi * 8.0 * t)).astype(np.float32)
+    audible = (0.02 * np.sin(2 * np.pi * 200.0 * t)).astype(np.float32)
+    plain = tail_of(note)
+    assert tail_of(note + rumble) == pytest.approx(plain, abs=0.5)
+    assert tail_of(note + audible) > plain + 5.0
+
+
+def test_a_high_pass_does_not_lend_a_loud_passage_to_a_quiet_one():
+    """The failure this guards is a filter artifact that reads as a voice with no decay."""
+    sr = SR
+    t = np.arange(3 * sr) / sr
+    x = np.zeros_like(t)
+    x[:sr // 2] = np.sin(2 * np.pi * 440.0 * t[:sr // 2])
+    tail = np.arange(2 * sr) / sr
+    x[sr:] = 1e-3 * np.sin(2 * np.pi * 200.0 * tail) * np.exp(-3.0 * tail)
+    y = profile_module.highpass(x, sr, profile_module.TAKE_SUBSONIC_HZ)
+
+    def db(sig, a, b):
+        seg = sig[int(a * sr):int(b * sr)]
+        return 20.0 * np.log10(max(float(np.sqrt(np.mean(seg ** 2))), 1e-18))
+
+    # The tail runs 70 to 110 dB under the burst and has to survive untouched:
+    # a brick wall on the rfft put a flat floor across all of it.
+    for a, b in ((1.1, 1.3), (2.1, 2.3), (2.6, 2.8)):
+        assert db(y, a, b) == pytest.approx(db(x, a, b), abs=0.5)
+
+
+def test_the_high_pass_stops_what_no_instrument_radiates():
+    """Below the line by an octave is gone; an octave above it is untouched."""
+    sr = SR
+    t = np.arange(2 * sr) / sr
+    hz = profile_module.TAKE_SUBSONIC_HZ
+
+    def through(f):
+        y = profile_module.highpass(np.sin(2 * np.pi * f * t), sr, hz)
+        return 20.0 * np.log10(float(np.sqrt(np.mean(y[sr // 4:-sr // 4] ** 2))) / np.sqrt(0.5))
+
+    assert through(hz / 5.0) < -60.0
+    assert through(hz * 2.5) == pytest.approx(0.0, abs=0.5)
+
+
+def test_model_sends_gs_reaches_a_dry_captured_voice(monkeypatch):
+    """The flag exists so a shared-tank question can be heard on any voice.
+
+    A dry capture renders at CC91 0, where nothing about the GS reverb can be
+    heard at all — so a page asking "is the tank long enough" built on the voice
+    a listener knows best would have held its one setting perfectly inert, and
+    looked exactly like a page of subtly different versions.
+    """
+    import make_audition
+    from smf import Note
+
+    seen: list[tuple] = []
+    monkeypatch.setattr(make_audition, "write_smf",
+                        lambda *a, **kw: seen.append(kw.get("sends")) or b"")
+
+    class Capture:
+        dry = True
+
+    class Voice:
+        capture, kit, program, bank, slug = Capture(), False, 0, 0, "p000-x"
+
+    class Take:
+        id, notes, tail_s, cc_events, channel = "t", [Note(60, 96, 0.0, 1.0)], 1.0, (), 0
+        label, sub, group = "t", "", "g"
+
+        def duration(self):
+            return 2.0
+
+    monkeypatch.setattr(make_audition, "render_variant", lambda *a, **kw: np.zeros((10, 2)))
+    monkeypatch.setattr(make_audition, "render_model", lambda *a, **kw: np.zeros((10, 2)))
+    monkeypatch.setattr(make_audition, "write_wav", lambda *a, **kw: None)
+
+    for mode, want in (("auto", (0, 0, 0)), ("gs", (None, None, None)), ("dry", (0, 0, 0))):
+        seen.clear()
+        args = SimpleNamespace(model_sends=mode, lib="", archive_references="")
+        make_audition.render_take(Take(), Voice(), [], Path("."), args, [], None)
+        assert seen == [want], f"{mode}: {seen}"
+
+
+def test_measure_reads_only_the_timbres_the_capture_declares(tmp_path):
+    """A corpus outlives the definition that filled it, and holds what it held.
+
+    `corpus --resume` keeps a timbre it does not recognise rather than throwing
+    away an expensive render, so an instrument re-captured from a different
+    product still has the old one on disk. Measuring both is silent in the worst
+    direction: `committed_capture` intersects with the tracked definition, so
+    the profile would declare one timbre and carry the statistics of two — and
+    the retired reference is usually retired for being wrong.
+    """
+    import numpy as np
+    from wavio import write_wav
+
+    root = tmp_path / "corpus"
+    sr, note = 48000, 60
+    t = np.arange(int(1.2 * sr)) / sr
+    for tid, f0 in (("di", 261.63), ("retired", 261.63)):
+        (root / tid).mkdir(parents=True, exist_ok=True)
+        env = np.where(t < 0.1, 0.0, np.exp(-2.0 * (t - 0.1)))
+        y = (0.5 * np.sin(2 * np.pi * f0 * t) * env).astype(np.float32)
+        write_wav(root / tid / "n060_v100.wav", np.stack([y, y], axis=1), sr)
+    (root / "manifest.json").write_text(json.dumps({
+        "id": "x", "plugin": "aumu:xxxx:Yyyy", "params": [], "sample_rate": sr,
+        "gate_ms": 1000, "tail": "0s", "preroll_ms": 100, "notes": [note],
+        "velocities": [100],
+        "timbres": [{"id": "di"}, {"id": "retired"}],
+        "renders": [
+            {"id": "di/060/100", "timbre": "di", "note": note, "velocity": 100,
+             "path": "di/n060_v100.wav"},
+            {"id": "retired/060/100", "timbre": "retired", "note": note, "velocity": 100,
+             "path": "retired/n060_v100.wav"},
+        ],
+    }))
+    config = tmp_path / "x.json"
+    config.write_text(json.dumps(
+        {"id": "x", "label": "One declared timbre", "timbres": [{"id": "di"}]}))
+    cfg = {"id": "x", "program": 0, "timbres": [{"id": "di"}], "_path": str(config)}
+
+    out = tmp_path / "x_profile.json"
+    assert profile_module.measure(cfg, root, out) == 0
+    written = json.loads(out.read_text())
+    assert {r["timbre"] for r in written["rows"]} == {"di"}
+    assert [t["id"] for t in written["capture"]["timbres"]] == ["di"]
+
+
+def _grid_corpus(tmp_path: Path, notes: list[int], wet: set[int], rt60: float = 1.6) -> Path:
+    """A one-note-per-render corpus, with `wet` notes recorded in a room."""
+    from room import Room, apply_room, synth_room_ir
+    from wavio import write_wav
+
+    sr, gate_s, preroll_s = 48000, 1.0, 0.1
+    ir = synth_room_ir(Room(rt60_s=rt60, hf_ratio=0.5, tail_db=0.0, predelay_ms=15.0), sr)
+    root = tmp_path / "corpus"
+    (root / "t").mkdir(parents=True, exist_ok=True)
+    renders = []
+    for note in notes:
+        f0 = 440.0 * 2.0 ** ((note - 69) / 12.0)
+        span = np.arange(int(4.0 * sr)) / sr
+        env = np.where((span < preroll_s) | (span > preroll_s + gate_s), 0.0,
+                       np.exp(-(span - preroll_s) / 0.4))
+        dry = sum(np.sin(2 * np.pi * f0 * k * span) / k for k in (1, 2, 3, 4))
+        y = (0.3 * dry * env).astype(np.float32)
+        audio = np.stack([y, y], axis=1)
+        if note in wet:
+            audio = apply_room(audio, ir).astype(np.float32)
+        name = f"n{note:03d}_v100.wav"
+        write_wav(root / "t" / name, audio, sr)
+        renders.append({"id": f"t/{note}/100", "timbre": "t", "note": note,
+                        "velocity": 100, "path": f"t/{name}"})
+    (root / "manifest.json").write_text(json.dumps({
+        "id": "x", "plugin": "aumu:xxxx:Yyyy", "params": [], "sample_rate": sr,
+        "gate_ms": int(gate_s * 1000), "tail": "2s", "preroll_ms": int(preroll_s * 1000),
+        "notes": notes, "velocities": [100], "timbres": [{"id": "t"}], "renders": renders,
+    }))
+    return root
+
+
+def _measured_rooms(tmp_path: Path, root: Path) -> dict:
+    config = tmp_path / "x.json"
+    config.write_text(json.dumps({"id": "x", "label": "One timbre", "timbres": [{"id": "t"}]}))
+    cfg = {"id": "x", "program": 0, "timbres": [{"id": "t"}], "_path": str(config)}
+    out = tmp_path / "x_profile.json"
+    assert profile_module.measure(cfg, root, out) == 0
+    return json.loads(out.read_text()).get("rooms") or {}
+
+
+def test_a_space_only_one_note_of_the_grid_measures_is_not_a_room(tmp_path):
+    """A room belongs to the building, so every note is in it or none is.
+
+    Measured over a whole grid at once the distinction disappears and one note
+    carries the answer: the electric guitar's DI reported a credible 1.17 s
+    space that way, and note by note it is 3.56 s on one note of ten and nothing
+    on the other nine. None of `room.py`'s own guards catch it — the length is
+    believable and the notes are held for seconds — so the agreement is the
+    guard, and without it the model would be convolved with a room invented from
+    one note's decay and its own decay deficit hidden underneath.
+    """
+    notes = [48, 52, 56, 60, 64, 68]
+    assert _measured_rooms(tmp_path / "one", _grid_corpus(tmp_path / "one", notes, {60})) == {}
+
+
+def test_a_space_the_whole_grid_measures_is_recorded_with_what_agreed(tmp_path):
+    every = _grid_corpus(tmp_path / "all", [48, 52, 56, 60, 64, 68], {48, 52, 56, 60, 64, 68})
+    rooms = _measured_rooms(tmp_path / "all", every)
+    assert set(rooms) == {"t"}
+    assert rooms["t"]["rt60_s"] > 0.35
+    assert rooms["t"]["notes_probed"] == 6
+    assert rooms["t"]["notes_measured"] * 2 > 6, "kept without a majority of the grid"
+    assert rooms["t"]["rt60_min_s"] <= rooms["t"]["rt60_s"] <= rooms["t"]["rt60_max_s"]
+
+
+def test_the_model_is_placed_in_the_room_the_profile_recorded():
+    """The comparator's half of the correction the fitter already applies.
+
+    A dry model scored against a reference carrying its building reads short in
+    decay and fast in release, and both are the room. What is asserted is the
+    property that makes the correction worth having: the placed model *measures*
+    the recorded space, rather than merely having been convolved with something.
+    """
+    from room import Room, estimate_room
+
+    sr, spans = SR, [(0.1, 1.1)]
+    t = np.arange(int(4.0 * sr)) / sr
+    env = np.where((t < 0.1) | (t > 1.1), 0.0, np.exp(-(t - 0.1) / 0.4))
+    dry = sum(np.sin(2 * np.pi * 220.0 * k * t) / k for k in (1, 2, 3, 4))
+    model = np.stack([(0.3 * dry * env).astype(np.float32)] * 2, axis=1)
+
+    room = Room(rt60_s=1.6, hf_ratio=0.5, tail_db=0.0, predelay_ms=15.0)
+    assert estimate_room(model, sr, spans).is_dry(), "the bare model already has a room"
+
+    recorded = {**room.to_dict(), "notes_measured": 6, "notes_probed": 6,
+                "rt60_min_s": 1.5, "rt60_max_s": 1.7}
+    placed = profile_module.ModelPlacer({"rooms": {"t": recorded}}, "t", spans)
+    got = estimate_room(placed(model, sr), sr, spans)
+    assert not got.is_dry()
+    assert 0.6 * room.rt60_s <= got.rt60_s <= 1.6 * room.rt60_s, got.rt60_s
+
+    unplaced = profile_module.ModelPlacer({}, "t", spans)
+    assert unplaced(model, sr) is model
+
+
+# --------------------------------------------------------------------------- #
+# The variation bank reaches the render
+# --------------------------------------------------------------------------- #
+def _spy_smf_bytes(monkeypatch):
+    """Record the SMF bytes of every model render, keyed by note."""
+    emitted: dict[int, bytes] = {}
+    real_smf = profile_module.write_smf
+
+    def spy_smf(notes, **kw):
+        data = real_smf(notes, **kw)
+        emitted[notes[0].note] = data
+        return data
+
+    monkeypatch.setattr(profile_module, "write_smf", spy_smf)
+    monkeypatch.setattr(profile_module, "render_model",
+                        lambda smf, seconds, sr, *, rig=True:
+                        np.zeros((max(int(seconds * sr), 1), 2), dtype=np.float32))
+    return emitted
+
+
+def _bank_capture(tmp_path, bank):
+    profile = {"id": "v", "label": "V",
+               "capture": {"program": 14, "gate_ms": 500, "preroll_ms": 0,
+                           "sample_rate": 48000},
+               "rows": [{"timbre": "t", "note": 60, "velocity": 100,
+                         "f0_hz": 261.6, "cents_vs_et": 0.0}]}
+    cfg = {"id": "v", "notes": [60], "velocities": [100], "gate_ms": 500,
+           "preroll_ms": 0, "tail": "0s", "program": 14, "bank": bank,
+           "timbres": [{"id": "t"}]}
+    path = tmp_path / "ref.json"
+    path.write_text(json.dumps(profile))
+    return cfg, path
+
+
+def test_a_variation_capture_renders_its_own_bank_and_not_the_capital(tmp_path, monkeypatch):
+    """Nineteen captures in the tree are GS variations of a capital tone, and a
+    program alone reaches the capital. Rendering one without its Bank Select
+    compares a patch against a reference belonging to a different patch — which
+    is not a near miss, since the fallback map voices the two apart on purpose.
+    """
+    cfg, path = _bank_capture(tmp_path, 9)
+    emitted = _spy_smf_bytes(monkeypatch)
+    profile_module.compare(cfg, path, timbre="t", notes_filter=set())
+    # Bank Select MSB is CC0 on the rendered channel, LSB zeroed beside it.
+    assert bytes([0xB0, 0x00, 9]) in emitted[60]
+    assert bytes([0xB0, 0x20, 0]) in emitted[60]
+
+
+def test_a_capital_capture_still_selects_bank_zero(tmp_path, monkeypatch):
+    """The negative control: a capture declaring no bank is the capital tone, and
+    0 has to mean that rather than a field nobody filled in."""
+    cfg, path = _bank_capture(tmp_path, 0)
+    emitted = _spy_smf_bytes(monkeypatch)
+    profile_module.compare(cfg, path, timbre="t", notes_filter=set())
+    assert bytes([0xB0, 0x00, 9]) not in emitted[60]
