@@ -68,6 +68,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.viola.cutoff_hz = 2339.23f;
   o.viola.drift_rate_hz = 0.632726f;
   o.viola.resonance_q = 0.836075f;
+  // corpus_scale scales every mode centre in the violin corpus bank uniformly;
+  // these are measured A0 air-mode ratios against violin, not a fit. A uniform
+  // scale places A0 but not B1+/- or the bridge hill — viola's A0 ratio tracks
+  // its body-length ratio (0.88 against 0.87), so its upper modes land plausibly.
+  o.viola.bowed_string.corpus_scale = 0.88f;
   o.cello = bowed(0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.28f);
   o.cello.lfo_rate_hz = 4.3315f;
   o.cello.lfo_to_pitch_cents = 4.43038f;
@@ -85,12 +90,19 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.cello.cutoff_hz = 12130.9f;
   o.cello.drift_rate_hz = 0.0730796f;
   o.cello.resonance_q = 0.5f;
+  // Cello's A0 ratio runs about 21% steeper than its body-length ratio, so its
+  // B1+/- and hill land that much low under this same uniform scale — a cello
+  // is not a scaled violin.
+  o.cello.bowed_string.corpus_scale = 0.37f;
   // Contrabass (GM 43): the one member of the family with a reference, and fitted
   // to it. The bridge reflection filter is fixed in Hz, so at these pitches its
   // whole range sits above every partial and the darkening has to come from the
   // patch filter below. The corpus is all but muted because kViolin is a violin.
   // Gain restated because the darker string and the muted corpus together cost
   // 6.7 dB: it puts the model back on the reference's own peak and held level.
+  // No corpus_scale here: at body_mix 0.06 below, 94% of the output never
+  // passes the corpus, so scaling it moves the post-body signal by only -37 to
+  // -42 dB relative — inaudible, and would read as a fitted value for nothing.
   o.contrabass = bowed(0.177f, 0.58f, 0.15f, 0.18f, 185.0f, 160.0f, 0.06f, 0.69f);
   o.contrabass.lfo_rate_hz = 8.67559f;
   o.contrabass.lfo_to_pitch_cents = 2.62525f;
