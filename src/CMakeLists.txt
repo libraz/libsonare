@@ -732,10 +732,6 @@ if(BUILD_PITCH_EDITOR)
   target_link_libraries(sonare_core INTERFACE sonare_pitch_editor)
 endif()
 
-if(BUILD_VOICE_CHANGER AND NOT BUILD_PITCH_EDITOR)
-  message(FATAL_ERROR "BUILD_VOICE_CHANGER requires BUILD_PITCH_EDITOR for C API helpers")
-endif()
-
 if(BUILD_VOICE_CHANGER)
   add_library(sonare_voice_changer STATIC
     editing/voice_changer/isp_limiter.cpp

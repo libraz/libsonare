@@ -156,6 +156,11 @@ if(BUILD_VOICE_CHANGER AND NOT BUILD_MASTERING)
   message(STATUS "libsonare: BUILD_VOICE_CHANGER requires BUILD_MASTERING; disabling BUILD_VOICE_CHANGER")
   set(BUILD_VOICE_CHANGER OFF CACHE BOOL "Build realtime voice changer primitives" FORCE)
 endif()
+
+if(BUILD_VOICE_CHANGER AND NOT BUILD_PITCH_EDITOR)
+  message(STATUS "libsonare: BUILD_VOICE_CHANGER requires BUILD_PITCH_EDITOR; disabling BUILD_VOICE_CHANGER")
+  set(BUILD_VOICE_CHANGER OFF CACHE BOOL "Build realtime voice changer primitives" FORCE)
+endif()
 # The capability descriptor reports which subsystems this build contains, so its
 # flags have to mean the same thing in every translation unit that can compile
 # it -- sonare_c_memory.cpp alone is pulled into the core objects, the CLI and
