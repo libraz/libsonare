@@ -562,7 +562,8 @@ std::vector<EfxType> all_rows() {
 
 }  // namespace
 
-TEST_CASE("every GS EFX type resolves to a chain or to a listed refusal", "[midi][sf2][gs]") {
+TEST_CASE("every GS EFX type resolves to a chain or to a listed refusal",
+          "[midi][sf2][gs][efxtypes]") {
   for (const EfxType& row : all_rows()) {
     DYNAMIC_SECTION(hex4(row.type) << " " << row.name) {
       const auto chain = gs_efx_insert_chain(make_efx(row.type));
@@ -581,7 +582,7 @@ TEST_CASE("every GS EFX type resolves to a chain or to a listed refusal", "[midi
   }
 }
 
-TEST_CASE("no EFX type is mapped without a table row", "[midi][sf2][gs]") {
+TEST_CASE("no EFX type is mapped without a table row", "[midi][sf2][gs][efxtypes]") {
   // Exhaustive over the type-number space the GS wire can carry for the defined
   // category MSBs: a mapping added to gs_layer without a row here fails by name
   // rather than passing unnoticed.
@@ -605,7 +606,8 @@ TEST_CASE("no EFX type is mapped without a table row", "[midi][sf2][gs]") {
   REQUIRE(gs_efx_insert_chain(make_efx(0x0000)).empty());
 }
 
-TEST_CASE("gs_efx_insert_name covers exactly the mapped single-effect types", "[midi][sf2][gs]") {
+TEST_CASE("gs_efx_insert_name covers exactly the mapped single-effect types",
+          "[midi][sf2][gs][efxtypes]") {
   // The single effects are the MSB-01 group; composites have no single name and
   // are read through the chain. A refused type must have no name either, or the
   // caller would build a one-stage chain from it.
@@ -623,7 +625,8 @@ TEST_CASE("gs_efx_insert_name covers exactly the mapped single-effect types", "[
 
 #if defined(SONARE_WITH_FX) && defined(SONARE_WITH_MASTERING)
 
-TEST_CASE("every EFX chain stage names a processor the insert factory builds", "[midi][sf2][gs]") {
+TEST_CASE("every EFX chain stage names a processor the insert factory builds",
+          "[midi][sf2][gs][efxtypes]") {
   // The failure this catches: a mapping that looks complete and produces
   // nothing, because make_insert returns null for a name that does not exist.
   // Building also parses the stage's params JSON, so a malformed object throws.
@@ -640,7 +643,8 @@ TEST_CASE("every EFX chain stage names a processor the insert factory builds", "
   }
 }
 
-TEST_CASE("every translated EFX parameter key is one its insert reads", "[midi][sf2][gs]") {
+TEST_CASE("every translated EFX parameter key is one its insert reads",
+          "[midi][sf2][gs][efxtypes]") {
   // A key the processor does not read is silently ignored, so a translation
   // aimed at a misspelled key is a no-op that no audible test would catch.
   for (const EfxType& row : all_rows()) {
@@ -664,7 +668,8 @@ TEST_CASE("every translated EFX parameter key is one its insert reads", "[midi][
 
 #endif  // SONARE_WITH_FX && SONARE_WITH_MASTERING
 
-TEST_CASE("two EFX types realise the same chain only where that is documented", "[midi][sf2][gs]") {
+TEST_CASE("two EFX types realise the same chain only where that is documented",
+          "[midi][sf2][gs][efxtypes]") {
   std::map<std::string, std::vector<uint16_t>> by_signature;
   for (const EfxType& row : all_rows()) {
     if (row.bypass_reason != nullptr) continue;
@@ -704,7 +709,7 @@ TEST_CASE("two EFX types realise the same chain only where that is documented", 
   }
 }
 
-TEST_CASE("a parameter-only edit never changes an EFX chain's shape", "[midi][sf2][gs]") {
+TEST_CASE("a parameter-only edit never changes an EFX chain's shape", "[midi][sf2][gs][efxtypes]") {
   // Exhaustive over the three independent factors of the surface — type,
   // parameter index, parameter value — rather than a sampled combination, since
   // no pairwise generator is available here and the space is small enough to
@@ -724,7 +729,8 @@ TEST_CASE("a parameter-only edit never changes an EFX chain's shape", "[midi][sf
   }
 }
 
-TEST_CASE("EFX parameter translations move their insert control monotonically", "[midi][sf2][gs]") {
+TEST_CASE("EFX parameter translations move their insert control monotonically",
+          "[midi][sf2][gs][efxtypes]") {
   // Only the confirmed parameter positions are translated, so only they are
   // swept. Each sweep asserts the direction the manual gives, over every byte
   // value rather than a sampled few.
@@ -853,7 +859,8 @@ TEST_CASE("EFX parameter translations move their insert control monotonically", 
   }
 }
 
-TEST_CASE("Tremolo realises as amplitude modulation, not as a ring modulator", "[midi][sf2][gs]") {
+TEST_CASE("Tremolo realises as amplitude modulation, not as a ring modulator",
+          "[midi][sf2][gs][efxtypes]") {
   // Tremolo is UNIPOLAR amplitude modulation and ring modulation is bipolar, so
   // the mapping is only honest if the modulator never crosses zero. It does not,
   // and the control that holds it positive is dryWet: the insert's dry and wet
@@ -896,7 +903,7 @@ TEST_CASE("Tremolo realises as amplitude modulation, not as a ring modulator", "
 
 #if defined(SONARE_WITH_FX) && defined(SONARE_WITH_MASTERING)
 
-TEST_CASE("the Tremolo voicing never inverts the phase it modulates", "[midi][sf2][gs]") {
+TEST_CASE("the Tremolo voicing never inverts the phase it modulates", "[midi][sf2][gs][efxtypes]") {
   // A constant +1 input makes the output BE the gain envelope, so any sample at
   // or below zero is a sign flip and nothing else. Half a second covers several
   // periods of the sub-audio carrier, troughs included.
@@ -936,7 +943,7 @@ TEST_CASE("the Tremolo voicing never inverts the phase it modulates", "[midi][sf
 
 #endif  // SONARE_WITH_FX && SONARE_WITH_MASTERING
 
-TEST_CASE("an EFX type set over the wire reads back the same chain", "[midi][sf2][gs]") {
+TEST_CASE("an EFX type set over the wire reads back the same chain", "[midi][sf2][gs][efxtypes]") {
   for (const EfxType& row : all_rows()) {
     DYNAMIC_SECTION(hex4(row.type) << " " << row.name) {
       GsEfx efx;
@@ -967,7 +974,7 @@ TEST_CASE("an EFX type set over the wire reads back the same chain", "[midi][sf2
   }
 }
 
-TEST_CASE("every reached EFX byte is translated or counted as STATE", "[midi][sf2][gs]") {
+TEST_CASE("every reached EFX byte is translated or counted as STATE", "[midi][sf2][gs][efxtypes]") {
   Tally tally;
 
   // The join table and the generated header have to name the same pairs in the
@@ -1063,7 +1070,8 @@ TEST_CASE("every reached EFX byte is translated or counted as STATE", "[midi][sf
   REQUIRE(tally.count() >= 300);
 }
 
-TEST_CASE("the translation reads exactly the bytes the archive named", "[midi][sf2][gs]") {
+TEST_CASE("the translation reads exactly the bytes the archive named",
+          "[midi][sf2][gs][efxtypes]") {
   // The inverse of the case above, and the one that can see a wrong slot. A
   // sweep of the byte a test names only shows that the code reads the byte the
   // test reads, which is true of every layout: what separates a right layout

@@ -459,7 +459,8 @@ uint8_t efx_setup_unit(const GsAddressEntry& row) {
 
 #if !defined(SONARE_MIDI_WITH_FX) || !defined(SONARE_WITH_MASTERING)
 
-TEST_CASE("the GS audibility gate needs the FX suite and the insert factory", "[midi][synth][gs]") {
+TEST_CASE("the GS audibility gate needs the FX suite and the insert factory",
+          "[midi][synth][gs][audibility]") {
   FAIL(
       "built without SONARE_MIDI_WITH_FX / SONARE_WITH_MASTERING: the system-effect and EFX rows "
       "cannot be probed, so passing here would prove nothing");
@@ -891,7 +892,8 @@ std::string row_text(const GsAddressEntry& row, const Probe& probe, Setup setup,
 
 }  // namespace
 
-TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synth][gs]") {
+TEST_CASE("every GS address row keeps the promise its level makes",
+          "[midi][synth][gs][audibility]") {
   // A chain that never builds would make every EFX row read as unheard for a
   // reason that is not the table's.
   REQUIRE(sonare::mastering::api::make_insert("saturation.ampSim", "{}") != nullptr);
@@ -1044,7 +1046,7 @@ TEST_CASE("every GS address row keeps the promise its level makes", "[midi][synt
 #endif  // SONARE_MIDI_WITH_FX && SONARE_WITH_MASTERING
 
 TEST_CASE("a kAudible GS row whose range admits only its default has no probe value",
-          "[midi][synth][gs]") {
+          "[midi][synth][gs][audibility]") {
   // Such a row cannot be probed by changing its value, because there is no other
   // value to change to. Both of these are commands rather than parameters — a
   // write at all is what acts — so the loop above probes them by perturbing
@@ -1061,7 +1063,7 @@ TEST_CASE("a kAudible GS row whose range admits only its default has no probe va
   CHECK(found == expected);
 }
 
-TEST_CASE("a GS row below AUDIBLE is still received", "[midi][synth][gs]") {
+TEST_CASE("a GS row below AUDIBLE is still received", "[midi][synth][gs][audibility]") {
   // All four levels begin with "received", and the three below AUDIBLE are the
   // ones where nothing downstream would notice if the decode had stopped
   // claiming the address: the byte goes nowhere either way, so only the decoder
