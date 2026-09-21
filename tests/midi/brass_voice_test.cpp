@@ -629,6 +629,58 @@ TEST_CASE("bore harmonic ratios against causes that are not the lip", "[.][midi]
   }
 }
 
+TEST_CASE("brightness against the note, for causes that are not bore propagation",
+          "[.][midi][synth][null]") {
+  // Not a gate — it reports rather than asserts. An amplitude-dependent
+  // propagation term modulates the whole bore delay, so its effect grows with
+  // the bore length: four times from note 72 to note 48. That margin only means
+  // something against the note slope the engine already has without any
+  // propagation term, and it has one — the cuivre drive is scaled by a
+  // pitch-dependent factor, and the lip valve is a nonlinearity inside the loop.
+  // Read at the shipping patch rather than with the shaper switched off, since
+  // that is the configuration the term has to improve on.
+  const auto hz = [](int note) { return 440.0 * std::pow(2.0, (note - 69) / 12.0); };
+  NativeSynthPatch shipped = gm_fallback_patch(0, 56);  // Trumpet, as shipped
+  REQUIRE(shipped.mode == SynthEngineMode::kBrass);
+  REQUIRE(!(shipped.brass.bore_nonlinearity > 0.0f));  // every reading here is the control arm
+  REQUIRE(shipped.brass.cuivre_dynamics > 0.0f);       // the shaper tracks the live envelope
+
+  // Centroid over the fundamental: the note carries the raw centroid with it
+  // almost exactly (48/60/72 measured at 178.9 / 351.4 / 698.1 Hz), so only the
+  // ratio can be compared across notes.
+  const auto harmonic_centroid = [&](const NativeSynthPatch& p, uint8_t note, uint8_t vel) {
+    const std::vector<float> tone = render_patch(p, note, vel, 48000);
+    REQUIRE(std::isfinite(tone.back()));
+    return static_cast<double>(spectral_centroid(tone, 14400)) / hz(note);
+  };
+  const auto note_ratio = [&](const char* label, const NativeSynthPatch& p, uint8_t vel) {
+    const double low = harmonic_centroid(p, 48, vel);
+    const double mid = harmonic_centroid(p, 60, vel);
+    const double high = harmonic_centroid(p, 72, vel);
+    WARN(label << "  h-centroid  note 48 " << low << "  note 60 " << mid << "  note 72 " << high
+               << "   ratio 48/72 " << (low / high));
+    return low / high;
+  };
+  const auto pct = [](double a, double b) { return 100.0 * std::fabs(a - b) / std::fabs(b); };
+
+  const double v64 = note_ratio("shipped, velocity 64  ", shipped, 64);
+  const double v64b = note_ratio("shipped, velocity 64  ", shipped, 64);
+  WARN("run-to-run moves the ratio by " << pct(v64b, v64) << " %");
+  const double v127 = note_ratio("shipped, velocity 127 ", shipped, 127);
+  WARN("velocity 64 -> 127 moves the ratio by " << pct(v127, v64) << " %");
+
+  NativeSynthPatch no_cuivre = shipped;
+  no_cuivre.brass.brassiness = 0.0f;
+  no_cuivre.brass.cuivre_dynamics = 0.0f;
+  const double valve = note_ratio("cuivre off, velocity 64", no_cuivre, 64);
+  WARN("the shaper accounts for " << pct(v64, valve) << " % of the shipped ratio; what is left is "
+                                  << "the lip valve and the bell");
+
+  WARN(
+      "prediction to check once the term exists: the lumped form multiplies the note-48 "
+      "modulation by 4.0 against note 72, so the ratio above is what it has to beat");
+}
+
 namespace {
 
 using sonare::midi::synth::BrassPatchParams;
