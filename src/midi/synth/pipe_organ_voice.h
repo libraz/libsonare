@@ -34,6 +34,8 @@
 
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
+#include "midi/synth/wind_bore.h"
+#include "midi/synth/wind_breath.h"
 
 namespace sonare::midi::synth {
 
@@ -229,21 +231,17 @@ class PipeOrganVoiceCore {
   /// One flue pipe (one rank): a self-oscillating jet + bore waveguide. All
   /// per-pipe state lives here so the core can sum kMaxPipeRanks of them.
   struct Rank {
-    // Bore + jet delay lines (host-owned spans of span_capacity_).
-    float* bore = nullptr;
+    // Bore + jet delay lines (host-owned spans of span_capacity_). bore.period
+    // is the ideal loop period (samples) at pitch_ratio == 1: one full period
+    // at the rank's sounding fundamental (footage-scaled), times the pitch
+    // correction; bore.comp the loop delay not in the line (feedback register
+    // + loop-filter phase delay); bore.prefill_span how much of the bore this
+    // rank's onset seeds — its own loop period plus the margin the seed needs,
+    // shorter than the line itself; bore.out the last delay-line output
+    // (returns to the mouth next sample).
+    WindBore bore{nullptr, 0, 0, 0, 0.0f, 1.0f, 0.0f};
     float* jet = nullptr;
-    /// How much of the bore this rank's onset seeds — its own loop period
-    /// plus the margin the seed needs, shorter than the line itself.
-    int prefill_span = 0;
-    size_t bore_write = 0;
     size_t jet_write = 0;
-    /// Last bore delay-line output (returns to the mouth next sample).
-    float bore_out = 0.0f;
-    /// Ideal loop period (samples) at pitch_ratio == 1: one full period at the
-    /// rank's sounding fundamental (footage-scaled), times the pitch correction.
-    float bore_period = 0.0f;
-    /// Loop delay NOT in the line (feedback register + loop-filter phase delay).
-    float comp = 1.0f;
     /// The same compensation as voiced at kLossVoicedSr, in samples at the
     /// running rate: the jet delay is a fraction of the line THAT length
     /// leaves, so its duration does not follow the rate.
@@ -322,23 +320,20 @@ class PipeOrganVoiceCore {
 
   // Breath contour shared by every rank (the wind gate): ramps to 1 on note-on,
   // to 0 on release; each rank's steady breath is scaled by this.
-  float breath_level_ = 0.0f;
-  float attack_coeff_ = 0.0f;
-  float release_coeff_ = 0.0f;
-  bool releasing_ = false;
+  BreathContour breath_{};
   /// Wind-hiss depth on the jet drive, the voiced depth at the noise law's gain.
   float turb_gain_ = 0.0f;
 
   // Live excitation axes (jet drive, radiation brightness): base from the patch
   // or a CC, matrix offset, the composed target and the ramped value. The
   // brightness pair is centred on 0.5, which is the registration as voiced.
+  // force01_base/bright01_base start at pipe organ's own 0.0/0.5
+  // (ExcitationBases's in-class defaults are placeholders shared with other
+  // engines, not this one's).
   float srf_ = 48000.0f;
-  float force01_base_ = 0.0f;
-  float force01_mod_ = 0.0f;
+  ExcitationBases excite_{0.0f, 0.5f, 0.0f, 0.0f};
   float force01_target_ = 0.0f;
   float force01_ = 0.0f;
-  float bright01_base_ = 0.5f;
-  float bright01_mod_ = 0.0f;
   float bright01_target_ = 0.5f;
   float bright01_ = 0.5f;
   float ctrl_coeff_ = 0.0f;

@@ -33,6 +33,7 @@
 
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
+#include "midi/synth/wind_breath.h"
 
 namespace sonare::midi::synth {
 
@@ -153,12 +154,12 @@ class FreeReedVoiceCore {
 
   // Live excitation axes (bellows pressure, body brightness): base from the
   // patch or a CC, matrix offset, the composed target and the ramped value.
-  float force01_base_ = 0.0f;
-  float force01_mod_ = 0.0f;
+  // force01_base/bright01_base start at free reed's own 0.0/0.0
+  // (ExcitationBases's in-class defaults are placeholders shared with other
+  // engines, not this one's).
+  ExcitationBases excite_{0.0f, 0.0f, 0.0f, 0.0f};
   float force01_target_ = 0.0f;
   float force01_ = 0.0f;
-  float bright01_base_ = 0.0f;
-  float bright01_mod_ = 0.0f;
   float bright01_target_ = 0.0f;
   float bright01_ = 0.0f;
   float ctrl_coeff_ = 0.0f;

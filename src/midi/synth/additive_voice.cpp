@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+#include "midi/synth/wind_breath.h"
 #include "util/constants.h"
 #include "util/tunable.h"
 
@@ -22,12 +23,6 @@ float drawbar_gain(float level) noexcept {
   const float stops = std::clamp(level, 0.0f, 8.0f);
   if (stops <= 0.0f) return 0.0f;
   return std::pow(10.0f, (stops - 8.0f) * 3.0f / 20.0f);
-}
-
-/// One-pole ramp coefficient reaching ~95% of the target in @p ms.
-float ramp_coeff(float ms, double sample_rate) noexcept {
-  const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
-  return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
 }
 
 // Live-control smoothing time (ms) for the morph position: the same ramp the

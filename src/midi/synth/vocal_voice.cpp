@@ -94,12 +94,6 @@ SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 // audible and buys back the six transcendentals the re-cut spends.
 constexpr float kCtrlSettle = 1.0e-6f;
 
-/// One-pole ramp coefficient reaching ~95% of the target in @p ms.
-float ramp_coeff(float ms, double sample_rate) noexcept {
-  const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
-  return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
-}
-
 }  // namespace
 
 void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, uint8_t note,
@@ -151,8 +145,8 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
 
   // The live axis starts where the note put it, so nothing is armed and the
   // coefficients above stand until a control moves.
-  bright01_base_ = bright;
-  bright01_mod_ = 0.0f;
+  excite_.bright01_base = bright;
+  excite_.bright_mod01 = 0.0f;
   bright01_target_ = bright;
   bright01_ = bright;
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
@@ -179,19 +173,17 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
 }
 
 void VocalVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
-  if ((present & kAxisBrightness) != 0u) {
-    bright01_base_ = std::clamp(base.brightness, 0.0f, 1.0f);
-  }
+  excite_.set_base(base, present);
   refresh_excitation_targets();
 }
 
 void VocalVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
-  bright01_mod_ = offsets.brightness;
+  excite_.set_mod(offsets);
   refresh_excitation_targets();
 }
 
 void VocalVoiceCore::refresh_excitation_targets() noexcept {
-  bright01_target_ = std::clamp(bright01_base_ + bright01_mod_, 0.0f, 1.0f);
+  bright01_target_ = std::clamp(excite_.bright01_base + excite_.bright_mod01, 0.0f, 1.0f);
   if (bright01_target_ != bright01_) excitation_live_ = true;
 }
 

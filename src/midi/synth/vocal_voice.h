@@ -29,6 +29,7 @@
 
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
+#include "midi/synth/wind_breath.h"
 
 namespace sonare::midi::synth {
 
@@ -146,9 +147,12 @@ class VocalVoiceCore {
   float form_amp_db_[kVocalFormants] = {};
 
   // Live brightness axis: base from the patch or a CC, matrix offset, the
-  // composed target and the ramped value.
-  float bright01_base_ = 0.0f;
-  float bright01_mod_ = 0.0f;
+  // composed target and the ramped value. Only brightness is a real axis here
+  // — force01_base/force_mod01 are carried unused, ExcitationBases's shared
+  // shape (vocal declines the force axis in engine_axis_capability()).
+  // bright01_base starts at vocal's own 0.0 (ExcitationBases's in-class
+  // default is a placeholder shared with other engines, not this one's).
+  ExcitationBases excite_{0.0f, 0.0f, 0.0f, 0.0f};
   float bright01_target_ = 0.0f;
   float bright01_ = 0.0f;
   float ctrl_coeff_ = 0.0f;

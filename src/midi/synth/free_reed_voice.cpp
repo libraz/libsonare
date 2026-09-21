@@ -65,12 +65,6 @@ SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 // audible and buys back the pow()/exp() the re-cut spends.
 constexpr float kCtrlSettle = 1.0e-6f;
 
-/// One-pole ramp coefficient reaching ~95% of the target in @p ms.
-float ramp_coeff(float ms, double sample_rate) noexcept {
-  const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
-  return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
-}
-
 /// One flow hump: a quartic bump of fractional @p width centred at @p centre,
 /// zero in value and slope at both edges so the source rolls off at 18 dB per
 /// octave and folds little back under Nyquist.
@@ -167,12 +161,12 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
 
   // Live axes start where the note put them, so nothing is armed and the
   // coefficients above stand until a control moves.
-  force01_base_ = level;
-  force01_mod_ = 0.0f;
+  excite_.force01_base = level;
+  excite_.force_mod01 = 0.0f;
   force01_target_ = level;
   force01_ = level;
-  bright01_base_ = brightness;
-  bright01_mod_ = 0.0f;
+  excite_.bright01_base = brightness;
+  excite_.bright_mod01 = 0.0f;
   bright01_target_ = brightness;
   bright01_ = brightness;
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
@@ -180,24 +174,18 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
 }
 
 void FreeReedVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
-  if ((present & kAxisForce) != 0u) {
-    force01_base_ = std::clamp(base.force, 0.0f, 1.0f);
-  }
-  if ((present & kAxisBrightness) != 0u) {
-    bright01_base_ = std::clamp(base.brightness, 0.0f, 1.0f);
-  }
+  excite_.set_base(base, present);
   refresh_excitation_targets();
 }
 
 void FreeReedVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
-  force01_mod_ = offsets.force;
-  bright01_mod_ = offsets.brightness;
+  excite_.set_mod(offsets);
   refresh_excitation_targets();
 }
 
 void FreeReedVoiceCore::refresh_excitation_targets() noexcept {
-  force01_target_ = std::clamp(force01_base_ + force01_mod_, 0.0f, 1.0f);
-  bright01_target_ = std::clamp(bright01_base_ + bright01_mod_, 0.0f, 1.0f);
+  force01_target_ = std::clamp(excite_.force01_base + excite_.force_mod01, 0.0f, 1.0f);
+  bright01_target_ = std::clamp(excite_.bright01_base + excite_.bright_mod01, 0.0f, 1.0f);
   if (force01_target_ != force01_ || bright01_target_ != bright01_) excitation_live_ = true;
 }
 

@@ -200,12 +200,6 @@ float pipe_tuning_error(uint8_t note, int rank) noexcept {
   return static_cast<float>(h & 0xFFFFFFu) * (2.0f / 16777215.0f) - 1.0f;
 }
 
-/// One-pole ramp coefficient reaching ~95% of the target in @p ms.
-float ramp_coeff(float ms, double sample_rate) noexcept {
-  const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
-  return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
-}
-
 /// The jet function: the S-shaped saturating transfer of the air jet deflecting
 /// across the labium (Fabre-Hirschberg lumped model / STK JetTable). The odd
 /// cubic's small-signal slope is inverting near zero (the oscillator drive); the
@@ -223,8 +217,8 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   const float srf = static_cast<float>(sr);
   noise_ = VoiceRandomSequence(seed);
   drive_index_ = 0;
-  releasing_ = false;
-  breath_level_ = 0.0f;
+  breath_.releasing = false;
+  breath_.level = 0.0f;
   // The wind hiss is a per-sample draw voiced at kLossVoicedSr, so it carries
   // the noise law's gain.
   turb_gain_ = kJetTurbulence * noise_gain_at_rate(sr);
@@ -270,8 +264,8 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   const float mouth = kBreathBase + kBreathSpan * level;
 
   // Wind gate contour: a quick speak on, a ring-down on release.
-  attack_coeff_ = ramp_coeff(8.0f, sr);
-  release_coeff_ = ramp_coeff(std::max(0.01f, params.release_damp_s) * 1000.0f, sr);
+  breath_.attack_coeff = ramp_coeff(8.0f, sr);
+  breath_.release_coeff = ramp_coeff(std::max(0.01f, params.release_damp_s) * 1000.0f, sr);
 
   // Bore purity: tone_decay_s maps to the bore loss (a purer, more sustained,
   // sharply pitched pipe reflects with less loss).
@@ -283,7 +277,8 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
 
   for (int r = 0; r < count; ++r) {
     Rank& pipe = ranks_[static_cast<size_t>(r)];
-    pipe.bore = slab_ != nullptr ? slab_ + static_cast<size_t>(2 * r) * span_capacity_ : nullptr;
+    pipe.bore.buffer =
+        slab_ != nullptr ? slab_ + static_cast<size_t>(2 * r) * span_capacity_ : nullptr;
     pipe.jet = slab_ != nullptr ? slab_ + static_cast<size_t>(2 * r + 1) * span_capacity_ : nullptr;
     pipe.noise_offset = static_cast<uint64_t>(r) << kRankNoiseShift;
     pipe.mix = std::clamp(ranks[r].level, 0.0f, 1.0f) * norm;
@@ -321,7 +316,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     const float detune_span =
         kPipeDetuneCents / (1.0f + std::max(0.0f, std::log2(f0 / kDetuneTaperRefHz)));
     const float detune = std::exp2(detune_span * pipe_tuning_error(note, r) * (1.0f / 1200.0f));
-    pipe.bore_period = period * kPitchCorrectOpen / detune;
+    pipe.bore.period = period * kPitchCorrectOpen / detune;
     pipe.sign = 1.0f;
     pipe.jet_ratio = kJetRatioOpen;
 
@@ -358,7 +353,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     pipe.dc_x1 = 0.0f;
     pipe.dc_y1 = 0.0f;
     pipe.dc_r = dc_r;
-    pipe.bore_out = 0.0f;
+    pipe.bore.out = 0.0f;
 
     // Even-harmonic pump: the octave-rich open flue colour, nearly muted for a
     // stopped rank (a gedackt is fundamental-dominant, not octave-rich).
@@ -375,7 +370,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     const float phase_dc = std::atan2(std::sin(omega), 1.0f - std::cos(omega)) -
                            std::atan2(dc_r * std::sin(omega), 1.0f - dc_r * std::cos(omega));
     const float tau_dc = phase_dc / std::max(omega, 1.0e-6f);
-    pipe.comp = 1.0f + tau_lp - tau_dc;
+    pipe.bore.comp = 1.0f + tau_lp - tau_dc;
     // The jet's compensation is taken at the voiced rate: a sample count's
     // duration halves as the rate doubles, and the jet delay is a duration.
     {
@@ -424,14 +419,11 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     // downward bend and the clamp enforcing it saturates silently -- a glide
     // simply stops descending while the pipe keeps speaking. What this rank's
     // own period still decides is how much of the bore the onset seeds; the jet
-    // line starts silent and so needs no span of its own.
-    const float eff = std::max(2.0f, pipe.bore_period - pipe.comp);
-    const int span = std::min(span_capacity_, std::max(16, static_cast<int>(eff * 1.15f) + 8));
-    pipe.prefill_span = span;
-    // The seed IS the bore's history, so the write position starts just past it
-    // and the first traversal reads back over the seeded span exactly as it did
-    // when the line was no longer than that span.
-    pipe.bore_write = span_capacity_ > 0 ? static_cast<size_t>(span % span_capacity_) : 0;
+    // line starts silent and so needs no span of its own. The seed IS the
+    // bore's history, so the write position starts just past it and the first
+    // traversal reads back over the seeded span exactly as it did when the
+    // line was no longer than that span.
+    pipe.bore.configure(pipe.bore.buffer, span_capacity_, pipe.bore.period, pipe.bore.comp, 1.15f);
     pipe.jet_write = 0;
 
     // Jet turbulence band: the wind hiss lives around this pipe's speaking
@@ -478,16 +470,18 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     // silent. Each pipe seeds at its own fixed phase: seeding every rank at
     // phase zero starts all the detuned partials fully aligned, and their
     // first coherent swell-and-collapse reads as a crack on the onset.
-    if (pipe.bore != nullptr) {
+    if (pipe.bore.buffer != nullptr) {
       const float pf = kBorePrefill * mouth;
-      const float w = kTwoPi / std::max(2.0f, pipe.bore_period);
+      const float w = kTwoPi / std::max(2.0f, pipe.bore.period);
       const float phase = kPi * pipe_tuning_error(note, r + 8);
       // Past the seed the line has to be cleared rather than left alone: it is
       // a slab slot the previous note wrote, and everything outside the seed is
       // read before it is written.
-      for (int i = span; i < span_capacity_; ++i) pipe.bore[static_cast<size_t>(i)] = 0.0f;
-      for (int i = 0; i < span; ++i) {
-        pipe.bore[static_cast<size_t>(i)] = pf * std::sin(w * static_cast<float>(i) + phase);
+      for (int i = pipe.bore.prefill_span; i < span_capacity_; ++i) {
+        pipe.bore.buffer[static_cast<size_t>(i)] = 0.0f;
+      }
+      for (int i = 0; i < pipe.bore.prefill_span; ++i) {
+        pipe.bore.buffer[static_cast<size_t>(i)] = pf * std::sin(w * static_cast<float>(i) + phase);
       }
     }
     if (pipe.jet != nullptr) {
@@ -500,12 +494,12 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   // coefficients above stand until a control moves. Brightness is centred: 0.5
   // is the registration as voiced.
   srf_ = srf;
-  force01_base_ = level;
-  force01_mod_ = 0.0f;
+  excite_.force01_base = level;
+  excite_.force_mod01 = 0.0f;
   force01_target_ = level;
   force01_ = level;
-  bright01_base_ = 0.5f;
-  bright01_mod_ = 0.0f;
+  excite_.bright01_base = 0.5f;
+  excite_.bright_mod01 = 0.0f;
   bright01_target_ = 0.5f;
   bright01_ = 0.5f;
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
@@ -514,24 +508,18 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
 
 void PipeOrganVoiceCore::set_excitation_base(const ExcitationAxes& base,
                                              uint32_t present) noexcept {
-  if ((present & kAxisForce) != 0u) {
-    force01_base_ = std::clamp(base.force, 0.0f, 1.0f);
-  }
-  if ((present & kAxisBrightness) != 0u) {
-    bright01_base_ = std::clamp(base.brightness, 0.0f, 1.0f);
-  }
+  excite_.set_base(base, present);
   refresh_excitation_targets();
 }
 
 void PipeOrganVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
-  force01_mod_ = offsets.force;
-  bright01_mod_ = offsets.brightness;
+  excite_.set_mod(offsets);
   refresh_excitation_targets();
 }
 
 void PipeOrganVoiceCore::refresh_excitation_targets() noexcept {
-  force01_target_ = std::clamp(force01_base_ + force01_mod_, 0.0f, 1.0f);
-  bright01_target_ = std::clamp(bright01_base_ + bright01_mod_, 0.0f, 1.0f);
+  force01_target_ = std::clamp(excite_.force01_base + excite_.force_mod01, 0.0f, 1.0f);
+  bright01_target_ = std::clamp(excite_.bright01_base + excite_.bright_mod01, 0.0f, 1.0f);
   if (force01_target_ != force01_ || bright01_target_ != bright01_) excitation_live_ = true;
 }
 
@@ -578,24 +566,22 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
   if (excitation_live_) advance_excitation();
 
   // Shared wind gate: ramp to 1 while blowing, to 0 once released.
-  const float target = releasing_ ? 0.0f : 1.0f;
-  const float coeff = releasing_ ? release_coeff_ : attack_coeff_;
-  breath_level_ += coeff * (target - breath_level_);
+  breath_.advance();
 
   float mix = 0.0f;
   for (int r = 0; r < rank_count_; ++r) {
     Rank& pipe = ranks_[static_cast<size_t>(r)];
-    if (pipe.bore == nullptr || pipe.jet == nullptr || pipe.prefill_span < 8) continue;
+    if (pipe.bore.buffer == nullptr || pipe.jet == nullptr || pipe.bore.prefill_span < 8) continue;
 
     // Per-rank speech swell (post-loop level ramp toward 1).
     pipe.wind += pipe.speak_coeff * (1.0f - pipe.wind);
 
-    const float breath = pipe.breath * breath_level_ *
+    const float breath = pipe.breath * breath_.level *
                          (kFootPressureFloor + (1.0f - kFootPressureFloor) * pipe.wind);
 
     // Open/stopped-end reflection from the previous bore output: one-pole loss
     // lowpass, sign-selected feedback (+ open / - stopped).
-    pipe.lp_state += pipe.lp_alpha * (pipe.bore_out - pipe.lp_state);
+    pipe.lp_state += pipe.lp_alpha * (pipe.bore.out - pipe.lp_state);
     const float temp = pipe.sign * pipe.loss_gain * pipe.lp_state;
 
     // Jet drive: the pressure difference across the flue convects (jet delay)
@@ -606,10 +592,8 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
         pipe.turb_alpha *
         (noise_.bipolar_at(kTurbIndexBase + pipe.noise_offset + drive_index_) - pipe.turb_state);
     const float pd = breath - pipe.jet_reflection * temp + turb_gain_ * breath * pipe.turb_state;
-    const float bore_delay = std::clamp(pipe.bore_period / ratio - pipe.comp, 1.0f,
-                                        static_cast<float>(span_capacity_ - 4));
     // The jet rides the line as it was voiced, not the line at the running rate.
-    const float jet_line = std::clamp(pipe.bore_period / ratio - pipe.jet_comp, 1.0f,
+    const float jet_line = std::clamp(pipe.bore.period / ratio - pipe.jet_comp, 1.0f,
                                       static_cast<float>(span_capacity_ - 4));
     const float jet_delay =
         std::clamp(pipe.jet_ratio * jet_line, 1.0f, static_cast<float>(span_capacity_ - 4));
@@ -640,15 +624,13 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
       into += pump;
     }
 
-    pipe.bore_out = rt::lagrange3_fractional_delay(pipe.bore, static_cast<size_t>(span_capacity_),
-                                                   pipe.bore_write,
-                                                   static_cast<int>(bore_delay * 256.0f), into);
+    pipe.bore.advance(into, ratio);
 
     // Mouth/radiation high-shelf (lifting what the pipe radiates efficiently
     // into the room; rad_gain == 0 is a true bypass), then the post-loop tone
     // filter — the pipe's own radiated purity caps the shelf's reach so the
     // lift lives in the pipe's speaking band, not the top octaves.
-    float radiated = pipe.bore_out;
+    float radiated = pipe.bore.out;
     if (pipe.rad_gain > 0.0f) {
       pipe.rad_state += pipe.rad_alpha * (radiated - pipe.rad_state);
       radiated += pipe.rad_gain * (radiated - pipe.rad_state);
@@ -665,7 +647,7 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
           pipe.chiff_lp_alpha *
           (noise_.bipolar_at(kChiffIndexBase + pipe.noise_offset + drive_index_) -
            pipe.chiff_lp_state);
-      chiff = pipe.chiff_level * breath_level_ * pipe.chiff_lp_state;
+      chiff = pipe.chiff_level * breath_.level * pipe.chiff_lp_state;
       pipe.chiff_level *= pipe.chiff_coeff;
     }
 
@@ -683,7 +665,7 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
 }
 
 void PipeOrganVoiceCore::release() noexcept {
-  releasing_ = true;
+  breath_.release();
   // Cut the wind and damp each bore so it stops speaking promptly.
   for (int r = 0; r < rank_count_; ++r) {
     Rank& pipe = ranks_[static_cast<size_t>(r)];
@@ -692,12 +674,12 @@ void PipeOrganVoiceCore::release() noexcept {
 }
 
 void PipeOrganVoiceCore::kill() noexcept {
-  releasing_ = true;
-  breath_level_ = 0.0f;
+  breath_.releasing = true;
+  breath_.level = 0.0f;
   for (int r = 0; r < rank_count_; ++r) {
     Rank& pipe = ranks_[static_cast<size_t>(r)];
     pipe.lp_state = 0.0f;
-    pipe.bore_out = 0.0f;
+    pipe.bore.out = 0.0f;
     pipe.dc_x1 = 0.0f;
     pipe.dc_y1 = 0.0f;
     pipe.chiff_level = 0.0f;

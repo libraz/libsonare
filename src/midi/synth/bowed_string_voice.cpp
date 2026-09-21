@@ -5,6 +5,7 @@
 
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
+#include "midi/synth/wind_breath.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -94,12 +95,6 @@ SONARE_TUNABLE(kPolDrive, 0.35f);
 SONARE_TUNABLE(kPolCoupleMax, 0.20f);
 // Direct radiation of the 2nd polarization added to the output.
 SONARE_TUNABLE(kPolRadiation, 0.25f);
-
-/// One-pole ramp coefficient reaching ~95% of the target in @p ms.
-float ramp_coeff(float ms, double sample_rate) noexcept {
-  const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
-  return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
-}
 
 }  // namespace
 
