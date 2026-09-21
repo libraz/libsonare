@@ -2570,6 +2570,59 @@ def test_a_failure_on_a_bound_nobody_chose_a_floor_for_says_so(tmp_path, capsys)
     assert "tone-to-noise" not in out.split("rests on the generic")[1].split("\n")[0]
 
 
+def test_a_bound_that_is_its_floor_is_named_even_where_the_gate_records_none(tmp_path, capsys):
+    """108 of the 153 gates in the tree predate the recorded `floor` field, and on
+    those a bound sitting at its floor is indistinguishable from a measured one.
+    The floor table is reachable from the reader, so it is recomputed."""
+    gate = tmp_path / "gate.json"
+    gate.write_text(json.dumps({"timbre": "ref", "bounds": {
+        "register": {"median": 1.0, "abs_median": 1.0, "p90": 3.1, "rows": 35},
+        "attack": {"median": 40.0, "abs_median": 40.0, "p90": 40.0, "rows": 35}}}))
+    summary = {"register": {"median": 0.1, "abs_median": 0.1, "p90": 0.1, "n": 35},
+               "attack": {"median": 1.0, "abs_median": 1.0, "p90": 1.0, "n": 35}}
+    assert profile_module.check_gate(summary, gate, "ref") == 0
+    out = capsys.readouterr().out
+    named = out.split("resting on the dimension's floor")[1].split("\n")[0]
+    assert "(median/abs_median/p90)" in named          # attack, floored on all three
+    assert "(median/abs_median)" in named              # register, its p90 is not
+    assert "this gate records no floors" in out
+
+
+def test_a_bound_above_its_floor_is_not_named_as_floored(tmp_path, capsys):
+    """The sensitivity specimen for the check above. Reach is not enough: a check
+    that named every bound would pass that test and report nothing."""
+    gate = tmp_path / "gate.json"
+    gate.write_text(json.dumps({"timbre": "ref", "bounds": {
+        "register": {"median": 4.2, "abs_median": 4.2, "p90": 9.0, "rows": 35}}}))
+    summary = {"register": {"median": 0.1, "abs_median": 0.1, "p90": 0.1, "n": 35}}
+    assert profile_module.check_gate(summary, gate, "ref") == 0
+    assert "resting on the dimension's floor" not in capsys.readouterr().out
+
+
+def test_a_gate_read_through_a_stale_library_says_the_pass_is_not_evidence(
+        tmp_path, capsys, monkeypatch):
+    """The build state was recorded into a written gate and asked by nobody, so a
+    comparison against a library older than the change under test returned green
+    in silence. Reported rather than failed: the test is on mtimes."""
+    gate = tmp_path / "gate.json"
+    gate.write_text(json.dumps({"timbre": "ref", "bounds": {
+        "tnr": {"median": 1e9, "abs_median": 1e9, "p90": 1e9, "rows": 35,
+                "floor": 3.74, "floor_from": "measured spread"}}}))
+    summary = {"tnr": {"median": 0.0, "abs_median": 0.0, "p90": 0.0, "n": 35}}
+    monkeypatch.setattr(profile_gate, "_model_build_state",
+                        lambda: {"built_utc": "2026-09-21T00:05:10Z",
+                                 "newest_source_utc": "2026-09-21T10:53:08Z",
+                                 "stale": True})
+    assert profile_module.check_gate(summary, gate, "ref") == 0
+    err = capsys.readouterr().err
+    assert "2026-09-21T00:05:10Z" in err
+    assert "A pass here is not evidence" in err
+
+    monkeypatch.setattr(profile_gate, "_model_build_state", lambda: {"stale": False})
+    assert profile_module.check_gate(summary, gate, "ref") == 0
+    assert "not evidence" not in capsys.readouterr().err
+
+
 # --------------------------------------------------------------------------- #
 # The variation bank reaches the render
 # --------------------------------------------------------------------------- #

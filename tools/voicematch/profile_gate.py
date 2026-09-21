@@ -247,6 +247,61 @@ PER_NOTE_DIMENSIONS = ("vel_range", "register")
 #: `register` bounds are this number. Named so a gate can record it as its own.
 GENERIC_FLOOR = 1.0
 
+#: A floor is the dimension's own noise, and it is MEASURED where the corpus
+#: holds several instruments of one kind: the median disagreement between them
+#: is the tightest bound any model can be held to without failing on which one
+#: it was compared against. These hand-written ones are the fallback for a
+#: corpus with a single reference, and they were the whole story until a
+#: measured one showed how far off a guess can be -- the guess under the tuning
+#: column was 1.0 cent where three concert grands disagree by 3.74, so a voice
+#: sitting at half their spread failed a bound it should never have been held
+#: to. Module scope rather than local to the writer, because a reader given a
+#: gate that predates the recorded `floor` field can reach the same number here
+#: instead of being unable to tell a floored bound from a measured one.
+FLOOR_GUESSES = {
+    "stretch": 1.0, "decay": 0.5, "damper": 5.0, "balance": 0.5,
+    "centroid_pct": 1.0, "tnr": 1.0, "vel_range": 1.0,
+    "stereo": 0.27, "attack": 40.0, "aftersound": 1.81,
+    # A sixth of a doubling and a decibel: the smallest change in ring length
+    # and in tonality a listener would call a different instrument. Both are
+    # fallbacks — a capture with two references measures its own floor and
+    # that one wins.
+    "ring": 0.17, "tonality": 1.0,
+}
+
+
+def dimension_floor(key: str, spread: dict[str, float] | None = None) -> tuple[float, str]:
+    """The floor under @p key's bound, and which of the three decided it.
+
+    The three carry different weight and the number alone cannot say which it
+    was, so both are returned together. `default` is the weakest: nobody chose
+    it for this dimension.
+    """
+    measured = (spread or {}).get(key, 0.0)
+    if measured > 0.0:
+        return measured, "measured spread"
+    if key in FLOOR_GUESSES:
+        return FLOOR_GUESSES[key], "guess"
+    return GENERIC_FLOOR, "default"
+
+
+def floored_axes(key: str, bound: dict, spread: dict[str, float] | None = None) -> list[str]:
+    """Which of @p bound's axes are the floor rather than the reading.
+
+    A floored axis is not a weak voice: `max(reading * margin, floor)` picks the
+    floor precisely when the model's own error was under the corpus's noise. It
+    is the bound that stops meaning anything about the model — it reports what
+    the instrument can resolve. A gate recorded before the `floor` field existed
+    carries no floor of its own, so it is recomputed here; only a `measured
+    spread` floor is unrecoverable that way, and such a gate records the spread
+    it used.
+    """
+    floor = bound.get("floor")
+    if floor is None:
+        floor, _from = dimension_floor(key, spread)
+    return [axis for axis in RATCHETED_BOUND_KEYS
+            if axis in bound and abs(bound[axis] - floor) < 1e-9]
+
 
 def print_summary_table(summary: dict[str, dict], spread: dict[str, float],
                         attempted: int) -> None:
@@ -430,6 +485,39 @@ def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str,
               f"{', '.join(from_default)}:\n  its dimension has neither a measured spread nor "
               f"a guess, so that number was\n  chosen for no dimension in particular and is "
               f"in this one's units by accident.")
+    # A bound that IS its floor holds nothing about the voice. `max(reading *
+    # margin, floor)` takes the floor exactly when the model's own error was
+    # already under the corpus's noise, so the bound reports what the instrument
+    # can resolve. Printed whether or not the gate passed, because the case it
+    # exists for is a green one: a pass on a floored bound is not evidence.
+    spread = gate.get("reference_spread") or {}
+    floored = {k: floored_axes(k, b, spread) for k, b in bounds.items()
+               if isinstance(b, dict)}
+    floored = {k: v for k, v in floored.items() if v}
+    if floored:
+        named = ", ".join(f"{DELTA_LABELS.get(k, k)} ({'/'.join(v)})"
+                          for k, v in sorted(floored.items()))
+        print(f"  resting on the dimension's floor, not on the voice: {named}\n"
+              f"  — the reading these were recorded from was under the corpus's own noise, so "
+              f"they\n  bound what the measurement can resolve and a pass on one says nothing.")
+    if bounds and not any(isinstance(b, dict) and "floor" in b for b in bounds.values()):
+        print("  this gate records no floors, so the ones named above were recomputed from "
+              "the\n  dimension's table. A dimension whose floor came from a measured spread "
+              "cannot be\n  recovered that way. The next --write-gate records them.")
+    # The model side was rendered through a library, and a gate says nothing
+    # about a source the library predates. Recorded in the gate since `6fcdca7c`
+    # and asked here, because it was only ever written down: six gates were read
+    # as green against a library built before the change under test, and nothing
+    # in the run said so. Reported rather than failed — the comparison is on
+    # mtimes, so a comment edit raises it without moving a sample — but a pass
+    # is the dangerous outcome and is named as one.
+    build = _model_build_state()
+    if build.get("stale"):
+        advice = ("Rebuild before reading the failures below." if failures
+                  else "A pass here is not evidence: rebuild and run it again.")
+        print(f"  the library this rendered through was built {build['built_utc']} and a "
+              f"source is\n  newer ({build['newest_source_utc']}). {advice}",
+              file=sys.stderr)
     if failures:
         for line in failures:
             print(f"  FAIL  {line}")
@@ -552,36 +640,15 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
     happens to be near zero today would otherwise be held to a tolerance no
     change could stay inside.
     """
-    # A floor is the dimension's own noise, and it is MEASURED: where the corpus
-    # holds several instruments of one kind, the median disagreement between
-    # them is the tightest bound any model can be held to without failing on
-    # which one it was compared against. Hand-written floors are the fallback
-    # for a corpus with a single reference, and they were the whole story until
-    # a measured one showed how far off a guess can be -- the guess under the
-    # tuning column was 1.0 cent where three concert grands disagree by 3.74, so
-    # a voice sitting at half their spread failed a bound it should never have
-    # been held to. Nothing here loosens a bound below what was measured: the
-    # recorded value times the margin still wins whenever it is larger.
-    guesses = {"stretch": 1.0, "decay": 0.5, "damper": 5.0, "balance": 0.5,
-               "centroid_pct": 1.0, "tnr": 1.0, "vel_range": 1.0,
-               "stereo": 0.27, "attack": 40.0, "aftersound": 1.81,
-               # A sixth of a doubling and a decibel: the smallest change in
-               # ring length and in tonality a listener would call a different
-               # instrument. Both are fallbacks — a capture with two references
-               # measures its own floor and that one wins.
-               "ring": 0.17, "tonality": 1.0}
-    measured = {k: v for k, v in (spread or {}).items() if v > 0.0}
-    floors = {**guesses, **measured}
+    # The floor table is `FLOOR_GUESSES` / `dimension_floor`, at module scope so
+    # a reader can reach it too. Nothing here loosens a bound below what was
+    # measured: the recorded value times the margin still wins when it is larger.
     bounds = {}
     for key, row in summary.items():
-        floor = floors.get(key, GENERIC_FLOOR)
+        floor, floor_from = dimension_floor(key, spread)
         bounds[key] = {
-            # Which of the three decided this floor, recorded because the three
-            # carry different weight and the number alone cannot say which it
-            # was. `default` is the weakest: nobody chose it for this dimension.
             "floor": round(floor, 4),
-            "floor_from": ("measured spread" if key in measured
-                           else "guess" if key in guesses else "default"),
+            "floor_from": floor_from,
             "median": round(max(abs(row["median"]) * margin, floor), 3),
             "abs_median": round(max(row["abs_median"] * margin, floor), 3),
             # The tail, held to the same floor as the medians: a p90 tighter
