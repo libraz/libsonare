@@ -697,6 +697,35 @@ TEST_CASE("Sf2Player stores the GS EFX unit and clears it on reset", "[midi][sf2
   REQUIRE(player.gs_efx().type == 0);
 }
 
+TEST_CASE("an offline bounce clears the GS EFX unit on reset too", "[midi][sf2][gslayer]") {
+  // Two separate pieces of code clear the mirror, because the thread that owns
+  // it differs: live, the control thread clears it while parsing the reset;
+  // offline (realize_efx_inline), the render thread clears it in
+  // reset_all_state. The case above covers the first, this one the second --
+  // which is the path an offline bounce takes.
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.realize_efx_inline = true;
+  Sf2Player player(cfg);
+  player.set_soundfont(make_fixture());
+  player.prepare(kOutRate, 256);
+
+  const uint8_t type_write[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                                0x03, 0x00, 0x01, 0x11, 0x2B, 0xF7};  // Distortion
+  const uint8_t gs_reset_bytes[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                                    0x00, 0x7F, 0x00, 0x41, 0xF7};
+
+  // Asserting the selection first is what gives the two below their teeth: a
+  // player that never took the type would answer Thru afterwards either way.
+  REQUIRE(player.handle_sysex(type_write, sizeof(type_write)));
+  REQUIRE(player.gs_efx().assigned);
+  REQUIRE(player.gs_efx().type == 0x0111);
+
+  REQUIRE(player.handle_sysex(gs_reset_bytes, sizeof(gs_reset_bytes)));
+  REQUIRE_FALSE(player.gs_efx().assigned);
+  REQUIRE(player.gs_efx().type == 0);
+}
+
 TEST_CASE("use-for-rhythm SysEx turns a melodic channel into drums", "[midi][sf2][gslayer]") {
   Sf2Player player = make_player();
   // Channel 1 plays the melodic preset by default; mark it as rhythm and it
