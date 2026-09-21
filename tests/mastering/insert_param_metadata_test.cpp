@@ -15,11 +15,25 @@
 
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/param_field_tables.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/stereo/imager.h"
 #include "support/schema_paths.h"
 #include "util/json.h"
+
+#ifdef SONARE_WITH_FX
+#include "effects/delay/stereo_delay.h"
+#include "effects/modulation/auto_wah.h"
+#include "effects/modulation/chorus.h"
+#include "effects/modulation/ensemble.h"
+#include "effects/modulation/flanger.h"
+#include "effects/modulation/phaser.h"
+#include "effects/modulation/pitch_shifter.h"
+#include "effects/modulation/ring_modulator.h"
+#include "effects/modulation/rotary.h"
+#include "effects/modulation/wah.h"
+#endif
 
 namespace {
 
@@ -67,6 +81,23 @@ bool builds_with(const std::string& name, const std::string& key, const json::Va
     return false;
   }
 }
+
+#ifdef SONARE_WITH_FX
+// Compares an insert's construction keys against the arity of the config struct
+// behind it. The two sides come from different places — the keys from probing
+// the factory, the arity from the struct's own declaration — so neither can be
+// corrected into agreement with the other.
+template <typename Config>
+void require_a_key_per_config_field(const std::string& name, std::size_t unexposed = 0) {
+  const std::vector<std::string> keys = insert_param_names(name);
+  INFO(name);
+  // A name the factory does not know, and one whose feature is off, both return
+  // an empty list — which would agree with any config without the factory being
+  // asked anything at all.
+  REQUIRE_FALSE(keys.empty());
+  CHECK(keys.size() + unexposed == sonare::mastering::api::detail::field_count<Config>());
+}
+#endif
 
 }  // namespace
 
@@ -244,3 +275,50 @@ TEST_CASE("the processor catalog schema list matches what the writer emits",
   }
   REQUIRE(interior == prefixed);
 }
+
+#ifdef SONARE_WITH_FX
+TEST_CASE("every effects-insert config field has a construction key", "[mastering][catalog]") {
+  // A config field with no key is unreachable from every binding, and nothing
+  // else here detects it: the DSP tests build the config struct directly and the
+  // catalog only publishes keys someone already wrote. The mastering processors
+  // are guarded at compile time by SONARE_ASSERT_TABLE_COVERS, which pairs a
+  // field table with its struct. These have no table — insert_factory.cpp spells
+  // their keys by hand — so the equivalent question is asked of the factory's
+  // own behaviour instead.
+  //
+  // The population is every effects insert whose keys stand one to one with its
+  // config's fields. The reverbs are deliberately outside it and an `unexposed`
+  // count would misdescribe them in both directions: they probe alias keys for
+  // one field (`damping` / `hfDamping`), derive one field from another key
+  // (`decaySec` -> `decay`), and carry nested members that one field spans
+  // several keys of (a room's dimensions, its endpoints, its air).
+  namespace modulation = sonare::effects::modulation;
+  require_a_key_per_config_field<modulation::PhaserConfig>("effects.modulation.phaser");
+  require_a_key_per_config_field<modulation::RotaryConfig>("effects.modulation.rotary");
+  require_a_key_per_config_field<modulation::ChorusConfig>("effects.modulation.chorus");
+  require_a_key_per_config_field<modulation::FlangerConfig>("effects.modulation.flanger");
+  require_a_key_per_config_field<modulation::PitchShifterConfig>("effects.modulation.pitchShifter");
+  require_a_key_per_config_field<modulation::EnsembleConfig>("effects.modulation.ensemble");
+  require_a_key_per_config_field<modulation::WahConfig>("effects.modulation.wah");
+  require_a_key_per_config_field<modulation::AutoWahConfig>("effects.modulation.autoWah");
+  require_a_key_per_config_field<modulation::RingModulatorConfig>(
+      "effects.modulation.ringModulator");
+  require_a_key_per_config_field<sonare::effects::delay::StereoDelayConfig>("effects.delay.stereo");
+
+  // The same comparison against a struct carrying one field the factory does not
+  // read must fail. A local specimen rather than a real config: a control naming
+  // a live defect stops being one the day it is fixed.
+  struct PhaserConfigPlusOne {
+    float rate_hz;
+    float min_hz;
+    float max_hz;
+    int stages;
+    float dry_wet;
+    float feedback;
+    modulation::PhaserMixMode mix_mode;
+    float never_read;
+  };
+  CHECK(insert_param_names("effects.modulation.phaser").size() !=
+        sonare::mastering::api::detail::field_count<PhaserConfigPlusOne>());
+}
+#endif
