@@ -19,7 +19,7 @@ describe('Sonare WASM Module', () => {
     await init();
   });
 
-  describe('initialization', () => {
+  describe('sends, buses and strips', () => {
     it('routes track sends through buses', () => {
       const engine = new RealtimeEngine(48000, 256);
       const frames = 256 * 40;

@@ -16,7 +16,7 @@ describe('Sonare WASM Module', () => {
     await init();
   });
 
-  describe('mastering', () => {
+  describe('streaming processors', () => {
     it('should stream a mono block through StreamingMasteringChain', () => {
       const chain = new StreamingMasteringChain({
         eq: { tiltDb: 1.0 },

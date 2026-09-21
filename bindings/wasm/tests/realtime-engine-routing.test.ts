@@ -23,7 +23,7 @@ describe('Sonare WASM Module', () => {
     await init();
   });
 
-  describe('initialization', () => {
+  describe('clip, lane and MIDI routing', () => {
     it('processes realtime engine clips, capture, and telemetry', () => {
       const engine = new RealtimeEngine(48000, 128);
       engine.setTempo(60);
