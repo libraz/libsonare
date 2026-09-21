@@ -90,14 +90,14 @@ HEARD_STAGE = STAGES.index("heard") / 5.0
 #: The engine a program falls to when nothing chose one for it. Deliberate for a
 #: synth lead and a default everywhere else, which is why the untouched
 #: predicate needs the patch as well: `tremolo_strings` and `orchestra_hit` are
-#: subtractive on purpose, while `fam10` through `fam15` are eight synth programs
-#: sharing one patch nobody has voiced apart.
+#: subtractive on purpose.
 DEFAULT_ENGINE = "subtractive"
 
-#: A patch named `famN` is the family fallback rather than a voice written for
-#: an instrument. On a physical engine that is still a deliberate choice — `fam0`
-#: is the piano family on the piano engine — so it only reads as untouched
-#: together with the default engine.
+#: A patch named `famN` is a family base rather than a voice written for an
+#: instrument. Only `fam0` reaches a program today — it is the piano family on
+#: the piano engine, which is a deliberate choice — so the prefix only reads as
+#: untouched together with the default engine. The predicate is kept general
+#: because a base retargeted to a program would come back under this name.
 FAMILY_PATCH_PREFIX = "fam"
 
 

@@ -401,6 +401,14 @@ inline const NativeSynthPatch* program_override_patches(
   return reinterpret_cast<const NativeSynthPatch*>(&overrides);
 }
 
+/// The entries of `family_patches()` that hold a patch, indexed by GM family so
+/// a `famN` tuning key keeps naming the family it was fitted under. Family 0 is
+/// the concert grand, which program 0 resolves to; 3, 4 and 7 are bases program
+/// builders copy and re-voice. The rest are unpopulated — every other program
+/// names its own patch — so a whole-table sweep walks this list, and nothing
+/// indexes the table by program.
+inline constexpr std::array<size_t, 4> kLiveBases = {0, 3, 4, 7};
+
 const std::array<NativeSynthPatch, 16>& family_patches() noexcept;
 const ProgramOverrides& program_overrides() noexcept;
 const std::array<NativeSynthPatch, 128>& drum_note_table() noexcept;

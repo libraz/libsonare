@@ -621,7 +621,11 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
     default:
       break;
   }
-  return family_patches()[static_cast<size_t>((program & 0x7Fu) >> 3)];
+  // Program 0 is the only program that reaches here — the switch above names a
+  // patch for the other 127 — so this is the grand rather than an index by
+  // family. The other family slots hold no patch, and indexing into one would
+  // answer a future uncovered program with silence.
+  return family_patches()[0];
 }
 
 bool is_dedicated_model_engine(SynthEngineMode mode) noexcept {
@@ -1190,7 +1194,8 @@ float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t 
 float gm_fallback_max_release_ms() noexcept {
   static const float kMax = [] {
     float max_ms = 0.0f;
-    for (const NativeSynthPatch& p : family_patches()) {
+    for (size_t i : detail::kLiveBases) {
+      const NativeSynthPatch& p = family_patches()[i];
       // Zero-sustain (percussive/one-shot) patches ring through their decay
       // after note-off, so the decay bounds the tail too.
       max_ms = std::max(max_ms, std::max(p.amp_env.release_ms, p.amp_env.decay_ms));
