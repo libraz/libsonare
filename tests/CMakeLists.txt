@@ -248,6 +248,7 @@ if(BUILD_MASTERING)
     mastering/insert_factory_extra_test.cpp
     mastering/insert_latency_alignment_test.cpp
     mastering/insert_param_metadata_test.cpp
+    effects/lofi_hold_test.cpp
     mastering/loudness_ceiling_test.cpp
     mastering/match_test.cpp
     mastering/maximizer_test.cpp
@@ -371,6 +372,13 @@ if(BUILD_FX)
   target_sources(sonare_tests PRIVATE effects/dattorro_modulation_test.cpp)
   target_sources(sonare_tests PRIVATE effects/modulation_inserts_test.cpp)
   target_sources(sonare_tests PRIVATE effects/effects_state_non_finite_recovery_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/insert_bit_identity_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/insert_sample_rate_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/phaser_structure_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/rotary_structure_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/modulated_delay_structure_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/delay_damping_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/pitch_window_test.cpp)
   if(NOT BUILD_MASTERING)
     target_link_libraries(sonare_tests PRIVATE sonare_fx)
   endif()
@@ -487,7 +495,7 @@ if(BUILD_ARRANGEMENT)
     midi/sample_voice_test.cpp
     midi/layered_instrument_test.cpp
     midi/string_loop_test.cpp
-    midi/plucked_string_loss_law_test.cpp
+    midi/loop_loss_law_test.cpp
     midi/modal_voice_test.cpp
     midi/percussion_voice_test.cpp
     midi/piano_voice_test.cpp
@@ -538,6 +546,9 @@ if(BUILD_ARRANGEMENT)
     midi/gs_cc_rpn_test.cpp
     midi/drum_exclusive_group_test.cpp
     midi/gs_efx_send_routing_test.cpp
+    midi/gs_efx_convert_test.cpp
+    midi/gs_efx_tables_reach_test.cpp
+    midi/gs_efx_defaults_test.cpp
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
     midi/smf_roundtrip_test.cpp
