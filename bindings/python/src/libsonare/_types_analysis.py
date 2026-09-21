@@ -377,7 +377,14 @@ class MeterEstimate:
     when the beat series was too short to score any candidate, and then every
     other field carries that fallback rather than a result. Read it before
     treating a short span's answer as a detection — the confidence reported
-    alongside it is the fallback's fixed value, not a measurement.
+    alongside it is 0, so an unchecked read degrades toward "no idea" rather
+    than toward a middling detection.
+
+    Two different quantities share the name ``confidence``:
+    ``time_signature.confidence`` is derived from the margin over the
+    runner-up, while a ``candidates`` entry's is that candidate's share of the
+    summed support. They are not comparable — read the one belonging to the
+    field you meant.
     """
 
     time_signature: TimeSignature

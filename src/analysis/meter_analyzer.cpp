@@ -196,9 +196,10 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
   result_.candidate_scores.assign(config_.candidate_numerators.size(), 0.0f);
 
   if (beats.size() < 8 || config_.candidate_numerators.empty()) {
-    result_.time_signature.confidence = 0.5f;
     // No search ran, so the bar is reported undivided rather than carrying the
-    // 2+2 that a four would have been given had anything been scored, and
+    // 2+2 that a four would have been given had anything been scored, the
+    // confidence stays at the zero it was initialized to so an unchecked read
+    // degrades toward "no idea" rather than toward a middling detection, and
     // searched stays false so a caller can tell this fixed answer from a
     // measured one instead of having to recognize the fallback by its values.
     result_.grouping = {result_.time_signature.numerator};

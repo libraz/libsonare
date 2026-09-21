@@ -469,7 +469,10 @@ class MeterEstimate:
     3+2+2 — and always sums to the reported numerator; a single entry means no
     internal division was resolved. ``searched`` is False when the series was
     too short to score any candidate, in which case every other field is the
-    fixed fallback rather than a measurement."""
+    fixed fallback rather than a measurement, the confidence 0 included. Two
+    different quantities share the name ``confidence``:
+    ``time_signature.confidence`` is the margin over the runner-up, while a
+    ``candidates`` entry's is that candidate's share of the summed support."""
 
     time_signature: TimeSignature
     downbeat_phase: int

@@ -483,7 +483,7 @@ TEST_CASE("estimate_meter_from_beats draws the line at empty, not at short", "[m
   REQUIRE(one.time_signature.denominator == 4);
   REQUIRE(one.downbeat_phase == 0);
   REQUIRE(one.candidates.size() == 1);
-  REQUIRE(one.time_signature.confidence <= 0.5f);
+  REQUIRE(one.time_signature.confidence == 0.0f);
 
   // A full series scores higher, so the value above is the short-series report
   // and not the estimator's ceiling.
@@ -520,7 +520,11 @@ TEST_CASE("estimate_meter_from_beats reports the default for a series below the 
                         [](float score) { return score == 0.0f; }));
     // The short-span answer has to be distinguishable from a real detection.
     REQUIRE(result.time_signature.confidence < searched.time_signature.confidence);
-    REQUIRE(result.time_signature.confidence <= 0.5f);
+    // Zero rather than any middling value: a caller who reads the confidence
+    // without the flag lands on "no idea" instead of on a weak detection, and
+    // the single candidate carries the same zero as the scores beside it.
+    REQUIRE(result.time_signature.confidence == 0.0f);
+    REQUIRE(result.candidates.front().confidence == 0.0f);
   }
 }
 

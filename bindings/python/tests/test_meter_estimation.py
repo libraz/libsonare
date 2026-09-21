@@ -138,13 +138,17 @@ def test_negative_beat_times_still_reach_the_core_check() -> None:
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
 
 
-def test_single_beat_series_still_returns_the_low_confidence_default() -> None:
-    """The line is drawn at empty, not at short — one beat is still answered."""
+def test_single_beat_series_still_returns_the_unmeasured_default() -> None:
+    """The line is drawn at empty, not at short — one beat is still answered.
+
+    Answered with a zero confidence, so a caller reading the confidence alone
+    lands on "no idea" rather than on a value that reads as a weak detection.
+    """
     result = libsonare.estimate_meter([0.0], [1.0])
 
     assert result.time_signature.numerator == 4
     assert result.time_signature.denominator == 4
-    assert result.time_signature.confidence == pytest.approx(0.5)
+    assert result.time_signature.confidence == pytest.approx(0.0)
     assert result.downbeat_phase == 0
     assert result.searched is False
 
@@ -153,8 +157,9 @@ def test_searched_separates_the_fallback_from_a_detection() -> None:
     """Below the eight-beat search floor nothing is scored, and it says so.
 
     A caller scoring many spans — a meter map over a beat series, say — needs
-    the fallback to be recognizable as one. The confidence alone does not do
-    that: 0.5 reads as a middling detection rather than as "no search ran".
+    the fallback to be recognizable as one. A zero confidence is the graceful
+    reading for a caller who never looks, but it cannot separate "no search
+    ran" from a search that found nothing; only this flag does that.
     """
     times, strengths = _beat_series(4, bars=8)
     detected = libsonare.estimate_meter(times, strengths)
@@ -165,6 +170,7 @@ def test_searched_separates_the_fallback_from_a_detection() -> None:
         assert result.searched is False, count
         # Every field belongs to the fallback rather than to a candidate.
         assert result.time_signature.numerator == 4
+        assert result.time_signature.confidence == pytest.approx(0.0)
         assert result.grouping == [4]
         assert all(score == 0.0 for score in result.candidate_scores)
 

@@ -498,6 +498,15 @@ export interface EstimateMeterRequest {
    * `beats[].strength` also works but is a single unwindowed envelope frame.
    * Neither needs pre-scaling: the series is divided by its own maximum before
    * scoring, so only the accent contrast within it is read.
+   *
+   * A series assembled by hand from {@link onsetEnvelope} — one frame read at
+   * each beat time — is neither of those, and it carries a sample-rate
+   * dependence neither of them has: a hop counted in samples frames a different
+   * amount of time at each rate, so one waveform sampled at 32000, 44100 and
+   * 48000 Hz has produced three different winning numerators off beat times
+   * identical to the sample. Widening the read to a window around the beat does
+   * not remove it. A browser decodes at the output device's rate, so that is a
+   * different answer per visitor for the same clip.
    */
   beatStrengths: ArrayLike<number>;
   /**

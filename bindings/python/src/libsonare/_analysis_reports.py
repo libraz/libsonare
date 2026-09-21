@@ -418,7 +418,14 @@ def estimate_meter(
             unwindowed envelope frame per beat and scores accordingly. Neither
             needs pre-scaling: the series is divided by its own maximum before
             scoring, so only the accent contrast within it is read and the
-            absolute units it arrives in do not matter.
+            absolute units it arrives in do not matter. A series assembled by
+            hand from :func:`onset_envelope` — one frame read at each beat time
+            — is neither of those, and it carries a sample-rate dependence
+            neither of them has: a hop counted in samples frames a different
+            amount of time at each rate, so one waveform sampled at 32000,
+            44100 and 48000 Hz has produced three different winning numerators
+            off beat times identical to the sample. Widening the read to a
+            window around the beat does not remove it.
         candidate_numerators: Meter numerators to score. ``None`` selects the
             native default ``(3, 4, 6)``. At most 16 entries, each in
             ``[2, 32]``. Widening the set does not force a wider meter — the
@@ -451,7 +458,10 @@ def estimate_meter(
         ``[3, 2, 2]`` for a 7/8 notated 3+2+2 — and always sums to the reported
         numerator. ``searched`` is False when the series was too short to score
         any candidate, in which case every other field is the fixed fallback
-        rather than a measurement.
+        rather than a measurement, the confidence 0 included. Two quantities
+        share the name ``confidence``: ``time_signature.confidence`` is the
+        margin over the runner-up, a ``candidates`` entry's its share of the
+        summed support.
 
     Raises:
         SonareValueError: If ``beat_times`` and ``beat_strengths`` differ in

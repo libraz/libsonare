@@ -1582,7 +1582,9 @@ TEST_CASE("sonare_estimate_meter_json", "[c_api]") {
     REQUIRE(json != nullptr);
     const auto root = sonare::util::json::parse(json);
     REQUIRE(root["timeSignature"]["numerator"].as_number() == 4.0);
-    REQUIRE(root["timeSignature"]["confidence"].as_number() <= 0.5);
+    // The fallback reports no confidence at all, so a caller reading the field
+    // without "searched" degrades toward "no idea".
+    REQUIRE(root["timeSignature"]["confidence"].as_number() == 0.0);
     sonare_free_string(json);
   }
 

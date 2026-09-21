@@ -66,7 +66,10 @@ const std::vector<std::string>& analysis_result_schema_paths();
 /// resolved.
 /// searched is false when the beat series was too short to score any candidate,
 /// in which case every other field carries the fixed fallback rather than a
-/// measurement.
+/// measurement, timeSignature.confidence included, which is 0.
+/// The name confidence covers two quantities: on timeSignature it is the margin
+/// over the runner-up, on a candidates entry the candidate's share of the
+/// summed support. They are not comparable.
 std::string meter_result_to_json(const MeterResult& result);
 
 /// @brief Canonical field paths for the standalone meter estimate schema.

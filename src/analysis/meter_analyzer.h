@@ -50,6 +50,12 @@ struct MeterConfig {
 
 /// @brief Result from meter analysis.
 struct MeterResult {
+  /// @brief Selected time signature.
+  /// @details Its confidence is derived from the margin between the winning
+  ///          numerator's score and the runner-up's, so it says how separated
+  ///          the winner is. That is a different quantity from the confidence
+  ///          each `candidates` entry carries under the same field name, and
+  ///          the two are not comparable.
   TimeSignature time_signature{4, 4, 0.0f};
   int downbeat_phase = 0;
   /// @brief Whether a search ran, as opposed to the fixed default being reported.
@@ -57,10 +63,10 @@ struct MeterResult {
   ///          shorter than the estimator can search over — and every other field
   ///          then carries the fixed fallback rather than a measurement:
   ///          time_signature is 4 over the requested denominator, downbeat_phase
-  ///          is 0, grouping is undivided and candidate_scores are all zero.
-  ///          Read this before treating any field as a detection; the
-  ///          confidence a false result reports is the estimator's fixed
-  ///          fallback value and is not a measurement either.
+  ///          is 0, grouping is undivided, candidate_scores are all zero and
+  ///          the confidence is 0 — an unchecked read of a fallback therefore
+  ///          degrades toward "no idea" rather than toward a middling
+  ///          detection. Read this before treating any field as a detection.
   bool searched = false;
   /// @brief Beat counts of the accent groups inside one bar, summing to the numerator.
   /// @details How the bar divides, in beats per group: {3, 2, 2} is the 7/8 an
@@ -92,6 +98,11 @@ struct MeterResult {
   ///          normalize for length first.
   std::vector<float> candidate_scores;
   /// @brief Candidate signatures in descending existing multi-comb score order.
+  /// @details Each entry's confidence is that candidate's share of the summed
+  ///          support, so the entries sum to one. It answers "how much of the
+  ///          evidence points here", not the separation from the runner-up that
+  ///          `time_signature.confidence` reports under the same field name —
+  ///          reading one as the other produces a plausible wrong number.
   std::vector<TimeSignature> candidates;
 };
 
@@ -129,6 +140,13 @@ void validate_meter_config(const MeterConfig& config);
 ///        Neither needs pre-scaling: the series is divided by its own maximum
 ///        before scoring, so only the accent contrast within it is read and the
 ///        absolute units it arrives in do not matter.
+///        A series assembled by hand from onset_envelope() — one frame read at
+///        each beat time — is not equivalent to either, and it carries a sample
+///        rate dependence neither of them has: a hop counted in samples frames
+///        a different amount of time at each rate, so one waveform sampled at
+///        32000, 44100 and 48000 Hz has produced three different winning
+///        numerators off beat times that were identical to the sample. Widening
+///        the read to a window around the beat does not remove it.
 /// @param config Scoring configuration; validated before use.
 /// @details The scoring reads only the per-beat strengths, so no audio or
 ///          frame-level onset envelope is needed and a caller can score an

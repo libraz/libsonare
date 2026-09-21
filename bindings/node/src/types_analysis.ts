@@ -73,6 +73,16 @@ export interface KeyCandidate {
 export interface TimeSignature {
   numerator: number;
   denominator: number;
+  /**
+   * Support for this signature in `[0, 1]`.
+   *
+   * What it measures depends on which field the signature arrived in. On
+   * {@link MeterEstimate.timeSignature} it is derived from the margin over the
+   * runner-up; on a {@link MeterEstimate.candidates} entry it is that
+   * candidate's share of the summed support. The two are not comparable, so
+   * read the value from the field you meant rather than from whichever one is
+   * to hand.
+   */
   confidence: number;
 }
 
@@ -250,7 +260,11 @@ export interface AnalysisResult {
 
 /** Result of {@link estimateMeter}. */
 export interface MeterEstimate {
-  /** The best-supported meter over the scored beat series. */
+  /**
+   * The best-supported meter over the scored beat series. Its `confidence` is
+   * the margin over the runner-up — how separated the winner is — not the
+   * share-of-support a {@link candidates} entry carries under the same name.
+   */
   timeSignature: TimeSignature;
   /** Beat index the first measure starts on; always in `[0, timeSignature.numerator)`. */
   downbeatPhase: number;
@@ -259,8 +273,9 @@ export interface MeterEstimate {
    *
    * `false` means the beat series was too short to score any candidate, and
    * every other field then carries that fallback rather than a measurement —
-   * including `timeSignature.confidence`, which is the fallback's own fixed
-   * value. Read this before treating a short span's answer as a detection.
+   * `timeSignature.confidence` included, which is 0, so an unchecked read
+   * degrades toward "no idea" rather than toward a middling detection. Read
+   * this before treating a short span's answer as a detection.
    */
   searched: boolean;
   /**

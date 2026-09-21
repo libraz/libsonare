@@ -535,7 +535,7 @@ void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_streng
   if (beats_.size() < 8) {
     // Matches MeterAnalyzer's own too-few-beats guard, so the same condition
     // reports the same signature whichever estimator reaches it first.
-    time_signature_ = {4, meter_config.denominator, 0.5f};  // Low-confidence default
+    time_signature_ = {4, meter_config.denominator, 0.0f};  // Unmeasured default
     time_signature_candidates_ = {time_signature_};
     downbeat_phase_ = 0;
     DownbeatResult downbeat_result = estimate_downbeats(beats_, time_signature_, 0);

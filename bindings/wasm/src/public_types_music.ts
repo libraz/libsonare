@@ -474,6 +474,17 @@ export interface Dynamics {
 export interface TimeSignature {
   numerator: number;
   denominator: number;
+  /**
+   * Support for this signature in `[0, 1]`.
+   *
+   * @remarks
+   * What it measures depends on which field the signature arrived in. On
+   * {@link MeterEstimate.timeSignature} it is derived from the margin over the
+   * runner-up; on a {@link MeterEstimate.candidates} entry it is that
+   * candidate's share of the summed support. The two are not comparable, so
+   * read the value from the field you meant rather than from whichever one is
+   * to hand.
+   */
   confidence: number;
 }
 
@@ -481,7 +492,14 @@ export interface TimeSignature {
  * Meter estimated over a caller-supplied beat series.
  */
 export interface MeterEstimate {
-  /** Selected time signature. */
+  /**
+   * Selected time signature.
+   *
+   * @remarks
+   * Its `confidence` is the margin over the runner-up — how separated the
+   * winner is — not the share-of-support a {@link candidates} entry carries
+   * under the same field name.
+   */
   timeSignature: TimeSignature;
   /** Beat index the first measure starts on, in `[0, timeSignature.numerator)`. */
   downbeatPhase: number;
@@ -491,8 +509,9 @@ export interface MeterEstimate {
    * @remarks
    * `false` means the beat series was too short to score any candidate, and
    * every other field then carries that fallback rather than a measurement —
-   * including `timeSignature.confidence`, which is the fallback's own fixed
-   * value. Read this before treating a short span's answer as a detection.
+   * `timeSignature.confidence` included, which is 0, so an unchecked read
+   * degrades toward "no idea" rather than toward a middling detection. Read
+   * this before treating a short span's answer as a detection.
    */
   searched: boolean;
   /**
@@ -536,6 +555,11 @@ export interface MeterEstimate {
    * A ranking, so entry `k` is the k-th best hypothesis — not the k-th
    * requested numerator. Use {@link candidateScores} to read the score of a
    * specific requested numerator.
+   *
+   * Each entry's `confidence` is that candidate's share of the summed support,
+   * so the entries sum to one. It is a different quantity from
+   * {@link timeSignature}'s margin-derived confidence, which shares the field
+   * name and nothing else.
    */
   candidates: TimeSignature[];
 }

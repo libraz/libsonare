@@ -291,12 +291,22 @@ SonareMeterOptions sonare_meter_options_default(void);
    beats[].strength also works but is a single unwindowed envelope frame.
    Neither needs pre-scaling: the series is divided by its own maximum before
    scoring, so only the accent contrast within it is read.
+   A series assembled by hand from an onset envelope -- one frame read at each
+   beat time -- is neither of those, and it carries a sample-rate dependence
+   neither of them has: a hop counted in samples frames a different amount of
+   time at each rate, so one waveform sampled at 32000, 44100 and 48000 Hz has
+   produced three different winning numerators off beat times identical to the
+   sample. Widening the read to a window around the beat does not remove it.
    The result carries a grouping alongside the numerator: how the bar divides
    into accent groups of two and three beats, so a seven comes back as 3+2+2 or
    2+2+3 rather than as a bare seven.
    Read "searched" before treating any field as a detection: a beat series too
-   short to score any candidate reports a fixed fallback instead, and the
-   confidence it carries is that fallback's own value.
+   short to score any candidate reports a fixed fallback instead, whose
+   confidence is 0 rather than a middling value a caller could mistake for a
+   measurement.
+   The name "confidence" covers two quantities: on "timeSignature" it is the
+   margin over the runner-up, on a "candidates" entry the candidate's share of
+   the summed support. They are not comparable.
    Emits the schema documented on meter_result_to_json. On any error *out_json
    is set to NULL, so a caller may check it instead of the return code.
    Free *out_json with sonare_free_string. */
