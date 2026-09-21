@@ -33,13 +33,12 @@ SONARE_TUNABLE(kRosinDepth, 0.15f);
 SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
 // --- frequency-referenced bridge loop loss ---
-// The bridge reflection pole used to be a function of brightness alone (no sr
-// term), so the same value darkened a fundamental differently at every sample
-// rate. The fix re-expresses the shipped one-pole as two decay targets in Hz,
-// anchored so the anchor cell reproduces the shipped filter exactly (design-
-// bowed-pitch-scaling-2026-09-21.md §13.1; design-loop-loss-law-2026-09-21.md
-// §9.2). omega_ref cannot be wrong AT the anchor — it only selects the law's
-// behaviour away from it — so it is a fit parameter, not a correctness one.
+// A pole is a count of samples, so a bridge reflection set from brightness
+// alone darkens a given fundamental differently at every sample rate. The
+// one-pole is expressed as two decay targets in Hz, anchored so the anchor cell
+// reproduces it exactly. kBowLossRefHz cannot be wrong AT the anchor — it only
+// selects the law's behaviour away from it — so it is a fit parameter rather
+// than a correctness one.
 SONARE_TUNABLE(kBowLossRefHz, 2000.0f);
 constexpr uint8_t kBowLossAnchorNote = 55;
 constexpr double kBowLossAnchorSr = 48000.0;
@@ -267,10 +266,8 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   pol_write_ = 0;
   if (pol_couple_ > 0.0f) {
     pol_period_ = base_period_ * std::exp2(kPolDetuneCents / 1200.0f);
-    // Same frequency-referenced law as the primary loop above; this loop has
-    // no patch field of its own, so kPolLpPole/kPolLoss stand in as its
-    // shipped (a, g), anchored on the detuned period the anchor note/rate
-    // would give this loop (design-loop-loss-law-2026-09-21.md §6).
+    // Same law as the primary loop; with no patch field of its own, kPolLpPole
+    // and kPolLoss stand in as this loop's shipped (a, g) at the detuned period.
     const float pol_anchor_period = anchor_period * std::exp2(kPolDetuneCents / 1200.0f);
     const BowLossT60Pair pol_t60 = bow_loss_anchor_t60(pol_anchor_period, kPolLpPole, kPolLoss);
     const float pol_omega = kTwoPi / std::max(1.0f, pol_period_);

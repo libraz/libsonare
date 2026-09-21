@@ -120,7 +120,7 @@ NativeSynthPatch flute_base_patch() {
   return p;
 }
 
-// --- Bell loop-loss law reproduction (design-loop-loss-law-2026-09-21.md #3) ---
+// --- Bell loop-loss law reproduction ---
 //
 // flute_voice.cpp's own bell_loss_anchor_t60() / refresh_excitation_targets()
 // are private (internal linkage), so this reproduces them from the patch

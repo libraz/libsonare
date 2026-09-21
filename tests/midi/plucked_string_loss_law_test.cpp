@@ -7,9 +7,9 @@
 ///
 /// The shipped pole `(1 - brightness) * 0.7` carries no sr term, so the loss a
 /// harmonic received was a function of n/N (n = harmonic number, N = sr/f0)
-/// rather than of the harmonic's own frequency in Hz -- the same defect
-/// design-loop-loss-law-2026-09-21.md #4 measured in the other four waveguide
-/// engines. The fix re-derives the pole from decay_s's own t60 at the
+/// rather than of the harmonic's own frequency in Hz -- the same defect the
+/// other four waveguide engines carried. The pole is re-derived from decay_s's
+/// own t60 at the
 /// fundamental (unchanged) and a second t60 at a fixed reference frequency,
 /// both solved through solve_string_loop_filter.
 
@@ -54,8 +54,7 @@ using sonare::test::bowed::octave_band_tilt;
 /// update this literal.
 constexpr float kRefHz = 2500.0f;
 
-/// The anchor the engine's law is built at (design-loop-loss-law-2026-09-21.md
-/// #4.3): sitar note 60, 48 kHz.
+/// The anchor the engine's law is built at: sitar note 60, 48 kHz.
 constexpr uint8_t kAnchorNote = 60;
 constexpr float kAnchorSr = 48000.0f;
 
@@ -243,9 +242,8 @@ TEST_CASE("the rendered plucked-string engine's sr-discriminator, with ks_voice 
   // an illustrative value chosen for measurement power, not the shipped sitar
   // patch: the sitar's own brightness (0.817194) gives an almost-transparent
   // pole, so its output-level effect is latent, the same way brass's own
-  // shipped range moves the output by only 0.14 dB
-  // (design-loop-loss-law-2026-09-21.md #9.5) -- an output reading there is
-  // read off the coefficient instead, which the tests above already do.
+  // shipped range moves the output by only 0.14 dB -- an output reading there
+  // is taken off the coefficient instead, which the tests above already do.
   PluckedStringPatchParams dark;
   dark.buzz = 0.0f;
   dark.brightness = 0.0f;

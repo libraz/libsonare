@@ -97,11 +97,10 @@ ROOM_PRESENT = "present"
 #: between two rungs names a step that does not exist.
 LADDER = tuple(n / 5.0 for n in range(6))
 
-#: A generated row may carry none of these. The rule is in `status.md` and in
-#: `.claude/rules/synth-bank.md`: `tools/voice-status.json` holds what the
-#: library and the references reported, and a tier, a rank or a goal is a
-#: decision. Baking one in makes the generated file stale whenever the policy
-#: moves with no voice having changed.
+#: A generated row may carry none of these. The rule is in `status.md`:
+#: `tools/voice-status.json` holds what the library and the references
+#: reported, and a tier, a rank or a goal is a decision. Baking one in makes
+#: the generated file stale whenever the policy moves with no voice changed.
 DECISION_KEYS = ("tier", "rank", "goal", "goals", "priority", "release")
 
 #: Keys a tier entry may carry. Anything else is read by nothing: the policy is

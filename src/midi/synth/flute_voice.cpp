@@ -38,20 +38,15 @@ SONARE_TUNABLE(kJetRatioMax, 0.62f);
 // region; the STK-stable operating point is ~0.5 each.
 SONARE_TUNABLE(kReflectMax, 0.62f);
 
-// Open-end reflection lowpass, re-expressed as a loop-loss law rather than a
-// pole fixed in samples (design-loop-loss-law-2026-09-21.md #3): the pole this
-// engine reflects with tracked a fixed SAMPLE COUNT regardless of sample rate,
-// so the same brightness voiced a different corner in Hz at every rate (the
-// comment this replaced already said so: "brightness 0.5 lands near the STK
-// flute filter pole (~0.65 at 48 kHz)", naming the rate the code never used).
-// The render-time pole now comes from solve_string_loop_filter() against two
-// per-traversal gains quoted in Hz (bell_hf() below); the old kBellPoleBase /
-// kBellPoleSpan retire as tunables, surviving only as the bare 0.80 / 0.30
-// literals that reconstruct the SHIPPED pole shape for the anchor solve.
-// kBellRefHz is the new knob: the second point past which the darkening is
-// quoted. Set to the shipped, ear-calibrated filter's own implied corner at
-// 48 kHz (-ln(a_ship)*48000/(2*pi) clusters at 2625-4031 Hz, mean ~3100) --
-// a like-for-like substitution, not a re-voicing argued fresh from register.
+// Open-end reflection as a loop-loss law rather than a pole fixed in samples: a
+// pole counts samples, so one brightness voiced a different corner in Hz at
+// every rate. The render-time pole comes from solve_string_loop_filter() against
+// two per-traversal gains quoted in Hz (bell_hf() below), whose bare 0.80 / 0.30
+// literals reconstruct the shipped pole shape for the anchor solve.
+//
+// The second point past which the darkening is quoted. Set to the ear-calibrated
+// filter's own implied corner at 48 kHz, -ln(a)*48000/(2*pi), which spans
+// 2625-4031 Hz across the eight patches -- a substitution, not a re-voicing.
 SONARE_TUNABLE(kBellRefHz, 3000.0f);
 
 // Bore loss from damping: a mild reflection trim on top of the 0.5 reflections
@@ -94,15 +89,13 @@ SONARE_TUNABLE(kPeakBase, 4.0f);
 SONARE_TUNABLE(kPeakTilt, -0.65f);    // the driven peak falls with pitch (rich bass)
 SONARE_TUNABLE(kPeakRefHz, 261.63f);  // middle C, the flute's home register
 
-// Anchor for the bell loop-loss law (design-loop-loss-law-2026-09-21.md #3.3),
-// 48 kHz. Note 76 rather than 60: it is interior to all eight shipped flute
-// patches' voicematch gate grids (a measured cell in seven of the eight; only
-// piccolo's grid, 74-90, has to interpolate it), where 60 sat at the bottom
-// edge of six grids and entirely below two -- a one-signed placement that
-// cannot separate a correct law's own divergence from a mis-set kBellRefHz.
-// The one shipped pole/gain pair the solve below reproduces exactly at this
-// (f0, sr), for any anchor note -- the identity is structural, not tied to a
-// particular register.
+// Anchor for the bell loop-loss law, at 48 kHz. Note 76 rather than 60: it is
+// interior to all eight shipped flute patches' voicematch gate grids (measured
+// in seven, interpolated only in piccolo's 74-90), where 60 sits at the bottom
+// edge of six and below two entirely -- a one-signed placement cannot separate
+// a correct law's own divergence from a mis-set kBellRefHz. The solve below
+// reproduces the shipped pole/gain pair exactly at this (f0, sr) for any anchor
+// note; that identity is structural rather than tied to a register.
 constexpr float kBellAnchorSr = 48000.0f;
 constexpr uint8_t kBellAnchorNote = 76;
 
@@ -425,13 +418,9 @@ void FluteVoiceCore::refresh_excitation_targets() noexcept {
   const float b = std::clamp(breath01_base_ + force_mod01_, 0.0f, 1.0f);
   breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
 
-  // Open-end reflection lowpass: two per-traversal gains quoted in Hz (the
-  // SHIPPED pole/gain pair's own response at the fundamental and at
-  // kBellRefHz, anchored) rather than a pole fixed in samples, so the pole
-  // this solves for tracks f0/sr correctly (design-loop-loss-law-2026-09-21.md
-  // #3). brightness is CC74-live, so this whole solve is redone on every
-  // write, not only at note-on -- freezing it in start() alone would silently
-  // kill the live control (#9.5).
+  // brightness is CC74-live, so the whole solve is redone on every write rather
+  // than at note-on alone; freezing it in start() would silently kill the live
+  // control.
   const float br = std::clamp(bright01_base_ + bright_mod01_, 0.0f, 1.0f);
   // The shipped pole shape: 0.80 / 0.30 were kBellPoleBase / kBellPoleSpan
   // before this fix retired them as tunables. The clamp is provably slack for
