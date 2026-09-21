@@ -135,6 +135,7 @@ void write_manifest(const std::filesystem::path& path) {
 
 TEST_CASE("mixing assistant suggestion golden hashes stay stable",
           "[.][mixing][assistant][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::filesystem::path manifest = "tests/mixing/golden/assistant_scene_hashes.tsv";
   if (std::getenv("SONARE_UPDATE_MIXING_ASSISTANT_GOLDEN") != nullptr) {
     write_manifest(manifest);

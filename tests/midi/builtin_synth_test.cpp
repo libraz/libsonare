@@ -554,6 +554,7 @@ TEST_CASE("BuiltinSynth obeys the zone's prohibitions", "[midi][synth][mpe]") {
 
 TEST_CASE("BuiltinSynth renders a project that configures no zone unchanged",
           "[.][midi][synth][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   // The zone model is inert until an MCM arrives, and this is the hash that says
   // so: every controller this synth honours, sent on an ordinary channel, over a
   // render long enough to cover the attack, the sustain and the release. Hidden

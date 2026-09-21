@@ -202,6 +202,7 @@ void write_surround_bus_manifest(const std::filesystem::path& path) {
 }  // namespace
 
 TEST_CASE("built-in mixing strip golden hashes stay stable", "[.][mixing][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::filesystem::path manifest = "tests/mixing/golden/strip_hashes.tsv";
   if (std::getenv("SONARE_UPDATE_MIXING_GOLDEN") != nullptr) {
     write_manifest(manifest);
@@ -223,6 +224,7 @@ TEST_CASE("built-in mixing strip golden hashes stay stable", "[.][mixing][golden
 }
 
 TEST_CASE("surround bus linked-dynamics golden hashes stay stable", "[.][mixing][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::filesystem::path manifest = "tests/mixing/golden/surround_bus_hashes.tsv";
   if (std::getenv("SONARE_UPDATE_MIXING_GOLDEN") != nullptr) {
     write_surround_bus_manifest(manifest);

@@ -26,6 +26,7 @@
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "repair_metrics.h"
+#include "support/golden_hash.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -190,6 +191,7 @@ const float kInf = std::numeric_limits<float>::infinity();
 // -- the linked path against the mono one, a report against the same call
 // without one -- are asserted in the cases below and stay in CI.
 TEST_CASE("mono denoise and dereverb are unchanged", "[.][repair][stereo][denoise][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const auto bed = make_bed(16384, 12345u);
   const Audio audio = as_audio(bed);
 

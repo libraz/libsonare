@@ -32,6 +32,7 @@
 #include "mastering/api/audio_utils.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
+#include "support/golden_hash.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -458,6 +459,7 @@ TEST_CASE("Declip mono output survives the detector extraction unchanged",
 // The halves are separate cases because they hold under different conditions, which
 // one case cannot express: a skip covers everything in it.
 TEST_CASE("Declip mono digests stay stable", "[.][repair][stereo][impulse][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::vector<float> clip_left = clip_fixture(0.0);
   const std::vector<float> clip_right = clip_fixture(0.35);
   DeclipConfig config;
@@ -473,6 +475,7 @@ TEST_CASE("Declip mono digests stay stable", "[.][repair][stereo][impulse][golde
 // digest instead would not fix that -- 7% of this bed's samples sit within one
 // drift-width of a 1e-6 grid boundary, so a re-record would cross one eventually.
 TEST_CASE("Declick fill values stay stable", "[.][repair][stereo][impulse][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::vector<float> click_left = click_fixture(0.0);
   const std::vector<float> click_right = click_fixture(0.35);
   const std::vector<float> left = to_vector(declick(view(click_left), kCorpusDeclick));

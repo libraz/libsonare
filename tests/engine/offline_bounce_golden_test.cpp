@@ -382,6 +382,7 @@ TEST_CASE("every offline entry point opens at settled parameter values",
 
 TEST_CASE("realtime engine offline bounce golden hashes stay stable",
           "[.][engine][offline][bounce][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::filesystem::path manifest = "tests/engine/golden/offline_bounce_hashes.tsv";
   if (std::getenv("SONARE_UPDATE_ENGINE_GOLDEN") != nullptr) {
     write_manifest(manifest);

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "mastering/eq/equalizer.h"
+#include "support/golden_hash.h"
 #include "util/constants.h"
 
 namespace {
@@ -38,6 +39,7 @@ std::vector<float> signal(float phase) {
 }  // namespace
 
 TEST_CASE("EqualizerProcessor golden regression stays stable", "[mastering][eq][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   using namespace sonare::mastering::eq;
   struct Case {
     const char* name;

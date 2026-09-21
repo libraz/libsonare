@@ -473,6 +473,7 @@ void write_gesture_manifest(const std::filesystem::path& path,
 }  // namespace
 
 TEST_CASE("NativeSynth GM program renders stay bit-identical", "[.][midi][synth][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::filesystem::path manifest = "tests/midi/golden/gm_program_hashes.tsv";
   if (std::getenv("SONARE_UPDATE_SYNTH_GOLDEN") != nullptr) {
     write_manifest(manifest);
@@ -494,6 +495,7 @@ TEST_CASE("NativeSynth GM program renders stay bit-identical", "[.][midi][synth]
 
 TEST_CASE("NativeSynth engine renders under a controller gesture stay bit-identical",
           "[.][midi][synth][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::filesystem::path manifest = "tests/midi/golden/gm_gesture_hashes.tsv";
   const std::vector<GestureResult> rows = compute_gesture_rows();
   if (std::getenv("SONARE_UPDATE_SYNTH_GOLDEN") != nullptr) {

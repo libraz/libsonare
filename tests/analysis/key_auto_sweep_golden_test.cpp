@@ -44,6 +44,7 @@
 
 #include "analysis/key_analyzer.h"
 #include "core/audio.h"
+#include "support/golden_hash.h"
 #include "util/constants.h"
 
 namespace {
@@ -232,6 +233,7 @@ void write_manifest(const std::filesystem::path& path, const std::vector<Row>& r
 }  // namespace
 
 TEST_CASE("automatic key sweep decisions stay stable", "[.][key][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::filesystem::path manifest = "tests/analysis/golden/key_auto_sweep.tsv";
   // The sweep runs a harmonic separation per track, so the corpus is computed
   // once and reused for both the regeneration and the comparison.

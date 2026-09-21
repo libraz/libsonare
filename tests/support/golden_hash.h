@@ -17,6 +17,26 @@
 
 namespace sonare::test {
 
+/// Which build the committed digests belong to, and whether this one is it.
+///
+/// Every `*.tsv` under a `golden/` directory is recorded from the Release build
+/// `make test-golden` configures, so a run from the shared Debug tree compares
+/// two optimization levels rather than two states of the code. It is not a
+/// theoretical difference: at -O0 the piano and vocal engine renders differ from
+/// their recorded digests while the other 126 GM programs reproduce exactly, and
+/// that subset once read as an unattributed regression. Pass this to `INFO` at
+/// the head of a golden case so a mismatch says which of the two it is.
+///
+/// RelWithDebInfo defines NDEBUG as well and is not separated here; nothing in
+/// this tree runs a golden from one.
+inline constexpr const char* kGoldenDigestProvenance =
+#ifdef NDEBUG
+    "golden digests are recorded from a Release build, and this run is one";
+#else
+    "golden digests are recorded from a Release build and this run is NOT one: a mismatch here "
+    "compares two optimization levels rather than two states of the code (use make test-golden)";
+#endif
+
 /// FNV-1a 64-bit offset basis.
 inline constexpr std::uint64_t kFnvOffsetBasis = 1469598103934665603ull;
 

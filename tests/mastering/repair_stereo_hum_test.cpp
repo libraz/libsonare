@@ -28,6 +28,7 @@
 #include "mastering/repair/decrackle.h"
 #include "mastering/repair/dehum.h"
 #include "mastering/repair/trim_silence.h"
+#include "support/golden_hash.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -608,6 +609,7 @@ TEST_CASE("Dehum and trim mono output are unchanged by the report and stereo wor
 // notch cascade, the adaptive pair and the chord because the tracker reaches a
 // different frequency as well.
 TEST_CASE("Dehum and decrackle mono digests stay stable", "[.][repair][stereo][hum][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::vector<float> crackle_left = crackle_fixture(0.0);
   const std::vector<float> crackle_right = crackle_fixture(0.35);
   CHECK(digest(decrackle(view(crackle_left), kMedian)) == 0x7262ef87u);

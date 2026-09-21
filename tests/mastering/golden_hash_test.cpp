@@ -135,6 +135,7 @@ void write_manifest(const std::filesystem::path& path) {
 }  // namespace
 
 TEST_CASE("built-in mastering preset golden hashes stay stable", "[.][mastering][preset][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   const std::filesystem::path manifest = "tests/mastering/golden/preset_hashes.tsv";
   if (std::getenv("SONARE_UPDATE_MASTERING_GOLDEN") != nullptr) {
     write_manifest(manifest);
