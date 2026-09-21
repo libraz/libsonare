@@ -554,9 +554,16 @@ void SectionAnalyzer::classify_sections(const Spectrogram& spec) {
       type = SectionType::Instrumental;
       confidence = std::clamp(0.5f + 0.4f * (1.0f - desc.vocal_likelihood), 0.0f, 1.0f);
     } else if (!is_first && !is_last) {
-      // Distinctive, vocal, non-repeating interior segment => Bridge.
+      // Distinctive, vocal, non-repeating interior segment => Bridge. The
+      // mirror of the Instrumental branch above, which this one is the negative
+      // of: that branch is taken when the segment is under the vocal threshold
+      // and scores how far under, so this one scores how far over. A flat
+      // constant here instead would sit below kMinLabelConfidence and rewrite
+      // every Bridge to Unknown before it left the analyzer, which is what the
+      // four sibling branches deriving their score from their own evidence
+      // exists to prevent.
       type = SectionType::Bridge;
-      confidence = 0.5f;
+      confidence = std::clamp(0.5f + 0.4f * desc.vocal_likelihood, 0.0f, 1.0f);
     } else {
       // Everything above is a positive identification. What reaches here is the
       // single shape none of them claim: a high-energy, non-repeating first or

@@ -453,6 +453,37 @@ TEST_CASE("a track with no detected structure is reported as unidentified", "[se
   REQUIRE(section.confidence == 0.0f);
 }
 
+TEST_CASE("a bridge reaches the caller instead of being demoted to Unknown", "[section_analyzer]") {
+  // The Bridge branch assigned a flat confidence that sat under the same
+  // function's demotion floor, so every Bridge it identified was rewritten to
+  // Unknown before leaving the analyzer and the enum value was unreachable in
+  // output. Its four sibling branches all score themselves from the evidence
+  // that selected them; this pins that Bridge does too.
+  //
+  // A search for the label alone would pass on a build that never enters the
+  // branch, so the confidence is asserted as well: a Bridge has to arrive with
+  // a score that came from its own vocal likelihood rather than with the
+  // constant that used to be there.
+  constexpr int sr = 22050;
+  // Interior, non-repeating, and inside the vocal band, which is the exact
+  // shape the branch claims. The repeated tone around it is what leaves this
+  // one segment without a repeat to match.
+  const std::array<float, 6> hz = {220.0f, 330.0f, 330.0f, 880.0f, 330.0f, 330.0f};
+  std::vector<float> samples(static_cast<size_t>(sr) * 30);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float time = static_cast<float>(i) / static_cast<float>(sr);
+    const size_t seg = std::min<size_t>(hz.size() - 1, static_cast<size_t>(time / 5.0f));
+    samples[i] = 0.4f * std::sin(sonare::constants::kTwoPi * hz[seg] * time);
+  }
+  SectionAnalyzer analyzer(Audio::from_vector(samples, sr));
+
+  const auto& sections = analyzer.sections();
+  const auto bridge = std::find_if(sections.begin(), sections.end(),
+                                   [](const Section& s) { return s.type == SectionType::Bridge; });
+  REQUIRE(bridge != sections.end());
+  REQUIRE(bridge->confidence > 0.5f);
+}
+
 TEST_CASE("an unclassified edge segment is not labelled as a verse", "[section_analyzer]") {
   // Every positive branch of the classifier claims something specific, and
   // together they cover every repeat and every interior segment. What is left is
