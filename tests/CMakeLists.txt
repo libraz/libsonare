@@ -146,6 +146,11 @@ add_executable(sonare_tests
   api/sonare_c_mastering_repair_detect_test.cpp
   api/sonare_c_features_metering_test.cpp
   api/sonare_c_abi_version_test.cpp
+  api/sonare_c_engine_contract_test.cpp
+  api/sonare_c_engine_automation_test.cpp
+  api/sonare_c_engine_bounce_test.cpp
+  api/sonare_c_engine_strip_test.cpp
+  api/sonare_c_engine_midi_test.cpp
   api/sonare_c_engine_voice_test.cpp
   api/sonare_c_engine_articulation_test.cpp
   api/sonare_c_engine_controller_test.cpp
@@ -432,8 +437,8 @@ if(BUILD_PITCH_EDITOR)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_PITCH_EDITOR=1)
 endif()
 
-# The realtime engine C API (api/sonare_c_engine_voice_test.cpp is compiled
-# unconditionally above) has no BUILD_VOICE_CHANGER dependency of its own --
+# The realtime engine C API (the api/sonare_c_engine_*_test.cpp units are
+# compiled unconditionally above) has no BUILD_VOICE_CHANGER dependency --
 # each translation unit self-guards its optional features (SONARE_WITH_
 # ARRANGEMENT/MIXING/GRAPH/MASTERING/PITCH_EDITOR) and falls back to a stub
 # otherwise. sonare_engine is already linked unconditionally above, so compile
