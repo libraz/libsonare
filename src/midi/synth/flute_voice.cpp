@@ -81,12 +81,6 @@ SONARE_TUNABLE(kPeakBase, 4.0f);
 SONARE_TUNABLE(kPeakTilt, -0.65f);    // the driven peak falls with pitch (rich bass)
 SONARE_TUNABLE(kPeakRefHz, 261.63f);  // middle C, the flute's home register
 
-/// One-pole ramp coefficient reaching ~95% of the target in @p ms.
-float ramp_coeff(float ms, double sample_rate) noexcept {
-  const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
-  return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
-}
-
 // Jet offset (asymmetry): a real jet is deflected to one side of the labium at
 // rest, so it spends unequal time on each side and the drive is asymmetric — the
 // source of the EVEN harmonics a concert flute has (the octave) that a symmetric
@@ -122,10 +116,10 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   const float srf = static_cast<float>(sr);
   noise_ = VoiceRandomSequence(seed);
   drive_index_ = 0;
-  releasing_ = false;
-  breath_level_ = 0.0f;
+  breath_.releasing = false;
+  breath_.level = 0.0f;
   lp_state_ = 0.0f;
-  bore_out_ = 0.0f;
+  bore_.out = 0.0f;
   dc_x1_ = 0.0f;
   dc_y1_ = 0.0f;
   jet_write_ = 0;
@@ -143,7 +137,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   // drives every harmonic; the asymmetric jet drive fills in the even harmonics
   // a stopped (odd-only) pipe would lack.
   const float period = kFluteBoreLengthPeriods * srf / std::max(1.0f, f0);
-  bore_period_ = period * kPitchCorrect;
+  bore_.period = period * kPitchCorrect;
   jet_ratio_ = std::clamp(params.jet_ratio, kJetRatioMin, kJetRatioMax);
 
   const float vel01 = static_cast<float>(velocity & 0x7Fu) / 127.0f;
@@ -152,9 +146,9 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
       (1.0f - vel_to_breath) * params.breath_pressure + vel_to_breath * vel01, 0.0f, 1.0f);
   // A fresh note starts unmodulated; the matrix re-sets the offsets on its
   // first render, and a voice with no excitation route never touches them.
-  breath01_base_ = level;
-  force_mod01_ = 0.0f;
-  bright_mod01_ = 0.0f;
+  excite_.force01_base = level;
+  excite_.force_mod01 = 0.0f;
+  excite_.bright_mod01 = 0.0f;
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
 
   jet_reflection_ = std::min(std::clamp(params.jet_reflection, 0.0f, 1.0f), kReflectMax);
@@ -168,7 +162,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
 
   // Open-end reflection lowpass: brightness -> pole a (y += (1-a)(x - y)). A
   // brighter end reflects more upper partials (a smaller pole).
-  bright01_base_ = std::clamp(params.brightness, 0.0f, 1.0f);
+  excite_.bright01_base = std::clamp(params.brightness, 0.0f, 1.0f);
   // Both axes are derived here and nowhere else. A note-on copy of the mapping
   // is free to drift from the control-rate one, and a single rounding apart is
   // enough for the first CC to move a sound the host did not ask to move.
@@ -184,11 +178,11 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   even_hp_alpha_ =
       std::clamp(1.0f - std::exp(-kTwoPi * kEvenPumpDcHz / static_cast<float>(sr)), 0.0f, 1.0f);
 
-  // Tuning compensation: one feedback register (bore_out_ is consumed one sample
+  // Tuning compensation: one feedback register (bore_.out is consumed one sample
   // after it is produced) plus the reflection lowpass's phase delay at f0.
   const float omega = kTwoPi * f0 / srf;
   const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, omega);
-  comp_ = 1.0f + tau_lp;
+  bore_.comp = 1.0f + tau_lp;
   // The jet's compensation is taken at the voiced rate: a sample count's
   // duration halves as the rate doubles, and the jet delay is a duration.
   const float voiced_srf = static_cast<float>(kLossVoicedSr);
@@ -200,20 +194,18 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   // downward bend and the clamp enforcing it saturates silently -- a glide
   // simply stops descending while the note keeps sounding. What the note's own
   // period still decides is how much of the bore the onset seeds; the jet line
-  // starts silent and so needs no span of its own.
-  const float eff = std::max(2.0f, bore_period_ - comp_);
-  prefill_span_ = std::min(capacity_, std::max(16, static_cast<int>(eff * 1.15f) + 8));
-  // The seed IS the bore's history, so the write position starts just past it
-  // and the first traversal reads back over the seeded span exactly as it did
-  // when the line was no longer than that span.
-  bore_write_ = capacity_ > 0 ? static_cast<size_t>(prefill_span_ % capacity_) : 0;
+  // starts silent and so needs no span of its own. The seed IS the bore's
+  // history, so the write position starts just past it and the first traversal
+  // reads back over the seeded span exactly as it did when the line was no
+  // longer than that span.
+  bore_.configure(bore_.buffer, capacity_, bore_.period, bore_.comp, 1.15f);
   jet_write_ = 0;
 
   // Contour + textures. Every seeded level is a per-sample draw voiced at
   // kLossVoicedSr, so each carries the noise law's gain.
   const float noise_gain = noise_gain_at_rate(sr);
-  attack_coeff_ = ramp_coeff(params.attack_ms, sr);
-  release_coeff_ = ramp_coeff(params.release_ms, sr);
+  breath_.attack_coeff = ramp_coeff(params.attack_ms, sr);
+  breath_.release_coeff = ramp_coeff(params.release_ms, sr);
   breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain;
   chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth * noise_gain;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
@@ -230,21 +222,15 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
 
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst so the
   // jet has an f0 component to lock onto rather than swelling up from silence.
-  // The jet span starts silent.
+  // The jet span starts silent. Past the seed the bore has to be cleared rather
+  // than left alone: it is a slab slot the previous note wrote, and everything
+  // outside the seed is read before it is written.
   const float prefill = kBorePrefill * breath_target_ * noise_gain;
-  if (bore_ != nullptr) {
-    // Past the seed the line has to be cleared rather than left alone: it is a
-    // slab slot the previous note wrote, and everything outside the seed is
-    // read before it is written.
-    for (int i = prefill_span_; i < capacity_; ++i) bore_[static_cast<size_t>(i)] = 0.0f;
-    for (int i = 0; i < prefill_span_; ++i) {
-      bore_[static_cast<size_t>(i)] = prefill * noise_.bipolar_at(static_cast<uint64_t>(i));
-    }
-  }
+  bore_.seed(prefill, noise_);
   if (jet_ != nullptr) {
     for (int i = 0; i < capacity_; ++i) jet_[static_cast<size_t>(i)] = 0.0f;
   }
-  drive_index_ = static_cast<uint64_t>(prefill_span_);
+  drive_index_ = static_cast<uint64_t>(bore_.prefill_span);
 
   // --- off-by-default advanced physics (Phase 4). When off, render() takes the
   // linear jet branch untouched (bit-identical). ---
@@ -262,7 +248,7 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
 }
 
 float FluteVoiceCore::render(float pitch_ratio) noexcept {
-  if (bore_ == nullptr || jet_ == nullptr || capacity_ < 8) return 0.0f;
+  if (bore_.buffer == nullptr || jet_ == nullptr || capacity_ < 8) return 0.0f;
   float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
   // Live control: ramp the steady breath / brightness / vibrato depth toward
@@ -275,10 +261,8 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
 
   // Mouth-pressure contour: ramp toward the target (1 while blowing, 0 once
   // released), then the steady breath plus its turbulence and the onset chiff.
-  const float target = releasing_ ? 0.0f : 1.0f;
-  const float coeff = releasing_ ? release_coeff_ : attack_coeff_;
-  breath_level_ += coeff * (target - breath_level_);
-  float breath = breath_target_ * breath_level_;
+  breath_.advance();
+  float breath = breath_target_ * breath_.level;
 
   // Voice-local vibrato: a slow pitch (and slight level) undulation. Skipped
   // entirely at zero depth so a vibrato-free note is bit-identical.
@@ -297,7 +281,7 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
     if (jet_turb_ > 0.0f) {
       jet_turb_state_ += jet_turb_alpha_ * (n - jet_turb_state_);
       n = (1.0f - jet_turb_) * n +
-          jet_turb_ * (jet_turb_state_ + n) * (0.5f + 0.5f * breath_level_);
+          jet_turb_ * (jet_turb_state_ + n) * (0.5f + 0.5f * breath_.level);
     }
     breath += breath * breath_noise_ * n;
   }
@@ -312,10 +296,10 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
   // amplitude-gated source noise. All skipped when off (bit-identical).
   float jet_ref = jet_reflection_;
   if (overblow_ > 0.0f) {
-    jet_ref *= 1.0f + 0.5f * overblow_ * std::max(0.0f, breath_level_ - 0.5f);
+    jet_ref *= 1.0f + 0.5f * overblow_ * std::max(0.0f, breath_.level - 0.5f);
   }
   if (edge_hyst_ > 0.0f) {
-    edge_hyst_state_ += edge_hyst_alpha_ * (breath_level_ - edge_hyst_state_);
+    edge_hyst_state_ += edge_hyst_alpha_ * (breath_.level - edge_hyst_state_);
     jet_ref *= 1.0f + 0.2f * edge_hyst_ * (edge_hyst_state_ - 0.5f);
   }
 
@@ -323,20 +307,18 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
   // POSITIVE feedback (an open-open pipe is a positive-feedback comb of the full
   // period — the full harmonic series). The returning pressure both drives the
   // jet (below) and re-enters the bore directly.
-  lp_state_ += lp_alpha_ * (bore_out_ - lp_state_);
+  lp_state_ += lp_alpha_ * (bore_.out - lp_state_);
   const float temp = loss_gain_ * lp_state_;
 
   // Jet drive: the pressure difference across the flue drives the jet, which
   // convects (jet delay) and deflects across the labium (the cubic jet table).
   float pd = breath - jet_ref * temp;
   if (vortex_ > 0.0f) {
-    pd += vortex_ * 0.3f * breath_level_ * breath_level_ * noise_.bipolar_at(drive_index_ + 2u);
+    pd += vortex_ * 0.3f * breath_.level * breath_.level * noise_.bipolar_at(drive_index_ + 2u);
   }
-  const float bore_delay =
-      std::clamp(bore_period_ / ratio - comp_, 1.0f, static_cast<float>(capacity_ - 4));
   // The jet rides the line as it was voiced, not the line at the running rate.
   const float jet_line =
-      std::clamp(bore_period_ / ratio - jet_comp_, 1.0f, static_cast<float>(capacity_ - 4));
+      std::clamp(bore_.period / ratio - jet_comp_, 1.0f, static_cast<float>(capacity_ - 4));
   const float jet_delay =
       std::clamp(jet_ratio_ * jet_line, 1.0f, static_cast<float>(capacity_ - 4));
   const float pd_j = rt::lagrange3_fractional_delay(
@@ -365,37 +347,30 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
   float pump = even_gain_ * (rect - even_state_);
   pump = pump < -1.5f ? -1.5f : (pump > 1.5f ? 1.5f : pump);
   into_bore += pump;
-  bore_out_ = rt::lagrange3_fractional_delay(bore_, static_cast<size_t>(capacity_), bore_write_,
-                                             static_cast<int>(bore_delay * 256.0f), into_bore);
+  bore_.advance(into_bore, ratio);
   ++drive_index_;
 
-  return output_scale_ * vib_gain * bore_out_;
+  return output_scale_ * vib_gain * bore_.out;
 }
 
 void FluteVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
-  if ((present & kAxisForce) != 0u) {
-    breath01_base_ = std::clamp(base.force, 0.0f, 1.0f);
-  }
-  if ((present & kAxisBrightness) != 0u) {
-    bright01_base_ = std::clamp(base.brightness, 0.0f, 1.0f);
-  }
+  excite_.set_base(base, present);
   refresh_excitation_targets();
 }
 
 void FluteVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
-  force_mod01_ = offsets.force;
-  bright_mod01_ = offsets.brightness;
+  excite_.set_mod(offsets);
   refresh_excitation_targets();
 }
 
 void FluteVoiceCore::refresh_excitation_targets() noexcept {
-  const float b = std::clamp(breath01_base_ + force_mod01_, 0.0f, 1.0f);
+  const float b = std::clamp(excite_.force01_base + excite_.force_mod01, 0.0f, 1.0f);
   breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
 
   // brightness is CC74-live, so the whole solve is redone on every write rather
   // than at note-on alone; freezing it in start() would silently kill the live
   // control.
-  const float br = std::clamp(bright01_base_ + bright_mod01_, 0.0f, 1.0f);
+  const float br = std::clamp(excite_.bright01_base + excite_.bright_mod01, 0.0f, 1.0f);
   // The pole the ear voiced, at kLossVoicedSr. The clamp is provably slack for
   // any br in [0,1] -- it ranges [0.50, 0.80], well inside [0, 0.95] -- and is
   // kept only to reproduce the shipped formula exactly.
@@ -418,17 +393,17 @@ void FluteVoiceCore::snap_excitation() noexcept {
   vib_depth_ = vib_depth_target_;
 }
 
-void FluteVoiceCore::release() noexcept { releasing_ = true; }
+void FluteVoiceCore::release() noexcept { breath_.release(); }
 
 void FluteVoiceCore::kill() noexcept {
-  breath_level_ = 0.0f;
+  breath_.level = 0.0f;
   lp_state_ = 0.0f;
-  bore_out_ = 0.0f;
+  bore_.out = 0.0f;
   dc_x1_ = 0.0f;
   dc_y1_ = 0.0f;
   chiff_level_ = 0.0f;
   jet_turb_state_ = 0.0f;
-  releasing_ = true;
+  breath_.releasing = true;
 }
 
 }  // namespace sonare::midi::synth

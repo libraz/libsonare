@@ -30,6 +30,8 @@
 
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
+#include "midi/synth/wind_bore.h"
+#include "midi/synth/wind_breath.h"
 
 namespace sonare::midi::synth {
 
@@ -145,7 +147,11 @@ class FluteVoiceCore {
   /// hands the core its delay slab (two spans of @p per_span_capacity: a bore
   /// span then a jet span). The slab outlives the voice.
   void attach(float* slab, int per_span_capacity) noexcept {
-    bore_ = slab;
+    bore_.buffer = slab;
+    // Both spans are the same length, and bore_.capacity has to hold it from
+    // here rather than from start(): the bore's own delay clamp reads it, while
+    // the jet's reads capacity_, and the two must never disagree.
+    bore_.capacity = per_span_capacity;
     jet_ = slab != nullptr ? slab + per_span_capacity : nullptr;
     capacity_ = per_span_capacity;
   }
@@ -195,26 +201,17 @@ class FluteVoiceCore {
 
   // Bore + jet delay lines (host-owned): the travelling-wave air column and the
   // air-jet convection line.
-  float* bore_ = nullptr;
+  WindBore bore_{nullptr, 0, 0, 0, 0.0f, 1.0f, 0.0f};
   float* jet_ = nullptr;
   int capacity_ = 0;
-  /// How much of the bore the onset seeds — the note's own loop period plus
-  /// the margin the seed needs, which is shorter than the line itself.
-  int prefill_span_ = 0;
-  size_t bore_write_ = 0;
   size_t jet_write_ = 0;
-  // Last bore delay-line output (the pressure returning to the mouth next sample).
-  float bore_out_ = 0.0f;
 
-  // Tuning: the bore loop period (samples, ~one fundamental period), the delay
-  // not carried in the line (feedback register + loop-filter phase), and the jet
-  // delay as a fraction of the bore LINE delay (jet_delay = jet_ratio * (period -
-  // comp), the STK jet-convection length).
-  float bore_period_ = 0.0f;
-  float comp_ = 1.0f;
-  /// The same compensation as voiced at kLossVoicedSr, in samples at the
-  /// running rate: the jet delay is a fraction of the line THAT length leaves,
-  /// so its duration does not follow the rate.
+  // Tuning: bore_'s period is the bore loop period (samples, ~one fundamental
+  // period) and comp the delay not carried in the line (feedback register +
+  // loop-filter phase); jet_comp_ is that same compensation voiced at
+  // kLossVoicedSr, and jet_ratio_ the fraction of the bore LINE delay the jet
+  // convection spans (jet_delay = jet_ratio * (period - comp), the STK
+  // jet-convection length).
   float jet_comp_ = 1.0f;
   float jet_ratio_ = 0.4f;
   /// The played fundamental (Hz) and the sample rate, held for the bell-loop
@@ -258,10 +255,7 @@ class FluteVoiceCore {
   // (1 while blowing, 0 once released). breath_target_ is the steady mouth
   // pressure (live-smoothed toward breath_ctrl_target_).
   float breath_target_ = 0.55f;
-  float breath_level_ = 0.0f;
-  float attack_coeff_ = 0.0f;
-  float release_coeff_ = 0.0f;
-  bool releasing_ = false;
+  BreathContour breath_{};
 
   // Live-control smoothing: the render ramps breath_target_ / lp_alpha_ toward
   // these CC targets so a moving controller never zippers. Initialised equal to
@@ -274,11 +268,10 @@ class FluteVoiceCore {
   float lp_alpha_voiced_ = 1.0f;
   float loss_gain_target_ = 1.0f;
   // The normalized bases behind those two targets, and the matrix offsets on
-  // them; the targets are always the composed pair.
-  float breath01_base_ = 0.55f;
-  float bright01_base_ = 0.5f;
-  float force_mod01_ = 0.0f;
-  float bright_mod01_ = 0.0f;
+  // them; the targets are always the composed pair. force01_base/bright01_base
+  // start at flute's own 0.55/0.5 (ExcitationBases's in-class defaults are
+  // placeholders shared with other engines, not this one's).
+  ExcitationBases excite_{0.55f, 0.5f, 0.0f, 0.0f};
 
   // Jet turbulence (deterministic multiplicative mouth-pressure noise).
   float breath_noise_ = 0.0f;
