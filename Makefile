@@ -216,7 +216,7 @@ format:
 # format` deliberately stays on the binding: it would restyle 110 files
 # elsewhere, whose line breaks are hand-set.
 #
-# D2 (src/midi/synth/docs/gs.md via the GS EFX conversion-layer design): a
+# The sample-rate rule, stated in src/midi/synth/docs/gs.md and CONTRIBUTING.md: a
 # quantity measured at the machine's 32 kHz internal clock must be stored in
 # physical units (Hz/ms/s/ratio/dB), never as a sample-rate-dependent
 # coefficient. This is not a style preference -- it is the exact shape of a
@@ -314,7 +314,7 @@ lint:
 		echo "python_catalog_invalid.py unexpectedly passed mypy" >&2; exit 1; \
 	fi
 	python3 -c "$$GS_EFX_SR_COEFFICIENT_LINT_PY"
-# D7 (the GS EFX conversion-layer design): the byte-to-physical-unit
+# The test-independence rule, stated in CONTRIBUTING.md: the byte-to-physical-unit
 # conversion functions are tested against the archive's raw measured
 # readings, hand-transcribed, never against gs_efx_tables.h -- the table the
 # same derivation script generates from the same archive. A test that
@@ -324,7 +324,7 @@ lint:
 # rather than needing a second run to see what matched; a bare mention
 # outside an #include is deliberately not this rule's concern.
 	@test -f tests/midi/gs_efx_convert_test.cpp || { \
-		echo "lint: tests/midi/gs_efx_convert_test.cpp is missing -- the D7 include-scope check has nothing to read" >&2; \
+		echo "lint: tests/midi/gs_efx_convert_test.cpp is missing -- the include-scope check has nothing to read" >&2; \
 		exit 1; }
 	@if grep -n '#include.*gs_efx_tables\.h' tests/midi/gs_efx_convert_test.cpp; then \
 		echo "tests/midi/gs_efx_convert_test.cpp includes gs_efx_tables.h -- its expectations"; \
