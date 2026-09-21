@@ -214,67 +214,67 @@
       "reason": "WASM twin of the sonare_c_daw.cpp cutoff; moves with it."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/notes.cpp",
       "value": "threshold_cents",
       "measured": "no",
       "reason": "Note segmentation threshold; core response not driven."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/notes.cpp",
       "value": "min_note_ms",
       "measured": "yes",
       "reason": "Same NoteSegmenter frame-count floor as the C-ABI copies."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/notes.cpp",
       "value": "reference_hz",
       "measured": "yes",
       "reason": "Same NoteSegmenter default substitution as the C-ABI copies."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/notes.cpp",
       "value": "voiced_threshold",
       "measured": "no",
       "reason": "WASM twin of the C-ABI voiced threshold; moves with it."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/notes.cpp",
       "value": "fade_ms",
       "measured": "no",
       "reason": "WASM twin of the C-ABI fade; moves with it."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/notes.cpp",
       "value": "vibrato_cutoff_hz",
       "measured": "no",
       "reason": "WASM twin of the C-ABI cutoff; moves with it."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/decomposition.cpp",
       "value": "n_components",
       "measured": "no",
       "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/decomposition.cpp",
       "value": "n_fft",
       "measured": "no",
       "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/decomposition.cpp",
       "value": "hop_length",
       "measured": "no",
       "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/decomposition.cpp",
       "value": "n_iter",
       "measured": "no",
       "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
     },
     {
-      "file": "src/wasm/bindings/effects/audio.cpp",
+      "file": "src/wasm/bindings/effects/decomposition.cpp",
       "value": "mask_power",
       "measured": "no",
       "reason": "WASM twin of the sonare_c_effects.cpp decomposition config; moves with it."
