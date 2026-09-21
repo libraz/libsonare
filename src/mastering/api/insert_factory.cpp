@@ -829,6 +829,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.depth_ms = f(params, "depthMs", config.depth_ms);
     config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.pre_filter_hz = f(params, "preFilterHz", config.pre_filter_hz);
+    // Enum selectors go through the field overlay, which refuses a fractional
+    // value rather than rounding it onto a neighbouring mode.
+    detail::read_field(params, "preFilterMode", config.pre_filter_mode);
     return make<effects::modulation::Chorus>(config);
   }
   if (name == "effects.modulation.ensemble") {
@@ -849,6 +853,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms);
     config.feedback = f(params, "feedback", config.feedback);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.pre_filter_hz = f(params, "preFilterHz", config.pre_filter_hz);
+    detail::read_field(params, "preFilterMode", config.pre_filter_mode);
     return make<effects::modulation::Flanger>(config);
   }
   if (name == "effects.modulation.phaser") {
@@ -858,6 +864,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.max_hz = f(params, "maxHz", config.max_hz);
     config.stages = detail::i(params, "stages", config.stages);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.feedback = f(params, "feedback", config.feedback);
+    detail::read_field(params, "mixMode", config.mix_mode);
     return make<effects::modulation::Phaser>(config);
   }
   if (name == "effects.modulation.wah") {
@@ -883,10 +891,15 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
   if (name == "effects.modulation.rotary") {
     effects::modulation::RotaryConfig config;
     config.rate_hz = f(params, "rateHz", config.rate_hz);
+    config.drum_rate_hz = f(params, "drumRateHz", config.drum_rate_hz);
     config.depth_ms = f(params, "depthMs", config.depth_ms);
     config.tremolo = f(params, "tremolo", config.tremolo);
     config.stereo_spread = f(params, "stereoSpread", config.stereo_spread);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.accel_tau_s = f(params, "accelTauS", config.accel_tau_s);
+    config.decel_tau_s = f(params, "decelTauS", config.decel_tau_s);
+    config.undershoot_hz = f(params, "undershootHz", config.undershoot_hz);
+    config.drum_undershoot_hz = f(params, "drumUndershootHz", config.drum_undershoot_hz);
     return make<effects::modulation::Rotary>(config);
   }
   if (name == "effects.modulation.ringModulator") {
@@ -899,6 +912,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     effects::modulation::PitchShifterConfig config;
     config.semitones = f(params, "semitones", config.semitones);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.window_ms = f(params, "windowMs", config.window_ms);
     return make<effects::modulation::PitchShifter>(config);
   }
   if (name == "effects.delay.stereo") {
@@ -908,6 +922,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.feedback = f(params, "feedback", config.feedback);
     config.ping_pong = f(params, "pingPong", config.ping_pong);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.damping_hz = f(params, "dampingHz", config.damping_hz);
     return make<effects::delay::StereoDelay>(config);
   }
   return nullptr;

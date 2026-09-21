@@ -368,7 +368,9 @@ inline double field_as_double(Enum value) {
   X("downsampleFactor", downsample_factor) \
   X("mix", mix)                            \
   X("ditherType", dither_type)             \
-  X("ditherSeed", dither_seed)
+  X("ditherSeed", dither_seed)             \
+  X("holdHz", hold_hz)                     \
+  X("quantizerMode", quantizer_mode)
 
 #define SONARE_FIELDS_HARD_CLIPPER(X) \
   X("ceiling", ceiling)               \

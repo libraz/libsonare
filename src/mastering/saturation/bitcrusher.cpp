@@ -18,6 +18,10 @@ namespace {
 constexpr std::array<float, 9> kNoiseShapingCoeffs = {2.412f,  -3.370f, 3.937f,  -4.174f, 3.353f,
                                                       -2.205f, 1.281f,  -0.569f, 0.0847f};
 
+// A whole period of the hold rate: the phase starts here so the first sample of
+// a run is latched, which is where the sample-count cadence starts too.
+constexpr double kLatchNextSample = 1.0;
+
 }  // namespace
 
 BitCrusher::BitCrusher(BitCrusherConfig config) : config_(config) { validate_config(config_); }
@@ -28,11 +32,14 @@ void BitCrusher::prepare(double sample_rate, int max_block_size) {
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   prepared_ = true;
+  sample_rate_ = sample_rate;
+  update_hold_increment();
   // Preallocate per-channel state so process() never resizes on the audio
   // thread (matches Tube/AmpSim).
   const size_t n = dynamics::kRealtimePreparedChannels;
   held_.assign(n, 0.0f);
   counters_.assign(n, 0);
+  hold_phase_.assign(n, kLatchNextSample);
   rng_state_.assign(n, 0);
   error_history_.assign(n, {});
   reset();
@@ -47,20 +54,33 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
   if (channels == nullptr)
     throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
   ensure_state(num_channels);
+  // One cadence or the other: a hold rate in hertz replaces the sample count.
+  const bool held_by_rate = hold_increment_ > 0.0;
   bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
+    const size_t c = static_cast<size_t>(ch);
     for (int i = 0; i < num_samples; ++i) {
-      if (counters_[static_cast<size_t>(ch)] == 0) {
-        held_[static_cast<size_t>(ch)] = quantize(channels[ch][i], config_.bit_depth, ch);
+      bool latch = false;
+      if (held_by_rate) {
+        latch = hold_phase_[c] >= 1.0;
+        if (latch) hold_phase_[c] -= 1.0;
+        hold_phase_[c] += hold_increment_;
+      } else {
+        latch = counters_[c] == 0;
+        counters_[c] = (counters_[c] + 1) % config_.downsample_factor;
       }
-      counters_[static_cast<size_t>(ch)] =
-          (counters_[static_cast<size_t>(ch)] + 1) % config_.downsample_factor;
-      channels[ch][i] =
-          channels[ch][i] * (1.0f - config_.mix) + held_[static_cast<size_t>(ch)] * config_.mix;
+      if (latch) {
+        // kOff is a branch and not a transparent setting: a quantizer asked for
+        // a very fine step still moves the sample it was given.
+        held_[c] = config_.quantizer_mode == QuantizerMode::kOff
+                       ? channels[ch][i]
+                       : quantize(channels[ch][i], config_.bit_depth, ch);
+      }
+      channels[ch][i] = channels[ch][i] * (1.0f - config_.mix) + held_[c] * config_.mix;
     }
-    discarded |= discard_non_finite_state(static_cast<size_t>(ch));
+    discarded |= discard_non_finite_state(c);
   }
   if (discarded) note_non_finite_discard();
 }
@@ -80,6 +100,7 @@ bool BitCrusher::discard_non_finite_state(size_t channel) noexcept {
 void BitCrusher::reset() {
   std::fill(held_.begin(), held_.end(), 0.0f);
   std::fill(counters_.begin(), counters_.end(), 0);
+  std::fill(hold_phase_.begin(), hold_phase_.end(), kLatchNextSample);
   for (size_t ch = 0; ch < rng_state_.size(); ++ch) {
     rng_state_[ch] = config_.dither_seed + static_cast<uint32_t>(ch * 747796405u);
   }
@@ -91,6 +112,7 @@ void BitCrusher::reset() {
 void BitCrusher::set_config(const BitCrusherConfig& config) {
   validate_config(config);
   config_ = config;
+  update_hold_increment();
 }
 
 bool BitCrusher::set_parameter(unsigned int param_id, float value) {
@@ -102,20 +124,49 @@ bool BitCrusher::set_parameter(unsigned int param_id, float value) {
     case 1:
       config_.mix = std::clamp(value, 0.0f, 1.0f);
       return true;
+    case 2:
+      // Refused rather than clamped: a rate the increment cannot be derived from
+      // would otherwise arrive as an in-domain hold nothing downstream can
+      // separate from one that was asked for.
+      if (!std::isfinite(value) || value < 0.0f) return false;
+      config_.hold_hz = value;
+      // In place, and the phase runs on: a moved rate changes when the next
+      // sample is latched, not which one is being held now.
+      update_hold_increment();
+      return true;
     default:
       return false;
   }
 }
 
+bool BitCrusher::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  // All three are in-place scalar updates on preallocated state. hold_hz is a
+  // frequency rather than a structure: it moves where the aperture null sits
+  // without changing what the processor is made of, so it is published here
+  // alongside the two that were already automatable. quantizer_mode does select
+  // a structure and is not published at all; unknown ids are rejected by
+  // set_parameter before this query is reached.
+  return param_id <= 2;
+}
+
 std::vector<rt::ParamDescriptor> BitCrusher::parameter_descriptors() const {
-  return {{"bitDepth", 0}, {"mix", 1}};
+  return {{"bitDepth", 0}, {"mix", 1}, {"holdHz", 2}};
 }
 
 void BitCrusher::validate_config(const BitCrusherConfig& config) {
   if (config.bit_depth < 1 || config.bit_depth > 24 || config.downsample_factor < 1 ||
-      config.mix < 0.0f || config.mix > 1.0f) {
+      config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.hold_hz) ||
+      config.hold_hz < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid bitcrusher configuration");
   }
+}
+
+void BitCrusher::update_hold_increment() noexcept {
+  // A hold rate at or above the host's rate is no hold at all: a whole period
+  // per sample latches every sample, which is what the increment is capped to.
+  const double rate = sample_rate_ > 0.0 ? sample_rate_ : 48000.0;
+  const double increment = static_cast<double>(config_.hold_hz) / rate;
+  hold_increment_ = increment > 0.0 ? std::min(increment, 1.0) : 0.0;
 }
 
 float BitCrusher::quantize(float sample, int bit_depth, int channel) {
@@ -164,6 +215,7 @@ void BitCrusher::ensure_state(int num_channels) {
     const size_t old = held_.size();
     held_.resize(n, 0.0f);
     counters_.resize(n, 0);
+    hold_phase_.resize(n, kLatchNextSample);
     rng_state_.resize(n, 0);
     error_history_.resize(n, {});
     for (size_t ch = old; ch < n; ++ch) {
