@@ -38,22 +38,8 @@ from cli_contract_schema import (
 )
 
 
-def validate_manifest(manifest: Any) -> list[str]:
-    """Return schema errors for a decoded manifest (empty means valid)."""
-
-    errors: list[str] = []
-    if not _exact(manifest, _TOP_LEVEL_KEYS, "manifest", errors):
-        return errors
-    exempt_properties = _validate_payload_property_exemptions(manifest, errors)
-    suppressed_exemptions: set[str] = set()
-    if manifest["schema_version"] != 2:
-        errors.append("manifest.schema_version: expected 2")
-    if manifest["contract"] != "cli-json-v2":
-        errors.append("manifest.contract: expected cli-json-v2")
-    if manifest["surfaces"] != ["native", "python"]:
-        errors.append("manifest.surfaces: expected [native, python]")
-
-    exit_codes = manifest["exit_codes"]
+def _validate_exit_codes(exit_codes: Any, errors: list[str]) -> None:
+    """The five named exit codes and the values the contract fixes them at."""
     if _exact(
         exit_codes,
         {
@@ -80,7 +66,9 @@ def validate_manifest(manifest: Any) -> list[str]:
         if exit_codes != expected:
             errors.append(f"manifest.exit_codes: expected {expected!r}")
 
-    comparison = manifest["comparison"]
+
+def _validate_comparison(comparison: Any, errors: list[str]) -> None:
+    """The absolute and relative tolerances two surfaces are compared under."""
     if _exact(comparison, {"absolute", "relative"}, "manifest.comparison", errors):
         for key in comparison:
             if not _is_number(comparison[key]) or comparison[key] <= 0:
@@ -88,7 +76,16 @@ def validate_manifest(manifest: Any) -> list[str]:
                     f"manifest.comparison.{key}: expected a positive finite number"
                 )
 
-    inventory = manifest["inventory"]
+
+def _validate_declared_inventory(
+    manifest: Any, inventory: Any, errors: list[str]
+) -> None:
+    """The declared command and option field lists, and the canonical shared options.
+
+    Reads the command records straight off the manifest because the expected
+    options are checked against the paths whose options are active, and that is
+    the only place that says which those are.
+    """
     if _exact(
         inventory,
         {"schema_version", "command_fields", "option_fields", "expected_options"},
@@ -152,7 +149,9 @@ def validate_manifest(manifest: Any) -> list[str]:
                             )
                         names.add(option["name"])
 
-    commands = manifest["commands"]
+
+def _validate_commands(commands: Any, errors: list[str]) -> tuple[set[str], set[str]]:
+    """Every command record. Returns the declared paths and the active subset."""
     command_paths: set[str] = set()
     active_from_commands: set[str] = set()
     if not isinstance(commands, dict) or not commands:
@@ -207,9 +206,19 @@ def validate_manifest(manifest: Any) -> list[str]:
                 errors.append(f"{label}: status must match classification")
             if status == "active":
                 active_from_commands.add(path)
+    return command_paths, active_from_commands
 
-    active = manifest["active_paths"]
+
+def _validate_active_paths(
+    active: Any, exempt_properties: frozenset[str], errors: list[str]
+) -> tuple[set[str], set[str]]:
+    """Each active path's options, positionals, payloads, cases and artifacts.
+
+    Returns the paths it accepted and the payload-property exemptions that
+    suppressed something, which the caller needs to retire the rest.
+    """
     active_paths: set[str] = set()
+    suppressed_exemptions: set[str] = set()
     if not isinstance(active, list) or not active:
         errors.append("manifest.active_paths: expected a non-empty array")
     else:
@@ -437,7 +446,13 @@ def validate_manifest(manifest: Any) -> list[str]:
                                 f"unknown artifact {artifact_name!r}"
                             )
                             errors.append(message)
+    return active_paths, suppressed_exemptions
 
+
+def _validate_expected_options(
+    inventory: Any, commands: Any, active: Any, errors: list[str]
+) -> None:
+    """The canonical shared options against the active paths that must carry them."""
     if (
         isinstance(inventory, dict)
         and isinstance(inventory.get("expected_options"), dict)
@@ -466,20 +481,9 @@ def validate_manifest(manifest: Any) -> list[str]:
                     "manifest.inventory.expected_options"
                 )
 
-    if active_paths != active_from_commands:
-        errors.append(
-            "manifest.active_paths: paths must exactly match commands with status active "
-            f"(active_paths={sorted(active_paths)!r}, commands={sorted(active_from_commands)!r})"
-        )
-    # An exemption that suppresses nothing is not inert: it keeps asserting a
-    # reviewed decision about a name, so the next property to take that name
-    # inherits the blessing unexamined.  It expires with the divergence.
-    for pointer in sorted(exempt_properties - suppressed_exemptions):
-        errors.append(
-            f"manifest.payload_property_exemptions: {pointer!r} suppressed nothing; "
-            "delete the entry with the divergence"
-        )
-    parser_cases = manifest["parser_cases"]
+
+def _validate_parser_cases(parser_cases: Any, errors: list[str]) -> None:
+    """The parser-level cases and the ids they are addressed by."""
     if not isinstance(parser_cases, list) or not parser_cases:
         errors.append("manifest.parser_cases: expected a non-empty array")
     else:
@@ -514,7 +518,9 @@ def validate_manifest(manifest: Any) -> list[str]:
                     f"{label}.payload: parser cases must not declare a JSON payload"
                 )
 
-    fixtures = manifest["fixtures"]
+
+def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
+    """The audio, melody, project and preset fixtures the cases name."""
     if _exact(
         fixtures,
         {"audio", "melodies", "projects", "presets"},
@@ -591,6 +597,49 @@ def validate_manifest(manifest: Any) -> list[str]:
                     errors.append(
                         f"manifest.fixtures.presets.{key}: expected an object"
                     )
+
+
+def validate_manifest(manifest: Any) -> list[str]:
+    """Return schema errors for a decoded manifest (empty means valid)."""
+    errors: list[str] = []
+    if not _exact(manifest, _TOP_LEVEL_KEYS, "manifest", errors):
+        return errors
+    exempt_properties = _validate_payload_property_exemptions(manifest, errors)
+    if manifest["schema_version"] != 2:
+        errors.append("manifest.schema_version: expected 2")
+    if manifest["contract"] != "cli-json-v2":
+        errors.append("manifest.contract: expected cli-json-v2")
+    if manifest["surfaces"] != ["native", "python"]:
+        errors.append("manifest.surfaces: expected [native, python]")
+
+    _validate_exit_codes(manifest["exit_codes"], errors)
+    _validate_comparison(manifest["comparison"], errors)
+
+    inventory = manifest["inventory"]
+    _validate_declared_inventory(manifest, inventory, errors)
+    commands = manifest["commands"]
+    command_paths, active_from_commands = _validate_commands(commands, errors)
+    active = manifest["active_paths"]
+    active_paths, suppressed_exemptions = _validate_active_paths(
+        active, exempt_properties, errors
+    )
+    _validate_expected_options(inventory, commands, active, errors)
+
+    if active_paths != active_from_commands:
+        errors.append(
+            "manifest.active_paths: paths must exactly match commands with status active "
+            f"(active_paths={sorted(active_paths)!r}, commands={sorted(active_from_commands)!r})"
+        )
+    # An exemption that suppresses nothing is not inert: it keeps asserting a
+    # reviewed decision about a name, so the next property to take that name
+    # inherits the blessing unexamined.  It expires with the divergence.
+    for pointer in sorted(exempt_properties - suppressed_exemptions):
+        errors.append(
+            f"manifest.payload_property_exemptions: {pointer!r} suppressed nothing; "
+            "delete the entry with the divergence"
+        )
+    _validate_parser_cases(manifest["parser_cases"], errors)
+    _validate_fixtures(manifest["fixtures"], errors)
 
     if command_paths and len(command_paths) != len(commands):
         errors.append("manifest.commands: duplicate command path")
