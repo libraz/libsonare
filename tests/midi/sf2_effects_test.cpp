@@ -775,6 +775,77 @@ TEST_CASE("the offline realize_efx_inline path installs EFX without a manual pum
   REQUIRE(h3(efx.left) > 10.0 * h3(cln.left));
 }
 
+TEST_CASE("a GS reset after the EFX frames clears the chain, not only one at tick 0",
+          "[midi][sf2][gsfx]") {
+  const uint8_t part_on[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
+  const uint8_t od_type[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+                             0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
+  const uint8_t gs_reset[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7};
+
+  auto efx_config = [] {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.realize_efx_inline = true;
+    cfg.insert_factory = [](std::string_view name, std::string_view json) {
+      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    };
+    return cfg;
+  };
+
+  // Overdrive returns far below dry, so a peak separates "the chain is still
+  // installed" from "it is gone" without a spectral measure. The probe note
+  // starts AFTER the reset: asking what the already-sounding note does cannot
+  // answer this, for the reason the second section below measures.
+  const auto probe_note_peak = [&](bool with_efx, bool reset_midstream) {
+    Sf2Player player = make_player(efx_config());
+    if (with_efx) {
+      REQUIRE(player.handle_sysex(part_on, sizeof(part_on)));
+      REQUIRE(player.handle_sysex(od_type, sizeof(od_type)));
+    }
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    static_cast<void>(render(player, 24000));  // the chain is realised in here
+    if (reset_midstream) {
+      REQUIRE(player.handle_sysex(gs_reset, sizeof(gs_reset)));
+      REQUIRE_FALSE(player.gs_efx().assigned);
+    }
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 64, 127)));
+    const StereoRender out = render(player, 24000);
+    return peak(out.left, 0, out.left.size());
+  };
+
+  const float dry = probe_note_peak(/*with_efx=*/false, /*reset_midstream=*/false);
+  const float through_efx = probe_note_peak(true, false);
+  const float after_reset = probe_note_peak(true, true);
+
+  // Without this the last assertion passes on a chain that was never audible.
+  REQUIRE(through_efx < 0.2f * dry);
+  REQUIRE(after_reset > 0.5f * dry);
+
+  SECTION("the reset silences the sounding note, which reads as a surviving chain") {
+    // A GS reset runs all-sound-off before restoring the power-on state, so
+    // measuring the note that was already sounding answers a different question:
+    // the note is cut and what remains is the chain's tail. That render is
+    // QUIETER than the un-reset one rather than dry, which is the shape a
+    // surviving chain would never produce.
+    Sf2Player player = make_player(efx_config());
+    REQUIRE(player.handle_sysex(part_on, sizeof(part_on)));
+    REQUIRE(player.handle_sysex(od_type, sizeof(od_type)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    static_cast<void>(render(player, 24000));
+    REQUIRE(player.handle_sysex(gs_reset, sizeof(gs_reset)));
+    const float tail = peak(render(player, 24000).left, 0, 24000);
+
+    Sf2Player held = make_player(efx_config());
+    REQUIRE(held.handle_sysex(part_on, sizeof(part_on)));
+    REQUIRE(held.handle_sysex(od_type, sizeof(od_type)));
+    held.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    static_cast<void>(render(held, 24000));
+    const float sustained = peak(render(held, 24000).left, 0, 24000);
+
+    REQUIRE(tail < sustained);
+  }
+}
+
 #endif  // SONARE_WITH_MASTERING
 
 TEST_CASE("GS effects render bit-identically", "[midi][sf2][gsfx]") {
