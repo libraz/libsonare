@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://libraz.net/schemas/libsonare/mixer-scene.schema.json",
   "title": "MixSceneDocument",
-  "description": "A libsonare mixer scene: the document `sonare mix --scene` reads, `suggestMixScene` returns, and `Mixer.fromSceneJson` builds a graph from. Field paths are held to src/mixing/api/scene_json.cpp's scene_schema_paths() by tests/conformance/check_result_schema_surfaces.py, so this file cannot drift from the writer. Two things this schema deliberately does not describe. The parser also accepts a legacy snake_case spelling of most keys (fader_db beside faderDb); the writer never emits one, and admitting them here would let a document validate in a shape nothing produces. And a scene reaches the mixer through the C++ parser, which refuses values this schema cannot express - an unknown insert processor, a send naming a bus that is not in the document, a connection whose endpoints do not exist. Validating here narrows what reaches that parser; it does not replace it.",
+  "description": "A libsonare mixer scene: the document `sonare mix --scene` reads, `suggestMixScene` returns, and `Mixer.fromSceneJson` builds a graph from. Field paths are held to src/mixing/api/scene_json.cpp's scene_schema_paths() by tests/conformance/check_result_schema_surfaces.py, so this file cannot drift from the writer. Two things this schema deliberately does not describe. The parser also accepts a legacy snake_case spelling of most keys (fader_db beside faderDb); the writer never emits one, and admitting them here would let a document validate in a shape nothing produces. And a scene reaches the mixer through the C++ parser, which refuses values this schema cannot express - an unknown insert processor, a send naming a bus that is not in the document, a connection whose endpoints do not exist. Validating here narrows what reaches that parser; it does not replace it. One numeric limit is also outside what this file states: every float field is stored as a 32-bit float, and the parser refuses a value that is non-finite or past that range. JSON cannot spell a non-finite number at all, and putting the float magnitude on each of the sixteen numeric fields would be sixteen copies of one constant, so a double beyond float range is the one class of value that validates here and is then refused.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version"],
@@ -105,9 +105,10 @@
         "lufs": { "type": "boolean", "default": true },
         "truePeak": { "type": "boolean", "default": true },
         "truePeakOversample": {
-          "description": "Oversampling factor for the inter-sample peak meter.",
+          "description": "Oversampling factor for the inter-sample peak meter. The loader accepts the whole range and resolves a value to the nearest factor the meter implements, so this is a range rather than the set {1, 2, 4, 8, 16}.",
           "type": "integer",
           "minimum": 1,
+          "maximum": 16,
           "default": 4
         }
       }
@@ -159,9 +160,10 @@
           "default": false
         },
         "panMode": {
-          "description": "Panner shape, matching SONARE_PAN_MODE_*. 0 is balance, which is what `pan` drives; a dual-pan mode reads dualPanLeft / dualPanRight instead.",
+          "description": "Panner shape, matching SONARE_PAN_MODE_*. 0 is balance, which is what `pan` drives; a dual-pan mode reads dualPanLeft / dualPanRight instead. The loader rejects a value outside the range rather than clamping it, so the maximum here is what makes validation sufficient.",
           "type": "integer",
           "minimum": 0,
+          "maximum": 2,
           "default": 0
         },
         "dualPanLeft": {
@@ -181,15 +183,17 @@
         "polarityInvertLeft": { "type": "boolean", "default": false },
         "polarityInvertRight": { "type": "boolean", "default": false },
         "panLaw": {
-          "description": "Pan law, matching the PanLaw enum order. 0 is Const3dB.",
+          "description": "Pan law, matching the PanLaw enum order. 0 is Const3dB. The maximum is kPanLawCount - 1; the loader rejects anything above it.",
           "type": "integer",
           "minimum": 0,
+          "maximum": 3,
           "default": 0
         },
         "channelDelaySamples": {
-          "description": "Whole-sample delay applied to this strip, for time-aligning a multi-mic source against its siblings.",
+          "description": "Whole-sample delay applied to this strip, for time-aligning a multi-mic source against its siblings. The maximum is kMaxAlignmentDelaySamples, which the loader rejects above rather than clamping.",
           "type": "integer",
           "minimum": 0,
+          "maximum": 192000,
           "default": 0
         },
         "sourceLayout": {

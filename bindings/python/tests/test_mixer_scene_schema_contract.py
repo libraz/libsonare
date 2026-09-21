@@ -144,3 +144,55 @@ def test_the_schema_refuses_what_it_is_written_to_refuse(mutate, expected: str) 
     mutate(scene)
     findings = _findings(scene)
     assert any(expected in finding for finding in findings), findings
+
+
+# (field path, the loader's maximum, the substring its refusal message carries).
+# Every one is a range the loader rejects outside of rather than clamping into,
+# which is what makes a schema maximum the difference between "validates" and
+# "loads".
+_BOUNDED = [
+    (("strips", 0, "panMode"), 2, "panMode enum is out of range"),
+    (("strips", 0, "panLaw"), 3, "panLaw enum is out of range"),
+    (("strips", 0, "channelDelaySamples"), 192000, "channelDelaySamples must be in"),
+    (("strips", 0, "metering", "truePeakOversample"), 16, "truePeakOversample must be in"),
+]
+
+
+def _place(scene: dict, path: tuple, value: object) -> None:
+    node: Any = scene
+    for step in path[:-1]:
+        node = node[step] if isinstance(step, int) else node.setdefault(step, {})
+    node[path[-1]] = value
+
+
+@pytest.mark.parametrize(("path", "maximum", "message"), _BOUNDED, ids=lambda v: str(v)[:40])
+def test_the_schema_and_the_loader_agree_on_where_each_bound_sits(
+    path: tuple, maximum: int, message: str
+) -> None:
+    """One past the maximum must be refused by BOTH, and the maximum by neither.
+
+    Asserting only the rejection would pass against a schema whose maximum sits
+    anywhere at or below the loader's, silently narrowing what validates; the
+    at-the-bound half is what pins the two to the same number. And the two arms
+    are handed the SAME document -- an earlier draft validated the bare scene
+    and gave the loader a `{"scene": ...}` wrapper, which the parser reads as a
+    document with no strips, so it built an empty mixer and raised nothing. Both
+    arms passed on inputs that were never the same object.
+
+    The loader's own message does not survive to Python (every failure arrives as
+    one RuntimeError), so attribution comes from the differential instead: the
+    only thing that changed between the accepted and the refused run is this one
+    field, which is a stronger claim than matching a string would be.
+    """
+    del message  # the loader's specific wording does not reach this surface
+    scene = _preset_scene("vocalReverbSend")
+
+    _place(scene, path, maximum)
+    assert _findings(scene) == []  # the schema admits the boundary value
+    libsonare.Mixer.from_scene_json(json.dumps(scene)).close()  # and so does the loader
+
+    _place(scene, path, maximum + 1)
+    findings = _findings(scene)
+    assert any("over the maximum" in finding for finding in findings), findings
+    with pytest.raises(RuntimeError):
+        libsonare.Mixer.from_scene_json(json.dumps(scene))
