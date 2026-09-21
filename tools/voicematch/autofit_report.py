@@ -11,7 +11,7 @@ def winner_or_defaults(knobs, best_values: list[float], evaluator,
                        validation: dict | None = None) -> list[float]:
     """The fit's winner, unless something measured says it is worse than the start.
 
-    Two readings can say that, and both are refusals to write rather than
+    Three readings can say that, and all are refusals to write rather than
     findings to report on the way past:
 
     Every stage's loss is a ratio against the compiled-in defaults, so those
@@ -26,6 +26,18 @@ def winner_or_defaults(knobs, best_values: list[float], evaluator,
     three velocities. A wash is not a loss — an "unchanged off the probe" result
     improved the measured objective and is worse nowhere, so it is kept, and the
     verdict is printed above this either way.
+
+    `tnr` is the one term in `loss.py` that is one-sided: it charges only where
+    the model is NOISIER than the reference, so a candidate that walks the model
+    past the reference leaves the term nothing to say and collects its whole
+    unit for doing it. `loss.py` reports `tnr_notes` so a reader can tell that
+    apart from a genuine match, and deliberately keeps it out of
+    `TERM_COUNT_KEYS` — but that objection is about the LEVEL, since a physical
+    model starting cleaner than a sampled recording is ordinary and charging it
+    would penalise a voice for being clean. The DELTA is a different reading and
+    the objection does not reach it: a winner comparing on fewer notes than the
+    start point stopped comparing during the fit, which is the term going quiet
+    rather than being satisfied.
     """
     if getattr(evaluator, "normalize", False) and evaluator.best_loss > 1.0:
         print(f"\nthe winner scores {evaluator.best_loss:.4f} against the defaults' 1.0 — "
@@ -37,6 +49,15 @@ def winner_or_defaults(knobs, best_values: list[float], evaluator,
               f"{validation['start']:.4f} on the held-out {validation['axis']} — keeping "
               f"the defaults, since values that lose where the fit could not see are "
               f"fitted to the probe", file=sys.stderr)
+        return [k.start_value for k in knobs]
+    start_tnr = getattr(evaluator, "start_tnr_notes", None)
+    best_tnr = getattr(evaluator, "best_tnr_notes", None)
+    if start_tnr is not None and best_tnr is not None and best_tnr < start_tnr:
+        print(f"\nthe winner is scored against the reference's noise on {best_tnr:g} "
+              f"notes where the start point was scored on {start_tnr:g} — keeping the "
+              f"defaults, since a fit that took the model past the reference collected "
+              f"the whole `tnr` term for going quiet rather than for matching",
+              file=sys.stderr)
         return [k.start_value for k in knobs]
     return best_values
 

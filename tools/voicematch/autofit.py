@@ -698,6 +698,12 @@ class Evaluator:
         self._anchored = False
         self.fence_unit = 1.0
         self.best_level_offset_db: float | None = None
+        # How many notes the one-sided noise term still had something to say
+        # about, at the start and at the winner. `loss.py` charges `tnr` only
+        # where the model is noisier, so a candidate that walks the model past
+        # the reference collects the term's whole unit and reports zero.
+        self.start_tnr_notes: float | None = None
+        self.best_tnr_notes: float | None = None
         # A rebuild rewrites the shared tree, so its evaluations can only ever
         # run one at a time however many workers were asked for.
         self.workers = 1 if self.needs_rebuild else max(1, args.workers)
@@ -1030,6 +1036,7 @@ class Evaluator:
             self._anchored = True
             self.start_level_offset_db = terms.get("level_offset_db")
             self.start_sustain_excess_db_s = terms.get("sustain_excess_db_s")
+            self.start_tnr_notes = terms.get("tnr_notes")
             # What one unit of loss is worth in the units this run reports. The
             # fence rates are per dB on a loss the start scores 1.0, so on a raw
             # run — where the start scores its own weighted sum, two orders of
@@ -1079,6 +1086,9 @@ class Evaluator:
             # quieter scores exactly as if it had not.
             self.best_level_offset_db = (
                 None if terms is None else terms.get("level_offset_db")
+            )
+            self.best_tnr_notes = (
+                None if terms is None else terms.get("tnr_notes")
             )
         if not fresh:
             return loss

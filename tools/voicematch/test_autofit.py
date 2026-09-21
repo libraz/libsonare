@@ -3169,6 +3169,35 @@ def test_a_winner_that_loses_off_the_probe_writes_nothing_either():
     assert winner_or_defaults(knobs, [0.9], won, None) == [0.9]
 
 
+def test_a_winner_that_stopped_being_scored_on_noise_writes_nothing():
+    """`tnr` charges only where the model is noisier, so leaving is free.
+
+    The shamisen's buzz is its sawari and it is the only between-partial energy
+    the model has. A fit took it from 0.5 to 0.146 and the gate then read the
+    voice 29.97 dB cleaner than its reference against a 1.81 bound, while the
+    term reported 0.00 at every candidate — not a match, but a comparison that
+    had stopped happening. The count of notes it still charged for is what
+    separates those, and it falls as the model walks past the reference.
+    """
+    knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
+    quit_early = argparse.Namespace(normalize=True, best_loss=0.5071,
+                                    start_tnr_notes=7.0, best_tnr_notes=0.0)
+    assert winner_or_defaults(knobs, [0.9], quit_early) == [0.25]
+    # Still scored on every note it started with: nothing went quiet.
+    held = argparse.Namespace(normalize=True, best_loss=0.5071,
+                              start_tnr_notes=7.0, best_tnr_notes=7.0)
+    assert winner_or_defaults(knobs, [0.9], held) == [0.9]
+    # A model cleaner than a sampled reference from the start is ordinary, and
+    # the term never spoke about any candidate — there is no delta to read.
+    silent = argparse.Namespace(normalize=True, best_loss=0.5071,
+                                start_tnr_notes=0.0, best_tnr_notes=0.0)
+    assert winner_or_defaults(knobs, [0.9], silent) == [0.9]
+    # A --raw-loss run leaves both anchors unset; the guard has nothing to read.
+    unanchored = argparse.Namespace(normalize=True, best_loss=0.5071,
+                                    start_tnr_notes=None, best_tnr_notes=None)
+    assert winner_or_defaults(knobs, [0.9], unanchored) == [0.9]
+
+
 def test_a_screen_that_moves_something_still_narrows_to_it():
     """The inert-knob finding is unchanged; only the all-inert case is new."""
     knobs = [_reach_knob("a", 0.0, 1.0, 0.5), _reach_knob("b", 0.0, 1.0, 0.5)]
