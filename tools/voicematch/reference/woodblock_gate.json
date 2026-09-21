@@ -5,6 +5,12 @@
   "reference_measured_utc": "2026-09-04T21:30:29+00:00",
   "recorded_utc": "2026-09-09T16:50:35+00:00",
   "reference_spread": {},
+  "_unbounded": {
+    "decay": "the reference's usable decay span is 0.015-0.035 s, which is 3 to 7 points on the envelope's 5 ms hop and under the 9 `measure_note` needs to fit a slope, so `decay_db_s` is absent on 25 of 25 reference rows. Measured off the corpus, the reference falls 60 dB within 40 ms of its peak. The model's span is 0.060-0.065 s - it rings 1.86 to 4.33 times longer than the reference, and with no rate on the reference side nothing here holds that.",
+    "aftersound": "as `decay`. `double_decay` needs 12 envelope points and the reference's span holds 3 to 7, so `decay_late_db_s` is absent on 25 of 25 reference rows.",
+    "doubling": "as `decay`. `double_decay` never runs on the reference, so the prompt-minus-aftersound gap is absent on 25 of 25 reference rows and there is no pair to difference.",
+    "body": "the 0.2-1.2 s body window opens 165 ms after the reference has already fallen 60 dB. Read off the corpus WAVs, that segment is exactly digital zero - absolute maximum 0.000e+00, RMS -240 dBFS - so both bands of `body_below_f0_db` are 0 and it returns nothing on 25 of 25 reference rows."
+  },
   "bounds": {
     "tnr": {
       "median": 9.45,

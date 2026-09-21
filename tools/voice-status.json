@@ -1736,7 +1736,10 @@
       "capture": "clavi",
       "stage": 0.4,
       "stage_name": "targeted",
-      "open_candidates": [],
+      "open_candidates": [
+        "sustain-held",
+        "sustain-held-key-scaled"
+      ],
       "axes": {
         "engine": "fm",
         "patch": "clav",
@@ -2775,7 +2778,7 @@
         "structure": null,
         "music": null
       },
-      "next": "0 canonical dimension(s) neither gated nor excused: "
+      "next": "1 dimension(s) recorded unbounded in the gate: balance — read the reason there, then either record a bound that became measurable or fix what the model is missing"
     },
     {
       "slug": "p016b003-drawbar-organ",
@@ -2923,7 +2926,7 @@
         "structure": null,
         "music": null
       },
-      "next": "0 canonical dimension(s) neither gated nor excused: "
+      "next": "1 dimension(s) recorded unbounded in the gate: balance — read the reason there, then either record a bound that became measurable or fix what the model is missing"
     },
     {
       "slug": "p016b032-drawbar-organ",
@@ -4321,7 +4324,9 @@
       "capture": "jazz_guitar",
       "stage": 0.4,
       "stage_name": "targeted",
-      "open_candidates": [],
+      "open_candidates": [
+        "string-rings-longer"
+      ],
       "axes": {
         "engine": "karplus_strong",
         "patch": "electric_guitar",
@@ -4437,8 +4442,8 @@
       "patch": "muted_guitar",
       "engine": "karplus_strong",
       "capture": "muted_guitar",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4448,26 +4453,25 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 9,
+          "gated": 12,
           "excused": [
             "damper"
           ],
-          "gaps": [
-            "decay",
-            "aftersound",
-            "doubling"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "outside": {},
           "unjudgeable": [
+            "aftersound",
             "attack",
             "balance",
             "body",
             "centroid_pct",
+            "decay",
+            "doubling",
             "register",
             "stereo",
             "stretch",
@@ -4478,7 +4482,7 @@
         "structure": null,
         "music": null
       },
-      "next": "3 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p029-overdriven-guitar",
@@ -4598,8 +4602,8 @@
       "patch": "guitar_harmonics",
       "engine": "karplus_strong",
       "capture": "guitar_harmonics",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4609,15 +4613,13 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 13,
-          "gated": 10,
+          "gated": 11,
           "excused": [
             "balance",
             "body"
           ],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -4627,6 +4629,7 @@
             "aftersound",
             "attack",
             "centroid_pct",
+            "damper",
             "decay",
             "doubling",
             "register",
@@ -4639,7 +4642,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p032-acoustic-bass",
@@ -5749,10 +5752,11 @@
           "canonical": 10,
           "gated": 9,
           "excused": [],
-          "gaps": [
+          "gaps": [],
+          "complete": false,
+          "unbounded": [
             "damper"
-          ],
-          "complete": false
+          ]
         },
         "agreement": {
           "inside": 0,
@@ -5779,7 +5783,7 @@
         },
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "1 dimension(s) recorded unbounded in the gate: damper — read the reason there, then either record a bound that became measurable or fix what the model is missing"
     },
     {
       "slug": "p051-synth-strings-2",
@@ -5805,10 +5809,11 @@
           "canonical": 10,
           "gated": 9,
           "excused": [],
-          "gaps": [
+          "gaps": [],
+          "complete": false,
+          "unbounded": [
             "damper"
-          ],
-          "complete": false
+          ]
         },
         "agreement": {
           "inside": 0,
@@ -5835,7 +5840,7 @@
         },
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "1 dimension(s) recorded unbounded in the gate: damper — read the reason there, then either record a bound that became measurable or fix what the model is missing"
     },
     {
       "slug": "p052-choir-aahs",
@@ -5916,10 +5921,11 @@
           "canonical": 10,
           "gated": 9,
           "excused": [],
-          "gaps": [
+          "gaps": [],
+          "complete": false,
+          "unbounded": [
             "damper"
-          ],
-          "complete": false
+          ]
         },
         "agreement": {
           "inside": 0,
@@ -5946,7 +5952,7 @@
         },
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "1 dimension(s) recorded unbounded in the gate: damper — read the reason there, then either record a bound that became measurable or fix what the model is missing"
     },
     {
       "slug": "p054-synth-voice",
@@ -5972,10 +5978,11 @@
           "canonical": 10,
           "gated": 9,
           "excused": [],
-          "gaps": [
+          "gaps": [],
+          "complete": false,
+          "unbounded": [
             "damper"
-          ],
-          "complete": false
+          ]
         },
         "agreement": {
           "inside": 0,
@@ -6002,7 +6009,7 @@
         },
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "1 dimension(s) recorded unbounded in the gate: damper — read the reason there, then either record a bound that became measurable or fix what the model is missing"
     },
     {
       "slug": "p055-orchestra-hit",
@@ -9081,13 +9088,14 @@
             "damper",
             "stereo"
           ],
-          "gaps": [
-            "decay",
+          "gaps": [],
+          "complete": false,
+          "unbounded": [
             "aftersound",
-            "doubling",
-            "body"
-          ],
-          "complete": false
+            "body",
+            "decay",
+            "doubling"
+          ]
         },
         "agreement": {
           "inside": 0,
@@ -9110,7 +9118,7 @@
         },
         "music": null
       },
-      "next": "4 canonical dimension(s) neither gated nor excused: decay, aftersound, doubling, body"
+      "next": "4 dimension(s) recorded unbounded in the gate: aftersound, body, decay, doubling — read the reason there, then either record a bound that became measurable or fix what the model is missing"
     },
     {
       "slug": "p116-taiko-drum",
@@ -9294,10 +9302,11 @@
           "excused": [
             "stereo"
           ],
-          "gaps": [
+          "gaps": [],
+          "complete": false,
+          "unbounded": [
             "decay"
-          ],
-          "complete": false
+          ]
         },
         "agreement": {
           "inside": 0,
@@ -9318,7 +9327,7 @@
         },
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: decay"
+      "next": "1 dimension(s) recorded unbounded in the gate: decay — read the reason there, then either record a bound that became measurable or fix what the model is missing"
     },
     {
       "slug": "p120-guitar-fret-noise",

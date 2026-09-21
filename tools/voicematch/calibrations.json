@@ -912,5 +912,52 @@
         "note": "past the reference rather than level with it, and past the valve's period doubling; listed as the end of the range rather than as a candidate"
       }
     ]
+  },
+  "p007-clavinet": {
+    "variants": [
+      {
+        "name": "sustain-held",
+        "title": {
+          "en": "A carrier that holds instead of dying",
+          "ja": "減衰しきらず支えるキャリア"
+        },
+        "desc": {
+          "en": "The note should stay present under the key rather than fading out beneath it, and the key release should become audible as an event.",
+          "ja": "鍵を押している間に音が痩せて消えてしまわず、支えが残るはずです。鍵を離した瞬間が出来事として聞こえるようになります。"
+        },
+        "overrides": "clav.fm.ops0.env.sustain=0.3",
+        "note": "the carrier envelope ends at sustain 0, so the model is a single exponential: measured early and late rates are equal to two decimals on all nine notes (-6.52/-6.47 at n36, -11.21/-11.27 at n84) while the reference splits -6.36/-3.07 and -48.11/-25.41. It also dies before note-off on 45 of 45 rows, which is why damper scores nothing. At sustain 0.3 the damper column goes from no rows at all to the 8 rows the reference carries, at a median -20.0 ms against a 130-135 ms reference. Cost: held-note decay p90 4.84 against its 3.49 bound, and 15 of 45 rows leave the decay population because the model now outlasts the reference. Not adopted - the decay bound and the span censor both need re-reading first."
+      },
+      {
+        "name": "sustain-held-key-scaled",
+        "title": {
+          "en": "Held, with the treble shortened to match",
+          "ja": "支えを残しつつ高音側を詰めたもの"
+        },
+        "desc": {
+          "en": "As the held carrier, but the top of the keyboard dies away faster, the way a real clavinet's short strings do.",
+          "ja": "支えを残したまま、高音側だけ速く減衰します。実際のクラビネットの短い弦の振る舞いに近づけたものです。"
+        },
+        "overrides": "clav.fm.ops0.env.sustain=0.3,clav.fm.ops0.key_rate_scale=0.7",
+        "note": "the reference's prompt rate steepens by a factor of 7.6 from n36 to n84 (-6.36 to -48.11 dB/s) where the model's moves by 1.7 (-6.52 to -11.21). key_rate_scale is the register term and is live: at 1.0 it takes n84 from -11.27 to -20.55. At 0.7 alongside the held carrier the damper median improves from -20.0 ms to +10.0 ms against the same reference. Same decay-bound cost as the held carrier alone."
+      }
+    ]
+  },
+  "p026-electric-guitar-jazz": {
+    "variants": [
+      {
+        "name": "string-rings-longer",
+        "title": {
+          "en": "A string that rings as long as the reference's",
+          "ja": "リファレンスと同じだけ鳴り続ける弦"
+        },
+        "desc": {
+          "en": "The note should sustain roughly twice as long under the key, so the sound of letting go is something you can hear.",
+          "ja": "鍵を押している間の伸びがおよそ倍になり、離したときの減衰が聞き取れるようになるはずです。"
+        },
+        "overrides": "electric_guitar.ks.decay_s=15.0",
+        "note": "the model's held-note decay runs 1.80 to 2.38 times the reference's on every row of the grid (median 2.13), which empties the damper column entirely: the note is 45 dB down before note-off on 35 of 35 rows while the reference resolves a release on 33. Raising ks.decay_s from 4.5 to 15.0 takes the held-decay error from a median 4.04 dB/s over 28 scored rows to 0.63 over all 35, and the damper column from no rows at all to 30 of 35 at a median -45.0 ms against a 95-135 ms reference. Cost: doubling moves from p90-only to failing all three (median 9.77 against its 8.62 bound). vel_range fails identically before and after and is not this setting's doing. Not adopted - the doubling trade is a decision, and the value itself is a first bracket rather than a fit."
+      }
+    ]
   }
 }

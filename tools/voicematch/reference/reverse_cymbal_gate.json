@@ -5,6 +5,9 @@
   "reference_measured_utc": "2026-09-04T13:45:38+00:00",
   "recorded_utc": "2026-09-09T16:50:07+00:00",
   "reference_spread": {},
+  "_unbounded": {
+    "decay": "the reference swells: its `attack_ms` is 900 ms at n48 and 615 ms at n60 inside a 2 s gate, so the only fall `decay_origin_index` can reach is the 0.025-0.045 s remnant after the peak, and `decay_db_s` is absent on 10 of 15 reference rows. The model's span is 1.59-1.70 s, a ratio of 35.3 to 65.4 against a `DECAY_SPAN_AGREEMENT` of 0.6, so all 15 rows are censored and none reaches a verdict. The shape divergence behind that ratio is held by the `attack` bound in this file - the model arrives 240-730 ms early, median 455 ms."
+  },
   "bounds": {
     "attack": {
       "median": 537.5,

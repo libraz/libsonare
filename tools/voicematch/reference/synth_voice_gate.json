@@ -5,6 +5,9 @@
   "reference_measured_utc": "2026-09-04T16:50:20+00:00",
   "recorded_utc": "2026-09-10T00:31:31+00:00",
   "reference_spread": {},
+  "_unbounded": {
+    "damper": "the reference never falls 40 dB inside the capture's 0.5 s tail - `damper_capped` on 35 of 35 rows, and its 495.0 ms is the window length rather than a release time. The model resolves one at 405-420 ms on all 35 rows, so what would be differenced is a measurement against a window length; 0 of 35 rows reach a verdict. The missing evidence is on the reference side, so the remedy is a longer tail and not an edit to the voice."
+  },
   "bounds": {
     "stretch": {
       "median": 1.0,

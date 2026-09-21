@@ -5,6 +5,9 @@
   "reference_measured_utc": "2026-09-04T16:50:20+00:00",
   "recorded_utc": "2026-09-10T00:31:36+00:00",
   "reference_spread": {},
+  "_unbounded": {
+    "damper": "neither side resolves a release inside the capture's 0.5 s tail: `damper_capped` is true on 35 of 35 reference rows and on 35 of 35 model rows, and the 495.0 ms the reference reports (490.0 ms on the model) is the last envelope point of that tail rather than a release time. 0 of 35 rows reach a verdict, so there is nothing to record a bound from. Lengthening the tail is a re-capture, not a voice change."
+  },
   "bounds": {
     "stretch": {
       "median": 5.281,
