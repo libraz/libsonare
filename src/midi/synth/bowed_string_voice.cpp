@@ -116,6 +116,9 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
 
   const float f0 = note_to_hz(note);
   base_period_ = static_cast<float>(sr) / std::max(1.0f, f0);
+  // The upper bound stays at 0.5: beta's Helmholtz window moves with N = sr/f0, so
+  // no per-patch constant tracks it. Narrowing it to 0.25 was measured over the two
+  // patches it would clamp and rescued no failing note while breaking two working ones.
   beta_ = std::clamp(params.bow_position, 0.02f, 0.5f);
   beta_base_ = beta_;
   beta_target_ = beta_;
