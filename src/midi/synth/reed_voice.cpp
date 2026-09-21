@@ -5,7 +5,6 @@
 
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
-#include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/tunable.h"
@@ -176,12 +175,6 @@ float reed_natural_hz(float resonance01, float srf) noexcept {
   return std::min(kReedResBaseHz + kReedResSpanHz * res01, 0.45f * srf);
 }
 
-/// One-pole ramp coefficient reaching ~95% of the target in @p ms.
-float ramp_coeff(float ms, double sample_rate) noexcept {
-  const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
-  return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
-}
-
 }  // namespace
 
 void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uint8_t note,
@@ -191,10 +184,10 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   sample_rate_ = sr;
   noise_ = VoiceRandomSequence(seed);
   drive_index_ = 0;
-  releasing_ = false;
-  breath_level_ = 0.0f;
+  breath_.releasing = false;
+  breath_.level = 0.0f;
   lp_state_ = 0.0f;
-  bore_out_ = 0.0f;
+  bore_.out = 0.0f;
   dc_x1_ = 0.0f;
   dc_y1_ = 0.0f;
 
@@ -204,10 +197,10 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   // period -> odd harmonics; a cone (sax/oboe/bassoon), approximated as an open
   // pipe, is a positive-feedback comb of the full period -> full harmonics.
   if (params.conical) {
-    bore_period_ = period;
+    bore_.period = period;
     sign_ = 1.0f;
   } else {
-    bore_period_ = 0.5f * period;
+    bore_.period = 0.5f * period;
     sign_ = -1.0f;
   }
 
@@ -219,9 +212,9 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
       (1.0f - vel_to_breath) * params.breath_pressure + vel_to_breath * vel01, 0.0f, 1.0f);
   // A fresh note starts unmodulated; the matrix re-sets the offsets on its
   // first render, and a voice with no excitation route never touches them.
-  breath01_base_ = level;
-  force_mod01_ = 0.0f;
-  bright_mod01_ = 0.0f;
+  excite_.force01_base = level;
+  excite_.force_mod01 = 0.0f;
+  excite_.bright_mod01 = 0.0f;
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
 
   // Reed table from stiffness / opening.
@@ -271,9 +264,9 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   // damping -> the shipped flat loss gain, kept only to anchor the
   // frequency-referenced law in refresh_excitation_targets() — neither is
   // applied directly. damping is not CC-live, so loss_gain_ship_ is fixed here;
-  // brightness is, so it is recomposed from bright01_base_/bright_mod01_ inside
-  // refresh_excitation_targets() itself.
-  bright01_base_ = std::clamp(params.brightness, 0.0f, 1.0f);
+  // brightness is, so it is recomposed from excite_.bright01_base/bright_mod01
+  // inside refresh_excitation_targets() itself.
+  excite_.bright01_base = std::clamp(params.brightness, 0.0f, 1.0f);
   loss_gain_ship_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
                                kLossFloor, kLossCeil);
   // Both axes are derived here and nowhere else. A note-on copy of the mapping
@@ -292,42 +285,38 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
       params.conical ? std::max(kHpCornerFloorHz, kHpCornerFracF0 * f0) : kHpCornerFloorHz;
   dc_r_ = 1.0f - static_cast<float>(kTwoPi * hp_corner / sr);
 
-  // Tuning compensation: one feedback register (bore_out_ is consumed one sample
+  // Tuning compensation: one feedback register (bore_.out is consumed one sample
   // after it is produced), the bell lowpass's phase delay, and — for the cone's
   // pitch-tracking highpass — its phase LEAD at the resonant frequency (which
   // would otherwise sharpen the note). The lowpass lag lengthens the effective
   // loop and the highpass lead shortens it, so they enter comp with opposite
   // signs. Subtract comp from the loop delay.
-  const float omega = kTwoPi / std::max(1.0f, bore_period_);
+  const float omega = kTwoPi / std::max(1.0f, bore_.period);
   const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, omega);
   const float sw = std::sin(omega);
   const float cw = std::cos(omega);
   const float phase_hp = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
   const float tau_hp = phase_hp / std::max(omega, 1.0e-6f);
   const float hp_scale = closing_pressure_ > 0.0f ? kHpCompScaleValve : kHpCompScale;
-  comp_ = 1.0f + tau_lp - hp_scale * tau_hp;
+  bore_.comp = 1.0f + tau_lp - hp_scale * tau_hp;
   // The dynamic valve's lag lengthens the driven loop the way the bell lowpass
   // does, so it enters comp with the same sign.
-  if (valve_tau > 0.0f) comp_ += valve_tau;
+  if (valve_tau > 0.0f) bore_.comp += valve_tau;
 
   // The bore delay line spans the whole slab, because the line length is what
   // bounds a downward bend and the clamp enforcing it saturates silently -- a
   // glide simply stops descending while the note keeps sounding. What the note's
-  // own period still decides is how much of the line the onset seeds: the span
-  // the reed reads back over before the first traversal completes.
-  const float eff = std::max(2.0f, bore_period_ - comp_);
-  const int span = static_cast<int>(eff * 1.3f) + 8;
-  prefill_span_ = std::min(capacity_, std::max(16, span));
-  // The seed IS the line's history, so the write position starts just past it
-  // and the first traversal reads back over the seeded span exactly as it did
-  // when the line was no longer than that span.
-  bore_write_ = capacity_ > 0 ? static_cast<size_t>(prefill_span_ % capacity_) : 0;
+  // own period still decides is how much of the line the onset seeds. The seed
+  // IS the line's history, so the write position starts just past it and the
+  // first traversal reads back over the seeded span exactly as it did when the
+  // line was no longer than that span.
+  bore_.configure(bore_.buffer, bore_.capacity, bore_.period, bore_.comp, 1.3f);
 
   // Contour + textures. Every seeded level is a per-sample draw voiced at
   // kLossVoicedSr, so each carries the noise law's gain.
   const float noise_gain = noise_gain_at_rate(sr);
-  attack_coeff_ = ramp_coeff(params.attack_ms, sr);
-  release_coeff_ = ramp_coeff(params.release_ms, sr);
+  breath_.attack_coeff = ramp_coeff(params.attack_ms, sr);
+  breath_.release_coeff = ramp_coeff(params.release_ms, sr);
   breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain;
   chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth * noise_gain;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
@@ -335,18 +324,12 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
 
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst (the
   // Karplus-Strong trick) so the reed locks onto a resonating column quickly
-  // rather than swelling up from silence.
+  // rather than swelling up from silence. Past the seed the line has to be
+  // cleared rather than left alone: it is a slab slot the previous note wrote,
+  // and everything outside the seed is read before it is written.
   const float prefill = kBorePrefill * breath_target_ * noise_gain;
-  if (bore_ != nullptr) {
-    // Past the seed the line has to be cleared rather than left alone: it is a
-    // slab slot the previous note wrote, and everything outside the seed is
-    // read before it is written.
-    for (int i = prefill_span_; i < capacity_; ++i) bore_[static_cast<size_t>(i)] = 0.0f;
-    for (int i = 0; i < prefill_span_; ++i) {
-      bore_[static_cast<size_t>(i)] = prefill * noise_.bipolar_at(static_cast<uint64_t>(i));
-    }
-  }
-  drive_index_ = static_cast<uint64_t>(prefill_span_);
+  bore_.seed(prefill, noise_);
+  drive_index_ = static_cast<uint64_t>(bore_.prefill_span);
 
   // --- off-by-default advanced physics (Phase 4). When off, render() takes the
   // memoryless branch untouched (bit-identical). ---
@@ -406,13 +389,13 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   if (hole > 0.0f) {
     hole_gain_ = kToneholeGainMax * hole;
     const float frac = params.conical ? kToneholeFracCone : kToneholeFracCylinder;
-    const int round_trip = static_cast<int>(2.0f * frac * bore_period_);
-    hole_delay_samples_ = std::clamp(round_trip, 1, prefill_span_ - 1);
+    const int round_trip = static_cast<int>(2.0f * frac * bore_.period);
+    hole_delay_samples_ = std::clamp(round_trip, 1, bore_.prefill_span - 1);
   }
 }
 
 float ReedVoiceCore::render(float pitch_ratio) noexcept {
-  if (bore_ == nullptr || capacity_ < 8) return 0.0f;
+  if (bore_.buffer == nullptr || bore_.capacity < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
   // Live control: ramp the steady breath / bell pole / bell loss toward their
@@ -427,10 +410,8 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
 
   // Mouth pressure contour: ramp toward the target (1 while blowing, 0 once the
   // player tongues off), then the steady breath plus its turbulence.
-  const float target = releasing_ ? 0.0f : 1.0f;
-  const float coeff = releasing_ ? release_coeff_ : attack_coeff_;
-  breath_level_ += coeff * (target - breath_level_);
-  float breath = breath_target_ * breath_level_;
+  breath_.advance();
+  float breath = breath_target_ * breath_.level;
   if (breath_noise_ > 0.0f) {
     breath += breath * breath_noise_ * noise_.bipolar_at(drive_index_);
   }
@@ -451,7 +432,7 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   // Bell reflection from the previous bore output: one-pole loss lowpass, the
   // loss gain and the topology sign, then the in-loop DC blocker so the driven
   // loop sheds the breath's DC without colouring the tone.
-  lp_state_ += lp_alpha_ * (bore_out_ - lp_state_);
+  lp_state_ += lp_alpha_ * (bore_.out - lp_state_);
   float refl_raw = sign_ * loss_gain_ * lp_state_;
   // Register vent (gated): subtract the tracked low band from the reflection,
   // damping the fundamental so the dominant mode rises toward the register break.
@@ -497,7 +478,7 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
     // lay, so the channel passes nothing at all, until the mouth pressure has
     // risen through the release level. What speaks the note is the swing from a
     // closed channel that follows — an initial condition, not reed inertia.
-    if (tongue_held_) tongue_held_ = breath_level_ < tongue_release_;
+    if (tongue_held_) tongue_held_ = breath_.level < tongue_release_;
     if (tongue_held_) {
       inj = refl;
     } else {
@@ -517,21 +498,18 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
 
   // Advance the bore delay line: write the reed injection, read the delayed
   // pressure returning from the bell.
-  const float delay =
-      std::clamp(bore_period_ / ratio - comp_, 1.0f, static_cast<float>(capacity_ - 4));
-  bore_out_ = rt::lagrange3_fractional_delay(bore_, static_cast<size_t>(capacity_), bore_write_,
-                                             static_cast<int>(delay * 256.0f), inj);
+  bore_.advance(inj, ratio);
   ++drive_index_;
 
   // Tonehole scattering (gated): read the bore (read-only) at the reed<->hole
   // round trip and store the open hole's inverting partial reflection for the
-  // next sample's loop reflection. bore_write_ now points past the just-written
+  // next sample's loop reflection. bore_.write now points past the just-written
   // injection, so the tap sits hole_delay_samples_ behind it.
   if (hole_delay_samples_ > 0) {
     const int d = hole_delay_samples_;
-    const size_t idx =
-        (bore_write_ + static_cast<size_t>(capacity_ - 1 - d)) % static_cast<size_t>(capacity_);
-    hole_refl_ = -hole_gain_ * bore_[idx];
+    const size_t idx = (bore_.write + static_cast<size_t>(bore_.capacity - 1 - d)) %
+                       static_cast<size_t>(bore_.capacity);
+    hole_refl_ = -hole_gain_ * bore_.buffer[idx];
   }
 
   // Growth cone (gated, conical only): the bore delay line carries the
@@ -545,10 +523,10 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   // resonance — the practical bounded form of the apex integrator, in place of
   // the lossless pole-on-circle case Smith's TIIR filters would bound).
   if (throat_gain_ > 0.0f) {
-    throat_state_ += (1.0f - throat_pole_) * (bore_out_ - throat_state_);
-    return output_scale_ * (bore_out_ + throat_gain_ * throat_state_);
+    throat_state_ += (1.0f - throat_pole_) * (bore_.out - throat_state_);
+    return output_scale_ * (bore_.out + throat_gain_ * throat_state_);
   }
-  return output_scale_ * bore_out_;
+  return output_scale_ * bore_.out;
 }
 
 float ReedVoiceCore::reed_resonator(float dp) noexcept {
@@ -573,31 +551,25 @@ float ReedVoiceCore::valve_opening(float x_rest) noexcept {
 }
 
 void ReedVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
-  if ((present & kAxisForce) != 0u) {
-    breath01_base_ = std::clamp(base.force, 0.0f, 1.0f);
-  }
-  if ((present & kAxisBrightness) != 0u) {
-    bright01_base_ = std::clamp(base.brightness, 0.0f, 1.0f);
-  }
+  excite_.set_base(base, present);
   refresh_excitation_targets();
 }
 
 void ReedVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept {
-  force_mod01_ = offsets.force;
-  bright_mod01_ = offsets.brightness;
+  excite_.set_mod(offsets);
   refresh_excitation_targets();
 }
 
 void ReedVoiceCore::refresh_excitation_targets() noexcept {
   // Map across the reed's stable band only, so the control colours the tone
   // toward the beating edge without ever silencing the reed.
-  const float b = std::clamp(breath01_base_ + force_mod01_, 0.0f, 1.0f);
+  const float b = std::clamp(excite_.force01_base + excite_.force_mod01, 0.0f, 1.0f);
   breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
 
   // Bell loop loss: brightness is CC74-live, so the pole is remapped on every
   // call here rather than only at note-on. loss_gain_ship_ (from damping, fixed
   // at note-on) is per traversal and needs no mapping.
-  const float br = std::clamp(bright01_base_ + bright_mod01_, 0.0f, 1.0f);
+  const float br = std::clamp(excite_.bright01_base + excite_.bright_mod01, 0.0f, 1.0f);
   lp_alpha_target_ = 1.0f - loss_pole_at_rate((1.0f - br) * kBellPoleSpan, sample_rate_);
   loss_gain_target_ = loss_gain_ship_;
 }
@@ -608,12 +580,12 @@ void ReedVoiceCore::snap_excitation() noexcept {
   loss_gain_ = loss_gain_target_;
 }
 
-void ReedVoiceCore::release() noexcept { releasing_ = true; }
+void ReedVoiceCore::release() noexcept { breath_.release(); }
 
 void ReedVoiceCore::kill() noexcept {
-  breath_level_ = 0.0f;
+  breath_.level = 0.0f;
   lp_state_ = 0.0f;
-  bore_out_ = 0.0f;
+  bore_.out = 0.0f;
   dc_x1_ = 0.0f;
   dc_y1_ = 0.0f;
   chiff_level_ = 0.0f;
@@ -622,7 +594,7 @@ void ReedVoiceCore::kill() noexcept {
   reg_lp_state_ = 0.0f;
   throat_state_ = 0.0f;
   hole_refl_ = 0.0f;
-  releasing_ = true;
+  breath_.releasing = true;
 }
 
 }  // namespace sonare::midi::synth
