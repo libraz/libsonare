@@ -42,6 +42,11 @@ SONARE_TUNABLE(kBreathSpan, 0.28f);
 // biased a touch negative for a brighter operating point.
 SONARE_TUNABLE(kLipOffset, -0.1f);
 SONARE_TUNABLE(kLipCouple, 4.5f);
+// Mouthpiece coefficient of the one-sided valve, applied to the Bernoulli flow.
+// Seeded at unity and kept there: the valve is quieter than the reflection
+// coefficient it replaces, and the level belongs to the radiation makeup, not
+// here — raising this instead drives the loop into period doubling.
+SONARE_TUNABLE(kLipFlowScale, 1.0f);
 // Lip resonator quality factor from lip_damping, held CONSTANT-Q (bandwidth
 // proportional to the note) so the lip stays selective at low notes — a
 // fixed-radius resonator is wider than the fundamental in the tuba range and
@@ -353,6 +358,11 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
     lip2_b0_ = 1.0f - r2;
     lip2_couple_ = kLip2Couple * dyn_lip_;
   }
+
+  // 4e: lip aperture — the lips as a one-sided valve instead of a symmetric
+  // clamp on a reflection coefficient. Off (0) -> the symmetric path is taken
+  // and the render is bit-identical.
+  lip_aperture_ = std::clamp(params.lip_aperture, 0.0f, 1.0f);
 }
 
 void BrassVoiceCore::tune_lip(float f0) noexcept {
@@ -432,21 +442,37 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
   if (half_valve_ > 0.0f) refl *= half_valve_loss_;
 
   // Lip valve (resonant, outward-striking): the pressure difference across the
-  // lips drives the resonant lip, and its displacement modulates a reflection
-  // coefficient (clamped to [-1,1]) that gates the mouth pressure into the bore —
-  // the reed-style flow inj = mouth + dp*coeff, but with the coefficient being
-  // the buzzing lip resonance rather than a memoryless table. The negative
-  // coupling sign is the outward-striking behaviour that locks the buzz to the
-  // fundamental. The [-1,1] clamp is the nonlinearity that keeps the loop bounded
-  // and injects the harmonics (the octave and above) that a bare resonance lacks.
+  // lips drives the resonant lip, and its displacement gates the mouth pressure
+  // into the bore. The negative coupling sign is the outward-striking behaviour
+  // that locks the buzz to the fundamental.
   const float dp = refl - mouth;
   const float x = lip_resonator(dp);
-  float lip_coeff = lip_offset_ - lip_couple_ * x;
-  // Dynamic (2-DOF) lip (gated): the transverse second mode couples in.
-  if (dyn_lip_ > 0.0f) lip_coeff -= lip2_couple_ * lip_resonator2(dp);
-  if (lip_coeff < -1.0f) lip_coeff = -1.0f;
-  if (lip_coeff > 1.0f) lip_coeff = 1.0f;
-  const float inj = mouth + dp * lip_coeff;
+  float inj;
+  if (lip_aperture_ > 0.0f) {
+    // 4e: a swinging door. The displacement moves an opening rather than a
+    // reflection coefficient, so it clamps at both ends — shut at 0, fully open
+    // at 1 — and the flow through it follows Bernoulli. The clamp is what bounds
+    // the loop on this branch: the flow grows as the aperture to the power of
+    // three halves, so nothing downstream would.
+    float h = lip_aperture_ + lip_couple_ * x;
+    // Dynamic (2-DOF) lip (gated): the transverse second mode couples in.
+    if (dyn_lip_ > 0.0f) h += lip2_couple_ * lip_resonator2(dp);
+    h = std::clamp(h, 0.0f, 1.0f);
+    // Mouthpiece to bore. This direction is what makes the displacement drive
+    // the loop; the reflection-coefficient form below reaches the same sign by
+    // multiplying two negatives, which is why the two arguments differ.
+    const float dp_phys = mouth - refl;
+    const float flow = h * std::copysign(std::sqrt(std::fabs(dp_phys)), dp_phys);
+    inj = mouth + kLipFlowScale * flow;
+  } else {
+    // The symmetric path: the displacement modulates a reflection coefficient,
+    // and its [-1,1] clamp is what bounds the loop here.
+    float lip_coeff = lip_offset_ - lip_couple_ * x;
+    if (dyn_lip_ > 0.0f) lip_coeff -= lip2_couple_ * lip_resonator2(dp);
+    if (lip_coeff < -1.0f) lip_coeff = -1.0f;
+    if (lip_coeff > 1.0f) lip_coeff = 1.0f;
+    inj = mouth + dp * lip_coeff;
+  }
 
   // DC-block the injection so the driven positive-feedback loop sheds the breath
   // DC without colouring the tone.

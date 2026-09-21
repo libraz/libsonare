@@ -9,13 +9,19 @@
 
 #include "midi/synth/brass_voice.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
+#include <cstddef>
+#include <cstdint>
+#include <sstream>
+#include <utility>
 #include <vector>
 
 #include "core/fft.h"
 #include "midi/midi_event.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
@@ -25,6 +31,7 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::synth::gm_fallback_patch;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
@@ -449,6 +456,172 @@ TEST_CASE("half-valve and dynamic lip alter the tone but stay bounded", "[midi][
     REQUIRE(peak(tone) < 4.0f);
     REQUIRE(std::isfinite(tone.back()));
     REQUIRE(tone != plain);  // the gate changes the sound
+  }
+}
+
+TEST_CASE("the lip valve opens and shuts", "[midi][synth][brass]") {
+  // What a brass bore carries is made by the lips, not by the bell, so this is
+  // read on the bore with the radiation stage and the cuivre shaper both off.
+  //
+  // The quantity is the second harmonic's share of the fundamental, read across
+  // the rest aperture rather than at one setting. A single "open is brighter
+  // than shut" comparison would be the wrong shape twice over: the ratio is not
+  // monotonic in aperture, and a purely linear stage moves it by more than ten
+  // decibels without creating a single harmonic, so its value at one point says
+  // nothing about what made it.
+  //
+  // What only a one-sided valve can produce is the shape. A valve clamped at
+  // both ends is cut off below when it rests nearly shut and above when it
+  // rests nearly open, so somewhere between the two its flow waveform is at its
+  // most symmetric and the even harmonics cancel. That notch is structural. A
+  // gain, a filter and a monotone shaper all lack it, and the symmetric path
+  // this replaces ignores the aperture altogether, leaving the response flat.
+  //
+  // Three decibels is the margin because the same ratio moves 0.851 dB across
+  // two octaves, 0.211 dB across the whole velocity range and 0.000 dB between
+  // repeated renders, and because the hand-written shaper this is meant to make
+  // derivable only moves it 1.73 dB. The floor is measured, not assumed, and it
+  // is re-measurable: the sibling case tagged [null] prints it. That the closed
+  // side did NOT move is not claimed here, because there is nothing in this
+  // case to compare it against: the golden manifests say it, against values
+  // recorded before the valve.
+  const double f0 = 261.6256;                         // C4, note 60
+  NativeSynthPatch patch = gm_fallback_patch(0, 56);  // Trumpet
+  REQUIRE(patch.mode == SynthEngineMode::kBrass);
+  patch.brass.brassiness = 0.0f;
+  patch.brass.bell_radiation_hz = 0.0f;
+  patch.cutoff_hz = 20000.0f;
+
+  // Steady portion only: 0.3 s to 0.8 s, averaged over four Hann frames so one
+  // unlucky frame cannot carry the verdict.
+  const auto ratios_db = [&](float aperture) {
+    NativeSynthPatch p = patch;
+    p.brass.lip_aperture = aperture;
+    const std::vector<float> tone = render_patch(p, 60, 100, 48000);
+    REQUIRE(std::isfinite(tone.back()));
+    double h1 = 0.0, h2 = 0.0, h4 = 0.0;
+    for (int frame = 0; frame < 4; ++frame) {
+      const std::size_t from = 14400 + static_cast<std::size_t>(frame) * 5269;
+      const std::vector<double> ps = power_spectrum(tone, from);
+      h1 += harmonic_power(ps, f0, 1);
+      h2 += harmonic_power(ps, f0, 2);
+      h4 += harmonic_power(ps, f0, 4);
+    }
+    REQUIRE(h1 > 0.0);
+    const auto db = [h1](double h) { return 10.0 * std::log10(h / h1 + 1e-30); };
+    return std::pair<double, double>{db(h2), db(h4)};
+  };
+
+  // 0 is the off sentinel and takes the old symmetric path.
+  const double off = ratios_db(0.0f).first;
+  std::vector<double> h2_db;
+  std::ostringstream trace;
+  trace << "off " << off << " dB |";
+  for (int step = 1; step <= 20; ++step) {
+    const float aperture = static_cast<float>(step) * 0.05f;
+    const auto r = ratios_db(aperture);
+    h2_db.push_back(r.first);
+    trace << ' ' << aperture << ':' << r.first;
+  }
+  INFO(trace.str());
+
+  double reach = 0.0;
+  for (double v : h2_db) reach = std::max(reach, std::abs(v - off));
+  INFO("furthest from off: " << reach << " dB");
+
+  const double ends = std::min(h2_db.front(), h2_db.back());
+  double notch = 0.0;
+  for (std::size_t i = 1; i + 1 < h2_db.size(); ++i) notch = std::max(notch, ends - h2_db[i]);
+  INFO("deepest interior notch below the shallower end: " << notch << " dB");
+
+  REQUIRE(reach >= 3.0);
+  REQUIRE(notch >= 3.0);
+}
+
+TEST_CASE("bore harmonic ratios against causes that are not the lip", "[.][midi][synth][null]") {
+  // Not a gate — it reports rather than asserts. A margin on h2/h1 is only
+  // meaningful against the spread the same quantity already shows when the lip
+  // valve is held fixed, so this measures that spread: repeated renders, the
+  // individual analysis frames, velocity, note, and the two stages that sit
+  // after the bore. Neither stage can create a harmonic, but a linear filter
+  // moves the ratio, which is why they belong in the null rather than outside it.
+  const auto hz = [](int note) { return 440.0 * std::pow(2.0, (note - 69) / 12.0); };
+  NativeSynthPatch base = gm_fallback_patch(0, 56);  // Trumpet
+  REQUIRE(base.mode == SynthEngineMode::kBrass);
+  const float gm_brassiness = base.brass.brassiness;
+  const float gm_bell_hz = base.brass.bell_radiation_hz;
+  base.brass.brassiness = 0.0f;
+  base.brass.bell_radiation_hz = 0.0f;
+  base.cutoff_hz = 20000.0f;
+
+  // Per-frame ratios over the same 0.3-0.8 s steady window the gated case reads.
+  const auto frames_db = [&](const NativeSynthPatch& p, uint8_t note, uint8_t vel) {
+    const std::vector<float> tone = render_patch(p, note, vel, 48000);
+    REQUIRE(std::isfinite(tone.back()));
+    const double f0 = hz(note);
+    std::vector<std::pair<double, double>> out;
+    for (int frame = 0; frame < 4; ++frame) {
+      const std::size_t from = 14400 + static_cast<std::size_t>(frame) * 5269;
+      const std::vector<double> ps = power_spectrum(tone, from);
+      const double h1 = harmonic_power(ps, f0, 1);
+      REQUIRE(h1 > 0.0);
+      const auto db = [h1](double h) { return 10.0 * std::log10(h / h1 + 1e-30); };
+      out.emplace_back(db(harmonic_power(ps, f0, 2)), db(harmonic_power(ps, f0, 4)));
+    }
+    return out;
+  };
+  const auto mean_db = [](const std::vector<std::pair<double, double>>& f) {
+    double a = 0.0, b = 0.0;
+    for (const auto& x : f) {
+      a += x.first;
+      b += x.second;
+    }
+    return std::pair<double, double>{a / static_cast<double>(f.size()),
+                                     b / static_cast<double>(f.size())};
+  };
+  const auto report = [&](const char* label, const NativeSynthPatch& p, uint8_t note, uint8_t vel) {
+    const auto f = frames_db(p, note, vel);
+    const auto m = mean_db(f);
+    double lo2 = f[0].first, hi2 = f[0].first, lo4 = f[0].second, hi4 = f[0].second;
+    for (const auto& x : f) {
+      lo2 = std::min(lo2, x.first);
+      hi2 = std::max(hi2, x.first);
+      lo4 = std::min(lo4, x.second);
+      hi4 = std::max(hi4, x.second);
+    }
+    WARN(label << "  h2/h1 " << m.first << " dB (frame span " << (hi2 - lo2) << ")"
+               << "  h4/h1 " << m.second << " dB (frame span " << (hi4 - lo4) << ")");
+    return m;
+  };
+
+  const auto a = report("repeat 1        note 60 vel 100", base, 60, 100);
+  const auto b = report("repeat 2        note 60 vel 100", base, 60, 100);
+  WARN("run-to-run  h2 " << (b.first - a.first) << " dB  h4 " << (b.second - a.second) << " dB");
+
+  for (uint8_t vel : {uint8_t{32}, uint8_t{64}, uint8_t{100}, uint8_t{127}}) {
+    report("velocity                note 60", base, 60, vel);
+  }
+  for (uint8_t note : {uint8_t{48}, uint8_t{60}, uint8_t{72}}) {
+    report("note                    vel 100", base, note, 100);
+  }
+
+  NativeSynthPatch shaped = base;
+  shaped.brass.brassiness = gm_brassiness;
+  report("brassiness at its GM value      ", shaped, 60, 100);
+  NativeSynthPatch radiated = base;
+  radiated.brass.bell_radiation_hz = gm_bell_hz;
+  WARN("bell_radiation_hz GM value " << gm_bell_hz << " Hz, brassiness GM value " << gm_brassiness);
+  report("bell_radiation_hz at its GM value", radiated, 60, 100);
+
+  // The two corners a real flare and a bore with no flare would give. Whether
+  // these already separate decides whether a radiation test needs the lip valve
+  // in front of it to be able to fail.
+  for (float corner : {1000.0f, 13000.0f}) {
+    NativeSynthPatch p = base;
+    p.brass.bell_radiation_hz = corner;
+    report(
+        corner < 2000.0f ? "bell corner 1 kHz               " : "bell corner 13 kHz              ",
+        p, 60, 100);
   }
 }
 

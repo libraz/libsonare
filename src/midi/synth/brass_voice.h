@@ -15,8 +15,12 @@
 /// since the lip valve excites every harmonic regardless.
 ///
 /// The delay buffer is not owned here — the host attaches one bore span per
-/// voice slot before start(). Unconditionally stable: the lip reflection
-/// coefficient is bounded to [-1,1] and the bell loss gain is < 1.
+/// voice slot before start(). Unconditionally stable, by a different bound on
+/// each of the two lip valves: the symmetric one clamps its reflection
+/// coefficient to [-1,1], and the one-sided valve @c lip_aperture selects clamps
+/// its opening to [0,1] — which it needs, because its flow grows faster than
+/// linearly with drive and nothing downstream of it is a limiter. The bell loss
+/// gain is < 1 on both.
 ///
 /// The bell is two filters, not one: it reflects the long wavelengths back down
 /// the bore (the loop lowpass @c brightness sets) and radiates the short ones
@@ -418,6 +422,11 @@ class BrassVoiceCore {
   float lip2_z1_ = 0.0f;
   float lip2_z2_ = 0.0f;
   float lip2_couple_ = 0.0f;
+
+  // 4e: lip aperture. lip_aperture_ == 0 -> the symmetric reflection-coefficient
+  // valve is taken instead (bit-identical). Above 0 the lip is a one-sided valve
+  // whose opening clamps to [0,1] and whose flow follows Bernoulli.
+  float lip_aperture_ = 0.0f;
 
   // Lip resonator step: a two-pole (mass-spring) resonator driven by the pressure
   // difference; returns the lip displacement.
