@@ -240,8 +240,13 @@ def _check_artifact_skew(
     python_executable: str,
     timeout: float,
     report: list[tuple[str, str]],
-) -> None:
+) -> bool:
     """Name the compared artifacts, and reject two built from different cores.
+
+    Returns whether the pair is skewed. A skewed pair must not be compared: by
+    the argument below, every difference the comparison could then report
+    belongs to the build rather than to either surface, so the findings would be
+    real failures of nothing and indistinguishable from contract defects.
 
     Every run prints which two artifacts were compared. Whether the Python
     surface loads the build tree, a ``SONARE_LIB_PATH`` override, or the
@@ -259,12 +264,12 @@ def _check_artifact_skew(
     """
     library = _resolved_python_library(python_executable, timeout)
     if library is None:
-        return
+        return False
     try:
         native_mtime = os.path.getmtime(native_executable)
         library_mtime = os.path.getmtime(library)
     except OSError:
-        return
+        return False
     provenance = f"cli contract v2: comparing {native_executable} and {library}"
     pending = _count_sources_after(max(native_mtime, library_mtime))
     if pending:
@@ -272,7 +277,7 @@ def _check_artifact_skew(
     print(provenance)
     straddling = _straddling_source(*sorted((native_mtime, library_mtime)))
     if straddling is None:
-        return
+        return False
     behind, ahead = (
         (native_executable, library)
         if native_mtime < library_mtime
@@ -285,6 +290,19 @@ def _check_artifact_skew(
             f"was linked and before {ahead} was -- rebuild both before comparing"),
         )
     )
+    return True
+
+
+def _emit(report: list[tuple[str, str]]) -> int:
+    """Print the accumulated report and return the process exit code."""
+    if report:
+        for kind, message in report:
+            prefix = "EXPECTED-FAILURE" if kind == "expected" else "FAIL"
+            print(f"[{prefix}] {message}")
+        print(f"cli contract v2: {len(report)} issue(s)")
+        return 1
+    print("cli contract v2: live checks passed")
+    return 0
 
 
 def _run(
@@ -969,7 +987,8 @@ def main(argv: list[str] | None = None) -> int:
     python_executable = _resolve_executable(args.python)
 
     report: list[tuple[str, str]] = []
-    _check_artifact_skew(native_executable, python_executable, args.timeout, report)
+    if _check_artifact_skew(native_executable, python_executable, args.timeout, report):
+        return _emit(report)
     # Each surface is asked about its own library. The inventory half only ever
     # relaxes the native front-end -- the Python parser is built
     # unconditionally, so a feature-off library changes what its commands DO
@@ -1095,14 +1114,7 @@ def main(argv: list[str] | None = None) -> int:
             python_disabled,
         )
 
-    if report:
-        for kind, message in report:
-            prefix = "EXPECTED-FAILURE" if kind == "expected" else "FAIL"
-            print(f"[{prefix}] {message}")
-        print(f"cli contract v2: {len(report)} issue(s)")
-        return 1
-    print("cli contract v2: live checks passed")
-    return 0
+    return _emit(report)
 
 
 if __name__ == "__main__":

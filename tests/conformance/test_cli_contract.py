@@ -623,6 +623,40 @@ class CliContractSelfTest(unittest.TestCase):
         self.assertIn("changed after cli was linked and before lib.dylib was", message)
         self.assertNotIn("includes", message)
 
+    def test_skew_stops_the_comparison_rather_than_colouring_it(self) -> None:
+        """A skewed pair must be reported and not compared.
+
+        Every difference the comparison could then report belongs to the build,
+        which is the same reason the skew is a failure at all -- so running it
+        emits findings indistinguishable from contract defects. One stale
+        artifact produced four of them against one real cause.
+        """
+        report: list[tuple[str, str]] = []
+        with (
+            mock.patch.object(CHECKER, "_resolved_python_library", return_value="lib.dylib"),
+            mock.patch.object(CHECKER.os.path, "getmtime", side_effect=[100.0, 200.0]),
+            mock.patch.object(CHECKER, "_count_sources_after", return_value=0),
+            mock.patch.object(
+                CHECKER,
+                "_straddling_source",
+                return_value=ROOT / "src/c_api/core_quick.cpp",
+            ),
+        ):
+            self.assertTrue(CHECKER._check_artifact_skew("cli", "python", 1.0, report))
+        self.assertEqual(len(report), 1)
+        # Non-vacuity: the same call with nothing straddling the two link times
+        # must report nothing and let the comparison run, or the short-circuit
+        # would refuse every pair rather than the skewed ones.
+        matched: list[tuple[str, str]] = []
+        with (
+            mock.patch.object(CHECKER, "_resolved_python_library", return_value="lib.dylib"),
+            mock.patch.object(CHECKER.os.path, "getmtime", side_effect=[100.0, 200.0]),
+            mock.patch.object(CHECKER, "_count_sources_after", return_value=0),
+            mock.patch.object(CHECKER, "_straddling_source", return_value=None),
+        ):
+            self.assertFalse(CHECKER._check_artifact_skew("cli", "python", 1.0, matched))
+        self.assertEqual(matched, [])
+
     def test_pending_payload_with_active_options_still_checks_inventory(self) -> None:
         """Payload promotion and option promotion are independent gates."""
         manifest = copy.deepcopy(self.manifest)
