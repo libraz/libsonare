@@ -39,12 +39,19 @@ def winner_or_defaults(knobs, best_values: list[float], evaluator,
     start point stopped comparing during the fit, which is the term going quiet
     rather than being satisfied.
     """
+    # Which refusal fired, for the --out record. A refusal leaves the tree
+    # showing a voice whose values did not change, and that reads the same as a
+    # search that simply found nothing — so the reason has to outlive the
+    # terminal or the finding does not survive the run.
+    evaluator.write_back_refusal = None
     if getattr(evaluator, "normalize", False) and evaluator.best_loss > 1.0:
+        evaluator.write_back_refusal = "lost_to_start"
         print(f"\nthe winner scores {evaluator.best_loss:.4f} against the defaults' 1.0 — "
               f"keeping the defaults, since a fit that lost to its own start point has "
               f"nothing to write", file=sys.stderr)
         return [k.start_value for k in knobs]
     if validation and validation["best"] - validation["start"] > 0.005:
+        evaluator.write_back_refusal = "fitted_to_the_probe"
         print(f"\nthe winner scores {validation['best']:.4f} against the defaults' "
               f"{validation['start']:.4f} on the held-out {validation['axis']} — keeping "
               f"the defaults, since values that lose where the fit could not see are "
@@ -53,6 +60,7 @@ def winner_or_defaults(knobs, best_values: list[float], evaluator,
     start_tnr = getattr(evaluator, "start_tnr_notes", None)
     best_tnr = getattr(evaluator, "best_tnr_notes", None)
     if start_tnr is not None and best_tnr is not None and best_tnr < start_tnr:
+        evaluator.write_back_refusal = "objective_went_blind"
         print(f"\nthe winner is scored against the reference's noise on {best_tnr:g} "
               f"notes where the start point was scored on {start_tnr:g} — keeping the "
               f"defaults, since a fit that took the model past the reference collected "

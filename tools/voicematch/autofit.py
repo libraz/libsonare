@@ -1436,6 +1436,28 @@ def _fold_tree_provenance(out_path: str, head: str | None, dirty: list[str]) -> 
     path.write_text(json.dumps(record, indent=2) + "\n")
 
 
+def _fold_write_back_verdict(out_path: str, evaluator) -> None:
+    """Add why a finished fit kept the defaults, if it did.
+
+    A refusal leaves a voice whose values did not change, which from every
+    artifact reads identically to a search that found nothing worth writing.
+    One of those is ordinary and one says the objective stopped being able to
+    see the voice — a missing measurement axis rather than a fit problem — so
+    the reason has to reach the record or the more valuable reading is lost
+    with the scrollback. Same post-write shape as the tree state above.
+    """
+    if not out_path or not Path(out_path).exists():
+        return
+    path = Path(out_path)
+    record = json.loads(path.read_text())
+    record["write_back"] = {
+        "refused": getattr(evaluator, "write_back_refusal", None),
+        "tnr_notes": {"start": getattr(evaluator, "start_tnr_notes", None),
+                      "best": getattr(evaluator, "best_tnr_notes", None)},
+    }
+    path.write_text(json.dumps(record, indent=2) + "\n")
+
+
 def run(args, argv: list[str] | None = None) -> int:
     build_dir = (REPO_ROOT / args.build_dir).resolve()
     if build_dir.name == "build-python-shared":
@@ -1667,6 +1689,7 @@ def run(args, argv: list[str] | None = None) -> int:
         }
     report_result(knobs, pristine, best_values, evaluator, args, extra)
     _fold_tree_provenance(args.out, head_sha, dirty_src)
+    _fold_write_back_verdict(args.out, evaluator)
     return 0
 
 

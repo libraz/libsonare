@@ -3951,6 +3951,51 @@ def test_fold_tree_provenance_is_a_noop_without_an_out_path(tmp_path):
     autofit._fold_tree_provenance("", "deadbeef", [])  # must not raise
 
 
+def test_a_refusal_names_itself_in_the_out_artifact(tmp_path):
+    """Unchanged values have two readings and only the record can tell them apart.
+
+    A search that found nothing worth writing and an objective that went blind
+    leave the same tree. The second is a missing measurement axis rather than a
+    fit result, and it is the one worth counting later.
+    """
+    knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
+    blind = argparse.Namespace(normalize=True, best_loss=0.5071,
+                               start_tnr_notes=7.0, best_tnr_notes=0.0)
+    assert winner_or_defaults(knobs, [0.9], blind) == [0.25]
+    assert blind.write_back_refusal == "objective_went_blind"
+
+    out = tmp_path / "result.json"
+    out.write_text(json.dumps({"loss": {"best": 0.5071}}))
+    autofit._fold_write_back_verdict(str(out), blind)
+    record = json.loads(out.read_text())
+    assert record["loss"] == {"best": 0.5071}  # what was already there survives
+    assert record["write_back"] == {"refused": "objective_went_blind",
+                                    "tnr_notes": {"start": 7.0, "best": 0.0}}
+
+
+def test_each_refusal_is_distinguishable_and_a_write_names_none():
+    knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
+    lost = argparse.Namespace(normalize=True, best_loss=1.1536)
+    winner_or_defaults(knobs, [0.9], lost)
+    assert lost.write_back_refusal == "lost_to_start"
+
+    overfit = argparse.Namespace(normalize=True, best_loss=0.8692)
+    winner_or_defaults(knobs, [0.9], overfit,
+                       {"axis": "velocities", "held_out": "48,88,112",
+                        "start": 1.0, "best": 1.1924})
+    assert overfit.write_back_refusal == "fitted_to_the_probe"
+
+    # A run that wrote its winner must not leave a stale refusal behind it.
+    won = argparse.Namespace(normalize=True, best_loss=0.5071,
+                             write_back_refusal="lost_to_start")
+    assert winner_or_defaults(knobs, [0.9], won) == [0.9]
+    assert won.write_back_refusal is None
+
+
+def test_fold_write_back_verdict_is_a_noop_without_an_out_path():
+    autofit._fold_write_back_verdict("", argparse.Namespace())  # must not raise
+
+
 def test_allow_dirty_src_run_records_provenance_in_out(tmp_path, monkeypatch):
     """The opt-out path all the way through `run()`: the artifact --diagnose
     writes carries the dirty paths and the sha, not just a warning on stderr
