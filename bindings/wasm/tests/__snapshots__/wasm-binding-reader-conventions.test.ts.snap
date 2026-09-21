@@ -18,10 +18,10 @@ exports[`WASM binding sources budget every caller-supplied array length > has no
 exports[`WASM binding sources stay on the shared common.h field readers > has no new bare literal-key field reads beyond the tracked baseline (snapshot ratchet) 1`] = `
 [
   "analysis/quick.cpp options["backtrack"].as<bool>() #1",
-  "effects/audio.cpp op["endSample"].as<double>() #1",
-  "effects/audio.cpp op["startSample"].as<double>() #1",
   "effects/offline_dynamics_editing.cpp options["autoMakeup"].as<bool>() #1",
   "effects/offline_dynamics_editing.cpp options["sidechainHpfEnabled"].as<bool>() #1",
+  "effects/spectral_edit.cpp op["endSample"].as<double>() #1",
+  "effects/spectral_edit.cpp op["startSample"].as<double>() #1",
   "metering/metering.cpp options["applyOctaveSmoothing"].as<bool>() #1",
   "metering/metering.cpp options["applyOctaveSmoothing"].as<bool>() #2",
   "metering/metering.cpp options["dbAmin"].as<float>() #1",

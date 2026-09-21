@@ -1151,6 +1151,10 @@ if(BUILD_WASM)
       wasm/bindings/common/common.cpp
       wasm/bindings/editing/polyphony.cpp
       wasm/bindings/effects/audio.cpp
+      wasm/bindings/effects/decomposition.cpp
+      wasm/bindings/effects/notes.cpp
+      wasm/bindings/effects/percussive_events.cpp
+      wasm/bindings/effects/spectral_edit.cpp
       c_api/sonare_c_voice_changer.cpp
       c_api/sonare_c_streaming_retune.cpp
       wasm/bindings/features/core.cpp
@@ -1343,6 +1347,10 @@ if(BUILD_WASM)
       wasm/bindings/common/common.cpp
       wasm/bindings/editing/polyphony.cpp
       wasm/bindings/effects/audio.cpp
+      wasm/bindings/effects/decomposition.cpp
+      wasm/bindings/effects/notes.cpp
+      wasm/bindings/effects/percussive_events.cpp
+      wasm/bindings/effects/spectral_edit.cpp
       wasm/bindings/effects/offline_dynamics_editing.cpp
       wasm/bindings/effects/realtime_voice_changer.cpp
       wasm/bindings/effects/repair.cpp
