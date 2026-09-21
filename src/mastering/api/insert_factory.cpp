@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "mastering/api/named_processor.h"
+#include "mastering/api/param_field_tables.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
@@ -571,7 +572,34 @@ std::unique_ptr<Processor> build_multiband(const std::string& name, const ParamM
 }
 
 #ifdef SONARE_HAVE_FX
+// Field coverage for the reverbs, which the catalog test cannot ask about.
+// Everywhere else an insert's construction keys stand one to one with its
+// config's fields, and the test compares the two counts. These six break that
+// correspondence on purpose -- `damping` and `hfDamping` write one field,
+// `decaySec` derives another field's value, and a room's geometry is one field
+// per three keys -- so the arity is pinned here instead, beside the builders
+// that have to wire a new field.
+//
+// The nested members are pinned separately: a field added to a room's
+// dimensions or to its climate does not move the arity of the config holding
+// them, and would otherwise arrive unreachable with nothing red.
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::DattorroReverbConfig, 6);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::FdnReverbConfig, 3);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::VelvetReverbConfig, 5);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::ConvolutionReverbConfig, 4);
 #ifdef SONARE_HAVE_ACOUSTIC
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::RoomReverbConfig, 10);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::acoustic::RoomMorphConfig, 12);
+// Reached through a room's own keys: three each for the box and the two
+// endpoints, two for the climate pair.
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::RoomDimensions, 3);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::acoustic::Vec3, 3);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::acoustic::AirAbsorption, 2);
+// The morph target's room arrives through acoustic_room_from_json below, which
+// resolves its walls by the material precedence the offline facade uses.
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::acoustic::ShoeboxRoom, 2);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::acoustic::SourceListener, 2);
+
 bool acoustic_material_preset_from_int(int selector, sonare::acoustic::MaterialPreset* out) {
   using sonare::acoustic::MaterialPreset;
   switch (selector) {

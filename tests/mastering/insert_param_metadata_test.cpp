@@ -287,11 +287,13 @@ TEST_CASE("every effects-insert config field has a construction key", "[masterin
   // own behaviour instead.
   //
   // The population is every effects insert whose keys stand one to one with its
-  // config's fields. The reverbs are deliberately outside it and an `unexposed`
-  // count would misdescribe them in both directions: they probe alias keys for
-  // one field (`damping` / `hfDamping`), derive one field from another key
-  // (`decaySec` -> `decay`), and carry nested members that one field spans
-  // several keys of (a room's dimensions, its endpoints, its air).
+  // config's fields. The reverbs are outside it and an `unexposed` count would
+  // misdescribe them in both directions: they probe alias keys for one field
+  // (`damping` / `hfDamping`), derive one field from another key (`decaySec` ->
+  // `decay`), and carry nested members that one field spans several keys of (a
+  // room's dimensions, its endpoints, its air). Counting keys answers nothing
+  // there, so they are guarded at compile time instead, by the arity assertions
+  // beside their builders in insert_factory.cpp.
   namespace modulation = sonare::effects::modulation;
   require_a_key_per_config_field<modulation::PhaserConfig>("effects.modulation.phaser");
   require_a_key_per_config_field<modulation::RotaryConfig>("effects.modulation.rotary");

@@ -228,6 +228,25 @@ inline double field_as_double(Enum value) {
                        " field: add the missing row, or raise the unexposed count "            \
                        "and say why")
 
+// The same guard for a builder that cannot carry a field table, because its keys
+// do not stand one to one with its fields: two keys writing one field (an alias),
+// one key deriving another field's value, or one field spanning several keys (a
+// nested member). Counting keys there answers nothing, so what is pinned is the
+// config's own arity, at the site that has to wire a new field.
+//
+// SONARE_ASSERT_EVERY_FIELD_IS_WIRED(Config, accounted) reads as: someone has
+// accounted for all `accounted` fields of Config, and Config has exactly that
+// many. The count is the whole arity, so a field deliberately left without a key
+// still occupies its place in it and takes a one-line reason at the call site --
+// the number never falls to record an omission, which would leave the next field
+// to arrive indistinguishable from the one that was decided about.
+#define SONARE_ASSERT_EVERY_FIELD_IS_WIRED(Config, accounted)                                   \
+  static_assert(                                                                                \
+      static_cast<int>(::sonare::mastering::api::detail::field_count<Config>()) == (accounted), \
+      #Config                                                                                   \
+      " gained or lost a field: wire it to a construction key and move the "                    \
+      "count, or say at the call site why it has none")
+
 // --- Dynamics ---
 
 #define SONARE_FIELDS_COMPRESSOR(X)               \
