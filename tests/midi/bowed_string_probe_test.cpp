@@ -336,6 +336,12 @@ TEST_CASE("bowed string control hashes", "[midi][synth][bowed][probe]") {
   // deterministic excitation. The percussion-shell configuration is written out
   // here rather than read from a kit so this control fires for a change to
   // process()/start_specs and not for a drum note being re-voiced.
+  // Deterministic, and deliberately not flat: the modulo folds the generator's
+  // period into a line near 842 Hz carrying 15-30x its neighbours' power. A hash
+  // does not care, but this is not an excitation for a spectral measurement --
+  // it swamps the response under test, so every arm reports the same number and
+  // reads as "the mechanism does nothing" rather than as an error. Use an
+  // impulse, whose flatness comes from the definition.
   std::vector<float> excitation(12000, 0.0f);
   uint32_t state = 0x1234567u;
   for (float& sample : excitation) {
