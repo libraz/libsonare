@@ -206,11 +206,6 @@ CliOptionDomain between(double minimum, double maximum, CliOptionDomainStage sta
   return domain;
 }
 
-// The C `seed` field's own width rather than a policy bound: every other surface
-// accepts the whole uint32 range, and this front-end reached only the lower half
-// while `int` was the widest thing its parser produced. Exact as a double.
-constexpr double kMaxCliSeed = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
-
 CliOptionDomain choices_of(std::vector<std::string> values, CliOptionDomainStage stage) {
   CliOptionDomain domain;
   domain.choices = std::move(values);
@@ -878,6 +873,13 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  number_value("noise-floor-margin-db", 10.0)});
 
 #ifdef SONARE_WITH_ACOUSTIC_SIM
+    // The C `seed` field's own width rather than a policy bound: every other
+    // surface accepts the whole uint32 range, and this front-end reached only
+    // the lower half while `int` was the widest thing its parser produced.
+    // Exact as a double. Declared inside the gate its only two readers sit in,
+    // because the CLI defines that macro from BUILD_ACOUSTIC_SIM AND BUILD_FX
+    // and an unconditional declaration is unused in every build missing either.
+    constexpr double kMaxCliSeed = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
     add_command(commands, "estimate-room", true,
                 {number_value("aspect-lw", 1.0), number_value("aspect-lh", 1.0),
                  number_value("reference-absorption", 0.15), flag("sabine"),
