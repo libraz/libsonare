@@ -307,6 +307,10 @@ class BowedStringVoiceCore {
   float bow_level_ = 0.0f;
   float attack_coeff_ = 0.0f;
   float release_coeff_ = 0.0f;
+  // Per-sample linear-ramp rate for bow_accel_ms (ZeroIsSentinel: 0 keeps the
+  // one-pole attack_coeff_ ramp above; render() only takes this branch on the
+  // attack, never on release).
+  float bow_accel_rate_ = 0.0f;
   bool releasing_ = false;
 
   // Live-control smoothing: the render ramps the current bow speed / slope /

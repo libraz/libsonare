@@ -27,6 +27,12 @@ SONARE_TUNABLE(kBowVelocitySpan, 0.14f);
 // Rosin texture depth: a light seeded jitter on the bow velocity.
 SONARE_TUNABLE(kRosinDepth, 0.15f);
 
+// --- note-on excitation seed (only when params.attack_noise > 0) ---
+// Seed depth: the bowed sibling of the wind engines' kBorePrefill (reed 0.02 /
+// brass 0.03 / flute 0.05), scaled by params.attack_noise and the bow-velocity
+// target rather than fitted against a reference (measured via time_to_helmholtz).
+SONARE_TUNABLE(kAttackSeed, 0.02f);
+
 // Live-control smoothing time (ms): the per-sample ramp of bow speed / force /
 // position toward their CC targets — fast enough to feel immediate, slow enough
 // to never zipper.
@@ -170,9 +176,43 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
     for (int i = 0; i < capacity_; ++i) bridge_[static_cast<size_t>(i)] = 0.0f;
   }
 
+  // Onset seed (0 = off, the lines stay zeroed above): see the header comment
+  // on attack_noise for the physics. Amplitude scales on the bow VELOCITY
+  // target, never on force, so a later force-law change cannot move it.
+  if (params.attack_noise > 0.0f) {
+    const int prefill_span = std::max(16, static_cast<int>(std::lround(base_period_)));
+    const int neck_span = std::clamp(
+        std::min(prefill_span, static_cast<int>(std::lround((1.0f - beta_) * base_period_))), 0,
+        capacity_);
+    const int bridge_span = std::clamp(
+        std::min(prefill_span, static_cast<int>(std::lround(beta_ * base_period_))), 0, capacity_);
+    const float amp = kAttackSeed * params.attack_noise * base_bow_velocity_;
+    // The far end of the buffer is read FIRST, not index 0: with
+    // neck_write_/bridge_write_ at 0, lagrange3_fractional_delay writes at
+    // write_index then reads BEHIND it, so the earliest calls wrap to the far
+    // end -- seeding index 0 instead is inert until write_index laps the buffer.
+    if (neck_ != nullptr) {
+      const int from = capacity_ - neck_span;
+      for (int i = 0; i < neck_span; ++i)
+        neck_[static_cast<size_t>(from + i)] = amp * noise_.bipolar_at(static_cast<uint64_t>(i));
+    }
+    if (bridge_ != nullptr) {
+      const int from = capacity_ - bridge_span;
+      for (int i = 0; i < bridge_span; ++i)
+        bridge_[static_cast<size_t>(from + i)] = amp * noise_.bipolar_at(static_cast<uint64_t>(i));
+    }
+    // Past the whole seed span so the rosin stream never redraws a spent index.
+    drive_index_ = static_cast<uint64_t>(prefill_span);
+  }
+
   // Bow velocity contour.
   attack_coeff_ = ramp_coeff(params.attack_ms, sr);
   release_coeff_ = ramp_coeff(params.release_ms, sr);
+  // 0 = one-pole ramp (ZeroIsSentinel); else a constant-acceleration linear rate.
+  bow_accel_rate_ = params.bow_accel_ms > 0.0f
+                        ? 1.0f / std::max(1.0f, static_cast<float>(params.bow_accel_ms) * 0.001f *
+                                                    static_cast<float>(sr))
+                        : 0.0f;
 
   rosin_level_ = std::clamp(params.rosin, 0.0f, 1.0f) * kRosinDepth;
 
@@ -250,8 +290,13 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
   // Bow velocity: ramp the bow speed toward the target (1 while bowing, 0 once
   // the bow lifts), then scale to the model's velocity units.
   const float target = releasing_ ? 0.0f : 1.0f;
-  const float coeff = releasing_ ? release_coeff_ : attack_coeff_;
-  bow_level_ += coeff * (target - bow_level_);
+  if (!releasing_ && bow_accel_rate_ > 0.0f) {
+    // Constant-acceleration ramp: linear, not the one-pole's peak-at-t=0 decay.
+    bow_level_ = std::min(1.0f, bow_level_ + bow_accel_rate_);
+  } else {
+    const float coeff = releasing_ ? release_coeff_ : attack_coeff_;
+    bow_level_ += coeff * (target - bow_level_);
+  }
   float bow_v = max_bow_velocity_ * bow_level_;
   if (rosin_level_ > 0.0f) {
     bow_v += max_bow_velocity_ * rosin_level_ * noise_.bipolar_at(drive_index_);
