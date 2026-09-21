@@ -3,7 +3,12 @@
   "timbre": "gm002",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-04T11:24:12+00:00",
-  "recorded_utc": "2026-09-20T20:55:41+00:00",
+  "recorded_utc": "2026-09-21T11:04:02+00:00",
+  "model_build": {
+    "built_utc": "2026-09-21T10:59:27Z",
+    "newest_source_utc": "2026-09-21T10:53:08Z",
+    "stale": false
+  },
   "reference_spread": {},
   "bounds": {
     "stretch": {
