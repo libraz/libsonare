@@ -34,7 +34,8 @@ INCLUDE_DIR = REPO_ROOT / "include" / "sonare"
 # Each signature module and the entry point that populates a CDLL from it.
 SIGNATURE_MODULES = (
     ("libsonare._ffi_signatures_core", "configure_core_signatures"),
-    ("libsonare._ffi_signatures_effects_engine", "configure_effects_engine_signatures"),
+    ("libsonare._ffi_signatures_effects", "configure_effects_signatures"),
+    ("libsonare._ffi_signatures_engine", "configure_engine_signatures"),
     ("libsonare._ffi_signatures_extra", "configure_extra_signatures"),
     ("libsonare._ffi_signatures_features", "configure_features_signatures"),
     ("libsonare._ffi_signatures_mastering", "configure_mastering_signatures"),

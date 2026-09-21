@@ -9,7 +9,8 @@ import platform
 from pathlib import Path
 
 from ._ffi_signatures_core import configure_core_signatures
-from ._ffi_signatures_effects_engine import configure_effects_engine_signatures
+from ._ffi_signatures_effects import configure_effects_signatures
+from ._ffi_signatures_engine import configure_engine_signatures
 from ._ffi_signatures_extra import configure_extra_signatures
 from ._ffi_signatures_features import configure_features_signatures
 from ._ffi_signatures_mastering import configure_mastering_signatures
@@ -107,7 +108,8 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
         )
 
     configure_core_signatures(lib)
-    configure_effects_engine_signatures(lib)
+    configure_effects_signatures(lib)
+    configure_engine_signatures(lib)
     configure_repair_dynamics_signatures(lib)
     configure_features_signatures(lib)
     configure_mastering_signatures(lib)
