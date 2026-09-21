@@ -273,12 +273,21 @@ class ReedVoiceCore {
   float comp_ = 1.0f;
   // Feedback sign: -1 = cylinder (odd harmonics), +1 = cone (full harmonics).
   float sign_ = -1.0f;
+  // Sample rate at note-on: refresh_excitation_targets() needs it on a live
+  // CC74 write, which carries no sample-rate parameter of its own.
+  double sample_rate_ = 48000.0;
 
   // Bell reflection: one-pole loop lowpass y += alpha*(x - y), a loss gain, and
-  // the sign (folded in render).
+  // the sign (folded in render). Both are solved together as a
+  // frequency-referenced pair (see loss_gain_ship_ below) rather than set
+  // independently, so both live-ramp toward their CC74 targets.
   float lp_alpha_ = 1.0f;
   float lp_state_ = 0.0f;
   float loss_gain_ = 0.95f;
+  // The shipped flat loss gain from damping (damping is not CC-live, so this is
+  // fixed at note-on). Kept only to anchor the frequency-referenced law in
+  // refresh_excitation_targets() — never applied to render() directly.
+  float loss_gain_ship_ = 0.95f;
   // In-loop DC blocker (the cone's positive-feedback comb has a DC mode that
   // does not radiate; the cylinder needs it too once driven).
   float dc_x1_ = 0.0f;
@@ -309,12 +318,14 @@ class ReedVoiceCore {
   float release_coeff_ = 0.0f;
   bool releasing_ = false;
 
-  // Live-control smoothing: the render ramps breath_target_ / lp_alpha_ toward
-  // these CC targets so a moving controller never zippers. Initialised equal to
-  // the note-on values, so an untouched note renders exactly as Phase 1.
+  // Live-control smoothing: the render ramps breath_target_ / lp_alpha_ /
+  // loss_gain_ toward these CC targets so a moving controller never zippers.
+  // Initialised equal to the note-on values, so an untouched note renders
+  // exactly as Phase 1.
   float ctrl_coeff_ = 1.0f;
   float breath_ctrl_target_ = 0.6f;
   float lp_alpha_target_ = 1.0f;
+  float loss_gain_target_ = 0.95f;
   // The normalized bases behind those two targets, and the matrix offsets on
   // them; the targets are always the composed pair.
   float breath01_base_ = 0.6f;

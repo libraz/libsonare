@@ -46,6 +46,24 @@ struct StringLoopFilter {
   float g = 0.0f;
 };
 
+/// |H(w)| of the loss one-pole y += (1-a)(x-y), given w in radians per sample.
+///
+/// (1-a)^2 + 4a sin^2(w/2) rather than the textbook 1 - 2a cos w + a^2, whose
+/// two terms near 2 leave 6e-5 at the dark poles and low fundamentals this
+/// solver reaches — three float digits, and the gain compensating it then misses
+/// the fundamental's target by parts in a thousand, differently per libm. Taking
+/// cos(w) from the caller would lose the same digits.
+///
+/// Public: also used to read a shipped pole's own magnitude at a named
+/// frequency when converting it into a frequency-referenced law (the anchor
+/// step every loop-loss fix takes before it ever calls the solver below).
+inline float onepole_magnitude(float a, float omega) noexcept {
+  const float half_sin = std::sin(0.5f * omega);
+  const float pole_gap = 1.0f - a;
+  return pole_gap /
+         std::sqrt(std::max(1.0e-12f, pole_gap * pole_gap + 4.0f * a * half_sin * half_sin));
+}
+
 namespace string_loop_detail {
 
 /// A pole this close to the unit circle already rings for minutes; past it the
@@ -61,20 +79,6 @@ inline float stable_pole(float beta) noexcept {
   const float hi = 0.5f * (-beta + root);
   const float lo = 0.5f * (-beta - root);
   return std::clamp(std::abs(hi) < std::abs(lo) ? hi : lo, -kMaxPole, kMaxPole);
-}
-
-/// |H(w)| of the loss one-pole y += (1-a)(x-y), given w in radians per sample.
-///
-/// (1-a)^2 + 4a sin^2(w/2) rather than the textbook 1 - 2a cos w + a^2, whose
-/// two terms near 2 leave 6e-5 at the dark poles and low fundamentals this
-/// solver reaches — three float digits, and the gain compensating it then misses
-/// the fundamental's target by parts in a thousand, differently per libm. Taking
-/// cos(w) from the caller would lose the same digits.
-inline float onepole_magnitude(float a, float omega) noexcept {
-  const float half_sin = std::sin(0.5f * omega);
-  const float pole_gap = 1.0f - a;
-  return pole_gap /
-         std::sqrt(std::max(1.0e-12f, pole_gap * pole_gap + 4.0f * a * half_sin * half_sin));
 }
 
 }  // namespace string_loop_detail
@@ -159,8 +163,7 @@ inline StringLoopFilter solve_string_loop_filter(float omega0, float omega_ref, 
   // Scale the pole back up so the fundamental keeps exactly the gain it was
   // asked for; without this the pole's own attenuation at w0 is an unaccounted
   // second decay.
-  out.g = std::min(kMaxLoopGain,
-                   g0 / std::max(1.0e-6f, string_loop_detail::onepole_magnitude(out.a, omega0)));
+  out.g = std::min(kMaxLoopGain, g0 / std::max(1.0e-6f, onepole_magnitude(out.a, omega0)));
   return out;
 }
 

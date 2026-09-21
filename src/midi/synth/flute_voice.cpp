@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+#include "midi/synth/string_loop.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -13,6 +14,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kEpsilon;
 using sonare::constants::kTwoPi;
 
 // Mouth-pressure calibration. The exposed breath range lands the jet in its
@@ -36,12 +38,21 @@ SONARE_TUNABLE(kJetRatioMax, 0.62f);
 // region; the STK-stable operating point is ~0.5 each.
 SONARE_TUNABLE(kReflectMax, 0.62f);
 
-// Open-end reflection lowpass: brightness maps to the one-pole pole a (the pole
-// coefficient of the reflection filter). A brighter open end reflects more upper
-// partials (a smaller pole). pole = base - span*brightness, so brightness 0.5
-// lands near the STK flute filter pole (~0.65 at 48 kHz).
-SONARE_TUNABLE(kBellPoleBase, 0.80f);
-SONARE_TUNABLE(kBellPoleSpan, 0.30f);
+// Open-end reflection lowpass, re-expressed as a loop-loss law rather than a
+// pole fixed in samples (design-loop-loss-law-2026-09-21.md #3): the pole this
+// engine reflects with tracked a fixed SAMPLE COUNT regardless of sample rate,
+// so the same brightness voiced a different corner in Hz at every rate (the
+// comment this replaced already said so: "brightness 0.5 lands near the STK
+// flute filter pole (~0.65 at 48 kHz)", naming the rate the code never used).
+// The render-time pole now comes from solve_string_loop_filter() against two
+// per-traversal gains quoted in Hz (bell_hf() below); the old kBellPoleBase /
+// kBellPoleSpan retire as tunables, surviving only as the bare 0.80 / 0.30
+// literals that reconstruct the SHIPPED pole shape for the anchor solve.
+// kBellRefHz is the new knob: the second point past which the darkening is
+// quoted. Set to the shipped, ear-calibrated filter's own implied corner at
+// 48 kHz (-ln(a_ship)*48000/(2*pi) clusters at 2625-4031 Hz, mean ~3100) --
+// a like-for-like substitution, not a re-voicing argued fresh from register.
+SONARE_TUNABLE(kBellRefHz, 3000.0f);
 
 // Bore loss from damping: a mild reflection trim on top of the 0.5 reflections
 // (which already keep the loop bounded). High damping quiets the resonance so an
@@ -82,6 +93,41 @@ SONARE_TUNABLE(kOutputTargetPeak, 0.5f);
 SONARE_TUNABLE(kPeakBase, 4.0f);
 SONARE_TUNABLE(kPeakTilt, -0.65f);    // the driven peak falls with pitch (rich bass)
 SONARE_TUNABLE(kPeakRefHz, 261.63f);  // middle C, the flute's home register
+
+// Anchor for the bell loop-loss law (design-loop-loss-law-2026-09-21.md #3.3),
+// 48 kHz. Note 76 rather than 60: it is interior to all eight shipped flute
+// patches' voicematch gate grids (a measured cell in seven of the eight; only
+// piccolo's grid, 74-90, has to interpolate it), where 60 sat at the bottom
+// edge of six grids and entirely below two -- a one-signed placement that
+// cannot separate a correct law's own divergence from a mis-set kBellRefHz.
+// The one shipped pole/gain pair the solve below reproduces exactly at this
+// (f0, sr), for any anchor note -- the identity is structural, not tied to a
+// particular register.
+constexpr float kBellAnchorSr = 48000.0f;
+constexpr uint8_t kBellAnchorNote = 76;
+
+/// The two decay targets (t60, seconds) a shipped one-pole loss filter
+/// (@p a_ship, @p g_ship) implies at the anchor: reapplying them through
+/// string_loop_gain_for() and solve_string_loop_filter() at that same period
+/// and rate reproduces {a_ship, g_ship} exactly, and at any other note/sample
+/// rate reproduces the LAW rather than the shipped coefficient. Same shape as
+/// bowed_string_voice.cpp's BowLossT60Pair / bow_loss_anchor_t60() -- both
+/// gains are read off the SHIPPED pole's own response (|H(a_ship, w)|) so the
+/// pole's own contribution at the fundamental is not silently dropped.
+struct BellLossT60Pair {
+  float fundamental_s;
+  float reference_s;
+};
+
+BellLossT60Pair bell_loss_anchor_t60(float a_ship, float g_ship) noexcept {
+  const float anchor_period = kBellAnchorSr / note_to_hz(static_cast<float>(kBellAnchorNote));
+  const float w0_a = kTwoPi / anchor_period;
+  const float wref_a = kTwoPi * kBellRefHz / kBellAnchorSr;
+  const float g0_a = g_ship * onepole_magnitude(a_ship, w0_a);
+  const float gr_a = g_ship * onepole_magnitude(a_ship, wref_a);
+  const float k = -6.907755279f * anchor_period / kBellAnchorSr;
+  return {k / std::log(std::max(kEpsilon, g0_a)), k / std::log(std::max(kEpsilon, gr_a))};
+}
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
@@ -134,6 +180,11 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   vib_phase_ = 0.0f;
 
   const float f0 = note_to_hz(note);
+  // Held for the bell-loop loss-law solve, which is re-run wherever the pole is
+  // refreshed today (refresh_excitation_targets(), called both here and on
+  // every live CC74 write) rather than only once at note-on.
+  f0_ = f0;
+  srf_ = srf;
   // The flute is open at both ends: the bore is a POSITIVE-feedback comb of one
   // full period, so the resonances land on the FULL harmonic series (f0, 2f0,
   // 3f0 …) the way an open flue pipe does. The jet buzzes the fundamental and
@@ -157,6 +208,13 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   jet_reflection_ = std::min(std::clamp(params.jet_reflection, 0.0f, 1.0f), kReflectMax);
   end_reflection_ = std::min(std::clamp(params.end_reflection, 0.0f, 1.0f), kReflectMax);
 
+  // Open-end reflection: damping alone sets the per-traversal gain at the
+  // fundamental (a flat scalar, already note/rate invariant -- §3.1); it feeds
+  // the solve inside refresh_excitation_targets() as g_fundamental, so it must
+  // be known before that call. damping is not live-controllable, unlike
+  // brightness, so this is computed once here and never touched again.
+  damping_gain_ = std::clamp(1.0f - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f), 0.5f, 1.0f);
+
   // Open-end reflection lowpass: brightness -> pole a (y += (1-a)(x - y)). A
   // brighter end reflects more upper partials (a smaller pole).
   bright01_base_ = std::clamp(params.brightness, 0.0f, 1.0f);
@@ -165,7 +223,6 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   // enough for the first CC to move a sound the host did not ask to move.
   refresh_excitation_targets();
   snap_excitation();
-  loss_gain_ = std::clamp(1.0f - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f), 0.5f, 1.0f);
 
   // In-loop DC blocker pole (on the jet output).
   dc_r_ = 1.0f - static_cast<float>(kTwoPi * kDcCornerHz / sr);
@@ -249,6 +306,7 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
   // zipper).
   breath_target_ += ctrl_coeff_ * (breath_ctrl_target_ - breath_target_);
   lp_alpha_ += ctrl_coeff_ * (lp_alpha_target_ - lp_alpha_);
+  loss_gain_ += ctrl_coeff_ * (loss_gain_target_ - loss_gain_);
   vib_depth_ += ctrl_coeff_ * (vib_depth_target_ - vib_depth_);
 
   // Mouth-pressure contour: ramp toward the target (1 while blowing, 0 once
@@ -366,9 +424,29 @@ void FluteVoiceCore::set_excitation_mod(const ExcitationAxes& offsets) noexcept 
 void FluteVoiceCore::refresh_excitation_targets() noexcept {
   const float b = std::clamp(breath01_base_ + force_mod01_, 0.0f, 1.0f);
   breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
+
+  // Open-end reflection lowpass: two per-traversal gains quoted in Hz (the
+  // SHIPPED pole/gain pair's own response at the fundamental and at
+  // kBellRefHz, anchored) rather than a pole fixed in samples, so the pole
+  // this solves for tracks f0/sr correctly (design-loop-loss-law-2026-09-21.md
+  // #3). brightness is CC74-live, so this whole solve is redone on every
+  // write, not only at note-on -- freezing it in start() alone would silently
+  // kill the live control (#9.5).
   const float br = std::clamp(bright01_base_ + bright_mod01_, 0.0f, 1.0f);
-  const float a = std::clamp(kBellPoleBase - kBellPoleSpan * br, 0.0f, 0.95f);
-  lp_alpha_target_ = 1.0f - a;
+  // The shipped pole shape: 0.80 / 0.30 were kBellPoleBase / kBellPoleSpan
+  // before this fix retired them as tunables. The clamp is provably slack for
+  // any br in [0,1] -- a_ship ranges [0.50, 0.80], well inside [0, 0.95] -- and
+  // is kept only to reproduce the shipped formula exactly.
+  const float a_ship = std::clamp(0.80f - 0.30f * br, 0.0f, 0.95f);
+  const BellLossT60Pair t60 = bell_loss_anchor_t60(a_ship, damping_gain_);
+  const float period0 = srf_ / std::max(1.0f, f0_);
+  const float omega0 = kTwoPi / period0;
+  const float omega_ref = kTwoPi * kBellRefHz / srf_;
+  const StringLoopFilter solved = solve_string_loop_filter(
+      omega0, omega_ref, string_loop_gain_for(period0, srf_, t60.fundamental_s),
+      string_loop_gain_for(period0, srf_, t60.reference_s));
+  lp_alpha_target_ = 1.0f - solved.a;
+  loss_gain_target_ = solved.g;
 }
 
 void FluteVoiceCore::set_vibrato(float depth01) noexcept {
@@ -378,6 +456,7 @@ void FluteVoiceCore::set_vibrato(float depth01) noexcept {
 void FluteVoiceCore::snap_excitation() noexcept {
   breath_target_ = breath_ctrl_target_;
   lp_alpha_ = lp_alpha_target_;
+  loss_gain_ = loss_gain_target_;
   vib_depth_ = vib_depth_target_;
 }
 

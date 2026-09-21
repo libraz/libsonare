@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+#include "midi/synth/string_loop.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -13,6 +14,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kEpsilon;
 using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 
@@ -29,6 +31,18 @@ SONARE_TUNABLE(kRosinDepth, 0.15f);
 // position toward their CC targets — fast enough to feel immediate, slow enough
 // to never zipper.
 SONARE_TUNABLE(kControlSmoothMs, 8.0f);
+
+// --- frequency-referenced bridge loop loss ---
+// The bridge reflection pole used to be a function of brightness alone (no sr
+// term), so the same value darkened a fundamental differently at every sample
+// rate. The fix re-expresses the shipped one-pole as two decay targets in Hz,
+// anchored so the anchor cell reproduces the shipped filter exactly (design-
+// bowed-pitch-scaling-2026-09-21.md §13.1; design-loop-loss-law-2026-09-21.md
+// §9.2). omega_ref cannot be wrong AT the anchor — it only selects the law's
+// behaviour away from it — so it is a fit parameter, not a correctness one.
+SONARE_TUNABLE(kBowLossRefHz, 2000.0f);
+constexpr uint8_t kBowLossAnchorNote = 55;
+constexpr double kBowLossAnchorSr = 48000.0;
 
 // --- elasto-plastic friction calibration (only when params.elasto_plastic) ---
 // All dimensionless in the model's velocity-wave units (bow velocities ~0.03..
@@ -93,6 +107,27 @@ float ramp_coeff(float ms, double sample_rate) noexcept {
   return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
 }
 
+/// The two decay targets (t60, seconds) a shipped one-pole loss filter
+/// (@p a_ship, @p g_ship) implies at @p anchor_period_samples and
+/// kBowLossAnchorSr: reapplying them through string_loop_gain_for() and
+/// solve_string_loop_filter() at that same period and rate reproduces
+/// {a_ship, g_ship} exactly, and at any other note/sample-rate reproduces the
+/// law rather than the shipped coefficient.
+struct BowLossT60Pair {
+  float fundamental_s;
+  float reference_s;
+};
+
+BowLossT60Pair bow_loss_anchor_t60(float anchor_period_samples, float a_ship,
+                                   float g_ship) noexcept {
+  const float w0_a = kTwoPi / anchor_period_samples;
+  const float wref_a = kTwoPi * kBowLossRefHz / static_cast<float>(kBowLossAnchorSr);
+  const float g0_a = g_ship * onepole_magnitude(a_ship, w0_a);
+  const float gr_a = g_ship * onepole_magnitude(a_ship, wref_a);
+  const float k = -6.907755279f * anchor_period_samples / static_cast<float>(kBowLossAnchorSr);
+  return {k / std::log(std::max(kEpsilon, g0_a)), k / std::log(std::max(kEpsilon, gr_a))};
+}
+
 }  // namespace
 
 void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sample_rate,
@@ -136,20 +171,29 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   // Live-control smoothing coefficient (per-sample one-pole toward the targets).
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
 
-  // Bridge loop lowpass: brightness -> pole a (y += (1-a)(x - y)). A brighter
-  // bridge reflects more upper partials (edgier tone).
-  const float a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f;
-  lp_alpha_ = 1.0f - a;
-  // String damping -> bridge loss gain (< 1 so the loop is stable; the bow
-  // replenishes it). Low damping = a purer, more sustained string.
-  loss_gain_ = std::clamp(0.99f - 0.09f * std::clamp(params.damping, 0.0f, 1.0f), 0.80f, 0.999f);
+  // Bridge loop lowpass: brightness -> the SHIPPED pole a (y += (1-a)(x - y))
+  // and damping -> the shipped flat loss gain, kept only to anchor the
+  // frequency-referenced law below (kBowLossAnchorNote @ kBowLossAnchorSr) —
+  // neither is applied directly. A brighter bridge reflects more upper
+  // partials (edgier tone); low damping is a purer, more sustained string.
+  const float a_ship = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f;
+  const float g_ship =
+      std::clamp(0.99f - 0.09f * std::clamp(params.damping, 0.0f, 1.0f), 0.80f, 0.999f);
+  const float anchor_period = static_cast<float>(kBowLossAnchorSr) / note_to_hz(kBowLossAnchorNote);
+  const BowLossT60Pair t60 = bow_loss_anchor_t60(anchor_period, a_ship, g_ship);
+  const float omega = kTwoPi / std::max(1.0f, base_period_);
+  const float omega_ref = kTwoPi * kBowLossRefHz / static_cast<float>(sr);
+  const StringLoopFilter solved = solve_string_loop_filter(
+      omega, omega_ref, string_loop_gain_for(base_period_, sr, t60.fundamental_s),
+      string_loop_gain_for(base_period_, sr, t60.reference_s));
+  lp_alpha_ = 1.0f - solved.a;
+  loss_gain_ = solved.g;
 
   // Tuning compensation: the two feedback registers (neck_out_/bridge_out_ are
   // consumed one sample after they are produced -> ~2 samples of loop delay not
   // in the lines) plus the bridge lowpass's exact phase delay at the
   // fundamental. Subtract them from the period before splitting.
-  const float omega = kTwoPi / std::max(1.0f, base_period_);
-  const float tau_lp = onepole_group_delay_samples(a, omega);
+  const float tau_lp = onepole_group_delay_samples(solved.a, omega);
   comp_ = 2.0f + tau_lp;
 
   // Each line spans the whole slab rather than this note's period. The line
@@ -223,8 +267,19 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   pol_write_ = 0;
   if (pol_couple_ > 0.0f) {
     pol_period_ = base_period_ * std::exp2(kPolDetuneCents / 1200.0f);
-    pol_lp_alpha_ = 1.0f - kPolLpPole;
-    pol_loss_ = kPolLoss;
+    // Same frequency-referenced law as the primary loop above; this loop has
+    // no patch field of its own, so kPolLpPole/kPolLoss stand in as its
+    // shipped (a, g), anchored on the detuned period the anchor note/rate
+    // would give this loop (design-loop-loss-law-2026-09-21.md §6).
+    const float pol_anchor_period = anchor_period * std::exp2(kPolDetuneCents / 1200.0f);
+    const BowLossT60Pair pol_t60 = bow_loss_anchor_t60(pol_anchor_period, kPolLpPole, kPolLoss);
+    const float pol_omega = kTwoPi / std::max(1.0f, pol_period_);
+    const float pol_omega_ref = kTwoPi * kBowLossRefHz / static_cast<float>(sr);
+    const StringLoopFilter pol_solved = solve_string_loop_filter(
+        pol_omega, pol_omega_ref, string_loop_gain_for(pol_period_, sr, pol_t60.fundamental_s),
+        string_loop_gain_for(pol_period_, sr, pol_t60.reference_s));
+    pol_lp_alpha_ = 1.0f - pol_solved.a;
+    pol_loss_ = pol_solved.g;
     pol_drive_ = kPolDrive;
     if (pol_ != nullptr) {
       for (int i = 0; i < capacity_; ++i) pol_[static_cast<size_t>(i)] = 0.0f;

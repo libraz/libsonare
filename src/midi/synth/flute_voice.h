@@ -213,13 +213,23 @@ class FluteVoiceCore {
   float bore_period_ = 0.0f;
   float comp_ = 1.0f;
   float jet_ratio_ = 0.4f;
+  /// The played fundamental (Hz) and the sample rate, held for the bell-loop
+  /// loss-law solve (refresh_excitation_targets()), which must be re-run on
+  /// every live brightness write (a CC74-live axis), not only at note-on.
+  float f0_ = 0.0f;
+  float srf_ = 48000.0f;
 
   // Open-end reflection: one-pole loss lowpass y += alpha*(x - y) (the frequency-
   // dependent radiation loss), an overall loss gain, and the inverting reflection
-  // (folded in render as -loss_gain*lp_state).
+  // (folded in render as -loss_gain*lp_state). Both are solved together, from
+  // two per-traversal gains quoted in Hz, whenever the pole is refreshed
+  // (refresh_excitation_targets()); damping_gain_ is the fixed, note/rate-
+  // invariant gain damping alone sets and the solve reproduces at the
+  // fundamental.
   float lp_alpha_ = 1.0f;
   float lp_state_ = 0.0f;
   float loss_gain_ = 1.0f;
+  float damping_gain_ = 1.0f;
   // Jet / end reflection coefficients (the two feedback taps of the jet-drive
   // model).
   float jet_reflection_ = 0.5f;
@@ -255,6 +265,7 @@ class FluteVoiceCore {
   float ctrl_coeff_ = 1.0f;
   float breath_ctrl_target_ = 0.55f;
   float lp_alpha_target_ = 1.0f;
+  float loss_gain_target_ = 1.0f;
   // The normalized bases behind those two targets, and the matrix offsets on
   // them; the targets are always the composed pair.
   float breath01_base_ = 0.55f;

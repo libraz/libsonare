@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+#include "midi/synth/string_loop.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -13,6 +14,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kEpsilon;
 using sonare::constants::kTwoPi;
 
 // Mouth-pressure calibration: a reed self-oscillates only inside a narrow
@@ -47,9 +49,27 @@ SONARE_TUNABLE(kLossSpan, 0.09f);
 SONARE_TUNABLE(kLossFloor, 0.80f);
 SONARE_TUNABLE(kLossCeil, 0.999f);
 
-// Bell loop-lowpass depth: brightness maps to the one-pole pole (a brighter bell
-// reflects more upper partials).
+// Bell loop-lowpass depth: brightness maps to the SHIPPED one-pole pole (a
+// brighter bell reflects more upper partials). Consumed only as the anchor
+// input to the frequency-referenced law below, never applied to the render
+// pole directly (a pole is a count of samples, not a brightness value).
 SONARE_TUNABLE(kBellPoleSpan, 0.7f);
+
+// --- frequency-referenced bell loop loss ---
+// The bell pole used to be a function of brightness alone (no sr term), so the
+// same value darkened a fundamental differently at every sample rate. The fix
+// re-expresses the shipped pole as two decay targets in Hz, anchored so the
+// anchor cell reproduces the shipped filter exactly. omega_ref cannot be wrong
+// AT the anchor — it only selects the law's behaviour away from it — so it is
+// a fit parameter, not a correctness one. 3000 Hz is argued from register
+// (comfortably above the family's realistic top, a quarter of Nyquist at the
+// lowest sample rate a wind sr-discriminator run tested), not measured.
+SONARE_TUNABLE(kBellLossRefHz, 3000.0f);
+// Tenor sax at note 48 (130.81 Hz): inside a real tenor's written range and an
+// exact cell an earlier sr-discriminator measurement covered. One anchor point
+// serves every reed patch, conical or not.
+constexpr uint8_t kBellLossAnchorNote = 48;
+constexpr double kBellLossAnchorSr = 48000.0;
 
 // Live-control smoothing time (ms): the per-sample ramp of breath / brightness
 // toward their CC targets — fast enough to feel immediate, slow enough to never
@@ -178,12 +198,34 @@ float ramp_coeff(float ms, double sample_rate) noexcept {
   return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
 }
 
+/// The two decay targets (t60, seconds) a shipped one-pole loss filter
+/// (@p a_ship, @p g_ship) implies at @p anchor_period_samples and
+/// kBellLossAnchorSr: reapplying them through string_loop_gain_for() and
+/// solve_string_loop_filter() at that same period and rate reproduces
+/// {a_ship, g_ship} exactly, and at any other note/sample-rate/brightness
+/// reproduces the law rather than the shipped coefficient.
+struct ReedLossT60Pair {
+  float fundamental_s;
+  float reference_s;
+};
+
+ReedLossT60Pair reed_loss_anchor_t60(float anchor_period_samples, float a_ship,
+                                     float g_ship) noexcept {
+  const float w0_a = kTwoPi / anchor_period_samples;
+  const float wref_a = kTwoPi * kBellLossRefHz / static_cast<float>(kBellLossAnchorSr);
+  const float g0_a = g_ship * onepole_magnitude(a_ship, w0_a);
+  const float gr_a = g_ship * onepole_magnitude(a_ship, wref_a);
+  const float k = -6.907755279f * anchor_period_samples / static_cast<float>(kBellLossAnchorSr);
+  return {k / std::log(std::max(kEpsilon, g0_a)), k / std::log(std::max(kEpsilon, gr_a))};
+}
+
 }  // namespace
 
 void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uint8_t note,
                           uint8_t velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float srf = static_cast<float>(sr);
+  sample_rate_ = sr;
   noise_ = VoiceRandomSequence(seed);
   drive_index_ = 0;
   releasing_ = false;
@@ -262,15 +304,20 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
     valve_tau = kReedValveCompScale * topology * qr * srf / (kTwoPi * f_reed);
   }
 
-  // Bell loop lowpass: brightness -> pole a (y += (1-a)(x - y)).
+  // Bell loop lowpass: brightness -> the SHIPPED pole a (y += (1-a)(x - y)) and
+  // damping -> the shipped flat loss gain, kept only to anchor the
+  // frequency-referenced law in refresh_excitation_targets() — neither is
+  // applied directly. damping is not CC-live, so loss_gain_ship_ is fixed here;
+  // brightness is, so it is recomposed from bright01_base_/bright_mod01_ inside
+  // refresh_excitation_targets() itself.
   bright01_base_ = std::clamp(params.brightness, 0.0f, 1.0f);
+  loss_gain_ship_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
+                               kLossFloor, kLossCeil);
   // Both axes are derived here and nowhere else. A note-on copy of the mapping
   // is free to drift from the control-rate one, and a single rounding apart is
   // enough for the first CC to move a sound the host did not ask to move.
   refresh_excitation_targets();
   snap_excitation();
-  loss_gain_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
-                          kLossFloor, kLossCeil);
 
   // In-loop sub-fundamental highpass pole. Only the CONE (positive-feedback comb)
   // has a resonant sub-fundamental (DC) mode that the rectified reed drive can
@@ -403,11 +450,15 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
   if (bore_ == nullptr || capacity_ < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
 
-  // Live control: ramp the steady breath / bell brightness toward their CC
-  // targets (control-rate host updates, audio-rate smoothing -> no zipper).
-  // Initialised equal at note-on, so an untouched note is bit-identical.
+  // Live control: ramp the steady breath / bell pole / bell loss toward their
+  // CC targets (control-rate host updates, audio-rate smoothing -> no
+  // zipper). Initialised equal at note-on, so an untouched note is
+  // bit-identical. The pole and the loss ramp together because the
+  // frequency-referenced law solves them as one pair (refresh_excitation_
+  // targets()) — brightness alone now moves both.
   breath_target_ += ctrl_coeff_ * (breath_ctrl_target_ - breath_target_);
   lp_alpha_ += ctrl_coeff_ * (lp_alpha_target_ - lp_alpha_);
+  loss_gain_ += ctrl_coeff_ * (loss_gain_target_ - loss_gain_);
 
   // Mouth pressure contour: ramp toward the target (1 while blowing, 0 once the
   // player tongues off), then the steady breath plus its turbulence.
@@ -577,14 +628,31 @@ void ReedVoiceCore::refresh_excitation_targets() noexcept {
   // toward the beating edge without ever silencing the reed.
   const float b = std::clamp(breath01_base_ + force_mod01_, 0.0f, 1.0f);
   breath_ctrl_target_ = kBreathBase + kBreathSpan * b;
+
+  // Bell loop loss, frequency-referenced: brightness is CC74-live, so the
+  // shipped-pole -> t60-pair -> solve pipeline reruns on every call here, not
+  // only at note-on. loss_gain_ship_ (from damping, fixed at note-on) supplies
+  // the flat-loss half of the pair.
   const float br = std::clamp(bright01_base_ + bright_mod01_, 0.0f, 1.0f);
-  const float a = (1.0f - br) * kBellPoleSpan;
-  lp_alpha_target_ = 1.0f - a;
+  const float a_ship = (1.0f - br) * kBellPoleSpan;
+  const bool conical = sign_ > 0.0f;
+  const float anchor_f0 = note_to_hz(kBellLossAnchorNote);
+  const float anchor_period = conical ? static_cast<float>(kBellLossAnchorSr) / anchor_f0
+                                      : 0.5f * static_cast<float>(kBellLossAnchorSr) / anchor_f0;
+  const ReedLossT60Pair t60 = reed_loss_anchor_t60(anchor_period, a_ship, loss_gain_ship_);
+  const float omega = kTwoPi / std::max(1.0f, bore_period_);
+  const float omega_ref = kTwoPi * kBellLossRefHz / static_cast<float>(sample_rate_);
+  const StringLoopFilter solved = solve_string_loop_filter(
+      omega, omega_ref, string_loop_gain_for(bore_period_, sample_rate_, t60.fundamental_s),
+      string_loop_gain_for(bore_period_, sample_rate_, t60.reference_s));
+  lp_alpha_target_ = 1.0f - solved.a;
+  loss_gain_target_ = solved.g;
 }
 
 void ReedVoiceCore::snap_excitation() noexcept {
   breath_target_ = breath_ctrl_target_;
   lp_alpha_ = lp_alpha_target_;
+  loss_gain_ = loss_gain_target_;
 }
 
 void ReedVoiceCore::release() noexcept { releasing_ = true; }

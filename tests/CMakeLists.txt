@@ -487,6 +487,7 @@ if(BUILD_ARRANGEMENT)
     midi/sample_voice_test.cpp
     midi/layered_instrument_test.cpp
     midi/string_loop_test.cpp
+    midi/plucked_string_loss_law_test.cpp
     midi/modal_voice_test.cpp
     midi/percussion_voice_test.cpp
     midi/piano_voice_test.cpp

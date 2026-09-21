@@ -429,21 +429,22 @@ TEST_CASE("the bow-force window sweep reads the patch it says it does",
   // apart from a moved engine here, the same way the control hashes do it.
   const BowedStringPatchParams& v = violin_params();
   CHECK(v.bow_speed == 0.630748f);
-  CHECK(v.vel_to_speed == 0.6f);
-  CHECK(v.brightness == 0.47f);
+  CHECK(v.vel_to_speed == 0.312461f);  // was 0.6, the clamp default the field
+                                       // inherited before the loop-loss re-fit
+  CHECK(v.brightness == 0.228986f);    // was 0.47
   CHECK(v.damping == 0.0822536f);
-  CHECK(v.attack_ms == 47.142f);
-  CHECK(v.release_ms == 165.23f);
-  CHECK(v.rosin == 0.1f);
+  CHECK(v.attack_ms == 41.9837f);  // was 47.142
+  CHECK(v.release_ms == 147.15f);  // was 165.23
+  CHECK(v.rosin == 0.0875388f);    // was 0.1
   CHECK(v.stribeck == 0.7f);
-  CHECK(v.sympathetic == 0.08f);
+  CHECK(v.sympathetic == 0.495379f);  // was 0.08
   // The onset mechanisms are still at their identity defaults, so this sweep
   // measures the engine as it stands rather than one already changed.
   CHECK(v.attack_noise == 0.0f);
   CHECK(v.bow_accel_ms == 0.0f);
   // Driven by the sweep, and pinned: recorded so the grid's own edges are read
   // against the shipped operating point rather than guessed.
-  CHECK(v.bow_position == 0.17016f);
+  CHECK(v.bow_position == 0.169028f);  // was 0.17016
   CHECK(v.bow_force == 0.0643318f);
   CHECK(v.polarization == 0.15f);
   CHECK(v.elasto_plastic);
