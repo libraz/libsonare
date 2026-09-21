@@ -405,15 +405,15 @@ inline constexpr std::array<GsAddressEntry, 178> kGsAddressTable = {{
     {0x400318, 0, GsParam::kEfxSendToChorus, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     {0x400319, 0, GsParam::kEfxSendToDelay, GsLevel::kAudible, 1, 0x00, 0x7F, 0x00, nullptr},
     // The two control assignments let a controller move an EFX parameter while
-    // the effect runs. The chain here is realised from its type and its twenty
-    // parameters and is not re-parameterised afterwards, so there is nothing for
-    // a source to drive; implementing them means giving the chain that hook.
+    // the effect runs, which needs a value the chain reads every block. A
+    // parameter edit does reach a built chain, but as a setting handed over one
+    // value at a time; implementing these means giving it that input first.
     {0x40031B, 0, GsParam::kEfxControlSource1, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x00,
-     "the insertion chain is realised from its type and parameters and takes no live modulation"},
+     "the insertion chain takes a parameter edit as a setting and has no block-rate input"},
     {0x40031C, 0, GsParam::kEfxControlDepth1, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x40,
      "the depth of a control source that has nothing to drive"},
     {0x40031D, 0, GsParam::kEfxControlSource2, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x00,
-     "the insertion chain is realised from its type and parameters and takes no live modulation"},
+     "the insertion chain takes a parameter edit as a setting and has no block-rate input"},
     {0x40031E, 0, GsParam::kEfxControlDepth2, GsLevel::kIgnore, 1, 0x00, 0x7F, 0x40,
      "the depth of a control source that has nothing to drive"},
     {0x40031F, 0, GsParam::kEfxSendEqSwitch, GsLevel::kIgnore, 1, 0x00, 0x01, 0x01,
@@ -677,8 +677,8 @@ inline constexpr std::array<GsAddressEntry, 178> kGsAddressTable = {{
     // the same storage 40 03 xx writes. The manual gives 40 3u xx no row, which
     // is what keeps the extension unreachable from a spec-compliant file. Only
     // the rows the realiser reads are here; the block's IGNORE rows are the spec
-    // block's alone, since a unit that cannot be re-parameterised while it runs
-    // does not gain the ability by being numbered.
+    // block's alone, since a unit with no block-rate controller input does not
+    // acquire one by being numbered.
     {0x403000, 0x000F00, GsParam::kEfxType, GsLevel::kAudible, 2, 0x00, 0x7F, 0x00, nullptr},
     {0x403003, 0x000F00, GsParam::kEfxParameter, GsLevel::kAudible, 20, 0x00, 0x7F, 0x00, nullptr},
     {0x403017, 0x000F00, GsParam::kEfxSendToReverb, GsLevel::kAudible, 1, 0x00, 0x7F, 0x28,
