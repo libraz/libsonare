@@ -139,7 +139,7 @@ def test_acoustic_cli_stays_blind_without_ir() -> None:
 
     This is the anchor half of a two-CLI invariant: the Python CLI runs
     sonare_detect_acoustic, which takes no mode argument and is therefore blind
-    by construction, and the native CLI case in tests/cli/cli_test.cpp pins the
+    by construction, and the native CLI case in tests/cli/cli_effects_test.cpp pins the
     same output shape for the side that can pick a mode.
     """
     sample_rate = 48000

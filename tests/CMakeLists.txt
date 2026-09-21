@@ -649,7 +649,10 @@ endif()
 # the CLI is built. Register them only then so they do not fail with exit 127
 # under -DBUILD_CLI=OFF (e.g. CI's native build matrix).
 if(BUILD_CLI AND NOT BUILD_WASM)
-  target_sources(sonare_tests PRIVATE cli/cli_test.cpp)
+  target_sources(sonare_tests
+                 PRIVATE cli/cli_contract_test.cpp cli/cli_analysis_test.cpp
+                         cli/cli_effects_test.cpp cli/cli_mastering_test.cpp
+                         cli/cli_project_test.cpp)
   target_compile_definitions(sonare_tests PRIVATE SONARE_TEST_CLI="$<TARGET_FILE:sonare>")
   add_dependencies(sonare_tests sonare)
 endif()
