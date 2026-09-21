@@ -5,6 +5,7 @@
        build-bank-shared bank-versions bank-versions-check \
        surface-coverage surface-coverage-check \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
+       gs-efx-archive-set gs-efx-tables gs-efx-tables-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
@@ -214,6 +215,85 @@ format:
 # derives the same population from `git ls-files` because it writes. `ruff
 # format` deliberately stays on the binding: it would restyle 110 files
 # elsewhere, whose line breaks are hand-set.
+#
+# D2 (src/midi/synth/docs/gs.md via the GS EFX conversion-layer design): a
+# quantity measured at the machine's 32 kHz internal clock must be stored in
+# physical units (Hz/ms/s/ratio/dB), never as a sample-rate-dependent
+# coefficient. This is not a style preference -- it is the exact shape of a
+# defect this tree already shipped once (a waveguide loop filter's brightness
+# mapping with no `sr` term at all, correct only at 48 kHz). No test can
+# enforce it (a coefficient and the physical quantity it came from both
+# compile and both run), so this is a grep over src/effects/** and
+# src/mastering/**: no `*Config` struct field named for a coefficient shape
+# (coeff/b1/a1/alpha). (A second rule that flagged `std::exp(` combined with
+# `sample_rate` was tried and dropped -- that combination is the CORRECT
+# pattern, not the defective one, so the rule could only ever fire on code
+# already doing the right thing. The two-sample-rate behavioural test,
+# tests/effects/insert_sample_rate_test.cpp, is what actually catches this
+# defect class.) One field predates this rule and is not a sample-rate
+# coefficient despite the name match; allowlisted by exact field name with a
+# reason, retired the day the field is renamed or becomes rate-derived.
+define GS_EFX_SR_COEFFICIENT_LINT_PY
+import pathlib, re, sys
+
+ROOTS = [pathlib.Path("src/effects"), pathlib.Path("src/mastering")]
+FILES = sorted(p for r in ROOTS for p in r.rglob("*") if p.suffix in (".h", ".hpp", ".cpp"))
+
+FIELD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(coeff|Coeff|b1|a1|alpha|Alpha)[A-Za-z0-9_]*\s*[;=]")
+STRUCT_RE = re.compile(r"\bstruct\s+\w*Config\b")
+
+ALLOWED_FIELDS = {
+    ("src/mastering/repair/denoise_classical.h", "dd_alpha"):
+        "Ephraim-Malah frame-to-frame smoothing factor, a literature constant "
+        "with no sample_rate term -- not a filter coefficient.",
+}
+
+violations = []
+scanned = 0
+
+for path in FILES:
+    scanned += 1
+    posix = path.as_posix()
+    depth = 0
+    config_depth = None
+    pending_config = False
+    for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        if config_depth is None and not pending_config and STRUCT_RE.search(line):
+            pending_config = True
+        for ch in line:
+            if ch == "{":
+                depth += 1
+                if pending_config and config_depth is None:
+                    config_depth = depth
+                    pending_config = False
+            elif ch == "}":
+                depth -= 1
+                if config_depth is not None and depth < config_depth:
+                    config_depth = None
+        in_config = config_depth is not None
+        if in_config:
+            fm = FIELD_RE.search(line)
+            if fm:
+                field_name = fm.group(0).rstrip(";= ").strip()
+                if (posix, field_name) not in ALLOWED_FIELDS:
+                    violations.append((path, lineno, line.strip(),
+                        "field name carries a sample-rate-dependent coefficient shape "
+                        "(coeff/b1/a1/alpha) inside a *Config struct"))
+
+if scanned == 0:
+    sys.exit("sample-rate coefficient rule: found no files under src/effects or "
+             "src/mastering -- the glob is broken, this is not a clean result")
+
+if violations:
+    for path, lineno, code, why in violations:
+        print(f"{path}:{lineno}: {why}")
+        print(f"    {code}")
+    sys.exit(f"sample-rate coefficient rule: {len(violations)} violation(s) across {scanned} files scanned")
+
+print(f"sample-rate coefficient rule: clean ({scanned} files scanned)")
+endef
+export GS_EFX_SR_COEFFICIENT_LINT_PY
+
 lint:
 	cd bindings/wasm && yarn lint
 	cd bindings/node && yarn lint
@@ -232,6 +312,24 @@ lint:
 	@cd bindings/python && if UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject pyproject.toml \
 		mypy --strict ../../tests/typing/python_catalog_invalid.py; then \
 		echo "python_catalog_invalid.py unexpectedly passed mypy" >&2; exit 1; \
+	fi
+	python3 -c "$$GS_EFX_SR_COEFFICIENT_LINT_PY"
+# D7 (the GS EFX conversion-layer design): the byte-to-physical-unit
+# conversion functions are tested against the archive's raw measured
+# readings, hand-transcribed, never against gs_efx_tables.h -- the table the
+# same derivation script generates from the same archive. A test that
+# imported the table instead would be comparing the derivation to itself and
+# could never go red. `-n` prints the offending line so a future false
+# positive (a comment mentioning the header, say) is visible immediately
+# rather than needing a second run to see what matched; a bare mention
+# outside an #include is deliberately not this rule's concern.
+	@test -f tests/midi/gs_efx_convert_test.cpp || { \
+		echo "lint: tests/midi/gs_efx_convert_test.cpp is missing -- the D7 include-scope check has nothing to read" >&2; \
+		exit 1; }
+	@if grep -n '#include.*gs_efx_tables\.h' tests/midi/gs_efx_convert_test.cpp; then \
+		echo "tests/midi/gs_efx_convert_test.cpp includes gs_efx_tables.h -- its expectations"; \
+		echo "would come from the same derivation that built the table it is meant to check"; \
+		exit 1; \
 	fi
 
 format-check:
@@ -528,6 +626,46 @@ gs-unit-diff-check: gs-unit-archive-set gs-address-table-json
 	python3 tools/gs/check_unit.py --table $(GS_TABLE_JSON) \
 	    --unit $(GS_UNIT_ARCHIVE) --out /tmp/gs_unit_diff_check.json
 	diff -u tools/gs/unit-diff.json /tmp/gs_unit_diff_check.json
+
+# The GS insertion-effect byte-to-physical-unit conversion tables, derived
+# from the same external archive as gs-unit-diff but read differently: that
+# script's --unit wants a unit DIRECTORY (GS_UNIT_ARCHIVE, documented as such
+# above), while derive_efx_tables.py's --archive wants the archive ROOT and
+# resolves the unit itself. The two are not interchangeable, so this gets its
+# own variable rather than reading GS_UNIT_ARCHIVE -- doing so would silently
+# break whichever of the two callers is already relying on its documented
+# shape. No default, for the reason GS_UNIT_ARCHIVE has none: a path into a
+# tree a clone does not have is a dead pointer rather than a convenience. See
+# tools/gs/docs/efx-tables.md.
+GS_EFX_ARCHIVE ?=
+
+gs-efx-archive-set:
+	@test -n "$(GS_EFX_ARCHIVE)" || { \
+	    echo "GS_EFX_ARCHIVE is unset: point it at the root of an external"; \
+	    echo "measurement archive of what an individual SC-8850 answered"; \
+	    echo "(tools/gs/docs/efx-tables.md)."; exit 1; }
+
+gs-efx-tables: gs-efx-archive-set
+	python3 tools/gs/derive_efx_tables.py --archive $(GS_EFX_ARCHIVE) \
+	    --out tools/gs/efx-tables.json --header src/midi/synth/gs_efx_tables.h
+
+# Regenerates into /tmp and diffs against the committed pair. A revision
+# mismatch is reported on its own line before the diff runs: "the archive
+# moved on" and "the script changed" both show up as a diff, and folding the
+# two into one report sends whoever reads it to the wrong place.
+gs-efx-tables-check: gs-efx-archive-set
+	@mkdir -p /tmp
+	python3 tools/gs/derive_efx_tables.py --archive $(GS_EFX_ARCHIVE) \
+	    --out /tmp/gs_efx_tables_check.json --header /tmp/gs_efx_tables_check.h
+	@committed=$$(python3 -c "import json; print(json.load(open('tools/gs/efx-tables.json'))['archive_revision'])"); \
+	regenerated=$$(python3 -c "import json; print(json.load(open('/tmp/gs_efx_tables_check.json'))['archive_revision'])"); \
+	if [ "$$committed" != "$$regenerated" ]; then \
+	    echo "archive_revision differs: committed $$committed, regenerated from \$$GS_EFX_ARCHIVE $$regenerated"; \
+	    echo "  (this is the archive moving on, not necessarily the derivation changing --"; \
+	    echo "  the diff below says whether the tables themselves moved too)"; \
+	fi
+	diff -u tools/gs/efx-tables.json /tmp/gs_efx_tables_check.json
+	diff -u src/midi/synth/gs_efx_tables.h /tmp/gs_efx_tables_check.h
 
 # Shared public-input schema plus public streaming field/flag/default snapshot.
 # Also gates request-object coverage: every one-shot facade export keeps a

@@ -1,0 +1,6269 @@
+{
+  "generated_by": "tools/gs/derive_efx_tables.py",
+  "unit_id": "roland-sc8850-01",
+  "model": "SC-8850",
+  "archive_revision": "47bd72cfb3ddd5a074dc9f5433e517525626555e",
+  "archive_revision_source": "git rev-parse HEAD",
+  "archive_inputs_dirty": false,
+  "what_this_is": "The byte-to-physical-quantity conversions the GS insertion-effect parameter block uses, and which (type, slot) pairs an archive of what one individual unit answered gives one to. Committed so that a clone reads them without the archive.",
+  "what_this_cannot_see": [
+    "One unit is one unit. Every number here is what one individual machine answered, and no second one has been measured. Entries flagged unit_specific are the ones a second machine is most likely to disagree with; that a entry is not flagged is not a claim that it would agree.",
+    "A slot with no printed_values field is not reached, and nothing here says whether it carries a quantity at all. Five hundred and thirty of the unit's parameters are in that state.",
+    "Reach is a statement about the archive, not about libsonare. A (type, slot) pair reached here still has to have somewhere to go in the insert it maps to before anything is translated, and that count is taken elsewhere.",
+    "The class assignment is taken from the printed spelling a record carries and from the type list its inference claims. A slot whose spelling matches a class it is not on would be assigned to it, and nothing here would notice: what would notice is a reading of that slot.",
+    "Where a class is selected by the bare byte range rather than by a conversion column, the inference's address list is part of the selector. A slot of one of those types carrying the same quantity at another address is invisible here rather than reported.",
+    "The defaults are the bytes the unit powered up holding. The manual's own printed statement of each default is not transcribed anywhere in the archive, so nothing here compares the two.",
+    "A ladder or a table is checked against the records that admit a reading. A setting no record admitted is carried on the law alone, and an entry flagged approximate is one no reading placed at all.",
+    "Whether a slot that returns a constant fraction of its cited column is on a second law or on the same one read through something else. The fraction and the shortfall are both reported for a slot this derivation does not reach, and neither is acted on: separating them wants a reading the unit can be asked for and this cannot produce."
+  ],
+  "schema": {
+    "every_entry_carries": [
+      "unit_specific",
+      "approximate"
+    ],
+    "unit_specific": "This unit returned a value the class's own law does not account for, by more than the reading separates. A second unit is free to differ here.",
+    "approximate": "No reading placed this entry; it is carried on the law alone."
+  },
+  "reach": {
+    "reached": 85,
+    "translatable": null,
+    "translated": null,
+    "why_two_are_null": "Translatable asks whether the insert a slot maps to has a control of the same physical unit, and translated asks whether the GS layer emits the key. Neither is a property of the archive, so neither is derived here."
+  },
+  "reach_by_class": {
+    "rate": 21,
+    "delay_time": 23,
+    "freq": 7,
+    "gain": 14,
+    "level": 3,
+    "width": 4,
+    "wave": 3,
+    "pan": 3,
+    "balance": 3,
+    "azimuth": 2,
+    "accel": 2
+  },
+  "reach_by_table": {
+    "rate.narrow": 3,
+    "rate.wide": 18,
+    "delay_time.pre_delay": 4,
+    "delay_time.time1": 7,
+    "delay_time.time2": 0,
+    "delay_time.time3": 11,
+    "delay_time.time4": 1,
+    "freq.eq": 4,
+    "freq.pre_filter": 1,
+    "freq.damping": 2,
+    "gain.tone": 14,
+    "level.output": 3,
+    "width.section": 4,
+    "wave.modulator": 3,
+    "pan.output": 3,
+    "balance.effect": 3,
+    "azimuth.placement": 2,
+    "accel.rotor": 2
+  },
+  "defaults": {
+    "types": 65,
+    "slots_per_type": 20,
+    "types_with_complete_defaults": 62,
+    "what_they_are": "The bytes the unit was measured holding at power-on, per type. Not the manual's printed defaults, which the archive does not transcribe.",
+    "by_type": {
+      "00 00": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        127
+      ],
+      "01 00": [
+        1,
+        69,
+        1,
+        52,
+        72,
+        0,
+        72,
+        56,
+        0,
+        56,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        127
+      ],
+      "01 01": [
+        60,
+        65,
+        67,
+        70,
+        66,
+        63,
+        60,
+        59,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        127
+      ],
+      "01 02": [
+        64,
+        127,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        67,
+        64,
+        0,
+        127
+      ],
+      "01 03": [
+        48,
+        1,
+        0,
+        127,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        127
+      ],
+      "01 10": [
+        48,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        96
+      ],
+      "01 11": [
+        76,
+        3,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        56,
+        64,
+        84
+      ],
+      "01 20": [
+        36,
+        16,
+        64,
+        16,
+        127,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        104
+      ],
+      "01 21": [
+        1,
+        0,
+        68,
+        62,
+        40,
+        72,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        96
+      ],
+      "01 22": [
+        6,
+        113,
+        24,
+        127,
+        17,
+        120,
+        88,
+        64,
+        96,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 23": [
+        0,
+        0,
+        16,
+        11,
+        24,
+        104,
+        90,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        0,
+        104
+      ],
+      "01 24": [
+        10,
+        5,
+        95,
+        79,
+        90,
+        54,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        0,
+        96
+      ],
+      "01 25": [
+        1,
+        60,
+        96,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 26": [
+        1,
+        60,
+        96,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 30": [
+        72,
+        100,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        104
+      ],
+      "01 31": [
+        85,
+        3,
+        16,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        127
+      ],
+      "01 40": [
+        24,
+        8,
+        127,
+        5,
+        66,
+        16,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        0,
+        112
+      ],
+      "01 41": [
+        16,
+        8,
+        40,
+        40,
+        60,
+        96,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        127,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 42": [
+        0,
+        0,
+        10,
+        8,
+        111,
+        0,
+        90,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        0,
+        104
+      ],
+      "01 43": [
+        32,
+        8,
+        127,
+        90,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        0,
+        96
+      ],
+      "01 44": [
+        10,
+        8,
+        72,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        0,
+        80
+      ],
+      "01 50": [
+        101,
+        116,
+        88,
+        1,
+        0,
+        0,
+        0,
+        127,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        48,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 51": [
+        90,
+        108,
+        null,
+        1,
+        12,
+        21,
+        90,
+        127,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        40,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 52": [
+        20,
+        0,
+        7,
+        80,
+        127,
+        127,
+        127,
+        127,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        48,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 53": [
+        60,
+        20,
+        40,
+        0,
+        127,
+        127,
+        127,
+        127,
+        80,
+        127,
+        0,
+        0,
+        0,
+        0,
+        0,
+        48,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 54": [
+        60,
+        80,
+        80,
+        127,
+        64,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        48,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 55": [
+        3,
+        112,
+        120,
+        104,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 56": [
+        0,
+        5,
+        12,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        42,
+        64,
+        61,
+        0,
+        112
+      ],
+      "01 57": [
+        116,
+        106,
+        110,
+        80,
+        40,
+        64,
+        64,
+        127,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        48,
+        64,
+        64,
+        0,
+        127
+      ],
+      "01 60": [
+        71,
+        62,
+        0,
+        127,
+        59,
+        66,
+        0,
+        0,
+        2,
+        64,
+        0,
+        0,
+        0,
+        0,
+        0,
+        48,
+        64,
+        64,
+        0,
+        95
+      ],
+      "01 61": [
+        71,
+        64,
+        84,
+        95,
+        2,
+        64,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        58,
+        0,
+        127
+      ],
+      "01 70": [
+        64,
+        25,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        127
+      ],
+      "01 71": [
+        64,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        127
+      ],
+      "01 72": [
+        1,
+        5,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        127,
+        64,
+        64,
+        64,
+        127
+      ],
+      "01 73": [
+        1,
+        1,
+        36,
+        0,
+        64,
+        1,
+        127,
+        0,
+        0,
+        127,
+        0,
+        0,
+        127,
+        0,
+        1,
+        127,
+        64,
+        64,
+        64,
+        127
+      ],
+      "02 00": [
+        48,
+        64,
+        1,
+        0,
+        0,
+        10,
+        8,
+        72,
+        0,
+        64,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        80
+      ],
+      "02 01": [
+        48,
+        64,
+        1,
+        0,
+        0,
+        16,
+        11,
+        40,
+        104,
+        32,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        80
+      ],
+      "02 02": [
+        48,
+        64,
+        1,
+        0,
+        0,
+        111,
+        80,
+        127,
+        0,
+        48,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        80
+      ],
+      "02 03": [
+        48,
+        64,
+        1,
+        0,
+        0,
+        10,
+        8,
+        72,
+        0,
+        64,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        72
+      ],
+      "02 04": [
+        48,
+        64,
+        1,
+        0,
+        0,
+        11,
+        11,
+        24,
+        104,
+        32,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        72
+      ],
+      "02 05": [
+        48,
+        64,
+        1,
+        0,
+        0,
+        111,
+        80,
+        127,
+        0,
+        48,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        72
+      ],
+      "02 06": [
+        64,
+        127,
+        0,
+        0,
+        0,
+        64,
+        8,
+        101,
+        0,
+        64,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        80
+      ],
+      "02 07": [
+        64,
+        127,
+        0,
+        0,
+        0,
+        16,
+        11,
+        24,
+        104,
+        48,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        96
+      ],
+      "02 08": [
+        64,
+        127,
+        0,
+        0,
+        0,
+        111,
+        80,
+        127,
+        0,
+        48,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        88
+      ],
+      "02 09": [
+        10,
+        9,
+        120,
+        0,
+        64,
+        111,
+        null,
+        127,
+        0,
+        48,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        127
+      ],
+      "02 0A": [
+        16,
+        11,
+        24,
+        104,
+        64,
+        111,
+        null,
+        127,
+        0,
+        48,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        127
+      ],
+      "02 0B": [
+        10,
+        8,
+        120,
+        0,
+        64,
+        16,
+        11,
+        24,
+        104,
+        64,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        64,
+        64,
+        0,
+        112
+      ],
+      "03 00": [
+        13,
+        1,
+        64,
+        72,
+        0,
+        64,
+        64,
+        6,
+        113,
+        24,
+        127,
+        17,
+        120,
+        88,
+        64,
+        96,
+        0,
+        0,
+        0,
+        96
+      ],
+      "04 00": [
+        100,
+        80,
+        100,
+        1,
+        0,
+        80,
+        0,
+        1,
+        69,
+        74,
+        1,
+        0,
+        8,
+        30,
+        102,
+        40,
+        60,
+        34,
+        15,
+        110
+      ],
+      "04 01": [
+        70,
+        127,
+        90,
+        1,
+        0,
+        80,
+        2,
+        1,
+        1,
+        76,
+        56,
+        2,
+        69,
+        54,
+        0,
+        8,
+        96,
+        102,
+        0,
+        80
+      ],
+      "04 02": [
+        1,
+        60,
+        10,
+        1,
+        1,
+        80,
+        2,
+        1,
+        64,
+        64,
+        1,
+        0,
+        8,
+        0,
+        89,
+        50,
+        32,
+        64,
+        30,
+        88
+      ],
+      "04 03": [
+        50,
+        127,
+        75,
+        1,
+        76,
+        0,
+        2,
+        69,
+        52,
+        0,
+        8,
+        40,
+        79,
+        100,
+        24,
+        40,
+        127,
+        30,
+        0,
+        95
+      ],
+      "04 04": [
+        1,
+        55,
+        40,
+        29,
+        80,
+        1,
+        76,
+        72,
+        0,
+        64,
+        64,
+        0,
+        8,
+        20,
+        102,
+        100,
+        6,
+        15,
+        80,
+        76
+      ],
+      "04 05": [
+        72,
+        100,
+        75,
+        1,
+        0,
+        48,
+        0,
+        0,
+        1,
+        66,
+        72,
+        1,
+        68,
+        64,
+        0,
+        5,
+        20,
+        102,
+        64,
+        76
+      ],
+      "04 06": [
+        64,
+        64,
+        36,
+        16,
+        32,
+        16,
+        64,
+        0,
+        127,
+        10,
+        8,
+        64,
+        104,
+        127,
+        1,
+        2,
+        60,
+        64,
+        1,
+        127
+      ],
+      "05 00": [
+        50,
+        20,
+        67,
+        0,
+        2,
+        69,
+        61,
+        71,
+        64,
+        0,
+        39,
+        36,
+        8,
+        90,
+        80,
+        75,
+        20,
+        64,
+        40,
+        96
+      ],
+      "11 00": [
+        10,
+        8,
+        120,
+        0,
+        64,
+        111,
+        80,
+        127,
+        0,
+        40,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        127,
+        127,
+        127,
+        96
+      ],
+      "11 01": [
+        16,
+        11,
+        24,
+        104,
+        64,
+        111,
+        80,
+        127,
+        0,
+        48,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        127,
+        127,
+        127,
+        96
+      ],
+      "11 02": [
+        16,
+        8,
+        120,
+        0,
+        64,
+        16,
+        11,
+        24,
+        104,
+        64,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        127,
+        127,
+        127,
+        88
+      ],
+      "11 03": [
+        0,
+        48,
+        1,
+        1,
+        0,
+        1,
+        76,
+        3,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        96,
+        127,
+        84,
+        127
+      ],
+      "11 04": [
+        0,
+        48,
+        1,
+        1,
+        0,
+        6,
+        113,
+        24,
+        127,
+        17,
+        120,
+        88,
+        64,
+        96,
+        0,
+        0,
+        96,
+        127,
+        127,
+        127
+      ],
+      "11 05": [
+        0,
+        48,
+        1,
+        1,
+        0,
+        36,
+        16,
+        64,
+        16,
+        127,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        96,
+        127,
+        127,
+        127
+      ],
+      "11 06": [
+        0,
+        48,
+        1,
+        1,
+        0,
+        1,
+        0,
+        68,
+        62,
+        40,
+        72,
+        1,
+        0,
+        0,
+        0,
+        0,
+        96,
+        127,
+        127,
+        127
+      ],
+      "11 07": [
+        36,
+        16,
+        64,
+        16,
+        127,
+        6,
+        113,
+        24,
+        127,
+        17,
+        120,
+        88,
+        64,
+        96,
+        0,
+        0,
+        127,
+        127,
+        127,
+        127
+      ],
+      "11 08": [
+        36,
+        16,
+        64,
+        16,
+        127,
+        1,
+        0,
+        68,
+        62,
+        40,
+        72,
+        1,
+        0,
+        0,
+        0,
+        0,
+        127,
+        127,
+        127,
+        127
+      ]
+    }
+  },
+  "classes": {
+    "rate": {
+      "read_by": "the byte, whole",
+      "tables": {
+        "narrow": {
+          "printed_ends": [
+            "0.05",
+            "6.40"
+          ],
+          "columns": [
+            "*7"
+          ],
+          "kind": "breakpoints",
+          "interpolate": "linear in the setting",
+          "breakpoints": [
+            {
+              "setting": 0,
+              "hz": 0.05,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 127,
+              "hz": 6.4,
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 3
+        },
+        "wide": {
+          "printed_ends": [
+            "0.05",
+            "10.00"
+          ],
+          "columns": [
+            "*6"
+          ],
+          "kind": "breakpoints",
+          "interpolate": "linear in the setting",
+          "breakpoints": [
+            {
+              "setting": 0,
+              "hz": 0.05,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 99,
+              "hz": 5.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 119,
+              "hz": 7.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 125,
+              "hz": 10.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 127,
+              "hz": 10.0,
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "why_the_last_two_settings_repeat": "The table has 126 entries over 128 settings, so 126 and 127 have none of their own and return what 125 returns.",
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 18
+        }
+      },
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json"
+    },
+    "delay_time": {
+      "read_by": "the byte, whole",
+      "tables": {
+        "pre_delay": {
+          "printed_ends": [
+            "0.0",
+            "100"
+          ],
+          "columns": [
+            "*1"
+          ],
+          "kind": "breakpoints",
+          "interpolate": "linear in the setting, then cut",
+          "breakpoints": [
+            {
+              "setting": 0,
+              "ms": 0.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 50,
+              "ms": 5.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 60,
+              "ms": 10.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 100,
+              "ms": 50.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 125,
+              "ms": 100.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 127,
+              "ms": 100.0,
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 4
+        },
+        "time1": {
+          "printed_ends": [
+            "200",
+            "1000"
+          ],
+          "columns": [
+            "*2"
+          ],
+          "kind": "breakpoints",
+          "interpolate": "linear in the setting, then cut",
+          "breakpoints": [
+            {
+              "setting": 0,
+              "ms": 200.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 70,
+              "ms": 550.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 115,
+              "ms": 1000.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 127,
+              "ms": 1000.0,
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 7
+        },
+        "time2": {
+          "printed_ends": [
+            "200",
+            "1000"
+          ],
+          "columns": [
+            "*3"
+          ],
+          "kind": "breakpoints",
+          "interpolate": "linear in the setting, then cut",
+          "breakpoints": [
+            {
+              "setting": 0,
+              "ms": 200.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 80,
+              "ms": 600.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 120,
+              "ms": 1000.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 127,
+              "ms": 1000.0,
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 0
+        },
+        "time3": {
+          "printed_ends": [
+            "0.0",
+            "500"
+          ],
+          "columns": [
+            "*4"
+          ],
+          "kind": "breakpoints",
+          "interpolate": "linear in the setting, then cut",
+          "breakpoints": [
+            {
+              "setting": 0,
+              "ms": 0.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 50,
+              "ms": 5.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 60,
+              "ms": 10.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 90,
+              "ms": 40.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 116,
+              "ms": 300.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 126,
+              "ms": 500.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 127,
+              "ms": 500.0,
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 11
+        },
+        "time4": {
+          "printed_ends": [
+            "0",
+            "635"
+          ],
+          "columns": [
+            "*5"
+          ],
+          "kind": "breakpoints",
+          "interpolate": "linear in the setting, then cut",
+          "breakpoints": [
+            {
+              "setting": 0,
+              "ms": 0.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 127,
+              "ms": 635.0,
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 1
+        }
+      },
+      "cut": {
+        "clock_hz": 32000,
+        "mode": "floor",
+        "how": "ms -> floor(ms * clock_hz / 1000) * 1000 / clock_hz",
+        "where": "Once, at evaluation, after interpolating between the stored knots. The knots are the uncut ladder and every one of them is checked to be a whole sample already, so nothing is cut twice.",
+        "how_the_reading_settles_it": "Measured every run under derivation_checks.the_cut_floor_against_round, over the settings where the two predictions differ at all. Two of the five ladders separate nothing -- every entry of theirs is five milliseconds or more, which is already a whole step -- so the settings that decide it are at the short end of the other three."
+      },
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json"
+    },
+    "gain": {
+      "read_by": "the byte, whole",
+      "tables": {
+        "tone": {
+          "printed_ends": [
+            "-12",
+            "+12"
+          ],
+          "columns": [
+            "34–4C"
+          ],
+          "kind": "rule",
+          "rule": "clamp(setting, 52, 76) - 64 decibels",
+          "window": [
+            52,
+            76
+          ],
+          "offset": 64,
+          "db_per_step": 1.0,
+          "outside_the_window": "the nearest edge value, not the byte read as decibels",
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 14
+        }
+      },
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json"
+    },
+    "level": {
+      "read_by": "the byte, whole",
+      "tables": {
+        "output": {
+          "printed_ends": [
+            "0",
+            "127"
+          ],
+          "columns": [
+            "00–7F"
+          ],
+          "kind": "entries",
+          "denominator": 127,
+          "why_this_denominator": "The reading stands for 127 and 128 alike -- a constant 0.068 dB it cannot resolve -- and 127 is the byte's own top and what the surrounding code already divides by.",
+          "entries": [
+            {
+              "setting": 0,
+              "numerator": 0,
+              "approximate": true,
+              "why": "filled from the straight line the byte gives; the take sits at the floor",
+              "unit_specific": false
+            },
+            {
+              "setting": 1,
+              "numerator": 1,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 2,
+              "numerator": 1,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 3,
+              "numerator": 2,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 4,
+              "numerator": 3,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 5,
+              "numerator": 4,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 6,
+              "numerator": 4,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 7,
+              "numerator": 5,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 8,
+              "numerator": 6,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 9,
+              "numerator": 6,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 10,
+              "numerator": 7,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 11,
+              "numerator": 8,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 12,
+              "numerator": 9,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 13,
+              "numerator": 9,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 14,
+              "numerator": 10,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 15,
+              "numerator": 11,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 16,
+              "numerator": 12,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 17,
+              "numerator": 12,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 18,
+              "numerator": 13,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 19,
+              "numerator": 14,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 20,
+              "numerator": 15,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 21,
+              "numerator": 15,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 22,
+              "numerator": 16,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 23,
+              "numerator": 17,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 24,
+              "numerator": 18,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 25,
+              "numerator": 19,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 26,
+              "numerator": 19,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 27,
+              "numerator": 20,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 28,
+              "numerator": 21,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 29,
+              "numerator": 22,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 30,
+              "numerator": 23,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 31,
+              "numerator": 23,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 32,
+              "numerator": 24,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 33,
+              "numerator": 25,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 34,
+              "numerator": 26,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 35,
+              "numerator": 27,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 36,
+              "numerator": 28,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 37,
+              "numerator": 28,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 38,
+              "numerator": 29,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 39,
+              "numerator": 30,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 40,
+              "numerator": 31,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 41,
+              "numerator": 32,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 42,
+              "numerator": 33,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 43,
+              "numerator": 34,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 44,
+              "numerator": 34,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 45,
+              "numerator": 35,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 46,
+              "numerator": 36,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 47,
+              "numerator": 37,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 48,
+              "numerator": 38,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 49,
+              "numerator": 39,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 50,
+              "numerator": 40,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 51,
+              "numerator": 41,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 52,
+              "numerator": 42,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 53,
+              "numerator": 43,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 54,
+              "numerator": 44,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 55,
+              "numerator": 44,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 56,
+              "numerator": 45,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 57,
+              "numerator": 46,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 58,
+              "numerator": 47,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 59,
+              "numerator": 48,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 60,
+              "numerator": 49,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 61,
+              "numerator": 50,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 62,
+              "numerator": 51,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 63,
+              "numerator": 52,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 64,
+              "numerator": 53,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 65,
+              "numerator": 54,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 66,
+              "numerator": 55,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 67,
+              "numerator": 56,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 68,
+              "numerator": 57,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 69,
+              "numerator": 58,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 70,
+              "numerator": 59,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 71,
+              "numerator": 60,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 72,
+              "numerator": 61,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 73,
+              "numerator": 62,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 74,
+              "numerator": 63,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 75,
+              "numerator": 64,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 76,
+              "numerator": 65,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 77,
+              "numerator": 66,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 78,
+              "numerator": 67,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 79,
+              "numerator": 68,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 80,
+              "numerator": 70,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 81,
+              "numerator": 71,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 82,
+              "numerator": 72,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 83,
+              "numerator": 73,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 84,
+              "numerator": 74,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 85,
+              "numerator": 75,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 86,
+              "numerator": 76,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 87,
+              "numerator": 77,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 88,
+              "numerator": 78,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 89,
+              "numerator": 79,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 90,
+              "numerator": 81,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 91,
+              "numerator": 82,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 92,
+              "numerator": 83,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 93,
+              "numerator": 84,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 94,
+              "numerator": 85,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 95,
+              "numerator": 86,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 96,
+              "numerator": 87,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 97,
+              "numerator": 89,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 98,
+              "numerator": 90,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 99,
+              "numerator": 91,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 100,
+              "numerator": 92,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 101,
+              "numerator": 93,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 102,
+              "numerator": 95,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 103,
+              "numerator": 96,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 104,
+              "numerator": 97,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 105,
+              "numerator": 98,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 106,
+              "numerator": 99,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 107,
+              "numerator": 101,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 108,
+              "numerator": 102,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 109,
+              "numerator": 103,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 110,
+              "numerator": 104,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 111,
+              "numerator": 106,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 112,
+              "numerator": 107,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 113,
+              "numerator": 108,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 114,
+              "numerator": 110,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 115,
+              "numerator": 111,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 116,
+              "numerator": 112,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 117,
+              "numerator": 114,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 118,
+              "numerator": 115,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 119,
+              "numerator": 116,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 120,
+              "numerator": 117,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 121,
+              "numerator": 119,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 122,
+              "numerator": 120,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 123,
+              "numerator": 122,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 124,
+              "numerator": 123,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 125,
+              "numerator": 124,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 126,
+              "numerator": 126,
+              "approximate": false,
+              "unit_specific": false
+            },
+            {
+              "setting": 127,
+              "numerator": 127,
+              "approximate": false,
+              "unit_specific": false
+            }
+          ],
+          "unit_specific": false,
+          "approximate": true,
+          "entries_using_it": 3
+        }
+      },
+      "rests_on": "level-the-multiplier-is-a-seventh-bit-table.json"
+    },
+    "width": {
+      "read_by": "the byte, whole",
+      "tables": {
+        "section": {
+          "printed_ends": [
+            "0",
+            "4"
+          ],
+          "columns": [
+            "00/01/02/03/04"
+          ],
+          "kind": "entries",
+          "entries": [
+            {
+              "setting": 0,
+              "octaves": 0.25,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 1,
+              "octaves": 0.5,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 2,
+              "octaves": 1.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 3,
+              "octaves": 2.0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 4,
+              "octaves": 4.5,
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "settings_past_the_table_return": 0,
+          "what_that_cannot_be_told_from": "This slot powers up at setting 0, so a setting past the table returning entry 0 and a setting past the table doing nothing are the same takes.",
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 4
+        }
+      },
+      "rests_on": "width-the-byte-halves-the-printed-table.json"
+    },
+    "wave": {
+      "read_by": "the byte, whole",
+      "tables": {
+        "modulator": {
+          "printed_ends": [
+            "0",
+            "4"
+          ],
+          "columns": [
+            "00/01/02/03/04"
+          ],
+          "kind": "entries",
+          "entries": [
+            {
+              "setting": 0,
+              "printed": "Tri",
+              "shape": "triangle",
+              "rising_fraction": 0.5,
+              "third_harmonic": 0.0,
+              "rising_fraction_read_on": {
+                "01 25": 0.5,
+                "01 26": 0.5
+              },
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 1,
+              "printed": "Sqr",
+              "shape": "square",
+              "rising_fraction": 0.3516,
+              "third_harmonic": 0.0,
+              "rising_fraction_read_on": {
+                "01 25": 0.375,
+                "01 26": 0.3281
+              },
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 2,
+              "printed": "Sin",
+              "shape": "sine carrying a third harmonic and almost nothing above it",
+              "rising_fraction": 0.4688,
+              "third_harmonic": 0.06,
+              "rising_fraction_read_on": {
+                "01 25": 0.4375,
+                "01 26": 0.5
+              },
+              "third_harmonic_read_on": [
+                0.0586,
+                0.0614
+              ],
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 3,
+              "printed": "Saw1",
+              "shape": "sawtooth, rising over most of the cycle",
+              "rising_fraction": 0.8828,
+              "third_harmonic": 0.0,
+              "rising_fraction_read_on": {
+                "01 25": 0.875,
+                "01 26": 0.8906
+              },
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "setting": 4,
+              "printed": "Saw2",
+              "shape": "sawtooth, rising over little of the cycle",
+              "rising_fraction": 0.1094,
+              "third_harmonic": 0.0,
+              "rising_fraction_read_on": {
+                "01 25": 0.1094,
+                "01 26": 0.1094
+              },
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "what_the_reading_cannot_separate": "Which direction Saw1 and Saw2 run. A magnitude-only reading places the fraction of the cycle that climbs and not the sign.",
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 3
+        }
+      },
+      "rests_on": "wave-the-byte-picks-one-of-five-fixed-shapes.json"
+    },
+    "pan": {
+      "read_by": "the byte, whole",
+      "what_it_does_not_carry": "The term added after the pan, which is what stops the far channel short of silence and is frequency-dependent. It is characterised by its net effect and not decomposed.",
+      "tables": {
+        "output": {
+          "printed_ends": [
+            "L63",
+            "R63"
+          ],
+          "columns": [
+            "00–7F"
+          ],
+          "kind": "breakpoints",
+          "interpolate": "linear in the setting",
+          "sides": {
+            "left": [
+              {
+                "setting": 0,
+                "multiplier": 1.001002,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 1,
+                "multiplier": 1.0,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 8,
+                "multiplier": 0.979141,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 16,
+                "multiplier": 0.949046,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 24,
+                "multiplier": 0.927557,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 32,
+                "multiplier": 0.903376,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 40,
+                "multiplier": 0.872693,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 48,
+                "multiplier": 0.835437,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 56,
+                "multiplier": 0.790175,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 64,
+                "multiplier": 0.754909,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 72,
+                "multiplier": 0.707822,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 80,
+                "multiplier": 0.651537,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 88,
+                "multiplier": 0.591701,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 96,
+                "multiplier": 0.518187,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 104,
+                "multiplier": 0.432559,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 112,
+                "multiplier": 0.32774,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 120,
+                "multiplier": 0.18725,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 126,
+                "multiplier": 0.059583,
+                "unit_specific": false,
+                "approximate": false
+              }
+            ],
+            "right": [
+              {
+                "setting": 1,
+                "multiplier": 0.059017,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 8,
+                "multiplier": 0.21119,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 16,
+                "multiplier": 0.34676,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 24,
+                "multiplier": 0.450704,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 32,
+                "multiplier": 0.529286,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 40,
+                "multiplier": 0.600908,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 48,
+                "multiplier": 0.665236,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 56,
+                "multiplier": 0.708199,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 64,
+                "multiplier": 0.756399,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 72,
+                "multiplier": 0.803473,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 80,
+                "multiplier": 0.84064,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 88,
+                "multiplier": 0.875925,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 96,
+                "multiplier": 0.902617,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 104,
+                "multiplier": 0.933513,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 112,
+                "multiplier": 0.954793,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 120,
+                "multiplier": 0.979115,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 126,
+                "multiplier": 1.0,
+                "unit_specific": false,
+                "approximate": false
+              },
+              {
+                "setting": 127,
+                "multiplier": 0.996956,
+                "unit_specific": false,
+                "approximate": false
+              }
+            ]
+          },
+          "recovered_up_to": "A constant. The table is pinned by putting its quietest entry at silence, which bounds the last entry's depth from one side only.",
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 3
+        }
+      },
+      "rests_on": "pan-one-multiplier-a-side-under-a-term-added-after-it.json"
+    },
+    "balance": {
+      "read_by": "the byte, whole",
+      "tables": {
+        "effect": {
+          "printed_ends": [
+            "D>0E",
+            "D0<E"
+          ],
+          "columns": [
+            "00–7F"
+          ],
+          "kind": "rule",
+          "rule": "min(1, floor((114 - n) * 128 / 50) / 128) past the effect, min(1, floor((n - 14) * 128 / 50) / 128) through it",
+          "corner_past_the_effect": 114,
+          "corner_through_the_effect": 14,
+          "width": 50,
+          "grid": 128,
+          "truncated": true,
+          "why_the_middle_stands_over_the_ends": "The two corners sum to 128 and the halves meet at full at setting 64, so the middle of the byte carries both at once and stands 3 dB over either end -- the opposite sign to a crossfade.",
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 3
+        }
+      },
+      "rests_on": "balance-two-ramps-that-meet-at-full.json"
+    },
+    "azimuth": {
+      "read_by": "two added, shifted right two, recentred, clamped",
+      "tables": {
+        "placement": {
+          "printed_ends": [
+            "L180(=R180)",
+            "R180(=L180)"
+          ],
+          "columns": [
+            "*13"
+          ],
+          "kind": "rule",
+          "rule": "clamp(((byte + 2) >> 2) - 16, -15, 15), 12 degrees a position",
+          "degrees_per_position": 12,
+          "clamp": 15,
+          "entries": [
+            {
+              "position": -15,
+              "settings": [
+                0,
+                5
+              ],
+              "degrees": -180,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -14,
+              "settings": [
+                6,
+                9
+              ],
+              "degrees": -168,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -13,
+              "settings": [
+                10,
+                13
+              ],
+              "degrees": -156,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -12,
+              "settings": [
+                14,
+                17
+              ],
+              "degrees": -144,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -11,
+              "settings": [
+                18,
+                21
+              ],
+              "degrees": -132,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -10,
+              "settings": [
+                22,
+                25
+              ],
+              "degrees": -120,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -9,
+              "settings": [
+                26,
+                29
+              ],
+              "degrees": -108,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -8,
+              "settings": [
+                30,
+                33
+              ],
+              "degrees": -96,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -7,
+              "settings": [
+                34,
+                37
+              ],
+              "degrees": -84,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -6,
+              "settings": [
+                38,
+                41
+              ],
+              "degrees": -72,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -5,
+              "settings": [
+                42,
+                45
+              ],
+              "degrees": -60,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -4,
+              "settings": [
+                46,
+                49
+              ],
+              "degrees": -48,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -3,
+              "settings": [
+                50,
+                53
+              ],
+              "degrees": -36,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -2,
+              "settings": [
+                54,
+                57
+              ],
+              "degrees": -24,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": -1,
+              "settings": [
+                58,
+                61
+              ],
+              "degrees": -12,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 0,
+              "settings": [
+                62,
+                65
+              ],
+              "degrees": 0,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 1,
+              "settings": [
+                66,
+                69
+              ],
+              "degrees": 12,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 2,
+              "settings": [
+                70,
+                73
+              ],
+              "degrees": 24,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 3,
+              "settings": [
+                74,
+                77
+              ],
+              "degrees": 36,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 4,
+              "settings": [
+                78,
+                81
+              ],
+              "degrees": 48,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 5,
+              "settings": [
+                82,
+                85
+              ],
+              "degrees": 60,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 6,
+              "settings": [
+                86,
+                89
+              ],
+              "degrees": 72,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 7,
+              "settings": [
+                90,
+                93
+              ],
+              "degrees": 84,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 8,
+              "settings": [
+                94,
+                97
+              ],
+              "degrees": 96,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 9,
+              "settings": [
+                98,
+                101
+              ],
+              "degrees": 108,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 10,
+              "settings": [
+                102,
+                105
+              ],
+              "degrees": 120,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 11,
+              "settings": [
+                106,
+                109
+              ],
+              "degrees": 132,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 12,
+              "settings": [
+                110,
+                113
+              ],
+              "degrees": 144,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 13,
+              "settings": [
+                114,
+                117
+              ],
+              "degrees": 156,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 14,
+              "settings": [
+                118,
+                121
+              ],
+              "degrees": 168,
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "position": 15,
+              "settings": [
+                122,
+                127
+              ],
+              "degrees": 180,
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "the_two_poles_are_one_place": true,
+          "the_table_is_a_mirror": "A position and its opposite put the same separation with the sign reversed, so a renderer needs sixteen magnitudes and a sign.",
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 2
+        }
+      },
+      "rests_on": "azimuth-a-byte-rounded-to-a-quarter-and-clamped.json"
+    },
+    "accel": {
+      "read_by": "the top four bits; eight settings share an entry",
+      "tables": {
+        "rotor": {
+          "printed_ends": [
+            "0",
+            "15"
+          ],
+          "columns": [
+            "*14"
+          ],
+          "kind": "entries",
+          "entries": [
+            {
+              "index": 0,
+              "settings": [
+                0,
+                7
+              ],
+              "divisor": 1.0,
+              "source": "the sequence; no multiplier is published for this entry",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 1,
+              "settings": [
+                8,
+                15
+              ],
+              "divisor": 2.0,
+              "source": "the sequence; no multiplier is published for this entry",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 2,
+              "settings": [
+                16,
+                23
+              ],
+              "divisor": 3.0,
+              "sequence_says": 3,
+              "measured_multiplier": 3.02,
+              "times_the_take_told_apart": 0.86,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 3,
+              "settings": [
+                24,
+                31
+              ],
+              "divisor": 4.0,
+              "sequence_says": 4,
+              "measured_multiplier": 4.0,
+              "times_the_take_told_apart": 0.0,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 4,
+              "settings": [
+                32,
+                39
+              ],
+              "divisor": 5.0,
+              "sequence_says": 5,
+              "measured_multiplier": 4.92,
+              "times_the_take_told_apart": 0.4,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 5,
+              "settings": [
+                40,
+                47
+              ],
+              "divisor": 6.0,
+              "sequence_says": 6,
+              "measured_multiplier": 5.9,
+              "times_the_take_told_apart": 0.33,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 6,
+              "settings": [
+                48,
+                55
+              ],
+              "divisor": 7.0,
+              "sequence_says": 7,
+              "measured_multiplier": 6.82,
+              "times_the_take_told_apart": 0.48,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 7,
+              "settings": [
+                56,
+                63
+              ],
+              "divisor": 8.0,
+              "sequence_says": 8,
+              "measured_multiplier": 7.9,
+              "times_the_take_told_apart": 1.23,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 8,
+              "settings": [
+                64,
+                71
+              ],
+              "divisor": 9.0,
+              "sequence_says": 9,
+              "measured_multiplier": 8.99,
+              "times_the_take_told_apart": 0.28,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 9,
+              "settings": [
+                72,
+                79
+              ],
+              "divisor": 10.0,
+              "sequence_says": 10,
+              "measured_multiplier": 10.09,
+              "times_the_take_told_apart": 0.31,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 10,
+              "settings": [
+                80,
+                87
+              ],
+              "divisor": 12.0,
+              "sequence_says": 12,
+              "measured_multiplier": 11.99,
+              "times_the_take_told_apart": 0.08,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 11,
+              "settings": [
+                88,
+                95
+              ],
+              "divisor": 16.0,
+              "sequence_says": 16,
+              "measured_multiplier": 15.99,
+              "times_the_take_told_apart": 0.06,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 12,
+              "settings": [
+                96,
+                103
+              ],
+              "divisor": 32.0,
+              "sequence_says": 32,
+              "measured_multiplier": 31.71,
+              "times_the_take_told_apart": 0.92,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 13,
+              "settings": [
+                104,
+                111
+              ],
+              "divisor": 64.0,
+              "sequence_says": 64,
+              "measured_multiplier": 63.84,
+              "times_the_take_told_apart": 0.19,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 14,
+              "settings": [
+                112,
+                119
+              ],
+              "divisor": 128.0,
+              "sequence_says": 128,
+              "measured_multiplier": 125.23,
+              "times_the_take_told_apart": 0.56,
+              "source": "the sequence",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 15,
+              "settings": [
+                120,
+                127
+              ],
+              "divisor": 168.41,
+              "sequence_says": 256,
+              "measured_multiplier": 168.41,
+              "times_the_take_told_apart": 4.96,
+              "source": "this unit's reading",
+              "unit_specific": true,
+              "approximate": false
+            }
+          ],
+          "what_the_divisor_is": "What the rotor's control loop divides the distance to its target rate by before shifting toward it.",
+          "to_seconds": {
+            "rule": "divisor * 2^15 / clock_hz",
+            "shift": 32768,
+            "clock_hz": 32000,
+            "why_not_the_divisor_itself": "The divisor is a per-step coefficient, so held as it stands its time constant moves with the sample rate. The constant behind it is 0.9768 Hz, which is the clock over two to the fifteenth."
+          },
+          "unit_specific": true,
+          "approximate": true,
+          "entries_using_it": 2
+        }
+      },
+      "rests_on": "0122-an-acceleration-byte-is-four-bits-and-a-multiplier.json"
+    },
+    "freq": {
+      "read_by": "the top four bits; eight settings share an entry",
+      "tables": {
+        "eq": {
+          "printed_ends": [
+            "200",
+            "6300"
+          ],
+          "columns": [
+            "*10"
+          ],
+          "printed_range_the_claim_calls_it": "200 - 6.3k",
+          "kind": "entries",
+          "entries": [
+            {
+              "index": 0,
+              "settings": [
+                0,
+                7
+              ],
+              "hz": 198.4,
+              "series_hz": 200.0,
+              "away_octaves": 0.0116,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 1,
+              "settings": [
+                8,
+                15
+              ],
+              "hz": 240.5,
+              "series_hz": 250.0,
+              "away_octaves": 0.0559,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 2,
+              "settings": [
+                16,
+                23
+              ],
+              "hz": 279.1,
+              "series_hz": 315.0,
+              "away_octaves": 0.1746,
+              "source": "read",
+              "unit_specific": true,
+              "approximate": false
+            },
+            {
+              "index": 3,
+              "settings": [
+                24,
+                31
+              ],
+              "hz": 397.9,
+              "series_hz": 400.0,
+              "away_octaves": 0.0076,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 4,
+              "settings": [
+                32,
+                39
+              ],
+              "hz": 481.4,
+              "series_hz": 500.0,
+              "away_octaves": 0.0547,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 5,
+              "settings": [
+                40,
+                47
+              ],
+              "hz": 600.0,
+              "series_hz": 630.0,
+              "away_octaves": 0.0704,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 6,
+              "settings": [
+                48,
+                55
+              ],
+              "hz": 778.1,
+              "series_hz": 800.0,
+              "away_octaves": 0.04,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 7,
+              "settings": [
+                56,
+                63
+              ],
+              "hz": 977.3,
+              "series_hz": 1000.0,
+              "away_octaves": 0.0331,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 8,
+              "settings": [
+                64,
+                71
+              ],
+              "hz": 1224.4,
+              "series_hz": 1250.0,
+              "away_octaves": 0.0299,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 9,
+              "settings": [
+                72,
+                79
+              ],
+              "hz": 1585.0,
+              "series_hz": 1600.0,
+              "away_octaves": 0.0136,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 10,
+              "settings": [
+                80,
+                87
+              ],
+              "hz": 1952.3,
+              "series_hz": 2000.0,
+              "away_octaves": 0.0348,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 11,
+              "settings": [
+                88,
+                95
+              ],
+              "hz": 2468.9,
+              "series_hz": 2500.0,
+              "away_octaves": 0.0181,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 12,
+              "settings": [
+                96,
+                103
+              ],
+              "hz": 3105.0,
+              "series_hz": 3150.0,
+              "away_octaves": 0.0208,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 13,
+              "settings": [
+                104,
+                111
+              ],
+              "hz": 3948.8,
+              "series_hz": 4000.0,
+              "away_octaves": 0.0186,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 14,
+              "settings": [
+                112,
+                119
+              ],
+              "hz": 4931.8,
+              "series_hz": 5000.0,
+              "away_octaves": 0.0198,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 15,
+              "settings": [
+                120,
+                127
+              ],
+              "hz": 6166.8,
+              "series_hz": 6300.0,
+              "away_octaves": 0.0308,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            }
+          ],
+          "band_the_reading_separates_octaves": 0.0833,
+          "unit_specific": true,
+          "approximate": false,
+          "entries_using_it": 4
+        },
+        "pre_filter": {
+          "printed_ends": [
+            "250",
+            "8000"
+          ],
+          "columns": [
+            "*9"
+          ],
+          "printed_range_the_claim_calls_it": "250 - 8k",
+          "kind": "entries",
+          "entries": [
+            {
+              "index": 0,
+              "settings": [
+                0,
+                7
+              ],
+              "hz": 250.0,
+              "series_hz": 250.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 1,
+              "settings": [
+                8,
+                15
+              ],
+              "hz": 315.0,
+              "series_hz": 315.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 2,
+              "settings": [
+                16,
+                23
+              ],
+              "hz": 400.0,
+              "series_hz": 400.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 3,
+              "settings": [
+                24,
+                31
+              ],
+              "hz": 500.0,
+              "series_hz": 500.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 4,
+              "settings": [
+                32,
+                39
+              ],
+              "hz": 630.0,
+              "series_hz": 630.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 5,
+              "settings": [
+                40,
+                47
+              ],
+              "hz": 800.0,
+              "series_hz": 800.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 6,
+              "settings": [
+                48,
+                55
+              ],
+              "hz": 1000.0,
+              "series_hz": 1000.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 7,
+              "settings": [
+                56,
+                63
+              ],
+              "hz": 1250.0,
+              "series_hz": 1250.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 8,
+              "settings": [
+                64,
+                71
+              ],
+              "hz": 1600.0,
+              "series_hz": 1600.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 9,
+              "settings": [
+                72,
+                79
+              ],
+              "hz": 2000.0,
+              "series_hz": 2000.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 10,
+              "settings": [
+                80,
+                87
+              ],
+              "hz": 2500.0,
+              "series_hz": 2500.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 11,
+              "settings": [
+                88,
+                95
+              ],
+              "hz": 3150.0,
+              "series_hz": 3150.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 12,
+              "settings": [
+                96,
+                103
+              ],
+              "hz": 4000.0,
+              "series_hz": 4000.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 13,
+              "settings": [
+                104,
+                111
+              ],
+              "hz": 5000.0,
+              "series_hz": 5000.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 14,
+              "settings": [
+                112,
+                119
+              ],
+              "hz": 6300.0,
+              "series_hz": 6300.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 15,
+              "settings": [
+                120,
+                127
+              ],
+              "hz": 8000.0,
+              "series_hz": 8000.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            }
+          ],
+          "band_the_reading_separates_octaves": 0.0847,
+          "unit_specific": false,
+          "approximate": true,
+          "checked_against": "Eleven settings across the range, a median 0.046 octaves from this series, and its second entry read 325.2 Hz through the low-pass and 324.2 through the high-pass -- inside the band this reading separates. No per-entry readout is published, so the entries are the series.",
+          "entries_using_it": 1
+        },
+        "damping": {
+          "printed_ends": [
+            "315",
+            "Bypass"
+          ],
+          "columns": [
+            "*8"
+          ],
+          "printed_range_the_claim_calls_it": "315 - 8k/Bypass",
+          "kind": "entries",
+          "entries": [
+            {
+              "index": 0,
+              "settings": [
+                0,
+                7
+              ],
+              "hz": 312.9,
+              "series_hz": 315.0,
+              "away_octaves": 0.0097,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 1,
+              "settings": [
+                8,
+                15
+              ],
+              "hz": 398.7,
+              "series_hz": 400.0,
+              "away_octaves": 0.0047,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 2,
+              "settings": [
+                16,
+                23
+              ],
+              "hz": 500.0,
+              "series_hz": 500.0,
+              "away_octaves": 0.0,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 3,
+              "settings": [
+                24,
+                31
+              ],
+              "hz": 622.2,
+              "series_hz": 630.0,
+              "away_octaves": 0.018,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 4,
+              "settings": [
+                32,
+                39
+              ],
+              "hz": 801.2,
+              "series_hz": 800.0,
+              "away_octaves": 0.0022,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 5,
+              "settings": [
+                40,
+                47
+              ],
+              "hz": 1000.0,
+              "series_hz": 1000.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 6,
+              "settings": [
+                48,
+                55
+              ],
+              "hz": 1245.4,
+              "series_hz": 1250.0,
+              "away_octaves": 0.0053,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 7,
+              "settings": [
+                56,
+                63
+              ],
+              "hz": 1600.0,
+              "series_hz": 1600.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 8,
+              "settings": [
+                64,
+                71
+              ],
+              "hz": 2016.6,
+              "series_hz": 2000.0,
+              "away_octaves": 0.0119,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 9,
+              "settings": [
+                72,
+                79
+              ],
+              "hz": 2500.0,
+              "series_hz": 2500.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 10,
+              "settings": [
+                80,
+                87
+              ],
+              "hz": 3138.3,
+              "series_hz": 3150.0,
+              "away_octaves": 0.0054,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 11,
+              "settings": [
+                88,
+                95
+              ],
+              "hz": 4000.0,
+              "series_hz": 4000.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 12,
+              "settings": [
+                96,
+                103
+              ],
+              "hz": 4964.3,
+              "series_hz": 5000.0,
+              "away_octaves": 0.0103,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 13,
+              "settings": [
+                104,
+                111
+              ],
+              "hz": 6300.0,
+              "series_hz": 6300.0,
+              "source": "the series; no reading of this entry is published",
+              "approximate": true,
+              "unit_specific": false
+            },
+            {
+              "index": 14,
+              "settings": [
+                112,
+                119
+              ],
+              "hz": 7972.9,
+              "series_hz": 8000.0,
+              "away_octaves": 0.0049,
+              "source": "read",
+              "unit_specific": false,
+              "approximate": false
+            },
+            {
+              "index": 15,
+              "settings": [
+                120,
+                127
+              ],
+              "hz": null,
+              "bypass": true,
+              "source": "the range's own last position, which is not a frequency",
+              "approximate": false,
+              "unit_specific": false
+            }
+          ],
+          "band_the_reading_separates_octaves": 0.0847,
+          "unit_specific": false,
+          "approximate": true,
+          "entries_using_it": 2
+        }
+      },
+      "rests_on": "freq-the-byte-indexes-a-third-octave-table.json"
+    }
+  },
+  "map": [
+    {
+      "type": "01 00",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 00",
+      "address": "40 03 06",
+      "parameter": 3,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 00",
+      "address": "40 03 07",
+      "parameter": 4,
+      "conversion_class": "freq",
+      "table": "eq",
+      "printed_values": "*10",
+      "rests_on": "freq-the-byte-indexes-a-third-octave-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": true,
+      "approximate": false
+    },
+    {
+      "type": "01 00",
+      "address": "40 03 08",
+      "parameter": 5,
+      "conversion_class": "width",
+      "table": "section",
+      "printed_values": "00/01/02/03/04",
+      "rests_on": "width-the-byte-halves-the-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 00",
+      "address": "40 03 09",
+      "parameter": 6,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 00",
+      "address": "40 03 0A",
+      "parameter": 7,
+      "conversion_class": "freq",
+      "table": "eq",
+      "printed_values": "*10",
+      "rests_on": "freq-the-byte-indexes-a-third-octave-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": true,
+      "approximate": false
+    },
+    {
+      "type": "01 00",
+      "address": "40 03 0B",
+      "parameter": 8,
+      "conversion_class": "width",
+      "table": "section",
+      "printed_values": "00/01/02/03/04",
+      "rests_on": "width-the-byte-halves-the-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 00",
+      "address": "40 03 0C",
+      "parameter": 9,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 00",
+      "address": "40 03 16",
+      "parameter": 19,
+      "conversion_class": "level",
+      "table": "output",
+      "printed_values": "00–7F",
+      "rests_on": "level-the-multiplier-is-a-seventh-bit-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": true
+    },
+    {
+      "type": "01 01",
+      "address": "40 03 15",
+      "parameter": 18,
+      "conversion_class": "pan",
+      "table": "output",
+      "printed_values": "00–7F",
+      "rests_on": "pan-one-multiplier-a-side-under-a-term-added-after-it.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 03",
+      "address": "40 03 15",
+      "parameter": 18,
+      "conversion_class": "pan",
+      "table": "output",
+      "printed_values": "00–7F",
+      "rests_on": "pan-one-multiplier-a-side-under-a-term-added-after-it.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 11",
+      "address": "40 03 16",
+      "parameter": 19,
+      "conversion_class": "level",
+      "table": "output",
+      "printed_values": "00–7F",
+      "rests_on": "level-the-multiplier-is-a-seventh-bit-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": true
+    },
+    {
+      "type": "01 20",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 21",
+      "address": "40 03 07",
+      "parameter": 4,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 22",
+      "address": "40 03 05",
+      "parameter": 2,
+      "conversion_class": "accel",
+      "table": "rotor",
+      "printed_values": "*14",
+      "rests_on": "0122-an-acceleration-byte-is-four-bits-and-a-multiplier.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": true,
+      "approximate": true
+    },
+    {
+      "type": "01 22",
+      "address": "40 03 09",
+      "parameter": 6,
+      "conversion_class": "accel",
+      "table": "rotor",
+      "printed_values": "*14",
+      "rests_on": "0122-an-acceleration-byte-is-four-bits-and-a-multiplier.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": true,
+      "approximate": true
+    },
+    {
+      "type": "01 23",
+      "address": "40 03 06",
+      "parameter": 3,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 25",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "wave",
+      "table": "modulator",
+      "printed_values": "00/01/02/03/04",
+      "rests_on": "wave-the-byte-picks-one-of-five-fixed-shapes.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 25",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 26",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "wave",
+      "table": "modulator",
+      "printed_values": "00/01/02/03/04",
+      "rests_on": "wave-the-byte-picks-one-of-five-fixed-shapes.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 26",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 30",
+      "address": "40 03 15",
+      "parameter": 18,
+      "conversion_class": "pan",
+      "table": "output",
+      "printed_values": "00–7F",
+      "rests_on": "pan-one-multiplier-a-side-under-a-term-added-after-it.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 40",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "delay_time",
+      "table": "pre_delay",
+      "printed_values": "*1",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 40",
+      "address": "40 03 16",
+      "parameter": 19,
+      "conversion_class": "level",
+      "table": "output",
+      "printed_values": "00–7F",
+      "rests_on": "level-the-multiplier-is-a-seventh-bit-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": true
+    },
+    {
+      "type": "01 42",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "freq",
+      "table": "pre_filter",
+      "printed_values": "*9",
+      "rests_on": "freq-the-byte-indexes-a-third-octave-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": false,
+      "unit_specific": false,
+      "approximate": true
+    },
+    {
+      "type": "01 42",
+      "address": "40 03 06",
+      "parameter": 3,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 42",
+      "address": "40 03 13",
+      "parameter": 16,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 42",
+      "address": "40 03 14",
+      "parameter": 17,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 43",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 44",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 50",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 50",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 50",
+      "address": "40 03 0A",
+      "parameter": 7,
+      "conversion_class": "freq",
+      "table": "damping",
+      "printed_values": "*8",
+      "rests_on": "freq-the-byte-indexes-a-third-octave-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": true
+    },
+    {
+      "type": "01 50",
+      "address": "40 03 12",
+      "parameter": 15,
+      "conversion_class": "balance",
+      "table": "effect",
+      "printed_values": "00–7F",
+      "rests_on": "balance-two-ramps-that-meet-at-full.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 50",
+      "address": "40 03 13",
+      "parameter": 16,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 50",
+      "address": "40 03 14",
+      "parameter": 17,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 51",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 51",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 51",
+      "address": "40 03 07",
+      "parameter": 4,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 52",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "delay_time",
+      "table": "time1",
+      "printed_values": "*2",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 52",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "delay_time",
+      "table": "time1",
+      "printed_values": "*2",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 52",
+      "address": "40 03 05",
+      "parameter": 2,
+      "conversion_class": "delay_time",
+      "table": "time1",
+      "printed_values": "*2",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 53",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "delay_time",
+      "table": "time1",
+      "printed_values": "*2",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 53",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "delay_time",
+      "table": "time1",
+      "printed_values": "*2",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 53",
+      "address": "40 03 05",
+      "parameter": 2,
+      "conversion_class": "delay_time",
+      "table": "time1",
+      "printed_values": "*2",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 53",
+      "address": "40 03 06",
+      "parameter": 3,
+      "conversion_class": "delay_time",
+      "table": "time1",
+      "printed_values": "*2",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 54",
+      "address": "40 03 12",
+      "parameter": 15,
+      "conversion_class": "balance",
+      "table": "effect",
+      "printed_values": "00–7F",
+      "rests_on": "balance-two-ramps-that-meet-at-full.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 57",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 57",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 57",
+      "address": "40 03 05",
+      "parameter": 2,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 57",
+      "address": "40 03 12",
+      "parameter": 15,
+      "conversion_class": "balance",
+      "table": "effect",
+      "printed_values": "00–7F",
+      "rests_on": "balance-two-ramps-that-meet-at-full.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 70",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "azimuth",
+      "table": "placement",
+      "printed_values": "*13",
+      "rests_on": "azimuth-a-byte-rounded-to-a-quarter-and-clamped.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 70",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "01 71",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "azimuth",
+      "table": "placement",
+      "printed_values": "*13",
+      "rests_on": "azimuth-a-byte-rounded-to-a-quarter-and-clamped.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "02 00",
+      "address": "40 03 09",
+      "parameter": 6,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "02 01",
+      "address": "40 03 09",
+      "parameter": 6,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "02 03",
+      "address": "40 03 09",
+      "parameter": 6,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "02 04",
+      "address": "40 03 09",
+      "parameter": 6,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "02 06",
+      "address": "40 03 09",
+      "parameter": 6,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "02 07",
+      "address": "40 03 09",
+      "parameter": 6,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "02 08",
+      "address": "40 03 08",
+      "parameter": 5,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "02 09",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "delay_time",
+      "table": "pre_delay",
+      "printed_values": "*1",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "02 09",
+      "address": "40 03 08",
+      "parameter": 5,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "02 0A",
+      "address": "40 03 04",
+      "parameter": 1,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 00",
+      "address": "40 03 0F",
+      "parameter": 12,
+      "conversion_class": "rate",
+      "table": "narrow",
+      "printed_values": "*7",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 00",
+      "address": "40 03 13",
+      "parameter": 16,
+      "conversion_class": "delay_time",
+      "table": "time4",
+      "printed_values": "*5",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 01",
+      "address": "40 03 0C",
+      "parameter": 9,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 01",
+      "address": "40 03 0D",
+      "parameter": 10,
+      "conversion_class": "freq",
+      "table": "eq",
+      "printed_values": "*10",
+      "rests_on": "freq-the-byte-indexes-a-third-octave-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": true,
+      "approximate": false
+    },
+    {
+      "type": "04 01",
+      "address": "40 03 0E",
+      "parameter": 11,
+      "conversion_class": "width",
+      "table": "section",
+      "printed_values": "00/01/02/03/04",
+      "rests_on": "width-the-byte-halves-the-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 01",
+      "address": "40 03 0F",
+      "parameter": 12,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 01",
+      "address": "40 03 10",
+      "parameter": 13,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 03",
+      "address": "40 03 07",
+      "parameter": 4,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": false,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 03",
+      "address": "40 03 08",
+      "parameter": 5,
+      "conversion_class": "freq",
+      "table": "eq",
+      "printed_values": "*10",
+      "rests_on": "freq-the-byte-indexes-a-third-octave-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": true,
+      "approximate": false
+    },
+    {
+      "type": "04 03",
+      "address": "40 03 09",
+      "parameter": 6,
+      "conversion_class": "width",
+      "table": "section",
+      "printed_values": "00/01/02/03/04",
+      "rests_on": "width-the-byte-halves-the-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 03",
+      "address": "40 03 0A",
+      "parameter": 7,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 03",
+      "address": "40 03 0B",
+      "parameter": 8,
+      "conversion_class": "gain",
+      "table": "tone",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": false,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 03",
+      "address": "40 03 0D",
+      "parameter": 10,
+      "conversion_class": "rate",
+      "table": "narrow",
+      "printed_values": "*7",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "04 03",
+      "address": "40 03 13",
+      "parameter": 16,
+      "conversion_class": "freq",
+      "table": "damping",
+      "printed_values": "*8",
+      "rests_on": "freq-the-byte-indexes-a-third-octave-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": false,
+      "unit_specific": false,
+      "approximate": true
+    },
+    {
+      "type": "04 06",
+      "address": "40 03 12",
+      "parameter": 15,
+      "conversion_class": "wave",
+      "table": "modulator",
+      "printed_values": "00/01/02/03/04",
+      "rests_on": "wave-the-byte-picks-one-of-five-fixed-shapes.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "05 00",
+      "address": "40 03 0F",
+      "parameter": 12,
+      "conversion_class": "rate",
+      "table": "narrow",
+      "printed_values": "*7",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "11 00",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "delay_time",
+      "table": "pre_delay",
+      "printed_values": "*1",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "11 00",
+      "address": "40 03 08",
+      "parameter": 5,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "11 01",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "delay_time",
+      "table": "pre_delay",
+      "printed_values": "*1",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "11 01",
+      "address": "40 03 08",
+      "parameter": 5,
+      "conversion_class": "delay_time",
+      "table": "time3",
+      "printed_values": "*4",
+      "rests_on": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    },
+    {
+      "type": "11 05",
+      "address": "40 03 09",
+      "parameter": 6,
+      "conversion_class": "rate",
+      "table": "wide",
+      "printed_values": "*6",
+      "rests_on": "rate-the-byte-indexes-a-printed-table.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false
+    }
+  ],
+  "records_outside_their_inferences_addresses": [
+    {
+      "type": "01 42",
+      "address": "40 03 04",
+      "conversion_class": "freq",
+      "printed_values": "*9",
+      "rests_on": "freq-the-byte-indexes-a-third-octave-table.json",
+      "the_inference_names": [
+        "40 03 07",
+        "40 03 08",
+        "40 03 0A",
+        "40 03 0D"
+      ]
+    },
+    {
+      "type": "04 03",
+      "address": "40 03 13",
+      "conversion_class": "freq",
+      "printed_values": "*8",
+      "rests_on": "freq-the-byte-indexes-a-third-octave-table.json",
+      "the_inference_names": [
+        "40 03 07",
+        "40 03 08",
+        "40 03 0A",
+        "40 03 0D"
+      ]
+    },
+    {
+      "type": "04 03",
+      "address": "40 03 07",
+      "conversion_class": "gain",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "the_inference_names": [
+        "40 03 04",
+        "40 03 06",
+        "40 03 09",
+        "40 03 0A",
+        "40 03 0C",
+        "40 03 0F",
+        "40 03 10",
+        "40 03 13",
+        "40 03 14"
+      ]
+    },
+    {
+      "type": "04 03",
+      "address": "40 03 0B",
+      "conversion_class": "gain",
+      "printed_values": "34–4C",
+      "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "the_inference_names": [
+        "40 03 04",
+        "40 03 06",
+        "40 03 09",
+        "40 03 0A",
+        "40 03 0C",
+        "40 03 0F",
+        "40 03 10",
+        "40 03 13",
+        "40 03 14"
+      ]
+    }
+  ],
+  "entries_resting_on_a_parked_inference": [],
+  "derivation_checks": {
+    "delay_ladders_against_the_records": [
+      {
+        "record": "01-50-03-every-step-of-a-delay-time.json",
+        "type": "01 50",
+        "address": "40 03 03",
+        "ladder": "time3",
+        "settings": 131,
+        "median_ms": 0.0,
+        "worst_ms": 0.1042,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "01-51-03-does-the-range-pick-the-table.json",
+        "type": "01 51",
+        "address": "40 03 03",
+        "ladder": "time3",
+        "settings": 10,
+        "median_ms": 0.0,
+        "worst_ms": 0.1042,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "01-40-03-every-step-of-a-pre-delay.json",
+        "type": "01 40",
+        "address": "40 03 03",
+        "ladder": "pre_delay",
+        "settings": 131,
+        "median_ms": 0.0,
+        "worst_ms": 0.0625,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "01-52-03-every-step-of-a-three-tap-delay.json",
+        "type": "01 52",
+        "address": "40 03 03",
+        "ladder": "time1",
+        "settings": 131,
+        "median_ms": 0.0,
+        "worst_ms": 0.0208,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "04-00-13-every-step-of-a-guitar-multi-delay.json",
+        "type": "04 00",
+        "address": "40 03 13",
+        "ladder": "time4",
+        "settings": 131,
+        "median_ms": 0.0,
+        "worst_ms": 0.1042,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "01-57-03-every-step-of-a-3d-delay.json",
+        "type": "01 57",
+        "address": "40 03 03",
+        "ladder": "time3",
+        "settings": 131,
+        "median_ms": 0.0,
+        "worst_ms": 0.1042,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "01-53-03-every-step-of-a-four-tap-delay-tap-1.json",
+        "type": "01 53",
+        "address": "40 03 03",
+        "ladder": "time1",
+        "settings": 17,
+        "median_ms": 0.0417,
+        "worst_ms": 271.1458,
+        "settings_over_1ms": 2,
+        "the_settings_over_1ms": [
+          {
+            "setting": 83,
+            "read_ms": 951.1458,
+            "the_ladder_says_ms": 680.0,
+            "the_record_also_read_ms": [
+              679.9583,
+              680.0625
+            ]
+          },
+          {
+            "setting": 90,
+            "read_ms": 950.875,
+            "the_ladder_says_ms": 750.0,
+            "the_record_also_read_ms": [
+              750.0625,
+              749.9792
+            ]
+          }
+        ],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0834
+      },
+      {
+        "record": "01-53-04-every-step-of-a-four-tap-delay-tap-2.json",
+        "type": "01 53",
+        "address": "40 03 04",
+        "ladder": "time1",
+        "settings": 11,
+        "median_ms": 0.0,
+        "worst_ms": 0.0208,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "01-53-05-every-step-of-a-four-tap-delay-tap-3.json",
+        "type": "01 53",
+        "address": "40 03 05",
+        "ladder": "time1",
+        "settings": 11,
+        "median_ms": 0.0,
+        "worst_ms": 0.0208,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "01-53-06-every-step-of-a-four-tap-delay-tap-4.json",
+        "type": "01 53",
+        "address": "40 03 06",
+        "ladder": "time1",
+        "settings": 11,
+        "median_ms": 0.0,
+        "worst_ms": 200.5625,
+        "settings_over_1ms": 1,
+        "the_settings_over_1ms": [
+          {
+            "setting": 90,
+            "read_ms": 950.5625,
+            "the_ladder_says_ms": 750.0,
+            "the_record_also_read_ms": [
+              750.0208,
+              950.4792
+            ]
+          }
+        ],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "02-08-08-every-step-of-a-delay-behind-a-stage-0208.json",
+        "type": "02 08",
+        "address": "40 03 08",
+        "ladder": "time3",
+        "settings": 11,
+        "median_ms": 0.0,
+        "worst_ms": 0.0,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "02-09-08-every-step-of-a-delay-behind-a-stage-0209.json",
+        "type": "02 09",
+        "address": "40 03 08",
+        "ladder": "time3",
+        "settings": 11,
+        "median_ms": 0.0,
+        "worst_ms": 0.0,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "11-00-08-every-step-of-a-delay-behind-a-stage-1100.json",
+        "type": "11 00",
+        "address": "40 03 08",
+        "ladder": "time3",
+        "settings": 11,
+        "median_ms": 0.0,
+        "worst_ms": 0.0,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      },
+      {
+        "record": "11-01-08-every-step-of-a-delay-behind-a-stage-1101.json",
+        "type": "11 01",
+        "address": "40 03 08",
+        "ladder": "time3",
+        "settings": 11,
+        "median_ms": 0.0,
+        "worst_ms": 0.0,
+        "settings_over_1ms": 0,
+        "the_settings_over_1ms": [],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0
+      }
+    ],
+    "delay_records_of_slots_not_reached": [
+      {
+        "record": "01-54-03-the-ladder-nobody-read.json",
+        "type": "01 54",
+        "address": "40 03 03",
+        "ladder": "time2",
+        "settings": 35,
+        "median_ms": 35.9583,
+        "worst_ms": 39.5417,
+        "settings_over_1ms": 35,
+        "the_settings_over_1ms": [
+          {
+            "setting": 0,
+            "read_ms": 198.4375,
+            "the_ladder_says_ms": 200.0,
+            "the_record_also_read_ms": [
+              198.375,
+              950.7083
+            ]
+          },
+          {
+            "setting": 4,
+            "read_ms": 218.2917,
+            "the_ladder_says_ms": 220.0,
+            "the_record_also_read_ms": [
+              218.3542,
+              218.2083
+            ]
+          },
+          {
+            "setting": 8,
+            "read_ms": 238.125,
+            "the_ladder_says_ms": 240.0,
+            "the_record_also_read_ms": [
+              238.0625,
+              238.0
+            ]
+          },
+          {
+            "setting": 12,
+            "read_ms": 257.9792,
+            "the_ladder_says_ms": 260.0,
+            "the_record_also_read_ms": [
+              258.0417,
+              257.8958
+            ]
+          },
+          {
+            "setting": 16,
+            "read_ms": 277.8125,
+            "the_ladder_says_ms": 280.0,
+            "the_record_also_read_ms": [
+              277.75,
+              950.4167
+            ]
+          },
+          {
+            "setting": 20,
+            "read_ms": 297.6667,
+            "the_ladder_says_ms": 300.0,
+            "the_record_also_read_ms": [
+              297.5833,
+              297.7917
+            ]
+          },
+          {
+            "setting": 24,
+            "read_ms": 317.5,
+            "the_ladder_says_ms": 320.0,
+            "the_record_also_read_ms": [
+              950.6875,
+              317.4375
+            ]
+          },
+          {
+            "setting": 28,
+            "read_ms": 337.3542,
+            "the_ladder_says_ms": 340.0,
+            "the_record_also_read_ms": [
+              337.2708,
+              950.8125
+            ]
+          },
+          {
+            "setting": 32,
+            "read_ms": 357.1875,
+            "the_ladder_says_ms": 360.0,
+            "the_record_also_read_ms": [
+              357.125,
+              357.2708
+            ]
+          },
+          {
+            "setting": 36,
+            "read_ms": 377.0417,
+            "the_ladder_says_ms": 380.0,
+            "the_record_also_read_ms": [
+              376.9583,
+              377.1042
+            ]
+          },
+          {
+            "setting": 40,
+            "read_ms": 396.875,
+            "the_ladder_says_ms": 400.0,
+            "the_record_also_read_ms": [
+              950.4792,
+              950.3125
+            ]
+          },
+          {
+            "setting": 44,
+            "read_ms": 416.7292,
+            "the_ladder_says_ms": 420.0,
+            "the_record_also_read_ms": [
+              950.6875,
+              416.7917
+            ]
+          },
+          {
+            "setting": 48,
+            "read_ms": 436.5625,
+            "the_ladder_says_ms": 440.0,
+            "the_record_also_read_ms": [
+              436.5,
+              436.6458
+            ]
+          },
+          {
+            "setting": 52,
+            "read_ms": 456.4167,
+            "the_ladder_says_ms": 460.0,
+            "the_record_also_read_ms": [
+              951.0833,
+              494.6667
+            ]
+          },
+          {
+            "setting": 56,
+            "read_ms": 476.25,
+            "the_ladder_says_ms": 480.0,
+            "the_record_also_read_ms": [
+              476.1875,
+              476.3333
+            ]
+          },
+          {
+            "setting": 60,
+            "read_ms": 496.1042,
+            "the_ladder_says_ms": 500.0,
+            "the_record_also_read_ms": [
+              950.9792,
+              496.0208
+            ]
+          },
+          {
+            "setting": 64,
+            "read_ms": 496.1042,
+            "the_ladder_says_ms": 520.0,
+            "the_record_also_read_ms": [
+              496.0208,
+              950.4375
+            ]
+          },
+          {
+            "setting": 68,
+            "read_ms": 504.0417,
+            "the_ladder_says_ms": 540.0,
+            "the_record_also_read_ms": [
+              950.8125,
+              951.0208
+            ]
+          },
+          {
+            "setting": 72,
+            "read_ms": 523.875,
+            "the_ladder_says_ms": 560.0,
+            "the_record_also_read_ms": [
+              523.8125,
+              523.9583
+            ]
+          },
+          {
+            "setting": 76,
+            "read_ms": 543.7292,
+            "the_ladder_says_ms": 580.0,
+            "the_record_also_read_ms": [
+              407.0208,
+              951.2292
+            ]
+          },
+          {
+            "setting": 80,
+            "read_ms": 563.5625,
+            "the_ladder_says_ms": 600.0,
+            "the_record_also_read_ms": [
+              950.3542,
+              563.5
+            ]
+          },
+          {
+            "setting": 80,
+            "read_ms": 563.5625,
+            "the_ladder_says_ms": 600.0,
+            "the_record_also_read_ms": [
+              563.5,
+              563.6458
+            ]
+          },
+          {
+            "setting": 84,
+            "read_ms": 603.25,
+            "the_ladder_says_ms": 640.0,
+            "the_record_also_read_ms": [
+              950.9583,
+              347.6875
+            ]
+          },
+          {
+            "setting": 88,
+            "read_ms": 642.9375,
+            "the_ladder_says_ms": 680.0,
+            "the_record_also_read_ms": [
+              950.9583,
+              643.0208
+            ]
+          },
+          {
+            "setting": 92,
+            "read_ms": 682.6458,
+            "the_ladder_says_ms": 720.0,
+            "the_record_also_read_ms": [
+              268.125,
+              682.5625
+            ]
+          },
+          {
+            "setting": 96,
+            "read_ms": 722.3333,
+            "the_ladder_says_ms": 760.0,
+            "the_record_also_read_ms": [
+              950.3542,
+              950.2083
+            ]
+          },
+          {
+            "setting": 100,
+            "read_ms": 762.0208,
+            "the_ladder_says_ms": 800.0,
+            "the_record_also_read_ms": [
+              762.0833,
+              951.2292
+            ]
+          },
+          {
+            "setting": 104,
+            "read_ms": 801.7083,
+            "the_ladder_says_ms": 840.0,
+            "the_record_also_read_ms": [
+              951.0625,
+              149.3542
+            ]
+          },
+          {
+            "setting": 108,
+            "read_ms": 841.3958,
+            "the_ladder_says_ms": 880.0,
+            "the_record_also_read_ms": [
+              950.8125,
+              950.9583
+            ]
+          },
+          {
+            "setting": 112,
+            "read_ms": 881.0833,
+            "the_ladder_says_ms": 920.0,
+            "the_record_also_read_ms": [
+              70.0625,
+              951.2292
+            ]
+          },
+          {
+            "setting": 115,
+            "read_ms": 910.8333,
+            "the_ladder_says_ms": 950.0,
+            "the_record_also_read_ms": [
+              950.6875,
+              950.3958
+            ]
+          },
+          {
+            "setting": 116,
+            "read_ms": 920.7708,
+            "the_ladder_says_ms": 960.0,
+            "the_record_also_read_ms": [
+              950.5417,
+              950.3125
+            ]
+          },
+          {
+            "setting": 120,
+            "read_ms": 960.4583,
+            "the_ladder_says_ms": 1000.0,
+            "the_record_also_read_ms": [
+              950.7708,
+              221.7917
+            ]
+          },
+          {
+            "setting": 124,
+            "read_ms": 960.4583,
+            "the_ladder_says_ms": 1000.0,
+            "the_record_also_read_ms": [
+              95.9583,
+              221.7917
+            ]
+          },
+          {
+            "setting": 127,
+            "read_ms": 960.4583,
+            "the_ladder_says_ms": 1000.0,
+            "the_record_also_read_ms": [
+              950.8125,
+              950.7083
+            ]
+          }
+        ],
+        "the_reading_is_quantised_to_ms": 0.020833,
+        "the_run_measured_its_own_floor_ms": 0.0,
+        "its_power_on_byte": 60,
+        "as_a_fraction_of_the_ladder": {
+          "over_every_setting": {
+            "n": 35,
+            "median": 0.960458,
+            "min": 0.933411,
+            "max": 0.992235
+          },
+          "at_or_below_its_power_on_byte": {
+            "n": 16,
+            "median": 0.992208,
+            "min": 0.992188,
+            "max": 0.992235
+          },
+          "above_it": {
+            "n": 19,
+            "median": 0.952526,
+            "min": 0.933411,
+            "max": 0.960458
+          }
+        },
+        "ms_short_of_the_ladder": {
+          "over_every_setting": {
+            "n": 35,
+            "median": 35.9583,
+            "min": 1.5625,
+            "max": 39.5417
+          },
+          "at_or_below_its_power_on_byte": {
+            "n": 16,
+            "median": 2.8125,
+            "min": 1.5625,
+            "max": 3.8958
+          },
+          "above_it": {
+            "n": 19,
+            "median": 37.6667,
+            "min": 23.8958,
+            "max": 39.5417
+          }
+        }
+      }
+    ],
+    "the_cut_floor_against_round": {
+      "settings_where_the_two_differ": 61,
+      "floor_closer": 61,
+      "round_closer": 0,
+      "per_record": [
+        {
+          "record": "01-50-03-every-step-of-a-delay-time.json",
+          "ladder": "time3",
+          "settings_where_the_two_differ": 20,
+          "floor_closer": 20,
+          "round_closer": 0,
+          "median_ms_floor": 0.0104,
+          "median_ms_round": 0.0312
+        },
+        {
+          "record": "01-51-03-does-the-range-pick-the-table.json",
+          "ladder": "time3",
+          "settings_where_the_two_differ": 1,
+          "floor_closer": 1,
+          "round_closer": 0,
+          "median_ms_floor": 0.0104,
+          "median_ms_round": 0.0417
+        },
+        {
+          "record": "01-40-03-every-step-of-a-pre-delay.json",
+          "ladder": "pre_delay",
+          "settings_where_the_two_differ": 20,
+          "floor_closer": 20,
+          "round_closer": 0,
+          "median_ms_floor": 0.0104,
+          "median_ms_round": 0.0312
+        },
+        {
+          "record": "01-57-03-every-step-of-a-3d-delay.json",
+          "ladder": "time3",
+          "settings_where_the_two_differ": 20,
+          "floor_closer": 20,
+          "round_closer": 0,
+          "median_ms_floor": 0.0104,
+          "median_ms_round": 0.0312
+        }
+      ]
+    },
+    "rate_tables_against_the_records": [
+      {
+        "record": "01-21-07-rate-curve-slow.json",
+        "type": "01 21",
+        "address": "40 03 07",
+        "table": "wide",
+        "settings": 4,
+        "median_hz": 0.0005,
+        "worst_hz": 0.001
+      },
+      {
+        "record": "01-21-07-rate-curve-low.json",
+        "type": "01 21",
+        "address": "40 03 07",
+        "table": "wide",
+        "settings": 88,
+        "median_hz": 0.0006,
+        "worst_hz": 0.0033
+      },
+      {
+        "record": "01-21-07-rate-curve-every.json",
+        "type": "01 21",
+        "address": "40 03 07",
+        "table": "wide",
+        "settings": 32,
+        "median_hz": 0.0008,
+        "worst_hz": 0.0019
+      },
+      {
+        "record": "04-00-0F-which-rate-table-005to640.json",
+        "type": "04 00",
+        "address": "40 03 0F",
+        "table": "narrow",
+        "settings": 4,
+        "median_hz": 0.0006,
+        "worst_hz": 0.0007
+      },
+      {
+        "record": "04-03-0D-which-rate-table-005to640.json",
+        "type": "04 03",
+        "address": "40 03 0D",
+        "table": "narrow",
+        "settings": 4,
+        "median_hz": 0.0008,
+        "worst_hz": 0.001
+      },
+      {
+        "record": "01-20-04-which-rate-table-005to100.json",
+        "type": "01 20",
+        "address": "40 03 04",
+        "table": "wide",
+        "settings": 4,
+        "median_hz": 0.0015,
+        "worst_hz": 0.0026
+      },
+      {
+        "record": "02-01-09-rate-curve-0201.json",
+        "type": "02 01",
+        "address": "40 03 09",
+        "table": "wide",
+        "settings": 13,
+        "median_hz": 0.0011,
+        "worst_hz": 0.5479
+      },
+      {
+        "record": "05-00-0F-which-rate-table-005to640.json",
+        "type": "05 00",
+        "address": "40 03 0F",
+        "table": "narrow",
+        "settings": 4,
+        "median_hz": 0.0047,
+        "worst_hz": 0.0066
+      },
+      {
+        "record": "02-01-09-where-the-table-bends.json",
+        "type": "02 01",
+        "address": "40 03 09",
+        "table": "wide",
+        "settings": 6,
+        "median_hz": 0.0014,
+        "worst_hz": 0.0026
+      }
+    ],
+    "tables_no_reached_slot_uses": [
+      {
+        "table": "delay_time.time2",
+        "columns": [
+          "*3"
+        ],
+        "slots_whose_printed_spelling_names_it": [
+          {
+            "type": "01 54",
+            "address": "40 03 03",
+            "printed_values": "*3",
+            "the_type_is_in_the_inferences_list": false,
+            "the_address_is_in_the_inferences_list": true
+          }
+        ],
+        "kind": "every slot carrying the column was let go by the intersection"
+      }
+    ],
+    "records_whose_name_and_prepared_state_disagree": [],
+    "the_inference_each_class_rests_on": [
+      {
+        "conversion_class": "rate",
+        "file": "rate-the-byte-indexes-a-printed-table.json",
+        "state": "standing",
+        "rounds": 3
+      },
+      {
+        "conversion_class": "delay_time",
+        "file": "time-the-byte-indexes-a-ladder-cut-to-whole-samples.json",
+        "state": "standing",
+        "rounds": 2
+      },
+      {
+        "conversion_class": "freq",
+        "file": "freq-the-byte-indexes-a-third-octave-table.json",
+        "state": "standing",
+        "rounds": 3
+      },
+      {
+        "conversion_class": "gain",
+        "file": "gain-the-byte-is-a-decibel-a-step.json",
+        "state": "standing",
+        "rounds": 1
+      },
+      {
+        "conversion_class": "level",
+        "file": "level-the-multiplier-is-a-seventh-bit-table.json",
+        "state": "standing",
+        "rounds": 3
+      },
+      {
+        "conversion_class": "width",
+        "file": "width-the-byte-halves-the-printed-table.json",
+        "state": "standing",
+        "rounds": 1
+      },
+      {
+        "conversion_class": "wave",
+        "file": "wave-the-byte-picks-one-of-five-fixed-shapes.json",
+        "state": "standing",
+        "rounds": 2
+      },
+      {
+        "conversion_class": "pan",
+        "file": "pan-one-multiplier-a-side-under-a-term-added-after-it.json",
+        "state": "standing",
+        "rounds": 2
+      },
+      {
+        "conversion_class": "balance",
+        "file": "balance-two-ramps-that-meet-at-full.json",
+        "state": "standing",
+        "rounds": 3
+      },
+      {
+        "conversion_class": "azimuth",
+        "file": "azimuth-a-byte-rounded-to-a-quarter-and-clamped.json",
+        "state": "standing",
+        "rounds": 3
+      },
+      {
+        "conversion_class": "accel",
+        "file": "0122-an-acceleration-byte-is-four-bits-and-a-multiplier.json",
+        "state": "standing",
+        "rounds": 2
+      }
+    ]
+  },
+  "notes": [
+    "freq: the 200 - 6.3k table's third entry is the one entry of the three tables whose reading is further from its own series than the reading separates -- 279.1 Hz against 315.0, 0.1746 octaves. Flagged unit_specific.",
+    "delay: 01 54 40 03 03 cites the time2 column and is not reached, its type being outside the claim's list. Read against that column at 35 settings it does not return it, and what it returns has a shape: at or below the byte it powers up at (60) it is a median 0.992208 of the column over 16 settings, spread 0.992188-0.992235, where 127/128 is 0.992188; above that byte it is 0.952526 over 19, a further median 37.6667 ms short. So a scaling plus a constant subtraction above a threshold, rather than the single constant a residual in milliseconds reports. **Nothing here decides whether that is a second law of this slot's or a shape a few points fall into** -- the archive's own claim reads the shortfall as an artifact of which direction the sweep approached from, and separating the two wants a reading of the unit that this cannot produce. Recorded so the observation is not lost; not acted on, and the slot stays unreached either way, since the column unscaled is wrong under both readings."
+  ]
+}
