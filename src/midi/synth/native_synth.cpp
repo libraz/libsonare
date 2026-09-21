@@ -50,20 +50,20 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // KS strings need a per-voice delay slab (the only allocation site; voices
   // attach their span at note-on).
   ks_capacity_ = ks_buffer_capacity(sample_rate_);
-  sympathetic_active_ = false;
+  guitar_halo_active_ = false;
   if (any_engine || config_.patch.mode == SynthEngineMode::kKarplusStrong) {
     ks_buffers_.assign(pool_.size() * static_cast<size_t>(ks_slab_capacity(sample_rate_)), 0.0f);
-    // Sympathetic-string "sound halo": a shared bank tuned to the standard-
-    // tuning open strings (E2 A2 D3 G3 B3 E4) plus their low harmonics — the
+    // Sympathetic-string "sound halo": a bank tuned to the standard-tuning
+    // open strings (E2 A2 D3 G3 B3 E4) plus their low harmonics — the
     // undamped strings ringing behind the played note. Gated by the same
     // sustain-pedal state as the piano board's bank (process_impl's
     // damper_open): a guitarist's hand damps the open strings unless
-    // something is holding them open. Bus-level, so it follows the configured
-    // patch: a GM render mixes many programs through one bus and cannot carry
-    // one program's halo.
+    // something is holding them open. Armed here for a configured
+    // Karplus-Strong patch; a GM render arms it lazily at the first
+    // qualifying note-on instead, since the program is not known yet.
     if (config_.patch.mode == SynthEngineMode::kKarplusStrong && config_.patch.ks.sympathetic) {
-      resonance_.prepare_guitar_sympathetic(sample_rate_);
-      sympathetic_active_ = true;
+      guitar_halo_.prepare_guitar_sympathetic(sample_rate_);
+      guitar_halo_active_ = true;
     }
   } else {
     ks_buffers_.clear();
@@ -191,9 +191,10 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
                                   : amp.release_ms;
   tail_samples_ = DahdsrEnvelope::release_tail_samples(
       sample_rate_, gm_tables ? gm_fallback_max_release_ms() : patch_tail_ms);
-  if (sympathetic_active_) {
-    // The shared sympathetic bank keeps ringing after the last voice releases;
-    // fold its halo t60 into the tail so a bounce does not clip the sound halo.
+  if (guitar_halo_active_ || gm_tables) {
+    // The halo bank keeps ringing after the last voice releases; fold its t60
+    // into the tail so a bounce does not clip it. GM is included because
+    // prepare() cannot know which program a later note-on will pick.
     tail_samples_ += static_cast<int64_t>(sample_rate_ * kKsSympatheticRingS);
   }
   if (piano_mode_ || gm_tables) {
@@ -217,10 +218,15 @@ void NativeSynth::reset() {
   dc_y1_ = {};
   resonance_.reset();
   soundboard_.reset();
+  guitar_halo_.reset();
   // A GM-mode body was tuned by a note-on, so it goes back to untuned; a
   // configured piano keeps the tuning prepare() gave it.
   piano_body_active_ = piano_mode_;
   if (!piano_mode_) piano_body_soundboard_ = -1.0f;
+  // Same rule for the halo: a GM-mode arming goes back to unarmed, while a
+  // configured Karplus-Strong sympathetic patch keeps the arming prepare() gave it.
+  guitar_halo_active_ =
+      config_.patch.mode == SynthEngineMode::kKarplusStrong && config_.patch.ks.sympathetic;
   wind_.reset();
   swell_lp_l_ = 0.0f;
   swell_lp_r_ = 0.0f;
@@ -470,9 +476,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // prepare(); re-tuned only when the resolved patch asks for a different board
   // so the bank keeps its state across notes. Allocation-free, like the lazy
   // per-part prepare on the Sf2Player fallback path.
-  // Skipped when a KS patch already owns the shared bank as its open-string
-  // halo: one bank cannot be both, and the halo was configured explicitly.
-  if (patch->mode == SynthEngineMode::kPiano && !sympathetic_active_) {
+  if (patch->mode == SynthEngineMode::kPiano) {
     if (piano_body_soundboard_ != patch->piano.soundboard) {
       piano_body_soundboard_ = patch->piano.soundboard;
       soundboard_.prepare(sample_rate_, patch->piano.soundboard);
@@ -483,6 +487,15 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
     // than driven by. After any prepare() above, which clears the network.
     soundboard_.strike(voice->piano.case_strike());
     soundboard_.strike_board(voice->piano.board_strike());
+  }
+  // Bus-level open-string halo, the same lazy-arming rule as the piano body
+  // above but for a Karplus-Strong voice that asks for it. Guarded so an
+  // already-armed bank (configured, or armed by an earlier note-on) is never
+  // re-prepared, which would clear its ringing state.
+  if (patch->mode == SynthEngineMode::kKarplusStrong && patch->ks.sympathetic &&
+      !guitar_halo_active_) {
+    guitar_halo_.prepare_guitar_sympathetic(sample_rate_);
+    guitar_halo_active_ = true;
   }
   channels_[ch].last_freq_hz = voice->base_freq_hz;
   // A second note on a member channel is what makes the channel's bend and
@@ -622,13 +635,15 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
   recharge_percussion(ch);
   if (pool_.active_count() == 0) {
     // All Sound Off means silence NOW, and the instrument's bus resonators are
-    // part of its output: the piano soundboard and sympathetic bank ring for
-    // ~1.5 s and the swell one-pole holds a residual, so killing the voices
-    // alone would leak an audible wash past the stop. They are bus-level (all
-    // 16 channels feed one), so they are cleared only once nothing is sounding
-    // on any channel. The DC blocker goes with them for the same reason.
+    // part of its output: the piano soundboard, the sympathetic bank and the
+    // guitar halo ring for ~1.5 s and the swell one-pole holds a residual, so
+    // killing the voices alone would leak an audible wash past the stop. They
+    // are bus-level (all 16 channels feed one), so they are cleared only once
+    // nothing is sounding on any channel. The DC blocker goes with them for
+    // the same reason.
     resonance_.reset();
     soundboard_.reset();
+    guitar_halo_.reset();
     swell_lp_l_ = 0.0f;
     swell_lp_r_ = 0.0f;
     dc_x1_ = {};
@@ -956,9 +971,9 @@ void NativeSynth::process_impl(float* const* channels,
   // Sympathetic resonance is gated by the dampers being lifted on any channel
   // (sustain pedal down). Sustain state is fixed for the block (events are
   // applied before process()). Shared by the piano board and the guitar
-  // halo below -- one bus-level bank, one gate rule.
+  // halo below -- two bus-level banks, one gate rule.
   bool damper_open = false;
-  if (piano_body_active_ || sympathetic_active_) {
+  if (piano_body_active_ || guitar_halo_active_) {
     for (const ChannelState& ch : channels_) {
       if (ch.sustain) {
         damper_open = true;
@@ -1007,6 +1022,12 @@ void NativeSynth::process_impl(float* const* channels,
     // at zero, so the sum is unchanged.
     float piano_l = 0.0f;
     float piano_r = 0.0f;
+    // Guitar/harp/banjo halo drive: the same isolation as the piano leg above,
+    // so drums and brass sharing a GM bus never reach a bank tuned to open
+    // strings. Unlike the piano leg this one stays IN mix_l/mix_r too — the
+    // halo is additive to the dry KS voice rather than replacing it.
+    float guitar_l = 0.0f;
+    float guitar_r = 0.0f;
     for (NativeSynthVoice& v : pool_) {
       if (!v.active) continue;
       // The channel's, except on a member channel sounding more than one note,
@@ -1022,6 +1043,11 @@ void NativeSynth::process_impl(float* const* channels,
       } else {
         mix_l += voice_l;
         mix_r += voice_r;
+        if (guitar_halo_active_ && v.patch != nullptr &&
+            v.patch->mode == SynthEngineMode::kKarplusStrong && v.patch->ks.sympathetic) {
+          guitar_l += voice_l;
+          guitar_r += voice_r;
+        }
       }
       if (source_render) {
         add_output(target_for(v.source_track_id), i, voice_l * config_.gain,
@@ -1032,6 +1058,8 @@ void NativeSynth::process_impl(float* const* channels,
     mix_r *= config_.gain;
     piano_l *= config_.gain;
     piano_r *= config_.gain;
+    guitar_l *= config_.gain;
+    guitar_r *= config_.gain;
     const float dry_l = mix_l + piano_l;
     const float dry_r = mix_r + piano_r;
     // Swell box shutter: a one-pole lowpass on the bus as the louvres close.
@@ -1043,7 +1071,9 @@ void NativeSynth::process_impl(float* const* channels,
     }
     // Shared modal soundboard plus pedal-gated sympathetic resonance, both
     // driven by the summed dry piano mix. The sympathetic bank returns to the
-    // centre; the board does not, because its two radiation paths differ.
+    // centre; the board does not, because its two radiation paths differ. Runs
+    // independently of the halo below them, since GM can voice a piano and a
+    // guitar together.
     if (piano_body_active_) {
       // Radiation split: the board returns the phase-diffused complement of
       // the direct share (plus the modal colour), so most of the note reaches
@@ -1056,14 +1086,17 @@ void NativeSynth::process_impl(float* const* channels,
       const float symp = resonance_.process(soundboard_.last_diffused(), damper_open);
       mix_l += kPianoDirectGain * piano_l + body + side + symp;
       mix_r += kPianoDirectGain * piano_r + body - side + symp;
-    } else if (sympathetic_active_) {
+    }
+    if (guitar_halo_active_) {
       // Plucked-string sound halo: the open strings ring behind the note,
       // gated by damper_open exactly as the piano board is above -- a guitar's
       // open strings are damped unless the sustain pedal is holding them open.
-      // Skipped entirely for KS patches that did not opt in, so every existing
-      // KS voicing renders bit-identically.
-      const float dry_mono = 0.5f * (mix_l + mix_r);
-      const float symp = resonance_.process(dry_mono, damper_open);
+      // Driven by guitar_l/guitar_r alone (the halo-eligible voices' own dry
+      // mix), never by the rest of the GM bus. Skipped entirely when no
+      // eligible voice has ever sounded, so every existing KS voicing with no
+      // halo renders bit-identically.
+      const float dry_mono = 0.5f * (guitar_l + guitar_r);
+      const float symp = guitar_halo_.process(dry_mono, damper_open);
       mix_l += symp;
       mix_r += symp;
     }

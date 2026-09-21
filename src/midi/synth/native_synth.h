@@ -794,16 +794,17 @@ class NativeSynth final : public MidiInstrument {
   /// allocated in prepare() only when the patch is a piano.
   std::vector<float> piano_buffers_;
   int piano_string_capacity_ = 0;
-  /// Shared sympathetic resonance bank. Piano patches drive it pedal-gated (the
-  /// sustain-pedal sound halo); Karplus-Strong patches that opt in (patch.ks.
-  /// sympathetic) reuse the same bank tuned to the open-string set, driven by the
-  /// same sustain state — a hand damping the played string damps the open ones
-  /// with it. kPiano and kKarplusStrong are mutually exclusive modes, so one bank
-  /// serves both without a second allocation. The Karplus-Strong side is armed in
-  /// prepare() from this synth's own configured patch, so it is silent when the
-  /// synth is driven by per-note GM program resolution; Sf2Player arms its own
-  /// copy per part at note-on instead.
+  /// Shared sympathetic resonance bank, piano patches only: driven pedal-gated
+  /// (the sustain-pedal sound halo), tuned in prepare() for a configured piano
+  /// or lazily at the first GM piano note-on.
   PianoResonanceBank resonance_;
+  /// Shared open-string sound halo for Karplus-Strong patches that opt in
+  /// (patch.ks.sympathetic): a second bank rather than reusing the one above,
+  /// since GM mode can voice a piano and a guitar together and each needs its
+  /// own tuning and its own ring state. Armed in prepare() from this synth's
+  /// own configured patch, or lazily at the first qualifying GM note-on
+  /// (guitar_halo_active_); Sf2Player arms its own copy per part instead.
+  PianoResonanceBank guitar_halo_;
   /// Shared modal soundboard body (piano patches only).
   PianoSoundboard soundboard_;
   /// The configured patch is a piano, so the bus body is tuned in prepare().
@@ -820,10 +821,11 @@ class NativeSynth final : public MidiInstrument {
   /// a note-on re-prepares only when the resolved patch asks for a different
   /// board — the bank keeps its state across notes otherwise.
   float piano_body_soundboard_ = -1.0f;
-  /// A Karplus-Strong patch has opted into the shared sympathetic bank
-  /// (patch.ks.sympathetic). false leaves every existing KS voicing on its
-  /// original render path (the resonance branch is skipped entirely).
-  bool sympathetic_active_ = false;
+  /// The halo bank above is armed and should be driven this render: true for
+  /// a configured Karplus-Strong sympathetic patch from prepare(), or set
+  /// lazily at the first qualifying GM note-on (mirrors piano_body_active_).
+  /// False leaves every existing KS voicing on its original render path.
+  bool guitar_halo_active_ = false;
   /// Pipe-organ delay slab: one kMaxPipeRanks-pipe slab per voice slot,
   /// allocated in prepare() only when the patch is a pipe organ.
   std::vector<float> pipe_organ_buffers_;
