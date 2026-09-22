@@ -486,12 +486,12 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept {
     case 0x0173:  // Lo-Fi 2 -> the bit-depth / sample-rate reducer.
       return "saturation.bitcrusher";
     default:
-      // A single-effect type is refused when its identity is carried by
-      // something this tree cannot supply — DSP that does not exist, or a
-      // parameter whose position the transcribed manual does not give:
-      //   0x0103 Humanizer: a vowel formant filter whose identity IS the vowel,
-      //     and no parameter position for the vowel is transcribed. A fixed
-      //     vowel would be a strong resonant filter chosen at random.
+      // A single-effect type is refused when its identity is carried by DSP
+      // this tree does not have:
+      //   0x0103 Humanizer: a vowel formant filter whose identity IS the vowel.
+      //     The vowel has a parameter position of its own — slot 2, a five-value
+      //     enumeration — so what is missing is the formant filter to receive
+      //     it. A fixed vowel would be a strong resonant filter chosen at random.
       //   0x0170 3D Auto / 0x0171 3D Manual: binaural panners, no stock insert.
       //     3D Chorus (0x0144) and 3D Delay (0x0157) map because their 3D stage
       //     sits on an effect that exists; here the 3D stage IS the effect.
