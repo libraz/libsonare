@@ -631,17 +631,6 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
       // Distortion -> the amp model on its high-gain voicing (ampModel 2), which
       // saturates earlier and harder; a higher drive floor than the overdrive.
       return gs_drive_json(efx, 2, 0.45f, 0.55f);
-    case 0x0122: {
-      // Rotary. The glide's time constant is one control for the pair, so it
-      // follows the horn's acceleration byte. The archive times no rotor — the
-      // divisor is read from where a rotor stopped — so the constant follows
-      // from the loop the acceleration claim names.
-      const uint8_t horn = efx_byte(efx, 6);
-      ParamsJson out;
-      out.number("accelTauS", gs_efx_accel_tau_s(horn));
-      out.number("decelTauS", gs_efx_accel_tau_s(horn));
-      return out.str();
-    }
     case 0x0123:  // Stereo Flanger: its pre-filter was read to be the chorus's section.
     case 0x0142: {
       // Stereo Chorus. The section in front of the delay is one pole whose shape

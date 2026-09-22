@@ -1233,6 +1233,27 @@ bool law_reads(const s::GsEfxBinding& row, uint8_t byte, const std::string& key,
 
 }  // namespace
 
+TEST_CASE("the chain skeleton writes no control a binding row owns", "[midi][sf2][gs][efxtypes]") {
+  // A key the skeleton wrote outranks the row naming it, and while the two
+  // agree in value nothing downstream can tell which of them wrote it. So the
+  // skeleton's own object is read on its own, at every swept byte, and may
+  // carry none of the keys its type's rows bind.
+  Tally tally;
+  for (const s::GsEfxBinding& row : s::kGsEfxBindings) {
+    const std::string key(s::kGsEfxBindingKeys[row.key]);
+    for (uint8_t value : kValues) {
+      GsEfx efx = make_efx(row.type);
+      efx.params[row.slot] = value;
+      double unused = 0.0;
+      tally.same(!json_number(gs_efx_insert_params(efx), key, unused),
+                 hex4(row.type) + " slot " + std::to_string(row.slot) + ": the skeleton writes " +
+                     key + ", which a binding row owns");
+    }
+  }
+  WARN("comparisons: " << tally.count());
+  REQUIRE(tally.count() >= static_cast<int>(s::kGsEfxBindings.size()));
+}
+
 TEST_CASE("every binding row reaches its control carrying its own law's reading",
           "[midi][sf2][gs][efxtypes]") {
   Tally tally;

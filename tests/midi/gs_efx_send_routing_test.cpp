@@ -355,10 +355,10 @@ struct Unautomated {
   std::string_view reason;
 };
 
-/// Two are lengths an insert sizes a buffer by in prepare(); the other two are
-/// the rotary's acceleration fields, the glide's shape rather than anything a
+/// Two are lengths an insert sizes a buffer by in prepare(); the rest are the
+/// rotary's acceleration fields, the glide's shape rather than anything a
 /// running rotor rides.
-constexpr std::array<Unautomated, 4> kUnautomated = {{
+constexpr std::array<Unautomated, 6> kUnautomated = {{
     {"effects.reverb.dattorro", "preDelayMs",
      "the pre-delay line is sized by it in prepare(), so a live write would allocate on the audio "
      "thread; an edit of the byte rebuilds the reverb, which is the cost the insert already "
@@ -371,6 +371,11 @@ constexpr std::array<Unautomated, 4> kUnautomated = {{
      "one byte writes this with accelTauS and decelTauS, and a time constant read mid-glide has "
      "no defined arrival, so publishing this half alone would apply the byte partly in place and "
      "partly by rebuild"},
+    {"effects.modulation.rotary", "accelTauS",
+     "a time constant read on the audio thread mid-glide has no defined arrival, so the insert "
+     "offers no id for it and an edit of the byte rebuilds the rotor"},
+    {"effects.modulation.rotary", "decelTauS",
+     "the same byte writes it with accelTauS, for the same reason"},
     {"effects.modulation.rotary", "drumUndershootHz",
      "its byte drives nothing else, so it could be ridden; the drum rotor publishes what the horn "
      "rotor publishes, and one rotor automating a field the other cannot is a difference in the "
@@ -448,9 +453,9 @@ TEST_CASE("every EFX binding drives a control its insert can automate", "[midi][
     CHECK(used.count(i) != 0);
   }
 
-  // A floor rather than an equality: the lane adjudicating the remaining
-  // parameters adds controls, and a ceiling would go red on it finishing.
+  // A floor rather than an equality: binding one more control is not a
+  // regression, and a ceiling would read it as one.
   WARN("distinct (insert, control) pairs checked: " << checked);
-  REQUIRE(checked >= 38);
+  REQUIRE(checked >= 40);
 }
 #endif  // SONARE_WITH_FX && SONARE_WITH_MASTERING

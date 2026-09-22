@@ -505,11 +505,10 @@ std::string_view gs_efx_insert_name(uint16_t type) noexcept;
 /// The skeleton's own JSON params for a single-effect type's insert (for
 /// `insert_factory` / make_insert): band shapes and fixed corners, mode
 /// selectors, and the bytes the skeleton reads under a law of its own (the
-/// Overdrive/Distortion drive, the pitch shifter's balance, the rotary's glide
-/// time). Every byte a measured law reaches is written by the binding table
-/// instead, which gs_efx_insert_chain applies, so this object alone is not the
-/// type's realised parameters. A type with nothing of the skeleton's returns
-/// "{}".
+/// Overdrive/Distortion drive, the pitch shifter's balance). Every byte a
+/// measured law reaches is written by the binding table instead, which
+/// gs_efx_insert_chain applies, so this object alone is not the type's realised
+/// parameters. A type with nothing of the skeleton's returns "{}".
 std::string gs_efx_insert_params(const GsEfx& efx);
 
 /// One stage of a realised EFX chain: an `insert_factory` processor name and

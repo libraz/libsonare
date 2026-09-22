@@ -931,6 +931,6 @@ inline constexpr int kGsEfxJoinUnreadableRows = 0;
 
 /// Controls the assigned rows declare, which is one per key and so larger
 /// than the assigned row count as soon as a row names several.
-inline constexpr int kGsEfxJoinDeclaredKeys = 304;
+inline constexpr int kGsEfxJoinDeclaredKeys = 308;
 
 }  // namespace sonare::midi::synth

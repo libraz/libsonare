@@ -143,7 +143,7 @@
 {"type": "02 0C", "slot": 10, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
 {"type": "02 0C", "slot": 11, "state": "the rotary insert has one rate per rotor, and the speed switch picks which of the two rate bytes it follows", "named_by": "the parameter list"},
 {"type": "02 0C", "slot": 12, "state": "the rotary insert has one rate per rotor, and the speed switch picks which of the two rate bytes it follows", "named_by": "the parameter list"},
-{"type": "02 0C", "slot": 13, "class": "accel", "table": "rotor", "stage": "effects.modulation.rotary", "key": "undershootHz", "named_by": "the parameter list"},
+{"type": "02 0C", "slot": 13, "class": "accel", "table": "rotor", "stage": "effects.modulation.rotary", "keys": ["undershootHz", "accelTauS", "decelTauS"], "note": "the glide's time constant is one control for the two rotors, so it follows the horn's byte", "named_by": "the parameter list"},
 {"type": "02 0C", "slot": 14, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
 {"type": "02 0C", "slot": 15, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
 {"type": "02 0C", "slot": 16, "state": "the rotary insert has no speed switch", "named_by": "the parameter list"},
