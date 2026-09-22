@@ -306,6 +306,43 @@ export GS_EFX_SR_COEFFICIENT_LINT_PY
 GS_EFX_SKELETON_CONSTANTS := 6
 GS_EFX_SKELETON_CONSTANT_RE := constexpr float k[A-Za-z]*(Hz|DryWet|ChainHz) =
 
+# The insertion-effect coverage tally is described in three documents, each for
+# a different reader, and a tally described three ways drifts three ways. So the
+# line they quote is checked against the tool that prints it rather than against
+# a copy of itself: rename a form in coverage.py and every document that did not
+# follow goes red. The counts are deliberately NOT in the documents -- they move
+# with every parameter anyone adjudicates, and a hand-maintained number in three
+# files is stale the day after it is written.
+define GS_EFX_COVERAGE_LINE_LINT_PY
+import pathlib
+import re
+import sys
+
+DOCS = ["CONTRIBUTING.md", "src/midi/synth/docs/gs.md", "tools/gs/docs/efx-tables.md"]
+LINE = ("GS EFX coverage: printed=<n> translated=<n> state=<n> unmapped=<n> "
+        "unreadable=<n> builder=<n>")
+
+source = pathlib.Path("tools/gs/coverage.py").read_text()
+try:
+    start = source.index('"GS EFX coverage: ')
+    end = source.index(".format(", start)
+except ValueError:
+    sys.exit("coverage.py no longer prints a line beginning 'GS EFX coverage: '")
+
+# The adjacent string literals the tally is spelled across, with each field
+# placeholder collapsed to the one the documents carry.
+printed = re.sub(r"\{\w+\}", "<n>", "".join(re.findall(r'"([^"]*)"', source[start:end])))
+if printed != LINE:
+    sys.exit(f"coverage.py prints\n  {printed}\nand the documents carry\n  {LINE}")
+
+missing = [doc for doc in DOCS if LINE not in pathlib.Path(doc).read_text()]
+if missing:
+    sys.exit("the GS EFX coverage line is missing from: " + ", ".join(missing))
+
+print(f"GS EFX coverage line: current with coverage.py, in {len(DOCS)} documents")
+endef
+export GS_EFX_COVERAGE_LINE_LINT_PY
+
 lint:
 	cd bindings/wasm && yarn lint
 	cd bindings/node && yarn lint
@@ -352,6 +389,7 @@ lint:
 		exit 1; \
 	fi; \
 	echo "gs_layer.cpp hand-placed EFX constants: $$found (pinned)"
+	python3 -c "$$GS_EFX_COVERAGE_LINE_LINT_PY"
 # Both headers are rendered from committed inputs alone, so a clone can re-run
 # them and a drifted one is a static fact rather than something a build reports.
 	$(MAKE) gs-efx-bindings-check
@@ -769,6 +807,7 @@ conformance:
 	python3 tests/conformance/check_bank_policy.py
 	python3 -m unittest tests/conformance/test_bank_policy.py
 	python3 -m unittest tests/conformance/test_gs_program_census.py
+	python3 -m unittest tests/conformance/test_gs_efx_coverage.py
 	python3 -m unittest tests/conformance/test_c_api_out_param_init.py
 	python3 -m unittest tests/conformance/test_c_api_pointer_contracts.py
 	python3 -m unittest tests/conformance/test_c_api_header_self_contained.py
