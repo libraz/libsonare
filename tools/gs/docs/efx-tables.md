@@ -22,6 +22,16 @@ The design this implements splits coverage into three, because `gs.md`'s own rul
 - **translatable** — reached, and the insert the type maps to has a control of the same physical unit. Needs the insert side, so it is `null` here.
 - **translated** — translatable, and the GS layer actually emits the JSON key. Needs the layer, so it is `null` here.
 
+The header names the first two `kGsEfxPrinted` and `kGsEfxMeasured`. `reach.reached` in the JSON is the name the schema opened with for the second and is kept beside it, so a reader holding an older file finds the number under either spelling.
+
+**The other two are answered on the libsonare side, by `make gs-efx-coverage`.** It walks the hand-written binding files under `tools/gs/efx-bindings/` and adjudicates every printed (type, slot) into exactly one of five forms:
+
+```
+GS EFX coverage: printed=<n> translated=<n> state=<n> unmapped=<n> unreadable=<n> builder=<n>
+```
+
+It fails while the five do not add up to the first, so a parameter nobody has looked at reads as a shortfall rather than as silence. `src/midi/synth/docs/gs.md` holds what each form means and what stops a row being filed under whichever one is cheapest to defend.
+
 The header also carries a named count per class, `kGsEfxReach*`. **A class reaching zero is a failure of the derivation and not a property of the unit**: a class that stopped being fed produces exactly what a class that was never wired produces, and both look like a clean run. The script exits non-zero on it, and the C++ side checks the same thing without an archive by enumerating the eleven classes by hand — which is why the header offers the eleven counts as named constants and not as an array the test could iterate. A derivation that dropped a class would drop its count too, and a test reading the list would pass by not looking.
 
 ## How a slot gets a class
@@ -67,6 +77,11 @@ Every entry in the file carries both, from the first version — adding a flag l
 
 `unit_specific` being false is not a claim that a second machine would agree. It is a claim that this one did not visibly disagree.
 
+Two further fields say where an entry came from rather than what is unusual about it. Neither is a later flag in the sense above: both restate what the entry already carried, so no case had to be known in advance.
+
+- **`source`** — one of `measured` (a reading placed the entry and the law agrees), `assigned` (no reading reaches it and the law alone placed it) and `unit_overrides_assigned` (a reading placed it and overruled the law). Every table entry and every `map` row carries one, and the run fails if any of the three reaches zero: a stage that stopped classifying produces exactly what a stage classifying everything one way produces, and both read as a clean run.
+- **`what_placed_it`** — the same question in prose, one phrase per entry (`read`, `the sequence`, `the series; no reading of this entry is published`). It held the name `source` until the three-valued field needed it. Nothing parses it.
+
 ## What the derivation checks about itself
 
 Printed at the end of every run, because a derivation that reached nothing prints the same thing a clean one does unless it says how far it got.
@@ -89,7 +104,13 @@ Carried in `efx-tables.json` itself, under `what_this_cannot_see`, so a reader o
 Two properties are the tables' and not the reader's, so they are stated here rather than left to be rediscovered.
 
 - **The defaults are a function of the type, not of the address.** Twenty bytes arrive when a type is selected, and they are almost never zero. A consumer that treats byte 0 as "unset, use the default" is reading a value the unit holds as an absence. The cost of the other reading is real and is the machine's: a file that writes a parameter *before* its type loses that byte, because selecting the type loads the type's own twenty.
-- **A structural field cannot be automated.** A conversion that changes a filter's order, a window's length or a hold's frequency rebuilds the processor rather than being applied in place, so editing that byte mid-note cuts the tail. A field that is only a gain, a rate or a corner does not have that problem. Which is which is a property of the insert and not of these tables, but the tables are what make the difference reachable from a file.
+- **A structural field cannot be automated.** A conversion that changes a filter's order, a window's length or a hold's frequency rebuilds the processor rather than being applied in place, so editing that byte mid-note cuts the tail. A field that is only a gain, a rate or a corner does not have that problem. Which is which is a property of the insert and not of these tables, but the tables are what make the difference reachable from a file. `tests/midi/gs_efx_send_routing_test.cpp` asks each insert which of its keys carry a realtime descriptor, so a binding that lands on a structural field is a listed exception with its reason rather than a tail that quietly stops.
+
+## What holds the chain these tables feed
+
+`tests/midi/gs_efx_chain_fixture.tsv` — the stage list and each stage's parameters for every type and slot at the boundary bytes, read back from `gs_efx_insert_chain` and held as a tab-separated file so a deliberate update is readable line by line. It runs in the default ctest set.
+
+**The synth goldens do not reach any of this.** Their GM manifests send no SysEx, so no part ever selects an insertion effect and no chain is ever built during a golden render. A change to what the chain assembles moves the fixture and moves nothing else — which is worth knowing in both directions: a green golden run says nothing about this code, and a fixture diff is the whole evidence that a chain change did what it meant to.
 
 ## Running it
 
