@@ -62,6 +62,11 @@ FAMILY_NAMES: dict[int, str] = {
 }
 
 DRUM_GROUP = "Drum kit"
+#: The public preset catalogue is its own heading rather than being filed under
+#: the family of the program it is voiced beside — a catalogue entry answers a
+#: patch name and no GM number, so a listener comparing the two needs to see
+#: which address they are hearing.
+PRESET_GROUP = "Preset catalogue"
 
 #: GM kit numbers, as the program that selects them on the drum channel. A kit
 #: is one entry of the index rather than 47: the phrase set is written for the
@@ -234,6 +239,11 @@ class Voice:
     #: for first. More than one is the normal case wherever the axes a slot
     #: needs are split across sources — see `captures_for`.
     captures: tuple[Capture, ...] = ()
+    #: A public preset catalogue entry, when this voice is one. The catalogue is
+    #: a second address space over the same engines and carries no GM number, so
+    #: nothing else here identifies it: `program` then says only which phrase set
+    #: and tone class to sound it on, and the render binds the preset by name.
+    preset: str = ""
 
     @property
     def capture(self) -> Capture | None:
@@ -246,6 +256,8 @@ class Voice:
     @property
     def name(self) -> str:
         """What the instrument is called."""
+        if self.preset:
+            return self.preset
         if self.kit:
             return KIT_NAMES.get(self.program, f"kit {self.program}")
         return gm_name(self.program)
@@ -272,6 +284,11 @@ class Voice:
     @property
     def slug(self) -> str:
         """The directory name, and so the id every link to this voice carries."""
+        if self.preset:
+            # Not the program's slug: the catalogue entry and the GM voice it is
+            # voiced beside are different sounds, and two sets sharing a
+            # directory would have one overwrite the other.
+            return f"preset-{_slugify(self.preset)}"
         if self.kit:
             return f"kit{self.program:03d}-{_slugify(self.name)}"
         stem = f"p{self.program:03d}"
@@ -282,6 +299,8 @@ class Voice:
     @property
     def group(self) -> str:
         """The heading a set picker files this voice under."""
+        if self.preset:
+            return PRESET_GROUP
         if self.kit:
             return DRUM_GROUP
         return FAMILY_NAMES.get((self.program // 8) * 8, "other")
@@ -289,6 +308,8 @@ class Voice:
     @property
     def label(self) -> str:
         """A one-line name for the voice, bank and all."""
+        if self.preset:
+            return f"preset {self.preset!r}"
         if self.kit:
             return f"kit {self.program} — {self.name}"
         if self.bank:
@@ -320,6 +341,12 @@ class Voice:
         }
         if self.kit:
             out["kit"] = True
+        if self.preset:
+            # Both, and labelled: `program` here is the phrase set this entry was
+            # sounded on, never the voice that answered. A reader given only one
+            # of them cannot tell a catalogue render from its GM neighbour.
+            out["preset"] = self.preset
+            out["program_is_phrase_set_only"] = True
         if self.patch:
             out["patch"] = self.patch
         if self.capture is not None:

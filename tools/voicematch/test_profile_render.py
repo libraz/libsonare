@@ -788,6 +788,9 @@ def test_model_sends_gs_reaches_a_dry_captured_voice(monkeypatch):
 
     class Voice:
         capture, kit, program, bank, slug = Capture(), False, 0, 0, "p000-x"
+        # A bank entry rather than a catalogue one, which is what this case is
+        # about: the sends it checks are GS state and a preset receives none.
+        preset = ""
 
     class Take:
         id, notes, tail_s, cc_events, channel = "t", [Note(60, 96, 0.0, 1.0)], 1.0, (), 0

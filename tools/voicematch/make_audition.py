@@ -137,14 +137,16 @@ sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
 from render_model import render_model
 smf, out, seconds, sr = sys.argv[1], sys.argv[2], float(sys.argv[3]), int(sys.argv[4])
 rig = sys.argv[5] != "0"
+preset = sys.argv[6] if len(sys.argv) > 6 else ""
 with open(smf, "rb") as fh:
-    a = np.asarray(render_model(fh.read(), seconds, sr, rig=rig), dtype=np.float32)
+    a = np.asarray(render_model(fh.read(), seconds, sr, rig=rig, preset=preset),
+                   dtype=np.float32)
 np.save(out, a.mean(axis=1) if a.ndim > 1 else a)
 '''
 
 
 def render_variant(smf: bytes, seconds: float, sr: int, overrides: str,
-                   lib_path: str = "", rig: bool = True) -> np.ndarray:
+                   lib_path: str = "", rig: bool = True, preset: str = "") -> np.ndarray:
     """One take under one override set, in its own interpreter."""
     env = dict(os.environ)
     if lib_path:
@@ -159,7 +161,7 @@ def render_variant(smf: bytes, seconds: float, sr: int, overrides: str,
         out_path = Path(tmp) / "render.npy"
         proc = subprocess.run(
             [sys.executable, "-c", _VARIANT_WORKER, str(smf_path), str(out_path),
-             str(seconds), str(sr), "1" if rig else "0"],
+             str(seconds), str(sr), "1" if rig else "0", preset],
             capture_output=True, check=False, text=True, env=env, cwd=str(REPO_ROOT))
         if proc.returncode:
             raise RuntimeError(proc.stderr[-4000:])
@@ -395,8 +397,8 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
     # prefers, so a page meant to compare four settings of one constant would be
     # comparing two builds -- and the difference between two build trees is
     # invisible on a listening page and reads as tuning.
-    renders["model"] = (render_variant(smf, total, SR, "", args.lib) if args.lib
-                        else render_model(smf, total, SR))
+    renders["model"] = (render_variant(smf, total, SR, "", args.lib, preset=voice.preset)
+                        if args.lib else render_model(smf, total, SR, preset=voice.preset))
     print("  model", file=sys.stderr)
 
     # The bank binds an amplifier after some voices and `model` is the product
@@ -408,7 +410,10 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
     # once per voice rather than once per take, since a voice with no rig would
     # otherwise pay for a duplicate render of every take it has -- six programs
     # in the bank are bound and the rest would render twice for nothing.
-    if di_state.get("bound") is not False:
+    # A preset is a bare patch and the rig is bank data, so there is no second
+    # side of the boundary to offer and the probe would render every take twice
+    # to prove it.
+    if di_state.get("bound") is not False and not voice.preset:
         di = (render_variant(smf, total, SR, "", args.lib, rig=False) if args.lib
               else render_model(smf, total, SR, rig=False))
         di_state["bound"] = digest(di) != digest(renders["model"])
@@ -691,6 +696,25 @@ def load_catalogue(lib: str):
         return None
 
 
+def preset_names(lib: str = "") -> tuple[str, ...]:
+    """Every public preset the library reports, asked rather than mirrored.
+
+    The catalogue is built in C++ and has no tracked manifest anywhere, so a
+    list written here would be a copy that drifts the moment an entry is added
+    — and the drift would read as "that preset does not exist" rather than as a
+    stale table.
+    """
+    from render_model import ensure_lib_path
+
+    if lib:
+        os.environ["SONARE_LIB_PATH"] = lib
+    else:
+        ensure_lib_path()
+    import libsonare
+
+    return tuple(libsonare.synth_preset_names())
+
+
 class Unselectable(Exception):
     """What to audition could not be worked out. The message is for the user.
 
@@ -738,6 +762,21 @@ def playable_first(voice: Voice, archive: Path | None) -> Voice:
 
 def resolve_voices(args) -> list[Voice]:
     """What this run was asked to audition, as bank entries."""
+    if args.preset:
+        if args.program is None:
+            raise Unselectable(
+                f"--preset {args.preset} needs --program N as well: a catalogue entry "
+                "carries no GM number, so nothing else says which phrase set and tone "
+                "class to sound it on. Name the program the entry is voiced beside")
+        known = preset_names(args.lib)
+        if args.preset not in known:
+            near = [n for n in known if args.preset in n][:6]
+            raise Unselectable(
+                f"the library reports no preset named {args.preset!r}"
+                + (f" — did you mean {', '.join(near)}?" if near else
+                   f" ({len(known)} exist; run with --preset '' to see none of them)"))
+        return [Voice(program=args.program, preset=args.preset)]
+
     if args.config:
         capture = load_capture(Path(args.config).expanduser().resolve())
         if capture is None:
@@ -777,6 +816,13 @@ def main() -> int:
     pick.add_argument("--kits", default="",
                       help="drum kit numbers, rendered on channel 10 (`0` is the "
                            "GM standard kit)")
+    pick.add_argument("--preset", default="",
+                      help="a public preset catalogue entry by name (`muted-trumpet`). "
+                           "The catalogue is a second address space over the same "
+                           "engines and carries no GM number, so --program is required "
+                           "alongside it and says only which phrase set to sound it on. "
+                           "No capture answers a catalogue entry, so the set is "
+                           "model-only by construction")
     pick.add_argument("--config", default="",
                       help="a capture definition, when the capture is the subject: it "
                            "fixes the program, the phrase set and the reference timbres")

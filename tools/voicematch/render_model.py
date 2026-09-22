@@ -94,8 +94,15 @@ def check_gm_fallback(manifest) -> None:
 
 
 def render_model(smf_bytes: bytes, total_seconds: float, sr: int = 48000, *,
-                 rig: bool = True) -> np.ndarray:
+                 rig: bool = True, preset: str = "") -> np.ndarray:
     """Render SMF bytes to a (frames, 2) float32 array via the GM fallback bank.
+
+    `preset` switches address space rather than voicing: a public catalogue entry
+    carries no GM number, so it is bound as the patch and the file's own program
+    changes are ignored. Nothing else reaches the catalogue — the GM manifest
+    check does not apply, because no program was resolved through the bank, and
+    `rig` does not either, since a rig binding is bank data and a preset is a
+    bare patch.
 
     `rig` selects which side of the instrument's boundary the render stops at.
     The default is the product sound — the bank binds an amplifier after an
@@ -120,13 +127,23 @@ def render_model(smf_bytes: bytes, total_seconds: float, sr: int = 48000, *,
         # without this the model cannot be rendered against any of them at all.
         project.set_sample_rate(float(sr))
         project.import_smf(smf_bytes)
-        audio = project.bounce_with_sf2_instrument(
-            libsonare.Sf2InstrumentConfig(clear_bank_rig=not rig),
-            total_frames=round(total_seconds * sr),
-            sample_rate=sr,
-        )
-        manifest = project.soundfont_manifest()
+        if preset:
+            audio = project.bounce_with_synth_instrument(
+                instrument=preset,
+                auto_select_gm=False,
+                total_frames=round(total_seconds * sr),
+                sample_rate=sr,
+            )
+            manifest = None
+        else:
+            audio = project.bounce_with_sf2_instrument(
+                libsonare.Sf2InstrumentConfig(clear_bank_rig=not rig),
+                total_frames=round(total_seconds * sr),
+                sample_rate=sr,
+            )
+            manifest = project.soundfont_manifest()
     finally:
         project.close()
-    check_gm_fallback(manifest)
+    if manifest is not None:
+        check_gm_fallback(manifest)
     return np.asarray(audio, dtype=np.float32)
