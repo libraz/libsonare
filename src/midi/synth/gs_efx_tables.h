@@ -65,7 +65,6 @@ inline constexpr int kGsEfxReachAzimuth = 2;
 inline constexpr uint8_t kGsEfxClassAzimuth = 9;
 inline constexpr int kGsEfxReachAccel = 2;
 inline constexpr uint8_t kGsEfxClassAccel = 10;
-inline constexpr int kGsEfxReached = 85;
 
 // The two numbers the block's coverage is read as: every (type, slot) the unit
 // prints a value for, and how many of those these tables give a conversion to.

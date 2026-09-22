@@ -1909,7 +1909,6 @@ def emit_header(tables: dict, path: Path) -> None:
     for index, name in enumerate(CLASS_ORDER):
         w(f"inline constexpr int kGsEfxReach{camel(name)} = {reach[name]};")
         w(f"inline constexpr uint8_t kGsEfxClass{camel(name)} = {index};")
-    w(f"inline constexpr int kGsEfxReached = {tables['reach']['reached']};")
     w("")
     w("// The two numbers the block's coverage is read as: every (type, slot) the unit")
     w("// prints a value for, and how many of those these tables give a conversion to.")
