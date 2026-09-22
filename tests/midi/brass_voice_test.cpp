@@ -665,9 +665,9 @@ TEST_CASE("bore harmonic ratios against causes that are not the lip", "[.][midi]
       lo4 = std::min(lo4, x.second);
       hi4 = std::max(hi4, x.second);
     }
-    WARN(label << "  h2/h1 " << m.first << " dB (frame span " << (hi2 - lo2) << ")"
-               << "  h4/h1 " << m.second << " dB (frame span " << (hi4 - lo4) << ")"
-               << "  centroid " << spectral_centroid(render_patch(p, note, vel, 48000), 14400)
+    const auto centroid = spectral_centroid(render_patch(p, note, vel, 48000), 14400);
+    WARN(label << "  h2/h1 " << m.first << " dB (frame span " << (hi2 - lo2) << ")  h4/h1 "
+               << m.second << " dB (frame span " << (hi4 - lo4) << ")  centroid " << centroid
                << " Hz");
     return m;
   };
