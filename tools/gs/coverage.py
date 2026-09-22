@@ -122,9 +122,7 @@ def load_printed(
     """
     params_dir = archive / "data" / "units"
     if not params_dir.is_dir():
-        sys.exit(
-            f"{params_dir} does not exist; --archive must point at a soundings archive root"
-        )
+        sys.exit(f"{params_dir} does not exist; --archive must point at a soundings archive root")
     files = sorted(params_dir.glob("*/efx-params/*.json"))
     if not files:
         sys.exit(f"no efx-params records under {params_dir}")
@@ -137,9 +135,7 @@ def load_printed(
             values = parameter.get("printed_values")
             if not values:
                 continue
-            _merge_slots(
-                archive_keyed, gs_type, parameter["parameter"], values, path.name
-            )
+            _merge_slots(archive_keyed, gs_type, parameter["parameter"], values, path.name)
     archive_keyed = {t: s for t, s in archive_keyed.items() if s}
 
     canonical: dict[str, dict[int, str]] = {}
@@ -232,9 +228,7 @@ def tally(rows: list[dict], printed: dict[str, dict[int, str]]) -> dict:
 
         key = (gs_type, slot)
         if key in claimed:
-            sys.exit(
-                f"{row_label(row)}: (type, slot) already claimed by another binding row"
-            )
+            sys.exit(f"{row_label(row)}: (type, slot) already claimed by another binding row")
         claimed.add(key)
 
         counts[FORM_TERM[form]] += 1
@@ -266,9 +260,7 @@ def per_msb_of(printed: dict[str, dict[int, str]]) -> dict[str, int]:
     return per_msb
 
 
-def assert_expected(
-    label: str, printed: dict[str, dict[int, str]], expected_per_msb: dict
-) -> None:
+def assert_expected(label: str, printed: dict[str, dict[int, str]], expected_per_msb: dict) -> None:
     total = sum(len(slots) for slots in printed.values())
     types = len(printed)
     per_msb = per_msb_of(printed)
@@ -287,9 +279,7 @@ def assert_expected(
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument(
-        "--archive", required=True, help="root of a soundings measurement archive"
-    )
+    ap.add_argument("--archive", required=True, help="root of a soundings measurement archive")
     ap.add_argument(
         "--bindings",
         default="tools/gs/efx-bindings",
