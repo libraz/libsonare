@@ -17,6 +17,7 @@
 
 #include "midi/synth/gs_efx_convert.h"
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -29,11 +30,13 @@ using sonare::midi::synth::gs_efx_accel_undershoot_hz;
 using sonare::midi::synth::gs_efx_azimuth_deg;
 using sonare::midi::synth::gs_efx_balance;
 using sonare::midi::synth::gs_efx_delay_ms;
+using sonare::midi::synth::gs_efx_enum_index;
 using sonare::midi::synth::gs_efx_freq_hz;
 using sonare::midi::synth::gs_efx_gain_db;
 using sonare::midi::synth::gs_efx_level_mul;
 using sonare::midi::synth::gs_efx_pan;
 using sonare::midi::synth::gs_efx_rate_hz;
+using sonare::midi::synth::gs_efx_ratio;
 using sonare::midi::synth::gs_efx_wave;
 using sonare::midi::synth::gs_efx_width_q;
 using sonare::midi::synth::GsEfxWave;
@@ -558,4 +561,90 @@ TEST_CASE("gs_efx_convert reproduces the archive's measured readings", "[gs-efx-
 
   WARN("comparisons: " << tally.count());
   REQUIRE(tally.count() >= 40);
+}
+
+TEST_CASE("gs_efx_ratio reads a slot only where the printed ends force one step",
+          "[gs-efx-convert]") {
+  Tally tally;
+
+  // The three printed ranges whose ends admit exactly one step. Each spans a
+  // whole number of units per byte, which is what separates reading them from
+  // fitting them -- no table was measured for any of these slots.
+  struct Forced {
+    int lo_byte, hi_byte, lo_unit, hi_unit, per_byte;
+    const char* printed;
+  };
+  constexpr std::array<Forced, 3> kForced = {{
+      {15, 113, -98, 98, 2, "0F-71"},
+      {14, 114, -100, 100, 2, "0E-72"},
+      {0, 90, 0, 180, 2, "00-5A"},
+  }};
+
+  for (const auto& r : kForced) {
+    const std::string at = std::string("printed ") + r.printed;
+    float lo = 0.0F;
+    float hi = 0.0F;
+    float mid = 0.0F;
+    tally.same(gs_efx_ratio(static_cast<uint8_t>(r.lo_byte), r.lo_byte, r.hi_byte, r.lo_unit,
+                            r.hi_unit, &lo),
+               at + ": the low end is read");
+    tally.same(gs_efx_ratio(static_cast<uint8_t>(r.hi_byte), r.lo_byte, r.hi_byte, r.lo_unit,
+                            r.hi_unit, &hi),
+               at + ": the high end is read");
+    tally.same(lo == static_cast<float>(r.lo_unit), at + ": the low end returns its printed unit");
+    tally.same(hi == static_cast<float>(r.hi_unit), at + ": the high end returns its printed unit");
+
+    const int one_up = r.lo_byte + 1;
+    tally.same(gs_efx_ratio(static_cast<uint8_t>(one_up), r.lo_byte, r.hi_byte, r.lo_unit,
+                            r.hi_unit, &mid),
+               at + ": one byte above the low end is read");
+    tally.same(mid == static_cast<float>(r.lo_unit + r.per_byte),
+               at + ": one byte moves exactly one step");
+
+    // Outside the range there is no reading to take, so the nearer end stands.
+    float under = 0.0F;
+    float over = 0.0F;
+    if (r.lo_byte > 0) {
+      tally.same(gs_efx_ratio(0, r.lo_byte, r.hi_byte, r.lo_unit, r.hi_unit, &under) &&
+                     under == static_cast<float>(r.lo_unit),
+                 at + ": a byte below the range clamps to the low end");
+    }
+    tally.same(gs_efx_ratio(127, r.lo_byte, r.hi_byte, r.lo_unit, r.hi_unit, &over) &&
+                   over == static_cast<float>(r.hi_unit),
+               at + ": a byte above the range clamps to the high end");
+  }
+
+  // The refusal. A span the byte count does not divide has no step the ends
+  // force, and the function must not pick the nearest one -- nothing
+  // downstream could tell the result from a measured conversion.
+  float written = -1.0F;
+  tally.same(!gs_efx_ratio(50, 15, 113, 0, 100, &written),
+             "a span of 100 over 98 steps is refused rather than rounded");
+  tally.same(written == -1.0F, "a refused reading writes nothing");
+  tally.same(!gs_efx_ratio(50, 15, 113, -98, 98, nullptr), "no output means no reading");
+  tally.same(!gs_efx_ratio(50, 113, 113, -98, 98, &written), "an empty range is refused");
+  tally.same(!gs_efx_ratio(50, 113, 15, -98, 98, &written), "a reversed range is refused");
+  tally.same(written == -1.0F, "none of the four refusals wrote");
+
+  WARN("comparisons: " << tally.count());
+  REQUIRE(tally.count() >= 24);
+}
+
+TEST_CASE("gs_efx_enum_index returns the first state past the printed list", "[gs-efx-convert]") {
+  Tally tally;
+
+  tally.same(gs_efx_enum_index(0, 5) == 0, "the first state");
+  tally.same(gs_efx_enum_index(4, 5) == 4, "the last state of five");
+  // The shape the measured small tables were read with: past the list the unit
+  // keeps the state it was in, which a pure conversion cannot see, so entry 0
+  // stands in for it here exactly as it does in width and wave.
+  tally.same(gs_efx_enum_index(5, 5) == 0, "one past the list");
+  tally.same(gs_efx_enum_index(127, 5) == 0, "far past the list");
+  tally.same(gs_efx_enum_index(0, 2) == 0, "a two-state switch, off");
+  tally.same(gs_efx_enum_index(1, 2) == 1, "a two-state switch, on");
+  tally.same(gs_efx_enum_index(2, 2) == 0, "a two-state switch, past its list");
+  tally.same(gs_efx_enum_index(3, 0) == 0, "an empty list has no state but the first");
+
+  WARN("comparisons: " << tally.count());
+  REQUIRE(tally.count() >= 8);
 }

@@ -82,4 +82,16 @@ float gs_efx_accel_tau_s(uint8_t value) noexcept;
 /// measurement: the loop's step rate over the divisor, against it times it.
 float gs_efx_accel_undershoot_hz(uint8_t value) noexcept;
 
+/// A byte read through the printed endpoints of a slot no table was measured
+/// for. Nothing here is fitted: the two endpoints admit exactly one step or
+/// none, and where they admit none this returns false and writes nothing,
+/// because a rounded conversion is indistinguishable downstream from a
+/// measured one. Bytes outside the range clamp to their nearer endpoint.
+bool gs_efx_ratio(uint8_t value, int lo_byte, int hi_byte, int lo_unit, int hi_unit,
+                  float* out) noexcept;
+
+/// A byte selecting one of @p count printed states. Past the list it returns
+/// the first, which is what the measured small tables were read doing.
+int gs_efx_enum_index(uint8_t value, int count) noexcept;
+
 }  // namespace sonare::midi::synth

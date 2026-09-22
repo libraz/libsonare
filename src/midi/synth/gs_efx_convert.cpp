@@ -154,4 +154,22 @@ float gs_efx_accel_undershoot_hz(uint8_t value) noexcept {
   return static_cast<float>(accel_step_hz() / kGsEfxAccelDivisor[top_four_bits(value)]);
 }
 
+bool gs_efx_ratio(uint8_t value, int lo_byte, int hi_byte, int lo_unit, int hi_unit,
+                  float* out) noexcept {
+  if (out == nullptr || hi_byte <= lo_byte) return false;
+  const int steps = hi_byte - lo_byte;
+  const int span = hi_unit - lo_unit;
+  // The refusal, and the whole reason this takes endpoints rather than a table.
+  if (span % steps != 0) return false;
+  const int per_byte = span / steps;  // exact, by the check above
+  const int clamped = std::clamp(static_cast<int>(value), lo_byte, hi_byte);
+  const int units = lo_unit + (clamped - lo_byte) * per_byte;
+  *out = static_cast<float>(units);
+  return true;
+}
+
+int gs_efx_enum_index(uint8_t value, int count) noexcept {
+  return (count > 0 && static_cast<int>(value) < count) ? static_cast<int>(value) : 0;
+}
+
 }  // namespace sonare::midi::synth

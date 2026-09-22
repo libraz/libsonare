@@ -138,10 +138,10 @@ TEST_CASE("every conversion class reaches at least one (type, slot) pair", "[gs-
                label + " count disagrees with the conversion list");
     class_total += row.reach;
   }
-  tally.same(class_total == s::kGsEfxReached,
-             "the eleven class counts do not add up to the header's total reach");
-  tally.same(static_cast<int>(kGsEfxSlotConversions.size()) == s::kGsEfxReached,
-             "the conversion list is not as long as the header's total reach");
+  tally.same(class_total == s::kGsEfxMeasured,
+             "the eleven class counts do not add up to the header's measured count");
+  tally.same(static_cast<int>(kGsEfxSlotConversions.size()) == s::kGsEfxMeasured,
+             "the conversion list is not as long as the header's measured count");
 
   int table_total = 0;
   for (const TableReach& row : kTables) {
@@ -155,8 +155,16 @@ TEST_CASE("every conversion class reaches at least one (type, slot) pair", "[gs-
     }
     table_total += row.expected;
   }
-  tally.same(table_total == s::kGsEfxReached,
-             "the eighteen table counts do not add up to the header's total reach");
+  tally.same(table_total == s::kGsEfxMeasured,
+             "the eighteen table counts do not add up to the header's measured count");
+
+  // The block these counts are a part of. Measured alone reads as an amount
+  // understood; against printed it reads as what it is, a fraction, and a
+  // header that lost the distinction fails here rather than quietly halving
+  // the denominator every count is read against.
+  tally.same(s::kGsEfxMeasured > 0, "the tables give no conversion at all");
+  tally.same(s::kGsEfxMeasured < s::kGsEfxPrinted,
+             "the measured count is not inside the printed parameter block");
 
   // The derivation's own identity, so a header swapped for another unit's is a
   // failure here rather than a silent change of what every count means.
