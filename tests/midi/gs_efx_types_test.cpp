@@ -84,8 +84,9 @@ constexpr EfxType kEfxTypes[] = {
     {0x0101, "Spectrum", nullptr},
     {0x0102, "Enhancer", nullptr},
     {0x0103, "Humanizer",
-     "a vowel formant filter whose identity is the vowel; no parameter position "
-     "for the vowel is transcribed, so any vowel would be picked at random"},
+     "a vowel formant filter whose identity is the vowel; the vowel has a "
+     "parameter position of its own, so what is missing is the formant filter "
+     "to receive it, and a fixed vowel would be a resonant filter chosen at random"},
     {0x0110, "Overdrive", nullptr},
     {0x0111, "Distortion", nullptr},
     {0x0120, "Phaser", nullptr},
