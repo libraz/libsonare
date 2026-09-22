@@ -67,6 +67,13 @@ inline constexpr int kGsEfxReachAccel = 2;
 inline constexpr uint8_t kGsEfxClassAccel = 10;
 inline constexpr int kGsEfxReached = 85;
 
+// The two numbers the block's coverage is read as: every (type, slot) the unit
+// prints a value for, and how many of those these tables give a conversion to.
+// Held apart because the numerator alone reads as an amount understood, which
+// it is not, and because one number cannot say which of the two moved.
+inline constexpr int kGsEfxPrinted = 770;
+inline constexpr int kGsEfxMeasured = 85;
+
 // The same count per table. A class holds more than one -- two rate ranges, five
 // delay ladders, three frequency columns -- so a table that stops being fed leaves
 // its class's count untouched, which is the shape the class guard was written

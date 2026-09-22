@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import itertools
 import json
 import math
@@ -296,6 +297,214 @@ def entry(**fields) -> dict:
     return fields
 
 
+# The three values `source` takes. It is the provenance of the conversion law,
+# a projection of the two flags above, and says nothing about how a slot is
+# bound to an insert -- that is a different axis and a different count.
+SOURCE_MEASURED = "measured"
+SOURCE_ASSIGNED = "assigned"
+SOURCE_UNIT_OVERRIDES_ASSIGNED = "unit_overrides_assigned"
+SOURCE_VALUES = (SOURCE_MEASURED, SOURCE_ASSIGNED, SOURCE_UNIT_OVERRIDES_ASSIGNED)
+
+
+def carries_the_flags(node) -> bool:
+    """Whether @p node is one of the dicts `source` is a projection of.
+
+    Both flags have to be real booleans. The `schema` block carries the same two
+    keys holding their prose descriptions, and it is a statement about entries
+    rather than one of them.
+    """
+    return (
+        isinstance(node, dict)
+        and isinstance(node.get("unit_specific"), bool)
+        and isinstance(node.get("approximate"), bool)
+    )
+
+
+def fold_source(unit_specific: bool, approximate: bool) -> str:
+    """The projection where the flags are a fold over entries.
+
+    A table and a `map` row take the strongest statement any entry under them
+    makes, so the two flags there are not exclusive: a table can hold an entry a
+    reading overruled beside one no reading placed at all. Reading it as
+    overruled is what says the table carries a value this individual unit
+    returned, which is the fact a second machine has to be checked against.
+    """
+    if unit_specific:
+        return SOURCE_UNIT_OVERRIDES_ASSIGNED
+    if approximate:
+        return SOURCE_ASSIGNED
+    return SOURCE_MEASURED
+
+
+def cell_source(unit_specific: bool, approximate: bool, where: str) -> str:
+    """The projection where the flags are one entry's own.
+
+    Both at once is refused rather than resolved here: on a single entry it
+    reads "no reading placed this, and a reading overruled the law", which is
+    not a state either flag can be in, so meeting it means the two no longer
+    mean what the schema says and a winner picked here would bury that.
+    """
+    if unit_specific and approximate:
+        sys.exit(
+            f"{where} is one entry flagged unit_specific and approximate at once. No reading "
+            "placed it and a reading overruled the law cannot both hold; one of the two flags "
+            "is being written for something other than what the schema says it means."
+        )
+    return fold_source(unit_specific, approximate)
+
+
+def stamp_sources(node, path: str) -> bool:
+    """Give every provenance-carrying dict under @p node its `source`.
+
+    One pass over the finished tables rather than a line in each builder: cells
+    and the table-level folds over them carry the same two flags, and several
+    tables write their dicts inline rather than through `entry`, so a table
+    added later would otherwise be the one that quietly emits no `source`.
+
+    Returns whether anything at or under @p node carried the flags, which is
+    what separates the two projections: a dict with no flag-carrying descendant
+    is one entry and its flags are exclusive, and a dict with one is a fold.
+    """
+    found = False
+    if isinstance(node, dict):
+        for key, value in node.items():
+            found |= stamp_sources(value, f"{path}.{key}")
+        if carries_the_flags(node):
+            unit_specific, approximate = node["unit_specific"], node["approximate"]
+            node["source"] = (
+                fold_source(unit_specific, approximate)
+                if found
+                else cell_source(unit_specific, approximate, path)
+            )
+            return True
+    elif isinstance(node, list):
+        for index, item in enumerate(node):
+            found |= stamp_sources(item, f"{path}[{index}]")
+    return found
+
+
+def check_map_sources(map_rows: list[dict]) -> dict[str, int]:
+    """The three `source` counts over the map, and the refusal of an empty one.
+
+    A bucket at zero is not reported as a count, because a split that collapsed
+    into fewer buckets produces exactly what a block with nothing to distinguish
+    produces and neither is readable from the number alone. The counts are
+    computed rather than compared against expected ones: what is asserted is
+    that the distinction still reaches a verdict, not what the verdicts were.
+    """
+    counts = dict.fromkeys(SOURCE_VALUES, 0)
+    for row in map_rows:
+        source = row.get("source")
+        if source not in counts:
+            sys.exit(
+                f"map entry {row.get('type')} {row.get('address')} carries source={source!r}, "
+                f"which is not one of {list(SOURCE_VALUES)}."
+            )
+        counts[source] += 1
+    empty = [name for name, count in counts.items() if count == 0]
+    if empty:
+        sys.exit(
+            f"no map entry carries source {', '.join(empty)}. The three-valued split has "
+            "collapsed into fewer buckets, which reads exactly like a block whose entries all "
+            "have the same provenance."
+        )
+    return counts
+
+
+def disagreements(classes: dict) -> list[dict]:
+    """The five places the measured law is taken over the printed one.
+
+    `src/midi/synth/docs/gs.md` is the source of record for the list; this is
+    what the tables carry of it, and a conformance test reads both, so the two
+    cannot part company without something going red. A figure this derivation
+    computes is read off the table the run built rather than restated -- the
+    third-octave entry is measured here, and only the rotary switch, which
+    belongs to none of the eleven classes, is carried on the doc's word.
+    """
+    third = classes["freq"]["tables"]["eq"]["entries"][2]
+    gain = classes["gain"]["tables"]["tone"]
+    level = classes["level"]["tables"]["output"]
+    balance = classes["balance"]["tables"]["effect"]
+    return [
+        {
+            "conversion_class": "freq",
+            "table": "eq",
+            "what": (
+                f"the third entry reads {third['hz']} Hz where the third-octave series printed "
+                f"beside it says {third['series_hz']}, {third['away_octaves']} octaves away"
+            ),
+            "the_printed_law_says": third["series_hz"],
+            "this_unit_returns": third["hz"],
+        },
+        {
+            "conversion_class": None,
+            "table": None,
+            "what": ("the rotary speed switch turns over at 63/64 rather than at the printed 7F"),
+            "why_it_names_no_class": (
+                "A switch, not a conversion: none of the eleven classes carries it, so nothing "
+                "here computes its corner and the figure is the doc's."
+            ),
+        },
+        {
+            "conversion_class": "gain",
+            "table": "tone",
+            "what": (
+                f"the gain window is {gain['window'][0]}-{gain['window'][1]} of the byte and "
+                "narrower than the range printed against the parameter, and outside it the unit "
+                f"returns {gain['outside_the_window']}"
+            ),
+            "the_printed_law_says": gain["printed_ends"],
+            "this_unit_returns": gain["window"],
+        },
+        {
+            "conversion_class": "level",
+            "table": "output",
+            "what": (
+                f"the level curve is a stored table of {len(level['entries'])} numerators over "
+                f"{level['denominator']} and not the straight line its printed range reads as"
+            ),
+            "the_printed_law_says": level["printed_ends"],
+        },
+        {
+            "conversion_class": "balance",
+            "table": "effect",
+            "what": (
+                "the centre of the balance stands over both of its ends, the two ramps meeting "
+                "at full at the middle of the byte rather than crossing"
+            ),
+            "the_printed_law_says": balance["printed_ends"],
+            "how_far_over": balance["why_the_middle_stands_over_the_ends"],
+        },
+    ]
+
+
+def printed_parameters(root: Path) -> int:
+    """How many (type, slot) parameters the unit prints a value for.
+
+    Counted by `tools/gs/coverage.py`'s own enumeration rather than by a second
+    one written here: it is the denominator the whole block's coverage is read
+    against, and two derivations of it would be two things to keep in step.
+    The module is loaded by path because `coverage` is also the name of a widely
+    installed package, and an import by name would take whichever the
+    interpreter's path offered first.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "gs_coverage", Path(__file__).resolve().parent / "coverage.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    _archive_keyed, canonical = module.load_printed(root)
+    total = sum(len(slots) for slots in canonical.values())
+    if total != module.EXPECTED_PRINTED:
+        sys.exit(
+            f"the printed enumeration counts {total} (type, slot) parameters where "
+            f"{module.EXPECTED_PRINTED} is recorded. That number is the denominator these "
+            "tables are read against; refusing to emit a header carrying a different one."
+        )
+    return total
+
+
 def load(path: Path) -> dict:
     if not path.is_file():
         sys.exit(f"{path} is not in the archive; this derivation needs it")
@@ -332,7 +541,15 @@ def archive_revision(root: Path, inputs: list[Path]) -> dict:
         }
 
     status = subprocess.run(
-        ["git", "-C", str(root), "status", "--porcelain", "--", *[str(p) for p in inputs]],
+        [
+            "git",
+            "-C",
+            str(root),
+            "status",
+            "--porcelain",
+            "--",
+            *[str(p) for p in inputs],
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -540,7 +757,8 @@ def rate_tables(scope: dict) -> dict:
                 "kind": "breakpoints",
                 "interpolate": "linear in the setting",
                 "breakpoints": breakpoints(
-                    [(0, 0.05), (99, 5.00), (119, 7.00), (125, 10.00), (127, 10.00)], "hz"
+                    [(0, 0.05), (99, 5.00), (119, 7.00), (125, 10.00), (127, 10.00)],
+                    "hz",
                 ),
                 "why_the_last_two_settings_repeat": (
                     "The table has 126 entries over 128 settings, so 126 and 127 have none of "
@@ -560,12 +778,28 @@ DELAY_LADDERS = {
         ["0.0", "100"],
         [(0, 0.0), (50, 5.0), (60, 10.0), (100, 50.0), (125, 100.0), (127, 100.0)],
     ),
-    "time1": (["*2"], ["200", "1000"], [(0, 200.0), (70, 550.0), (115, 1000.0), (127, 1000.0)]),
-    "time2": (["*3"], ["200", "1000"], [(0, 200.0), (80, 600.0), (120, 1000.0), (127, 1000.0)]),
+    "time1": (
+        ["*2"],
+        ["200", "1000"],
+        [(0, 200.0), (70, 550.0), (115, 1000.0), (127, 1000.0)],
+    ),
+    "time2": (
+        ["*3"],
+        ["200", "1000"],
+        [(0, 200.0), (80, 600.0), (120, 1000.0), (127, 1000.0)],
+    ),
     "time3": (
         ["*4"],
         ["0.0", "500"],
-        [(0, 0.0), (50, 5.0), (60, 10.0), (90, 40.0), (116, 300.0), (126, 500.0), (127, 500.0)],
+        [
+            (0, 0.0),
+            (50, 5.0),
+            (60, 10.0),
+            (90, 40.0),
+            (116, 300.0),
+            (126, 500.0),
+            (127, 500.0),
+        ],
     ),
     "time4": (["*5"], ["0", "635"], [(0, 0.0), (127, 635.0)]),
 }
@@ -681,7 +915,7 @@ def freq_tables(scope: dict, candidates: list[dict]) -> tuple[dict, list[str]]:
                         settings=[index * 8, index * 8 + 7],
                         hz=None,
                         bypass=True,
-                        source="the range's own last position, which is not a frequency",
+                        what_placed_it="the range's own last position, which is not a frequency",
                         approximate=False,
                     )
                 )
@@ -695,7 +929,7 @@ def freq_tables(scope: dict, candidates: list[dict]) -> tuple[dict, list[str]]:
                         settings=[index * 8, index * 8 + 7],
                         hz=nominal,
                         series_hz=nominal,
-                        source="the series; no reading of this entry is published",
+                        what_placed_it="the series; no reading of this entry is published",
                         approximate=True,
                     )
                 )
@@ -708,15 +942,13 @@ def freq_tables(scope: dict, candidates: list[dict]) -> tuple[dict, list[str]]:
                     hz=round(read, 4),
                     series_hz=nominal,
                     away_octaves=round(away, 4),
-                    source="read",
+                    what_placed_it="read",
                     unit_specific=away > band,
                 )
             )
         tables[name] = {
             "printed_ends": ends_for.get(name),
-            "columns": [
-                col for col, table in CLASSES["freq"]["columns"].items() if table == name
-            ],
+            "columns": [col for col, table in CLASSES["freq"]["columns"].items() if table == name],
             "printed_range_the_claim_calls_it": printed,
             "kind": "entries",
             "entries": entries,
@@ -738,8 +970,11 @@ def freq_tables(scope: dict, candidates: list[dict]) -> tuple[dict, list[str]]:
         f"{tables['eq']['entries'][2]['hz']} Hz against {tables['eq']['entries'][2]['series_hz']}, "
         f"{tables['eq']['entries'][2]['away_octaves']} octaves. Flagged unit_specific."
     )
-    return {"read_by": "the top four bits; eight settings share an entry", "tables": tables,
-            "rests_on": scope["file"]}, notes
+    return {
+        "read_by": "the top four bits; eight settings share an entry",
+        "tables": tables,
+        "rests_on": scope["file"],
+    }, notes
 
 
 def gain_tables(scope: dict) -> dict:
@@ -1026,7 +1261,7 @@ def accel_tables(scope: dict) -> dict:
                     index=index,
                     settings=[index * 8, index * 8 + 7],
                     divisor=float(sequence[index]),
-                    source="the sequence; no multiplier is published for this entry",
+                    what_placed_it="the sequence; no multiplier is published for this entry",
                     approximate=True,
                 )
             )
@@ -1041,7 +1276,7 @@ def accel_tables(scope: dict) -> dict:
                 sequence_says=sequence[index],
                 measured_multiplier=row["multiplier"],
                 times_the_take_told_apart=apart,
-                source="this unit's reading" if leaves_the_law else "the sequence",
+                what_placed_it="this unit's reading" if leaves_the_law else "the sequence",
                 unit_specific=leaves_the_law,
             )
         )
@@ -1151,7 +1386,8 @@ def check_delay_ladders(
             row["its_power_on_byte"] = power_on
             row["as_a_fraction_of_the_ladder"] = {
                 "over_every_setting": spread(
-                    sorted(r["ms"] / ladder[r["value"]] for r in rows if ladder[r["value"]] > 0), 6
+                    sorted(r["ms"] / ladder[r["value"]] for r in rows if ladder[r["value"]] > 0),
+                    6,
                 ),
                 "at_or_below_its_power_on_byte": spread(
                     sorted(
@@ -1171,14 +1407,14 @@ def check_delay_ladders(
                 ),
             }
             row["ms_short_of_the_ladder"] = {
-                "over_every_setting": spread(
-                    sorted(ladder[r["value"]] - r["ms"] for r in rows), 4
-                ),
+                "over_every_setting": spread(sorted(ladder[r["value"]] - r["ms"] for r in rows), 4),
                 "at_or_below_its_power_on_byte": spread(
-                    sorted(ladder[r["value"]] - r["ms"] for r in rows if r["value"] <= power_on), 4
+                    sorted(ladder[r["value"]] - r["ms"] for r in rows if r["value"] <= power_on),
+                    4,
                 ),
                 "above_it": spread(
-                    sorted(ladder[r["value"]] - r["ms"] for r in rows if r["value"] > power_on), 4
+                    sorted(ladder[r["value"]] - r["ms"] for r in rows if r["value"] > power_on),
+                    4,
                 ),
             }
         (checks if key in assigned else not_reached).append(row)
@@ -1301,9 +1537,7 @@ def idle_tables(classes: dict, reach_by_table: dict, candidates: list[dict], sco
         name, table_name = key.split(".", 1)
         scope = scopes[name]
         wanted = {
-            column
-            for column, table in CLASSES[name]["columns"].items()
-            if table == table_name
+            column for column, table in CLASSES[name]["columns"].items() if table == table_name
         }
         let_go = [
             {
@@ -1497,6 +1731,8 @@ def derive(root: Path, unit: str) -> dict:
         ],
     }
 
+    printed = printed_parameters(root)
+
     meta = load(root / "data" / "units" / unit / "meta.json")
     # Everything a run reads, which is what the revision has to identify. The
     # stage index is in here because it decides which records are read at all: an
@@ -1513,8 +1749,15 @@ def derive(root: Path, unit: str) -> dict:
         for measurement in scopes[name]["data"]["rests_on"]["measurements"]
         if f"/efx-{'time' if name == 'delay_time' else 'rate'}/" in measurement["file"]
     ]
+    # The printed enumeration reads every unit's parameter records rather than
+    # this one's stage index, so whatever it adds joins the list too.
+    inputs += [
+        path
+        for path in sorted((root / "data" / "units").glob("*/efx-params/*.json"))
+        if path not in inputs
+    ]
 
-    return {
+    tables = {
         "generated_by": GENERATED_BY,
         "unit_id": meta.get("unit_id", unit),
         "model": meta.get("model"),
@@ -1526,17 +1769,38 @@ def derive(root: Path, unit: str) -> dict:
         ),
         "what_this_cannot_see": WHAT_THIS_CANNOT_SEE,
         "schema": {
-            "every_entry_carries": ["unit_specific", "approximate"],
+            "every_entry_carries": ["unit_specific", "approximate", "source"],
             "unit_specific": (
                 "This unit returned a value the class's own law does not account for, by more "
                 "than the reading separates. A second unit is free to differ here."
             ),
             "approximate": "No reading placed this entry; it is carried on the law alone.",
+            "source": (
+                "The provenance of the conversion law, as the three values the two flags above "
+                "project onto: unit_overrides_assigned where a reading overruled the law, "
+                "assigned where no reading placed it, measured where a reading placed it and it "
+                "agrees. The two flags are exclusive on one entry; on a table or a map row they "
+                "are a fold over entries and both can hold, where overruled is what it reads as. "
+                "Not the provenance of a binding, which is a different axis and is counted by "
+                "tools/gs/coverage.py."
+            ),
+            "what_placed_it": (
+                "Where a cell says so, which reading or which law put the value there. Prose "
+                "beside source rather than under it, since source is mechanical."
+            ),
         },
         "reach": {
+            "printed": printed,
+            "measured": len(reached),
             "reached": len(reached),
             "translatable": None,
             "translated": None,
+            "what_the_first_two_are": (
+                "Printed is every (type, slot) the unit's own records carry a printed value for, "
+                "counted by tools/gs/coverage.py's enumeration -- the denominator the block's "
+                "coverage is read against. Measured is how many of them these tables give a "
+                "conversion to; reached is the same count under the name the schema opened with."
+            ),
             "why_two_are_null": (
                 "Translatable asks whether the insert a slot maps to has a control of the same "
                 "physical unit, and translated asks whether the GS layer emits the key. Neither "
@@ -1554,19 +1818,27 @@ def derive(root: Path, unit: str) -> dict:
                 "printed defaults, which the archive does not transcribe."
             ),
             "by_type": {
-                spelled_type(code): [
-                    slots.get(FIRST_PARAMETER + i) for i in range(PARAMETER_SLOTS)
-                ]
+                spelled_type(code): [slots.get(FIRST_PARAMETER + i) for i in range(PARAMETER_SLOTS)]
                 for code, slots in sorted(defaults.items())
             },
         },
         "classes": classes,
         "map": sorted(reached, key=lambda r: (r["type"], r["address"])),
+        "disagreement": disagreements(classes),
         "records_outside_their_inferences_addresses": outside,
         "entries_resting_on_a_parked_inference": parked,
         "derivation_checks": checks,
         "notes": notes,
     }
+
+    stamp_sources(tables["classes"], "classes")
+    # A `map` row's flags are the fold its table already made, so it is stamped
+    # as a fold rather than let through the walker, which would read a row with
+    # no flag-carrying children as one entry and refuse the two accel slots.
+    for row in tables["map"]:
+        row["source"] = fold_source(row["unit_specific"], row["approximate"])
+    tables["reach"]["by_source"] = check_map_sources(tables["map"])
+    return tables
 
 
 def cpp_float(value: float) -> str:
@@ -1638,6 +1910,13 @@ def emit_header(tables: dict, path: Path) -> None:
         w(f"inline constexpr int kGsEfxReach{camel(name)} = {reach[name]};")
         w(f"inline constexpr uint8_t kGsEfxClass{camel(name)} = {index};")
     w(f"inline constexpr int kGsEfxReached = {tables['reach']['reached']};")
+    w("")
+    w("// The two numbers the block's coverage is read as: every (type, slot) the unit")
+    w("// prints a value for, and how many of those these tables give a conversion to.")
+    w("// Held apart because the numerator alone reads as an amount understood, which")
+    w("// it is not, and because one number cannot say which of the two moved.")
+    w(f"inline constexpr int kGsEfxPrinted = {tables['reach']['printed']};")
+    w(f"inline constexpr int kGsEfxMeasured = {tables['reach']['measured']};")
     w("")
     w("// The same count per table. A class holds more than one -- two rate ranges, five")
     w("// delay ladders, three frequency columns -- so a table that stops being fed leaves")
@@ -1778,12 +2057,11 @@ def emit_header(tables: dict, path: Path) -> None:
 
     by_type = tables["defaults"]["by_type"]
     w("/// What every type powers up holding. `measured` is clear where a slot was refused.")
-    w(f"inline constexpr int kGsEfxTypesWithCompleteDefaults = "
-      f"{tables['defaults']['types_with_complete_defaults']};")
     w(
-        f"inline constexpr std::array<GsEfxTypeDefaults, {len(by_type)}> "
-        "kGsEfxTypeDefaults = {{"
+        f"inline constexpr int kGsEfxTypesWithCompleteDefaults = "
+        f"{tables['defaults']['types_with_complete_defaults']};"
     )
+    w(f"inline constexpr std::array<GsEfxTypeDefaults, {len(by_type)}> kGsEfxTypeDefaults = {{{{")
     for spelled, params in by_type.items():
         mask = sum(1 << i for i, value in enumerate(params) if value is not None)
         bytes_out = ", ".join(str(value if value is not None else 0) for value in params)
@@ -1818,19 +2096,24 @@ def camel(name: str) -> str:
 
 def report(tables: dict) -> None:
     reach = tables["reach"]
-    print(f'{reach["reached"]:>8}  reached')
-    print(f'{"-":>8}  translatable   (filled in once the insert side is wired)')
-    print(f'{"-":>8}  translated     (filled in once the GS layer emits the keys)')
+    print(f"{reach['printed']:>8}  printed")
+    print(f"{reach['measured']:>8}  measured")
+    print(f"{reach['reached']:>8}  reached")
+    print(f"{'-':>8}  translatable   (filled in once the insert side is wired)")
+    print(f"{'-':>8}  translated     (filled in once the GS layer emits the keys)")
     print()
     for name in CLASS_ORDER:
-        print(f'{tables["reach_by_class"][name]:>8}  {name.replace("_", " ")}')
+        print(f"{tables['reach_by_class'][name]:>8}  {name.replace('_', ' ')}")
     print()
-    print(f'{tables["defaults"]["types"]:>8}  types with a power-on record')
+    for name in SOURCE_VALUES:
+        print(f"{reach['by_source'][name]:>8}  map entries whose law is {name}")
+    print()
+    print(f"{tables['defaults']['types']:>8}  types with a power-on record")
     complete = tables["defaults"]["types_with_complete_defaults"]
-    print(f'{complete:>8}  of them complete over 20 slots')
+    print(f"{complete:>8}  of them complete over 20 slots")
     print()
-    print(f'archive_revision  {tables["archive_revision"]}')
-    print(f'                  {tables["archive_revision_source"]}')
+    print(f"archive_revision  {tables['archive_revision']}")
+    print(f"                  {tables['archive_revision_source']}")
     if tables["archive_inputs_dirty"]:
         print("                  the working copy is dirty over the files read, so the")
         print("                  revision does not identify them")
