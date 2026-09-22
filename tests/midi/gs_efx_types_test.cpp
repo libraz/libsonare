@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -50,6 +51,7 @@
 #include "mastering/api/insert_factory.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
+#include "midi/synth/gs_efx_convert.h"
 #include "midi/synth/gs_efx_tables.h"
 #include "midi/synth/gs_layer.h"
 #include "rt/processor_base.h"
@@ -1160,4 +1162,95 @@ TEST_CASE("the translation reads exactly the bytes the archive named",
                                    << "  listed exceptions: " << kUnmeasuredReads.size());
   WARN("comparisons: " << tally.count());
   REQUIRE(tally.count() >= 120);
+}
+
+namespace {
+
+/// The quantity a binding row's law reads out of one byte, derived here from
+/// the generated table rather than from the chain builder.
+///
+/// This is a second reader on purpose. The chain builder writes a control only
+/// where the hand-written translation for the type has not already written it,
+/// so a binding row naming a different law from the branch beside it would be
+/// silently outranked -- the control would carry the branch's value and the
+/// table would be a claim nothing tested. Both sides are read here and required
+/// to agree, which is also what makes the branches safe to retire.
+bool law_reads(const s::GsEfxBinding& row, uint8_t byte, const std::string& key, double& out) {
+  using s::GsFreqColumn;
+  using s::GsRateRange;
+  using s::GsTimeLadder;
+  switch (row.conversion_class) {
+    case s::kGsEfxClassRate:
+      out = s::gs_efx_rate_hz(byte, row.table == 1 ? GsRateRange::kWide : GsRateRange::kNarrow);
+      return true;
+    case s::kGsEfxClassDelayTime: {
+      const std::array<GsTimeLadder, 5> ladders = {GsTimeLadder::kLadder0, GsTimeLadder::kLadder1,
+                                                   GsTimeLadder::kLadder2, GsTimeLadder::kLadder3,
+                                                   GsTimeLadder::kLadder4};
+      if (row.table >= ladders.size()) return false;
+      out = s::gs_efx_delay_ms(byte, ladders[row.table]);
+      return true;
+    }
+    case s::kGsEfxClassFreq: {
+      const std::array<GsFreqColumn, 3> columns = {GsFreqColumn::kColumn0, GsFreqColumn::kColumn1,
+                                                   GsFreqColumn::kColumn2};
+      if (row.table >= columns.size()) return false;
+      out = s::gs_efx_freq_hz(byte, columns[row.table]);
+      return true;
+    }
+    case s::kGsEfxClassGain:
+      out = s::gs_efx_gain_db(byte);
+      return true;
+    case s::kGsEfxClassLevel:
+      // The dB wrapper the chain carries, over the measured multiplier's floor.
+      out = std::max(-24.0, 20.0 * std::log10(static_cast<double>(s::gs_efx_level_mul(byte))));
+      return true;
+    case s::kGsEfxClassWidth:
+      out = s::gs_efx_width_q(byte);
+      return true;
+    case s::kGsEfxClassAccel: {
+      const bool hertz = key.size() > 2 && key.compare(key.size() - 2, 2, "Hz") == 0;
+      out = hertz ? s::gs_efx_accel_undershoot_hz(byte) : s::gs_efx_accel_tau_s(byte);
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
+}  // namespace
+
+TEST_CASE("every binding row reaches its control carrying its own law's reading",
+          "[midi][sf2][gs][efxtypes]") {
+  Tally tally;
+  int unread = 0;
+  for (const s::GsEfxBinding& row : s::kGsEfxBindings) {
+    const std::string stage(s::kGsEfxBindingStages[row.stage]);
+    const std::string key(s::kGsEfxBindingKeys[row.key]);
+    const std::string label =
+        hex4(row.type) + " slot " + std::to_string(row.slot) + " -> " + stage + "." + key;
+    for (uint8_t value : kValues) {
+      GsEfx efx = make_efx(row.type);
+      efx.params[row.slot] = value;
+      const std::string params = stage_params(gs_efx_insert_chain(efx), stage);
+      double carried = 0.0;
+      if (!json_number(params, key, carried)) {
+        tally.same(false, label + " names a control the chain does not carry");
+        continue;
+      }
+      double expected = 0.0;
+      if (!law_reads(row, value, key, expected)) {
+        ++unread;
+        continue;
+      }
+      // Rendered through std::to_string, so six decimal places is the width of
+      // the comparison rather than a tolerance chosen for the quantity.
+      tally.same(std::fabs(carried - expected) <= 5e-7 * std::max(1.0, std::fabs(expected)),
+                 label + " at byte " + std::to_string(static_cast<int>(value)) + " carries " +
+                     std::to_string(carried) + " where its law reads " + std::to_string(expected));
+    }
+  }
+  tally.same(unread == 0, "every binding row's class has a reader here");
+  WARN("binding rows checked: " << s::kGsEfxBindings.size() << "  comparisons: " << tally.count());
+  REQUIRE(tally.count() >= static_cast<int>(s::kGsEfxBindings.size()));
 }
