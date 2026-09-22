@@ -492,16 +492,23 @@ TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][s
   // for the byte read in dB over a -24 dB floor. A byte of 0 is the value zero
   // and takes the floor rather than reading as an absence: selecting a type
   // loads that type's own twenty bytes, so a zero here is one the file asked for.
+  // It is the unit's own output stage that carries it, not the drive block:
+  // every type holds the level at this slot, so it is read once for all of them.
+  auto level_of = [](const GsEfx& efx) {
+    for (const auto& stage : gs_efx_insert_chain(efx)) {
+      if (stage.name == "utility.gain") return stage.params_json;
+    }
+    return std::string{};
+  };
   GsEfx lvl;
   lvl.type = 0x0110;
   lvl.params[0] = 100;
   lvl.params[19] = 0;
-  REQUIRE(gs_efx_insert_params(lvl).find("\"levelDb\":-24") != std::string::npos);
+  REQUIRE(level_of(lvl).find("\"levelDb\":-24") != std::string::npos);
   lvl.params[19] = 64;  // ~half of unity -> a negative levelDb
-  const std::string cut = gs_efx_insert_params(lvl);
-  REQUIRE(cut.find("\"levelDb\":-") != std::string::npos);
+  REQUIRE(level_of(lvl).find("\"levelDb\":-") != std::string::npos);
   lvl.params[19] = 127;  // unity -> 0 dB
-  REQUIRE(gs_efx_insert_params(lvl).find("\"levelDb\":0") != std::string::npos);
+  REQUIRE(level_of(lvl).find("\"levelDb\":0") != std::string::npos);
 
   GsEfx thru;  // unmapped type -> the insert's defaults
   thru.type = 0x0114;
@@ -544,7 +551,9 @@ TEST_CASE("gs_efx_insert_chain expands a composite type into its block chain",
   GsEfx od;
   od.type = 0x0110;  // Overdrive
   const auto single = gs_efx_insert_chain(od);
-  REQUIRE(single.size() == 1);
+  // One stage realises the effect; the unit's output stage follows it, as it
+  // follows every effect, and is checked where it belongs.
+  REQUIRE_FALSE(single.empty());
   REQUIRE(single[0].name == "saturation.ampSim");
 
   // GTR Multi 2 (04 01) yields its Cmp-OD-EQ-CF block chain, in signal order.
@@ -555,7 +564,7 @@ TEST_CASE("gs_efx_insert_chain expands a composite type into its block chain",
   gtr.params[9] = 52;   // EQ Low Gain -12 dB (0x34, centre 64)
   gtr.params[13] = 76;  // EQ Hi Gain  +12 dB (0x4C)
   const auto chain = gs_efx_insert_chain(gtr);
-  REQUIRE(chain.size() == 4);
+  REQUIRE(chain.size() >= 4);  // the four blocks, then the unit's output stage
   REQUIRE(chain[0].name == "dynamics.compressor");
   REQUIRE(chain[1].name == "saturation.ampSim");
   REQUIRE(chain[2].name == "eq.parametric");
@@ -581,28 +590,32 @@ TEST_CASE("gs_efx_insert_chain expands a composite type into its block chain",
 }
 
 TEST_CASE("gs_efx_insert_chain covers the guitar/bass multi block", "[midi][sf2][gslayer]") {
-  auto names = [](uint16_t type) {
+  // The effect's own stages, which are the head of the chain: the unit's output
+  // stage is appended after them for every type and is not this block's shape.
+  auto names = [](uint16_t type, size_t blocks) {
     GsEfx efx;
     efx.type = type;
     std::vector<std::string> out;
     for (const auto& stage : gs_efx_insert_chain(efx)) out.push_back(stage.name);
+    REQUIRE(out.size() >= blocks);
+    out.resize(blocks);
     return out;
   };
   // The SC-88Pro MSB-04 guitar/bass multi block, each in its manual signal order
   // (every block now has a matching insert: Wah / Auto-Wah are realised too).
-  REQUIRE(names(0x0400) ==  // GTR Multi 1: Cmp-OD-CF-Dly
+  REQUIRE(names(0x0400, 4) ==  // GTR Multi 1: Cmp-OD-CF-Dly
           std::vector<std::string>{"dynamics.compressor", "saturation.ampSim",
                                    "effects.modulation.chorus", "effects.delay.stereo"});
-  REQUIRE(names(0x0402) ==  // GTR Multi 3: Wah-OD-CF-Dly
+  REQUIRE(names(0x0402, 4) ==  // GTR Multi 3: Wah-OD-CF-Dly
           std::vector<std::string>{"effects.modulation.wah", "saturation.ampSim",
                                    "effects.modulation.chorus", "effects.delay.stereo"});
-  REQUIRE(names(0x0403) ==  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD)
+  REQUIRE(names(0x0403, 4) ==  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD)
           std::vector<std::string>{"dynamics.compressor", "eq.parametric",
                                    "effects.modulation.chorus", "effects.delay.stereo"});
-  REQUIRE(names(0x0404) ==  // Clean GTR Multi 2: AW-EQ-CF-Dly
+  REQUIRE(names(0x0404, 4) ==  // Clean GTR Multi 2: AW-EQ-CF-Dly
           std::vector<std::string>{"effects.modulation.autoWah", "eq.parametric",
                                    "effects.modulation.chorus", "effects.delay.stereo"});
-  REQUIRE(names(0x0405) ==  // Bass Multi: Cmp-OD-EQ-CF
+  REQUIRE(names(0x0405, 4) ==  // Bass Multi: Cmp-OD-EQ-CF
           std::vector<std::string>{"dynamics.compressor", "saturation.ampSim", "eq.parametric",
                                    "effects.modulation.chorus"});
 
@@ -617,23 +630,27 @@ TEST_CASE("gs_efx_insert_chain covers the guitar/bass multi block", "[midi][sf2]
 }
 
 TEST_CASE("gs_efx_insert_chain expands the series-2 and multi composites", "[midi][sf2][gslayer]") {
-  auto names = [](uint16_t type) {
+  // The effect's own stages, which are the head of the chain: the unit's output
+  // stage is appended after them for every type and is not this block's shape.
+  auto names = [](uint16_t type, size_t blocks) {
     GsEfx efx;
     efx.type = type;
     std::vector<std::string> out;
     for (const auto& stage : gs_efx_insert_chain(efx)) out.push_back(stage.name);
+    REQUIRE(out.size() >= blocks);
+    out.resize(blocks);
     return out;
   };
   // Series-2 composites (SC-88Pro MSB 02): two stock effects in signal order.
-  REQUIRE(names(0x0200) ==  // OD -> Chorus
+  REQUIRE(names(0x0200, 2) ==  // OD -> Chorus
           std::vector<std::string>{"saturation.ampSim", "effects.modulation.chorus"});
-  REQUIRE(names(0x0202) ==  // OD -> Delay
+  REQUIRE(names(0x0202, 2) ==  // OD -> Delay
           std::vector<std::string>{"saturation.ampSim", "effects.delay.stereo"});
-  REQUIRE(names(0x0206) ==  // EH -> Chorus
+  REQUIRE(names(0x0206, 2) ==  // EH -> Chorus
           std::vector<std::string>{"spectral.presenceEnhancer", "effects.modulation.chorus"});
-  REQUIRE(names(0x0209) ==  // Cho -> Delay
+  REQUIRE(names(0x0209, 2) ==  // Cho -> Delay
           std::vector<std::string>{"effects.modulation.chorus", "effects.delay.stereo"});
-  REQUIRE(names(0x020B) ==  // Cho -> Flanger
+  REQUIRE(names(0x020B, 2) ==  // Cho -> Flanger
           std::vector<std::string>{"effects.modulation.chorus", "effects.modulation.flanger"});
   // The distortion series-2 blocks use the high-gain amp voicing.
   GsEfx ds;
@@ -647,17 +664,17 @@ TEST_CASE("gs_efx_insert_chain expands the series-2 and multi composites", "[mid
   // manual prints for it (chapter-4 body 03 00 and appendix table 02 0C).
   const std::vector<std::string> rotary_multi{"saturation.ampSim", "eq.parametric",
                                               "effects.modulation.rotary"};
-  REQUIRE(names(0x0300) == rotary_multi);
-  REQUIRE(names(0x020C) == rotary_multi);
+  REQUIRE(names(0x0300, rotary_multi.size()) == rotary_multi);
+  REQUIRE(names(0x020C, rotary_multi.size()) == rotary_multi);
 
   // Rhodes Multi (04 06): Enhancer -> Phaser -> Chorus -> Tremolo/Pan.
-  REQUIRE(names(0x0406) == std::vector<std::string>{"spectral.presenceEnhancer",
-                                                    "effects.modulation.phaser",
-                                                    "effects.modulation.chorus", "stereo.autoPan"});
+  REQUIRE(names(0x0406, 4) ==
+          std::vector<std::string>{"spectral.presenceEnhancer", "effects.modulation.phaser",
+                                   "effects.modulation.chorus", "stereo.autoPan"});
 
   // Keyboard Multi (05 00): Ring Mod -> EQ -> Pitch Shifter -> Phaser -> Delay.
   // This is the only GS type that binds the ring-modulator insert.
-  REQUIRE(names(0x0500) ==
+  REQUIRE(names(0x0500, 5) ==
           std::vector<std::string>{"effects.modulation.ringModulator", "eq.parametric",
                                    "effects.modulation.pitchShifter", "effects.modulation.phaser",
                                    "effects.delay.stereo"});

@@ -17,6 +17,8 @@
 
 #include "mastering/api/insert_factory.h"
 #include "midi/midi_event.h"
+#include "midi/synth/gs_address_table.h"
+#include "midi/synth/gs_layer.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
@@ -27,9 +29,24 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::synth::gs_efx_insert_chain;
+using sonare::midi::synth::gs_efx_type_defaults;
+using sonare::midi::synth::GsEfx;
 using sonare::midi::synth::Sf2File;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
+
+/// A unit holding @p type with that type's own power-on parameters, which is
+/// the state selecting it over the wire leaves.
+GsEfx efx_holding(uint16_t type) {
+  GsEfx efx;
+  efx.type = type;
+  efx.type_msb = static_cast<uint8_t>(type >> 8);
+  const auto* defaults = gs_efx_type_defaults(type);
+  if (defaults != nullptr) efx.params = defaults->params;
+  efx.assigned = true;
+  return efx;
+}
 using sonare::test::Sf2Builder;
 
 constexpr double kOutRate = 48000.0;
@@ -223,11 +240,13 @@ TEST_CASE("a GS EFX parameter-only change updates the insert in place", "[midi][
   Sf2Player player(cfg);
   player.prepare(kOutRate, 256);
 
-  // Route part 1 (channel 0) through an EFX and select Overdrive: one insert is
-  // built and prepared.
+  // Route part 1 (channel 0) through an EFX and select Overdrive: the chain is
+  // built and every stage of it prepared. The count is the chain's length --
+  // the drive block plus the output stage the unit puts after every effect --
+  // and what matters below is that it does not move again.
   player.on_control_sysex(kPartOn, sizeof(kPartOn));
   player.on_control_sysex(kOdType, sizeof(kOdType));
-  REQUIRE(counters->prepares == 1);
+  REQUIRE(counters->prepares == static_cast<int>(gs_efx_insert_chain(efx_holding(0x0110)).size()));
   const int prepares_after_build = counters->prepares;
   const int set_params_before = counters->set_params;
 

@@ -930,11 +930,29 @@ constexpr uint8_t gs_reset_default(const GsAddressEntry& entry, uint32_t addr) n
 /// The EFX type a unit powers on holding: no insertion effect.
 inline constexpr uint16_t kGsEfxTypeThru = 0x0000;
 
+/// The other number the manual prints for the same effect, or @p type itself.
+///
+/// Rotary Multi is the only one: the chapter body calls it 03 00 and the
+/// appendix table 02 0C. A table keyed by type files it under one of the two,
+/// and which one differs between tables, so every such lookup has to be willing
+/// to ask for the other spelling before answering that it knows nothing.
+constexpr uint16_t gs_efx_alias_type(uint16_t type) noexcept {
+  if (type == 0x020C) return 0x0300;
+  if (type == 0x0300) return 0x020C;
+  return type;
+}
+
 /// The twenty bytes @p type powers up holding, or nullptr for a type the
 /// archive behind gs_efx_tables.h never measured.
 constexpr const GsEfxTypeDefaults* gs_efx_type_defaults(uint16_t type) noexcept {
   for (const GsEfxTypeDefaults& entry : kGsEfxTypeDefaults) {
     if (entry.type == type) return &entry;
+  }
+  const uint16_t alias = gs_efx_alias_type(type);
+  if (alias != type) {
+    for (const GsEfxTypeDefaults& entry : kGsEfxTypeDefaults) {
+      if (entry.type == alias) return &entry;
+    }
   }
   return nullptr;
 }

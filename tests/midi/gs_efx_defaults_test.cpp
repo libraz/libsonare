@@ -28,6 +28,7 @@
 namespace {
 
 using sonare::midi::synth::apply_gs_efx_sysex;
+using sonare::midi::synth::gs_efx_insert_chain;
 using sonare::midi::synth::gs_efx_insert_params;
 using sonare::midi::synth::gs_efx_parameter_reset_default;
 using sonare::midi::synth::gs_efx_power_on_params;
@@ -36,6 +37,16 @@ using sonare::midi::synth::GsEfx;
 using sonare::midi::synth::GsEfxTypeDefaults;
 using sonare::midi::synth::kGsEfxTypeDefaults;
 using sonare::midi::synth::kGsEfxTypeThru;
+
+/// The params of the one stage named @p name, or an empty string where the
+/// chain carries no such stage.
+std::string stage_params(const std::vector<sonare::midi::synth::GsEfxStage>& chain,
+                         const std::string& name) {
+  for (const auto& stage : chain) {
+    if (stage.name == name) return stage.params_json;
+  }
+  return {};
+}
 
 /// A GS DT1 message carrying @p data from address @p addr, with its checksum.
 std::vector<uint8_t> dt1(uint32_t addr, const std::vector<uint8_t>& data) {
@@ -206,14 +217,16 @@ TEST_CASE("an EFX type write loads that type's defaults at LSB resolution", "[gs
     REQUIRE(write_type(efx, 0x0110));
     tally.same(gs_efx_parameter_reset_default(0x0110, 19) != 0,
                "the overdrive's output level does not power up at zero");
-    tally.same(gs_efx_insert_params(efx).find("\"levelDb\"") != std::string::npos,
+    tally.same(stage_params(gs_efx_insert_chain(efx), "utility.gain").find("\"levelDb\"") !=
+                   std::string::npos,
                "the overdrive's own default output level reaches the translation");
 
     REQUIRE(write_param(efx, 20, 0));
     tally.same(efx.params[19] == 0, "a written zero stands rather than reading as unset");
     // -24 dB is the floor the translation carries, so the silent byte lands on
     // it rather than being dropped.
-    tally.same(gs_efx_insert_params(efx).find("\"levelDb\":-24") != std::string::npos,
+    tally.same(stage_params(gs_efx_insert_chain(efx), "utility.gain").find("\"levelDb\":-24") !=
+                   std::string::npos,
                "output level 0 translates to the floor rather than to no key");
 
     // Effect Balance had the same reading. The pitch shifter powers up at 48,
@@ -225,17 +238,19 @@ TEST_CASE("an EFX type write loads that type's defaults at LSB resolution", "[gs
                "effect balance 0 translates to all-direct rather than to no key");
   }
 
-  // A type the archive never measured loads nothing. 02 0C is the second type
-  // number the manual prints for the rotary multi; the archive measured it under
-  // 03 00 and has no reading at this one, so the block stands. A measurement
-  // gap, not a rule.
+  // Both of the rotary multi's type numbers load the same block. The archive
+  // files the measurement under 03 00 and the manual's appendix calls the same
+  // effect 02 0C, so a lookup keyed by the number has to answer for either
+  // spelling; selecting one and selecting the other are the same instruction.
   {
-    GsEfx efx;
-    REQUIRE(write_type(efx, 0x0150));
-    const std::array<uint8_t, 20> delay = efx.params;
-    REQUIRE(write_type(efx, 0x020C));
-    tally.same(efx.type == 0x020C, "the unmeasured type still resolved");
-    tally.same(same_block(efx.params, delay), "an unmeasured type left the block as it stood");
+    GsEfx by_appendix;
+    GsEfx by_body;
+    REQUIRE(write_type(by_appendix, 0x020C));
+    REQUIRE(write_type(by_body, 0x0300));
+    tally.same(by_appendix.type == 0x020C, "the appendix's number resolved");
+    tally.same(by_body.type == 0x0300, "the chapter body's number resolved");
+    tally.same(same_block(by_appendix.params, by_body.params),
+               "the two numbers for one effect load one block");
   }
 
   // Three types carry nineteen measured bytes rather than twenty, because one

@@ -48,6 +48,8 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "midi/synth/gs_address_table.h"
+#include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/gs_efx_tables.h"
 #include "midi/synth/gs_layer.h"
 #include "rt/processor_base.h"
@@ -193,13 +195,16 @@ const std::vector<EfxCollision>& collisions() {
       // the stereo flanger's does, and the delay variants power up on different
       // times. What is not modelled is unchanged; what it no longer does is make
       // the types indistinguishable.
-      {"Space-D and 3D Chorus power up on the same chorus rate, and neither "
-       "Space-D's unmodulated voicing nor 3D Chorus's binaural stage is modelled",
-       {0x0143, 0x0144}},
+      // Space-D and 3D Chorus were here for the same reason, and are separated
+      // now by their own pre-delay bytes and by their output levels. Neither
+      // Space-D's unmodulated voicing nor 3D Chorus's binaural stage is
+      // modelled; what that no longer does is make the pair indistinguishable.
       {"the 3-tap delay's first two taps and the 3D delay's land on the same two times at "
        "their power-on bytes, and neither the tap counts nor the 3D stage is modelled",
        {0x0152, 0x0157}},
-      {"the gate reverb's gate stage is not modelled", {0x0155, 0x0156}},
+      // The two reverbs were here too, and part company now on their output
+      // stage: the gate type powers up on a different high-shelf gain and a
+      // different output level. The gate stage is still not modelled.
       // The two pitch shifters were here while every block read zero. They are
       // separable now without the feedback loop being modelled: the two types
       // power up on different effect balances (48 against 64), and the balance
@@ -302,8 +307,8 @@ constexpr const char* kAutoPan = "stereo.autoPan";
 constexpr const char* kEnsemble = "effects.modulation.ensemble";
 constexpr const char* kDelay = "effects.delay.stereo";
 constexpr const char* kEq = "eq.parametric";
-constexpr const char* kAmpSim = "saturation.ampSim";
 constexpr const char* kRotary = "effects.modulation.rotary";
+constexpr const char* kGain = "utility.gain";
 
 /// One row per entry of kGsEfxSlotConversions, in the header's own order.
 constexpr std::array<EfxJoin, 85> kJoin = {{
@@ -315,11 +320,14 @@ constexpr std::array<EfxJoin, 85> kJoin = {{
     {0x0100, 7, "freq.eq", kEq, "band2.frequencyHz", nullptr},
     {0x0100, 8, "width.section", kEq, "band2.q", nullptr},
     {0x0100, 9, "gain.tone", kEq, "band2.gainDb", nullptr},
-    {0x0100, 19, "level.output", nullptr, nullptr, "eq.parametric has no output gain"},
-    {0x0101, 18, "pan.output", nullptr, nullptr, "eq.graphic has no pan"},
+    {0x0100, 19, "level.output", kGain, "levelDb", nullptr},
+    {0x0101, 18, "pan.output", nullptr, nullptr,
+     "a pan places a signal where stereo.stereoBalance moves an image "
+     "already there, and the measured pair is the raw constant-power curve, "
+     "which that insert normalises to centre unity three decibels above"},
     {0x0103, 18, "pan.output", nullptr, nullptr,
      "a vowel formant filter has no insert, so the type realises no chain at all"},
-    {0x0111, 19, "level.output", kAmpSim, "levelDb", nullptr},
+    {0x0111, 19, "level.output", kGain, "levelDb", nullptr},
     {0x0120, 1, "rate.wide", kPhaser, "rateHz", nullptr},
     {0x0121, 4, "rate.wide", nullptr, nullptr,
      "the auto-wah insert follows an envelope and carries no LFO rate"},
@@ -332,13 +340,16 @@ constexpr std::array<EfxJoin, 85> kJoin = {{
     {0x0126, 0, "wave.modulator", nullptr, nullptr,
      "the auto-pan insert's LFO takes no shape selector"},
     {0x0126, 1, "rate.wide", kAutoPan, "rateHz", nullptr},
-    {0x0130, 18, "pan.output", nullptr, nullptr, "the compressor insert has no pan"},
+    {0x0130, 18, "pan.output", nullptr, nullptr,
+     "a pan places a signal where stereo.stereoBalance moves an image "
+     "already there, and the measured pair is the raw constant-power curve, "
+     "which that insert normalises to centre unity three decibels above"},
     {0x0140, 0, "delay_time.pre_delay", kEnsemble, "centerDelayMs", nullptr},
-    {0x0140, 19, "level.output", nullptr, nullptr, "the ensemble insert has no output level"},
+    {0x0140, 19, "level.output", kGain, "levelDb", nullptr},
     {0x0142, 1, "freq.pre_filter", kChorus, "preFilterHz", nullptr},
     {0x0142, 3, "rate.wide", kChorus, "rateHz", nullptr},
-    {0x0142, 16, "gain.tone", nullptr, nullptr, "the chorus insert has no output EQ"},
-    {0x0142, 17, "gain.tone", nullptr, nullptr, "the chorus insert has no output EQ"},
+    {0x0142, 16, "gain.tone", kEq, "band0.gainDb", nullptr},
+    {0x0142, 17, "gain.tone", kEq, "band1.gainDb", nullptr},
     {0x0143, 1, "rate.wide", kChorus, "rateHz", nullptr},
     {0x0144, 1, "rate.wide", kChorus, "rateHz", nullptr},
     {0x0150, 0, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
@@ -348,8 +359,8 @@ constexpr std::array<EfxJoin, 85> kJoin = {{
      "the insert's mix is a crossfade, dry = 1 - wet; the measured law is two independent "
      "gains that meet at full in the middle of the byte, which the record calls the opposite "
      "sign to a crossfade"},
-    {0x0150, 16, "gain.tone", nullptr, nullptr, "the stereo-delay insert has no output EQ"},
-    {0x0150, 17, "gain.tone", nullptr, nullptr, "the stereo-delay insert has no output EQ"},
+    {0x0150, 16, "gain.tone", kEq, "band0.gainDb", nullptr},
+    {0x0150, 17, "gain.tone", kEq, "band1.gainDb", nullptr},
     {0x0151, 0, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
     {0x0151, 1, "delay_time.time3", kDelay, "delayTimeRMs", nullptr},
     {0x0151, 4, "rate.wide", nullptr, nullptr, "the stereo-delay insert carries no modulation LFO"},
@@ -777,7 +788,10 @@ TEST_CASE("EFX parameter translations move their insert control monotonically",
     for (int value = 0; value <= 127; ++value) {
       efx.params[19] = static_cast<uint8_t>(value);
       double level = 0.0;
-      REQUIRE(json_number(gs_efx_insert_params(efx), "levelDb", level));
+      // Read off the output stage: the level is the unit's, carried at the same
+      // slot for every type, so it is not the drive block's parameter to hold.
+      REQUIRE(
+          json_number(stage_params(gs_efx_insert_chain(efx), "utility.gain"), "levelDb", level));
       INFO("PARAMETER 20 = " << value);
       REQUIRE(level >= previous);
       previous = level;
@@ -873,12 +887,13 @@ TEST_CASE("Tremolo realises as amplitude modulation, not as a ring modulator",
   // peak is unity. The case below asserts that on the OUTPUT, not on the
   // algebra, and checks that 0.5 is a real edge rather than a claimed one.
   const auto chain = gs_efx_insert_chain(make_efx(0x0125));
-  REQUIRE(chain.size() == 1);
+  REQUIRE_FALSE(chain.empty());
   REQUIRE(chain[0].name == "effects.modulation.ringModulator");
+  const std::string modulator = stage_params(chain, "effects.modulation.ringModulator");
   double carrier = 0.0;
   double wet = 0.0;
-  REQUIRE(json_number(chain[0].params_json, "carrierHz", carrier));
-  REQUIRE(json_number(chain[0].params_json, "dryWet", wet));
+  REQUIRE(json_number(modulator, "carrierHz", carrier));
+  REQUIRE(json_number(modulator, "dryWet", wet));
   REQUIRE(carrier > 0.0);
   REQUIRE(carrier < 20.0);
   REQUIRE(wet > 0.0);
@@ -890,14 +905,18 @@ TEST_CASE("Tremolo realises as amplitude modulation, not as a ring modulator",
   // carries a conversion and the chain's does not, so the chain keeps a voicing
   // where the standalone type reads a setting.
   const auto tremolo_chorus = gs_efx_insert_chain(make_efx(0x0141));
-  REQUIRE(
-      stage_names(tremolo_chorus) ==
-      std::vector<std::string>{"effects.modulation.chorus", "effects.modulation.ringModulator"});
+  // The effect's own stages come first and the unit's output stage follows, so
+  // the two modulation blocks are the head of the chain rather than all of it.
+  REQUIRE(stage_names(tremolo_chorus).size() >= 2);
+  REQUIRE(stage_names(tremolo_chorus)[0] == "effects.modulation.chorus");
+  REQUIRE(stage_names(tremolo_chorus)[1] == "effects.modulation.ringModulator");
+  const std::string chain_modulator =
+      stage_params(tremolo_chorus, "effects.modulation.ringModulator");
   double chain_wet = 0.0;
-  REQUIRE(json_number(tremolo_chorus[1].params_json, "dryWet", chain_wet));
+  REQUIRE(json_number(chain_modulator, "dryWet", chain_wet));
   REQUIRE(chain_wet == wet);
   double chain_carrier = 0.0;
-  REQUIRE(json_number(tremolo_chorus[1].params_json, "carrierHz", chain_carrier));
+  REQUIRE(json_number(chain_modulator, "carrierHz", chain_carrier));
   REQUIRE(chain_carrier > 0.0);
   REQUIRE(chain_carrier < 20.0);
 }
@@ -1088,6 +1107,17 @@ TEST_CASE("the translation reads exactly the bytes the archive named",
   std::set<std::pair<uint16_t, int>> named;
   for (const EfxJoin& row : kJoin) {
     if (row.key != nullptr) named.insert({row.type, row.slot});
+  }
+  // The binding table names the rest: a slot the archive measured no table for
+  // still moves the chain where a binding row gives it one of the measured laws
+  // (the shared output stage is most of them). Without this the sweep would
+  // report every adjudicated slot as an unexplained read.
+  for (const s::GsEfxBinding& row : s::kGsEfxBindings) {
+    named.insert({row.type, row.slot});
+    // Rotary Multi answers to two type numbers and the binding files carry one
+    // of them, so the other is named here rather than reading as an unexplained
+    // set of reads.
+    named.insert({s::gs_efx_alias_type(row.type), row.slot});
   }
   std::set<std::pair<uint16_t, int>> excepted;
   for (const UnmeasuredRead& row : kUnmeasuredReads) {
