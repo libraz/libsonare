@@ -38,8 +38,7 @@ LOCK = REPO_ROOT / "bindings/python/requirements-dev.lock"
 #: pipeline and so ends the line at the flags: letting the match cross the
 #: newline read the next recipe line as the scope, and letting a flag be the
 #: target reads `--fix` as one.
-RUFF_CALL = re.compile(
-    r"ruff[ \t]+check(?:[ \t]+--[\w-]+)*[ \t]+(?P<target>(?!-)[^\s|;&]+)")
+RUFF_CALL = re.compile(r"ruff[ \t]+check(?:[ \t]+--[\w-]+)*[ \t]+(?P<target>(?!-)[^\s|;&]+)")
 
 #: The pathspec list a `git ls-files ... -- <specs> |` pipeline feeds clang-format.
 LS_FILES_SPECS = re.compile(r"git ls-files[^|]*?--\s+(?P<specs>(?:'[^']*'\s*)+)")
@@ -73,7 +72,7 @@ def clang_format_specs(text: str) -> list[tuple[str, ...]]:
         # `git ls-files`, so a nearby unrelated one cannot lend its clang-format.
         # A fixed character lookahead does exactly that, and did.
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        if "clang-format" not in text[m.end():end]:
+        if "clang-format" not in text[m.end() : end]:
             continue
         out.append(tuple(re.findall(r"'([^']*)'", m.group("specs"))))
     return out
@@ -106,7 +105,8 @@ def check_agreement(label: str, found: dict[str, list], failures: list[str]) -> 
     if not carriers:
         failures.append(
             f"{label}: no file carries it at all. Either the invocation moved and this "
-            "check is now blind, or the gate was deleted.")
+            "check is now blind, or the gate was deleted."
+        )
         return
     distinct = {tuple(value) for value in carriers.values()}
     if len(distinct) == 1:
@@ -114,21 +114,22 @@ def check_agreement(label: str, found: dict[str, list], failures: list[str]) -> 
     failures.append(
         f"{label} disagrees across the files that carry it. CI does not call the "
         f"Makefile, so the narrowest of these is the gate that actually runs:\n"
-        + "\n".join(f"    {name}: {value}" for name, value in sorted(carriers.items())))
+        + "\n".join(f"    {name}: {value}" for name, value in sorted(carriers.items()))
+    )
 
 
 def main() -> int:
-    sources = {p.relative_to(REPO_ROOT).as_posix(): p.read_text()
-               for p in (MAKEFILE, *WORKFLOWS)}
+    sources = {p.relative_to(REPO_ROOT).as_posix(): p.read_text() for p in (MAKEFILE, *WORKFLOWS)}
     failures: list[str] = []
 
-    check_agreement("the ruff scope",
-                    {name: ruff_targets(text) for name, text in sources.items()},
-                    failures)
-    check_agreement("the clang-format pathspec",
-                    {name: sorted(set(clang_format_specs(text)))
-                     for name, text in sources.items()},
-                    failures)
+    check_agreement(
+        "the ruff scope", {name: ruff_targets(text) for name, text in sources.items()}, failures
+    )
+    check_agreement(
+        "the clang-format pathspec",
+        {name: sorted(set(clang_format_specs(text))) for name, text in sources.items()},
+        failures,
+    )
 
     locked = locked_versions(LOCK.read_text())
     lock_name = LOCK.relative_to(REPO_ROOT).as_posix()
@@ -148,20 +149,24 @@ def main() -> int:
                     f"{name} pins {package}=={version} but {lock_name} resolves "
                     f"{package}=={want}. The workflow comment claims the pin follows "
                     f"the lock; a bump moved one and not the other, so CI and "
-                    f"`make lint` no longer run the same tool.")
+                    f"`make lint` no longer run the same tool."
+                )
             checked += 1
     if not checked:
         failures.append(
             "no workflow pins any tool version, so this check verified nothing. The "
-            "install lines moved and the parsing above is stale.")
+            "install lines moved and the parsing above is stale."
+        )
 
     if failures:
         print("\n".join(f"[FAIL] {f}" for f in failures))
         return 1
     ruff = ruff_targets(sources["Makefile"])
     specs = sorted(set(clang_format_specs(sources["Makefile"])))
-    print(f"lint scope agrees across {len(sources)} file(s): ruff {ruff[0]}, "
-          f"clang-format {' '.join(specs[0])}")
+    print(
+        f"lint scope agrees across {len(sources)} file(s): ruff {ruff[0]}, "
+        f"clang-format {' '.join(specs[0])}"
+    )
     print(f"{checked} pinned tool version(s) match {lock_name}")
     return 0
 

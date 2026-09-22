@@ -119,14 +119,11 @@ def _parse_param(decl: str) -> Param:
     elif lname in ("samples", "data", "length", "sample_rate", "size", "len"):
         structural = True  # input-buffer plumbing folded by facades
     elif name == "" or (
-        is_ptr
-        and lname in ("audio", "self", "handle", "engine", "out_key", "out_bpm")
+        is_ptr and lname in ("audio", "self", "handle", "engine", "out_key", "out_bpm")
     ):
         structural = True
 
-    return Param(
-        name=name, raw_name=name, default=None, type=full_type, structural=structural
-    )
+    return Param(name=name, raw_name=name, default=None, type=full_type, structural=structural)
 
 
 # Local public-API includes: ``#include <sonare/sonare_c_effects.h>`` etc.
@@ -195,9 +192,7 @@ _PADDING_FIELD_RE = re.compile(r"^(reserved|_?pad(ding)?)([0-9_].*)?$")
 # at least one pointer or array member may legitimately drop these (the
 # allowlist's "array-length derivation" category, expressed as a rule rather
 # than as per-record entries).
-_LENGTH_FIELD_RE = re.compile(
-    r"^(count|length|len|size)$|.*_(count|length|len)$|^num_.+"
-)
+_LENGTH_FIELD_RE = re.compile(r"^(count|length|len|size)$|.*_(count|length|len)$|^num_.+")
 
 # ABI plumbing members that describe the STRUCT rather than the data in it: the
 # version tag that selects which field generation is populated, and the presence

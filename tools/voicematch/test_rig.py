@@ -61,13 +61,22 @@ def _corpus(tmp_path: Path, name: str, render, gate_ms: int = 1500) -> object:
         audio = render(440.0 * 2.0 ** ((note - 69) / 12.0))
         write_wav(root / rel, audio, SR)
         frames = audio.shape[0] if audio.ndim > 1 else audio.size
-        records.append({"timbre": "t", "note": note, "velocity": VELOCITY,
-                        "path": rel, "seconds": frames / SR})
-    (root / "manifest.json").write_text(json.dumps({
-        "id": name, "sample_rate": SR, "gate_ms": gate_ms, "tail": "500ms",
-        "preroll_ms": 0, "timbres": [{"id": "t", "label": name, "slot_channel": 1}],
-        "renders": records,
-    }))
+        records.append(
+            {"timbre": "t", "note": note, "velocity": VELOCITY, "path": rel, "seconds": frames / SR}
+        )
+    (root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "id": name,
+                "sample_rate": SR,
+                "gate_ms": gate_ms,
+                "tail": "500ms",
+                "preroll_ms": 0,
+                "timbres": [{"id": "t", "label": name, "slot_channel": 1}],
+                "renders": records,
+            }
+        )
+    )
     return load_corpus(root)
 
 

@@ -113,8 +113,7 @@ def engine_for(voice, catalogue) -> str | None:
         return None
     if not voice.kit:
         return catalogue.mode_for(voice.program, voice.bank)
-    modes = {m for k, m in catalogue.modes.items()
-             if k.startswith("d") and k[1:].isdigit()}
+    modes = {m for k, m in catalogue.modes.items() if k.startswith("d") and k[1:].isdigit()}
     if not modes:
         return None
     return modes.pop() if len(modes) == 1 else "mixed"
@@ -187,8 +186,11 @@ def goal_members(goal: dict, rows: list[dict]) -> list[dict]:
     """
     progs = set(goal.get("programs") or [])
     kits = set(goal.get("kits") or [])
-    return [r for r in rows if not r["bank"]
-            and (r["program"] in kits if r["kit"] else r["program"] in progs)]
+    return [
+        r
+        for r in rows
+        if not r["bank"] and (r["program"] in kits if r["kit"] else r["program"] in progs)
+    ]
 
 
 def goal_progress(pol: dict, rows: list[dict]) -> list[dict]:
@@ -211,13 +213,15 @@ def goal_progress(pol: dict, rows: list[dict]) -> list[dict]:
             continue
         want = float(goal.get("stage", 1.0))
         here = goal_members(goal, rows)
-        out.append({
-            "name": name,
-            "stage": want,
-            "total": len(here),
-            "met": len([r for r in here if r["stage"] >= want]),
-            "short": [r for r in here if r["stage"] < want],
-        })
+        out.append(
+            {
+                "name": name,
+                "stage": want,
+                "total": len(here),
+                "met": len([r for r in here if r["stage"] >= want]),
+                "short": [r for r in here if r["stage"] < want],
+            }
+        )
     return out
 
 
@@ -255,8 +259,13 @@ def signoff_census(rows: list[dict]) -> dict:
     Nothing else surfaces it: the stage column shows where a voice stopped and
     not what has been recorded past the step it stopped at.
     """
-    out = {"structure": 0, "structure_current": 0,
-           "music": 0, "music_current": 0, "structure_only": 0}
+    out = {
+        "structure": 0,
+        "structure_current": 0,
+        "music": 0,
+        "music_current": 0,
+        "structure_only": 0,
+    }
     for r in rows:
         axes = r.get("axes") or {}
         structure, music = axes.get("structure"), axes.get("music")
@@ -374,8 +383,7 @@ def coverage(voice, cap_raws: list[dict], gates: list[dict]) -> dict:
     unbounded = {d for gate in gates for d in (gate.get("_unbounded") or {})}
     excused -= gated
     unbounded -= gated | excused
-    gaps = [d for d in canon if d not in gated and d not in excused
-            and d not in unbounded]
+    gaps = [d for d in canon if d not in gated and d not in excused and d not in unbounded]
     out = {
         "canonical": len(canon),
         "gated": len([d for d in canon if d in gated]),
@@ -429,8 +437,13 @@ def merged_facts(every: list[dict]) -> dict:
     added before its gate is recorded must not knock a voice off the ladder.
     """
     if not every:
-        return {"profile_rows": 0, "measured_utc": "", "gate_recorded": False,
-                "gate_state": None, "gate_timbre": ""}
+        return {
+            "profile_rows": 0,
+            "measured_utc": "",
+            "gate_recorded": False,
+            "gate_state": None,
+            "gate_timbre": "",
+        }
     states = {f["gate_state"] for f in every if f["gate_state"]}
     worst = next((s for s in ("unknown", "stale", "current") if s in states), None)
     return {
@@ -446,9 +459,9 @@ def merged_facts(every: list[dict]) -> dict:
 
 def stage_for(axes: dict) -> int:
     """The highest step whose predicate holds. See the module docstring."""
-    untouched = (not axes["engine"]
-                 or (axes["engine"] == DEFAULT_ENGINE
-                     and (axes["patch"] or "").startswith(FAMILY_PATCH_PREFIX)))
+    untouched = not axes["engine"] or (
+        axes["engine"] == DEFAULT_ENGINE and (axes["patch"] or "").startswith(FAMILY_PATCH_PREFIX)
+    )
     if untouched:
         return 0
     # One timbre is a target, not half a measurement: see `docs/objective.md`.
@@ -495,8 +508,9 @@ def capital_of(row: dict, rows: list[dict], pol: dict) -> dict | None:
         return None
     if row["kit"] or not row["bank"]:
         return None
-    return next((r for r in rows
-                 if r["program"] == row["program"] and not r["bank"] and not r["kit"]), None)
+    return next(
+        (r for r in rows if r["program"] == row["program"] and not r["bank"] and not r["kit"]), None
+    )
 
 
 def resolved_next(row: dict, pol: dict, rows: list[dict]) -> str:
@@ -518,16 +532,22 @@ def resolved_next(row: dict, pol: dict, rows: list[dict]) -> str:
     approx = approximation(pol, row["slug"])
     if approx is not None:
         answered = approx.get("answered_by") or "a neighbouring voice"
-        return (f"approximated by {answered}, and terminal: "
-                f"{approx.get('reason') or 'no reason recorded'}")
+        return (
+            f"approximated by {answered}, and terminal: "
+            f"{approx.get('reason') or 'no reason recorded'}"
+        )
     capital = capital_of(row, rows, pol)
     if capital is not None and row["stage"] < HEARD_STAGE:
         if capital["stage"] < HEARD_STAGE:
-            return (f"its capital {capital['slug']} is at {capital['stage']:.1f} and nothing "
-                    f"here moves until it is heard: a variation is the capital copied and "
-                    f"then narrowed, so starting one first buys a round of rework")
-        return (f"its capital {capital['slug']} is heard: capture this variation from the "
-                f"module and measure it")
+            return (
+                f"its capital {capital['slug']} is at {capital['stage']:.1f} and nothing "
+                f"here moves until it is heard: a variation is the capital copied and "
+                f"then narrowed, so starting one first buys a round of rework"
+            )
+        return (
+            f"its capital {capital['slug']} is heard: capture this variation from the "
+            f"module and measure it"
+        )
     return row["next"]
 
 
@@ -545,25 +565,28 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
         return "measure the captured corpus into a reference profile"
     if stage == 2:
         if axes["gate_state"] is None:
-            return ("write the first gate: `profile.py compare --write-gate` against "
-                    "the profile just measured")
+            return (
+                "write the first gate: `profile.py compare --write-gate` against "
+                "the profile just measured"
+            )
         if axes["gate_state"] != "current":
-            return (f"the gate is {axes['gate_state']}: re-record it against the "
-                    f"current profile")
+            return f"the gate is {axes['gate_state']}: re-record it against the current profile"
         gaps = axes["coverage"]["gaps"]
         if gaps:
-            return (f"{len(gaps)} canonical dimension(s) neither gated nor excused: "
-                    f"{', '.join(gaps)}")
+            return (
+                f"{len(gaps)} canonical dimension(s) neither gated nor excused: {', '.join(gaps)}"
+            )
         # No gap left, so what holds the voice here is a reason already written down.
         unbounded = axes["coverage"].get("unbounded") or []
-        return (f"{len(unbounded)} dimension(s) recorded unbounded in the gate: "
-                f"{', '.join(unbounded)} — read the reason there, then either record a "
-                f"bound that became measurable or fix what the model is missing")
+        return (
+            f"{len(unbounded)} dimension(s) recorded unbounded in the gate: "
+            f"{', '.join(unbounded)} — read the reason there, then either record a "
+            f"bound that became measurable or fix what the model is missing"
+        )
     if stage == 3:
         listen = "listen to a take and record the verdict in signoff.json"
         if candidates:
-            return (f"judge the recorded candidate(s) — {', '.join(candidates)} — "
-                    f"then {listen}")
+            return f"judge the recorded candidate(s) — {', '.join(candidates)} — then {listen}"
         music = axes["music"]
         if music is not None:
             return f"the sign-off is {music['state']} against this bank: listen again"
@@ -591,12 +614,16 @@ def _last_step(axes: dict) -> str:
         what = "the patch" if axes.get("patch") else "a voice of this kit"
         return f"{what} has moved since the diagnosis: re-run autofit --diagnose"
     if structure["state"] == signoff.UNVERIFIED:
-        return ("a shared calibration unit has moved since the diagnosis and nothing can "
-                "attribute it: re-run autofit --diagnose")
+        return (
+            "a shared calibration unit has moved since the diagnosis and nothing can "
+            "attribute it: re-run autofit --diagnose"
+        )
     if structure["open"]:
-        return (f"{len(structure['open'])} term(s) no knob reaches and nobody has accepted: "
-                f"{', '.join(structure['open'])} — a missing mechanism in the model, "
-                f"or an acceptance with a reason")
+        return (
+            f"{len(structure['open'])} term(s) no knob reaches and nobody has accepted: "
+            f"{', '.join(structure['open'])} — a missing mechanism in the model, "
+            f"or an acceptance with a reason"
+        )
     return "settled"
 
 
@@ -634,23 +661,25 @@ def build(catalogue) -> list[dict]:
         }
         stage = stage_for(axes)
         open_here = cands.get(v.slug, [])
-        rows.append({
-            "slug": v.slug,
-            "program": v.program,
-            "bank": v.bank,
-            "kit": v.kit,
-            "name": v.name,
-            "group": v.group,
-            "tone_class": v.tone.value,
-            "patch": v.patch or None,
-            "engine": axes["engine"],
-            "capture": cap.id if cap else None,
-            "stage": stage / 5.0,
-            "stage_name": STAGES[stage],
-            "open_candidates": open_here,
-            "axes": axes,
-            "next": next_action(axes, stage, open_here),
-        })
+        rows.append(
+            {
+                "slug": v.slug,
+                "program": v.program,
+                "bank": v.bank,
+                "kit": v.kit,
+                "name": v.name,
+                "group": v.group,
+                "tone_class": v.tone.value,
+                "patch": v.patch or None,
+                "engine": axes["engine"],
+                "capture": cap.id if cap else None,
+                "stage": stage / 5.0,
+                "stage_name": STAGES[stage],
+                "open_candidates": open_here,
+                "axes": axes,
+                "next": next_action(axes, stage, open_here),
+            }
+        )
     return rows
 
 
@@ -665,8 +694,7 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
             return
         rows = goal_members((pol.get("goals") or {})[goal], rows)
         goals = [match]
-    shown = rows if every or goal else [
-        r for r in rows if r["stage"] > 0.2 or r["open_candidates"]]
+    shown = rows if every or goal else [r for r in rows if r["stage"] > 0.2 or r["open_candidates"]]
     if not shown:
         print("  nothing past stage 0.2 — pass --all for the whole bank")
         return
@@ -680,8 +708,10 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
         oracle = r["capture"] or "-"
         rank, _name = tier_of(pol, r["program"], r["bank"], kit=r["kit"])
         tier = f"t{rank}" if rank else "t-"
-        print(f"    {r['slug']:<32} {tier} {r['stage']:.1f} {bar}  {r['engine'] or '?':<15}"
-              f" {oracle:<10}{flag}".rstrip())
+        print(
+            f"    {r['slug']:<32} {tier} {r['stage']:.1f} {bar}  {r['engine'] or '?':<15}"
+            f" {oracle:<10}{flag}".rstrip()
+        )
         # Only past the oracle step, where the line differs per voice. Below it
         # every voice says the same sentence, and 150 copies of it bury the four
         # that say something — except where the policy has something to add,
@@ -693,66 +723,87 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
     counts: dict[str, int] = {}
     for r in rows:
         counts[r["stage_name"]] = counts.get(r["stage_name"], 0) + 1
-    print(f"\n  {total} voices: "
-          + ", ".join(f"{n} {s}" for s, n in
-                      sorted(counts.items(), key=lambda kv: STAGES.index(kv[0]))))
+    print(
+        f"\n  {total} voices: "
+        + ", ".join(
+            f"{n} {s}" for s, n in sorted(counts.items(), key=lambda kv: STAGES.index(kv[0]))
+        )
+    )
     # Counted apart from the unfinished voices rather than added to them: an
     # approximated slot is not waiting on a capture, whether or not it has one.
     approximated = [r for r in rows if approximation(pol, r["slug"])]
     no_oracle = [r for r in rows if not r["capture"] and r not in approximated]
     if no_oracle:
-        print(f"  {len(no_oracle)} with no oracle captured — that is the task list, "
-              f"and nothing below stage 0.4 moves without one")
+        print(
+            f"  {len(no_oracle)} with no oracle captured — that is the task list, "
+            f"and nothing below stage 0.4 moves without one"
+        )
     if approximated:
         # Two shapes, and the count does not separate them: the bank has no
         # mechanism for the slot, or one patch answers it and a neighbour both.
         # Either way nothing moves until the entry's own reason is addressed,
         # and several of these do hold a capture of their own.
-        print(f"  {len(approximated)} answered by a neighbouring voice and terminal "
-              f"until the entry's reason is addressed — read `approximated` in "
-              f"policy.json for which")
+        print(
+            f"  {len(approximated)} answered by a neighbouring voice and terminal "
+            f"until the entry's reason is addressed — read `approximated` in "
+            f"policy.json for which"
+        )
     waiting, ready = variation_split(rows, pol)
     if waiting or ready:
-        print(f"  {waiting + ready} variation(s) below heard: {waiting} behind a capital that "
-              f"is not heard yet, {ready} whose capital is and which can be captured")
+        print(
+            f"  {waiting + ready} variation(s) below heard: {waiting} behind a capital that "
+            f"is not heard yet, {ready} whose capital is and which can be captured"
+        )
     unwritten = sum(len(r["open_candidates"]) for r in rows)
     if unwritten:
         print(f"  {unwritten} recorded calibration setting(s) not written back")
     census = signoff_census(rows)
     if census["structure"] or census["music"]:
-        print(f"  sign-offs: {census['music']} musical "
-              f"({census['music_current']} current against this bank), "
-              f"{census['structure']} structural "
-              f"({census['structure_current']} current)")
+        print(
+            f"  sign-offs: {census['music']} musical "
+            f"({census['music_current']} current against this bank), "
+            f"{census['structure']} structural "
+            f"({census['structure_current']} current)"
+        )
     if census["structure_only"]:
-        print(f"  {census['structure_only']} of those diagnoses sit on a voice nobody has "
-              f"signed a take off on: the ear is read one step earlier, so none of them "
-              f"raises a stage until somebody listens")
+        print(
+            f"  {census['structure_only']} of those diagnoses sit on a voice nobody has "
+            f"signed a take off on: the ear is read one step earlier, so none of them "
+            f"raises a stage until somebody listens"
+        )
     for g in goals:
         step = STAGES[round(g["stage"] * 5)]
         print(f"  goal {g['name']}: {g['met']}/{g['total']} at {step} ({g['stage']:.1f})")
         if g["short"] and goal is not None:
             print("    short: " + ", ".join(r["slug"] for r in g["short"]))
     if goals:
-        print("  a goal is where attention goes, never a condition on shipping: a version "
-              "whose date arrives with the set unmet ships and the goal carries over")
+        print(
+            "  a goal is where attention goes, never a condition on shipping: a version "
+            "whose date arrives with the set unmet ships and the goal carries over"
+        )
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--lib", default=None,
-                    help="a -DBUILD_TUNING=ON library; without one the engine "
-                         "column is blank and every voice reads as untouched")
-    ap.add_argument("--write", action="store_true",
-                    help=f"regenerate {_display(OUT_PATH)}")
-    ap.add_argument("--check", action="store_true",
-                    help="fail if the generated file is stale")
-    ap.add_argument("--all", action="store_true",
-                    help="print every voice, not only those past stage 0.2")
-    ap.add_argument("--goal", default=None, metavar="NAME",
-                    help=f"print one goal's members and what each still needs "
-                         f"(goals are declared in {_display(POLICY)}; a goal is "
-                         f"never a condition on shipping)")
+    ap.add_argument(
+        "--lib",
+        default=None,
+        help="a -DBUILD_TUNING=ON library; without one the engine "
+        "column is blank and every voice reads as untouched",
+    )
+    ap.add_argument("--write", action="store_true", help=f"regenerate {_display(OUT_PATH)}")
+    ap.add_argument("--check", action="store_true", help="fail if the generated file is stale")
+    ap.add_argument(
+        "--all", action="store_true", help="print every voice, not only those past stage 0.2"
+    )
+    ap.add_argument(
+        "--goal",
+        default=None,
+        metavar="NAME",
+        help=f"print one goal's members and what each still needs "
+        f"(goals are declared in {_display(POLICY)}; a goal is "
+        f"never a condition on shipping)",
+    )
     ap.add_argument("--sr", type=int, default=48000)
     args = ap.parse_args()
     pol = _load(POLICY)
@@ -778,8 +829,10 @@ def main() -> int:
     # The reading path needs no build: the generated file is committed precisely
     # so a plain clone can see where the bank stands.
     if not OUT_PATH.is_file():
-        print(f"{OUT_PATH}: missing — run `make voice-status-refresh` "
-              f"(needs a -DBUILD_TUNING=ON build)")
+        print(
+            f"{OUT_PATH}: missing — run `make voice-status-refresh` "
+            f"(needs a -DBUILD_TUNING=ON build)"
+        )
         return 0
     render_table(_load(OUT_PATH)["voices"], every=args.all, pol=pol, goal=args.goal)
     return 0

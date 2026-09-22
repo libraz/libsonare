@@ -133,7 +133,12 @@ class Catalogue:
 
 
 def dump_catalogue(
-    program: int, pattern: str, lib_path: str | None, *, sr: int, notes: str = "",
+    program: int,
+    pattern: str,
+    lib_path: str | None,
+    *,
+    sr: int,
+    notes: str = "",
     bank: int = 0,
 ) -> Catalogue:
     """Render once with `SONARE_TUNING_DUMP` and read back the whole knob space.
@@ -164,10 +169,16 @@ def dump_catalogue(
         ) % (
             str(HERE),
             tuple(int(n) for n in notes.split(",")) if notes else (),
-            notes, pattern, program, program, bank, sr,
+            notes,
+            pattern,
+            program,
+            program,
+            bank,
+            sr,
         )
-        proc = subprocess.run([sys.executable, "-c", child], env=env,
-                              capture_output=True, check=False, text=True)
+        proc = subprocess.run(
+            [sys.executable, "-c", child], env=env, capture_output=True, check=False, text=True
+        )
         if proc.returncode != 0:
             raise RuntimeError(f"knob dump render failed:\n{proc.stderr[-2000:]}")
         if not dump.exists():

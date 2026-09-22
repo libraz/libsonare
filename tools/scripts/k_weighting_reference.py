@@ -33,11 +33,11 @@ import os
 # ---------------------------------------------------------------------------
 # K-weighting analog prototype parameters (ITU-R BS.1770-4 Annex 2)
 # ---------------------------------------------------------------------------
-SHELF_FREQ_HZ = 1681.974450955533    # pre-filter shelf frequency
-SHELF_GAIN_DB = 3.999843853973347    # pre-filter shelf gain (dB)
-SHELF_Q = 0.7071752369554196         # pre-filter Q
-HP_FREQ_HZ = 38.13547087613982       # RLB high-pass frequency
-HP_Q = 0.5003270373238773            # RLB high-pass Q
+SHELF_FREQ_HZ = 1681.974450955533  # pre-filter shelf frequency
+SHELF_GAIN_DB = 3.999843853973347  # pre-filter shelf gain (dB)
+SHELF_Q = 0.7071752369554196  # pre-filter Q
+HP_FREQ_HZ = 38.13547087613982  # RLB high-pass frequency
+HP_Q = 0.5003270373238773  # RLB high-pass Q
 
 # Deman exponent: vb = vh^0.499666774155
 # This comes from the parametric EQ bilinear-transform derivation described
@@ -54,7 +54,7 @@ def deman_high_shelf(freq_hz: float, sample_rate: float, gain_db: float, q: floa
     """
     k = math.tan(math.pi * freq_hz / sample_rate)
     vh = 10.0 ** (gain_db / 20.0)
-    vb = vh ** DEMAN_EXP
+    vb = vh**DEMAN_EXP
     a0 = 1.0 + k / q + k * k
     b0 = (vh + vb * k / q + k * k) / a0
     b1 = 2.0 * (k * k - vh) / a0
@@ -90,7 +90,7 @@ def biquad_freq_response_db(coeffs: dict, freq_hz: float, sample_rate: float) ->
     """
     omega = 2.0 * math.pi * freq_hz / sample_rate
     z_inv = complex(math.cos(omega), -math.sin(omega))  # z^{-1} = e^{-j*omega}
-    z_inv2 = z_inv * z_inv                               # z^{-2}
+    z_inv2 = z_inv * z_inv  # z^{-2}
 
     numerator = coeffs["b0"] + coeffs["b1"] * z_inv + coeffs["b2"] * z_inv2
     denominator = 1.0 + coeffs["a1"] * z_inv + coeffs["a2"] * z_inv2
@@ -105,9 +105,8 @@ def k_weighting_response_db(pre: dict, rlb: dict, freq_hz: float, sample_rate: f
     """
     Combined K-weighting frequency response in dB (pre-filter + RLB cascaded).
     """
-    return (
-        biquad_freq_response_db(pre, freq_hz, sample_rate)
-        + biquad_freq_response_db(rlb, freq_hz, sample_rate)
+    return biquad_freq_response_db(pre, freq_hz, sample_rate) + biquad_freq_response_db(
+        rlb, freq_hz, sample_rate
     )
 
 
@@ -200,8 +199,10 @@ def main() -> None:
         print(f"  rlb:  b0={rlb['b0']:.15f}  b1={rlb['b1']:.15f}  b2={rlb['b2']:.15f}")
         print(f"        a1={rlb['a1']:.15f}  a2={rlb['a2']:.15f}")
         for freq_str, resp in sr_data["response_db"].items():
-            print(f"  {int(freq_str):6d} Hz: combined={resp['combined_db']:+8.4f} dB"
-                  f"  pre={resp['pre_db']:+7.4f} dB  rlb={resp['rlb_db']:+7.4f} dB")
+            print(
+                f"  {int(freq_str):6d} Hz: combined={resp['combined_db']:+8.4f} dB"
+                f"  pre={resp['pre_db']:+7.4f} dB  rlb={resp['rlb_db']:+7.4f} dB"
+            )
 
     # Cross-verify: 48 kHz hardcoded vs Deman should match to high precision
     pre_48_hc, rlb_48_hc = make_48k_hardcoded()

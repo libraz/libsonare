@@ -100,14 +100,17 @@ def _unassigned_violin_field() -> str:
     which leaves the case exercising the replace path while asserting the append
     path's postcondition. That is how it went red, silently, once.
     """
-    tables = "\n".join(p.read_text() for p in
-                       sorted((REPO_ROOT / "src/midi/synth").glob("gm_fallback_programs_*.h")))
+    tables = "\n".join(
+        p.read_text()
+        for p in sorted((REPO_ROOT / "src/midi/synth").glob("gm_fallback_programs_*.h"))
+    )
     assigned = set(re.findall(r"o\.violin\.bowed_string\.(\w+)\s*=", tables))
-    headers = "\n".join(p.read_text() for p in
-                        sorted((REPO_ROOT / "src/midi/synth").glob("*.h")))
+    headers = "\n".join(p.read_text() for p in sorted((REPO_ROOT / "src/midi/synth").glob("*.h")))
     block = re.search(r"struct\s+BowedStringPatchParams\s*\{(.*?)\n\};", headers, re.DOTALL)
     assert block, "BowedStringPatchParams is not declared where this case looks for it"
-    declared = re.findall(r"^\s*(?:float|int|bool|uint8_t)\s+(\w+)\s*=", block.group(1), re.MULTILINE)
+    declared = re.findall(
+        r"^\s*(?:float|int|bool|uint8_t)\s+(\w+)\s*=", block.group(1), re.MULTILINE
+    )
     free = sorted(set(declared) - assigned)
     assert free, "every bowed_string field is assigned; pick another struct for this case"
     return free[0]
@@ -152,8 +155,9 @@ def _cache(build_dir: Path, **options) -> Path:
 
 def test_a_dir_configured_without_the_shared_target_is_reconfigured(tmp_path, monkeypatch):
     """`sonare_shared` would not exist, and the build error names no option."""
-    build_dir = _cache(tmp_path / "build", BUILD_TUNING="ON", BUILD_SHARED="OFF",
-                       CMAKE_BUILD_TYPE="Release")
+    build_dir = _cache(
+        tmp_path / "build", BUILD_TUNING="ON", BUILD_SHARED="OFF", CMAKE_BUILD_TYPE="Release"
+    )
     ran: list[list[str]] = []
     monkeypatch.setattr(build_lib.subprocess, "run", lambda cmd, **k: ran.append(cmd))
     configure_build(build_dir, "cmake", tuning=True)
@@ -161,8 +165,9 @@ def test_a_dir_configured_without_the_shared_target_is_reconfigured(tmp_path, mo
 
 
 def test_a_debug_dir_is_reconfigured_to_release(tmp_path, monkeypatch):
-    build_dir = _cache(tmp_path / "build", BUILD_TUNING="OFF", BUILD_SHARED="ON",
-                       CMAKE_BUILD_TYPE="Debug")
+    build_dir = _cache(
+        tmp_path / "build", BUILD_TUNING="OFF", BUILD_SHARED="ON", CMAKE_BUILD_TYPE="Debug"
+    )
     ran: list[list[str]] = []
     monkeypatch.setattr(build_lib.subprocess, "run", lambda cmd, **k: ran.append(cmd))
     configure_build(build_dir, "cmake", tuning=False)
@@ -170,10 +175,12 @@ def test_a_debug_dir_is_reconfigured_to_release(tmp_path, monkeypatch):
 
 
 def test_a_matching_dir_is_left_alone(tmp_path, monkeypatch):
-    build_dir = _cache(tmp_path / "build", BUILD_TUNING="ON", BUILD_SHARED="ON",
-                       CMAKE_BUILD_TYPE="Release")
-    monkeypatch.setattr(build_lib.subprocess, "run",
-                        lambda *a, **k: pytest.fail("reconfigured a compatible dir"))
+    build_dir = _cache(
+        tmp_path / "build", BUILD_TUNING="ON", BUILD_SHARED="ON", CMAKE_BUILD_TYPE="Release"
+    )
+    monkeypatch.setattr(
+        build_lib.subprocess, "run", lambda *a, **k: pytest.fail("reconfigured a compatible dir")
+    )
     configure_build(build_dir, "cmake", tuning=True)
 
 
@@ -237,10 +244,9 @@ def test_every_source_file_matches_the_candidate_being_rendered(tmp_path, monkey
         return _terms(harm=1.0)
 
     evaluator._render_terms = capture
-    evaluator([1.0, 5.0])   # b moves away from its default
-    evaluator([9.0, 2.0])   # ...and back to it, while a moves
-    assert on_disk[1] == (materialize([a], [9.0], pristine, full=True)[a_path],
-                          pristine[b_path])
+    evaluator([1.0, 5.0])  # b moves away from its default
+    evaluator([9.0, 2.0])  # ...and back to it, while a moves
+    assert on_disk[1] == (materialize([a], [9.0], pristine, full=True)[a_path], pristine[b_path])
 
 
 def test_a_cached_point_still_decides_the_best(tmp_path, monkeypatch):
@@ -297,15 +303,21 @@ def test_restore_does_not_roll_back_an_edit_made_after_its_own(tmp_path, capsys)
 def _table_texts() -> dict[Path, str]:
     from writeback import PROGRAM_TABLE_FILES
 
-    return {REPO_ROOT / name: (REPO_ROOT / name).read_text()
-            for name in PROGRAM_TABLE_FILES if (REPO_ROOT / name).exists()}
+    return {
+        REPO_ROOT / name: (REPO_ROOT / name).read_text()
+        for name in PROGRAM_TABLE_FILES
+        if (REPO_ROOT / name).exists()
+    }
 
 
 def test_every_named_patch_has_a_write_back_site():
     """A patch with none falls silently into `unplaced` and the fit loop never closes."""
     tables = _table_texts()
-    unplaced = [patch for patch in override_patch_names()
-                if not write_patch_fields({patch: [("amp_env.release_ms", 123.0)]}, tables)]
+    unplaced = [
+        patch
+        for patch in override_patch_names()
+        if not write_patch_fields({patch: [("amp_env.release_ms", 123.0)]}, tables)
+    ]
     assert unplaced == []
 
 
@@ -315,10 +327,8 @@ def test_a_patch_built_through_a_reference_is_written_through_it():
     text = next(iter(edited.values()))
     lines = text.splitlines()
     written = next(i for i, ln in enumerate(lines) if "vb.body_mix = 0.33f;" in ln)
-    bound = next(i for i, ln in enumerate(lines)
-                 if "NativeSynthPatch& vb = o.vibraphone;" in ln)
-    following = next(i for i, ln in enumerate(lines)
-                     if i > bound and "NativeSynthPatch&" in ln)
+    bound = next(i for i, ln in enumerate(lines) if "NativeSynthPatch& vb = o.vibraphone;" in ln)
+    following = next(i for i, ln in enumerate(lines) if i > bound and "NativeSynthPatch&" in ln)
     assert bound < written < following
 
 
@@ -333,19 +343,23 @@ def test_two_write_backs_into_one_file_both_survive(tmp_path, monkeypatch, capsy
     """A `SONARE_TUNABLE` splice and a patch-field line can land in the same file."""
     path, knob = _source_knob(tmp_path, "shared.h", "1.0")
     knob = Knob(**{**vars(knob), "tunable": "violin.kValue"})
-    patch_knob = Knob(label="violin.cutoff_hz", lo=0.0, hi=1.0, log=False,
-                      start_value=0.5, tunable="violin.cutoff_hz")
+    patch_knob = Knob(
+        label="violin.cutoff_hz",
+        lo=0.0,
+        hi=1.0,
+        log=False,
+        start_value=0.5,
+        tunable="violin.cutoff_hz",
+    )
 
     def fake_write(per_patch, base=None):
         return {path: (base or {})[path] + "// patch field\n"}
 
     monkeypatch.setattr(report_module, "write_patch_fields", fake_write)
     monkeypatch.setattr(report_module, "REPO_ROOT", tmp_path)  # the knob file lives here
-    evaluator = argparse.Namespace(trajectory=[], n_renders=0, best_loss=0.5,
-                                   normalize=True)
+    evaluator = argparse.Namespace(trajectory=[], n_renders=0, best_loss=0.5, normalize=True)
     args = _probe_args(out="", dry_run=True)
-    report_result([knob, patch_knob], {path: path.read_text()}, [7.0, 0.9],
-                  evaluator, args)
+    report_result([knob, patch_knob], {path: path.read_text()}, [7.0, 0.9], evaluator, args)
     printed = capsys.readouterr().out
     assert "kValue = 7.0f" in printed and "// patch field" in printed
 
@@ -354,6 +368,7 @@ def test_two_write_backs_into_one_file_both_survive(tmp_path, monkeypatch, capsy
 # Starting up the way a user starts it
 # --------------------------------------------------------------------------- #
 HERE = Path(__file__).resolve().parent
+
 
 def _is_entry_point(path: Path) -> bool:
     """Whether a file has a `__main__` block — the line itself, not a mention of it.
@@ -364,8 +379,7 @@ def _is_entry_point(path: Path) -> bool:
     if path.name.startswith("test_"):
         return False
     return any(
-        line.rstrip() == 'if __name__ == "__main__":'
-        for line in path.read_text().splitlines()
+        line.rstrip() == 'if __name__ == "__main__":' for line in path.read_text().splitlines()
     )
 
 
@@ -410,7 +424,9 @@ def _native_library_loads() -> bool:
     """Whether a libsonare dylib is available to load at all."""
     proc = subprocess.run(
         [sys.executable, "-c", _NATIVE_PROBE, str(DEFAULT_DYLIB)],
-        capture_output=True, check=False, text=True,
+        capture_output=True,
+        check=False,
+        text=True,
     )
     return proc.returncode == 0
 
@@ -459,7 +475,11 @@ def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
     env.pop("PYTHONPATH", None)  # never let an ambient path answer the question
     proc = subprocess.run(
         [sys.executable, "-c", _IMPORT_SMOKE, str(HERE), str(HERE / script)],
-        capture_output=True, check=False, text=True, cwd=tmp_path, env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+        cwd=tmp_path,
+        env=env,
     )
     assert proc.returncode == 0, (
         f"{script} does not import on a clean interpreter "

@@ -54,9 +54,13 @@ MODAL_MERGE_CENTS = 50.0
 MODAL_MAX_HZ = 12000.0
 
 
-def measure_modes(freqs: np.ndarray, mag: np.ndarray, *,
-                  n_max: int = MODAL_MAX_MODES,
-                  floor_db: float = MODAL_FLOOR_DB) -> list[tuple[float, float]]:
+def measure_modes(
+    freqs: np.ndarray,
+    mag: np.ndarray,
+    *,
+    n_max: int = MODAL_MAX_MODES,
+    floor_db: float = MODAL_FLOOR_DB,
+) -> list[tuple[float, float]]:
     """The strongest isolated partials of a spectrum -> [(hz, db rel strongest)].
 
     Prominence against a locally smoothed baseline rather than a plain local
@@ -106,8 +110,7 @@ def measure_modes(freqs: np.ndarray, mag: np.ndarray, *,
     return [(round(hz, 2), round(level - peak, 2)) for hz, level in kept]
 
 
-def modal_profile(freqs: np.ndarray, mag: np.ndarray, expected_f0: float,
-                  **kwargs) -> dict:
+def modal_profile(freqs: np.ndarray, mag: np.ndarray, expected_f0: float, **kwargs) -> dict:
     """`measure_modes` as the fields a row carries.
 
     `modal_ratio` is against the note's nominal equal-tempered frequency rather
@@ -119,6 +122,5 @@ def modal_profile(freqs: np.ndarray, mag: np.ndarray, expected_f0: float,
     return {
         "modal_hz": [hz for hz, _ in modes],
         "modal_db": [db for _, db in modes],
-        "modal_ratio": [round(hz / expected_f0, 4) for hz, _ in modes]
-        if expected_f0 > 0.0 else [],
+        "modal_ratio": [round(hz / expected_f0, 4) for hz, _ in modes] if expected_f0 > 0.0 else [],
     }

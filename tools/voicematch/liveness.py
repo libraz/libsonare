@@ -129,35 +129,32 @@ class SpecReport:
         if len(velocities) < 2:
             return []
         return sorted(
-            name for name, hit in self.velocities.items()
+            name
+            for name, hit in self.velocities.items()
             if len(hit) == 1 and not self.excuses.get(name)
         )
 
     def dead(self) -> list[str]:
         """Knobs that moved nothing at any note and carry no excuse."""
         return sorted(
-            name for name, notes in self.live.items()
-            if not notes and not self.excuses.get(name)
+            name for name, notes in self.live.items() if not notes and not self.excuses.get(name)
         )
 
     def excused(self) -> list[str]:
         """Knobs that moved nothing and say why they are kept."""
         return sorted(
-            name for name, notes in self.live.items()
-            if not notes and self.excuses.get(name)
+            name for name, notes in self.live.items() if not notes and self.excuses.get(name)
         )
 
     def stale(self) -> list[str]:
         """Knobs excused as dead that have since come alive."""
-        return sorted(
-            name for name, notes in self.live.items()
-            if notes and self.excuses.get(name)
-        )
+        return sorted(name for name, notes in self.live.items() if notes and self.excuses.get(name))
 
     def partial(self, notes: tuple[int, ...]) -> list[str]:
         """Knobs live at some notes and not others, an excused one aside."""
         return sorted(
-            name for name, hit in self.live.items()
+            name
+            for name, hit in self.live.items()
             if hit and len(hit) < len(notes) and not self.excuses.get(name)
         )
 
@@ -224,19 +221,30 @@ def derive_program(knobs: list[Knob], catalogue) -> tuple[int | None, str | None
     for knob in knobs:
         head = knob.name.split(".")[0]
         mode = head.removesuffix("_voice")
-        on_engine = sorted((patch for patch, engine in catalogue.modes.items()
-                            if engine == mode and patch in addresses),
-                           key=lambda p: (addresses[p][1] != 0, p))
+        on_engine = sorted(
+            (
+                patch
+                for patch, engine in catalogue.modes.items()
+                if engine == mode and patch in addresses
+            ),
+            key=lambda p: (addresses[p][1] != 0, p),
+        )
         if on_engine:
             program, bank = addresses[on_engine[0]]
             return program, on_engine[0], bank, ""
     return None, None, 0, "no knob names a patch or an engine the catalogue reports"
 
 
-def probe_knobs(knobs: list[Knob], lib: str, program: int, channel: int,
-                notes: tuple[int, ...], velocities: tuple[int, ...],
-                workers: int, bank: int = 0
-                ) -> tuple[dict[str, list[int]], dict[str, set[int]]]:
+def probe_knobs(
+    knobs: list[Knob],
+    lib: str,
+    program: int,
+    channel: int,
+    notes: tuple[int, ...],
+    velocities: tuple[int, ...],
+    workers: int,
+    bank: int = 0,
+) -> tuple[dict[str, list[int]], dict[str, set[int]]]:
     """Render each knob's range ends over the grid; where it moved, and at which velocity.
 
     One subprocess per knob-end rather than per cell: the override is fixed at
@@ -265,14 +273,21 @@ def probe_knobs(knobs: list[Knob], lib: str, program: int, channel: int,
     return {name: sorted(hit) for name, hit in live.items()}, moved_at
 
 
-def scan_spec(path: Path, catalogue, lib: str, notes: tuple[int, ...],
-              velocities: tuple[int, ...], workers: int) -> SpecReport:
+def scan_spec(
+    path: Path,
+    catalogue,
+    lib: str,
+    notes: tuple[int, ...],
+    velocities: tuple[int, ...],
+    workers: int,
+) -> SpecReport:
     """Render every knob's range ends at every note and record where they differ."""
     # The older specs name a constant bare, and the override table's keys are
     # flat and scoped, so scope here rather than at every use.
     tunables = scan_tunables()
-    knobs = [Knob(resolve_knob_name(k.name, tunables), k.lo, k.hi, k.excuse)
-             for k in spec_entries(path)]
+    knobs = [
+        Knob(resolve_knob_name(k.name, tunables), k.lo, k.hi, k.excuse) for k in spec_entries(path)
+    ]
     report = SpecReport(spec=path.name)
     if not knobs:
         report.skipped = "no knob carries a tunable name and a range"
@@ -284,7 +299,8 @@ def scan_spec(path: Path, catalogue, lib: str, notes: tuple[int, ...],
 
     report.excuses = {knob.name: knob.excuse for knob in knobs if knob.excuse}
     report.live, report.velocities = probe_knobs(
-        knobs, lib, program, 0, notes, velocities, workers, bank)
+        knobs, lib, program, 0, notes, velocities, workers, bank
+    )
     return report
 
 
@@ -313,22 +329,31 @@ class PatchReport:
         return len(self.inert) / self.total if self.total else 0.0
 
 
-def census_jobs(catalogue, notes: tuple[int, ...], drums: bool
-                ) -> list[tuple[str, int, int, int, tuple[int, ...], int | None]]:
+def census_jobs(
+    catalogue, notes: tuple[int, ...], drums: bool
+) -> list[tuple[str, int, int, int, tuple[int, ...], int | None]]:
     """Every melodic patch at its own address, plus one job per drum note.
 
     The addresses are `patch_addresses`; what this adds is the grid and the
     channel each job is probed on.
     """
-    jobs = [(patch, program, bank, 0, notes, None)
-            for patch, (program, bank) in sorted(patch_addresses(catalogue).items())]
+    jobs = [
+        (patch, program, bank, 0, notes, None)
+        for patch, (program, bank) in sorted(patch_addresses(catalogue).items())
+    ]
     if drums:
         jobs += [(drum_patch_key(n), 0, 0, PERCUSSION_CHANNEL, (n,), n) for n in range(128)]
     return jobs
 
 
-def census(catalogue, lib: str, notes: tuple[int, ...], velocities: tuple[int, ...],
-           workers: int, drums: bool):
+def census(
+    catalogue,
+    lib: str,
+    notes: tuple[int, ...],
+    velocities: tuple[int, ...],
+    workers: int,
+    drums: bool,
+):
     """Per patch, which of its own fields cannot move the render it voices.
 
     The bank's patches rather than its programs, because one patch commonly
@@ -351,25 +376,42 @@ def census(catalogue, lib: str, notes: tuple[int, ...], velocities: tuple[int, .
             entries = auto_spec(program, catalogue, drum_note=drum_note, bank=bank)
         except ValueError:
             continue  # a drum note outside the kit, or a program with no patch
-        knobs = [Knob(e["tunable"], float(e["min"]), float(e["max"]))
-                 for e in entries if e["tunable"].startswith(patch + ".")
-                 and e["min"] != e["max"]]
+        knobs = [
+            Knob(e["tunable"], float(e["min"]), float(e["max"]))
+            for e in entries
+            if e["tunable"].startswith(patch + ".") and e["min"] != e["max"]
+        ]
         if not knobs:
             continue
         # One unmodified render first. The catalogue reports a patch for all 128
         # drum notes while a kit sounds about 47 of them, and a note it does not
         # sound renders silence -- under which every field is byte-identical and
         # the patch would otherwise be counted as wholly inert.
-        loudest = max(peak for _, peak in render_batch(
-            lib, program, channel, [(n, max(velocities)) for n in grid], "", bank))
+        loudest = max(
+            peak
+            for _, peak in render_batch(
+                lib, program, channel, [(n, max(velocities)) for n in grid], "", bank
+            )
+        )
         if loudest < SILENCE_PEAK:
-            yield PatchReport(patch=patch, program=program, bank=bank, channel=channel,
-                              total=len(knobs), silent=True)
+            yield PatchReport(
+                patch=patch,
+                program=program,
+                bank=bank,
+                channel=channel,
+                total=len(knobs),
+                silent=True,
+            )
             continue
         live, _ = probe_knobs(knobs, lib, program, channel, grid, velocities, workers, bank)
         yield PatchReport(
-            patch=patch, program=program, bank=bank, channel=channel, total=len(knobs),
-            inert=sorted(name for name, hit in live.items() if not hit))
+            patch=patch,
+            program=program,
+            bank=bank,
+            channel=channel,
+            total=len(knobs),
+            inert=sorted(name for name, hit in live.items() if not hit),
+        )
 
 
 #: `tools/bank-versions.json`, whose generation a census is only valid against.
@@ -384,8 +426,9 @@ def bank_generation() -> int | None:
         return None
 
 
-def write_census(path: Path, reports: list[PatchReport], notes: tuple[int, ...],
-                 velocities: tuple[int, ...]) -> None:
+def write_census(
+    path: Path, reports: list[PatchReport], notes: tuple[int, ...], velocities: tuple[int, ...]
+) -> None:
     """Write the census, stamped with the bank generation it was taken against.
 
     The stamp is what makes a committed census honest without an hour-scale
@@ -393,29 +436,37 @@ def write_census(path: Path, reports: list[PatchReport], notes: tuple[int, ...],
     and a census recorded against an older one is a claim about a bank nobody
     is running any more. `--census-check` compares the two and says so.
     """
-    path.write_text(json.dumps({
-        "_": ("Per patch, which of its own fields could not move the render it voices. "
-              "Generated by `make spec-liveness-census`; see tools/voicematch/docs/"
-              "fitting.md. A census screens rather than proves - a null here earns the "
-              "per-semitone ladder, and a patch is free not to use a field its engine "
-              "offers, so this is not a defect list."),
-        "bank_generation": bank_generation(),
-        "notes": list(notes),
-        "velocities": list(velocities),
-        "patches": {
-            r.patch: {
-                "program": r.program,
-                # Absent means bank 0, which is every patch a plain GM file
-                # reaches; a variation carries the address it was probed at.
-                **({"bank": r.bank} if r.bank else {}),
-                "channel": r.channel,
-                "fields": r.total,
-                "silent": r.silent,
-                "inert": [n.split(".", 1)[1] for n in r.inert],
-            }
-            for r in sorted(reports, key=lambda r: r.patch)
-        },
-    }, indent=2) + "\n")
+    path.write_text(
+        json.dumps(
+            {
+                "_": (
+                    "Per patch, which of its own fields could not move the render it voices. "
+                    "Generated by `make spec-liveness-census`; see tools/voicematch/docs/"
+                    "fitting.md. A census screens rather than proves - a null here earns the "
+                    "per-semitone ladder, and a patch is free not to use a field its engine "
+                    "offers, so this is not a defect list."
+                ),
+                "bank_generation": bank_generation(),
+                "notes": list(notes),
+                "velocities": list(velocities),
+                "patches": {
+                    r.patch: {
+                        "program": r.program,
+                        # Absent means bank 0, which is every patch a plain GM file
+                        # reaches; a variation carries the address it was probed at.
+                        **({"bank": r.bank} if r.bank else {}),
+                        "channel": r.channel,
+                        "fields": r.total,
+                        "silent": r.silent,
+                        "inert": [n.split(".", 1)[1] for n in r.inert],
+                    }
+                    for r in sorted(reports, key=lambda r: r.patch)
+                },
+            },
+            indent=2,
+        )
+        + "\n"
+    )
 
 
 def check_census(path: Path) -> int:
@@ -428,9 +479,11 @@ def check_census(path: Path) -> int:
     if recorded == current:
         print(f"{path}: current (bank generation {current})")
         return 0
-    print(f"{path}: taken against bank generation {recorded}, the bank is now {current}. "
-          "A voice moved since this was measured, so what it says about that voice's "
-          "fields is a claim about a bank nobody runs. Regenerate it or delete it.")
+    print(
+        f"{path}: taken against bank generation {recorded}, the bank is now {current}. "
+        "A voice moved since this was measured, so what it says about that voice's "
+        "fields is a claim about a bank nobody runs. Regenerate it or delete it."
+    )
     return 1
 
 
@@ -446,8 +499,7 @@ def run_census(args, catalogue, velocities: tuple[int, ...]) -> int:
             print(f"  {r.patch:24s} silent -- not probed", flush=True)
             continue
         pct = round(100 * r.share())
-        print(f"  {r.patch:24s} {len(r.inert):3d} of {r.total:3d} inert ({pct:3d}%)",
-              flush=True)
+        print(f"  {r.patch:24s} {len(r.inert):3d} of {r.total:3d} inert ({pct:3d}%)", flush=True)
 
     sounded = [r for r in reports if not r.silent]
     silent = [r for r in reports if r.silent]
@@ -465,10 +517,12 @@ def run_census(args, catalogue, velocities: tuple[int, ...]) -> int:
         print(f"{len(silent)} patch(es) rendered silence and were not probed: {names}")
     total = sum(r.total for r in sounded)
     dead = sum(len(r.inert) for r in sounded)
-    print(f"{dead} of {total} patch fields across {len(sounded)} sounding patches move no "
-          "render over this grid. That is a census, not a verdict: a patch is free not to "
-          "use a field its engine offers, and what a null here earns is the per-semitone "
-          "ladder.")
+    print(
+        f"{dead} of {total} patch fields across {len(sounded)} sounding patches move no "
+        "render over this grid. That is a census, not a verdict: a patch is free not to "
+        "use a field its engine offers, and what a null here earns is the per-semitone "
+        "ladder."
+    )
     if args.out:
         write_census(Path(args.out), reports, notes, velocities)
         print(f"wrote {args.out}")
@@ -477,17 +531,23 @@ def run_census(args, catalogue, velocities: tuple[int, ...]) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--lib", default="build-tuning/lib/libsonare.dylib",
-                    help="a -DBUILD_TUNING=ON library")
+    ap.add_argument(
+        "--lib", default="build-tuning/lib/libsonare.dylib", help="a -DBUILD_TUNING=ON library"
+    )
     ap.add_argument("--spec", default=None, help="one spec file, else all of them")
-    ap.add_argument("--census", action="store_true",
-                    help="every patch's own fields instead of the specs")
-    ap.add_argument("--drums", action="store_true",
-                    help="with --census, include the drum-note patches")
-    ap.add_argument("--out", default=None,
-                    help="with --census, also write the result as JSON")
-    ap.add_argument("--census-check", default=None, metavar="PATH",
-                    help="report whether a recorded census still matches the bank")
+    ap.add_argument(
+        "--census", action="store_true", help="every patch's own fields instead of the specs"
+    )
+    ap.add_argument(
+        "--drums", action="store_true", help="with --census, include the drum-note patches"
+    )
+    ap.add_argument("--out", default=None, help="with --census, also write the result as JSON")
+    ap.add_argument(
+        "--census-check",
+        default=None,
+        metavar="PATH",
+        help="report whether a recorded census still matches the bank",
+    )
     ap.add_argument("--notes", default="")
     ap.add_argument("--velocities", default=",".join(str(v) for v in DEFAULT_VELOCITIES))
     ap.add_argument("--workers", type=int, default=8)
@@ -502,12 +562,14 @@ def main() -> int:
     if args.census:
         return run_census(args, catalogue, velocities)
 
-    notes = tuple(int(n) for n in (args.notes or ",".join(str(n) for n in DEFAULT_NOTES))
-                  .split(",") if n.strip())
+    notes = tuple(
+        int(n)
+        for n in (args.notes or ",".join(str(n) for n in DEFAULT_NOTES)).split(",")
+        if n.strip()
+    )
     paths = [Path(args.spec)] if args.spec else sorted(SPEC_DIR.glob("*.json"))
 
-    reports = [scan_spec(p, catalogue, args.lib, notes, velocities, args.workers)
-               for p in paths]
+    reports = [scan_spec(p, catalogue, args.lib, notes, velocities, args.workers) for p in paths]
     grid = ", ".join(str(n) for n in notes)
     vels = ", ".join(str(v) for v in velocities)
     print(f"{len(paths)} spec(s) over notes {grid} at velocities {vels}\n")
@@ -545,10 +607,12 @@ def main() -> int:
         failed += len(dead) + len(stale)
 
     if failed:
-        print(f"\n{failed} knob(s) fail. One that moves no render at any note is a spec "
-              "asserting a mechanism this program does not have: find the switch that "
-              "gates it and record it as this knob's `dead` reason, or drop the knob. "
-              "One excused as dead and since come alive has an excuse to delete.")
+        print(
+            f"\n{failed} knob(s) fail. One that moves no render at any note is a spec "
+            "asserting a mechanism this program does not have: find the switch that "
+            "gates it and record it as this knob's `dead` reason, or drop the knob. "
+            "One excused as dead and since come alive has an excuse to delete."
+        )
         return 1
     print("\nno spec sweeps a knob that moves nothing without saying why")
     return 0

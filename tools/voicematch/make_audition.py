@@ -130,7 +130,7 @@ DEFAULT_REFERENCE_ARCHIVE = CORPUS_ROOT / "audition-references"
 #: Renders one SMF in a fresh interpreter. The tuning override table is read
 #: when the library loads, so two settings of the same constant cannot be
 #: rendered by one process -- the second would silently get the first's values.
-_VARIANT_WORKER = r'''
+_VARIANT_WORKER = r"""
 import sys
 import numpy as np
 sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
@@ -142,11 +142,18 @@ with open(smf, "rb") as fh:
     a = np.asarray(render_model(fh.read(), seconds, sr, rig=rig, preset=preset),
                    dtype=np.float32)
 np.save(out, a.mean(axis=1) if a.ndim > 1 else a)
-'''
+"""
 
 
-def render_variant(smf: bytes, seconds: float, sr: int, overrides: str,
-                   lib_path: str = "", rig: bool = True, preset: str = "") -> np.ndarray:
+def render_variant(
+    smf: bytes,
+    seconds: float,
+    sr: int,
+    overrides: str,
+    lib_path: str = "",
+    rig: bool = True,
+    preset: str = "",
+) -> np.ndarray:
     """One take under one override set, in its own interpreter."""
     env = dict(os.environ)
     if lib_path:
@@ -160,9 +167,23 @@ def render_variant(smf: bytes, seconds: float, sr: int, overrides: str,
         smf_path.write_bytes(smf)
         out_path = Path(tmp) / "render.npy"
         proc = subprocess.run(
-            [sys.executable, "-c", _VARIANT_WORKER, str(smf_path), str(out_path),
-             str(seconds), str(sr), "1" if rig else "0", preset],
-            capture_output=True, check=False, text=True, env=env, cwd=str(REPO_ROOT))
+            [
+                sys.executable,
+                "-c",
+                _VARIANT_WORKER,
+                str(smf_path),
+                str(out_path),
+                str(seconds),
+                str(sr),
+                "1" if rig else "0",
+                preset,
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+            env=env,
+            cwd=str(REPO_ROOT),
+        )
         if proc.returncode:
             raise RuntimeError(proc.stderr[-4000:])
         return np.load(out_path)
@@ -177,8 +198,7 @@ def digest(audio: np.ndarray) -> str:
     exactly the one asking whether a variant changed anything at all.
     """
     mono = audio.mean(axis=1) if audio.ndim > 1 else audio
-    return hashlib.sha256(
-        np.ascontiguousarray(mono, dtype=np.float32).tobytes()).hexdigest()
+    return hashlib.sha256(np.ascontiguousarray(mono, dtype=np.float32).tobytes()).hexdigest()
 
 
 def shared_gain(renders: dict[str, np.ndarray], headroom_db: float = -1.0) -> float:
@@ -193,8 +213,9 @@ def shared_gain(renders: dict[str, np.ndarray], headroom_db: float = -1.0) -> fl
     return float(10.0 ** (headroom_db / 20.0) / peak)
 
 
-def archived_references(archive: Path, capture_id: str, take_id: str,
-                        timbres: list[dict]) -> dict[str, np.ndarray]:
+def archived_references(
+    archive: Path, capture_id: str, take_id: str, timbres: list[dict]
+) -> dict[str, np.ndarray]:
     """Reference renders for one take, back at the level the plugin produced.
 
     The archive stores them under a gain of its own so 16 bits are spent on the
@@ -221,15 +242,18 @@ def archived_references(archive: Path, capture_id: str, take_id: str,
         # A rate mismatch is a different capture, not a resampling job: the
         # analysis windows and the take's own timing are written for one rate.
         if sr != SR:
-            print(f"  {timbre['id']}: archived at {sr} Hz, not {SR} — rendering instead",
-                  file=sys.stderr)
+            print(
+                f"  {timbre['id']}: archived at {sr} Hz, not {SR} — rendering instead",
+                file=sys.stderr,
+            )
             continue
         out[timbre["id"]] = np.asarray(audio, dtype=np.float64) / gain
     return out
 
 
-def archive_references(archive: Path, capture_id: str, take_id: str,
-                       renders: dict[str, np.ndarray]) -> None:
+def archive_references(
+    archive: Path, capture_id: str, take_id: str, renders: dict[str, np.ndarray]
+) -> None:
     """Keep this take's reference renders so no later page needs the plugin."""
     if not renders:
         return
@@ -263,8 +287,9 @@ def moves_the_instrument(overrides: str) -> bool:
     return any(not k.startswith(RIG_KNOB_PREFIX) for k in keys)
 
 
-def build_sources(voice: Voice, timbres: list[dict],
-                  variants: list[Variant], di: bool = False) -> dict:
+def build_sources(
+    voice: Voice, timbres: list[dict], variants: list[Variant], di: bool = False
+) -> dict:
     """The page's version switch, split into a model row and a reference row.
 
     Seven versions of a take is an ordinary number once a couple of candidate
@@ -275,11 +300,13 @@ def build_sources(voice: Voice, timbres: list[dict],
     detail = f"the library as it stands, no overrides — {voice.label}"
     if voice.patch:
         detail += f", patch {voice.patch}"
-    sources = {"model": {
-        "label": "libsonare NativeSynth (GM fallback)",
-        "role": "model",
-        "detail": detail,
-    }}
+    sources = {
+        "model": {
+            "label": "libsonare NativeSynth (GM fallback)",
+            "role": "model",
+            "detail": detail,
+        }
+    }
     if di:
         sources["model-di"] = {
             "label": "libsonare NativeSynth (GM fallback), direct",
@@ -289,10 +316,10 @@ def build_sources(voice: Voice, timbres: list[dict],
             # interleaves them asks one question where there are two.
             "path": "direct",
             "detail": "the same voice with the bank's rig cleared, which is where "
-                      "the instrument itself stops. `model` is what ships and what "
-                      "the reference is comparable with, since a module's samples "
-                      "of this program have an amplifier recorded into them; this "
-                      "is what the rig is being asked to work on.",
+            "the instrument itself stops. `model` is what ships and what "
+            "the reference is comparable with, since a module's samples "
+            "of this program have an amplifier recorded into them; this "
+            "is what the rig is being asked to work on.",
         }
     for variant in variants:
         sources[variant.name] = {
@@ -310,10 +337,10 @@ def build_sources(voice: Voice, timbres: list[dict],
                 "role": "model",
                 "path": "direct",
                 "detail": "the same candidate with the bank's rig cleared. A setting "
-                          "that moves the instrument is judged where the instrument "
-                          "ends, since an amplifier in front of it both hides a change "
-                          "and invents one: it compresses, so it narrows whatever the "
-                          "candidate did to the decay. — " + variant.detail,
+                "that moves the instrument is judged where the instrument "
+                "ends, since an amplifier in front of it both hides a change "
+                "and invents one: it compresses, so it narrows whatever the "
+                "candidate did to the decay. — " + variant.detail,
                 **calibration.source_text(variant, direct=True),
             }
     reference_of = voice.capture.label.split(",")[0] if voice.capture else ""
@@ -335,33 +362,46 @@ def reference_note(voice: Voice, timbres: list[dict], model_sends: str = "auto")
     """
     forced = ""
     if model_sends == "gs":
-        forced = ("The model side renders with CC91/93/94 at their GS power-on values "
-                  "whatever the reference does, because this page was built to be heard "
-                  "through libsonare's own ambience. ")
+        forced = (
+            "The model side renders with CC91/93/94 at their GS power-on values "
+            "whatever the reference does, because this page was built to be heard "
+            "through libsonare's own ambience. "
+        )
     elif model_sends == "dry":
         forced = "The model side renders with CC91/93/94 zeroed, by request. "
     if voice.capture is None or not timbres:
         return forced + (
             "Nothing is being compared here: this page holds the model alone, "
             "either because no reference has been captured for this voice or "
-            "because none was asked for.")
+            "because none was asked for."
+        )
     if voice.capture.dry:
         return forced + (
             "The reference is captured dry — every effect section of the plugin is "
-            "switched off — so what is being compared is the instrument and not a room.")
-    return ("The reference is NOT captured dry: this one carries effects of its own "
-            "that cannot be switched off per slot, so part of what is heard on the "
-            "reference side is its room. The model side therefore renders the way it "
-            "ships — CC91/93/94 left at their GS power-on values, weighted per program "
-            "by `gm_fallback_sends` — rather than at the zero a dry-versus-dry metric "
-            "needs. That is libsonare's own ambience and the only ambience a listener "
-            "gets from it, so what is being compared is the product against the "
-            "recording, room included on both sides.")
+            "switched off — so what is being compared is the instrument and not a room."
+        )
+    return (
+        "The reference is NOT captured dry: this one carries effects of its own "
+        "that cannot be switched off per slot, so part of what is heard on the "
+        "reference side is its room. The model side therefore renders the way it "
+        "ships — CC91/93/94 left at their GS power-on values, weighted per program "
+        "by `gm_fallback_sends` — rather than at the zero a dry-versus-dry metric "
+        "needs. That is libsonare's own ambience and the only ambience a listener "
+        "gets from it, so what is being compared is the product against the "
+        "recording, room included on both sides."
+    )
 
 
-def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
-                variants: list[Variant], archive: Path | None,
-                di_state: dict | None = None) -> dict:
+def render_take(
+    take: Take,
+    voice: Voice,
+    timbres: list[dict],
+    out: Path,
+    args,
+    variants: list[Variant],
+    archive: Path | None,
+    di_state: dict | None = None,
+) -> dict:
     """Every version of one take, written out, as the manifest item describing it."""
     di_state = {} if di_state is None else di_state
     total = take.duration()
@@ -382,14 +422,24 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
     # has to be checked for collateral is whichever one the listener knows best
     # — usually a dry-captured one, whose page would otherwise render at CC91 0
     # and hold the one setting the question is about perfectly inert.
-    wet = (args.model_sends == "gs" or (
+    wet = args.model_sends == "gs" or (
         args.model_sends == "auto"
-        and voice.capture is not None and not voice.capture.dry and bool(timbres)))
-    smf = write_smf(take.notes, program=voice.program, bank=voice.bank,
-                    end_pad=take.tail_s, cc_events=take.cc_events, channel=channel,
-                    sends=(None, None, None) if wet else (0, 0, 0))
-    print(f"== {take.id} ({total:.1f}s){' [GS sends at power-on]' if wet else ''} ==",
-          file=sys.stderr)
+        and voice.capture is not None
+        and not voice.capture.dry
+        and bool(timbres)
+    )
+    smf = write_smf(
+        take.notes,
+        program=voice.program,
+        bank=voice.bank,
+        end_pad=take.tail_s,
+        cc_events=take.cc_events,
+        channel=channel,
+        sends=(None, None, None) if wet else (0, 0, 0),
+    )
+    print(
+        f"== {take.id} ({total:.1f}s){' [GS sends at power-on]' if wet else ''} ==", file=sys.stderr
+    )
 
     renders: dict[str, np.ndarray] = {}
     # `--lib` has to reach the unmodified voice as well as the variants.
@@ -397,8 +447,11 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
     # prefers, so a page meant to compare four settings of one constant would be
     # comparing two builds -- and the difference between two build trees is
     # invisible on a listening page and reads as tuning.
-    renders["model"] = (render_variant(smf, total, SR, "", args.lib, preset=voice.preset)
-                        if args.lib else render_model(smf, total, SR, preset=voice.preset))
+    renders["model"] = (
+        render_variant(smf, total, SR, "", args.lib, preset=voice.preset)
+        if args.lib
+        else render_model(smf, total, SR, preset=voice.preset)
+    )
     print("  model", file=sys.stderr)
 
     # The bank binds an amplifier after some voices and `model` is the product
@@ -414,8 +467,11 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
     # side of the boundary to offer and the probe would render every take twice
     # to prove it.
     if di_state.get("bound") is not False and not voice.preset:
-        di = (render_variant(smf, total, SR, "", args.lib, rig=False) if args.lib
-              else render_model(smf, total, SR, rig=False))
+        di = (
+            render_variant(smf, total, SR, "", args.lib, rig=False)
+            if args.lib
+            else render_model(smf, total, SR, rig=False)
+        )
         di_state["bound"] = digest(di) != digest(renders["model"])
         if di_state["bound"]:
             renders["model-di"] = di
@@ -444,12 +500,16 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
         # instrument through it is judging the wrong end of the chain.
         if di_state.get("bound") and moves_the_instrument(variant.overrides):
             renders[f"{variant.name}-di"] = render_variant(
-                smf, total, SR, variant.overrides, args.lib, rig=False)
+                smf, total, SR, variant.overrides, args.lib, rig=False
+            )
             print(f"  {variant.name}-di", file=sys.stderr)
 
     cfg = voice.capture
-    held = (archived_references(archive, cfg.id, take.id, timbres)
-            if archive is not None and cfg is not None else {})
+    held = (
+        archived_references(archive, cfg.id, take.id, timbres)
+        if archive is not None and cfg is not None
+        else {}
+    )
     fresh: dict[str, np.ndarray] = {}
     for timbre in timbres:
         if timbre["id"] in held:
@@ -462,9 +522,12 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
             # skipped rather than raised: the model side of this page is what a
             # listener is here for, and one voice with no renderable reference
             # took the whole run down with it — including every voice after it.
-            print(f"  {timbre['id']}: {cfg.id} names no plugin, so its reference cannot be "
-                  f"rendered here — the archive under --reference-from is the only route, "
-                  f"and it does not hold this take", file=sys.stderr)
+            print(
+                f"  {timbre['id']}: {cfg.id} names no plugin, so its reference cannot be "
+                f"rendered here — the archive under --reference-from is the only route, "
+                f"and it does not hold this take",
+                file=sys.stderr,
+            )
             continue
         # Built through the same helper the capture path uses, so a timbre
         # selected by preset reaches the plugin here too.
@@ -481,12 +544,14 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
         # The model keeps the take's own channel, which is what makes a note
         # number a drum rather than a pitch; a reference gets its timbre's,
         # one-based in the capture definition and zero-based in the file.
-        ref_channel = int(timbre.get("slot_channel",
-                                     timbre.get("channel", channel + 1))) - 1
+        ref_channel = int(timbre.get("slot_channel", timbre.get("channel", channel + 1))) - 1
         # A take is written in sounding pitch, so an instrument mapped away from
         # it needs its own score even when the channel already matches.
-        ref_notes = ([replace(n, note=source.key(n.note)) for n in take.notes]
-                     if source.key_offset else take.notes)
+        ref_notes = (
+            [replace(n, note=source.key(n.note)) for n in take.notes]
+            if source.key_offset
+            else take.notes
+        )
         # A timbre selected from the keyboard needs its own score for the same
         # reason a rack slot does, and for the same failure: the switch would
         # simply be absent and every switched timbre would render as the
@@ -500,13 +565,18 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
         # variant.
         lead_s = source.keyswitch_lead_ms / 1000.0
         ref_cc = tuple((at + lead_s, cc, v) for at, cc, v in take.cc_events)
-        timbre_smf = (smf if (ref_channel == channel and not source.key_offset
-                              and not source.keyswitch)
-                      else write_smf(
-                          ref_notes, program=voice.program, bank=voice.bank,
-                          end_pad=take.tail_s, cc_events=ref_cc,
-                          channel=ref_channel,
-                      ))
+        timbre_smf = (
+            smf
+            if (ref_channel == channel and not source.key_offset and not source.keyswitch)
+            else write_smf(
+                ref_notes,
+                program=voice.program,
+                bank=voice.bank,
+                end_pad=take.tail_s,
+                cc_events=ref_cc,
+                channel=ref_channel,
+            )
+        )
         try:
             fresh[timbre["id"]] = render_oracle_au(timbre_smf, total, SR, source=source)
             renders[timbre["id"]] = fresh[timbre["id"]]
@@ -517,8 +587,9 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
     # written, so the archive never holds a render that has been through 16-bit
     # twice. A partial take is left alone rather than topped up.
     if args.archive_references and cfg is not None and timbres and len(fresh) == len(timbres):
-        archive_references(Path(args.archive_references).expanduser().resolve(),
-                           cfg.id, take.id, fresh)
+        archive_references(
+            Path(args.archive_references).expanduser().resolve(), cfg.id, take.id, fresh
+        )
 
     gain = shared_gain(renders)
     tracks = {}
@@ -549,9 +620,15 @@ def render_take(take: Take, voice: Voice, timbres: list[dict], out: Path, args,
             # the last note-off and the pedal lifting, and a window a little
             # further on measures the dampers landing instead -- the opposite
             # mechanism, at the other end of the same take.
-            "notes": [{"note": n.note, "velocity": n.velocity,
-                       "start": round(n.start, 4), "duration": round(n.dur, 4)}
-                      for n in take.notes],
+            "notes": [
+                {
+                    "note": n.note,
+                    "velocity": n.velocity,
+                    "start": round(n.start, 4),
+                    "duration": round(n.dur, 4),
+                }
+                for n in take.notes
+            ],
             "cc": [[round(t, 4), int(cc), int(v)] for t, cc, v in take.cc_events],
         },
     }
@@ -565,8 +642,7 @@ _DRUM_KEY = re.compile(r"\bd(\d{3})\.")
 
 def played_notes(items: list[dict]) -> set[int]:
     """Every note number this page's takes actually strike."""
-    return {int(n["note"]) for item in items
-            for n in (item.get("meta") or {}).get("notes") or []}
+    return {int(n["note"]) for item in items for n in (item.get("meta") or {}).get("notes") or []}
 
 
 def unheard_drum_notes(tuned: list[Variant], items: list[dict]) -> list[int]:
@@ -577,12 +653,14 @@ def unheard_drum_notes(tuned: list[Variant], items: list[dict]) -> list[int]:
     to, and the reader is told which takes went unchanged separately.
     """
     named = {int(m.group(1)) for v in tuned for m in _DRUM_KEY.finditer(v.overrides)}
-    return sorted(named - played_notes(items)) if named and not (
-        named & played_notes(items)) else []
+    return (
+        sorted(named - played_notes(items)) if named and not (named & played_notes(items)) else []
+    )
 
 
-def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
-               extra: list[Variant]) -> int:
+def render_set(
+    voice: Voice, out: Path, args, table: dict[str, list[Variant]], extra: list[Variant]
+) -> int:
     """One voice's whole page: every take, every version, and the manifest.
 
     The settings recorded for this voice come first and the run's own `--variant`
@@ -590,23 +668,29 @@ def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
     candidates — one command line cannot.
     """
     variants = calibration.for_voice(voice.slug, table, extra)
-    timbres = [] if args.model_only else [
-        t for t in (voice.capture.timbres if voice.capture else ())
-        if not args.wanted_timbres or t["id"] in args.wanted_timbres
-    ]
+    timbres = (
+        []
+        if args.model_only
+        else [
+            t
+            for t in (voice.capture.timbres if voice.capture else ())
+            if not args.wanted_timbres or t["id"] in args.wanted_timbres
+        ]
+    )
     # A listening page carries the musical take; a measurement run does not, and
     # `--no-music` is for the case where the ten seconds of polyphony are just
     # render time — a sweep across the bank narrowed with `--only`, say.
-    music = None if args.no_music else (
-        voice.capture.raw.get("music", "") if voice.capture else "")
-    selected = [t for t in build_takes(voice.take_set, voice.program, music=music)
-                if not args.only_takes or t.id in args.only_takes]
+    music = None if args.no_music else (voice.capture.raw.get("music", "") if voice.capture else "")
+    selected = [
+        t
+        for t in build_takes(voice.take_set, voice.program, music=music)
+        if not args.only_takes or t.id in args.only_takes
+    ]
     if not selected:
         print(f"{voice.slug}: no takes selected", file=sys.stderr)
         return 0
 
-    archive = (Path(args.reference_from).expanduser().resolve()
-               if args.reference_from else None)
+    archive = Path(args.reference_from).expanduser().resolve() if args.reference_from else None
     print(f"\n### {voice.label}  ->  {out}", file=sys.stderr)
 
     items = []
@@ -629,14 +713,15 @@ def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
         # copied or pointed at explicitly is still not served.
         "probe": bool(args.probe),
         "voice": voice.describe(),
-        "notes": ((args.note + " ") if args.note else "") + (
+        "notes": ((args.note + " ") if args.note else "")
+        + (
             "Every version of a take is written at one shared gain, so the level "
-            "difference between them is real. "
-            + reference_note(voice, timbres, args.model_sends)),
+            "difference between them is real. " + reference_note(voice, timbres, args.model_sends)
+        ),
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "sources": build_sources(
-            voice, timbres, variants,
-            di=any("model-di" in (i.get("tracks") or {}) for i in items)),
+            voice, timbres, variants, di=any("model-di" in (i.get("tracks") or {}) for i in items)
+        ),
         "items": items,
     }
     out.mkdir(parents=True, exist_ok=True)
@@ -659,22 +744,31 @@ def render_set(voice: Voice, out: Path, args, table: dict[str, list[Variant]],
                 # take strikes the instrument they are about. A candidate on a
                 # note no phrase plays cannot be listened to at all, which is
                 # the one thing recording it was supposed to make possible.
-                print(f"WARNING: no setting changed the render on any take "
-                      f"({', '.join(v.name for v in tuned)}), because no take on "
-                      f"this page\n         strikes the drum notes they move: "
-                      f"{', '.join(str(n) for n in unplayed)}. The takes play "
-                      f"{', '.join(str(n) for n in sorted(played_notes(items)))}."
-                      f"\n         This is a gap in the take set, not in the "
-                      f"settings.", file=sys.stderr)
+                print(
+                    f"WARNING: no setting changed the render on any take "
+                    f"({', '.join(v.name for v in tuned)}), because no take on "
+                    f"this page\n         strikes the drum notes they move: "
+                    f"{', '.join(str(n) for n in unplayed)}. The takes play "
+                    f"{', '.join(str(n) for n in sorted(played_notes(items)))}."
+                    f"\n         This is a gap in the take set, not in the "
+                    f"settings.",
+                    file=sys.stderr,
+                )
             else:
-                print(f"WARNING: no setting changed the render on any take "
-                      f"({', '.join(v.name for v in tuned)}).\n         The library has "
-                      f"no tuning override layer -- rebuild it with -DBUILD_TUNING=ON, "
-                      f"or point\n         --lib at one that has; or the keys reach "
-                      f"nothing this voice consults.", file=sys.stderr)
+                print(
+                    f"WARNING: no setting changed the render on any take "
+                    f"({', '.join(v.name for v in tuned)}).\n         The library has "
+                    f"no tuning override layer -- rebuild it with -DBUILD_TUNING=ON, "
+                    f"or point\n         --lib at one that has; or the keys reach "
+                    f"nothing this voice consults.",
+                    file=sys.stderr,
+                )
         elif identical:
-            print(f"note: {len(identical)} take(s) render identically across the "
-                  f"settings: {', '.join(sorted(identical))}", file=sys.stderr)
+            print(
+                f"note: {len(identical)} take(s) render identically across the "
+                f"settings: {', '.join(sorted(identical))}",
+                file=sys.stderr,
+            )
     return len(items)
 
 
@@ -691,8 +785,11 @@ def load_catalogue(lib: str):
     try:
         return dump_catalogue(0, "sustain", lib or None, sr=SR)
     except RuntimeError as exc:
-        print(f"note: no knob catalogue ({str(exc).splitlines()[0]}); "
-              f"listing bank 0 only, with no patch names", file=sys.stderr)
+        print(
+            f"note: no knob catalogue ({str(exc).splitlines()[0]}); "
+            f"listing bank 0 only, with no patch names",
+            file=sys.stderr,
+        )
         return None
 
 
@@ -755,8 +852,11 @@ def playable_first(voice: Voice, archive: Path | None) -> Voice:
     if not playable or playable[0] is voice.capture:
         return voice
     rest = [c for c in voice.captures if c not in playable]
-    print(f"{voice.slug}: {voice.capture.id} can render no reference; "
-          f"the page plays {playable[0].id}", file=sys.stderr)
+    print(
+        f"{voice.slug}: {voice.capture.id} can render no reference; "
+        f"the page plays {playable[0].id}",
+        file=sys.stderr,
+    )
     return replace(voice, captures=tuple(playable + rest))
 
 
@@ -767,14 +867,19 @@ def resolve_voices(args) -> list[Voice]:
             raise Unselectable(
                 f"--preset {args.preset} needs --program N as well: a catalogue entry "
                 "carries no GM number, so nothing else says which phrase set and tone "
-                "class to sound it on. Name the program the entry is voiced beside")
+                "class to sound it on. Name the program the entry is voiced beside"
+            )
         known = preset_names(args.lib)
         if args.preset not in known:
             near = [n for n in known if args.preset in n][:6]
             raise Unselectable(
                 f"the library reports no preset named {args.preset!r}"
-                + (f" — did you mean {', '.join(near)}?" if near else
-                   f" ({len(known)} exist; run with --preset '' to see none of them)"))
+                + (
+                    f" — did you mean {', '.join(near)}?"
+                    if near
+                    else f" ({len(known)} exist; run with --preset '' to see none of them)"
+                )
+            )
         return [Voice(program=args.program, preset=args.preset)]
 
     if args.config:
@@ -782,8 +887,7 @@ def resolve_voices(args) -> list[Voice]:
         if capture is None:
             raise Unselectable(f"{args.config} names no phrase set (`takes`)")
         program = args.program if args.program is not None else capture.program
-        return [Voice(program=program, bank=capture.bank,
-                      kit=capture.drums, captures=(capture,))]
+        return [Voice(program=program, bank=capture.bank, kit=capture.drums, captures=(capture,))]
 
     programs = parse_selection(args.programs) if args.programs else []
     if args.program is not None:
@@ -792,93 +896,146 @@ def resolve_voices(args) -> list[Voice]:
     if not programs and not kits:
         raise Unselectable(
             "name what to audition: --program N, --programs 0-7,40, --kits 0, "
-            "--programs all, or --config <capture>")
+            "--programs all, or --config <capture>"
+        )
 
     banks = parse_selection(args.banks) if args.banks else None
     catalogue = load_catalogue(args.lib) if banks is None and programs else None
-    archive = (Path(args.reference_from).expanduser().resolve()
-               if args.reference_from else None)
-    return [playable_first(v, archive) for v in
-            voices(sorted(set(programs)), banks=banks, kits=kits, catalogue=catalogue)]
+    archive = Path(args.reference_from).expanduser().resolve() if args.reference_from else None
+    return [
+        playable_first(v, archive)
+        for v in voices(sorted(set(programs)), banks=banks, kits=kits, catalogue=catalogue)
+    ]
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     pick = ap.add_argument_group("what to audition")
-    pick.add_argument("--program", type=int, default=None,
-                      help="a GM program number")
-    pick.add_argument("--programs", default="",
-                      help="several: `0-7,40,73`, or `all` for the whole bank")
-    pick.add_argument("--banks", default="",
-                      help="GS variation banks to render each program at (default: "
-                           "every bank the library voices apart, or 0 without a "
-                           "tuning build)")
-    pick.add_argument("--kits", default="",
-                      help="drum kit numbers, rendered on channel 10 (`0` is the "
-                           "GM standard kit)")
-    pick.add_argument("--preset", default="",
-                      help="a public preset catalogue entry by name (`muted-trumpet`). "
-                           "The catalogue is a second address space over the same "
-                           "engines and carries no GM number, so --program is required "
-                           "alongside it and says only which phrase set to sound it on. "
-                           "No capture answers a catalogue entry, so the set is "
-                           "model-only by construction")
-    pick.add_argument("--config", default="",
-                      help="a capture definition, when the capture is the subject: it "
-                           "fixes the program, the phrase set and the reference timbres")
+    pick.add_argument("--program", type=int, default=None, help="a GM program number")
+    pick.add_argument(
+        "--programs", default="", help="several: `0-7,40,73`, or `all` for the whole bank"
+    )
+    pick.add_argument(
+        "--banks",
+        default="",
+        help="GS variation banks to render each program at (default: "
+        "every bank the library voices apart, or 0 without a "
+        "tuning build)",
+    )
+    pick.add_argument(
+        "--kits",
+        default="",
+        help="drum kit numbers, rendered on channel 10 (`0` is the GM standard kit)",
+    )
+    pick.add_argument(
+        "--preset",
+        default="",
+        help="a public preset catalogue entry by name (`muted-trumpet`). "
+        "The catalogue is a second address space over the same "
+        "engines and carries no GM number, so --program is required "
+        "alongside it and says only which phrase set to sound it on. "
+        "No capture answers a catalogue entry, so the set is "
+        "model-only by construction",
+    )
+    pick.add_argument(
+        "--config",
+        default="",
+        help="a capture definition, when the capture is the subject: it "
+        "fixes the program, the phrase set and the reference timbres",
+    )
 
-    ap.add_argument("--out", default="",
-                    help=f"one subdirectory per voice is written under here "
-                         f"(default: {DEFAULT_OUT.name}/ under the scratch root, "
-                         f"or {DEFAULT_PROBE_OUT.name}/ with --probe)")
-    ap.add_argument("--probe", action="store_true",
-                    help="a measurement run, not a listening page: writes under the "
-                         "probe root, which the listening server does not discover, "
-                         "and marks the manifest so it stays unserved wherever it is")
-    ap.add_argument("--timbres", default="",
-                    help="comma-separated timbre ids to render (default: all the "
-                         "voice's capture has)")
-    ap.add_argument("--model-only", action="store_true",
-                    help="skip the reference renders even where one exists")
-    ap.add_argument("--no-music", action="store_true",
-                    help="leave off the musical take — ten seconds of real Bach, "
-                         "which nothing measures and every page otherwise carries")
+    ap.add_argument(
+        "--out",
+        default="",
+        help=f"one subdirectory per voice is written under here "
+        f"(default: {DEFAULT_OUT.name}/ under the scratch root, "
+        f"or {DEFAULT_PROBE_OUT.name}/ with --probe)",
+    )
+    ap.add_argument(
+        "--probe",
+        action="store_true",
+        help="a measurement run, not a listening page: writes under the "
+        "probe root, which the listening server does not discover, "
+        "and marks the manifest so it stays unserved wherever it is",
+    )
+    ap.add_argument(
+        "--timbres",
+        default="",
+        help="comma-separated timbre ids to render (default: all the voice's capture has)",
+    )
+    ap.add_argument(
+        "--model-only", action="store_true", help="skip the reference renders even where one exists"
+    )
+    ap.add_argument(
+        "--no-music",
+        action="store_true",
+        help="leave off the musical take — ten seconds of real Bach, "
+        "which nothing measures and every page otherwise carries",
+    )
     ap.add_argument("--only", default="", help="comma-separated take ids")
-    ap.add_argument("--model-sends", choices=("auto", "gs", "dry"), default="auto",
-                    help="what the model side does with CC91/93/94: 'auto' leaves them "
-                         "at the GS power-on values where the reference carries a room "
-                         "and zeroes them where it does not, 'gs' always leaves them "
-                         "(the way the library ships, which is what a question about "
-                         "the shared GS tank has to be heard through), 'dry' always "
-                         "zeroes them")
-    ap.add_argument("--variant", action="append", default=[], metavar="NAME=OVERRIDES",
-                    help="an extra version of every take, rendered under this "
-                         "SONARE_TUNING_OVERRIDES string; repeatable, and applied to "
-                         "every voice in the run")
-    ap.add_argument("--calibrations", nargs="?", const=str(calibration.DEFAULT_PATH),
-                    default="", metavar="FILE",
-                    help="also render each voice's recorded calibration settings "
-                         f"(default file: {calibration.DEFAULT_PATH.name}). Off unless "
-                         "asked for: every setting is another render of every take, and "
-                         "the override layer needs a -DBUILD_TUNING=ON library")
-    ap.add_argument("--lib", default="",
-                    help="library the variants load (a -DBUILD_TUNING=ON build); "
-                         "sets SONARE_LIB_PATH for them")
-    ap.add_argument("--title", default="",
-                    help="what this page is for, shown in the set picker (default: the "
-                         "voice's own name, which is the right answer until two pages "
-                         "of one voice are up at once)")
-    ap.add_argument("--note", default="",
-                    help="a sentence at the top of the page saying what to listen for")
-    ap.add_argument("--reference-from", default=str(DEFAULT_REFERENCE_ARCHIVE),
-                    dest="reference_from", metavar="DIR",
-                    help="take reference renders from this archive instead of the plugin, "
-                         "falling back to the plugin for any it does not hold. Empty string "
-                         "to always render")
-    ap.add_argument("--archive-references", default="", dest="archive_references",
-                    metavar="DIR",
-                    help="write every reference render this run produced into DIR, so the "
-                         "next page can be built without the plugin")
+    ap.add_argument(
+        "--model-sends",
+        choices=("auto", "gs", "dry"),
+        default="auto",
+        help="what the model side does with CC91/93/94: 'auto' leaves them "
+        "at the GS power-on values where the reference carries a room "
+        "and zeroes them where it does not, 'gs' always leaves them "
+        "(the way the library ships, which is what a question about "
+        "the shared GS tank has to be heard through), 'dry' always "
+        "zeroes them",
+    )
+    ap.add_argument(
+        "--variant",
+        action="append",
+        default=[],
+        metavar="NAME=OVERRIDES",
+        help="an extra version of every take, rendered under this "
+        "SONARE_TUNING_OVERRIDES string; repeatable, and applied to "
+        "every voice in the run",
+    )
+    ap.add_argument(
+        "--calibrations",
+        nargs="?",
+        const=str(calibration.DEFAULT_PATH),
+        default="",
+        metavar="FILE",
+        help="also render each voice's recorded calibration settings "
+        f"(default file: {calibration.DEFAULT_PATH.name}). Off unless "
+        "asked for: every setting is another render of every take, and "
+        "the override layer needs a -DBUILD_TUNING=ON library",
+    )
+    ap.add_argument(
+        "--lib",
+        default="",
+        help="library the variants load (a -DBUILD_TUNING=ON build); sets SONARE_LIB_PATH for them",
+    )
+    ap.add_argument(
+        "--title",
+        default="",
+        help="what this page is for, shown in the set picker (default: the "
+        "voice's own name, which is the right answer until two pages "
+        "of one voice are up at once)",
+    )
+    ap.add_argument(
+        "--note", default="", help="a sentence at the top of the page saying what to listen for"
+    )
+    ap.add_argument(
+        "--reference-from",
+        default=str(DEFAULT_REFERENCE_ARCHIVE),
+        dest="reference_from",
+        metavar="DIR",
+        help="take reference renders from this archive instead of the plugin, "
+        "falling back to the plugin for any it does not hold. Empty string "
+        "to always render",
+    )
+    ap.add_argument(
+        "--archive-references",
+        default="",
+        dest="archive_references",
+        metavar="DIR",
+        help="write every reference render this run produced into DIR, so the "
+        "next page can be built without the plugin",
+    )
     args = ap.parse_args()
 
     args.wanted_timbres = {t.strip() for t in args.timbres.split(",") if t.strip()}
@@ -894,8 +1051,10 @@ def main() -> int:
         # both are worth a line before several hundred renders start.
         unknown = calibration.unknown_voices(table, {v.slug for v in selected})
         if unknown:
-            print(f"note: {len(unknown)} recorded voice(s) not in this run: "
-                  f"{', '.join(unknown)}", file=sys.stderr)
+            print(
+                f"note: {len(unknown)} recorded voice(s) not in this run: {', '.join(unknown)}",
+                file=sys.stderr,
+            )
         for voice in selected:
             calibration.for_voice(voice.slug, table, extra)
     except (Unselectable, ValueError) as exc:
@@ -917,9 +1076,11 @@ def main() -> int:
     write_index(root, selected)
     print(f"\n{len(selected)} voice(s), {total} takes -> {root}", file=sys.stderr)
     if root.is_relative_to(CORPUS_ROOT):
-        print("listen:  python tools/audition/serve.py"
-              "   (under the scratch root, so it is found with no argument)",
-              file=sys.stderr)
+        print(
+            "listen:  python tools/audition/serve.py"
+            "   (under the scratch root, so it is found with no argument)",
+            file=sys.stderr,
+        )
     else:
         print(f"listen:  python tools/audition/serve.py {root}", file=sys.stderr)
     return 0

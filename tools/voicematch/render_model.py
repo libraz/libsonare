@@ -93,8 +93,9 @@ def check_gm_fallback(manifest) -> None:
             )
 
 
-def render_model(smf_bytes: bytes, total_seconds: float, sr: int = 48000, *,
-                 rig: bool = True, preset: str = "") -> np.ndarray:
+def render_model(
+    smf_bytes: bytes, total_seconds: float, sr: int = 48000, *, rig: bool = True, preset: str = ""
+) -> np.ndarray:
     """Render SMF bytes to a (frames, 2) float32 array via the GM fallback bank.
 
     `preset` switches address space rather than voicing: a public catalogue entry

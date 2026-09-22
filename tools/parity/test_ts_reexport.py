@@ -106,11 +106,7 @@ def test_class_getter_in_reexported_module() -> None:
         _write(
             root,
             "bindings/x/src/audio.ts",
-            "export class Audio {\n"
-            "  get length(): number {\n"
-            "    return 0;\n"
-            "  }\n"
-            "}\n",
+            "export class Audio {\n  get length(): number {\n    return 0;\n  }\n}\n",
         )
         ex = extract_ts(root, "wasm", "bindings/x/src/index.ts", "bindings/x/src/generated")
         assert "length" in _keys(ex), _keys(ex)
@@ -209,9 +205,7 @@ def test_an_inline_type_specifier_beside_a_value_still_carries_values() -> None:
     """``export { type T, fn } from`` is a value edge — one value is enough."""
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
-        _type_only_tree(
-            root, "export { type SharedRequest, assertGeometry } from './_shared.js';"
-        )
+        _type_only_tree(root, "export { type SharedRequest, assertGeometry } from './_shared.js';")
         keys = _keys(extract_ts(root, "node", "bindings/x/src/index.ts", "gen"))
         assert "assert_geometry" in keys, keys
 
@@ -242,8 +236,7 @@ def test_a_module_reached_both_ways_is_published() -> None:
         _write(
             root,
             "bindings/x/src/index.ts",
-            "export type { SharedRequest } from './_shared.js';\n"
-            "export * from './facade.js';\n",
+            "export type { SharedRequest } from './_shared.js';\nexport * from './facade.js';\n",
         )
         _write(
             root,
@@ -261,7 +254,9 @@ def test_js_extension_resolves_to_ts() -> None:
         root = Path(d)
         idx = root / "bindings/x/src/index.ts"
         _write(root, "bindings/x/src/index.ts", "export * from './m.js';\n")
-        _write(root, "bindings/x/src/m.ts", "export function fn(x: number): number {\n  return x;\n}\n")
+        _write(
+            root, "bindings/x/src/m.ts", "export function fn(x: number): number {\n  return x;\n}\n"
+        )
         closure, values = _reexport_closure(idx.resolve())
         names = {p.name for p in closure}
         assert "m.ts" in names, names

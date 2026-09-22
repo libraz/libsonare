@@ -19,16 +19,15 @@ def _write_wav(path: Path, fixture: dict[str, Any]) -> None:
     samples = bytearray()
     for index in range(frames):
         sample = round(
-                max(
-                    -1.0,
-                    min(
-                        1.0,
-                        amplitude
-                        * math.sin(2.0 * math.pi * frequency * index / sample_rate),
-                    ),
-                )
-                * 32767.0
+            max(
+                -1.0,
+                min(
+                    1.0,
+                    amplitude * math.sin(2.0 * math.pi * frequency * index / sample_rate),
+                ),
             )
+            * 32767.0
+        )
         samples.extend(struct.pack("<h", sample))
     with wave.open(str(path), "wb") as output:
         output.setnchannels(1)
@@ -66,9 +65,7 @@ def _write_smf(path: Path, fixture: dict[str, Any]) -> None:
         events.append((start + int(note["length_ticks"]), 0, bytes((0x80, pitch, 0))))
     events.sort(key=lambda event: (event[0], event[1]))
     track = bytearray(
-        _variable_length_quantity(0)
-        + b"\xff\x51\x03"
-        + tempo_microseconds.to_bytes(3, "big")
+        _variable_length_quantity(0) + b"\xff\x51\x03" + tempo_microseconds.to_bytes(3, "big")
     )
     previous_tick = 0
     for tick, _order, message in events:
@@ -103,9 +100,7 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
         paths[f"project_{name}"] = str(project_path)
     for name, value in fixtures["presets"].items():
         preset_path = directory / f"preset_{name}.json"
-        preset_path.write_text(
-            json.dumps(value, separators=(",", ":")), encoding="utf-8"
-        )
+        preset_path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
         paths[f"preset_{name}"] = str(preset_path)
     for name, value in fixtures["melodies"].items():
         melody_path = directory / f"melody_{name}.mid"
@@ -125,9 +120,7 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     # holds. The sibling gain that still fits is the control: without it a
     # writer emitting silence for everything would satisfy the other two.
     paths["eq_non_finite_output"] = str(directory / "eq-non-finite-output.wav")
-    paths["eq_non_finite_output_24bit"] = str(
-        directory / "eq-non-finite-output-24bit.wav"
-    )
+    paths["eq_non_finite_output_24bit"] = str(directory / "eq-non-finite-output-24bit.wav")
     paths["eq_saturating_output"] = str(directory / "eq-saturating-output.wav")
     paths["rir_output"] = str(directory / "rir-output.wav")
     paths["render_output"] = str(directory / "render-output.wav")

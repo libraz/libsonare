@@ -102,9 +102,7 @@ def summarize_events(observations: list[dict[str, Any]]) -> dict[str, Any]:
     f_measures = [float(item["f_measure"]) for item in observations]
     return {
         "mean_f_measure": mean(f_measures),
-        "tracks_above_threshold": fraction(
-            value >= EVENT_CORRECT_FMEASURE for value in f_measures
-        ),
+        "tracks_above_threshold": fraction(value >= EVENT_CORRECT_FMEASURE for value in f_measures),
         "threshold": EVENT_CORRECT_FMEASURE,
     }
 
@@ -156,12 +154,8 @@ def fixture_count(observations: list[dict[str, Any]]) -> int:
     return len({str(item.get("fixture", "")) for item in observations})
 
 
-def summarize_dimension(
-    dimension: Dimension, observations: list[dict[str, Any]]
-) -> dict[str, Any]:
-    selected = [
-        item for item in observations if item.get("metric") in dimension.metrics
-    ]
+def summarize_dimension(dimension: Dimension, observations: list[dict[str, Any]]) -> dict[str, Any]:
+    selected = [item for item in observations if item.get("metric") in dimension.metrics]
     if not selected:
         # No observations is not a score. Saying so is the whole point: a mean
         # over an empty set would read as a measurement that never happened.
@@ -175,11 +169,7 @@ def summarize_dimension(
     }
     datasets = sorted({dataset_of(str(item.get("fixture", ""))) for item in selected})
     for dataset in datasets:
-        subset = [
-            item
-            for item in selected
-            if dataset_of(str(item.get("fixture", ""))) == dataset
-        ]
+        subset = [item for item in selected if dataset_of(str(item.get("fixture", ""))) == dataset]
         result["by_dataset"][dataset] = {
             "fixtures": fixture_count(subset),
             **dimension.summarize(subset),
@@ -190,8 +180,7 @@ def summarize_dimension(
 def summarize(report: dict[str, Any]) -> dict[str, Any]:
     observations = all_observations(report)
     dimensions = {
-        dimension.name: summarize_dimension(dimension, observations)
-        for dimension in DIMENSIONS
+        dimension.name: summarize_dimension(dimension, observations) for dimension in DIMENSIONS
     }
     return {
         "generated_at": report.get("generated_at"),
@@ -223,9 +212,7 @@ def to_markdown(summary: dict[str, Any]) -> str:
     for dimension in DIMENSIONS:
         entry = summary["dimensions"][dimension.name]
         if not entry["measured"]:
-            lines.append(
-                f"| {dimension.name} | — | 0 | unmeasured | no fixtures configured |"
-            )
+            lines.append(f"| {dimension.name} | — | 0 | unmeasured | no fixtures configured |")
             continue
         rows = [("all", entry["fixtures"], entry["overall"])]
         rows.extend(
@@ -253,9 +240,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="JSON report written by tests/fixtures/run_optional_fixture_report.py",
     )
-    parser.add_argument(
-        "--output", type=Path, help="Write the summary here instead of stdout."
-    )
+    parser.add_argument("--output", type=Path, help="Write the summary here instead of stdout.")
     parser.add_argument(
         "--markdown",
         action="store_true",
@@ -283,15 +268,10 @@ def main() -> int:
     missing = [
         name
         for name in args.require
-        if name not in summary["dimensions"]
-        or not summary["dimensions"][name]["measured"]
+        if name not in summary["dimensions"] or not summary["dimensions"][name]["measured"]
     ]
 
-    text = (
-        to_markdown(summary)
-        if args.markdown
-        else json.dumps(summary, indent=2, sort_keys=True)
-    )
+    text = to_markdown(summary) if args.markdown else json.dumps(summary, indent=2, sort_keys=True)
     if args.output:
         args.output.write_text(text + "\n")
     else:

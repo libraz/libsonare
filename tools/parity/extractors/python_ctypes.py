@@ -85,9 +85,7 @@ def _parse_class(node: ast.ClassDef, file: str, ex: Extraction) -> None:
     literal = _fields_literal(node)
     if literal is None:
         ex.unparsed += 1
-        ex.unparsed_notes.append(
-            f"{file}:{node.lineno}: {node.name} (no literal _fields_ list)"
-        )
+        ex.unparsed_notes.append(f"{file}:{node.lineno}: {node.name} (no literal _fields_ list)")
         return
     fields: list[RecordField] = []
     for item in literal.elts:

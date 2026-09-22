@@ -32,16 +32,24 @@ from optimizers import (
 
 
 def _args(**kwargs) -> argparse.Namespace:
-    base = {"max_evals": 400, "per_knob_evals": 6, "population": 0, "sigma0": 0.25,
-            "seed": 0, "restarts": 0}
+    base = {
+        "max_evals": 400,
+        "per_knob_evals": 6,
+        "population": 0,
+        "sigma0": 0.25,
+        "seed": 0,
+        "restarts": 0,
+    }
     base.update(kwargs)
     return argparse.Namespace(**base)
 
 
 def _knobs(n: int, lo: float = 0.0, hi: float = 1.0, start: float | None = None):
     mid = 0.5 * (lo + hi) if start is None else start
-    return [Knob(label=f"k{i}.v", lo=lo, hi=hi, log=False, start_value=mid, tunable=f"k{i}.v")
-            for i in range(n)]
+    return [
+        Knob(label=f"k{i}.v", lo=lo, hi=hi, log=False, start_value=mid, tunable=f"k{i}.v")
+        for i in range(n)
+    ]
 
 
 class Recorder:
@@ -217,13 +225,13 @@ def test_samples_are_folded_into_the_cube_not_stacked_on_its_faces():
 def test_folding_is_an_involution_on_the_cube_and_periodic_outside_it():
     inside = np.array([0.0, 0.25, 0.5, 1.0])
     assert np.allclose(_fold_into_cube(inside), inside)
-    assert np.allclose(_fold_into_cube(np.array([1.3, -0.2, 2.5, 3.5])),
-                       np.array([0.7, 0.2, 0.5, 0.5]))
+    assert np.allclose(
+        _fold_into_cube(np.array([1.3, -0.2, 2.5, 3.5])), np.array([0.7, 0.2, 0.5, 0.5])
+    )
 
 
 def _pinned(knobs, values) -> list[str]:
-    return [k.label for k, v in zip(knobs, values)
-            if v <= k.lo + 1e-3 or v >= k.hi - 1e-3]
+    return [k.label for k, v in zip(knobs, values) if v <= k.lo + 1e-3 or v >= k.hi - 1e-3]
 
 
 def test_cma_es_does_not_manufacture_a_pin_near_an_interior_optimum(monkeypatch):
@@ -246,6 +254,7 @@ def test_cma_es_does_not_manufacture_a_pin_near_an_interior_optimum(monkeypatch)
     LAPACK. A budget large enough to separate them outright converges the clipped
     run off the face too, which would leave the control proving nothing.
     """
+
     def near_edge(values):
         return float(sum((v - 0.01) ** 2 for v in values))
 
@@ -253,14 +262,15 @@ def test_cma_es_does_not_manufacture_a_pin_near_an_interior_optimum(monkeypatch)
     clipped, folded = [], []
     for seed in range(seeds):
         knobs = _knobs(dimensions)
-        monkeypatch.setattr(optimizers, "_fold_into_cube",
-                            lambda x: np.clip(x, 0.0, 1.0))
-        clipped += _pinned(knobs, cma_es(Recorder(near_edge), knobs,
-                                         _args(max_evals=300, sigma0=0.3, seed=seed)))
+        monkeypatch.setattr(optimizers, "_fold_into_cube", lambda x: np.clip(x, 0.0, 1.0))
+        clipped += _pinned(
+            knobs, cma_es(Recorder(near_edge), knobs, _args(max_evals=300, sigma0=0.3, seed=seed))
+        )
         knobs = _knobs(dimensions)
         monkeypatch.undo()
-        folded += _pinned(knobs, cma_es(Recorder(near_edge), knobs,
-                                        _args(max_evals=300, sigma0=0.3, seed=seed)))
+        folded += _pinned(
+            knobs, cma_es(Recorder(near_edge), knobs, _args(max_evals=300, sigma0=0.3, seed=seed))
+        )
 
     total = seeds * dimensions
     assert len(clipped) >= total // 4, (
@@ -340,6 +350,7 @@ def test_two_seeds_do_not_produce_one_search(optimizer, capsys):
     seed when what it had measured was a descent still descending — so the run
     asserts it saw a second start before comparing anything.
     """
+
     def run(seed):
         rec = Recorder(ellipse)
         optimizer(rec, _knobs(5), _args(max_evals=4000, seed=seed))

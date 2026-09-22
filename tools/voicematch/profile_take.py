@@ -79,8 +79,10 @@ def take_windows(take) -> dict:
     opposite mechanisms at the two ends of one window.
     """
     last_off = max(n.start + n.dur for n in take.notes)
-    release = next((t for t, cc, v in sorted(take.cc_events)
-                    if cc == SUSTAIN_CC and v < 64 and t > last_off), None)
+    release = next(
+        (t for t, cc, v in sorted(take.cc_events) if cc == SUSTAIN_CC and v < 64 and t > last_off),
+        None,
+    )
     tail0 = last_off + TAKE_TAIL_LEAD_S
     tail1 = release if release is not None else last_off + take.tail_s
     windows = {"tail": (tail0, tail1)} if tail1 - tail0 > 0.15 else {}
@@ -93,8 +95,9 @@ def take_windows(take) -> dict:
     gaps = []
     onsets = sorted({n.start for n in take.notes})
     for onset in onsets[1:]:
-        prev_off = max((n.start + n.dur for n in take.notes if n.start + n.dur <= onset),
-                       default=None)
+        prev_off = max(
+            (n.start + n.dur for n in take.notes if n.start + n.dur <= onset), default=None
+        )
         if prev_off is not None and onset - prev_off > 0.15:
             gaps.append((onset - 0.06, onset - 0.005))
     windows["_gaps"] = gaps
@@ -122,8 +125,9 @@ def signal_end_s(x: np.ndarray, sr: int, threshold: float = TAKE_SILENCE) -> flo
     return float(live[-1] + 1) / sr if live.size else 0.0
 
 
-def usable_tail(sources: list[np.ndarray], sr: int,
-                window: tuple[float, float]) -> tuple[float, float] | None:
+def usable_tail(
+    sources: list[np.ndarray], sr: int, window: tuple[float, float]
+) -> tuple[float, float] | None:
     """@p window clipped to where every source still has signal.
 
     Taken across the REFERENCES and applied to the model too, so both sides are
@@ -169,7 +173,7 @@ def highpass(x: np.ndarray, sr: int, hz: float) -> np.ndarray:
     h[(taps - 1) // 2] += 1.0
     size = len(x) + taps - 1
     y = np.fft.irfft(np.fft.rfft(x, size) * np.fft.rfft(h, size), size)
-    return y[(taps - 1) // 2:(taps - 1) // 2 + len(x)]
+    return y[(taps - 1) // 2 : (taps - 1) // 2 + len(x)]
 
 
 def measure_take(audio: np.ndarray, sr: int, windows: dict) -> dict:
@@ -186,11 +190,11 @@ def measure_take(audio: np.ndarray, sr: int, windows: dict) -> dict:
 
     def seg(window):
         a, b = int(window[0] * sr), int(window[1] * sr)
-        return x[max(0, a):min(len(x), b)]
+        return x[max(0, a) : min(len(x), b)]
 
     def rms(window):
         s = seg(window)
-        return float(np.sqrt(np.mean(s ** 2))) if s.size else 0.0
+        return float(np.sqrt(np.mean(s**2))) if s.size else 0.0
 
     out: dict = {}
     # What the note-and-gap windows carry is measured first, because it does not
@@ -207,7 +211,8 @@ def measure_take(audio: np.ndarray, sr: int, windows: dict) -> dict:
             sq = np.maximum(sp[(sf >= lo) & (sf < hi)], 1e-30)
             if sq.size:
                 out["sustain_tonality"] = round(
-                    float(10 * np.log10(sq.mean() / np.exp(np.log(sq).mean()))), 2)
+                    float(10 * np.log10(sq.mean() / np.exp(np.log(sq).mean()))), 2
+                )
             stotal = max(float(sp.sum()), 1e-30)
             share = float(sp[(sf >= 2560.0) & (sf < 10240.0)].sum()) / stotal
             out["s2560"] = round(float(10 * np.log10(max(share, 1e-12))), 2)
@@ -224,7 +229,8 @@ def measure_take(audio: np.ndarray, sr: int, windows: dict) -> dict:
     span = 0.5 * (tail[1] - tail[0])
     if span > 0.05:
         out["tail_slope"] = round(
-            float((_db(rms((mid, tail[1]))) - _db(rms((tail[0], mid)))) / span), 2)
+            float((_db(rms((mid, tail[1]))) - _db(rms((tail[0], mid)))) / span), 2
+        )
     if "damped" in windows:
         out["damped"] = round(float(_db(rms(windows["damped"]) / max(rms(tail), 1e-12))), 2)
     body = seg(tail)
@@ -312,20 +318,23 @@ def room_match(cfg: dict, *, archive: Path, take_id: str, program: int, verbose:
     for name, audio in refs.items():
         room = measurable_room(np.asarray(audio, dtype=np.float64), sr, spans)
         if room is None:
-            print(f"{take.id}: {name} measures no room this phrase can support",
-                  file=sys.stderr)
+            print(f"{take.id}: {name} measures no room this phrase can support", file=sys.stderr)
             continue
         targets.append(room)
-        print(f"target ({name} on {take.id}): RT60 {room.rt60_s:.2f}s  "
-              f"tail level {room.tail_db:+.1f}dB  HF ratio {room.hf_ratio:.2f}")
+        print(
+            f"target ({name} on {take.id}): RT60 {room.rt60_s:.2f}s  "
+            f"tail level {room.tail_db:+.1f}dB  HF ratio {room.hf_ratio:.2f}"
+        )
     if not targets:
         return 2
     if len(targets) > 1:
-        print(f"  span: RT60 {min(t.rt60_s for t in targets):.2f}-"
-              f"{max(t.rt60_s for t in targets):.2f}s  tail level "
-              f"{min(t.tail_db for t in targets):+.1f} to "
-              f"{max(t.tail_db for t in targets):+.1f}dB  "
-              f"(anything inside it scores zero)")
+        print(
+            f"  span: RT60 {min(t.rt60_s for t in targets):.2f}-"
+            f"{max(t.rt60_s for t in targets):.2f}s  tail level "
+            f"{min(t.tail_db for t in targets):+.1f} to "
+            f"{max(t.tail_db for t in targets):+.1f}dB  "
+            f"(anything inside it scores zero)"
+        )
 
     # One render per grid point, each in its own interpreter: the override table
     # is read once when the library loads, so a sweep inside one process would
@@ -351,7 +360,12 @@ def room_match(cfg: dict, *, archive: Path, take_id: str, program: int, verbose:
         env["SONARE_TUNING_OVERRIDES"] = f"{DECAY_SCALE_KEY}={decay_scale}"
         proc = subprocess.run(
             [sys.executable, "-c", child, str(program), str(cc91), take.id, cfg["takes"]],
-            env=env, capture_output=True, check=False, text=True, cwd=str(REPO_ROOT))
+            env=env,
+            capture_output=True,
+            check=False,
+            text=True,
+            cwd=str(REPO_ROOT),
+        )
         if proc.returncode:
             raise SystemExit(proc.stderr[-1200:])
         rt, tail, hf = (float(v) for v in proc.stdout.strip().split()[-3:])
@@ -359,14 +373,22 @@ def room_match(cfg: dict, *, archive: Path, take_id: str, program: int, verbose:
 
     print("searching libsonare's ambience controls (one render per point)...")
     result = match_sends(targets, measure, log=print if verbose else None)
-    print(f"\nclosest: CC91 {result['cc91']}, reverb_decay {result['reverb_decay']} "
-          f"({DECAY_SCALE_KEY}={result['decay_scale']})")
-    print(f"  reached RT60 {result['measured']['rt60_s']:.2f}s  "
-          f"tail {result['measured']['tail_db']:+.1f}dB   residual {result['residual']}")
-    print(f"  -> MULTIPLY program {program}'s gm_fallback_sends reverb weight "
-          f"by {result['send_factor']} (the shipped weight is already in the "
-          f"measurement; this is not the weight to write)")
+    print(
+        f"\nclosest: CC91 {result['cc91']}, reverb_decay {result['reverb_decay']} "
+        f"({DECAY_SCALE_KEY}={result['decay_scale']})"
+    )
+    print(
+        f"  reached RT60 {result['measured']['rt60_s']:.2f}s  "
+        f"tail {result['measured']['tail_db']:+.1f}dB   residual {result['residual']}"
+    )
+    print(
+        f"  -> MULTIPLY program {program}'s gm_fallback_sends reverb weight "
+        f"by {result['send_factor']} (the shipped weight is already in the "
+        f"measurement; this is not the weight to write)"
+    )
     if result["residual"] > 1.5:
-        print("  the tank cannot reach this space: the reference's room is outside "
-              "the range libsonare's own reverb spans, so no send weight fixes it")
+        print(
+            "  the tank cannot reach this space: the reference's room is outside "
+            "the range libsonare's own reverb spans, so no send weight fixes it"
+        )
     return 0

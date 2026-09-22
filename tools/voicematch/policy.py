@@ -54,8 +54,7 @@ def wanted_layer(policy: dict, program: int, kit: bool, bank: int = 0) -> dict:
     branches = policy.get("reference_layer")
     if not isinstance(branches, dict):
         return {}
-    named = {k: v for k, v in branches.items()
-             if isinstance(v, dict) and not k.startswith("_")}
+    named = {k: v for k, v in branches.items() if isinstance(v, dict) and not k.startswith("_")}
     chosen = ""
     if kit and "kits" in named:
         chosen = "kits"

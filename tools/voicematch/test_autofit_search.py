@@ -47,9 +47,7 @@ def test_unit_bound_is_searched_end_to_end():
 
 def test_small_physical_bound_is_searched_end_to_end():
     """A bow position at 0.02..0.5 is small enough to search whole."""
-    assert _auto_range("violin.bowed_string.bow_position", 0.12, (0.02, 0.5)) == (
-        0.02, 0.5, False
-    )
+    assert _auto_range("violin.bowed_string.bow_position", 0.12, (0.02, 0.5)) == (0.02, 0.5, False)
 
 
 def test_wide_bound_becomes_a_log_window_around_the_default():
@@ -144,8 +142,9 @@ def test_a_written_literal_always_carries_a_decimal_point():
 # --------------------------------------------------------------------------- #
 def test_room_match_refuses_a_library_that_ignores_the_override(monkeypatch):
     """Without BUILD_TUNING the decay axis is inert and every render is identical."""
-    monkeypatch.setattr(voicematch, "dump_catalogue",
-                        lambda *a, **k: Catalogue({"gs_effects.kOther": 1.0}, {}, {}))
+    monkeypatch.setattr(
+        voicematch, "dump_catalogue", lambda *a, **k: Catalogue({"gs_effects.kOther": 1.0}, {}, {})
+    )
 
     def refuse(*args, **kwargs):
         raise AssertionError("run_room_match rendered before checking the override table")
@@ -168,7 +167,8 @@ def test_room_match_reports_a_library_built_without_the_table(monkeypatch):
 
 def test_room_match_proceeds_when_the_library_reports_the_key(monkeypatch):
     monkeypatch.setattr(
-        voicematch, "dump_catalogue",
+        voicematch,
+        "dump_catalogue",
         lambda *a, **k: Catalogue({voicematch.DECAY_SCALE_KEY: 1.0}, {}, {}),
     )
     voicematch.require_live_tunable(19, "sustain", voicematch.DECAY_SCALE_KEY)
@@ -218,8 +218,14 @@ class _CacheOnlyEvaluator:
 
 
 def _optimizer_args(**kwargs) -> argparse.Namespace:
-    base = {"max_evals": 30, "per_knob_evals": 6, "population": 6, "sigma0": 0.25, "seed": 0,
-                "restarts": 0}
+    base = {
+        "max_evals": 30,
+        "per_knob_evals": 6,
+        "population": 6,
+        "sigma0": 0.25,
+        "seed": 0,
+        "restarts": 0,
+    }
     base.update(kwargs)
     return argparse.Namespace(**base)
 
@@ -307,8 +313,10 @@ def test_a_run_that_renders_nothing_searches_exactly_as_far_as_one_that_renders(
 # --------------------------------------------------------------------------- #
 def test_a_result_on_a_range_bound_is_named_rather_than_reported_as_an_optimum():
     """The most expensive failure this tool has, because nothing else looks wrong."""
-    knobs = [_bounded_knob("kTrebleDecayOct", 0.5, 3.0, 1.9),
-             _bounded_knob("kOther", 0.0, 1.0, 0.5)]
+    knobs = [
+        _bounded_knob("kTrebleDecayOct", 0.5, 3.0, 1.9),
+        _bounded_knob("kOther", 0.0, 1.0, 0.5),
+    ]
     pinned = autofit.report_pinned(knobs, [3.0, 0.5])
     assert len(pinned) == 1
     assert "kTrebleDecayOct" in pinned[0] and "maximum" in pinned[0]
@@ -340,8 +348,13 @@ def test_a_spec_can_carry_the_weights_its_knobs_answer_to(tmp_path):
 
 
 def test_spec_weights_apply_but_never_over_an_explicit_flag(tmp_path):
-    path = _spec_file(tmp_path, {"weights": {"tail": 2.0, "crest": 3.0}, "knobs": [
-        {"tunable": "kX", "min": 0.0, "max": 1.0}]})
+    path = _spec_file(
+        tmp_path,
+        {
+            "weights": {"tail": 2.0, "crest": 3.0},
+            "knobs": [{"tunable": "kX", "min": 0.0, "max": 1.0}],
+        },
+    )
     # argparse has already put the flag's value on the namespace by this point;
     # what apply_spec_weights decides is whether the spec is allowed to replace it.
     args = _probe_args(spec=str(path), w_crest=0.5)
@@ -351,7 +364,9 @@ def test_spec_weights_apply_but_never_over_an_explicit_flag(tmp_path):
 
 
 def test_a_spec_naming_a_term_that_does_not_exist_is_refused(tmp_path):
-    path = _spec_file(tmp_path, {"weights": {"loudness": 1.0}, "knobs": [
-        {"tunable": "kX", "min": 0.0, "max": 1.0}]})
+    path = _spec_file(
+        tmp_path,
+        {"weights": {"loudness": 1.0}, "knobs": [{"tunable": "kX", "min": 0.0, "max": 1.0}]},
+    )
     with pytest.raises(ValueError, match="not a loss term"):
         autofit.apply_spec_weights(_probe_args(spec=str(path)), [])

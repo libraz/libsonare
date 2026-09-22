@@ -92,8 +92,9 @@ def _rows_of(profile: dict, timbre: str | None) -> list[dict]:
     return [r for r in rows if r["timbre"] == chosen]
 
 
-def substitute(reference: dict, substituted: dict,
-               ref_timbre: str | None, sub_timbre: str | None) -> dict[str, float]:
+def substitute(
+    reference: dict, substituted: dict, ref_timbre: str | None, sub_timbre: str | None
+) -> dict[str, float]:
     """Per-dimension error of one instrument measured against another.
 
     Runs through `reference_spread`, which is the function the compare table
@@ -102,8 +103,9 @@ def substitute(reference: dict, substituted: dict,
     control that computed its own deltas would be comparing against a gate whose
     numbers came from somewhere else.
     """
-    rows = ([{**r, "timbre": "reference"} for r in _rows_of(reference, ref_timbre)]
-            + [{**r, "timbre": "substituted"} for r in _rows_of(substituted, sub_timbre)])
+    rows = [{**r, "timbre": "reference"} for r in _rows_of(reference, ref_timbre)] + [
+        {**r, "timbre": "substituted"} for r in _rows_of(substituted, sub_timbre)
+    ]
     return reference_spread({"rows": rows})
 
 
@@ -140,8 +142,9 @@ def identity_control(group: list[str], profiles: dict, gates: dict) -> tuple[int
     """
     clean = 0
     for ident in group:
-        spread = substitute(profiles[ident], profiles[ident],
-                            gates[ident].get("timbre"), gates[ident].get("timbre"))
+        spread = substitute(
+            profiles[ident], profiles[ident], gates[ident].get("timbre"), gates[ident].get("timbre")
+        )
         _passed, failed, _unreached = judge(spread, gates[ident])
         if not failed:
             clean += 1
@@ -155,9 +158,10 @@ def run_group(group: list[str]) -> dict:
 
     # The spread is symmetric in the pair — it pools absolute deltas — while the
     # gate is not, so each unordered pair is measured once and read twice.
-    spreads = {(a, b): substitute(profiles[a], profiles[b],
-                                  gates[a].get("timbre"), gates[b].get("timbre"))
-               for a, b in itertools.combinations(group, 2)}
+    spreads = {
+        (a, b): substitute(profiles[a], profiles[b], gates[a].get("timbre"), gates[b].get("timbre"))
+        for a, b in itertools.combinations(group, 2)
+    }
 
     per_dimension = defaultdict(Counter)
     by_gate: Counter[str] = Counter()
@@ -194,37 +198,53 @@ def run_group(group: list[str]) -> dict:
 
 def print_group(grid: tuple, result: dict) -> None:
     notes, velocities = grid
-    print(f"\ngrid: {len(notes)} notes {notes[0]}-{notes[-1]} x {len(velocities)} velocities, "
-          f"{len(result['members'])} captures, {result['pairs']} ordered pairs")
+    print(
+        f"\ngrid: {len(notes)} notes {notes[0]}-{notes[-1]} x {len(velocities)} velocities, "
+        f"{len(result['members'])} captures, {result['pairs']} ordered pairs"
+    )
     control = result["identity_control"]
-    print(f"  identity control: {control['clean']}/{control['of']} gates clear every bound "
-          f"against their own reference")
+    print(
+        f"  identity control: {control['clean']}/{control['of']} gates clear every bound "
+        f"against their own reference"
+    )
     if control["clean"] != control["of"]:
         print("  the control did not reach 100 %, so nothing below is a reading of the gates")
     print(f"  comparisons reaching a verdict: {result['comparisons']}")
     print(f"  pairs clearing EVERY bound of the other's gate: {result['cleared_every_bound']}")
     for ident, count in result["cleared_by_gate"].items():
-        print(f"    {ident}: {count} of {len(result['members']) - 1} other instruments pass "
-              f"its gate whole")
-    print(f"  mean share of bounds a foreign instrument clears: "
-          f"{100.0 * result['mean_pass_rate']:.1f} %")
+        print(
+            f"    {ident}: {count} of {len(result['members']) - 1} other instruments pass "
+            f"its gate whole"
+        )
+    print(
+        f"  mean share of bounds a foreign instrument clears: "
+        f"{100.0 * result['mean_pass_rate']:.1f} %"
+    )
     print("\n  per dimension, how often a foreign instrument clears the bound:")
-    rows = sorted(result["dimensions"].items(),
-                  key=lambda kv: -(kv[1].get("pass", 0)
-                                   / max(1, kv[1].get("pass", 0) + kv[1].get("fail", 0))))
+    rows = sorted(
+        result["dimensions"].items(),
+        key=lambda kv: (
+            -(kv[1].get("pass", 0) / max(1, kv[1].get("pass", 0) + kv[1].get("fail", 0)))
+        ),
+    )
     for dimension, counts in rows:
         decided = counts.get("pass", 0) + counts.get("fail", 0)
         share = 100.0 * counts.get("pass", 0) / decided if decided else 0.0
         unreached = counts.get("unreached", 0)
         tail = f"  ({unreached} pairs could not measure it)" if unreached else ""
-        print(f"    {dimension:13s} {counts.get('pass', 0):4d}/{decided:<4d} = {share:5.1f} %  "
-              f"{DELTA_LABELS.get(dimension, dimension)}{tail}")
+        print(
+            f"    {dimension:13s} {counts.get('pass', 0):4d}/{decided:<4d} = {share:5.1f} %  "
+            f"{DELTA_LABELS.get(dimension, dimension)}{tail}"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--all-grids", action="store_true",
-                        help="every grid shared by two or more captures, not only the largest")
+    parser.add_argument(
+        "--all-grids",
+        action="store_true",
+        help="every grid shared by two or more captures, not only the largest",
+    )
     parser.add_argument("--json", action="store_true", help="machine-readable, one object")
     args = parser.parse_args(argv)
 
@@ -240,14 +260,27 @@ def main(argv: list[str] | None = None) -> int:
     for grid, ids in groups.items():
         results[grid] = run_group(ids)
     if args.json:
-        print(json.dumps({"grids": [{"notes": list(g[0]), "velocities": list(g[1]), **r}
-                                    for g, r in results.items()]}, indent=2))
+        print(
+            json.dumps(
+                {
+                    "grids": [
+                        {"notes": list(g[0]), "velocities": list(g[1]), **r}
+                        for g, r in results.items()
+                    ]
+                },
+                indent=2,
+            )
+        )
         return 0
-    print(f"substitution control over {sum(len(r['members']) for r in results.values())} "
-          f"captures in {len(results)} shared grid(s)")
-    print(f"the bound column compared is {COMPARED_STAT!r}; the signed median and the p90 the "
-          f"gate also holds\nare not recoverable from a pooled spread, so a pair clearing "
-          f"every bound here has cleared one\nof the three columns rather than the gate")
+    print(
+        f"substitution control over {sum(len(r['members']) for r in results.values())} "
+        f"captures in {len(results)} shared grid(s)"
+    )
+    print(
+        f"the bound column compared is {COMPARED_STAT!r}; the signed median and the p90 the "
+        f"gate also holds\nare not recoverable from a pooled spread, so a pair clearing "
+        f"every bound here has cleared one\nof the three columns rather than the gate"
+    )
     for grid, result in results.items():
         print_group(grid, result)
     return 0

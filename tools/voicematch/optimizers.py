@@ -159,8 +159,9 @@ def cma_es(evaluator, knobs: list[Knob], args) -> list[float]:
         if attempt > 0:
             lam = next_lam
             x0 = rng.random(n)
-            print(f"  restart {attempt}: population {lam}, from a fresh random point",
-                  file=sys.stderr)
+            print(
+                f"  restart {attempt}: population {lam}, from a fresh random point", file=sys.stderr
+            )
         before = len(evaluator.trajectory)
         _cma_run(evaluator, knobs, args, x0, lam, rng)
         attempt += 1
@@ -226,8 +227,7 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
         take = min(lam, args.max_evals - len(evaluator.trajectory))
         if take < mu:
             break
-        xs = [_fold_into_cube(xmean + sigma * (bd @ rng.standard_normal(n)))
-              for _ in range(take)]
+        xs = [_fold_into_cube(xmean + sigma * (bd @ rng.standard_normal(n))) for _ in range(take)]
         before = len(evaluator.trajectory)
         losses = evaluator.evaluate_batch(
             [[_unit_to_value(k, xi) for k, xi in zip(knobs, x)] for x in xs]
@@ -240,8 +240,11 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
             # points and does not move, and sigma shrinks from here rather than
             # recovering. That is convergence, so the run ends and hands what is
             # left to a restart.
-            print(f"  gen {generation + 1}: every candidate already evaluated — "
-                  f"the search has converged", file=sys.stderr)
+            print(
+                f"  gen {generation + 1}: every candidate already evaluated — "
+                f"the search has converged",
+                file=sys.stderr,
+            )
             return
 
         # A generation where nothing scored is a generation with no ranking, and
@@ -253,8 +256,10 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
         if not any(math.isfinite(v) for v in losses):
             sigma = max(sigma * 0.5, 1e-4)
             generation += 1
-            print(f"  gen {generation}: no candidate scored — sigma halved to {sigma:.4f}",
-                  file=sys.stderr)
+            print(
+                f"  gen {generation}: no candidate scored — sigma halved to {sigma:.4f}",
+                file=sys.stderr,
+            )
             continue
 
         order = np.argsort(losses)[:mu]
@@ -264,15 +269,19 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
         inv_sqrt = eigvecs @ np.diag(1.0 / np.sqrt(eigvals)) @ eigvecs.T
         ps = (1 - cs) * ps + math.sqrt(cs * (2 - cs) * mueff) * (inv_sqrt @ (xmean - x_old)) / sigma
         generation += 1
-        hsig = (np.linalg.norm(ps) / math.sqrt(1 - (1 - cs) ** (2 * generation)) / chi_n
-                < 1.4 + 2 / (n + 1))
-        pc = (1 - cc) * pc + (hsig and 1.0 or 0.0) * math.sqrt(cc * (2 - cc) * mueff) * \
-            (xmean - x_old) / sigma
+        hsig = np.linalg.norm(ps) / math.sqrt(
+            1 - (1 - cs) ** (2 * generation)
+        ) / chi_n < 1.4 + 2 / (n + 1)
+        pc = (1 - cc) * pc + (hsig and 1.0 or 0.0) * math.sqrt(cc * (2 - cc) * mueff) * (
+            xmean - x_old
+        ) / sigma
 
         artmp = np.array([(xs[k] - x_old) / sigma for k in order])
-        cov = ((1 - c1 - cmu) * cov
-               + c1 * (np.outer(pc, pc) + (0.0 if hsig else cc * (2 - cc)) * cov)
-               + cmu * (artmp.T @ np.diag(weights) @ artmp))
+        cov = (
+            (1 - c1 - cmu) * cov
+            + c1 * (np.outer(pc, pc) + (0.0 if hsig else cc * (2 - cc)) * cov)
+            + cmu * (artmp.T @ np.diag(weights) @ artmp)
+        )
         cov = np.triu(cov) + np.triu(cov, 1).T  # keep it symmetric against drift
         sigma *= math.exp((cs / damps) * (np.linalg.norm(ps) / chi_n - 1))
         sigma = float(np.clip(sigma, 1e-4, 1.0))
@@ -285,11 +294,13 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
             stall = 0
         else:
             stall += 1
-        print(f"  gen {generation}: sigma={sigma:.4f} best={evaluator.best_loss:.4f}"
-              f"{f' (stalled {stall})' if stall else ''}", file=sys.stderr)
+        print(
+            f"  gen {generation}: sigma={sigma:.4f} best={evaluator.best_loss:.4f}"
+            f"{f' (stalled {stall})' if stall else ''}",
+            file=sys.stderr,
+        )
         if stall >= stall_limit:
-            print(f"  no improvement in {stall} generations — ending this run",
-                  file=sys.stderr)
+            print(f"  no improvement in {stall} generations — ending this run", file=sys.stderr)
             return
 
 

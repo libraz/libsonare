@@ -61,14 +61,10 @@ _STRUCTURAL_NAMES = {"options", "validate", "on_progress"}
 # export function foo(  ... up to the closing paren before the return type
 _FUNC_HEAD = re.compile(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(")
 # class method head: indented `name(` that is not a keyword/control statement.
-_METHOD_HEAD = re.compile(
-    r"^[ \t]{2,4}(?:static\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE
-)
+_METHOD_HEAD = re.compile(r"^[ \t]{2,4}(?:static\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE)
 # A public property getter has no argument list to normalize, but represents a
 # callable C-ABI accessor just like a zero-argument class method.
-_GETTER_HEAD = re.compile(
-    r"^[ \t]{2,4}get\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)", re.MULTILINE
-)
+_GETTER_HEAD = re.compile(r"^[ \t]{2,4}get\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)", re.MULTILINE)
 # `export class Foo` / `export abstract class Foo` heads.
 _CLASS_HEAD = re.compile(r"export\s+(?:abstract\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)\b")
 _TYPE_UNION = re.compile(r"export\s+type\s+([A-Za-z0-9_]+)\s*=\s*([^;]+);", re.DOTALL)
@@ -101,6 +97,7 @@ def _edge_carries_values(type_marker: str | None, clause: str) -> bool:
     if not names:
         return False
     return any(not n.startswith("type ") for n in names)
+
 
 _NON_METHOD = {
     "if",
@@ -205,20 +202,14 @@ def _parse_text(
         bal = _balanced_arglist(text, open_idx)
         if bal is None:
             ex.unparsed += 1
-            ex.unparsed_notes.append(
-                f"{file}:{_line_of(text, open_idx)}: {name} (unbalanced args)"
-            )
+            ex.unparsed_notes.append(f"{file}:{_line_of(text, open_idx)}: {name} (unbalanced args)")
             continue
         inner, _ = bal
         try:
-            params = [
-                _parse_ts_param(p, enum_types) for p in split_top_level_commas(inner)
-            ]
+            params = [_parse_ts_param(p, enum_types) for p in split_top_level_commas(inner)]
         except Exception:  # noqa: BLE001
             ex.unparsed += 1
-            ex.unparsed_notes.append(
-                f"{file}:{_line_of(text, open_idx)}: {name} (param parse)"
-            )
+            ex.unparsed_notes.append(f"{file}:{_line_of(text, open_idx)}: {name} (param parse)")
             continue
         key = canonical_key(name, surface)
         seen_here.add(name)
@@ -277,9 +268,7 @@ def _parse_text(
             if brace < 0 or (semi >= 0 and semi < brace):
                 continue
             try:
-                params = [
-                _parse_ts_param(p, enum_types) for p in split_top_level_commas(inner)
-            ]
+                params = [_parse_ts_param(p, enum_types) for p in split_top_level_commas(inner)]
             except Exception:  # noqa: BLE001, S112 -- an unparsable signature is skipped
                 continue
             key = canonical_key(name, surface)
@@ -378,9 +367,7 @@ def _reexport_closure(index_path: Path) -> tuple[list[Path], set[Path]]:
     return sorted(order), values
 
 
-def extract_ts(
-    root: Path, surface: str, index_rel: str, generated_glob: str
-) -> Extraction:
+def extract_ts(root: Path, surface: str, index_rel: str, generated_glob: str) -> Extraction:
     ex = Extraction(surface=surface)
     index_path = root / index_rel
     gen_dir = root / generated_glob

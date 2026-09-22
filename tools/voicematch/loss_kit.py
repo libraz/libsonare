@@ -108,9 +108,14 @@ def _kit_value(row: dict, field: str, in_db: bool) -> float | None:
     return math.log2(value) if value > 0.0 else None
 
 
-def _kit_relation(model_rows: list[dict], oracle_rows_: list[dict],
-                  indices: list[int], field: str, in_db: bool,
-                  guard: str | None) -> tuple[list[float], list[float]] | None:
+def _kit_relation(
+    model_rows: list[dict],
+    oracle_rows_: list[dict],
+    indices: list[int],
+    field: str,
+    in_db: bool,
+    guard: str | None,
+) -> tuple[list[float], list[float]] | None:
     """(model contrasts, oracle contrasts) for one relation of one group.
 
     Both sides are read over exactly the same members: a contrast taken over two
@@ -138,8 +143,9 @@ def _kit_relation(model_rows: list[dict], oracle_rows_: list[dict],
     return model_c, oracle_c
 
 
-def _kit_scored(model_rows: list[dict], oracle_rows_: list[dict],
-                groups: dict[str, list[int]] | None):
+def _kit_scored(
+    model_rows: list[dict], oracle_rows_: list[dict], groups: dict[str, list[int]] | None
+):
     """Yield (family, relation, velocity, model contrasts, oracle contrasts).
 
     Groups arrive as ORACLE note numbers, since a family is a fact about the
@@ -154,22 +160,21 @@ def _kit_scored(model_rows: list[dict], oracle_rows_: list[dict],
     index: dict[tuple, int] = {}
     for i, row in enumerate(oracle_rows_):
         index.setdefault((row.get("note"), row.get("velocity")), i)
-    velocities = sorted({row.get("velocity") for row in oracle_rows_},
-                        key=lambda v: (v is None, v))
+    velocities = sorted({row.get("velocity") for row in oracle_rows_}, key=lambda v: (v is None, v))
     for family, notes in groups.items():
         for velocity in velocities:
             members = [index[(n, velocity)] for n in notes if (n, velocity) in index]
             if len(members) < KIT_MIN_MEMBERS:
                 continue
             for name, field, in_db, guard in KIT_RELATIONS:
-                found = _kit_relation(model_rows, oracle_rows_, members,
-                                      field, in_db, guard)
+                found = _kit_relation(model_rows, oracle_rows_, members, field, in_db, guard)
                 if found is not None:
                     yield family, name, velocity, found[0], found[1]
 
 
-def _kit_terms(model_rows: list[dict], oracle_rows_: list[dict],
-               groups: dict[str, list[int]] | None) -> tuple[float, int]:
+def _kit_terms(
+    model_rows: list[dict], oracle_rows_: list[dict], groups: dict[str, list[int]] | None
+) -> tuple[float, int]:
     """How far the model's kit-internal relations sit from the reference's.
 
     A mean, so it dilutes: the shipped kit resolves to 790 member-relations
@@ -183,16 +188,15 @@ def _kit_terms(model_rows: list[dict], oracle_rows_: list[dict],
     """
     total = 0.0
     scored = 0
-    for _family, _name, _v, model_c, oracle_c in _kit_scored(model_rows, oracle_rows_,
-                                                             groups):
-        total += sum(min(abs(a - b), KIT_DOUBLING_CAP)
-                     for a, b in zip(model_c, oracle_c))
+    for _family, _name, _v, model_c, oracle_c in _kit_scored(model_rows, oracle_rows_, groups):
+        total += sum(min(abs(a - b), KIT_DOUBLING_CAP) for a, b in zip(model_c, oracle_c))
         scored += len(oracle_c)
     return (total / scored, scored) if scored else (0.0, 0)
 
 
-def kit_report(model_rows: list[dict], oracle_rows_: list[dict],
-               groups: dict[str, list[int]] | None) -> list[dict]:
+def kit_report(
+    model_rows: list[dict], oracle_rows_: list[dict], groups: dict[str, list[int]] | None
+) -> list[dict]:
     """One readable line per family and relation, pooled over the velocities.
 
     The scalar term answers whether the kit's relations are right; this answers
@@ -206,24 +210,28 @@ def kit_report(model_rows: list[dict], oracle_rows_: list[dict],
     instrument, which is the failure this was written for.
     """
     pooled: dict[tuple[str, str], dict[str, list[float]]] = {}
-    for family, name, _v, model_c, oracle_c in _kit_scored(model_rows, oracle_rows_,
-                                                           groups):
-        acc = pooled.setdefault((family, name),
-                                {"spread": [], "model_spread": [], "charge": [],
-                                 "members": []})
+    for family, name, _v, model_c, oracle_c in _kit_scored(model_rows, oracle_rows_, groups):
+        acc = pooled.setdefault(
+            (family, name), {"spread": [], "model_spread": [], "charge": [], "members": []}
+        )
         acc["spread"].append(oracle_c[-1] - oracle_c[0])
         acc["model_spread"].append(model_c[-1] - model_c[0])
-        acc["charge"].append(sum(min(abs(a - b), KIT_DOUBLING_CAP)
-                                 for a, b in zip(model_c, oracle_c)) / len(oracle_c))
+        acc["charge"].append(
+            sum(min(abs(a - b), KIT_DOUBLING_CAP) for a, b in zip(model_c, oracle_c))
+            / len(oracle_c)
+        )
         acc["members"].append(float(len(oracle_c)))
     out = []
     for (family, name), acc in pooled.items():
-        out.append({
-            "family": family, "relation": name,
-            "spread": float(np.median(acc["spread"])),
-            "model_spread": float(np.median(acc["model_spread"])),
-            "charge": float(np.median(acc["charge"])),
-            "members": int(max(acc["members"])),
-            "velocities": len(acc["charge"]),
-        })
+        out.append(
+            {
+                "family": family,
+                "relation": name,
+                "spread": float(np.median(acc["spread"])),
+                "model_spread": float(np.median(acc["model_spread"])),
+                "charge": float(np.median(acc["charge"])),
+                "members": int(max(acc["members"])),
+                "velocities": len(acc["charge"]),
+            }
+        )
     return sorted(out, key=lambda r: -r["charge"])

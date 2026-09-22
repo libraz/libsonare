@@ -167,9 +167,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
     if not chosen:
         raise ValueError(f"{path} lists no timbres")
     if chosen not in available:
-        raise ValueError(
-            f"timbre {chosen!r} is not in {path.name} (it has {', '.join(available)})"
-        )
+        raise ValueError(f"timbre {chosen!r} is not in {path.name} (it has {', '.join(available)})")
 
     renders: dict[tuple[int, int], Path] = {}
     for rec in manifest.get("renders", []):
@@ -190,12 +188,10 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         for rec in manifest.get("renders", [])
         if rec.get("timbre") == chosen and "seconds" in rec
     }
-    slot_s = (max(slots.values()) if slots
-              else gate_s + _tail_seconds(manifest.get("tail", "2s")))
+    slot_s = max(slots.values()) if slots else gate_s + _tail_seconds(manifest.get("tail", "2s"))
 
     entry = next(
-        (t for t in manifest.get("timbres", [])
-         if isinstance(t, dict) and t.get("id") == chosen),
+        (t for t in manifest.get("timbres", []) if isinstance(t, dict) and t.get("id") == chosen),
         {},
     )
     label = entry.get("label", chosen)
@@ -391,15 +387,18 @@ def check_rig(corpus: Corpus, program: int, *, allow: bool = False) -> None:
             f"nothing says whether the {what} reference carries a rig, and program "
             f"{program} is a family that can: a cabinet is a filter rather than a space, "
             f"so an amplified take passes every dryness test with the whole rig inside it. "
-            f"Answer it in the capture definition — \"rig\": \"none\" for a reference "
-            f"captured at the instrument's boundary, \"baked\" for one recorded through an "
+            f'Answer it in the capture definition — "rig": "none" for a reference '
+            f'captured at the instrument\'s boundary, "baked" for one recorded through an '
             f"amplifier, which stays an acceptance target — and re-run"
         )
     else:
         return
     if allow:
-        print(f"--allow-rigged-oracle: {why}. Proceeding; the values this produces "
-              f"transfer to nothing once the rig is a stage of its own.", file=sys.stderr)
+        print(
+            f"--allow-rigged-oracle: {why}. Proceeding; the values this produces "
+            f"transfer to nothing once the rig is a stage of its own.",
+            file=sys.stderr,
+        )
         return
     raise ValueError(f"{why}. --allow-rigged-oracle overrides.")
 
@@ -492,7 +491,9 @@ def corpus_pattern(
     picked_notes = tuple(notes) if notes else corpus.played_notes()
     picked_vels = tuple(velocities) if velocities else corpus.velocities
     missing = [
-        (n, v) for n in picked_notes for v in picked_vels
+        (n, v)
+        for n in picked_notes
+        for v in picked_vels
         if (corpus.capture_slot(n), v) not in corpus.renders
     ]
     if missing:
@@ -523,9 +524,14 @@ def corpus_pattern(
     # be written on the same one or its note numbers sound pitches of program 0
     # while the oracle plays the kit. `percussive` then carries into which metric
     # set can measure the pair.
-    return Pattern("corpus", seq, analysis_notes=list(seq), tail=tail,
-                   channel=PERCUSSION_CHANNEL - 1 if corpus.percussive() else 0,
-                   percussive=corpus.percussive())
+    return Pattern(
+        "corpus",
+        seq,
+        analysis_notes=list(seq),
+        tail=tail,
+        channel=PERCUSSION_CHANNEL - 1 if corpus.percussive() else 0,
+        percussive=corpus.percussive(),
+    )
 
 
 def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
@@ -557,7 +563,8 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
         )
     last = max(pattern.notes, key=lambda n: n.start)
     total = round(
-        (last.start + corpus.slot_for(corpus.capture_slot(last.note), last.velocity)) * sr)
+        (last.start + corpus.slot_for(corpus.capture_slot(last.note), last.velocity)) * sr
+    )
     out: np.ndarray | None = None
     # The pattern is written in the model's numbering; the renders are filed
     # under the notes the reference was struck on. See `Corpus.capture_slot`.
@@ -574,7 +581,7 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
         if out is None:
             out = np.zeros((total, audio.shape[1]), dtype=np.float64)
         lead_s = sound_onset_s(to_mono(audio), sr, corpus.preroll_s, len(audio) / sr)
-        seg = audio[round(lead_s * sr):]
+        seg = audio[round(lead_s * sr) :]
         start = round(note.start * sr)
         slot = corpus.slot_for(slot_note, note.velocity)
         room = min(len(seg), total - start, round(slot * sr))

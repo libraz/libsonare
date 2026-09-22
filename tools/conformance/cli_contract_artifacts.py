@@ -53,9 +53,7 @@ def _check_artifact(
         if payload is not None and (
             not isinstance(payload, dict) or payload.get(sample_rate_key) != sample_rate
         ):
-            payload_rate = (
-                payload.get(sample_rate_key) if isinstance(payload, dict) else None
-            )
+            payload_rate = payload.get(sample_rate_key) if isinstance(payload, dict) else None
             report.append(
                 (
                     "fail",
@@ -86,16 +84,10 @@ def _check_artifact(
         try:
             parsed_artifact = parse_single_json(data.decode("utf-8"))
         except (UnicodeDecodeError, ValueError) as exc:
-            report.append(
-                ("fail", f"{label}: artifact is not one JSON document ({exc})")
-            )
+            report.append(("fail", f"{label}: artifact is not one JSON document ({exc})"))
             return
-        if not isinstance(parsed_artifact, dict) or set(parsed_artifact) != set(
-            artifact["keys"]
-        ):
-            actual_keys = (
-                sorted(parsed_artifact) if isinstance(parsed_artifact, dict) else None
-            )
+        if not isinstance(parsed_artifact, dict) or set(parsed_artifact) != set(artifact["keys"]):
+            actual_keys = sorted(parsed_artifact) if isinstance(parsed_artifact, dict) else None
             report.append(
                 (
                     "fail",
@@ -131,8 +123,7 @@ def _check_artifact(
         report.append(
             (
                 "fail",
-                (f"{label}: artifact SHA-256 {actual_digest} does not match "
-                f"{artifact['sha256']}"),
+                (f"{label}: artifact SHA-256 {actual_digest} does not match {artifact['sha256']}"),
             )
         )
     try:

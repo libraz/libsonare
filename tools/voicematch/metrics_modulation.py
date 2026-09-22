@@ -58,8 +58,9 @@ MOD_TRACK_CENTS = 120.0
 MOD_TRACK_POINTS = 49
 
 
-def _band_peak(spectrum: np.ndarray, rate_hz: float, band: tuple[float, float],
-               n: int) -> tuple[float, float] | None:
+def _band_peak(
+    spectrum: np.ndarray, rate_hz: float, band: tuple[float, float], n: int
+) -> tuple[float, float] | None:
     """Strongest component of a modulation spectrum inside `band`, or None.
 
     Returns (peak-to-peak amplitude in the input's own units, rate in Hz).
@@ -82,8 +83,9 @@ def _band_peak(spectrum: np.ndarray, rate_hz: float, band: tuple[float, float],
     return float(8.0 * spectrum[k] / n), float(freqs[k])
 
 
-def modulation_note(mono: np.ndarray, sr: int, note: Note, f0: float,
-                    onset: float | None = None) -> dict:
+def modulation_note(
+    mono: np.ndarray, sr: int, note: Note, f0: float, onset: float | None = None
+) -> dict:
     """Vibrato, tremolo and beat of one note's fundamental.
 
     The fundamental is tracked rather than assumed: a zoomed DFT over a bank of
@@ -97,13 +99,18 @@ def modulation_note(mono: np.ndarray, sr: int, note: Note, f0: float,
     fundamental to track. A zero would be a claim that the note is dead still,
     which is a different finding from not having looked.
     """
-    empty = {"vib_cents": None, "vib_rate_hz": None, "trem_db": None,
-             "trem_rate_hz": None, "beat_db": None, "beat_rate_hz": None}
+    empty = {
+        "vib_cents": None,
+        "vib_rate_hz": None,
+        "trem_db": None,
+        "trem_rate_hz": None,
+        "beat_db": None,
+        "beat_rate_hz": None,
+    }
     if f0 <= 0.0 or f0 > sr / 2.0:
         return empty
     start = (note.start if onset is None else onset) + MOD_WINDOW_S[0]
-    end = min((note.start if onset is None else onset) + MOD_WINDOW_S[1],
-              note.start + note.dur)
+    end = min((note.start if onset is None else onset) + MOD_WINDOW_S[1], note.start + note.dur)
     a, b = int(start * sr), int(end * sr)
     seg = np.asarray(mono[a:b], dtype=np.float64)
     win_n = int(MOD_FRAME_WIN_S * sr)
@@ -117,8 +124,8 @@ def modulation_note(mono: np.ndarray, sr: int, note: Note, f0: float,
     span = 2.0 ** (MOD_TRACK_CENTS / 1200.0)
     cand = np.linspace(f0 / span, f0 * span, MOD_TRACK_POINTS)
     t = np.arange(win_n) / sr
-    basis = np.exp(-2j * np.pi * np.outer(cand, t))       # (points, win_n)
-    amps = np.abs(frames @ basis.T)                        # (frames, points)
+    basis = np.exp(-2j * np.pi * np.outer(cand, t))  # (points, win_n)
+    amps = np.abs(frames @ basis.T)  # (frames, points)
     k = np.argmax(amps, axis=1)
     level = amps[np.arange(n_frames), k]
     if float(level.max()) <= 0.0:
@@ -148,6 +155,7 @@ def modulation_note(mono: np.ndarray, sr: int, note: Note, f0: float,
     rate = 1.0 / MOD_FRAME_HOP_S
     fm = np.abs(np.fft.rfft(cents * window))
     am = np.abs(np.fft.rfft(level_db * window))
+
     # Per band, because they are not resolved together: the same window that
     # carries fourteen bins of vibrato carries one of beat.
     def _pair(peak: tuple[float, float] | None) -> tuple[float | None, float | None]:
@@ -157,9 +165,12 @@ def modulation_note(mono: np.ndarray, sr: int, note: Note, f0: float,
     trem_db, trem_rate = _pair(_band_peak(am, rate, VIBRATO_BAND_HZ, n_frames))
     beat_db, beat_rate = _pair(_band_peak(am, rate, BEAT_BAND_HZ, n_frames))
     return {
-        "vib_cents": vib_cents, "vib_rate_hz": vib_rate,
-        "trem_db": trem_db, "trem_rate_hz": trem_rate,
-        "beat_db": beat_db, "beat_rate_hz": beat_rate,
+        "vib_cents": vib_cents,
+        "vib_rate_hz": vib_rate,
+        "trem_db": trem_db,
+        "trem_rate_hz": trem_rate,
+        "beat_db": beat_db,
+        "beat_rate_hz": beat_rate,
     }
 
 

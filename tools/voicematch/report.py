@@ -50,12 +50,16 @@ def print_level_drift(evaluator) -> None:
         return
     drift = best - start
     print("\n== level ==")
-    print(f"  the winner's whole-grid level sits {drift:+.1f} dB against the start point "
-          f"({start:+.1f} -> {best:+.1f} dB against the reference)")
+    print(
+        f"  the winner's whole-grid level sits {drift:+.1f} dB against the start point "
+        f"({start:+.1f} -> {best:+.1f} dB against the reference)"
+    )
     if abs(drift) >= LEVEL_DRIFT_WARN_DB:
-        print(f"  that is past {LEVEL_DRIFT_WARN_DB:.0f} dB and no term charged for it: "
-              f"check that the shape was not bought with loudness before keeping these "
-              f"values, since every metric above is level-normalised")
+        print(
+            f"  that is past {LEVEL_DRIFT_WARN_DB:.0f} dB and no term charged for it: "
+            f"check that the shape was not bought with loudness before keeping these "
+            f"values, since every metric above is level-normalised"
+        )
 
 
 def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> None:
@@ -81,10 +85,15 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         # at: a fit resumed against a store did the same search as the one that
         # filled it, and a report that only counted evaluations would read as if
         # it had rendered them again.
-        paid = ("" if evaluator.n_renders == len(evaluator.trajectory)
-                else f", {evaluator.n_renders} rendered")
-        print(f"  initial {evaluator.trajectory[0][1]:.4f}  ->  best {evaluator.best_loss:.4f}"
-              f"  over {len(evaluator.trajectory)} evaluations{paid}")
+        paid = (
+            ""
+            if evaluator.n_renders == len(evaluator.trajectory)
+            else f", {evaluator.n_renders} rendered"
+        )
+        print(
+            f"  initial {evaluator.trajectory[0][1]:.4f}  ->  best {evaluator.best_loss:.4f}"
+            f"  over {len(evaluator.trajectory)} evaluations{paid}"
+        )
         if evaluator.normalize:
             print("  (a ratio against the start point, which scores 1.0)")
     else:
@@ -103,8 +112,10 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         print(f"\n== held-out {v['axis']} {v['held_out']} ==")
         print(f"  start {v['start']:.4f}  ->  best {v['best']:.4f}   {verdict}")
         if margin < -0.005:
-            print("  the fitted values are worse than the defaults on notes the fit never "
-                  "saw; treat the result as overfitted to the probe")
+            print(
+                "  the fitted values are worse than the defaults on notes the fit never "
+                "saw; treat the result as overfitted to the probe"
+            )
 
     print_level_drift(evaluator)
 
@@ -117,10 +128,16 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         rel = knob.file.relative_to(REPO_ROOT) if knob.file else Path("(program table)")
         kind = "runtime" if knob.tunable else "source"
         end = at_bound(knob, best)
-        note = (f"  <- at its {end}; widen the range or accept that the model cannot go "
-                f"further this way" if end else "")
-        print(f"  [{kind}] {rel}  {knob.label}:  "
-              f"{format_value(knob.start_value)} -> {format_value(best)}{note}")
+        note = (
+            f"  <- at its {end}; widen the range or accept that the model cannot go "
+            f"further this way"
+            if end
+            else ""
+        )
+        print(
+            f"  [{kind}] {rel}  {knob.label}:  "
+            f"{format_value(knob.start_value)} -> {format_value(best)}{note}"
+        )
     print(f"  ({moved} of {len(knobs)} knobs moved; the rest stayed at their defaults)")
 
     print("\n== overrides (paste-ready, for an ad-hoc render) ==")
@@ -155,7 +172,8 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         diff = difflib.unified_diff(
             baseline[path].splitlines(keepends=True),
             new_text.splitlines(keepends=True),
-            fromfile=f"a/{rel}", tofile=f"b/{rel}",
+            fromfile=f"a/{rel}",
+            tofile=f"b/{rel}",
         )
         chunk = "".join(diff)
         if chunk:
@@ -171,14 +189,22 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
             "pattern": args.pattern,
             "notes": args.notes,
             "velocities": args.velocities,
-            "loss": {"start": evaluator.trajectory[0][1] if evaluator.trajectory else None,
-                     "best": evaluator.best_loss,
-                     "normalized": evaluator.normalize},
+            "loss": {
+                "start": evaluator.trajectory[0][1] if evaluator.trajectory else None,
+                "best": evaluator.best_loss,
+                "normalized": evaluator.normalize,
+            },
             "evaluations": len(evaluator.trajectory),
             "renders": evaluator.n_renders,
             "knobs": [
-                {"key": k.label, "start": k.start_value, "best": b,
-                 "min": k.lo, "max": k.hi, "scale": "log" if k.log else "linear"}
+                {
+                    "key": k.label,
+                    "start": k.start_value,
+                    "best": b,
+                    "min": k.lo,
+                    "max": k.hi,
+                    "scale": "log" if k.log else "linear",
+                }
                 for k, b in zip(knobs, best_values)
             ],
             "overrides": overrides,
@@ -197,7 +223,9 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
             # than let it happen silently: the values are in the diff and the
             # overrides string above either way.
             if path in baseline and path.exists() and path.read_text() != baseline[path]:
-                print(f"warning: {path} changed since the fit started; the write-back "
-                      f"below replaces that change with the fitted values")
+                print(
+                    f"warning: {path} changed since the fit started; the write-back "
+                    f"below replaces that change with the fitted values"
+                )
             path.write_text(text)
         print("\nBest values written to source.")

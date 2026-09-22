@@ -41,18 +41,20 @@ from smf import Note
 #
 # It lives here rather than with the probe patterns because it is a fact
 # about the instruments, and the probe layout is one of its consumers.
-LONG_DECAY_DRUM_NOTES = frozenset({
-    49,  # crash cymbal 1
-    51,  # ride cymbal 1
-    52,  # chinese cymbal
-    53,  # ride bell
-    55,  # splash cymbal
-    57,  # crash cymbal 2
-    59,  # ride cymbal 2
-    81,  # open triangle
-    80,  # mute triangle - the same instrument, and its mute group's other half
-    84,  # belltree, the longest and quietest thing in the kit
-})
+LONG_DECAY_DRUM_NOTES = frozenset(
+    {
+        49,  # crash cymbal 1
+        51,  # ride cymbal 1
+        52,  # chinese cymbal
+        53,  # ride bell
+        55,  # splash cymbal
+        57,  # crash cymbal 2
+        59,  # ride cymbal 2
+        81,  # open triangle
+        80,  # mute triangle - the same instrument, and its mute group's other half
+        84,  # belltree, the longest and quietest thing in the kit
+    }
+)
 
 HIT_MAX_SEC = 1.8
 #: What a hit is analysed over when it is one of the kit's long-decay notes.
@@ -145,8 +147,9 @@ PITCH_DROP_POINTS = 61
 PITCH_DROP_FLOOR_DB = 24.0
 
 
-def spectral_flatness_db(freqs: np.ndarray, mag: np.ndarray,
-                         max_band_hz: float | None) -> float | None:
+def spectral_flatness_db(
+    freqs: np.ndarray, mag: np.ndarray, max_band_hz: float | None
+) -> float | None:
     """Geometric over arithmetic mean of the power spectrum, in dB.
 
     How much of a hit stands in lines rather than lying in a continuum: a struck
@@ -171,9 +174,9 @@ def spectral_flatness_db(freqs: np.ndarray, mag: np.ndarray,
     it the spectrum is the recording chain's roll-off, which is smooth and would
     read as tone.
     """
-    ceiling = min(CENTROID_MAX_HZ,
-                  float("inf") if max_band_hz is None
-                  else max_band_hz * THIRD_OCTAVE_RATIO)
+    ceiling = min(
+        CENTROID_MAX_HZ, float("inf") if max_band_hz is None else max_band_hz * THIRD_OCTAVE_RATIO
+    )
     band = (freqs >= FLATNESS_LOW_HZ) & (freqs <= ceiling)
     power = np.asarray(mag[band], dtype=np.float64) ** 2
     if power.size < 16:
@@ -215,8 +218,14 @@ def hit_tone(seg: np.ndarray, sr: int, *, max_band_hz: float | None = None) -> d
     reads directly against the patch's `mode_ratios` — an ideal circular head
     is 1 : 1.59 : 2.14 : 2.30 : 2.65, and those ratios are to the fundamental.
     """
-    empty = {"modal_hz": [], "modal_db": [], "modal_ratio": [],
-             "tone_f0_hz": None, "tone_lowest_hz": None, "flatness_db": None}
+    empty = {
+        "modal_hz": [],
+        "modal_db": [],
+        "modal_ratio": [],
+        "tone_f0_hz": None,
+        "tone_lowest_hz": None,
+        "flatness_db": None,
+    }
     n = min(len(seg), int(HIT_TONE_WINDOW_S * sr))
     if n < 512:
         return empty
@@ -265,10 +274,10 @@ def pitch_drop(seg: np.ndarray, sr: int, f0: float | None) -> dict:
     if n_frames < 8:
         return empty
     frames = np.lib.stride_tricks.sliding_window_view(
-        np.asarray(seg[:end], dtype=np.float64), win_n)[::hop][:n_frames]
+        np.asarray(seg[:end], dtype=np.float64), win_n
+    )[::hop][:n_frames]
     frames = frames * np.hanning(win_n)
-    cand = np.linspace(f0 * PITCH_DROP_SPAN[0], f0 * PITCH_DROP_SPAN[1],
-                       PITCH_DROP_POINTS)
+    cand = np.linspace(f0 * PITCH_DROP_SPAN[0], f0 * PITCH_DROP_SPAN[1], PITCH_DROP_POINTS)
     t = np.arange(win_n) / sr
     amps = np.abs(frames @ np.exp(-2j * np.pi * np.outer(cand, t)).T)
     k = np.argmax(amps, axis=1)
@@ -280,7 +289,7 @@ def pitch_drop(seg: np.ndarray, sr: int, f0: float | None) -> dict:
         return empty
     track = cand[k]
     idx = np.where(keep)[0]
-    settled = float(np.median(track[idx[len(idx) // 2:]]))
+    settled = float(np.median(track[idx[len(idx) // 2 :]]))
     start = float(track[idx[0]])
     if settled <= 0.0:
         return empty
@@ -294,8 +303,10 @@ def pitch_drop(seg: np.ndarray, sr: int, f0: float | None) -> dict:
         below = np.where(excess <= target)[0]
         if below.size:
             ms = float((idx[below[0]] - idx[0]) * PITCH_DROP_HOP_S * 1000.0)
-    return {"pitch_drop_ratio": round(ratio, 4),
-            "pitch_drop_ms": None if ms is None else round(ms, 1)}
+    return {
+        "pitch_drop_ratio": round(ratio, 4),
+        "pitch_drop_ms": None if ms is None else round(ms, 1),
+    }
 
 
 @dataclass
@@ -304,11 +315,11 @@ class HitMetrics:
 
     note: int
     velocity: int
-    bands_db: list[float]                # 1/3-octave, dB relative to the loudest band
+    bands_db: list[float]  # 1/3-octave, dB relative to the loudest band
     peak_band_hz: float
     band_decay_db_s: list[float | None]  # per octave band
     centroid_hz: float
-    onset_ms: float                      # strike, relative to the note-on
+    onset_ms: float  # strike, relative to the note-on
     attack_ms: float
     #: The attack sat at or under what the envelope window can resolve, so the
     #: number is the ruler and not the hit -- the counterpart of `decay_capped`
@@ -349,9 +360,15 @@ def _hit_onset(mono: np.ndarray, sr: int, start: float, limit: float) -> float:
     return sound_onset_s(mono, sr, start, limit)
 
 
-def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
-                max_band_hz: float | None = None,
-                stereo: np.ndarray | None = None) -> HitMetrics:
+def analyze_hit(
+    mono: np.ndarray,
+    sr: int,
+    note: Note,
+    window_end: float,
+    *,
+    max_band_hz: float | None = None,
+    stereo: np.ndarray | None = None,
+) -> HitMetrics:
     """Compute the percussion metric set for one hit.
 
     The window runs from the strike to `window_end` (the next hit, or the end of
@@ -389,7 +406,7 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
     on = int(onset * sr)
     ceiling = HIT_LONG_MAX_SEC if note.note in LONG_DECAY_DRUM_NOTES else HIT_MAX_SEC
     end = int(min(window_end, onset + ceiling) * sr)
-    seg = np.asarray(mono[on:min(end, len(mono))], dtype=np.float64)
+    seg = np.asarray(mono[on : min(end, len(mono))], dtype=np.float64)
     if len(seg) < 256:
         seg = np.asarray(mono[on : on + 256], dtype=np.float64)
 
@@ -408,16 +425,15 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
     # Cut at whatever the kept bands cover, for the reason the profile is:
     # a capture that cannot hear its own cymbals reports a centroid the chain
     # decided, and a model with a real wash is charged the difference.
-    ceiling = CENTROID_MAX_HZ if max_band_hz is None else min(
-        CENTROID_MAX_HZ, max_band_hz * THIRD_OCTAVE_RATIO)
+    ceiling = (
+        CENTROID_MAX_HZ
+        if max_band_hz is None
+        else min(CENTROID_MAX_HZ, max_band_hz * THIRD_OCTAVE_RATIO)
+    )
     in_range = freqs <= ceiling
-    centroid = float(
-        np.sum(freqs[in_range] * mag[in_range]) / max(np.sum(mag[in_range]), 1e-12)
-    )
+    centroid = float(np.sum(freqs[in_range] * mag[in_range]) / max(np.sum(mag[in_range]), 1e-12))
 
-    times, env = _rms_envelope(
-        seg, sr, hop_ms=HIT_ENVELOPE_HOP_MS, win_ms=HIT_ENVELOPE_WIN_MS
-    )
+    times, env = _rms_envelope(seg, sr, hop_ms=HIT_ENVELOPE_HOP_MS, win_ms=HIT_ENVELOPE_WIN_MS)
     peak = float(np.max(env))
     reached = np.where(env >= peak * 10.0 ** (HIT_ATTACK_TOLERANCE_DB / 20.0))[0]
     attack_i = int(reached[0]) if reached.size else int(np.argmax(env))
@@ -454,7 +470,8 @@ def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float, *,
         **drop,
         band_decay_db_s=[
             None if v is None or i >= keep_octaves else round(v, 2)
-            for i, v in enumerate(_band_decay(seg, sr, OCTAVE_CENTERS, OCTAVE_RATIO))],
+            for i, v in enumerate(_band_decay(seg, sr, OCTAVE_CENTERS, OCTAVE_RATIO))
+        ],
         centroid_hz=round(centroid, 1),
         onset_ms=round((onset - note.start) * 1000.0, 2),
         attack_ms=round(attack_ms, 2),

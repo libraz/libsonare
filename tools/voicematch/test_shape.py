@@ -64,8 +64,9 @@ from shape.spectro import DEFAULT_SCALES, Spectro, rows_hz
 SR = 48000
 
 
-def synth(note, seconds=4.0, B=0.0, decay=(), level=(), sr=SR, n_partials=8,
-          noise_db=None, extra=()):
+def synth(
+    note, seconds=4.0, B=0.0, decay=(), level=(), sr=SR, n_partials=8, noise_db=None, extra=()
+):
     """A struck-string stand-in: inharmonic partials with per-partial decay."""
     t = np.arange(int(seconds * sr)) / sr
     f0 = note_hz(note)
@@ -86,6 +87,7 @@ def synth(note, seconds=4.0, B=0.0, decay=(), level=(), sr=SR, n_partials=8,
 
 
 # --- spectrogram ---------------------------------------------------------
+
 
 def test_rows_are_geometric_and_ordered():
     hz = rows_hz(64, 27.5, 16000.0)
@@ -109,6 +111,7 @@ def test_a_signal_shorter_than_the_window_is_padded_not_truncated():
 
 
 # --- partials ------------------------------------------------------------
+
 
 def test_inharmonicity_is_recovered_from_a_stretched_series():
     B = 4e-4
@@ -150,6 +153,7 @@ def test_a_partial_buried_in_noise_is_not_reported_as_clear():
 
 
 # --- bed -----------------------------------------------------------------
+
 
 def _floor(n_samples, tilt, seed, sr=SR):
     """Noise with a chosen spectral tilt: the thing a recording session leaves."""
@@ -220,6 +224,7 @@ def test_a_frozen_bed_round_trips(tmp_path):
 
 # --- terms ---------------------------------------------------------------
 
+
 def test_a_slower_attack_reads_as_a_longer_rise():
     t = np.arange(int(0.5 * SR)) / SR
     tone = np.sin(2 * np.pi * 2000.0 * t)
@@ -242,8 +247,7 @@ def test_residue_ratio_separates_a_clean_series_from_a_stray_tone():
     sp = Spectro(seconds=4.0)
     hm = harmonic_rows(sp.rows_hz(0), note_hz(60), 0.0)
     clean = terms.residue_ratio(sp, sp(synth(60))[0], hm)
-    rung = terms.residue_ratio(
-        sp, sp(synth(60, extra=((1451.0, 2.0, 0.5),)))[0], hm)
+    rung = terms.residue_ratio(sp, sp(synth(60, extra=((1451.0, 2.0, 0.5),)))[0], hm)
     assert (rung > clean + 6.0).all()
 
 
@@ -283,6 +287,7 @@ def test_release_is_measured_against_the_note_peak():
 
 # --- loss ----------------------------------------------------------------
 
+
 class _Fixed:
     """A signal source that answers from a table, standing in for a renderer."""
 
@@ -303,15 +308,13 @@ def _pair_tables(mod_fn):
 
 def test_an_identical_render_scores_near_zero():
     notes, vels, ref, mod = _pair_tables(lambda k, v: v.copy())
-    loss = ShapeLoss(signals=_Fixed(ref, mod), spectro=Spectro(seconds=10.0),
-                     velocities=vels)
+    loss = ShapeLoss(signals=_Fixed(ref, mod), spectro=Spectro(seconds=10.0), velocities=vels)
     assert loss.score(notes=notes).total < 0.5
 
 
 def test_a_gain_offset_alone_is_removed():
     notes, vels, ref, mod = _pair_tables(lambda k, v: v * 4.0)
-    loss = ShapeLoss(signals=_Fixed(ref, mod), spectro=Spectro(seconds=10.0),
-                     velocities=vels)
+    loss = ShapeLoss(signals=_Fixed(ref, mod), spectro=Spectro(seconds=10.0), velocities=vels)
     assert loss.score(notes=notes).total < 0.5
     assert 11.0 < loss.score(notes=notes).gain_db < 13.0
 
@@ -319,8 +322,10 @@ def test_a_gain_offset_alone_is_removed():
 def test_an_added_ring_is_scored_worse_than_the_clean_render():
     notes, vels, ref, _ = _pair_tables(lambda k, v: v)
     clean = {k: v.copy() for k, v in ref.items()}
-    rung = {k: v + synth(k[0], seconds=10.0, n_partials=0,
-                         extra=((1451.0, 1.0, 0.4),)) for k, v in ref.items()}
+    rung = {
+        k: v + synth(k[0], seconds=10.0, n_partials=0, extra=((1451.0, 1.0, 0.4),))
+        for k, v in ref.items()
+    }
     sp = Spectro(seconds=10.0)
     a = ShapeLoss(signals=_Fixed(ref, clean), spectro=sp, velocities=vels)
     b = ShapeLoss(signals=_Fixed(ref, rung), spectro=sp, velocities=vels)
@@ -342,8 +347,10 @@ def test_the_recurrence_term_charges_a_ring_that_answers_every_note():
     fixed = ((1451.0, 1.0, 3.0), (2137.0, 0.8, 3.0), (3299.0, 0.6, 3.0))
     share = {48: 0.02, 60: 0.15, 72: 1.2}
     clean = {k: v.copy() for k, v in ref.items()}
-    rung = {k: v + synth(k[0], seconds=10.0, n_partials=0, extra=fixed) * share[k[0]]
-            for k, v in ref.items()}
+    rung = {
+        k: v + synth(k[0], seconds=10.0, n_partials=0, extra=fixed) * share[k[0]]
+        for k, v in ref.items()
+    }
     a = ShapeLoss(signals=_Fixed(ref, clean), spectro=sp, velocities=vels)
     b = ShapeLoss(signals=_Fixed(ref, rung), spectro=sp, velocities=vels)
     ra = a.score(notes=notes).parts["recurrence"]
@@ -369,12 +376,17 @@ def test_the_recurrence_term_charges_the_model_far_more_than_the_reference():
     sp = Spectro(seconds=10.0)
     fixed = ((1451.0, 0.05, 3.0), (2137.0, 0.04, 3.0))
     plain = {k: v.copy() for k, v in ref.items()}
-    rung = {k: v + synth(k[0], seconds=10.0, n_partials=0, extra=fixed)
-            for k, v in ref.items()}
-    model_rings = ShapeLoss(signals=_Fixed(plain, rung), spectro=sp,
-                            velocities=vels).score(notes=notes).parts["recurrence"]
-    ref_rings = ShapeLoss(signals=_Fixed(rung, plain), spectro=sp,
-                          velocities=vels).score(notes=notes).parts["recurrence"]
+    rung = {k: v + synth(k[0], seconds=10.0, n_partials=0, extra=fixed) for k, v in ref.items()}
+    model_rings = (
+        ShapeLoss(signals=_Fixed(plain, rung), spectro=sp, velocities=vels)
+        .score(notes=notes)
+        .parts["recurrence"]
+    )
+    ref_rings = (
+        ShapeLoss(signals=_Fixed(rung, plain), spectro=sp, velocities=vels)
+        .score(notes=notes)
+        .parts["recurrence"]
+    )
     assert model_rings > 2.0 * ref_rings, (model_rings, ref_rings)
 
 
@@ -402,27 +414,31 @@ def test_a_render_missing_its_tail_is_scored_by_the_balance_term():
     dark = {k: darken(v) for k, v in ref.items()}
     a = ShapeLoss(signals=_Fixed(ref, clean), spectro=sp, velocities=vels)
     b = ShapeLoss(signals=_Fixed(ref, dark), spectro=sp, velocities=vels)
-    assert b.score(notes=notes).parts["balance"] > \
-        a.score(notes=notes).parts["balance"] + 2.0
+    assert b.score(notes=notes).parts["balance"] > a.score(notes=notes).parts["balance"] + 2.0
 
 
 def test_the_balance_term_is_blind_to_a_pure_gain():
     notes, vels, ref, mod = _pair_tables(lambda k, v: v * 8.0)
-    loss = ShapeLoss(signals=_Fixed(ref, mod), spectro=Spectro(seconds=10.0),
-                     velocities=vels)
+    loss = ShapeLoss(signals=_Fixed(ref, mod), spectro=Spectro(seconds=10.0), velocities=vels)
     assert loss.score(notes=notes).parts["balance"] < 0.2
 
 
 def test_the_parts_are_reported_separately():
     notes, vels, ref, mod = _pair_tables(lambda k, v: v.copy())
-    loss = ShapeLoss(signals=_Fixed(ref, mod), spectro=Spectro(seconds=10.0),
-                     velocities=vels)
+    loss = ShapeLoss(signals=_Fixed(ref, mod), spectro=Spectro(seconds=10.0), velocities=vels)
     assert set(loss.score(notes=notes).parts) == {
-        "spectrum", "onset", "residue", "invariance", "release", "balance",
-        "recurrence"}
+        "spectrum",
+        "onset",
+        "residue",
+        "invariance",
+        "release",
+        "balance",
+        "recurrence",
+    }
 
 
 # --- probes --------------------------------------------------------------
+
 
 def test_sustain_colour_rises_when_the_middle_partials_are_lifted():
     dull = synth(48, seconds=6.0, level=(0, -8, -20, -26, -32, -38, -44, -50))
@@ -434,8 +450,7 @@ def test_sustain_colour_rises_when_the_middle_partials_are_lifted():
 def test_tail_residue_sees_a_ring_the_string_cannot_account_for():
     sp = Spectro(seconds=8.0)
     clean = synth(60, seconds=8.0)
-    rung = clean + synth(60, seconds=8.0, n_partials=0,
-                         extra=((1451.0, 1.0, 0.4),))
+    rung = clean + synth(60, seconds=8.0, n_partials=0, extra=((1451.0, 1.0, 0.4),))
     assert tail_residue(sp, rung, 60) > tail_residue(sp, clean, 60) + 10.0
 
 
@@ -553,6 +568,7 @@ def test_recurrence_finds_a_ring_that_answers_every_note():
     """
     from shape.density import bell_score, recurrence
     from shape.partials import note_hz
+
     sp = Spectro(seconds=DUR)
     # Halfway between the partials of the lowest note, whose grid the octaves
     # above it are subsets of. A resonance that lands ON a note's partial is
@@ -576,9 +592,10 @@ def test_recurrence_finds_a_ring_that_answers_every_note():
     # the pooled figure moves.
     for f in fixed:
         near = np.argmin(np.abs(hz - f))
-        assert frac[near - 1:near + 2].max() >= 2.0 / 3.0, f
-    assert bell_score(sp, with_bell, tuple(loud), 88, window=(0.2, 3.0)) > \
-        bell_score(sp, without, tuple(loud), 88, window=(0.2, 3.0))
+        assert frac[near - 1 : near + 2].max() >= 2.0 / 3.0, f
+    assert bell_score(sp, with_bell, tuple(loud), 88, window=(0.2, 3.0)) > bell_score(
+        sp, without, tuple(loud), 88, window=(0.2, 3.0)
+    )
 
 
 def test_recurrence_does_not_count_each_note_s_own_partials():
@@ -590,9 +607,9 @@ def test_recurrence_does_not_count_each_note_s_own_partials():
     """
     from shape.density import recurrence
     from shape.partials import note_hz
+
     sp = Spectro(seconds=DUR)
-    sigs = {(n, 88): _tones([note_hz(n) * k for k in range(1, 13)], seed=n)
-            for n in (48, 60, 72)}
+    sigs = {(n, 88): _tones([note_hz(n) * k for k in range(1, 13)], seed=n) for n in (48, 60, 72)}
     _hz, frac = recurrence(sp, sigs, (48, 60, 72), 88, window=(0.2, 3.0))
     assert float(np.mean(frac >= 0.99)) < 0.02
 
@@ -622,9 +639,11 @@ def test_a_band_with_nothing_in_it_reports_zero_rather_than_noise():
 
 # --- purity --------------------------------------------------------------
 
+
 def _partials(note, count=12, b=0.0, seconds=DUR, decay=None, seed=1):
     """A synthesised note: `count` partials on the stiff-string grid."""
     from shape.partials import note_hz, partial_hz
+
     t = np.arange(int(seconds * SR)) / SR
     rng = np.random.default_rng(seed)
     out = np.zeros_like(t)
@@ -639,10 +658,10 @@ def _partials(note, count=12, b=0.0, seconds=DUR, decay=None, seed=1):
 
 def test_a_pure_partial_stack_is_all_string_and_noise_alone_is_none_of_it():
     from shape.purity import purity_db
+
     sp = Spectro(seconds=DUR)
     clean = purity_db(sp, _partials(60), 60, (0.2, 3.0))
-    noisy = purity_db(sp, np.random.default_rng(2).standard_normal(int(DUR * SR)),
-                      60, (0.2, 3.0))
+    noisy = purity_db(sp, np.random.default_rng(2).standard_normal(int(DUR * SR)), 60, (0.2, 3.0))
     # The separation is the property; neither endpoint is. A synthesised stack
     # does not read as infinitely pure because the analysis rows are wider than
     # the mask, and noise does not read as zero because the mask covers a
@@ -660,12 +679,15 @@ def test_adding_noise_to_a_note_lowers_its_purity_monotonically():
     one number would be pinned to this synthesis rather than to the measure.
     """
     from shape.purity import purity_db
+
     sp = Spectro(seconds=DUR)
     base = _partials(60)
-    rms = float(np.sqrt(np.mean(base ** 2)))
+    rms = float(np.sqrt(np.mean(base**2)))
     rng = np.random.default_rng(5)
-    got = [purity_db(sp, base + rng.standard_normal(len(base)) * rms * a, 60,
-                     (0.2, 3.0)) for a in (0.0, 0.05, 0.2, 0.8)]
+    got = [
+        purity_db(sp, base + rng.standard_normal(len(base)) * rms * a, 60, (0.2, 3.0))
+        for a in (0.0, 0.05, 0.2, 0.8)
+    ]
     assert all(a > b for a, b in itertools.pairwise(got)), got
 
 
@@ -677,6 +699,7 @@ def test_a_tail_sitting_on_its_own_floor_is_flagged_by_the_floor_share():
     the same recording after its damper has landed.
     """
     from shape.purity import FLOOR_SHARE_LIMIT, floor_share
+
     sp = Spectro(seconds=10.0)
     t = np.arange(int(10.0 * SR)) / SR
     floor = np.random.default_rng(4).standard_normal(len(t)) * 3e-4
@@ -691,10 +714,10 @@ def test_the_profile_keeps_the_notes_rather_than_averaging_them():
     real data, which meant the notes disagreed, and the disagreement was the
     finding -- so the reduction is the caller's to choose."""
     from shape.purity import profile
+
     sp = Spectro(seconds=DUR)
     sigs = {(n, 88): _partials(n) for n in (48, 60, 72)}
-    got = profile(sp, sigs, (48, 60, 72), 88,
-                  windows=(("body", 0.2, 1.0), ("tail", 1.5, 3.0)))
+    got = profile(sp, sigs, (48, 60, 72), 88, windows=(("body", 0.2, 1.0), ("tail", 1.5, 3.0)))
     assert set(got) == {"body", "tail"}
     assert set(got["body"]) == {48, 60, 72}
     assert all(isinstance(v, float) for v in got["body"].values())
@@ -702,10 +725,16 @@ def test_the_profile_keeps_the_notes_rather_than_averaging_them():
 
 # --- takes ---------------------------------------------------------------
 
+
 def _item(notes, cc=(), seconds=10.0):
-    return {"id": "t", "meta": {"seconds": seconds, "notes": [
-        {"note": n, "velocity": 88, "start": s, "duration": d} for n, s, d in notes],
-        "cc": [list(c) for c in cc]}}
+    return {
+        "id": "t",
+        "meta": {
+            "seconds": seconds,
+            "notes": [{"note": n, "velocity": 88, "start": s, "duration": d} for n, s, d in notes],
+            "cc": [list(c) for c in cc],
+        },
+    }
 
 
 def test_the_pedal_window_sits_before_the_pedal_lifts_not_after():
@@ -717,8 +746,8 @@ def test_the_pedal_window_sits_before_the_pedal_lifts_not_after():
     gives an answer with the wrong sign.
     """
     from shape.takes import window_for
-    item = _item([(60, 0.5 + i * 0.8, 0.12) for i in range(8)],
-                 cc=((0.2, 64, 127), (7.0, 64, 0)))
+
+    item = _item([(60, 0.5 + i * 0.8, 0.12) for i in range(8)], cc=((0.2, 64, 127), (7.0, 64, 0)))
     lo, hi = window_for(item, "ringing")
     assert 6.2 <= lo < hi <= 7.0
     body = window_for(item, "body")
@@ -732,6 +761,7 @@ def test_the_pedal_window_sits_before_the_pedal_lifts_not_after():
 
 def test_a_take_with_no_pedal_ends_its_ringing_window_before_the_take_does():
     from shape.takes import window_for
+
     item = _item([(48, 0.3, 6.0), (52, 0.3, 6.0)])
     lo, hi = window_for(item, "ringing")
     assert 6.3 <= lo < hi <= 10.0
@@ -746,15 +776,18 @@ def test_a_phrase_that_changes_pedal_repeatedly_uses_the_last_change():
     hundred-millisecond window in the middle of the music.
     """
     from shape.takes import window_for
-    item = _item([(60, 0.4, 0.85), (72, 2.95, 1.3), (36, 5.45, 1.0)],
-                 cc=((0.45, 64, 127), (2.05, 64, 0), (2.15, 64, 127),
-                     (7.20, 64, 0)))
+
+    item = _item(
+        [(60, 0.4, 0.85), (72, 2.95, 1.3), (36, 5.45, 1.0)],
+        cc=((0.45, 64, 127), (2.05, 64, 0), (2.15, 64, 127), (7.20, 64, 0)),
+    )
     lo, hi = window_for(item, "ringing")
     assert abs(lo - 6.55) < 1e-9 and hi == 7.20
 
 
 def test_a_take_still_sounding_at_its_end_has_no_ringing_window():
     from shape.takes import window_for
+
     item = _item([(60, 0.3, 9.5)])
     with pytest.raises(ValueError, match="no window"):
         window_for(item, "ringing")
@@ -762,6 +795,7 @@ def test_a_take_still_sounding_at_its_end_has_no_ringing_window():
 
 def test_a_take_without_a_schedule_says_so_instead_of_guessing():
     from shape.takes import window_for
+
     with pytest.raises(ValueError, match="schedule"):
         window_for({"id": "old", "meta": {"seconds": 10.0}}, "ringing")
 
@@ -770,19 +804,21 @@ def test_band_error_removes_one_gain_and_reports_the_tilt_that_is_left():
     """A model twice as loud but identically balanced must read as flat zero,
     and one that is level overall but tilted must read as the tilt."""
     from shape.takes import band_error
+
     t = np.arange(int(6.0 * SR)) / SR
     rng = np.random.default_rng(9)
-    ref = sum(np.sin(2 * np.pi * f * t + rng.uniform(0, 2 * np.pi))
-              for f in (90.0, 300.0, 1400.0, 5000.0))
+    ref = sum(
+        np.sin(2 * np.pi * f * t + rng.uniform(0, 2 * np.pi)) for f in (90.0, 300.0, 1400.0, 5000.0)
+    )
     tracks = {"m": (ref * 2.0, SR), "r": (ref, SR)}
-    vals, g = band_error(tracks, "m", "r", (0.5, 2.0), (2.0, 4.0), (0.0, 0.2),
-                         snr_db=-300.0)
+    vals, g = band_error(tracks, "m", "r", (0.5, 2.0), (2.0, 4.0), (0.0, 0.2), snr_db=-300.0)
     assert abs(g - 6.02) < 0.2
     assert max(abs(v) for v in vals if v is not None) < 0.5
 
 
 def test_band_error_drops_a_band_the_reference_leaves_on_its_own_floor():
     from shape.takes import band_error
+
     n = int(8.0 * SR)
     t = np.arange(n) / SR
     floor = np.random.default_rng(11).standard_normal(n) * 1e-4
@@ -791,14 +827,24 @@ def test_band_error_drops_a_band_the_reference_leaves_on_its_own_floor():
     # the measurement window 300 Hz is still sounding and 5 kHz is long gone, so
     # one band is a reading of the instrument and the other of the noise.
     struck = np.clip(t - 0.3, 0.0, None)
-    ref = (np.sin(2 * np.pi * 300.0 * t) * np.clip(1.0 - struck / 5.7, 0.0, 1.0)
-           * (t >= 0.3)
-           + np.sin(2 * np.pi * 5000.0 * t) * np.exp(-struck / 0.2) * (t >= 0.3)
-           + floor)
+    ref = (
+        np.sin(2 * np.pi * 300.0 * t) * np.clip(1.0 - struck / 5.7, 0.0, 1.0) * (t >= 0.3)
+        + np.sin(2 * np.pi * 5000.0 * t) * np.exp(-struck / 0.2) * (t >= 0.3)
+        + floor
+    )
     tracks = {"m": (ref, SR), "r": (ref, SR)}
     vals, _ = band_error(tracks, "m", "r", (0.4, 0.9), (2.0, 4.0), (0.0, 0.28))
-    bands = [(30, 60), (60, 125), (125, 250), (250, 500), (500, 1000),
-             (1000, 2000), (2000, 4000), (4000, 8000), (8000, 16000)]
+    bands = [
+        (30, 60),
+        (60, 125),
+        (125, 250),
+        (250, 500),
+        (500, 1000),
+        (1000, 2000),
+        (2000, 4000),
+        (4000, 8000),
+        (8000, 16000),
+    ]
     assert vals[bands.index((250, 500))] is not None
     assert vals[bands.index((4000, 8000))] is None
     assert vals[bands.index((4000, 8000))] is None
@@ -812,18 +858,19 @@ def test_relative_to_cancels_a_shared_error_in_how_a_note_decays():
     because the error is in both terms.
     """
     from shape.takes import relative_to
+
     t = np.arange(int(6.0 * SR)) / SR
     one = np.sin(2 * np.pi * 300.0 * t) * np.exp(-t / 2.0)
     slow = np.sin(2 * np.pi * 300.0 * t) * np.exp(-t / 4.0)
     eight = one * np.sqrt(8.0)
     eight_slow = slow * np.sqrt(8.0)
     a = relative_to({"s": (eight, SR)}, {"s": (one, SR)}, "s", (2.0, 3.0), (2.0, 3.0))
-    b = relative_to({"s": (eight_slow, SR)}, {"s": (slow, SR)}, "s",
-                    (2.0, 3.0), (2.0, 3.0))
+    b = relative_to({"s": (eight_slow, SR)}, {"s": (slow, SR)}, "s", (2.0, 3.0), (2.0, 3.0))
     assert abs(a - 9.03) < 0.2 and abs(b - 9.03) < 0.2
 
 
 # --- search plumbing -----------------------------------------------------
+
 
 def test_overrides_round_trip_and_only_carry_what_changed():
     base = {"a.k": 1.0, "a.j": 2.0}
@@ -853,6 +900,7 @@ def test_note_frequencies_follow_equal_temperament(note):
 
 # --- admittance ----------------------------------------------------------
 
+
 def _two_stage(note, count, fast_s, slow_s, split=0.5, seconds=6.0, seed=3):
     """A note whose every partial decays at two rates at once.
 
@@ -862,6 +910,7 @@ def _two_stage(note, count, fast_s, slow_s, split=0.5, seconds=6.0, seed=3):
     windows are there to separate.
     """
     from shape.partials import note_hz, partial_hz
+
     t = np.arange(int(seconds * SR)) / SR
     rng = np.random.default_rng(seed)
     out = np.zeros_like(t)
@@ -877,6 +926,7 @@ def _two_stage(note, count, fast_s, slow_s, split=0.5, seconds=6.0, seed=3):
 def test_the_two_windows_separate_the_two_rates_they_were_given():
     from shape import admittance
     from shape.partials import Track
+
     sig = _two_stage(48, 8, fast_s=0.30, slow_s=6.0)
     got = admittance.rates(Track(sig, 48), sig)
     assert len(got) >= 4
@@ -896,6 +946,7 @@ def test_a_single_rate_reads_the_same_in_both_windows():
     line wherever it is fitted -- which is exactly why that has to be shown."""
     from shape import admittance
     from shape.partials import Track
+
     sig = _two_stage(48, 8, fast_s=2.0, slow_s=2.0)
     got = admittance.rates(Track(sig, 48), sig)
     assert len(got) >= 4
@@ -910,6 +961,7 @@ def test_the_collapse_test_cannot_agree_with_itself_on_one_note():
     rather than reporting a curve."""
     from shape import admittance
     from shape.partials import Track
+
     sig = _two_stage(48, 12, fast_s=0.3, slow_s=6.0)
     one = admittance.rates(Track(sig, 48), sig)
     assert one
@@ -953,6 +1005,7 @@ def test_a_partial_the_model_let_die_is_counted_rather_than_dropped():
     """
     from shape import admittance
     from shape.partials import Track
+
     ref_sig = _two_stage(48, 14, fast_s=0.4, slow_s=6.0)
     # The same note with nothing above its fourth partial: a voice that dies in
     # the top of its range.
@@ -975,8 +1028,11 @@ def test_the_report_names_a_band_the_model_could_not_answer():
     the intersection, and leave the table. The reference decides which bands
     appear."""
     from shape import admittance
-    ref = {(48, 88): _two_stage(48, 16, fast_s=0.4, slow_s=6.0),
-           (55, 88): _two_stage(55, 16, fast_s=0.4, slow_s=6.0)}
+
+    ref = {
+        (48, 88): _two_stage(48, 16, fast_s=0.4, slow_s=6.0),
+        (55, 88): _two_stage(55, 16, fast_s=0.4, slow_s=6.0),
+    }
     model = {key: _two_stage(key[0], 5, fast_s=0.4, slow_s=6.0) for key in ref}
     text = admittance.report(ref, model)
     assert "n/a" in text
@@ -1001,8 +1057,11 @@ def _peaks_between(signal: np.ndarray, n_fft: int, lo: float, hi: float) -> list
     freq = np.fft.rfftfreq(n_fft, 1.0 / 48000.0)
     band = (freq > lo) & (freq < hi)
     m, f = mag[band], freq[band]
-    return [float(f[k]) for k in range(1, len(m) - 1)
-            if m[k] > m[k - 1] and m[k] > m[k + 1] and m[k] > 0.4 * m.max()]
+    return [
+        float(f[k])
+        for k in range(1, len(m) - 1)
+        if m[k] > m[k - 1] and m[k] > m[k + 1] and m[k] > 0.4 * m.max()
+    ]
 
 
 def test_the_longest_scale_separates_two_modes_a_few_hertz_apart():
@@ -1046,6 +1105,7 @@ def test_a_noise_bed_measured_over_fewer_scales_is_refused_by_name(tmp_path):
 
 # --------------------------------------------------------------- phrase takes
 
+
 def _burst(sr=SR, seconds=6.0, period=0.1, body=0.02, spike=0.5):
     """A transient every `period` seconds over a steady bed of amplitude `body`.
 
@@ -1059,7 +1119,7 @@ def _burst(sr=SR, seconds=6.0, period=0.1, body=0.02, spike=0.5):
     for k in range(int(seconds / period)):
         a = int(k * period * sr)
         env = np.exp(-np.arange(min(int(0.05 * sr), n - a)) / (0.01 * sr))
-        x[a:a + env.size] += spike * env
+        x[a : a + env.size] += spike * env
     return x
 
 
@@ -1109,12 +1169,12 @@ def test_digital_silence_is_not_a_level():
     from shape.takes import drawn
 
     x = np.zeros(int(2.0 * SR))
-    x[:int(0.1 * SR)] = 0.5
+    x[: int(0.1 * SR)] = 0.5
     hi, mid, lo = drawn(x, SR, (0.0, 2.0))
     # The self-comparisons are the NaN test, so the linter's "compared with
     # itself" is exactly what these two lines assert.
-    assert hi == hi                       # noqa: PLR0124 -- the burst is a real level
-    assert lo != lo and mid != mid        # noqa: PLR0124 -- the silence is not
+    assert hi == hi  # noqa: PLR0124 -- the burst is a real level
+    assert lo != lo and mid != mid  # noqa: PLR0124 -- the silence is not
 
 
 def test_a_variant_is_not_mistaken_for_the_reference():
@@ -1126,12 +1186,14 @@ def test_a_variant_is_not_mistaken_for_the_reference():
     """
     from shape.takes import pick_references
 
-    roled = {"sources": {
-        "model": {"role": "model"},
-        "cand_a": {"role": "model"},
-        "grand-227": {"role": "reference"},
-        "grand-290": {"role": "reference"},
-    }}
+    roled = {
+        "sources": {
+            "model": {"role": "model"},
+            "cand_a": {"role": "model"},
+            "grand-227": {"role": "reference"},
+            "grand-290": {"role": "reference"},
+        }
+    }
     assert pick_references(roled) == ["grand-227", "grand-290"]
 
     # No roles and one other source: unambiguous, and the old pages look like this.
@@ -1142,8 +1204,7 @@ def test_a_variant_is_not_mistaken_for_the_reference():
         pick_references({"sources": {"model": {}, "cand_a": {}, "grand-227": {}}})
 
     # Named explicitly, roles or not.
-    assert pick_references({"sources": {"model": {}, "a": {}, "b": {}}},
-                           "b,a") == ["b", "a"]
+    assert pick_references({"sources": {"model": {}, "a": {}, "b": {}}}, "b,a") == ["b", "a"]
     with pytest.raises(SystemExit, match="no source"):
         pick_references({"sources": {"model": {}, "a": {}}}, "nope")
 
@@ -1160,7 +1221,7 @@ def test_the_reference_median_is_not_one_reference():
     tracks = {
         "model": (_burst(body=0.02, spike=0.5), SR),
         "ref-a": (_burst(body=0.02, spike=0.05), SR),
-        "ref-b": (_burst(body=0.2, spike=0.05), SR),   # the odd one out
+        "ref-b": (_burst(body=0.2, spike=0.05), SR),  # the odd one out
         "ref-c": (_burst(body=0.02, spike=0.05), SR),
     }
     text = envelope_report(tracks, ["ref-a", "ref-b", "ref-c"], (0.0, 6.0))
@@ -1201,7 +1262,7 @@ def test_a_pieces_windows_follow_its_own_decay_and_not_the_clock():
 
 def test_a_decay_mark_is_where_the_hit_reached_that_level():
     t20, t60 = struck.decay_marks(_hit(1.0), 48000)
-    assert 0.30 < t20 < 0.38          # 20 dB down at a third of the t60
+    assert 0.30 < t20 < 0.38  # 20 dB down at a third of the t60
     assert 0.90 < t60 < 1.10
 
 
@@ -1224,8 +1285,7 @@ def _field(n, band=(2000, 4000), seconds=3.0, sr=48000, seed=3, t60=None):
     """n partials at random frequencies inside one band, optionally decaying."""
     t = np.arange(int(seconds * sr)) / sr
     r = np.random.default_rng(seed)
-    x = sum(np.sin(2 * np.pi * f * t + r.uniform(0, 6.28))
-            for f in r.uniform(band[0], band[1], n))
+    x = sum(np.sin(2 * np.pi * f * t + r.uniform(0, 6.28)) for f in r.uniform(band[0], band[1], n))
     return x if t60 is None else x * np.exp(-6.907755 * t / t60)
 
 
@@ -1234,18 +1294,26 @@ def test_the_density_estimator_is_graded_against_fields_it_knows_the_size_of():
     keep doing so when they are decaying -- a statistic that moves with the
     decay instead is measuring the envelope and not the texture."""
     sr, band, win = 48000, (2000, 4000), (0.30, 0.60)
-    counts = [modal_density(_field(n), 0, window=win, sr=sr, bands=(band,),
-                            notch=False)[band][0]
-              for n in (2, 8, 32, 128)]
+    counts = [
+        modal_density(_field(n), 0, window=win, sr=sr, bands=(band,), notch=False)[band][0]
+        for n in (2, 8, 32, 128)
+    ]
     assert counts == sorted(counts) and counts[0] < counts[-1] / 8
     # White noise is not a resolvable field, and reads below the dense end.
-    nz = modal_density(np.random.default_rng(11).standard_normal(int(3.0 * sr)), 0,
-                       window=win, sr=sr, bands=(band,), notch=False)[band][0]
+    nz = modal_density(
+        np.random.default_rng(11).standard_normal(int(3.0 * sr)),
+        0,
+        window=win,
+        sr=sr,
+        bands=(band,),
+        notch=False,
+    )[band][0]
     assert nz < counts[-1]
     # Decay must not move it: the same fields, given a 1.5 s t60.
-    decayed = [modal_density(_field(n, t60=1.5), 0, window=win, sr=sr, bands=(band,),
-                             notch=False)[band][0]
-               for n in (2, 8, 32, 128)]
+    decayed = [
+        modal_density(_field(n, t60=1.5), 0, window=win, sr=sr, bands=(band,), notch=False)[band][0]
+        for n in (2, 8, 32, 128)
+    ]
     for a, b in zip(counts, decayed):
         assert abs(a - b) <= max(2, 0.1 * a)
 
@@ -1257,8 +1325,7 @@ def test_an_unpitched_count_cannot_be_had_by_passing_a_nominal_note():
     sr, band, win = 48000, (2000, 4000), (0.30, 0.60)
     sig = _field(32)
     assert modal_density(sig, 21, window=win, sr=sr, bands=(band,))[band][0] == 0
-    assert modal_density(sig, 21, window=win, sr=sr, bands=(band,),
-                         notch=False)[band][0] > 8
+    assert modal_density(sig, 21, window=win, sr=sr, bands=(band,), notch=False)[band][0] > 8
 
 
 def test_the_texture_window_is_a_fixed_length_inside_the_aftersound():
@@ -1276,8 +1343,7 @@ def test_prompt_late_sees_a_top_that_belongs_to_the_strike_alone():
     # A low body, not white noise: white noise is flat to Nyquist and puts most
     # of its power in the top octave, which buries the layer under test in the
     # very bands the test is about.
-    lo = _field(40, band=(80, 800), seconds=1.5, sr=sr, seed=5) \
-        * np.exp(-6.907755 * t / 1.0)
+    lo = _field(40, band=(80, 800), seconds=1.5, sr=sr, seed=5) * np.exp(-6.907755 * t / 1.0)
     top = _field(24, band=(3000, 6000), seconds=1.5, sr=sr, seed=9)
     even = lo + top * np.exp(-6.907755 * t / 1.0)
     fading = lo + top * np.exp(-6.907755 * t / 0.05)
@@ -1299,8 +1365,7 @@ def test_a_struck_capture_is_scored_on_different_terms_than_a_played_one():
 
 
 def test_an_unscored_term_is_named_rather_than_counted_as_a_match():
-    t = Terms(total=1.0, parts={"spectrum": 1.0}, per_note={}, gain_db=0.0,
-              unscored=("density",))
+    t = Terms(total=1.0, parts={"spectrum": 1.0}, per_note={}, gain_db=0.0, unscored=("density",))
     assert "unscored" in str(t) and "density" in str(t)
 
 
@@ -1318,6 +1383,7 @@ def test_the_holdout_axis_follows_whether_the_capture_is_pitched():
     class FakeLoss:
         pitched = True
         velocities = (64, 88, 100, 112)
+
     played = holdout(FakeLoss(), (60, 62, 64, 66))
     assert played[0] != played[1] and played[2] is None
 
@@ -1387,8 +1453,7 @@ def test_prune_keeps_every_move_when_no_smaller_set_holds():
 
         def score(self, ov, notes=()):
             moved = {p.split("=")[0] for p in ov.split(",") if p}
-            return Terms(total=10.0 - bool(moved & {"a", "b"}),
-                         parts={}, per_note={}, gain_db=0.0)
+            return Terms(total=10.0 - bool(moved & {"a", "b"}), parts={}, per_note={}, gain_db=0.0)
 
     base = {"a": 1.0, "b": 1.0}
     moves = {k: 2.0 for k in base}
@@ -1407,13 +1472,14 @@ def test_a_faded_reference_does_not_drag_its_silence_into_the_window():
     two sides hold different amounts of nothing.
     """
     from shape.takes import usable_until
+
     n = int(8.0 * SR)
     t = np.arange(n) / SR
     rng = np.random.default_rng(5)
     hiss = rng.standard_normal(n) * 3e-5
     tone = np.sin(2 * np.pi * 300.0 * t) * np.exp(-t / 3.0) * (t >= 0.3) + hiss
     faded = tone.copy()
-    faded[int(5.0 * SR):] = 0.0
+    faded[int(5.0 * SR) :] = 0.0
     assert abs(usable_until(faded, SR, (0.0, 0.28), 1.0) - 5.0) < 0.15
     # The same signal left to decay on its own is measured to where it reaches
     # its own floor, not to a fixed margin under its body: a tail forty-five
@@ -1430,24 +1496,30 @@ def test_buildup_reads_accumulation_that_a_fitted_gain_hides():
     right. Measuring each source against ITS OWN plainest take is what shows it.
     """
     from shape.takes import band_buildup
+
     n = int(6.0 * SR)
     t = np.arange(n) / SR
     one = np.sin(2 * np.pi * 40.0 * t) * np.exp(-t / 2.0) * (t >= 0.2)
-    many = one * 4.0                       # four times the tail, same shape
+    many = one * 4.0  # four times the tail, same shape
     base = {"m": (one, SR)}
-    vals = band_buildup({"m": (many, SR)}, base, "m", (2.0, 4.0), (2.0, 4.0),
-                        (0.0, 0.18), (0.0, 0.18))
+    vals = band_buildup(
+        {"m": (many, SR)}, base, "m", (2.0, 4.0), (2.0, 4.0), (0.0, 0.18), (0.0, 0.18)
+    )
     assert abs(vals[0] - 12.04) < 0.3
-    same = band_buildup({"m": (one, SR)}, base, "m", (2.0, 4.0), (2.0, 4.0),
-                        (0.0, 0.18), (0.0, 0.18))
+    same = band_buildup(
+        {"m": (one, SR)}, base, "m", (2.0, 4.0), (2.0, 4.0), (0.0, 0.18), (0.0, 0.18)
+    )
     assert abs(same[0]) < 1e-6
 
 
 def test_the_plainest_take_is_chosen_from_the_schedule_not_named():
     from shape.takes import plainest
-    items = {"chord": _item([(48, 0.3, 6.0), (52, 0.3, 6.0), (55, 0.3, 6.0)]),
-             "single": _item([(60, 0.3, 2.0)]),
-             "run": _item([(60 + i, 0.3 + 0.2 * i, 1.0) for i in range(7)])}
+
+    items = {
+        "chord": _item([(48, 0.3, 6.0), (52, 0.3, 6.0), (55, 0.3, 6.0)]),
+        "single": _item([(60, 0.3, 2.0)]),
+        "run": _item([(60 + i, 0.3 + 0.2 * i, 1.0) for i in range(7)]),
+    }
     assert plainest(items) == "single"
 
 
@@ -1461,6 +1533,7 @@ def test_buildup_refuses_a_band_the_plainest_take_never_had():
     is exact silence, so every band clears it.
     """
     from shape.takes import band_buildup
+
     n = int(6.0 * SR)
     t = np.arange(n) / SR
     body = np.sin(2 * np.pi * 700.0 * t) * np.exp(-t / 1.5) * (t >= 0.2)
@@ -1471,15 +1544,33 @@ def test_buildup_refuses_a_band_the_plainest_take_never_had():
     low = np.sin(2 * np.pi * 40.0 * t) * np.exp(-t / 2.0) * (t >= 0.2)
     base = {"m": (body + low * 1e-6, SR)}
     many = {"m": (body + low, SR)}
-    vals = band_buildup(many, base, "m", (2.0, 4.0), (2.0, 4.0),
-                        (0.0, 0.18), (0.0, 0.18), (0.2, 1.8), (0.2, 1.8),
-                        range_db=50.0)
+    vals = band_buildup(
+        many,
+        base,
+        "m",
+        (2.0, 4.0),
+        (2.0, 4.0),
+        (0.0, 0.18),
+        (0.0, 0.18),
+        (0.2, 1.8),
+        (0.2, 1.8),
+        range_db=50.0,
+    )
     assert vals[0] is None
     # With the band genuinely present on both sides it is still reported.
     both = {"m": (body + low * 0.25, SR)}
-    vals = band_buildup(many, both, "m", (2.0, 4.0), (2.0, 4.0),
-                        (0.0, 0.18), (0.0, 0.18), (0.2, 1.8), (0.2, 1.8),
-                        range_db=50.0)
+    vals = band_buildup(
+        many,
+        both,
+        "m",
+        (2.0, 4.0),
+        (2.0, 4.0),
+        (0.0, 0.18),
+        (0.0, 0.18),
+        (0.2, 1.8),
+        (0.2, 1.8),
+        range_db=50.0,
+    )
     assert vals[0] is not None and abs(vals[0] - 12.04) < 0.5
 
 
@@ -1492,6 +1583,7 @@ def test_a_floor_recorded_into_the_sample_is_caught_by_its_own_infrasound():
     is that source's floor at that moment, whatever the lead-in said.
     """
     from shape.takes import band_error
+
     n = int(6.0 * SR)
     t = np.arange(n) / SR
     rng = np.random.default_rng(3)
@@ -1502,8 +1594,17 @@ def test_a_floor_recorded_into_the_sample_is_caught_by_its_own_infrasound():
     note = np.sin(2 * np.pi * 700.0 * t) * np.exp(-(t - 0.3) / 1.2) * playing
     tracks = {"m": (note, SR), "r": (note + hiss, SR)}
     vals, _ = band_error(tracks, "m", "r", (0.4, 1.6), (2.5, 4.5), (0.0, 0.28))
-    bands = [(30, 60), (60, 125), (125, 250), (250, 500), (500, 1000),
-             (1000, 2000), (2000, 4000), (4000, 8000), (8000, 16000)]
+    bands = [
+        (30, 60),
+        (60, 125),
+        (125, 250),
+        (250, 500),
+        (500, 1000),
+        (1000, 2000),
+        (2000, 4000),
+        (4000, 8000),
+        (8000, 16000),
+    ]
     # Every band the hiss owns is refused; the one the note is in is not.
     assert vals[bands.index((30, 60))] is None
     assert vals[bands.index((125, 250))] is None

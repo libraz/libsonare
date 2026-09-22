@@ -87,7 +87,7 @@ def load_spec_weights(spec_path: Path) -> dict[str, float]:
     """The term weights a spec carries, or an empty dict when it carries none."""
     weights = _spec_document(spec_path).get("weights", {})
     if not isinstance(weights, dict):
-        raise ValueError(# noqa: TRY004 -- one error class per document
+        raise ValueError(  # noqa: TRY004 -- one error class per document
             f"spec {spec_path}: 'weights' must be an object of term -> number"
         )
     out = {}
@@ -168,20 +168,32 @@ def build_knobs(
                         f"the library reported{hint}. Run --dump-knobs to list what exists."
                     )
                 start = entry.get("start", catalogue.defaults[name])
-                knobs.append(Knob(
-                    label=name, lo=lo, hi=hi, log=log,
-                    start_value=_clamp_start(float(start), lo, hi, name),
-                    tunable=name,
-                ))
+                knobs.append(
+                    Knob(
+                        label=name,
+                        lo=lo,
+                        hi=hi,
+                        log=log,
+                        start_value=_clamp_start(float(start), lo, hi, name),
+                        tunable=name,
+                    )
+                )
                 continue
             if found.file not in pristine:
                 pristine[found.file] = found.file.read_text()
-            knobs.append(Knob(
-                label=name, lo=lo, hi=hi, log=log,
-                start_value=_clamp_start(found.value, lo, hi, name),
-                tunable=name, file=found.file,
-                span_start=found.span_start, span_end=found.span_end,
-            ))
+            knobs.append(
+                Knob(
+                    label=name,
+                    lo=lo,
+                    hi=hi,
+                    log=log,
+                    start_value=_clamp_start(found.value, lo, hi, name),
+                    tunable=name,
+                    file=found.file,
+                    span_start=found.span_start,
+                    span_end=found.span_end,
+                )
+            )
             continue
 
         try:
@@ -209,16 +221,21 @@ def build_knobs(
         try:
             start_value = float(m.group(1))
         except (TypeError, ValueError):
-            raise ValueError(
-                f"knob #{i}: captured text {m.group(1)!r} is not a number"
-            ) from None
+            raise ValueError(f"knob #{i}: captured text {m.group(1)!r} is not a number") from None
         label = f"{Path(rel).name}:{pattern}"
-        knobs.append(Knob(
-            label=label, lo=lo, hi=hi, log=log,
-            start_value=_clamp_start(start_value, lo, hi, label),
-            file=path, pattern=pattern,
-            span_start=m.start(1), span_end=m.end(1),
-        ))
+        knobs.append(
+            Knob(
+                label=label,
+                lo=lo,
+                hi=hi,
+                log=log,
+                start_value=_clamp_start(start_value, lo, hi, label),
+                file=path,
+                pattern=pattern,
+                span_start=m.start(1),
+                span_end=m.end(1),
+            )
+        )
     return knobs
 
 
@@ -226,19 +243,60 @@ def build_knobs(
 # what the engine *is* rather than how it sounds, and a fitter given them
 # wanders into configurations no instrument occupies.
 AUTO_SKIP_SUFFIXES = (
-    ".filter_env.delay_ms", ".filter_env.hold_ms", ".amp_env.delay_ms", ".amp_env.hold_ms",
-    ".glide_ms", ".pitch_offset_cents", ".key_track", ".lfo2_rate_hz",
+    ".filter_env.delay_ms",
+    ".filter_env.hold_ms",
+    ".amp_env.delay_ms",
+    ".amp_env.hold_ms",
+    ".glide_ms",
+    ".pitch_offset_cents",
+    ".key_track",
+    ".lfo2_rate_hz",
 )
 
 # Fields whose meaning is a normalized amount; auto ranges are clamped to [0,1]
 # rather than scaled off the default, since 2x a 0.9 is not a thing the engine
 # accepts and 0 is always a legal end of the range.
 AUTO_UNIT_HINTS = (
-    "brightness", "damping", "breath", "chiff", "reed", "radiation", "keytrack", "swell",
-    "sustain", "mix", "spread", "drive", "rosin", "stribeck", "polarization", "sympathetic",
-    "slap", "buzz", "nail", "dispersion", "overblow", "vortex", "growl", "tonehole", "mute",
-    "brassiness", "half_valve", "dynamic_lip", "cuivre_dynamics", "noise", "click", "depth",
-    "position", "opening", "stiffness", "tension", "gain", "level", "wind_sag", "vent",
+    "brightness",
+    "damping",
+    "breath",
+    "chiff",
+    "reed",
+    "radiation",
+    "keytrack",
+    "swell",
+    "sustain",
+    "mix",
+    "spread",
+    "drive",
+    "rosin",
+    "stribeck",
+    "polarization",
+    "sympathetic",
+    "slap",
+    "buzz",
+    "nail",
+    "dispersion",
+    "overblow",
+    "vortex",
+    "growl",
+    "tonehole",
+    "mute",
+    "brassiness",
+    "half_valve",
+    "dynamic_lip",
+    "cuivre_dynamics",
+    "noise",
+    "click",
+    "depth",
+    "position",
+    "opening",
+    "stiffness",
+    "tension",
+    "gain",
+    "level",
+    "wind_sag",
+    "vent",
 )
 
 # Suffixes whose natural scale is multiplicative.
@@ -385,8 +443,14 @@ UNIDENTIFIABLE_FIELDS = frozenset({"gain"})
 #: bright and lands on a drum of whatever size that needed. `air_spring` is
 #: deliberately NOT here: it has a geometric estimate to check a value against
 #: but the estimate runs 30-40% high, so it is a fitted scalar by design.
-STRUCTURAL_FIELD_PREFIXES = ("mode_alpha", "base_freq_hz", "shell_freq_hz", "mode_ratios0",
-                             "head_diameter_m", "shell_depth_m")
+STRUCTURAL_FIELD_PREFIXES = (
+    "mode_alpha",
+    "base_freq_hz",
+    "shell_freq_hz",
+    "mode_ratios0",
+    "head_diameter_m",
+    "shell_depth_m",
+)
 
 #: How far either side of its compiled default a mode ratio above the
 #: fundamental is searched, and the interval no number of rounds leaves.
@@ -407,12 +471,15 @@ MODE_RATIO_RANGE = (0.2, 8.0)
 
 def _offered(field: str) -> bool:
     """Whether `--spec auto` puts this patch field in front of a search."""
-    return (field not in UNIDENTIFIABLE_FIELDS
-            and not field.startswith(STRUCTURAL_FIELD_PREFIXES))
+    return field not in UNIDENTIFIABLE_FIELDS and not field.startswith(STRUCTURAL_FIELD_PREFIXES)
 
 
 def auto_spec(
-    program: int, catalogue: Catalogue, *, drum_note: int | None = None, bank: int = 0,
+    program: int,
+    catalogue: Catalogue,
+    *,
+    drum_note: int | None = None,
+    bank: int = 0,
     patch_only: bool = False,
 ) -> list[dict]:
     """Build a knob spec for `program` from the library's own catalogue.
@@ -458,8 +525,9 @@ def auto_spec(
                 f"the library did not report a patch for program {program}; "
                 f"rebuild with BUILD_TUNING=ON so the catalogue is written"
             )
-    patch_keys = sorted(k for k in defaults if k.startswith(key + ".")
-                        and _offered(k.rsplit(".", 1)[-1]))
+    patch_keys = sorted(
+        k for k in defaults if k.startswith(key + ".") and _offered(k.rsplit(".", 1)[-1])
+    )
     if not patch_keys:
         raise ValueError(f"no patch fields under {key!r} in the catalogue")
 
@@ -467,11 +535,12 @@ def auto_spec(
     # one (`violin.bowed_string.bow_force` -> bowed_string), which is also the
     # stem prefix of the engine's own source file.
     sections = sorted({k.split(".")[1] for k in patch_keys if k.count(".") >= 2})
-    engine = next(
-        (s for s in sections if any(c.startswith(f"{s}_voice.") for c in defaults)), None
+    engine = next((s for s in sections if any(c.startswith(f"{s}_voice.") for c in defaults)), None)
+    engine_keys = (
+        []
+        if patch_only
+        else sorted(k for k in defaults if engine and k.startswith(f"{engine}_voice."))
     )
-    engine_keys = [] if patch_only else sorted(
-        k for k in defaults if engine and k.startswith(f"{engine}_voice."))
 
     spec: list[dict] = []
     for k in patch_keys + engine_keys:
@@ -479,15 +548,20 @@ def auto_spec(
         if rng is None:
             continue
         lo, hi, log = rng
-        spec.append({
-            "tunable": k, "min": round(lo, 6), "max": round(hi, 6),
-            "scale": "log" if log else "linear", "start": defaults[k],
-        })
+        spec.append(
+            {
+                "tunable": k,
+                "min": round(lo, 6),
+                "max": round(hi, 6),
+                "scale": "log" if log else "linear",
+                "start": defaults[k],
+            }
+        )
     return spec
 
 
 def at_bound(knob: Knob, value: float) -> str | None:
-    """"minimum" or "maximum" when a value sits on an end of its range, else None.
+    """ "minimum" or "maximum" when a value sits on an end of its range, else None.
 
     One rule, used both by the warning a run ends with and by the per-knob
     annotation in its report, so the two cannot disagree about what counts.
@@ -519,9 +593,7 @@ def format_value(v: float) -> str:
     return s
 
 
-def tunable_overrides(
-    knobs: list[Knob], values: list[float], *, changed_only: bool = False
-) -> str:
+def tunable_overrides(knobs: list[Knob], values: list[float], *, changed_only: bool = False) -> str:
     """Format the runtime knobs as a `SONARE_TUNING_OVERRIDES` value.
 
     `changed_only` drops the knobs still at their compiled-in default, which is

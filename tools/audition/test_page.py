@@ -135,7 +135,7 @@ def _tree_nodes() -> dict[str, str]:
     spans = list(re.finditer(r"^    (\w+): \{", nodes, re.MULTILINE))
     for i, m in enumerate(spans):
         end = spans[i + 1].start() if i + 1 < len(spans) else len(nodes)
-        found[m.group(1)] = nodes[m.start():end]
+        found[m.group(1)] = nodes[m.start() : end]
     return found
 
 
@@ -176,8 +176,11 @@ def test_every_verdict_the_tree_can_reach_has_a_label() -> None:
     verdicts |= set(re.findall(r"tag: '([\w/-]+)'", nodes["grade"]))
     verdicts |= {"broken"}
     verdicts |= set(re.findall(r"unsure: '([\w/-]+)'", nodes["off"]))
-    labelled = set(re.findall(r"^  '?([\w/-]+)'?: 'grade\.",
-                              (APP_DIR / "feedback.js").read_text(), re.MULTILINE))
+    labelled = set(
+        re.findall(
+            r"^  '?([\w/-]+)'?: 'grade\.", (APP_DIR / "feedback.js").read_text(), re.MULTILINE
+        )
+    )
     assert verdicts <= labelled, f"no label for: {sorted(verdicts - labelled)}"
 
 
@@ -244,8 +247,11 @@ def _run_all() -> int:
         # ends the whole run with no line saying which test it was.
         except Exception as e:  # noqa: BLE001
             failed += 1
-            print(f"FAIL {t.__name__}: {type(e).__name__}: {e}"
-                  if not isinstance(e, AssertionError) else f"FAIL {t.__name__}: {e}")
+            print(
+                f"FAIL {t.__name__}: {type(e).__name__}: {e}"
+                if not isinstance(e, AssertionError)
+                else f"FAIL {t.__name__}: {e}"
+            )
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     return 1 if failed else 0
 

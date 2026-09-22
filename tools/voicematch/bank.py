@@ -73,8 +73,14 @@ PRESET_GROUP = "Preset catalogue"
 #: relations between its pieces — the mute group, the tom series, a groove —
 #: and none of those is a property of a single note.
 KIT_NAMES: dict[int, str] = {
-    0: "Standard kit", 8: "Room kit", 16: "Power kit", 24: "Electronic kit",
-    25: "TR-808 kit", 32: "Jazz kit", 40: "Brush kit", 48: "Orchestra kit",
+    0: "Standard kit",
+    8: "Room kit",
+    16: "Power kit",
+    24: "Electronic kit",
+    25: "TR-808 kit",
+    32: "Jazz kit",
+    40: "Brush kit",
+    48: "Orchestra kit",
     56: "Sound-effects kit",
 }
 
@@ -156,8 +162,11 @@ def captures() -> list[Capture]:
     plugin, which only matters when a take has to be rendered rather than read
     from the archive.
     """
-    found = [load_capture(p) for p in sorted(CAPTURE_DIR.glob("*.json"))
-             if not p.name.endswith(".local.json")]
+    found = [
+        load_capture(p)
+        for p in sorted(CAPTURE_DIR.glob("*.json"))
+        if not p.name.endswith(".local.json")
+    ]
     return [c for c in found if c is not None]
 
 
@@ -178,8 +187,14 @@ def _same_voice(program: int, left: int, right: int, catalogue) -> bool:
     return catalogue.patch_for(program, left) == catalogue.patch_for(program, right)
 
 
-def captures_for(program: int, bank: int = 0, *, kit: bool = False,
-                 pool: list[Capture] | None = None, catalogue=None) -> list[Capture]:
+def captures_for(
+    program: int,
+    bank: int = 0,
+    *,
+    kit: bool = False,
+    pool: list[Capture] | None = None,
+    catalogue=None,
+) -> list[Capture]:
     """Every capture covering a voice, the one answering its layer first.
 
     Program 0 is both the grand piano and the standard kit, so the kit flag is
@@ -198,17 +213,26 @@ def captures_for(program: int, bank: int = 0, *, kit: bool = False,
     reported eleven of its twelve bounds as absent.
     """
     pool = captures() if pool is None else pool
-    found = [cap for cap in pool
-             if cap.drums == kit
-             and cap.program == program
-             and (kit or _same_voice(program, cap.bank, bank, catalogue))]
+    found = [
+        cap
+        for cap in pool
+        if cap.drums == kit
+        and cap.program == program
+        and (kit or _same_voice(program, cap.bank, bank, catalogue))
+    ]
     want = policy.wanted_layer(policy.load(), program, kit, bank)
     aimed = [c for c in found if policy.answers_layer(c.source_class, want)]
     return aimed + [c for c in found if c not in aimed]
 
 
-def capture_for(program: int, bank: int = 0, *, kit: bool = False,
-                pool: list[Capture] | None = None, catalogue=None) -> Capture | None:
+def capture_for(
+    program: int,
+    bank: int = 0,
+    *,
+    kit: bool = False,
+    pool: list[Capture] | None = None,
+    catalogue=None,
+) -> Capture | None:
     """The capture that represents a voice, if any does.
 
     The one whose `source_class` answers the layer `policy.json` aims this slot
@@ -377,8 +401,13 @@ def parse_selection(spec: str, *, limit: int = 128) -> list[int]:
     return sorted(out)
 
 
-def voices(programs: list[int] | None = None, *, banks: list[int] | None = None,
-           kits: list[int] | None = None, catalogue=None) -> list[Voice]:
+def voices(
+    programs: list[int] | None = None,
+    *,
+    banks: list[int] | None = None,
+    kits: list[int] | None = None,
+    catalogue=None,
+) -> list[Voice]:
     """The bank entries a run was asked for, in program order with kits last.
 
     `banks` names variation banks explicitly. Given none, a catalogue expands
@@ -388,7 +417,7 @@ def voices(programs: list[int] | None = None, *, banks: list[int] | None = None,
     """
     pool = captures()
     out: list[Voice] = []
-    for program in (range(128) if programs is None else programs):
+    for program in range(128) if programs is None else programs:
         if banks is not None:
             program_banks = banks
         elif catalogue is not None:
@@ -397,16 +426,22 @@ def voices(programs: list[int] | None = None, *, banks: list[int] | None = None,
             program_banks = [0]
         for bank in program_banks:
             patch = (catalogue.patch_for(program, bank) or "") if catalogue else ""
-            out.append(Voice(
-                program=program, bank=bank, patch=patch,
-                captures=tuple(captures_for(program, bank, pool=pool,
-                                            catalogue=catalogue)),
-            ))
-    for kit in (kits or []):
-        out.append(Voice(
-            program=kit, kit=True,
-            captures=tuple(captures_for(kit, kit=True, pool=pool)),
-        ))
+            out.append(
+                Voice(
+                    program=program,
+                    bank=bank,
+                    patch=patch,
+                    captures=tuple(captures_for(program, bank, pool=pool, catalogue=catalogue)),
+                )
+            )
+    for kit in kits or []:
+        out.append(
+            Voice(
+                program=kit,
+                kit=True,
+                captures=tuple(captures_for(kit, kit=True, pool=pool)),
+            )
+        )
     return out
 
 

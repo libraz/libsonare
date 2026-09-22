@@ -56,8 +56,9 @@ def test_the_band_comparisons_report_a_direction_and_a_magnitude_separately():
 
 def test_a_band_that_decayed_on_only_one_side_is_left_out_of_the_decay_average():
     """`analyze_hit` reports None for a band with no energy; that is not agreement."""
-    assert profile_module.mean_band_decay_delta([1.0, None, 3.0],
-                                                [0.0, 2.0, None]) == pytest.approx(1.0)
+    assert profile_module.mean_band_decay_delta(
+        [1.0, None, 3.0], [0.0, 2.0, None]
+    ) == pytest.approx(1.0)
     assert profile_module.mean_band_decay_delta([None], [1.0]) is None
 
 
@@ -71,11 +72,13 @@ def test_the_decay_average_reports_how_many_octaves_it_was_read_over():
     about a band the reference has nothing to say about.
     """
     reach = profile_percussion.band_decay_reach
-    assert reach({"band_decay_db_s": [-10.0, -20.0, None]},
-                 {"band_decay_db_s": [-11.0, -21.0, -31.0]}) == (2, 3)
+    assert reach(
+        {"band_decay_db_s": [-10.0, -20.0, None]}, {"band_decay_db_s": [-11.0, -21.0, -31.0]}
+    ) == (2, 3)
     # The model resolving MORE than the reference does not raise either number.
-    assert reach({"band_decay_db_s": [-10.0, -20.0, -30.0]},
-                 {"band_decay_db_s": [-11.0, None, None]}) == (1, 1)
+    assert reach(
+        {"band_decay_db_s": [-10.0, -20.0, -30.0]}, {"band_decay_db_s": [-11.0, None, None]}
+    ) == (1, 1)
     assert reach({"band_decay_db_s": []}, {"band_decay_db_s": []}) == (0, 0)
 
 
@@ -91,7 +94,8 @@ def test_ring_length_is_measured_in_doublings_and_refuses_a_capped_reading():
     # Symmetric, which is the whole reason for the unit: a percent would price
     # the doubling at +100 and the halving at -50.
     assert ring({"decay_ms": 400.0}, {"decay_ms": 200.0}) == pytest.approx(
-        -ring({"decay_ms": 100.0}, {"decay_ms": 200.0}))
+        -ring({"decay_ms": 100.0}, {"decay_ms": 200.0})
+    )
     assert ring({"decay_ms": 400.0, "decay_capped": True}, {"decay_ms": 200.0}) is None
     assert ring({"decay_ms": 400.0}, {"decay_ms": 200.0, "decay_capped": True}) is None
     assert ring({"decay_ms": 0.0}, {"decay_ms": 200.0}) is None
@@ -106,13 +110,13 @@ def test_a_hit_is_compared_on_tonality_and_image_as_well_as_on_its_spectrum():
     from a missing reading.
     """
     deltas = profile_percussion.percussion_row_deltas(
-        _hit_row(flatness_db=-12.0, stereo_width=0.7, decay_ms=400.0), _hit_row())
+        _hit_row(flatness_db=-12.0, stereo_width=0.7, decay_ms=400.0), _hit_row()
+    )
     assert deltas["tonality"] == pytest.approx(8.0)
     assert deltas["stereo"] == pytest.approx(0.3)
     assert deltas["ring"] == pytest.approx(1.0)
     for field in ("flatness_db", "stereo_width"):
-        one_sided = profile_percussion.percussion_row_deltas(
-            _hit_row(**{field: None}), _hit_row())
+        one_sided = profile_percussion.percussion_row_deltas(_hit_row(**{field: None}), _hit_row())
         assert one_sided["tonality" if field == "flatness_db" else "stereo"] is None
 
 
@@ -156,16 +160,20 @@ def test_a_kit_is_judged_on_every_percussion_dimension_or_told_why_not():
     cfg = json.loads((CAPTURE_DIR / "drums.json").read_text())
     named = set(cfg["dimensions"]) | set(cfg["dimensions_na"])
     assert named == set(PERCUSSION_DIMENSIONS)
-    assert not (set(cfg["dimensions"]) & set(cfg["dimensions_na"])), \
+    assert not (set(cfg["dimensions"]) & set(cfg["dimensions_na"])), (
         "a bound recorded from a measurement the same file calls invalid asserts both"
+    )
     assert all(cfg["dimensions_na"].values()), "an excuse with no reason excuses nothing"
 
 
 def _attack_of(sig, sr=48000):
     """The attack rule `analyze_hit` applies, on a bare signal."""
     t, env = metrics_module._rms_envelope(
-        sig, sr, hop_ms=metrics_module.HIT_ENVELOPE_HOP_MS,
-        win_ms=metrics_module.HIT_ENVELOPE_WIN_MS)
+        sig,
+        sr,
+        hop_ms=metrics_module.HIT_ENVELOPE_HOP_MS,
+        win_ms=metrics_module.HIT_ENVELOPE_WIN_MS,
+    )
     peak = float(np.max(env))
     reached = np.where(env >= peak * 10.0 ** (metrics_module.HIT_ATTACK_TOLERANCE_DB / 20.0))[0]
     return float(t[int(reached[0]) if reached.size else int(np.argmax(env))] * 1000.0)
@@ -209,16 +217,16 @@ def test_a_hit_records_whether_its_attack_was_floored():
     slow[:k] *= np.linspace(0.0, 1.0, k)
     assert _attack_of(noise) <= metrics_module.ATTACK_FLOOR_MS
     assert _attack_of(slow) > metrics_module.ATTACK_FLOOR_MS
-    assert "attack_floored" in {f.name for f in
-                                dataclasses.fields(metrics_module.HitMetrics)}
+    assert "attack_floored" in {f.name for f in dataclasses.fields(metrics_module.HitMetrics)}
 
 
 def test_the_model_grid_is_not_measured_into_the_reference_it_is_measured_against():
     """`render-grid` writes into the same corpus; a profile is the target half of it."""
-    shipped = [t["id"] for t in json.loads(
-        (REFERENCE_DIR / "drums.json").read_text())["capture"]["timbres"]]
-    measured = {r["timbre"] for r in json.loads(
-        (REFERENCE_DIR / "drums.json").read_text())["rows"]}
+    shipped = [
+        t["id"]
+        for t in json.loads((REFERENCE_DIR / "drums.json").read_text())["capture"]["timbres"]
+    ]
+    measured = {r["timbre"] for r in json.loads((REFERENCE_DIR / "drums.json").read_text())["rows"]}
     assert measured <= set(shipped)
     assert "model" not in measured
 
@@ -264,19 +272,17 @@ def test_a_wash_does_not_move_its_attack_when_ripple_moves_its_loudest_frame():
     sr = SR
     n = int(sr * 1.2)
     wash = np.random.default_rng(2).normal(0, 0.2, n)
-    wash *= np.minimum(1.0, np.arange(n) / (0.008 * sr))          # 8 ms strike
-    wash *= np.exp(-np.arange(n) / (2.0 * sr))                    # then a long plateau
+    wash *= np.minimum(1.0, np.arange(n) / (0.008 * sr))  # 8 ms strike
+    wash *= np.exp(-np.arange(n) / (2.0 * sr))  # then a long plateau
 
     def bump_at(seconds: float) -> np.ndarray:
         lift = np.ones(n)
         i = int(seconds * sr)
-        lift[i:i + int(0.02 * sr)] = 1.15
+        lift[i : i + int(0.02 * sr)] = 1.15
         return np.concatenate([np.zeros(int(0.1 * sr)), wash * lift])
 
-    early = profile_module.measure_hit(bump_at(0.02), sr, 49, 100,
-                                       preroll_s=0.1, gate_s=0.05)
-    late = profile_module.measure_hit(bump_at(0.40), sr, 49, 100,
-                                      preroll_s=0.1, gate_s=0.05)
+    early = profile_module.measure_hit(bump_at(0.02), sr, 49, 100, preroll_s=0.1, gate_s=0.05)
+    late = profile_module.measure_hit(bump_at(0.40), sr, 49, 100, preroll_s=0.1, gate_s=0.05)
 
     assert late["attack_ms"] == pytest.approx(early["attack_ms"], abs=5.0)
     assert early["attack_ms"] < 30.0
@@ -292,7 +298,7 @@ def test_a_momentary_dip_does_not_end_a_ring_that_is_still_going():
     n = int(sr * 1.0)
     ring = np.random.default_rng(3).normal(0, 0.2, n)
     ring *= np.exp(-np.arange(n) / (0.15 * sr))
-    ring[int(0.05 * sr):int(0.052 * sr)] *= 0.001                 # one dropout frame
+    ring[int(0.05 * sr) : int(0.052 * sr)] *= 0.001  # one dropout frame
     audio = np.concatenate([np.zeros(int(0.1 * sr)), ring])
 
     row = profile_module.measure_hit(audio, sr, 46, 100, preroll_s=0.1, gate_s=0.05)

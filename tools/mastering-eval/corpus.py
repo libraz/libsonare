@@ -661,9 +661,7 @@ def _noise_ensemble_entry(
                 f"would clip it and plant a defect the manifest does not record"
             )
         rel = f"{SYNTHETIC_DIR}/{item_id}_r{draw}.wav"
-        write_wav(
-            out_dir / rel, quantize(dirty).astype(np.float32), SAMPLE_RATE, bits=BIT_DEPTH
-        )
+        write_wav(out_dir / rel, quantize(dirty).astype(np.float32), SAMPLE_RATE, bits=BIT_DEPTH)
         draws.append(
             {"index": draw, "seed": seed_triple, "audio": rel, "defects": {"noise": noise}}
         )
@@ -763,8 +761,15 @@ def build_synthetic(out_dir: Path, seed: int) -> list[dict]:
     seconds = 1.0
     entries.append(
         _noise_ensemble_entry(
-            out_dir, "sine_white_noise", "sine", seconds, sine_bed(seconds),
-            kind="white", snr_db=12.0, seed=seed, index=6,
+            out_dir,
+            "sine_white_noise",
+            "sine",
+            seconds,
+            sine_bed(seconds),
+            kind="white",
+            snr_db=12.0,
+            seed=seed,
+            index=6,
         )
     )
 
@@ -774,9 +779,15 @@ def build_synthetic(out_dir: Path, seed: int) -> list[dict]:
     seconds = 1.0
     entries.append(
         _noise_ensemble_entry(
-            out_dir, "chord_pink_noise", "chord", seconds,
+            out_dir,
+            "chord_pink_noise",
+            "chord",
+            seconds,
             _peak_normalize(chord_bed(seconds), 0.6),
-            kind="pink", snr_db=12.0, seed=seed, index=7,
+            kind="pink",
+            snr_db=12.0,
+            seed=seed,
+            index=7,
         )
     )
 
@@ -839,14 +850,30 @@ def build_speech(out_dir: Path, seed: int) -> list[dict]:
     # the metric cannot improve tests nothing in the improving direction.
     entries.append(
         _noise_ensemble_entry(
-            out_dir, "speech_white_noise", "speech", seconds, speech_bed(seconds, peak=0.5),
-            kind="white", snr_db=0.0, seed=seed, index=103, speech_bearing=True,
+            out_dir,
+            "speech_white_noise",
+            "speech",
+            seconds,
+            speech_bed(seconds, peak=0.5),
+            kind="white",
+            snr_db=0.0,
+            seed=seed,
+            index=103,
+            speech_bearing=True,
         )
     )
     entries.append(
         _noise_ensemble_entry(
-            out_dir, "speech_pink_noise", "speech", seconds, speech_bed(seconds, peak=0.5),
-            kind="pink", snr_db=0.0, seed=seed, index=104, speech_bearing=True,
+            out_dir,
+            "speech_pink_noise",
+            "speech",
+            seconds,
+            speech_bed(seconds, peak=0.5),
+            kind="pink",
+            snr_db=0.0,
+            seed=seed,
+            index=104,
+            speech_bearing=True,
         )
     )
 

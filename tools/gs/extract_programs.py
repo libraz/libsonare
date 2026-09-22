@@ -250,8 +250,10 @@ class Census:
 
     @staticmethod
     def _rows(table: dict) -> list[list[int]]:
-        return [[program, bank_msb, bank_lsb, row["count"], len(row["files"])]
-                for (program, bank_msb, bank_lsb), row in sorted(table.items())]
+        return [
+            [program, bank_msb, bank_lsb, row["count"], len(row["files"])]
+            for (program, bank_msb, bank_lsb), row in sorted(table.items())
+        ]
 
     @staticmethod
     def _by_program(table: dict) -> list[list[int]]:
@@ -261,8 +263,10 @@ class Census:
             entry = folded.setdefault(program, {"count": 0, "files": set()})
             entry["count"] += row["count"]
             entry["files"] |= row["files"]
-        return [[program, entry["count"], len(entry["files"])]
-                for program, entry in sorted(folded.items())]
+        return [
+            [program, entry["count"], len(entry["files"])]
+            for program, entry in sorted(folded.items())
+        ]
 
     def to_json(self, source: str) -> dict:
         return {
@@ -320,10 +324,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--corpus", required=True, help="directory of SMF files")
     parser.add_argument("--out", required=True, help="census JSON to write")
-    parser.add_argument("--source", default="",
-                        help="one line naming where the corpus came from; recorded in the census")
-    parser.add_argument("--top", type=int, default=0,
-                        help="print the N most-reached melodic programs")
+    parser.add_argument(
+        "--source",
+        default="",
+        help="one line naming where the corpus came from; recorded in the census",
+    )
+    parser.add_argument(
+        "--top", type=int, default=0, help="print the N most-reached melodic programs"
+    )
     args = parser.parse_args()
 
     paths, duplicates = unique_paths(args.corpus)
@@ -341,16 +349,19 @@ def main() -> int:
         json.dump(payload, handle, indent=1, ensure_ascii=True)
         handle.write("\n")
 
-    print(f"scanned {payload['files_scanned']} unique files "
-          f"({payload['files_duplicate']} duplicates dropped, "
-          f"{payload['files_with_program_change']} select a program, "
-          f"{payload['files_unparsed']} unparsed) -> "
-          f"{len(payload['melodic_by_program'])} melodic programs, "
-          f"{len(payload['rhythm_by_program'])} kits, "
-          f"{len(payload['melodic'])} (program, bank) pairs")
+    print(
+        f"scanned {payload['files_scanned']} unique files "
+        f"({payload['files_duplicate']} duplicates dropped, "
+        f"{payload['files_with_program_change']} select a program, "
+        f"{payload['files_unparsed']} unparsed) -> "
+        f"{len(payload['melodic_by_program'])} melodic programs, "
+        f"{len(payload['rhythm_by_program'])} kits, "
+        f"{len(payload['melodic'])} (program, bank) pairs"
+    )
     if args.top:
-        for program, count, files in sorted(payload["melodic_by_program"],
-                                            key=lambda row: -row[2])[: args.top]:
+        for program, count, files in sorted(payload["melodic_by_program"], key=lambda row: -row[2])[
+            : args.top
+        ]:
             print(f"  program {program:3}: {files:6} files, {count:7} selections")
     return 0
 

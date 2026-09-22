@@ -91,9 +91,11 @@ AUDIO_SUFFIXES = (".wav", ".flac", ".mp3", ".ogg", ".m4a", ".aac")
 #: Resolved, because `discover` resolves what it finds and `set_id` compares a
 #: set's parent against this: one symlink anywhere above the checkout and the
 #: two spellings stop matching, which would rename every set silently.
-SCRATCH_ROOT = Path(
-    os.environ.get("SONARE_VOICEMATCH_ROOT") or REPO_ROOT / ".cache" / "voicematch"
-).expanduser().resolve()
+SCRATCH_ROOT = (
+    Path(os.environ.get("SONARE_VOICEMATCH_ROOT") or REPO_ROOT / ".cache" / "voicematch")
+    .expanduser()
+    .resolve()
+)
 #: Searched under the scratch root, in order. The second form is for a root that
 #: holds one set directly rather than a directory of them.
 FALLBACK_GLOBS = ("audition/*", "audition", "*/audition")
@@ -468,12 +470,16 @@ def infer_manifest(root: Path) -> dict:
     """
     items = []
     for sub in sorted(p for p in root.iterdir() if p.is_dir()):
-        tracks = {p.stem: str(p.relative_to(root)) for p in sorted(sub.iterdir())
-                  if p.suffix.lower() in AUDIO_SUFFIXES}
+        tracks = {
+            p.stem: str(p.relative_to(root))
+            for p in sorted(sub.iterdir())
+            if p.suffix.lower() in AUDIO_SUFFIXES
+        }
         if tracks:
             items.append({"id": sub.name, "label": sub.name, "tracks": tracks})
-    loose = [p for p in sorted(root.iterdir())
-             if p.is_file() and p.suffix.lower() in AUDIO_SUFFIXES]
+    loose = [
+        p for p in sorted(root.iterdir()) if p.is_file() and p.suffix.lower() in AUDIO_SUFFIXES
+    ]
     for p in loose:
         items.append({"id": p.stem, "label": p.stem, "tracks": {p.stem: p.name}})
     return {
@@ -559,8 +565,7 @@ def discover(paths: list[str]) -> list[Path]:
     """The directories to serve: the ones named, else whatever the scratch root holds."""
     if paths:
         named = [Path(p).expanduser().resolve() for p in paths]
-        return [q for q in dict.fromkeys(r for p in named for r in expand(p))
-                if not is_probe(q)]
+        return [q for q in dict.fromkeys(r for p in named for r in expand(p)) if not is_probe(q)]
     found: list[Path] = []
     for pattern in FALLBACK_GLOBS:
         found += [p.resolve() for p in sorted(SCRATCH_ROOT.glob(pattern)) if p.is_dir()]
@@ -579,10 +584,12 @@ def discover(paths: list[str]) -> list[Path]:
     # a set only if it is a leaf: two of these globs can match a directory and
     # its parent, and a parent holding no renders of its own would otherwise put
     # a name in the picker that plays nothing.
-    return [p for p in unique
-            if not is_probe(p)
-            and ((p / "manifest.json").exists()
-                 or not any(p in other.parents for other in unique))]
+    return [
+        p
+        for p in unique
+        if not is_probe(p)
+        and ((p / "manifest.json").exists() or not any(p in other.parents for other in unique))
+    ]
 
 
 def is_probe(path: Path) -> bool:
@@ -651,18 +658,20 @@ class Sets:
             # switcher with one entry.
             compare = any(len(it.get("tracks", {})) > 1 for it in items)
             cls.by_id[ident] = root
-            cls.index.append({
-                "id": ident,
-                "title": manifest.get("title") or root.name,
-                "takes": len(items),
-                "compare": compare,
-                # A heading the picker files this set under. Optional and
-                # generic — the manifest says what it is, this only carries it
-                # through — but a picker of a hundred and thirty sets is a wall
-                # of names without one.
-                "group": manifest.get("group") or "",
-                "path": str(root),
-            })
+            cls.index.append(
+                {
+                    "id": ident,
+                    "title": manifest.get("title") or root.name,
+                    "takes": len(items),
+                    "compare": compare,
+                    # A heading the picker files this set under. Optional and
+                    # generic — the manifest says what it is, this only carries it
+                    # through — but a picker of a hundred and thirty sets is a wall
+                    # of names without one.
+                    "group": manifest.get("group") or "",
+                    "path": str(root),
+                }
+            )
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -794,20 +803,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if payload.get("op") == "undo":
             drop_last_feedback(path)
         else:
-            append_feedback(path, {
-                "at": datetime.datetime.now(datetime.timezone.utc)
-                      .replace(microsecond=0).isoformat(),
-                # The verdict is kept apart from the finer tag: "recognisably
-                # the instrument and I would still change it" and "this is a
-                # different instrument" are the same `onset/hard` underneath,
-                # and only one of them is a defect.
-                "grade": payload.get("grade") or "",
-                "tag": payload.get("tag") or "",
-                "answers": payload.get("answers") or [],
-                "text": payload.get("text") or "",
-                "lang": payload.get("lang") or "",
-                "conditions": conditions,
-            })
+            append_feedback(
+                path,
+                {
+                    "at": datetime.datetime.now(datetime.timezone.utc)
+                    .replace(microsecond=0)
+                    .isoformat(),
+                    # The verdict is kept apart from the finer tag: "recognisably
+                    # the instrument and I would still change it" and "this is a
+                    # different instrument" are the same `onset/hard` underneath,
+                    # and only one of them is a defect.
+                    "grade": payload.get("grade") or "",
+                    "tag": payload.get("tag") or "",
+                    "answers": payload.get("answers") or [],
+                    "text": payload.get("text") or "",
+                    "lang": payload.get("lang") or "",
+                    "conditions": conditions,
+                },
+            )
         self._json({"entries": read_feedback(path), "path": str(path)})
 
     def end_headers(self) -> None:
@@ -840,9 +853,12 @@ def already_serving(port: int) -> bool:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("directory", nargs="*",
-                    help="directories of renders (default: whatever the voicematch "
-                         "scratch root holds; SONARE_VOICEMATCH_ROOT moves it)")
+    ap.add_argument(
+        "directory",
+        nargs="*",
+        help="directories of renders (default: whatever the voicematch "
+        "scratch root holds; SONARE_VOICEMATCH_ROOT moves it)",
+    )
     ap.add_argument("--port", type=int, default=8730)
     ap.add_argument("--no-open", action="store_true", help="do not launch a browser")
     args = ap.parse_args()
@@ -865,8 +881,10 @@ def main() -> int:
         # page anyway, so a set rendered now needs only a refresh.
         where = args.directory or [f"{SCRATCH_ROOT}/{g}" for g in FALLBACK_GLOBS]
         print("no renders found in: " + ", ".join(str(w) for w in where), file=sys.stderr)
-        print("render one with tools/voicematch/make_audition.py (--model-only needs no plugin)",
-              file=sys.stderr)
+        print(
+            "render one with tools/voicematch/make_audition.py (--model-only needs no plugin)",
+            file=sys.stderr,
+        )
     url = f"http://127.0.0.1:{args.port}/"
     # The per-set address, not just the name: a set is chosen for someone else
     # to listen to at least as often as for oneself, and `#<set>/<take>/<version>`

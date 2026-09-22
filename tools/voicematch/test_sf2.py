@@ -51,8 +51,17 @@ def _font(
         end = len(smpl) // 2
         smpl += b"\x00\x00" * _GUARD
         shdr += struct.pack(
-            "<20sIIIIIBbHH", f"s{i}".encode(), start, end, start, end, rate,
-            pitch, 0, 0, 1,
+            "<20sIIIIIBbHH",
+            f"s{i}".encode(),
+            start,
+            end,
+            start,
+            end,
+            rate,
+            pitch,
+            0,
+            0,
+            1,
         )
     shdr += struct.pack("<20sIIIIIBbHH", b"EOS", 0, 0, 0, 0, 0, 0, 0, 0, 0)
 
@@ -71,9 +80,8 @@ def _font(
     inst = struct.pack("<20sH", b"inst", 0) + struct.pack("<20sH", b"EOI", len(zones))
     pgen = struct.pack("<Hh", 41, 0) + struct.pack("<Hh", 0, 0)
     pbag = struct.pack("<HH", 0, 0) + struct.pack("<HH", 1, 0)
-    phdr = (
-        struct.pack("<20sHHHIII", name.encode(), 0, 0, 0, 0, 0, 0)
-        + struct.pack("<20sHHHIII", b"EOP", 0, 0, 1, 0, 0, 0)
+    phdr = struct.pack("<20sHHHIII", name.encode(), 0, 0, 0, 0, 0, 0) + struct.pack(
+        "<20sHHHIII", b"EOP", 0, 0, 1, 0, 0, 0
     )
     terminal_mod = b"\x00" * 10
 
@@ -84,9 +92,14 @@ def _font(
     info = chunk(b"ifil", struct.pack("<HH", 2, 1)) + chunk(b"INAM", name.encode() + b"\x00")
     sdta = chunk(b"smpl", bytes(smpl))
     pdta = (
-        chunk(b"phdr", phdr) + chunk(b"pbag", pbag) + chunk(b"pmod", terminal_mod)
-        + chunk(b"pgen", pgen) + chunk(b"inst", inst) + chunk(b"ibag", bytes(ibag))
-        + chunk(b"imod", terminal_mod) + chunk(b"igen", bytes(igen))
+        chunk(b"phdr", phdr)
+        + chunk(b"pbag", pbag)
+        + chunk(b"pmod", terminal_mod)
+        + chunk(b"pgen", pgen)
+        + chunk(b"inst", inst)
+        + chunk(b"ibag", bytes(ibag))
+        + chunk(b"imod", terminal_mod)
+        + chunk(b"igen", bytes(igen))
         + chunk(b"shdr", bytes(shdr))
     )
     body = (
@@ -148,12 +161,12 @@ def test_a_note_without_a_sample_of_its_own_is_absent_rather_than_stretched(clea
 @pytest.mark.parametrize(
     "gen,amount,wanted",
     [
-        ((8, 6900), None, "initialFilterFc"),   # a lowpass at ~1 kHz
+        ((8, 6900), None, "initialFilterFc"),  # a lowpass at ~1 kHz
         ((9, 60), None, "initialFilterQ"),
         ((13, 120), None, "modLfoToVolume"),
         ((48, 250), None, "initialAttenuation"),
         ((51, 12), None, "coarseTune"),
-        ((54, 1), None, "sampleModes"),         # the sample is meant to loop
+        ((54, 1), None, "sampleModes"),  # the sample is meant to loop
         ((44, (100 << 8) | 0), None, "velRange"),
         ((17, 500), None, "pan"),
         ((16, 400), None, "reverbEffectsSend"),
@@ -177,9 +190,9 @@ def test_a_shaping_generator_is_refused(tmp_path: Path, gen, amount, wanted):
 @pytest.mark.parametrize(
     "gen,wanted",
     [
-        ((34, -3000), "attack"),     # ~188 ms attack
-        ((37, 200), "sustain"),      # pulled 20 dB under the recording
-        ((36, 1200), "decay"),       # 2 s to that sustain
+        ((34, -3000), "attack"),  # ~188 ms attack
+        ((37, 200), "sustain"),  # pulled 20 dB under the recording
+        ((36, 1200), "decay"),  # 2 s to that sustain
     ],
 )
 def test_an_envelope_that_shapes_the_note_is_refused(tmp_path: Path, gen, wanted):
@@ -202,11 +215,11 @@ def test_an_envelope_that_shapes_the_note_is_refused(tmp_path: Path, gen, wanted
     [
         (34, -8359),  # 8 ms attack: a click guard, not shaping
         (35, -1200),
-        (36, 6008),   # 32 s decay, reaching a -3 dB sustain
+        (36, 6008),  # 32 s decay, reaching a -3 dB sustain
         (37, 30),
         (38, -2084),
-        (17, 0),      # centred pan
-        (22, -851),   # an LFO rate with nothing routed to it
+        (17, 0),  # centred pan
+        (22, -851),  # an LFO rate with nothing routed to it
         (24, 1),
     ],
 )

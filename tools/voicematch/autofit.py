@@ -387,13 +387,12 @@ def sustain_excess_db_s(model_rows: list[dict], oracle_rows: list[dict]) -> tupl
     0.0 here, which is this quantity's best value, and a fence cannot tell that
     from a voice that holds.
     """
-    ref = {(r.get("note"), r.get("velocity")): r.get("sustain_slope_db_s")
-           for r in oracle_rows}
+    ref = {(r.get("note"), r.get("velocity")): r.get("sustain_slope_db_s") for r in oracle_rows}
     deltas = []
     for row in model_rows:
         theirs = ref.get((row.get("note"), row.get("velocity")))
         if theirs is None:
-            continue                      # the reference holds nothing to fall from
+            continue  # the reference holds nothing to fall from
         # Two absences arrive as the same None and mean opposite things. No key
         # is the probe's shape — this row never carried a sustain slope — and
         # charging for that would charge a voice for how it was measured. A key
@@ -404,8 +403,7 @@ def sustain_excess_db_s(model_rows: list[dict], oracle_rows: list[dict]) -> tupl
         if "sustain_slope_db_s" not in row:
             continue
         mine = row["sustain_slope_db_s"]
-        deltas.append(-SUSTAIN_SLOPE_CAP_DB_S if mine is None
-                      else float(mine) - float(theirs))
+        deltas.append(-SUSTAIN_SLOPE_CAP_DB_S if mine is None else float(mine) - float(theirs))
     # Not clamped at zero: a voice holding BETTER than its reference reads
     # positive here, and the fence subtracting one reading from another needs
     # the true value on both sides or it would charge the difference between a
@@ -443,7 +441,11 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     corpus = resolve_corpus(args)
     sr = render_rate(corpus)
     pattern, total, _ = _score(
-        args.program, args.pattern, args.notes, getattr(args, "velocities", ""), corpus=corpus,
+        args.program,
+        args.pattern,
+        args.notes,
+        getattr(args, "velocities", ""),
+        corpus=corpus,
         gate_ms=getattr(args, "drum_gate_ms", 0),
     )
     if corpus is not None:
@@ -453,8 +455,11 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
         audio = corpus_oracle(corpus, pattern, sr)
     else:
         smf_bytes = write_smf(
-            pattern.notes, program=args.program, bank=getattr(args, "bank", 0), channel=pattern.channel,
-            end_pad=pattern.tail
+            pattern.notes,
+            program=args.program,
+            bank=getattr(args, "bank", 0),
+            channel=pattern.channel,
+            end_pad=pattern.tail,
         )
         audio = obtain_oracle(args, smf_bytes, total, sr, [n.start for n in pattern.notes])
 
@@ -470,32 +475,43 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     # `dry: false` for want of anything to switch off, and 57 of the captures
     # here do. Without the second half of this, every one of them had a room
     # estimated from its own note tails and convolved onto the model.
-    may_carry_room = ((not corpus.dry and corpus.room != ROOM_NONE)
-                      if corpus is not None else oracle_may_carry_room(args))
+    may_carry_room = (
+        (not corpus.dry and corpus.room != ROOM_NONE)
+        if corpus is not None
+        else oracle_may_carry_room(args)
+    )
     if getattr(args, "room", "auto") != "none" and may_carry_room:
-        measured = estimate_room(
-            audio, sr, [(n.start, n.start + n.dur) for n in pattern.notes]
-        )
+        measured = estimate_room(audio, sr, [(n.start, n.start + n.dur) for n in pattern.notes])
         if measured.is_dry():
-            print(f"oracle room: dry (RT60 {measured.rt60_s:.2f}s) — no room correction",
-                  file=sys.stderr)
+            print(
+                f"oracle room: dry (RT60 {measured.rt60_s:.2f}s) — no room correction",
+                file=sys.stderr,
+            )
         elif measured.gated():
-            print(f"oracle room: RT60 {measured.rt60_s:.2f}s, "
-                  f"tail level {measured.tail_db:+.1f}dB — NOT corrected. The probe holds each "
-                  f"note for {measured.note_window_s * 1000:.0f} ms against that decay, so the "
-                  f"tail level measures the gate rather than the room and a correction fitted to "
-                  f"it invents one. The reference's space stays in every decay term of the "
-                  f"objective; do not read a fitted decay as the instrument's.", file=sys.stderr)
+            print(
+                f"oracle room: RT60 {measured.rt60_s:.2f}s, "
+                f"tail level {measured.tail_db:+.1f}dB — NOT corrected. The probe holds each "
+                f"note for {measured.note_window_s * 1000:.0f} ms against that decay, so the "
+                f"tail level measures the gate rather than the room and a correction fitted to "
+                f"it invents one. The reference's space stays in every decay term of the "
+                f"objective; do not read a fitted decay as the instrument's.",
+                file=sys.stderr,
+            )
         else:
-            print(f"oracle room: RT60 {measured.rt60_s:.2f}s, "
-                  f"tail level {measured.tail_db:+.1f}dB, HF ratio {measured.hf_ratio:.2f} — "
-                  f"the model is placed in a matching space before every measurement",
-                  file=sys.stderr)
+            print(
+                f"oracle room: RT60 {measured.rt60_s:.2f}s, "
+                f"tail level {measured.tail_db:+.1f}dB, HF ratio {measured.hf_ratio:.2f} — "
+                f"the model is placed in a matching space before every measurement",
+                file=sys.stderr,
+            )
             if measured.truncated():
-                print(f"  note: the probe's shortest silence is {measured.tail_window_s:.1f}s, "
-                      f"less than the {measured.rt60_s * 25.0 / 60.0:.1f}s this decay needs to "
-                      f"fall 25 dB — the RT60 is likely underestimated. Re-export the probe "
-                      f"with --pattern room-probe to measure it properly.", file=sys.stderr)
+                print(
+                    f"  note: the probe's shortest silence is {measured.tail_window_s:.1f}s, "
+                    f"less than the {measured.rt60_s * 25.0 / 60.0:.1f}s this decay needs to "
+                    f"fall 25 dB — the RT60 is likely underestimated. Re-export the probe "
+                    f"with --pattern room-probe to measure it properly.",
+                    file=sys.stderr,
+                )
             room = measured
 
     # The model renders mono, so the reduction only ever matters on the oracle
@@ -508,9 +524,12 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     mode = getattr(args, "mono_mode", "mean")
     corr = channel_correlation(audio)
     if mode == "mean" and corr is not None and corr < STEREO_COMB_CORRELATION:
-        print(f"  note: the oracle's channels correlate at {corr:+.2f}, so summing "
-              f"them comb-filters what differs between them. --mono-mode left "
-              f"takes one channel and has no sum in it.", file=sys.stderr)
+        print(
+            f"  note: the oracle's channels correlate at {corr:+.2f}, so summing "
+            f"them comb-filters what differs between them. --mono-mode left "
+            f"takes one channel and has no sum in it.",
+            file=sys.stderr,
+        )
     raw = to_mono(audio, mode)
     mono = normalize_rms(raw)
     threads = resolve_metric_threads(args)
@@ -522,9 +541,12 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
         # applied to an already-floored profile without inventing the values the
         # floor took away.
         rows = probe_rows(mono, pattern, sr, raw=raw, max_band_hz=edge, threads=threads)
-        print(f"reference bandwidth: {edge / 1000.0:.1f} kHz — bands above it are "
-              f"the capture chain rather than the kit, and are excluded from the "
-              f"band profile on BOTH sides", file=sys.stderr)
+        print(
+            f"reference bandwidth: {edge / 1000.0:.1f} kHz — bands above it are "
+            f"the capture chain rather than the kit, and are excluded from the "
+            f"band profile on BOTH sides",
+            file=sys.stderr,
+        )
     return rows, mono, room, edge
 
 
@@ -548,9 +570,17 @@ def _corpus_identity(corpus: Corpus | None) -> list:
     if corpus is None:
         return []
     return [
-        corpus.timbre, corpus.sample_rate, corpus.gate_s, corpus.preroll_s,
-        corpus.slot_s, corpus.channel, corpus.dry, corpus.room, corpus.rig,
-        list(corpus.notes), list(corpus.velocities),
+        corpus.timbre,
+        corpus.sample_rate,
+        corpus.gate_s,
+        corpus.preroll_s,
+        corpus.slot_s,
+        corpus.channel,
+        corpus.dry,
+        corpus.room,
+        corpus.rig,
+        list(corpus.notes),
+        list(corpus.velocities),
         sorted((list(k), v) for k, v in corpus.slots.items()),
         sorted(corpus.note_map.items()),
     ]
@@ -570,10 +600,20 @@ def resolve_metric_threads(args) -> int:
 
 
 def render_model_rows_subprocess(
-    build_dir: Path, program: int, pattern_name: str, notes_csv: str,
-    *, velocities_csv: str = "", overrides: str = "", want_audio: bool = False,
-    room_ir: Path | None = None, corpus: Corpus | None = None, gate_ms: int = 0,
-    bank: int = 0, band_edge_hz: float | None = None, metric_threads: int = 1,
+    build_dir: Path,
+    program: int,
+    pattern_name: str,
+    notes_csv: str,
+    *,
+    velocities_csv: str = "",
+    overrides: str = "",
+    want_audio: bool = False,
+    room_ir: Path | None = None,
+    corpus: Corpus | None = None,
+    gate_ms: int = 0,
+    bank: int = 0,
+    band_edge_hz: float | None = None,
+    metric_threads: int = 1,
 ) -> tuple[list[dict], np.ndarray | None]:
     """Render the model in a fresh subprocess; return per-note metrics (+ audio).
 
@@ -596,9 +636,19 @@ def render_model_rows_subprocess(
     else:
         env.pop("SONARE_TUNING_OVERRIDES", None)
 
-    cmd = [sys.executable, str(Path(__file__).resolve()), "_render_metrics",
-           "--program", str(program), "--pattern", pattern_name, "--notes", notes_csv,
-           "--velocities", velocities_csv]
+    cmd = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "_render_metrics",
+        "--program",
+        str(program),
+        "--pattern",
+        pattern_name,
+        "--notes",
+        notes_csv,
+        "--velocities",
+        velocities_csv,
+    ]
     if bank:
         cmd += ["--bank", str(bank)]
     if metric_threads > 1:
@@ -643,8 +693,18 @@ class Evaluator:
     cached number no longer reflects.
     """
 
-    def __init__(self, knobs, pristine, oracle, oracle_audio, args, build_dir, room_ir=None,
-                 corpus=None, band_edge_hz=None):
+    def __init__(
+        self,
+        knobs,
+        pristine,
+        oracle,
+        oracle_audio,
+        args,
+        build_dir,
+        room_ir=None,
+        corpus=None,
+        band_edge_hz=None,
+    ):
         self.knobs = knobs
         # Resolved from the oracle once — see `oracle_reference`. Both sides
         # have to normalise their band profile over the same set of bands.
@@ -757,32 +817,35 @@ class Evaluator:
         """
         dylib = dylib_path(self.build_dir)
         oracle = json.dumps(self.oracle, sort_keys=True, default=str).encode()
-        audio = (self.oracle_audio.tobytes() if self.oracle_audio is not None else b"")
-        spec = json.dumps({
-            "lib": file_digest(dylib) if dylib is not None else "absent",
-            "code": source_digest(Path(__file__).resolve().parent),
-            "program": getattr(self.args, "program", 0),
-            "bank": getattr(self.args, "bank", 0),
-            "pattern": self.args.pattern,
-            "notes": self.args.notes,
-            "velocities": self.args.velocities,
-            "gate_ms": getattr(self.args, "drum_gate_ms", 0),
-            "band_edge_hz": self.band_edge_hz,
-            "room_ir": file_digest(self.room_ir) if self.room_ir else "",
-            # The corpus by what it lays out rather than by where it lives: the
-            # model render never touches the captured audio, it plays the
-            # timeline the manifest describes, and that manifest is an editable
-            # file at a path that does not change when its grid or its gate
-            # does. Keying on the path alone would answer an edited capture with
-            # the old capture's measurements.
-            "corpus": _corpus_identity(self.corpus),
-            "n_harm": getattr(self.args, "n_harm", 0),
-            "percussive": self.percussive,
-            "flat": bool(getattr(self.args, "flat_partial_weighting", False)),
-            "want_audio": self.want_audio,
-            "groups": sorted((k, sorted(v)) for k, v in self.groups.items()),
-            "knobs": [k.label for k in self.knobs],
-        }, sort_keys=True).encode()
+        audio = self.oracle_audio.tobytes() if self.oracle_audio is not None else b""
+        spec = json.dumps(
+            {
+                "lib": file_digest(dylib) if dylib is not None else "absent",
+                "code": source_digest(Path(__file__).resolve().parent),
+                "program": getattr(self.args, "program", 0),
+                "bank": getattr(self.args, "bank", 0),
+                "pattern": self.args.pattern,
+                "notes": self.args.notes,
+                "velocities": self.args.velocities,
+                "gate_ms": getattr(self.args, "drum_gate_ms", 0),
+                "band_edge_hz": self.band_edge_hz,
+                "room_ir": file_digest(self.room_ir) if self.room_ir else "",
+                # The corpus by what it lays out rather than by where it lives: the
+                # model render never touches the captured audio, it plays the
+                # timeline the manifest describes, and that manifest is an editable
+                # file at a path that does not change when its grid or its gate
+                # does. Keying on the path alone would answer an edited capture with
+                # the old capture's measurements.
+                "corpus": _corpus_identity(self.corpus),
+                "n_harm": getattr(self.args, "n_harm", 0),
+                "percussive": self.percussive,
+                "flat": bool(getattr(self.args, "flat_partial_weighting", False)),
+                "want_audio": self.want_audio,
+                "groups": sorted((k, sorted(v)) for k, v in self.groups.items()),
+                "knobs": [k.label for k in self.knobs],
+            },
+            sort_keys=True,
+        ).encode()
         return digest(spec, oracle, audio)
 
     def _ensure_cache(self) -> None:
@@ -798,11 +861,15 @@ class Evaluator:
         self.disk = open_cache(CORPUS_ROOT, self.cache_signature())
         self.cache.update(self.disk.entries)
         if self.disk.dropped:
-            print(f"cache: {self.disk.path.name} had grown past its size limit and "
-                  f"was started over", file=sys.stderr)
+            print(
+                f"cache: {self.disk.path.name} had grown past its size limit and was started over",
+                file=sys.stderr,
+            )
         if self.disk.loaded:
-            print(f"cache: {self.disk.loaded} candidates already measured "
-                  f"({self.disk.path})", file=sys.stderr)
+            print(
+                f"cache: {self.disk.loaded} candidates already measured ({self.disk.path})",
+                file=sys.stderr,
+            )
 
     def _ensure_built(self) -> None:
         if not self.built and not self.needs_rebuild:
@@ -845,8 +912,7 @@ class Evaluator:
         def far(k):
             if k.tunable is None:
                 return k.start_value
-            return (k.hi if abs(k.hi - k.start_value) >= abs(k.start_value - k.lo)
-                    else k.lo)
+            return k.hi if abs(k.hi - k.start_value) >= abs(k.start_value - k.lo) else k.lo
 
         start = [k.start_value for k in knobs]
         base = self._render_terms(start)
@@ -867,8 +933,7 @@ class Evaluator:
                 one = list(start)
                 one[i] = far(k)
                 alone = self._render_terms(one)
-                if alone is not None and any(
-                        abs(base[t] - alone[t]) >= 1e-12 for t in LOSS_TERMS):
+                if alone is not None and any(abs(base[t] - alone[t]) >= 1e-12 for t in LOSS_TERMS):
                     return
             moved = base
         if all(abs(base[t] - moved[t]) < 1e-12 for t in LOSS_TERMS):
@@ -886,19 +951,32 @@ class Evaluator:
         """Render one candidate and reduce it to raw loss terms. Thread-safe."""
         want_audio = self.want_audio
         model_rows, model_audio = render_model_rows_subprocess(
-            self.build_dir, self.args.program, self.args.pattern, self.args.notes,
+            self.build_dir,
+            self.args.program,
+            self.args.pattern,
+            self.args.notes,
             velocities_csv=self.args.velocities,
             overrides=tunable_overrides(self.knobs, values),
-            want_audio=want_audio, room_ir=self.room_ir, corpus=self.corpus,
-            gate_ms=getattr(self.args, "drum_gate_ms", 0), bank=getattr(self.args, "bank", 0),
-            band_edge_hz=self.band_edge_hz, metric_threads=self.metric_threads,
+            want_audio=want_audio,
+            room_ir=self.room_ir,
+            corpus=self.corpus,
+            gate_ms=getattr(self.args, "drum_gate_ms", 0),
+            bank=getattr(self.args, "bank", 0),
+            band_edge_hz=self.band_edge_hz,
+            metric_threads=self.metric_threads,
         )
         mss = 0.0
         if want_audio and model_audio is not None:
             mss = mss_distance(model_audio, self.oracle_audio)
-        terms = score_terms(model_rows, self.oracle, n_harm=self.args.n_harm, mss=mss,
-                            percussive=self.percussive, groups=self.groups,
-                            audibility=not getattr(self.args, "flat_partial_weighting", False))
+        terms = score_terms(
+            model_rows,
+            self.oracle,
+            n_harm=self.args.n_harm,
+            mss=mss,
+            percussive=self.percussive,
+            groups=self.groups,
+            audibility=not getattr(self.args, "flat_partial_weighting", False),
+        )
         if terms is not None:
             worst, pairs = sustain_excess_db_s(model_rows, self.oracle)
             terms["sustain_excess_db_s"] = worst
@@ -941,8 +1019,7 @@ class Evaluator:
         if offset is None:
             return 0.0
         excess = abs(offset - self.start_level_offset_db) - limit
-        return (LEVEL_DRIFT_PENALTY_PER_DB * excess * self.fence_unit
-                if excess > 0.0 else 0.0)
+        return LEVEL_DRIFT_PENALTY_PER_DB * excess * self.fence_unit if excess > 0.0 else 0.0
 
     def _report_sustain_excess(self, terms: dict[str, float]) -> None:
         """Name where the start point sits against its reference's own fall, once.
@@ -956,11 +1033,16 @@ class Evaluator:
         if here is None:
             return
         if not pairs:
-            print("  sustain: no note of this probe is comparable, so the fence is inert",
-                  file=sys.stderr)
+            print(
+                "  sustain: no note of this probe is comparable, so the fence is inert",
+                file=sys.stderr,
+            )
             return
-        print(f"  sustain: start falls {float(here):+.2f} dB/s against its reference's own "
-              f"slope, worst of {pairs} notes", file=sys.stderr)
+        print(
+            f"  sustain: start falls {float(here):+.2f} dB/s against its reference's own "
+            f"slope, worst of {pairs} notes",
+            file=sys.stderr,
+        )
 
     def _sustain_drift_penalty(self, terms: dict[str, float] | None) -> float:
         """What a candidate pays for letting the note fall away faster than it did.
@@ -986,8 +1068,7 @@ class Evaluator:
         if here is None:
             return 0.0
         excess = self.start_sustain_excess_db_s - float(here) - limit
-        return (SUSTAIN_DRIFT_PENALTY_PER_DB_S * excess * self.fence_unit
-                if excess > 0.0 else 0.0)
+        return SUSTAIN_DRIFT_PENALTY_PER_DB_S * excess * self.fence_unit if excess > 0.0 else 0.0
 
     def _report_level_offset(self, terms: dict[str, float]) -> None:
         """Name the whole-grid level difference once, since the loss removes it.
@@ -1007,9 +1088,12 @@ class Evaluator:
             return
         self._offset_reported = True
         if abs(offset) >= 1.0:
-            print(f"level: the model's held RMS runs {offset:+.1f} dB against the reference "
-                  f"across the whole grid. The level term scores the spread around that "
-                  f"offset, not the offset itself.", file=sys.stderr)
+            print(
+                f"level: the model's held RMS runs {offset:+.1f} dB against the reference "
+                f"across the whole grid. The level term scores the spread around that "
+                f"offset, not the offset itself.",
+                file=sys.stderr,
+            )
 
     def _calibrate_once(self, terms: dict[str, float] | None) -> None:
         """Make the first point scored this run the one every loss is relative to.
@@ -1044,8 +1128,9 @@ class Evaluator:
             self.fence_unit = max(self.loss.combine(terms), FENCE_UNIT_FLOOR)
             self._report_sustain_excess(terms)
 
-    def _record(self, values: list[float], terms: dict[str, float] | None,
-                *, rendered: bool = True) -> float:
+    def _record(
+        self, values: list[float], terms: dict[str, float] | None, *, rendered: bool = True
+    ) -> float:
         """Score a candidate, update the best, and log it if it is a new one.
 
         `trajectory` gets one entry per DISTINCT candidate scored, which is what
@@ -1070,12 +1155,14 @@ class Evaluator:
             # that answers it.
             self.sustain_fence_bit = True
             if not self.quiet:
-                print(f"  sustain: fence first charged here — this candidate falls "
-                      f"{float(terms['sustain_excess_db_s']):+.2f} dB/s against its "
-                      f"reference, the start point fell "
-                      f"{float(self.start_sustain_excess_db_s):+.2f}", file=sys.stderr)
-        loss = (self.loss.combine(terms) + self._level_drift_penalty(terms)
-                + sustain_charge)
+                print(
+                    f"  sustain: fence first charged here — this candidate falls "
+                    f"{float(terms['sustain_excess_db_s']):+.2f} dB/s against its "
+                    f"reference, the start point fell "
+                    f"{float(self.start_sustain_excess_db_s):+.2f}",
+                    file=sys.stderr,
+                )
+        loss = self.loss.combine(terms) + self._level_drift_penalty(terms) + sustain_charge
         if loss < self.best_loss:
             self.best_loss = loss
             self.best_values = list(values)
@@ -1084,12 +1171,8 @@ class Evaluator:
             # freely: the level term scores the spread around the grid's median
             # offset, so a candidate that bought its shape by making the voice
             # quieter scores exactly as if it had not.
-            self.best_level_offset_db = (
-                None if terms is None else terms.get("level_offset_db")
-            )
-            self.best_tnr_notes = (
-                None if terms is None else terms.get("tnr_notes")
-            )
+            self.best_level_offset_db = None if terms is None else terms.get("level_offset_db")
+            self.best_tnr_notes = None if terms is None else terms.get("tnr_notes")
         if not fresh:
             return loss
         self.trajectory.append((self.best_loss, loss, self.stage))
@@ -1117,8 +1200,7 @@ class Evaluator:
         parts = []
         for name in self.loss.active():
             value = terms.get(name, 0.0)
-            parts.append(f"{name}={value / scales[name]:.2f}" if scales else
-                         f"{name}={value:.3g}")
+            parts.append(f"{name}={value / scales[name]:.2f}" if scales else f"{name}={value:.3g}")
         return " ".join(parts) + " "
 
     def __call__(self, values: list[float]) -> float:
@@ -1130,9 +1212,7 @@ class Evaluator:
             # candidate moved it. A file left out because its knob formats back
             # to its start value would still hold the previous candidate's text,
             # and this render would score a vector nothing ever assembled.
-            write_edits(
-                materialize(self.knobs, values, self.pristine, full=True), self.written
-            )
+            write_edits(materialize(self.knobs, values, self.pristine, full=True), self.written)
             build_shared(self.build_dir, self.args.cmake, self.args.jobs)
             self.n_builds += 1
         else:
@@ -1214,8 +1294,9 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
     print(f"resolving held-out {axis} {held}...", file=sys.stderr)
     oracle_rows, oracle_audio, _, band_edge = oracle_reference(holdout)
     if not oracle_rows:
-        print(f"  the held-out {axis} produced no analyzable oracle rows — skipped",
-              file=sys.stderr)
+        print(
+            f"  the held-out {axis} produced no analyzable oracle rows — skipped", file=sys.stderr
+        )
         return None
 
     resolved = cli_weights(args)
@@ -1227,18 +1308,30 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
 
     def score(values: list[float]) -> float:
         rows, audio = render_model_rows_subprocess(
-            build_dir, args.program, args.pattern, holdout.notes,
+            build_dir,
+            args.program,
+            args.pattern,
+            holdout.notes,
             velocities_csv=holdout.velocities,
             overrides=tunable_overrides(knobs, values),
-            want_audio=want_audio, room_ir=room_ir, corpus=corpus,
-            gate_ms=getattr(holdout, "drum_gate_ms", 0), bank=getattr(args, "bank", 0),
-            band_edge_hz=band_edge, metric_threads=resolve_metric_threads(args),
+            want_audio=want_audio,
+            room_ir=room_ir,
+            corpus=corpus,
+            gate_ms=getattr(holdout, "drum_gate_ms", 0),
+            bank=getattr(args, "bank", 0),
+            band_edge_hz=band_edge,
+            metric_threads=resolve_metric_threads(args),
         )
         mss = mss_distance(audio, oracle_audio) if want_audio and audio is not None else 0.0
-        terms = score_terms(rows, oracle_rows, n_harm=args.n_harm, mss=mss,
-                            percussive=percussive,
-                            groups=dict(getattr(corpus, "groups", None) or {}),
-                            audibility=not getattr(args, "flat_partial_weighting", False))
+        terms = score_terms(
+            rows,
+            oracle_rows,
+            n_harm=args.n_harm,
+            mss=mss,
+            percussive=percussive,
+            groups=dict(getattr(corpus, "groups", None) or {}),
+            audibility=not getattr(args, "flat_partial_weighting", False),
+        )
         if weights.scales is None and terms is not None:
             weights.calibrate(terms)
         return weights.combine(terms)
@@ -1263,21 +1356,25 @@ def run_grid(evaluator, knobs, args, build_dir, room_ir) -> int:
     as one number at the end.
     """
     if len(knobs) > 3:
-        print(f"--grid enumerates a product, and {len(knobs)} knobs is not a surface "
-              f"anyone can read. Narrow the spec to at most three.", file=sys.stderr)
+        print(
+            f"--grid enumerates a product, and {len(knobs)} knobs is not a surface "
+            f"anyone can read. Narrow the spec to at most three.",
+            file=sys.stderr,
+        )
         return 2
     points = max(2, args.grid)
     total = points ** len(knobs)
     if total > GRID_MAX_POINTS:
-        print(f"--grid {points} over {len(knobs)} knobs is {total} points, past the "
-              f"{GRID_MAX_POINTS} this will enumerate. Use fewer points or fewer knobs.",
-              file=sys.stderr)
+        print(
+            f"--grid {points} over {len(knobs)} knobs is {total} points, past the "
+            f"{GRID_MAX_POINTS} this will enumerate. Use fewer points or fewer knobs.",
+            file=sys.stderr,
+        )
         return 2
 
     axes = [np.linspace(k.lo, k.hi, points).tolist() for k in knobs]
     combos = [list(c) for c in itertools.product(*axes)]
-    print(f"grid: {total} points over {', '.join(k.label for k in knobs)}",
-          file=sys.stderr)
+    print(f"grid: {total} points over {', '.join(k.label for k in knobs)}", file=sys.stderr)
 
     evaluator.quiet = True
     fit = evaluator.evaluate_batch(combos)
@@ -1288,21 +1385,26 @@ def run_grid(evaluator, knobs, args, build_dir, room_ir) -> int:
 
     labels = [k.label for k in knobs]
     width = max(len(lbl) for lbl in labels)
-    print("\n" + "  ".join(f"{lbl:>{width}}" for lbl in labels)
-          + f"  {'fit':>10}  {'hold-out':>10}")
+    print(
+        "\n" + "  ".join(f"{lbl:>{width}}" for lbl in labels) + f"  {'fit':>10}  {'hold-out':>10}"
+    )
     order = sorted(range(len(combos)), key=lambda i: fit[i])
     for i in order:
         values = "  ".join(f"{v:>{width}.4g}" for v in combos[i])
         hold = f"{hold_scores[i]:10.4f}" if math.isfinite(hold_scores[i]) else " " * 6 + "n/a"
         print(f"{values}  {fit[i]:10.4f}  {hold}")
     if held:
-        print(f"\n  hold-out on {held[1]} {held[2]}. Read the two columns together: a "
-              f"point that wins the fit and does nothing on the hold-out is a feature "
-              f"of the fit set, and a broad region that is good on both is worth more "
-              f"than a better isolated point.")
+        print(
+            f"\n  hold-out on {held[1]} {held[2]}. Read the two columns together: a "
+            f"point that wins the fit and does nothing on the hold-out is a feature "
+            f"of the fit set, and a broad region that is good on both is worth more "
+            f"than a better isolated point."
+        )
     else:
-        print("\n  No hold-out was asked for, so every number here is the fit set "
-              "scoring itself. Add --validate-notes or --validate-velocities.")
+        print(
+            "\n  No hold-out was asked for, so every number here is the fit set "
+            "scoring itself. Add --validate-notes or --validate-velocities."
+        )
     return 0
 
 
@@ -1344,43 +1446,67 @@ def render_metrics_main(argv: list[str]) -> int:
     p.add_argument("--pattern", required=True)
     p.add_argument("--notes", default="")
     p.add_argument("--velocities", default="")
-    p.add_argument("--dump-audio", default="", dest="dump_audio",
-                   help="also write the normalized mono render to this .npy path")
-    p.add_argument("--room-ir", default="", dest="room_ir",
-                   help="convolve the render with this .npy impulse response first")
+    p.add_argument(
+        "--dump-audio",
+        default="",
+        dest="dump_audio",
+        help="also write the normalized mono render to this .npy path",
+    )
+    p.add_argument(
+        "--room-ir",
+        default="",
+        dest="room_ir",
+        help="convolve the render with this .npy impulse response first",
+    )
     p.add_argument("--corpus", default="", help="capture manifest laying out the probe")
     p.add_argument("--corpus-timbre", default="", dest="corpus_timbre")
     p.add_argument("--drum-gate-ms", type=int, default=0, dest="drum_gate_ms")
-    p.add_argument("--mono-mode", default="mean", dest="mono_mode",
-                   choices=list(MONO_MODES))
-    p.add_argument("--band-edge-hz", type=float, default=0.0, dest="band_edge_hz",
-                   help="the reference's own measurable ceiling; bands above it "
-                        "are excluded from the profile and from its normalisation")
-    p.add_argument("--metric-threads", type=int, default=1, dest="metric_threads",
-                   help="measure this many of the probe's notes at once")
+    p.add_argument("--mono-mode", default="mean", dest="mono_mode", choices=list(MONO_MODES))
+    p.add_argument(
+        "--band-edge-hz",
+        type=float,
+        default=0.0,
+        dest="band_edge_hz",
+        help="the reference's own measurable ceiling; bands above it "
+        "are excluded from the profile and from its normalisation",
+    )
+    p.add_argument(
+        "--metric-threads",
+        type=int,
+        default=1,
+        dest="metric_threads",
+        help="measure this many of the probe's notes at once",
+    )
     a = p.parse_args(argv)
 
     corpus = load_corpus(a.corpus, a.corpus_timbre) if a.corpus else None
-    pattern, total, _ = _score(a.program, a.pattern, a.notes, a.velocities, corpus=corpus,
-                               gate_ms=a.drum_gate_ms)
+    pattern, total, _ = _score(
+        a.program, a.pattern, a.notes, a.velocities, corpus=corpus, gate_ms=a.drum_gate_ms
+    )
     smf_bytes = write_smf(
-        pattern.notes, program=a.program, bank=a.bank, channel=pattern.channel,
-        end_pad=pattern.tail
+        pattern.notes, program=a.program, bank=a.bank, channel=pattern.channel, end_pad=pattern.tail
     )
     # The model stops where the reference did. With no capture to ask, that is
     # the instrument's own boundary: a fit moves the voice, and the amplifier the
     # bank binds after it is not the voice's to answer for.
     rig = model_rig(corpus.rig) if corpus is not None else False
-    audio = np.asarray(render_model(smf_bytes, total, render_rate(corpus), rig=rig),
-                       dtype=np.float32)
+    audio = np.asarray(
+        render_model(smf_bytes, total, render_rate(corpus), rig=rig), dtype=np.float32
+    )
     if a.room_ir:
         # Applied here rather than in the parent so the per-note metrics and the
         # multi-scale term both see the same roomed signal.
         audio = apply_room(audio, np.load(a.room_ir))
     raw = to_mono(audio, a.mono_mode)
     mono = normalize_rms(raw)
-    rows = probe_rows(mono, pattern, render_rate(corpus), raw=raw,
-                      max_band_hz=a.band_edge_hz or None, threads=a.metric_threads)
+    rows = probe_rows(
+        mono,
+        pattern,
+        render_rate(corpus),
+        raw=raw,
+        max_band_hz=a.band_edge_hz or None,
+        threads=a.metric_threads,
+    )
     if a.dump_audio:
         np.save(a.dump_audio, mono.astype(np.float32))
     print(json.dumps(rows))
@@ -1407,15 +1533,22 @@ def repo_tree_state() -> tuple[str | None, list[str]]:
     try:
         status = subprocess.run(
             ["git", "status", "--porcelain", "--", "src/"],
-            cwd=REPO_ROOT, capture_output=True, check=True, text=True,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            check=True,
+            text=True,
         )
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            cwd=REPO_ROOT, capture_output=True, check=True, text=True,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            check=True,
+            text=True,
         )
     except (OSError, subprocess.CalledProcessError) as exc:
-        print(f"tree state: git unavailable ({exc}); proceeding with no provenance",
-              file=sys.stderr)
+        print(
+            f"tree state: git unavailable ({exc}); proceeding with no provenance", file=sys.stderr
+        )
         return None, []
     dirty = [line for line in status.stdout.splitlines() if line.strip()]
     return head.stdout.strip(), dirty
@@ -1452,8 +1585,10 @@ def _fold_write_back_verdict(out_path: str, evaluator) -> None:
     record = json.loads(path.read_text())
     record["write_back"] = {
         "refused": getattr(evaluator, "write_back_refusal", None),
-        "tnr_notes": {"start": getattr(evaluator, "start_tnr_notes", None),
-                      "best": getattr(evaluator, "best_tnr_notes", None)},
+        "tnr_notes": {
+            "start": getattr(evaluator, "start_tnr_notes", None),
+            "best": getattr(evaluator, "best_tnr_notes", None),
+        },
     }
     path.write_text(json.dumps(record, indent=2) + "\n")
 
@@ -1468,37 +1603,49 @@ def run(args, argv: list[str] | None = None) -> int:
         raise RuntimeError(
             "refusing to fit with src/ dirty — whatever is there right now is what "
             "this run would compile and fit against, silently, with nothing in the "
-            "output saying so:\n  " + "\n  ".join(dirty_src) +
-            "\nCommit it, or pass --allow-dirty-src if this is your own in-flight "
+            "output saying so:\n  "
+            + "\n  ".join(dirty_src)
+            + "\nCommit it, or pass --allow-dirty-src if this is your own in-flight "
             "engine edit."
         )
     if dirty_src:
-        print("src/ is dirty and --allow-dirty-src was given; fitting against it "
-              "anyway:\n  " + "\n  ".join(dirty_src), file=sys.stderr)
+        print(
+            "src/ is dirty and --allow-dirty-src was given; fitting against it "
+            "anyway:\n  " + "\n  ".join(dirty_src),
+            file=sys.stderr,
+        )
 
     resolve_probe(args)
     apply_spec_weights(args, argv if argv is not None else sys.argv[1:])
     weights = cli_weights(args)
-    print(f"probe: pattern {args.pattern!r} on MIDI channel "
-          f"{10 if args.percussive else 1}, scored with the "
-          f"{'percussion' if args.percussive else 'harmonic'} metric set; weights "
-          + " ".join(f"{t}={w:g}" for t, w in weights.items() if w > 0.0),
-          file=sys.stderr)
+    print(
+        f"probe: pattern {args.pattern!r} on MIDI channel "
+        f"{10 if args.percussive else 1}, scored with the "
+        f"{'percussion' if args.percussive else 'harmonic'} metric set; weights "
+        + " ".join(f"{t}={w:g}" for t, w in weights.items() if w > 0.0),
+        file=sys.stderr,
+    )
     refused = refused_weights(args)
     if refused:
-        print(f"  --w-{' --w-'.join(refused)}: this metric set does not produce "
-              f"{'that term' if len(refused) == 1 else 'those terms'}, so the weight is "
-              f"multiplying a constant zero and the run is the same without it",
-              file=sys.stderr)
+        print(
+            f"  --w-{' --w-'.join(refused)}: this metric set does not produce "
+            f"{'that term' if len(refused) == 1 else 'those terms'}, so the weight is "
+            f"multiplying a constant zero and the run is the same without it",
+            file=sys.stderr,
+        )
     # The other half: a weight nobody named, that the class asked for and the
     # probe's shape cannot fit. Dropping it is right; dropping it silently is
     # how a class default goes missing with nothing in the run to say so.
     dropped = dropped_weights(args)
     if dropped:
         kind = "kit" if args.percussive else "instrument"
-        print("  " + "; ".join(f"{t}: dropped from the {kind}'s class defaults "
-                               f"because {why}" for t, why in dropped),
-              file=sys.stderr)
+        print(
+            "  "
+            + "; ".join(
+                f"{t}: dropped from the {kind}'s class defaults because {why}" for t, why in dropped
+            ),
+            file=sys.stderr,
+        )
 
     # A catalogue is needed whenever a spec might name a per-program patch field
     # (which has no declaration in src/ to validate against) and always for
@@ -1511,34 +1658,52 @@ def run(args, argv: list[str] | None = None) -> int:
         build_shared(build_dir, args.cmake, args.jobs)
         dylib = dylib_path(build_dir)
         catalogue = dump_catalogue(
-            args.program, catalogue_pattern(args), str(dylib) if dylib else None,
-            sr=render_rate(resolve_corpus(args)), notes=args.notes, bank=args.bank,
+            args.program,
+            catalogue_pattern(args),
+            str(dylib) if dylib else None,
+            sr=render_rate(resolve_corpus(args)),
+            notes=args.notes,
+            bank=args.bank,
         )
-        print(f"catalogue: {len(catalogue.defaults)} knobs across "
-              f"{len({p for p, _ in catalogue.programs})} programs "
-              f"({len(catalogue.programs)} with their variation banks), "
-              f"{len(catalogue.bounds)} clamp bounds",
-              file=sys.stderr)
+        print(
+            f"catalogue: {len(catalogue.defaults)} knobs across "
+            f"{len({p for p, _ in catalogue.programs})} programs "
+            f"({len(catalogue.programs)} with their variation banks), "
+            f"{len(catalogue.bounds)} clamp bounds",
+            file=sys.stderr,
+        )
 
     if args.dump_knobs:
-        key = (drum_patch_key(args.drum_note) if args.drum_note is not None
-               else catalogue.patch_for(args.program, args.bank) or "")
+        key = (
+            drum_patch_key(args.drum_note)
+            if args.drum_note is not None
+            else catalogue.patch_for(args.program, args.bank) or ""
+        )
         rows = sorted(
-            (k, v) for k, v in catalogue.defaults.items()
+            (k, v)
+            for k, v in catalogue.defaults.items()
             if not args.program_only or (key and k.startswith(key + "."))
         )
         if args.drum_note is not None:
             print(f"# drum note {args.drum_note} is voiced by patch {key!r}")
         else:
             print(f"# program {args.program} bank {args.bank} is voiced by patch {key!r}")
-            print(f"# program {args.program} has variation banks "
-                  f"{catalogue.banks_for(args.program)}")
+            print(
+                f"# program {args.program} has variation banks {catalogue.banks_for(args.program)}"
+            )
         # Not the row count below, and the difference is the whole reason this
         # line exists: `auto_spec` drops a field the clamp leaves unbounded and
         # one whose range collapses, so anything scaled off the rows overshoots.
         try:
-            taken = len(auto_spec(args.program, catalogue, drum_note=args.drum_note,
-                                  bank=args.bank, patch_only=args.program_only))
+            taken = len(
+                auto_spec(
+                    args.program,
+                    catalogue,
+                    drum_note=args.drum_note,
+                    bank=args.bank,
+                    patch_only=args.program_only,
+                )
+            )
             print(f"# fit_knobs\t{taken}\tof {len(rows)} rows, what --spec auto takes")
         except ValueError as exc:
             print(f"# fit_knobs\t0\t--spec auto refuses this one: {exc}")
@@ -1550,15 +1715,29 @@ def run(args, argv: list[str] | None = None) -> int:
         return 0
 
     if auto:
-        spec = auto_spec(args.program, catalogue, drum_note=args.drum_note, bank=args.bank,
-                         patch_only=args.program_only)
-        subject = (f"drum note {args.drum_note}" if args.drum_note is not None
-                   else f"program {args.program} bank {args.bank}")
-        patch = (drum_patch_key(args.drum_note) if args.drum_note is not None
-                 else catalogue.patch_for(args.program, args.bank))
-        print(f"--spec auto: {len(spec)} knobs for {subject} "
-              f"(patch {patch!r}"
-              f"{' alone' if args.program_only else ' + its engine'})", file=sys.stderr)
+        spec = auto_spec(
+            args.program,
+            catalogue,
+            drum_note=args.drum_note,
+            bank=args.bank,
+            patch_only=args.program_only,
+        )
+        subject = (
+            f"drum note {args.drum_note}"
+            if args.drum_note is not None
+            else f"program {args.program} bank {args.bank}"
+        )
+        patch = (
+            drum_patch_key(args.drum_note)
+            if args.drum_note is not None
+            else catalogue.patch_for(args.program, args.bank)
+        )
+        print(
+            f"--spec auto: {len(spec)} knobs for {subject} "
+            f"(patch {patch!r}"
+            f"{' alone' if args.program_only else ' + its engine'})",
+            file=sys.stderr,
+        )
     else:
         spec = load_spec(Path(args.spec).resolve())
         if any("." in e.get("tunable", "") for e in spec):
@@ -1566,8 +1745,11 @@ def run(args, argv: list[str] | None = None) -> int:
             build_shared(build_dir, args.cmake, args.jobs)
             dylib = dylib_path(build_dir)
             catalogue = dump_catalogue(
-                args.program, catalogue_pattern(args), str(dylib) if dylib else None,
-                sr=render_rate(resolve_corpus(args)), notes=args.notes,
+                args.program,
+                catalogue_pattern(args),
+                str(dylib) if dylib else None,
+                sr=render_rate(resolve_corpus(args)),
+                notes=args.notes,
             )
 
     pristine: dict[Path, str] = {}
@@ -1576,12 +1758,17 @@ def run(args, argv: list[str] | None = None) -> int:
     n_runtime = sum(1 for k in knobs if k.tunable is not None)
     n_source = len(knobs) - n_runtime
     if n_source:
-        print(f"{len(knobs)} knobs ({n_runtime} runtime, {n_source} source) — "
-              f"a source knob rebuilds the library every evaluation; converting it to "
-              f"SONARE_TUNABLE would make this run far cheaper", file=sys.stderr)
+        print(
+            f"{len(knobs)} knobs ({n_runtime} runtime, {n_source} source) — "
+            f"a source knob rebuilds the library every evaluation; converting it to "
+            f"SONARE_TUNABLE would make this run far cheaper",
+            file=sys.stderr,
+        )
     else:
-        print(f"{len(knobs)} runtime knobs — building once, then rendering per evaluation",
-              file=sys.stderr)
+        print(
+            f"{len(knobs)} runtime knobs — building once, then rendering per evaluation",
+            file=sys.stderr,
+        )
 
     configure_build(build_dir, args.cmake, tuning=n_runtime > 0)
 
@@ -1599,26 +1786,44 @@ def run(args, argv: list[str] | None = None) -> int:
             # extra render, once.
             build_shared(build_dir, args.cmake, args.jobs)
             _, dry_model = render_model_rows_subprocess(
-                build_dir, args.program, args.pattern, args.notes,
-                velocities_csv=args.velocities, want_audio=True, corpus=corpus,
-                gate_ms=getattr(args, "drum_gate_ms", 0), bank=getattr(args, "bank", 0),
+                build_dir,
+                args.program,
+                args.pattern,
+                args.notes,
+                velocities_csv=args.velocities,
+                want_audio=True,
+                corpus=corpus,
+                gate_ms=getattr(args, "drum_gate_ms", 0),
+                bank=getattr(args, "bank", 0),
                 band_edge_hz=band_edge,
             )
             if dry_model is None:
                 raise RuntimeError("room correction needs the model render, which came back empty")
-            pattern, _, _ = _score(args.program, args.pattern, args.notes, args.velocities,
-                                   corpus=corpus, gate_ms=getattr(args, "drum_gate_ms", 0))
+            pattern, _, _ = _score(
+                args.program,
+                args.pattern,
+                args.notes,
+                args.velocities,
+                corpus=corpus,
+                gate_ms=getattr(args, "drum_gate_ms", 0),
+            )
             spans = [(n.start, n.start + n.dur) for n in pattern.notes]
             ir = fit_room_ir(dry_model[:, None], render_rate(corpus), spans, room)
             ir_path = Path(tmp) / "room.npy"
             np.save(ir_path, ir)
         evaluator = Evaluator(
-            knobs, pristine, oracle, oracle_audio, args, build_dir, room_ir=ir_path,
-            corpus=corpus, band_edge_hz=band_edge,
+            knobs,
+            pristine,
+            oracle,
+            oracle_audio,
+            args,
+            build_dir,
+            room_ir=ir_path,
+            corpus=corpus,
+            band_edge_hz=band_edge,
         )
         if evaluator.workers > 1:
-            print(f"rendering up to {evaluator.workers} candidates concurrently",
-                  file=sys.stderr)
+            print(f"rendering up to {evaluator.workers} candidates concurrently", file=sys.stderr)
         if args.diagnose:
             # Diagnosis replaces the fit rather than following it: what it
             # describes is the state of the tree, so the way to diagnose fitted
@@ -1674,13 +1879,17 @@ def run(args, argv: list[str] | None = None) -> int:
 
         pinned = report_pinned(knobs, best_values)
         if pinned:
-            print(f"\n{len(pinned)} knob{'s' if len(pinned) > 1 else ''} ended on a range "
-                  f"bound — the search could not go further, so this may not be the optimum:",
-                  file=sys.stderr)
+            print(
+                f"\n{len(pinned)} knob{'s' if len(pinned) > 1 else ''} ended on a range "
+                f"bound — the search could not go further, so this may not be the optimum:",
+                file=sys.stderr,
+            )
             for line in pinned:
                 print(f"  {line}", file=sys.stderr)
-            print("  Widen the range in the spec and re-run before trusting these values.",
-                  file=sys.stderr)
+            print(
+                "  Widen the range in the spec and re-run before trusting these values.",
+                file=sys.stderr,
+            )
 
         extra = {
             "room": room.to_dict() if room is not None else None,
@@ -1698,326 +1907,579 @@ def main() -> int:
         return render_metrics_main(sys.argv[2:])
 
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--spec", required=True,
-                        help="knob spec JSON path, or 'auto' to derive the knob list for "
-                             "--program from the library's own catalogue")
-    parser.add_argument("--program", type=int, required=True,
-                        help="GM program to score, or the drum kit with --drum-note")
-    parser.add_argument("--bank", type=int, default=0,
-                        help="GS variation bank of --program (default 0, the capital tone). "
-                             "A variation is its own patch with its own knobs, so this "
-                             "selects both what is rendered and what --spec auto offers: "
-                             "program 19 is a six-rank principal chorus at 0, three flute "
-                             "ranks at 8 and a full organ with reeds at 16. "
-                             "--dump-knobs lists the banks a program has")
-    parser.add_argument("--drum-note", type=int, default=None, dest="drum_note",
-                        help="fit a percussion instrument instead of a GM program: the "
-                             "probe moves to the drum channel, where this note number "
-                             "selects the instrument (38 acoustic snare, 36 kick, 46 open "
-                             "hi-hat) and --program selects the kit. Scored with the "
-                             "percussion metric set, and --spec auto offers that note's "
-                             "own patch fields")
-    parser.add_argument("--drum-gate-ms", type=int, default=0, dest="drum_gate_ms",
-                        help=DRUM_GATE_HELP)
-    parser.add_argument("--pattern", default="sustain", help="probe pattern (default: sustain, "
-                                                             "or 'drum' with --drum-note)")
+    parser.add_argument(
+        "--spec",
+        required=True,
+        help="knob spec JSON path, or 'auto' to derive the knob list for "
+        "--program from the library's own catalogue",
+    )
+    parser.add_argument(
+        "--program",
+        type=int,
+        required=True,
+        help="GM program to score, or the drum kit with --drum-note",
+    )
+    parser.add_argument(
+        "--bank",
+        type=int,
+        default=0,
+        help="GS variation bank of --program (default 0, the capital tone). "
+        "A variation is its own patch with its own knobs, so this "
+        "selects both what is rendered and what --spec auto offers: "
+        "program 19 is a six-rank principal chorus at 0, three flute "
+        "ranks at 8 and a full organ with reeds at 16. "
+        "--dump-knobs lists the banks a program has",
+    )
+    parser.add_argument(
+        "--drum-note",
+        type=int,
+        default=None,
+        dest="drum_note",
+        help="fit a percussion instrument instead of a GM program: the "
+        "probe moves to the drum channel, where this note number "
+        "selects the instrument (38 acoustic snare, 36 kick, 46 open "
+        "hi-hat) and --program selects the kit. Scored with the "
+        "percussion metric set, and --spec auto offers that note's "
+        "own patch fields",
+    )
+    parser.add_argument(
+        "--drum-gate-ms", type=int, default=0, dest="drum_gate_ms", help=DRUM_GATE_HELP
+    )
+    parser.add_argument(
+        "--pattern",
+        default="sustain",
+        help="probe pattern (default: sustain, or 'drum' with --drum-note)",
+    )
     parser.add_argument("--notes", default="", help="override probe notes, e.g. '48,60,72'")
-    parser.add_argument("--velocities", default="",
-                        help="override probe velocities, e.g. '64,100,127' (the 'drum' and "
-                             "'velocity' patterns)")
-    parser.add_argument("--dump-knobs", action="store_true", dest="dump_knobs",
-                        help="list every knob the library reports, with its default, and exit")
-    parser.add_argument("--program-only", action="store_true", dest="program_only",
-                        help="offer only this program's (or drum note's) own patch "
-                             "fields, leaving out the calibration constants of the "
-                             "engine underneath it, which every other program on that "
-                             "engine shares. Applies to a fit as well as to "
-                             "--dump-knobs: a fit over one voice has nothing that "
-                             "could object to a shared constant moving, and a run "
-                             "over a grid of voices in turn moves the ground under "
-                             "the ones already done")
-    parser.add_argument("--room", default="auto", choices=("auto", "none"),
-                        help="auto (default): measure the oracle's reverberation and place "
-                             "every model render in a matching space before scoring, so a "
-                             "reference recorded in a hall does not read as timbre; "
-                             "none: score as rendered")
-    parser.add_argument("--corpus", default="",
-                        help="score against a captured single-note corpus: the directory a "
-                             "`capture.py corpus` run wrote (or its manifest.json). The probe "
-                             "is then the capture's own grid — its notes, its velocities and "
-                             "its gate — and the oracle is the captured audio assembled onto "
-                             "that timeline, so the fit and the reference profile measure the "
-                             "same stimulus. Cuts down with --notes / --velocities")
-    parser.add_argument("--corpus-timbre", default="", dest="corpus_timbre",
-                        help="which timbre of the corpus to fit against (default: the first "
-                             "the manifest lists)")
-    parser.add_argument("--allow-rigged-oracle", action="store_true",
-                        dest="allow_rigged_oracle",
-                        help="fit against a reference that carries a rig — an amplifier, a "
-                             "cabinet, a rotary speaker — or one nobody has classified on a "
-                             "family that could carry one. The instrument's knobs then "
-                             "absorb the amplifier: every metric improves and the values "
-                             "transfer to nothing once the rig is a stage of its own. "
-                             "Answer the capture's `rig` field instead wherever that is "
-                             "possible")
+    parser.add_argument(
+        "--velocities",
+        default="",
+        help="override probe velocities, e.g. '64,100,127' (the 'drum' and 'velocity' patterns)",
+    )
+    parser.add_argument(
+        "--dump-knobs",
+        action="store_true",
+        dest="dump_knobs",
+        help="list every knob the library reports, with its default, and exit",
+    )
+    parser.add_argument(
+        "--program-only",
+        action="store_true",
+        dest="program_only",
+        help="offer only this program's (or drum note's) own patch "
+        "fields, leaving out the calibration constants of the "
+        "engine underneath it, which every other program on that "
+        "engine shares. Applies to a fit as well as to "
+        "--dump-knobs: a fit over one voice has nothing that "
+        "could object to a shared constant moving, and a run "
+        "over a grid of voices in turn moves the ground under "
+        "the ones already done",
+    )
+    parser.add_argument(
+        "--room",
+        default="auto",
+        choices=("auto", "none"),
+        help="auto (default): measure the oracle's reverberation and place "
+        "every model render in a matching space before scoring, so a "
+        "reference recorded in a hall does not read as timbre; "
+        "none: score as rendered",
+    )
+    parser.add_argument(
+        "--corpus",
+        default="",
+        help="score against a captured single-note corpus: the directory a "
+        "`capture.py corpus` run wrote (or its manifest.json). The probe "
+        "is then the capture's own grid — its notes, its velocities and "
+        "its gate — and the oracle is the captured audio assembled onto "
+        "that timeline, so the fit and the reference profile measure the "
+        "same stimulus. Cuts down with --notes / --velocities",
+    )
+    parser.add_argument(
+        "--corpus-timbre",
+        default="",
+        dest="corpus_timbre",
+        help="which timbre of the corpus to fit against (default: the first the manifest lists)",
+    )
+    parser.add_argument(
+        "--allow-rigged-oracle",
+        action="store_true",
+        dest="allow_rigged_oracle",
+        help="fit against a reference that carries a rig — an amplifier, a "
+        "cabinet, a rotary speaker — or one nobody has classified on a "
+        "family that could carry one. The instrument's knobs then "
+        "absorb the amplifier: every metric improves and the values "
+        "transfer to nothing once the rig is a stage of its own. "
+        "Answer the capture's `rig` field instead wherever that is "
+        "possible",
+    )
     add_oracle_args(parser)
-    parser.add_argument("--max-evals", type=int, default=30, dest="max_evals",
-                        help="total evaluations (default: 30; raise it well past this "
-                             "when the spec is runtime knobs only)")
-    parser.add_argument("--optimizer", default="coord", choices=("coord", "cmaes"),
-                        help="coord: golden-section coordinate descent (default). "
-                             "cmaes: covariance-matrix adaptation, which handles knobs "
-                             "that trade against each other and renders its population "
-                             "concurrently")
-    parser.add_argument("--per-knob-evals", type=int, default=6, dest="per_knob_evals",
-                        help="golden-section budget per knob per pass (coord only, default: 6)")
-    parser.add_argument("--population", type=int, default=0,
-                        help="CMA-ES population size (default: 4 + 3*ln(n))")
-    parser.add_argument("--sigma0", type=float, default=0.25,
-                        help="CMA-ES initial step, as a fraction of each knob's range")
+    parser.add_argument(
+        "--max-evals",
+        type=int,
+        default=30,
+        dest="max_evals",
+        help="total evaluations (default: 30; raise it well past this "
+        "when the spec is runtime knobs only)",
+    )
+    parser.add_argument(
+        "--optimizer",
+        default="coord",
+        choices=("coord", "cmaes"),
+        help="coord: golden-section coordinate descent (default). "
+        "cmaes: covariance-matrix adaptation, which handles knobs "
+        "that trade against each other and renders its population "
+        "concurrently",
+    )
+    parser.add_argument(
+        "--per-knob-evals",
+        type=int,
+        default=6,
+        dest="per_knob_evals",
+        help="golden-section budget per knob per pass (coord only, default: 6)",
+    )
+    parser.add_argument(
+        "--population", type=int, default=0, help="CMA-ES population size (default: 4 + 3*ln(n))"
+    )
+    parser.add_argument(
+        "--sigma0",
+        type=float,
+        default=0.25,
+        help="CMA-ES initial step, as a fraction of each knob's range",
+    )
     parser.add_argument("--seed", type=int, default=0, help="CMA-ES sampling seed")
-    parser.add_argument("--restarts", type=int, default=0,
-                        help="CMA-ES restarts from a fresh random point with a doubled "
-                             "population when a run stalls (default: 0). They share "
-                             "--max-evals rather than each getting their own")
-    parser.add_argument("--workers", type=int, default=1,
-                        help="model renders to run concurrently (default: 1). Only helps "
-                             "--optimizer cmaes, whose population is independent; a "
-                             "rebuilding spec is forced back to 1")
-    parser.add_argument("--metric-threads", type=int, default=0, dest="metric_threads",
-                        help=f"notes of the probe to measure at once WITHIN one render "
-                             f"(default: {AUTO_METRIC_THREADS}, and 1 whenever --workers "
-                             f"is spending the concurrency a level up). Measuring a note "
-                             f"is around a third of an evaluation and the notes are "
-                             f"independent, so this is the only concurrency a serial "
-                             f"optimiser like --optimizer coord can use")
-    parser.add_argument("--no-cache", action="store_true", dest="no_cache",
-                        help="re-render every candidate instead of reading the ones an "
-                             "earlier run already measured. The store is keyed on the "
-                             "library's bytes, the harness source, the probe and the "
-                             "oracle, so a hit stands for the render it replaces; this "
-                             "is for proving that rather than assuming it")
-    parser.add_argument("--diagnose", action="store_true",
-                        help="instead of fitting, report what the residual is made of and "
-                             "which parts of it no knob reaches — the difference between "
-                             "constants still slightly off and a mechanism the voice does "
-                             "not have. Costs 2 renders per knob and writes nothing; run it "
-                             "after a fit has written back, since it describes the tree as "
-                             "it stands. --out records the verdict as JSON")
-    parser.add_argument("--grid", type=int, default=0, metavar="POINTS",
-                        help="instead of fitting, enumerate POINTS values of every knob "
-                             "in the spec (at most three) and print the fit and hold-out "
-                             "loss at each point of the product. What a search cannot "
-                             "show: whether its winner is a spike or a plateau, and "
-                             "whether a coarse grid's best point survives being scored "
-                             "on notes it never saw. Run it before trusting a search "
-                             "over knobs that interact")
-    parser.add_argument("--screen", action="store_true",
-                        help="probe each knob at both ends first and drop the ones that do "
-                             "not move the loss, then fit only the rest. Costs 2 evaluations "
-                             "per knob out of --max-evals; the dropped knobs are named. Both "
-                             "ends and nothing between them, so a knob whose clamp is a guard "
-                             "rail rather than a search range can be dropped for looking flat "
-                             "across an interval it is only good in the middle of")
-    parser.add_argument("--screen-threshold", type=float, default=0.002,
-                        dest="screen_threshold",
-                        help="smallest loss change over a knob's whole range that counts as "
-                             "an effect (default: 0.002, i.e. 0.2%% of the start loss)")
-    parser.add_argument("--stages", action="store_true",
-                        help="fit the excitation knobs against the onset evidence, then the "
-                             "decay knobs against the decay evidence, then everything under "
-                             "the weights given here — instead of all of it at once")
-    parser.add_argument("--validate-notes", default="", dest="validate_notes",
-                        help="score the result on these notes as well (e.g. '43,55,67'). "
-                             "They must be disjoint from --notes to mean anything: this is "
-                             "the only check that the fit did not overfit the probe")
-    parser.add_argument("--validate-velocities", default="", dest="validate_velocities",
-                        help="the same check for a drum fit, which has no register to hold "
-                             "notes out of: score the result at these velocities as well "
-                             "(e.g. '48,88,112'), disjoint from the probe's")
-    parser.add_argument("--validate-oracle-wav", default="", dest="validate_oracle_wav",
-                        help="the reference for the held-out probe, rendered the same way "
-                             "as --oracle-wav. Required with it, because a fixed WAV is one "
-                             "rendering of one probe and cannot supply the held-out notes")
-    parser.add_argument("--out", default="",
-                        help="write the result (knob values, losses, overrides, validation) "
-                             "to this JSON path")
+    parser.add_argument(
+        "--restarts",
+        type=int,
+        default=0,
+        help="CMA-ES restarts from a fresh random point with a doubled "
+        "population when a run stalls (default: 0). They share "
+        "--max-evals rather than each getting their own",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="model renders to run concurrently (default: 1). Only helps "
+        "--optimizer cmaes, whose population is independent; a "
+        "rebuilding spec is forced back to 1",
+    )
+    parser.add_argument(
+        "--metric-threads",
+        type=int,
+        default=0,
+        dest="metric_threads",
+        help=f"notes of the probe to measure at once WITHIN one render "
+        f"(default: {AUTO_METRIC_THREADS}, and 1 whenever --workers "
+        f"is spending the concurrency a level up). Measuring a note "
+        f"is around a third of an evaluation and the notes are "
+        f"independent, so this is the only concurrency a serial "
+        f"optimiser like --optimizer coord can use",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        dest="no_cache",
+        help="re-render every candidate instead of reading the ones an "
+        "earlier run already measured. The store is keyed on the "
+        "library's bytes, the harness source, the probe and the "
+        "oracle, so a hit stands for the render it replaces; this "
+        "is for proving that rather than assuming it",
+    )
+    parser.add_argument(
+        "--diagnose",
+        action="store_true",
+        help="instead of fitting, report what the residual is made of and "
+        "which parts of it no knob reaches — the difference between "
+        "constants still slightly off and a mechanism the voice does "
+        "not have. Costs 2 renders per knob and writes nothing; run it "
+        "after a fit has written back, since it describes the tree as "
+        "it stands. --out records the verdict as JSON",
+    )
+    parser.add_argument(
+        "--grid",
+        type=int,
+        default=0,
+        metavar="POINTS",
+        help="instead of fitting, enumerate POINTS values of every knob "
+        "in the spec (at most three) and print the fit and hold-out "
+        "loss at each point of the product. What a search cannot "
+        "show: whether its winner is a spike or a plateau, and "
+        "whether a coarse grid's best point survives being scored "
+        "on notes it never saw. Run it before trusting a search "
+        "over knobs that interact",
+    )
+    parser.add_argument(
+        "--screen",
+        action="store_true",
+        help="probe each knob at both ends first and drop the ones that do "
+        "not move the loss, then fit only the rest. Costs 2 evaluations "
+        "per knob out of --max-evals; the dropped knobs are named. Both "
+        "ends and nothing between them, so a knob whose clamp is a guard "
+        "rail rather than a search range can be dropped for looking flat "
+        "across an interval it is only good in the middle of",
+    )
+    parser.add_argument(
+        "--screen-threshold",
+        type=float,
+        default=0.002,
+        dest="screen_threshold",
+        help="smallest loss change over a knob's whole range that counts as "
+        "an effect (default: 0.002, i.e. 0.2%% of the start loss)",
+    )
+    parser.add_argument(
+        "--stages",
+        action="store_true",
+        help="fit the excitation knobs against the onset evidence, then the "
+        "decay knobs against the decay evidence, then everything under "
+        "the weights given here — instead of all of it at once",
+    )
+    parser.add_argument(
+        "--validate-notes",
+        default="",
+        dest="validate_notes",
+        help="score the result on these notes as well (e.g. '43,55,67'). "
+        "They must be disjoint from --notes to mean anything: this is "
+        "the only check that the fit did not overfit the probe",
+    )
+    parser.add_argument(
+        "--validate-velocities",
+        default="",
+        dest="validate_velocities",
+        help="the same check for a drum fit, which has no register to hold "
+        "notes out of: score the result at these velocities as well "
+        "(e.g. '48,88,112'), disjoint from the probe's",
+    )
+    parser.add_argument(
+        "--validate-oracle-wav",
+        default="",
+        dest="validate_oracle_wav",
+        help="the reference for the held-out probe, rendered the same way "
+        "as --oracle-wav. Required with it, because a fixed WAV is one "
+        "rendering of one probe and cannot supply the held-out notes",
+    )
+    parser.add_argument(
+        "--out",
+        default="",
+        help="write the result (knob values, losses, overrides, validation) to this JSON path",
+    )
     # The whole ladder `analyze_note` measures, and the same count `TERM_UNITS`
     # divides `harm` by — a lower default summed fewer cells than the unit
     # assumed and understated the term against every other one.
-    parser.add_argument("--n-harm", type=int, default=HARM_REACH, dest="n_harm",
-                        help=f"harmonics counted in the L1 timbre term "
-                             f"(default: {HARM_REACH}, the whole measured ladder)")
-    parser.add_argument("--w-harm", type=float, default=None, dest="w_harm",
-                        help="weight on the harmonic-profile L1 term")
-    parser.add_argument("--w-cents", type=float, default=None, dest="w_cents",
-                        help="weight on the intonation (cents) term")
-    parser.add_argument("--w-tnr", type=float, default=None, dest="w_tnr",
-                        help="weight on the noise-floor (TNR shortfall) term")
-    parser.add_argument("--w-env", type=float, default=None, dest="w_env",
-                        help="weight on the temporal-envelope term (sustain slope / release / "
-                             "attack; attack / decay / crest for a drum). Unset, the weight "
-                             "comes from the tone class: half for a sustained voice, where the "
-                             "spectrum is the identity, and 1 for a struck, plucked or modal "
-                             "one and for a drum, where the gesture is")
-    parser.add_argument("--w-band", type=float, default=None, dest="w_band",
-                        help="drum fits: weight on the 1/3-octave level-profile term, the "
-                             "percussion analogue of the harmonic ladder")
-    parser.add_argument("--w-bdecay", type=float, default=None, dest="w_bdecay",
-                        help="drum fits: weight on the per-octave-band decay-slope term")
-    parser.add_argument("--w-tilt", type=float, default=None, dest="w_tilt",
-                        help="drum fits: weight on how far the hit's 2 kHz-and-up level "
-                             "sits from its 500 Hz-and-down level, against the same "
-                             "difference in the reference. A direction, which --w-band "
-                             "has none of")
-    parser.add_argument("--w-bright", type=float, default=None, dest="w_bright",
-                        help="drum fits: weight on the spectral centroid as a percentage "
-                             "of the reference's. The gate's own arithmetic, so a fit "
-                             "moves the quantity the kit is judged on")
-    parser.add_argument("--w-kit", type=float, default=None, dest="w_kit",
-                        help="drum fits: weight on the RELATIONS INSIDE THE KIT — the tom "
-                             "series, the hi-hat trio, the cymbals — as the sorted contrasts "
-                             "in pitch, decay, colour and level within each family the "
-                             "capture declares. Every other percussion term scores one hit "
-                             "against its own reference row and is capped, so a kit whose "
-                             "members are each individually plausible and collectively in "
-                             "the wrong relation reads as correct; worse, once the members "
-                             "are far enough out the per-hit terms saturate and the repair "
-                             "has no gradient to follow. Needs a corpus whose capture names "
-                             "its families AND a grid that covers one: --drum-note narrows "
-                             "to a single note by itself, so name the family with --notes")
-    parser.add_argument("--w-init", type=float, default=None, dest="w_init",
-                        help="weight on the per-harmonic ONSET-ladder term (excitation evidence)")
-    parser.add_argument("--w-slope", type=float, default=None, dest="w_slope",
-                        help="weight on the per-harmonic decay-slope term (loop evidence)")
-    parser.add_argument("--w-tail", type=float, default=None, dest="w_tail",
-                        help="weight on the per-harmonic decay slope 2-6 s in, which only has "
-                             "frames to fit when the probe holds a note that long. This is "
-                             "the aftersound: on a piano it is most of the note, and no "
-                             "two-second probe can reach it")
-    parser.add_argument("--w-hf", type=float, default=None, dest="w_hf",
-                        help="weight on the attack's high-band balance, measured in 20 ms "
-                             "slices over the first 120 ms. Catches a strike-noise or "
-                             "excitation path whose top end is wrong for a few tens of "
-                             "milliseconds — a tick, which the ear finds instantly and a "
-                             "whole-timeline spectral distance averages away")
-    parser.add_argument("--w-lf", type=float, default=None, dest="w_lf",
-                        help="weight on the attack's low- and mid-band balance, 20 Hz to "
-                             "4 kHz over one 50 ms window. The bass counterpart of --w-hf: "
-                             "catches an excitation that dumps its energy below where the "
-                             "instrument radiates, which reads as a note with no onset and "
-                             "which every sustain-window term here scores as correct")
-    parser.add_argument("--w-stiff", type=float, default=None, dest="w_stiff",
-                        help="weight on STRING STIFFNESS: how far the model stretches its "
-                             "twelfth partial against how far the reference does, in cents. "
-                             "The ladder is now measured along each string's own partial "
-                             "series, which is what makes it correct and also what leaves "
-                             "the series itself unpriced — a voice twice as stiff as its "
-                             "reference otherwise scores a clean sheet")
-    parser.add_argument("--w-dyn", type=float, default=None, dest="w_dyn",
-                        help="weight on the DYNAMICS CURVE: how brightness tracks velocity, "
-                             "fitted per pitch so register is held fixed. The only term "
-                             "that lives in the relation between notes rather than inside "
-                             "one — a model can match every note of a grid one at a time "
-                             "and still get the trend between them wrong. Needs a probe "
-                             "with a velocity axis (--pattern velocity, or a drum probe)")
-    parser.add_argument("--w-level", type=float, default=None, dest="w_level",
-                        help="weight on the level BALANCE across the probe grid: how loud each "
-                             "note is relative to the others, with the grid's own median "
-                             "offset removed so an output-gain difference is not fitted. "
-                             "Needs a probe with more than one note to mean anything")
-    parser.add_argument("--max-level-drift-db", type=float, default=6.0,
-                        dest="max_level_drift_db",
-                        help="how far the winner may move the voice's whole-grid level away "
-                             "from the start point before the loss charges it (default 6 dB; "
-                             "0 disables). A fence rather than a term: inside it the score is "
-                             "unchanged. Every other term is level-normalised, so without it a "
-                             "candidate can buy a better spectrum by quietening the voice - "
-                             "measured at 31 dB down with a bit-identical band profile. It is "
-                             "anchored on the START point, so it also holds a voice AT a level "
-                             "an earlier round left it at: a knob that moves the level as well "
-                             "as the shape - a filter corner does - has to be fitted with the "
-                             "gain beside it, or the fence charges the move by more than the "
-                             "corrected shape is worth and the search walks the other way")
-    parser.add_argument("--max-sustain-drift-db-s", type=float, default=3.0,
-                        dest="max_sustain_drift_db_s",
-                        help="how much faster than the start point a winner's worst note may "
-                             "fall away over its held section, in dB/s, before the loss "
-                             "charges it (default 3; 0 disables). The companion fence to "
-                             "--max-level-drift-db, against the trade that takes the note "
-                             "away rather than the gain: `env` does carry the sustain slope, "
-                             "but it is divided by its own value at the start point, so a "
-                             "voice that already falls steeply has a flat objective in the "
-                             "one dimension it is worst in. One-sided and anchored on the "
-                             "START, so a voice whose mechanism cannot sustain is not asked "
-                             "to fix that with a knob - what this stops is the fit making it "
-                             "worse")
-    parser.add_argument("--w-crest", type=float, default=None, dest="w_crest",
-                        help="weight on peak-minus-held-RMS per note. Gain-invariant, and the "
-                             "one term that sees a note whose envelope never falls after its "
-                             "attack — every other term here is normalised past it")
-    parser.add_argument("--w-mss", type=float, default=None, dest="w_mss",
-                        help="weight on the multi-scale STFT distance over the whole render "
-                             "(sees what the per-note metric set does not model)")
-    parser.add_argument("--w-modes", type=float, default=None, dest="w_modes",
-                        help="weight on the MEASURED PARTIAL SERIES: the partials as found, "
-                             "paired against the reference's by frequency, priced in cents "
-                             "and dB. The harmonic ladder searches n*f0*sqrt(1+B*n^2), which "
-                             "describes a stiff string and nothing else, so on a bar, a bell, "
-                             "a plate or a membrane every bin above the fundamental reads the "
-                             "render's own noise floor - on BOTH sides. That covers GM 8-14, "
-                             "47, 55 and 112-118, and every drum note with a definite pitch. "
-                             "Weighted by default for those, and available for any voice")
-    parser.add_argument("--w-mod", type=float, default=None, dest="w_mod",
-                        help="weight on MOVEMENT: vibrato depth and rate, tremolo, the slow "
-                             "beat of an ensemble or a unison pair, and how wide the "
-                             "fundamental is. A sampled reference is a recording of a player "
-                             "and carries all of it; a physical model renders a still note "
-                             "unless told otherwise, and every other term here reads that "
-                             "stillness as cleanliness - --w-tnr charges the model only for "
-                             "being NOISIER, so nothing could ever ask for vibrato")
-    parser.add_argument("--flat-partial-weighting", action="store_true",
-                        dest="flat_partial_weighting",
-                        help="score every partial of the harmonic term equally, as this "
-                             "harness did before audibility weighting. By default a partial's "
-                             "vote is scaled by an A-weighting at its own frequency and by how "
-                             "far it sits under the loudest partial of the same note - so A0's "
-                             "27.5 Hz fundamental no longer outvotes the partials that carry "
-                             "its timbre, and a 10 dB error on something 50 dB down is no "
-                             "longer charged in full")
-    parser.add_argument("--raw-loss", action="store_true", dest="raw_loss",
-                        help="weight the terms in their own units instead of normalising "
-                             "each to its value at the start point. The weights then mean "
-                             "whatever the units make them mean")
-    parser.add_argument("--mono-mode", default="mean", dest="mono_mode",
-                        choices=list(MONO_MODES),
-                        help="how a stereo render is reduced to one channel "
-                             "(default: mean). A reference captured through a "
-                             "spaced close pair is decorrelated by construction, "
-                             "so summing it notches the frequencies where the "
-                             "path difference is half a wavelength - and a notch "
-                             "on a partial reads as harmonic error a mono model "
-                             "cannot reproduce. 'left' and 'loudest' take one "
-                             "channel and have no sum in them. The default is a "
-                             "sum because every committed profile in reference/ "
-                             "was measured through one and cannot be re-measured "
-                             "without the plugin it came from")
-    parser.add_argument("--allow-dirty-src", action="store_true", dest="allow_dirty_src",
-                        help="fit anyway when src/ has uncommitted changes. Refused by "
-                             "default: this tree routinely has several sessions working "
-                             "in src/ at once, and whatever is there at build time is "
-                             "compiled and fit against with nothing in the output saying "
-                             "so. The normal reason to pass this is fitting against your "
-                             "own in-flight engine edit. The dirty paths and HEAD's sha "
-                             "are recorded in --out either way")
-    parser.add_argument("--build-dir", default="build-autofit", dest="build_dir",
-                        help="isolated build dir (default: build-autofit)")
+    parser.add_argument(
+        "--n-harm",
+        type=int,
+        default=HARM_REACH,
+        dest="n_harm",
+        help=f"harmonics counted in the L1 timbre term "
+        f"(default: {HARM_REACH}, the whole measured ladder)",
+    )
+    parser.add_argument(
+        "--w-harm",
+        type=float,
+        default=None,
+        dest="w_harm",
+        help="weight on the harmonic-profile L1 term",
+    )
+    parser.add_argument(
+        "--w-cents",
+        type=float,
+        default=None,
+        dest="w_cents",
+        help="weight on the intonation (cents) term",
+    )
+    parser.add_argument(
+        "--w-tnr",
+        type=float,
+        default=None,
+        dest="w_tnr",
+        help="weight on the noise-floor (TNR shortfall) term",
+    )
+    parser.add_argument(
+        "--w-env",
+        type=float,
+        default=None,
+        dest="w_env",
+        help="weight on the temporal-envelope term (sustain slope / release / "
+        "attack; attack / decay / crest for a drum). Unset, the weight "
+        "comes from the tone class: half for a sustained voice, where the "
+        "spectrum is the identity, and 1 for a struck, plucked or modal "
+        "one and for a drum, where the gesture is",
+    )
+    parser.add_argument(
+        "--w-band",
+        type=float,
+        default=None,
+        dest="w_band",
+        help="drum fits: weight on the 1/3-octave level-profile term, the "
+        "percussion analogue of the harmonic ladder",
+    )
+    parser.add_argument(
+        "--w-bdecay",
+        type=float,
+        default=None,
+        dest="w_bdecay",
+        help="drum fits: weight on the per-octave-band decay-slope term",
+    )
+    parser.add_argument(
+        "--w-tilt",
+        type=float,
+        default=None,
+        dest="w_tilt",
+        help="drum fits: weight on how far the hit's 2 kHz-and-up level "
+        "sits from its 500 Hz-and-down level, against the same "
+        "difference in the reference. A direction, which --w-band "
+        "has none of",
+    )
+    parser.add_argument(
+        "--w-bright",
+        type=float,
+        default=None,
+        dest="w_bright",
+        help="drum fits: weight on the spectral centroid as a percentage "
+        "of the reference's. The gate's own arithmetic, so a fit "
+        "moves the quantity the kit is judged on",
+    )
+    parser.add_argument(
+        "--w-kit",
+        type=float,
+        default=None,
+        dest="w_kit",
+        help="drum fits: weight on the RELATIONS INSIDE THE KIT — the tom "
+        "series, the hi-hat trio, the cymbals — as the sorted contrasts "
+        "in pitch, decay, colour and level within each family the "
+        "capture declares. Every other percussion term scores one hit "
+        "against its own reference row and is capped, so a kit whose "
+        "members are each individually plausible and collectively in "
+        "the wrong relation reads as correct; worse, once the members "
+        "are far enough out the per-hit terms saturate and the repair "
+        "has no gradient to follow. Needs a corpus whose capture names "
+        "its families AND a grid that covers one: --drum-note narrows "
+        "to a single note by itself, so name the family with --notes",
+    )
+    parser.add_argument(
+        "--w-init",
+        type=float,
+        default=None,
+        dest="w_init",
+        help="weight on the per-harmonic ONSET-ladder term (excitation evidence)",
+    )
+    parser.add_argument(
+        "--w-slope",
+        type=float,
+        default=None,
+        dest="w_slope",
+        help="weight on the per-harmonic decay-slope term (loop evidence)",
+    )
+    parser.add_argument(
+        "--w-tail",
+        type=float,
+        default=None,
+        dest="w_tail",
+        help="weight on the per-harmonic decay slope 2-6 s in, which only has "
+        "frames to fit when the probe holds a note that long. This is "
+        "the aftersound: on a piano it is most of the note, and no "
+        "two-second probe can reach it",
+    )
+    parser.add_argument(
+        "--w-hf",
+        type=float,
+        default=None,
+        dest="w_hf",
+        help="weight on the attack's high-band balance, measured in 20 ms "
+        "slices over the first 120 ms. Catches a strike-noise or "
+        "excitation path whose top end is wrong for a few tens of "
+        "milliseconds — a tick, which the ear finds instantly and a "
+        "whole-timeline spectral distance averages away",
+    )
+    parser.add_argument(
+        "--w-lf",
+        type=float,
+        default=None,
+        dest="w_lf",
+        help="weight on the attack's low- and mid-band balance, 20 Hz to "
+        "4 kHz over one 50 ms window. The bass counterpart of --w-hf: "
+        "catches an excitation that dumps its energy below where the "
+        "instrument radiates, which reads as a note with no onset and "
+        "which every sustain-window term here scores as correct",
+    )
+    parser.add_argument(
+        "--w-stiff",
+        type=float,
+        default=None,
+        dest="w_stiff",
+        help="weight on STRING STIFFNESS: how far the model stretches its "
+        "twelfth partial against how far the reference does, in cents. "
+        "The ladder is now measured along each string's own partial "
+        "series, which is what makes it correct and also what leaves "
+        "the series itself unpriced — a voice twice as stiff as its "
+        "reference otherwise scores a clean sheet",
+    )
+    parser.add_argument(
+        "--w-dyn",
+        type=float,
+        default=None,
+        dest="w_dyn",
+        help="weight on the DYNAMICS CURVE: how brightness tracks velocity, "
+        "fitted per pitch so register is held fixed. The only term "
+        "that lives in the relation between notes rather than inside "
+        "one — a model can match every note of a grid one at a time "
+        "and still get the trend between them wrong. Needs a probe "
+        "with a velocity axis (--pattern velocity, or a drum probe)",
+    )
+    parser.add_argument(
+        "--w-level",
+        type=float,
+        default=None,
+        dest="w_level",
+        help="weight on the level BALANCE across the probe grid: how loud each "
+        "note is relative to the others, with the grid's own median "
+        "offset removed so an output-gain difference is not fitted. "
+        "Needs a probe with more than one note to mean anything",
+    )
+    parser.add_argument(
+        "--max-level-drift-db",
+        type=float,
+        default=6.0,
+        dest="max_level_drift_db",
+        help="how far the winner may move the voice's whole-grid level away "
+        "from the start point before the loss charges it (default 6 dB; "
+        "0 disables). A fence rather than a term: inside it the score is "
+        "unchanged. Every other term is level-normalised, so without it a "
+        "candidate can buy a better spectrum by quietening the voice - "
+        "measured at 31 dB down with a bit-identical band profile. It is "
+        "anchored on the START point, so it also holds a voice AT a level "
+        "an earlier round left it at: a knob that moves the level as well "
+        "as the shape - a filter corner does - has to be fitted with the "
+        "gain beside it, or the fence charges the move by more than the "
+        "corrected shape is worth and the search walks the other way",
+    )
+    parser.add_argument(
+        "--max-sustain-drift-db-s",
+        type=float,
+        default=3.0,
+        dest="max_sustain_drift_db_s",
+        help="how much faster than the start point a winner's worst note may "
+        "fall away over its held section, in dB/s, before the loss "
+        "charges it (default 3; 0 disables). The companion fence to "
+        "--max-level-drift-db, against the trade that takes the note "
+        "away rather than the gain: `env` does carry the sustain slope, "
+        "but it is divided by its own value at the start point, so a "
+        "voice that already falls steeply has a flat objective in the "
+        "one dimension it is worst in. One-sided and anchored on the "
+        "START, so a voice whose mechanism cannot sustain is not asked "
+        "to fix that with a knob - what this stops is the fit making it "
+        "worse",
+    )
+    parser.add_argument(
+        "--w-crest",
+        type=float,
+        default=None,
+        dest="w_crest",
+        help="weight on peak-minus-held-RMS per note. Gain-invariant, and the "
+        "one term that sees a note whose envelope never falls after its "
+        "attack — every other term here is normalised past it",
+    )
+    parser.add_argument(
+        "--w-mss",
+        type=float,
+        default=None,
+        dest="w_mss",
+        help="weight on the multi-scale STFT distance over the whole render "
+        "(sees what the per-note metric set does not model)",
+    )
+    parser.add_argument(
+        "--w-modes",
+        type=float,
+        default=None,
+        dest="w_modes",
+        help="weight on the MEASURED PARTIAL SERIES: the partials as found, "
+        "paired against the reference's by frequency, priced in cents "
+        "and dB. The harmonic ladder searches n*f0*sqrt(1+B*n^2), which "
+        "describes a stiff string and nothing else, so on a bar, a bell, "
+        "a plate or a membrane every bin above the fundamental reads the "
+        "render's own noise floor - on BOTH sides. That covers GM 8-14, "
+        "47, 55 and 112-118, and every drum note with a definite pitch. "
+        "Weighted by default for those, and available for any voice",
+    )
+    parser.add_argument(
+        "--w-mod",
+        type=float,
+        default=None,
+        dest="w_mod",
+        help="weight on MOVEMENT: vibrato depth and rate, tremolo, the slow "
+        "beat of an ensemble or a unison pair, and how wide the "
+        "fundamental is. A sampled reference is a recording of a player "
+        "and carries all of it; a physical model renders a still note "
+        "unless told otherwise, and every other term here reads that "
+        "stillness as cleanliness - --w-tnr charges the model only for "
+        "being NOISIER, so nothing could ever ask for vibrato",
+    )
+    parser.add_argument(
+        "--flat-partial-weighting",
+        action="store_true",
+        dest="flat_partial_weighting",
+        help="score every partial of the harmonic term equally, as this "
+        "harness did before audibility weighting. By default a partial's "
+        "vote is scaled by an A-weighting at its own frequency and by how "
+        "far it sits under the loudest partial of the same note - so A0's "
+        "27.5 Hz fundamental no longer outvotes the partials that carry "
+        "its timbre, and a 10 dB error on something 50 dB down is no "
+        "longer charged in full",
+    )
+    parser.add_argument(
+        "--raw-loss",
+        action="store_true",
+        dest="raw_loss",
+        help="weight the terms in their own units instead of normalising "
+        "each to its value at the start point. The weights then mean "
+        "whatever the units make them mean",
+    )
+    parser.add_argument(
+        "--mono-mode",
+        default="mean",
+        dest="mono_mode",
+        choices=list(MONO_MODES),
+        help="how a stereo render is reduced to one channel "
+        "(default: mean). A reference captured through a "
+        "spaced close pair is decorrelated by construction, "
+        "so summing it notches the frequencies where the "
+        "path difference is half a wavelength - and a notch "
+        "on a partial reads as harmonic error a mono model "
+        "cannot reproduce. 'left' and 'loudest' take one "
+        "channel and have no sum in them. The default is a "
+        "sum because every committed profile in reference/ "
+        "was measured through one and cannot be re-measured "
+        "without the plugin it came from",
+    )
+    parser.add_argument(
+        "--allow-dirty-src",
+        action="store_true",
+        dest="allow_dirty_src",
+        help="fit anyway when src/ has uncommitted changes. Refused by "
+        "default: this tree routinely has several sessions working "
+        "in src/ at once, and whatever is there at build time is "
+        "compiled and fit against with nothing in the output saying "
+        "so. The normal reason to pass this is fitting against your "
+        "own in-flight engine edit. The dirty paths and HEAD's sha "
+        "are recorded in --out either way",
+    )
+    parser.add_argument(
+        "--build-dir",
+        default="build-autofit",
+        dest="build_dir",
+        help="isolated build dir (default: build-autofit)",
+    )
     parser.add_argument("--jobs", type=int, default=8, help="parallel build jobs")
     parser.add_argument("--cmake", default="cmake", help="cmake executable")
-    parser.add_argument("--dry-run", action="store_true", dest="dry_run",
-                        help="restore pristine and skip writing the best values")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="restore pristine and skip writing the best values",
+    )
     args = parser.parse_args()
     return run(args)
 

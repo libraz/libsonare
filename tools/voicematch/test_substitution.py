@@ -30,11 +30,12 @@ def _profile(deltas: list[float], base: float = -4.0) -> tuple[dict, dict]:
     as uncomparable, so the median under test is taken over exactly the numbers
     this function put in.
     """
-    notes = [48, 52, 56, 60, 64, 68, 72][:len(deltas)]
-    left = [{"timbre": "t", "note": n, "velocity": 80, "decay_db_s": base}
-            for n in notes]
-    right = [{"timbre": "t", "note": n, "velocity": 80, "decay_db_s": base + d}
-             for n, d in zip(notes, deltas)]
+    notes = [48, 52, 56, 60, 64, 68, 72][: len(deltas)]
+    left = [{"timbre": "t", "note": n, "velocity": 80, "decay_db_s": base} for n in notes]
+    right = [
+        {"timbre": "t", "note": n, "velocity": 80, "decay_db_s": base + d}
+        for n, d in zip(notes, deltas)
+    ]
     return {"rows": left}, {"rows": right}
 
 
@@ -46,15 +47,18 @@ def test_grid_of_needs_both_axes():
 
 def test_grid_of_is_a_set_rather_than_the_written_order():
     """Two captures naming the same grid in a different order share it."""
-    assert (substitution.grid_of({"notes": [72, 48], "velocities": [80, 32]})
-            == substitution.grid_of({"notes": [48, 72], "velocities": [32, 80]}))
+    assert substitution.grid_of(
+        {"notes": [72, 48], "velocities": [80, 32]}
+    ) == substitution.grid_of({"notes": [48, 72], "velocities": [32, 80]})
 
 
 def test_grid_groups_are_largest_first():
-    captures = {"a": {"notes": [60], "velocities": [80]},
-                "b": {"notes": [60, 64], "velocities": [80]},
-                "c": {"notes": [60, 64], "velocities": [80]},
-                "d": {"notes": [60, 64], "velocities": [80]}}
+    captures = {
+        "a": {"notes": [60], "velocities": [80]},
+        "b": {"notes": [60, 64], "velocities": [80]},
+        "c": {"notes": [60, 64], "velocities": [80]},
+        "d": {"notes": [60, 64], "velocities": [80]},
+    }
     groups = substitution.grid_groups(captures)
     assert [len(ids) for ids in groups.values()] == [3, 1]
 
@@ -75,8 +79,12 @@ def test_substituting_a_profile_for_itself_reads_zero():
 
 
 def test_rows_of_takes_the_timbre_the_gate_names():
-    profile = {"rows": [{"timbre": "gm001", "note": 60, "velocity": 80},
-                        {"timbre": "gm002", "note": 60, "velocity": 80}]}
+    profile = {
+        "rows": [
+            {"timbre": "gm001", "note": 60, "velocity": 80},
+            {"timbre": "gm002", "note": 60, "velocity": 80},
+        ]
+    }
     assert [r["timbre"] for r in substitution._rows_of(profile, "gm002")] == ["gm002"]
     # A gate naming a timbre this profile no longer carries falls back rather
     # than returning nothing: an empty side would read as a dimension that could
@@ -85,9 +93,13 @@ def test_rows_of_takes_the_timbre_the_gate_names():
 
 
 def test_judge_separates_a_disagreement_from_a_comparison_that_did_not_happen():
-    gate = {"bounds": {"decay": {"abs_median": 1.0},
-                       "damper": {"abs_median": 5.0},
-                       "stereo": {"median": 0.3}}}
+    gate = {
+        "bounds": {
+            "decay": {"abs_median": 1.0},
+            "damper": {"abs_median": 5.0},
+            "stereo": {"median": 0.3},
+        }
+    }
     passed, failed, unreached = substitution.judge({"decay": 4.0}, gate)
     assert passed == set()
     assert failed == {"decay"}

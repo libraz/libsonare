@@ -50,8 +50,9 @@ from toneclass import ToneClass, default_weights, tone_class
 SR = 48000
 
 
-def _modal(f0: float, ratios, levels, decays, *, seconds: float = 3.5,
-           seed: int = 0, noise: float = 1e-4) -> np.ndarray:
+def _modal(
+    f0: float, ratios, levels, decays, *, seconds: float = 3.5, seed: int = 0, noise: float = 1e-4
+) -> np.ndarray:
     """A struck bar or bell: partials at arbitrary ratios, each with its own decay."""
     n = int(SR * seconds)
     t = np.arange(n) / SR
@@ -66,15 +67,15 @@ def _modal(f0: float, ratios, levels, decays, *, seconds: float = 3.5,
 # Which ruler an instrument gets
 # --------------------------------------------------------------------------- #
 def test_the_class_of_a_program_follows_the_instrument_not_the_family():
-    assert tone_class(0) is ToneClass.STRUCK_STRING          # piano
-    assert tone_class(9) is ToneClass.MODAL                  # glockenspiel
-    assert tone_class(15) is ToneClass.STRUCK_STRING         # dulcimer, not a bar
-    assert tone_class(40) is ToneClass.SUSTAINED             # violin
-    assert tone_class(45) is ToneClass.PLUCKED_STRING        # pizzicato, not bowed
-    assert tone_class(47) is ToneClass.MODAL                 # timpani
-    assert tone_class(116) is ToneClass.MODAL                # taiko
-    assert tone_class(120) is ToneClass.NOISE                # sound effect
-    assert tone_class(0, drum_note=38) is ToneClass.MODAL    # the kit, whatever the program
+    assert tone_class(0) is ToneClass.STRUCK_STRING  # piano
+    assert tone_class(9) is ToneClass.MODAL  # glockenspiel
+    assert tone_class(15) is ToneClass.STRUCK_STRING  # dulcimer, not a bar
+    assert tone_class(40) is ToneClass.SUSTAINED  # violin
+    assert tone_class(45) is ToneClass.PLUCKED_STRING  # pizzicato, not bowed
+    assert tone_class(47) is ToneClass.MODAL  # timpani
+    assert tone_class(116) is ToneClass.MODAL  # taiko
+    assert tone_class(120) is ToneClass.NOISE  # sound effect
+    assert tone_class(0, drum_note=38) is ToneClass.MODAL  # the kit, whatever the program
 
 
 def test_a_modal_voice_is_never_weighted_on_the_harmonic_ladder():
@@ -108,9 +109,9 @@ def test_every_program_has_a_register_inside_something_playable():
         lo, mid, hi = registers_for_program(program)
         assert 0 <= lo <= mid <= hi <= 127
     # The families that used to fall through, each now in its own compass.
-    assert registers_for_program(9)[0] >= 72      # glockenspiel is a treble instrument
-    assert registers_for_program(24)[2] <= 67     # a guitar's top string is E5
-    assert registers_for_program(116)[2] <= 55    # a taiko is not a piccolo
+    assert registers_for_program(9)[0] >= 72  # glockenspiel is a treble instrument
+    assert registers_for_program(24)[2] <= 67  # a guitar's top string is E5
+    assert registers_for_program(116)[2] <= 55  # a taiko is not a piccolo
 
 
 # --------------------------------------------------------------------------- #
@@ -118,8 +119,9 @@ def test_every_program_has_a_register_inside_something_playable():
 # --------------------------------------------------------------------------- #
 def test_a_bar_s_partials_are_found_where_they_are_rather_than_where_a_series_predicts():
     """1 : 2.756 : 5.404 : 8.933 — a celesta, and not one integer multiple among them."""
-    y = _modal(261.626, [1, 2.756, 5.404, 8.933], [1, 0.55, 0.28, 0.14],
-               [1.5, 1.0, 0.7, 0.5], seed=1)
+    y = _modal(
+        261.626, [1, 2.756, 5.404, 8.933], [1, 0.55, 0.28, 0.14], [1.5, 1.0, 0.7, 0.5], seed=1
+    )
     m = analyze_note(y, SR, Note(60, 100, 0.0, 2.0), 3.5)
     assert m.modal_ratio == pytest.approx([1.0, 2.756, 5.404, 8.933], rel=0.003)
     # Levels come back relative to the strongest mode, so the shape survives any
@@ -140,8 +142,9 @@ def test_the_harmonic_ladder_reports_that_it_found_nothing_on_a_bar():
     voice with no harmonic series scored a confident harmonic error made
     entirely of the difference between two noise floors.
     """
-    y = _modal(261.626, [1, 2.756, 5.404, 8.933], [1, 0.55, 0.28, 0.14],
-               [1.5, 1.0, 0.7, 0.5], seed=1)
+    y = _modal(
+        261.626, [1, 2.756, 5.404, 8.933], [1, 0.55, 0.28, 0.14], [1.5, 1.0, 0.7, 0.5], seed=1
+    )
     m = analyze_note(y, SR, Note(60, 100, 0.0, 2.0), 3.5)
     # Every bin is above the sentinel...
     assert all(v > -120.0 for v in m.harmonics_db)
@@ -152,10 +155,12 @@ def test_the_harmonic_ladder_reports_that_it_found_nothing_on_a_bar():
 
 def test_two_noise_floors_no_longer_score_as_a_harmonic_difference():
     """The measurement that made `modes` necessary, as a regression test."""
-    model = _modal(261.626, [1, 2.756, 5.404, 8.933], [1, 0.55, 0.28, 0.14],
-                   [1.5, 1.0, 0.7, 0.5], seed=1)
-    oracle = _modal(261.626, [1, 2.80, 5.50, 9.10], [1, 0.62, 0.24, 0.10],
-                    [1.6, 1.1, 0.6, 0.45], seed=2)
+    model = _modal(
+        261.626, [1, 2.756, 5.404, 8.933], [1, 0.55, 0.28, 0.14], [1.5, 1.0, 0.7, 0.5], seed=1
+    )
+    oracle = _modal(
+        261.626, [1, 2.80, 5.50, 9.10], [1, 0.62, 0.24, 0.10], [1.6, 1.1, 0.6, 0.45], seed=2
+    )
     note = Note(60, 100, 0.0, 2.0)
     rows_m = [analyze_note(model, SR, note, 3.5).to_dict()]
     rows_o = [analyze_note(oracle, SR, note, 3.5).to_dict()]
@@ -197,15 +202,17 @@ def test_modes_are_paired_nearest_first_rather_than_in_order():
 
 def test_a_reference_with_no_modes_is_skipped_rather_than_matched():
     """A property of the reference, not of the voice — the `_absent_or` rule."""
-    assert _modes_terms([{"modal_hz": [100.0], "modal_db": [0.0]}],
-                        [{"modal_hz": [], "modal_db": []}]) == (0.0, 0)
+    assert _modes_terms(
+        [{"modal_hz": [100.0], "modal_db": [0.0]}], [{"modal_hz": [], "modal_db": []}]
+    ) == (0.0, 0)
 
 
 # --------------------------------------------------------------------------- #
 # Movement
 # --------------------------------------------------------------------------- #
-def _vibrato(f0: float, cents_pp: float, rate: float, seconds: float = 3.0,
-             trem_db: float = 0.0) -> np.ndarray:
+def _vibrato(
+    f0: float, cents_pp: float, rate: float, seconds: float = 3.0, trem_db: float = 0.0
+) -> np.ndarray:
     n = int(SR * seconds)
     t = np.arange(n) / SR
     dev = 0.5 * (2.0 ** (cents_pp / 1200.0) - 1.0) * f0
@@ -264,17 +271,33 @@ def test_the_movement_term_asks_for_vibrato_the_noise_term_never_could():
 
 def test_an_absent_movement_reading_on_the_model_side_is_charged_not_skipped():
     """A note too dead to track is the defect, not the absence of evidence."""
-    ref = {"vib_cents": 30.0, "vib_rate_hz": 5.5, "trem_db": 0.0, "beat_db": 0.0,
-           "f0_width_cents": 8.0}
-    dead = {"vib_cents": None, "vib_rate_hz": None, "trem_db": None,
-            "beat_db": None, "f0_width_cents": None}
+    ref = {
+        "vib_cents": 30.0,
+        "vib_rate_hz": 5.5,
+        "trem_db": 0.0,
+        "beat_db": 0.0,
+        "f0_width_cents": 8.0,
+    }
+    dead = {
+        "vib_cents": None,
+        "vib_rate_hz": None,
+        "trem_db": None,
+        "beat_db": None,
+        "f0_width_cents": None,
+    }
     assert _mod_terms([dead], [ref])[0] > _mod_terms([ref], [ref])[0]
 
 
 def _moving(vib: float | None, trem: float | None, rate: float = 2.0) -> dict:
-    return {"vib_cents": vib, "vib_rate_hz": rate, "trem_db": trem,
-            "trem_rate_hz": rate, "beat_db": None, "beat_rate_hz": None,
-            "f0_width_cents": None}
+    return {
+        "vib_cents": vib,
+        "vib_rate_hz": rate,
+        "trem_db": trem,
+        "trem_rate_hz": rate,
+        "beat_db": None,
+        "beat_rate_hz": None,
+        "f0_width_cents": None,
+    }
 
 
 def test_going_still_can_never_buy_a_discount_on_the_movement_term():
@@ -290,8 +313,13 @@ def test_going_still_can_never_buy_a_discount_on_the_movement_term():
     could fall down by letting the note die.
     """
     reference = _moving(20.0, 2.0, rate=5.5)
-    ladder = [_moving(6.0, 2.0), _moving(5.1, 1.1), _moving(4.9, 0.9),
-              _moving(0.0, 0.0), _moving(None, None)]
+    ladder = [
+        _moving(6.0, 2.0),
+        _moving(5.1, 1.1),
+        _moving(4.9, 0.9),
+        _moving(0.0, 0.0),
+        _moving(None, None),
+    ]
     scores = [_mod_terms([m], [reference])[0] for m in ladder]
     assert scores == sorted(scores), f"stiller must never score better: {scores}"
     # Each step is a real one rather than a rounding difference.
@@ -313,10 +341,13 @@ def test_a_rate_the_reference_does_not_have_is_still_skipped():
     # and the rate is not: moving the model's tremolo rate by five hertz must
     # change nothing at all.
     assert _mod_terms([model(5.5)], [still_reference])[0] == pytest.approx(
-        _mod_terms([model(0.5)], [still_reference])[0])
+        _mod_terms([model(0.5)], [still_reference])[0]
+    )
     # The vibrato rate, which the reference does have, is compared as before.
-    assert (_mod_terms([_moving(20.0, 0.0, rate=0.5)], [still_reference])[0]
-            > _mod_terms([_moving(20.0, 0.0, rate=5.5)], [still_reference])[0])
+    assert (
+        _mod_terms([_moving(20.0, 0.0, rate=0.5)], [still_reference])[0]
+        > _mod_terms([_moving(20.0, 0.0, rate=5.5)], [still_reference])[0]
+    )
 
 
 def test_a_unison_pair_is_wider_and_beats_where_one_string_does_neither():
@@ -353,10 +384,22 @@ def test_the_bottom_octave_no_longer_outvotes_the_partials_that_carry_its_timbre
 
 
 def test_flat_weighting_restores_the_raw_difference():
-    dark = {"harmonics_db": [0.0, -8.0], "f0_cents_err": 0.0, "tnr_db": 20.0,
-            "sustain_slope_db_s": 0.0, "release_ms": 0.0, "attack_ms": 0.0}
-    bright = {"harmonics_db": [0.0, -3.0], "f0_cents_err": 0.0, "tnr_db": 20.0,
-              "sustain_slope_db_s": 0.0, "release_ms": 0.0, "attack_ms": 0.0}
+    dark = {
+        "harmonics_db": [0.0, -8.0],
+        "f0_cents_err": 0.0,
+        "tnr_db": 20.0,
+        "sustain_slope_db_s": 0.0,
+        "release_ms": 0.0,
+        "attack_ms": 0.0,
+    }
+    bright = {
+        "harmonics_db": [0.0, -3.0],
+        "f0_cents_err": 0.0,
+        "tnr_db": 20.0,
+        "sustain_slope_db_s": 0.0,
+        "release_ms": 0.0,
+        "attack_ms": 0.0,
+    }
     assert loss_terms([dark], [bright], n_harm=2, audibility=False)["harm"] == pytest.approx(5.0)
     assert loss_terms([dark], [bright], n_harm=2)["harm"] < 5.0
 
@@ -366,16 +409,19 @@ def test_flat_weighting_restores_the_raw_difference():
 # --------------------------------------------------------------------------- #
 def test_a_struck_attack_is_resolved_rather_than_quantised():
     """Measured on the coarse grid, 0.5 ms and 5 ms both report the same number."""
+
     def struck(rise_ms: float) -> np.ndarray:
         n = int(SR * 2.5)
         t = np.arange(n) / SR
         env = (1 - np.exp(-t / (rise_ms / 1000.0))) * np.exp(-t / 1.5)
         return sum(np.sin(2 * np.pi * 261.6 * k * t) / k for k in range(1, 9)) * env
 
-    coarse = [analyze_note(struck(r), SR, Note(60, 100, 0.0, 2.0), 2.5).attack_ms
-              for r in (0.5, 2.0)]
-    fine = [analyze_note(struck(r), SR, Note(60, 100, 0.0, 2.0), 2.5).attack_fine_ms
-            for r in (0.5, 2.0)]
+    coarse = [
+        analyze_note(struck(r), SR, Note(60, 100, 0.0, 2.0), 2.5).attack_ms for r in (0.5, 2.0)
+    ]
+    fine = [
+        analyze_note(struck(r), SR, Note(60, 100, 0.0, 2.0), 2.5).attack_fine_ms for r in (0.5, 2.0)
+    ]
     assert coarse[0] == coarse[1] or abs(coarse[0] - coarse[1]) >= 5.0
     assert fine[1] > fine[0]
     assert fine[0] < 5.0
@@ -384,15 +430,15 @@ def test_a_struck_attack_is_resolved_rather_than_quantised():
 # --------------------------------------------------------------------------- #
 # Drums
 # --------------------------------------------------------------------------- #
-def _tom(f0: float = 100.0, drop: float = 0.25, tau: float = 0.040,
-         seconds: float = 2.0, seed: int = 0) -> np.ndarray:
+def _tom(
+    f0: float = 100.0, drop: float = 0.25, tau: float = 0.040, seconds: float = 2.0, seed: int = 0
+) -> np.ndarray:
     n = int(SR * seconds)
     t = np.arange(n) / SR
     rng = np.random.default_rng(seed)
     phase = np.cumsum(2 * np.pi * f0 * (1 + drop * np.exp(-t / tau)) / SR)
     y = np.zeros(n)
-    for r, level, decay in zip([1, 1.59, 2.14, 2.30], [1, 0.5, 0.3, 0.2],
-                               [0.45, 0.3, 0.22, 0.18]):
+    for r, level, decay in zip([1, 1.59, 2.14, 2.30], [1, 0.5, 0.3, 0.2], [0.45, 0.3, 0.22, 0.18]):
         y += level * np.sin(phase * r) * np.exp(-t / decay)
     return y + 0.05 * rng.standard_normal(n) * np.exp(-t / 0.01)
 
@@ -442,11 +488,18 @@ def test_a_band_the_reference_floored_is_not_charged_to_the_model():
     term whose whole value is around a hundred, reducible only by dulling the
     model.
     """
+
     def hit(top_db: float) -> dict:
         bands = [-6.0] * 22 + [top_db] * 3
-        return {"bands_db": bands, "band_decay_db_s": [None] * 8,
-                "attack_ms": 3.0, "decay_ms": 200.0, "crest_db": 20.0,
-                "note": 49, "velocity": 100}
+        return {
+            "bands_db": bands,
+            "band_decay_db_s": [None] * 8,
+            "attack_ms": 3.0,
+            "decay_ms": 200.0,
+            "crest_db": 20.0,
+            "note": 49,
+            "velocity": 100,
+        }
 
     dead = hit(BAND_REFERENCE_FLOOR_DB - 1.0)
     bright = hit(-12.0)
@@ -460,10 +513,17 @@ def test_a_band_the_reference_floored_is_not_charged_to_the_model():
 def test_a_decay_rate_is_compared_as_a_ratio_so_the_cap_means_the_same_everywhere():
     """A difference cannot be scaled: the same estimator returns -20 dB/s for a
     shell and -800 for the stick click on top of it, both correctly."""
+
     def hit(rates: list[float]) -> dict:
-        return {"bands_db": [-6.0] * 25, "band_decay_db_s": rates,
-                "attack_ms": 3.0, "decay_ms": 200.0, "crest_db": 20.0,
-                "note": 38, "velocity": 100}
+        return {
+            "bands_db": [-6.0] * 25,
+            "band_decay_db_s": rates,
+            "attack_ms": 3.0,
+            "decay_ms": 200.0,
+            "crest_db": 20.0,
+            "note": 38,
+            "velocity": 100,
+        }
 
     slow_pair = percussion_terms([hit([-20.0] * 8)], [hit([-40.0] * 8)])["bdecay"]
     fast_pair = percussion_terms([hit([-400.0] * 8)], [hit([-800.0] * 8)])["bdecay"]
@@ -479,10 +539,17 @@ def test_a_band_the_model_stops_giving_a_rate_costs_more_than_a_wrong_rate():
     48 bands with a measurable rate, and the term read as improved while the hit
     was four times too short. The sum is divided by the row count, so a band the
     estimator refuses on the model side is a discount unless it is charged."""
+
     def hit(rates: list[float | None]) -> dict:
-        return {"bands_db": [-6.0] * 25, "band_decay_db_s": rates,
-                "attack_ms": 3.0, "decay_ms": 200.0, "crest_db": 20.0,
-                "note": 35, "velocity": 100}
+        return {
+            "bands_db": [-6.0] * 25,
+            "band_decay_db_s": rates,
+            "attack_ms": 3.0,
+            "decay_ms": 200.0,
+            "crest_db": 20.0,
+            "note": 35,
+            "velocity": 100,
+        }
 
     reference = hit([-115.0] * 8)
     wrong = percussion_terms([hit([-530.0] * 8)], [reference])
@@ -510,7 +577,7 @@ def test_the_mute_group_finally_gets_a_probe_that_fires_it():
     assert seq.channel == 9 and seq.percussive
     assert {n.note for n in seq.notes} == {42, 44, 46}
     gaps = [b.start - a.start for a, b in zip(seq.notes, seq.notes[1:])]
-    assert max(gaps) < 1.5     # close enough that the choke is what is heard
+    assert max(gaps) < 1.5  # close enough that the choke is what is heard
     # Nothing is an analysis note: every per-hit measurement assumes isolation.
     assert seq.analysis_notes == []
 
@@ -545,8 +612,9 @@ def test_decorrelated_channels_are_reported_before_they_are_summed():
 # --------------------------------------------------------------------------- #
 # What the capture can measure, and what it cannot
 # --------------------------------------------------------------------------- #
-def _bandlimited_hit(cutoff_hz: float, tilt_db_per_octave: float, *,
-                     seconds: float = 1.0, seed: int = 11) -> np.ndarray:
+def _bandlimited_hit(
+    cutoff_hz: float, tilt_db_per_octave: float, *, seconds: float = 1.0, seed: int = 11
+) -> np.ndarray:
     """One instrument of a kit, through a chain that stops at `cutoff_hz`.
 
     The tilt is what makes it a different object from its neighbours: a kit's
@@ -567,9 +635,10 @@ def _bandlimited_hit(cutoff_hz: float, tilt_db_per_octave: float, *,
 def _kit(cutoff_hz: float) -> list[dict]:
     """Ten instruments differing in spectral tilt, sharing one capture chain."""
     note = Note(38, 100, 0.0, 0.05)
-    return [analyze_hit(_bandlimited_hit(cutoff_hz, tilt, seed=i), SR, note,
-                        1.0).to_dict()
-            for i, tilt in enumerate(range(-12, 13, 3))]
+    return [
+        analyze_hit(_bandlimited_hit(cutoff_hz, tilt, seed=i), SR, note, 1.0).to_dict()
+        for i, tilt in enumerate(range(-12, 13, 3))
+    ]
 
 
 def test_a_capture_s_own_ceiling_is_measured_rather_than_assumed():
@@ -684,7 +753,7 @@ def test_a_kick_hot_in_the_bottom_is_charged_as_a_region_not_as_one_band_of_25()
         return body + shell + beater
 
     ref = analyze_hit(kick(1.0), SR, note, 1.0).to_dict()
-    hot = analyze_hit(kick(8.0), SR, note, 1.0).to_dict()   # +18 dB of bottom
+    hot = analyze_hit(kick(8.0), SR, note, 1.0).to_dict()  # +18 dB of bottom
     terms = percussion_terms([hot], [ref])
     same = percussion_terms([ref], [ref])
     assert same["lf"] == pytest.approx(0.0, abs=0.01)
@@ -702,8 +771,9 @@ def test_the_low_end_is_measured_as_a_balance_so_a_gain_change_alone_is_not_it()
     note = Note(36, 100, 0.0, 0.05)
     n = int(SR * 1.0)
     t = np.arange(n) / SR
-    hit = (np.sin(2 * np.pi * 55.0 * t) * np.exp(-t / 0.18)
-           + 0.6 * np.sin(2 * np.pi * 400.0 * t) * np.exp(-t / 0.08))
+    hit = np.sin(2 * np.pi * 55.0 * t) * np.exp(-t / 0.18) + 0.6 * np.sin(
+        2 * np.pi * 400.0 * t
+    ) * np.exp(-t / 0.08)
     quiet = analyze_hit(hit, SR, note, 1.0).to_dict()
     loud = analyze_hit(hit * 4.0, SR, note, 1.0).to_dict()
     # Same instrument, 12 dB louder. The balance between its bottom and its
@@ -716,8 +786,16 @@ def test_the_low_end_is_measured_as_a_balance_so_a_gain_change_alone_is_not_it()
 # --------------------------------------------------------------------------- #
 def _terms(**over) -> dict:
     row = {name: 0.0 for name in LOSS_TERMS}
-    row.update({"modes_notes": 3.0, "harm_bins": 30.0, "mod_notes": 3.0,
-                "stiff_notes": 3.0, "dyn_groups": 1.0, "comparable": 1.0})
+    row.update(
+        {
+            "modes_notes": 3.0,
+            "harm_bins": 30.0,
+            "mod_notes": 3.0,
+            "stiff_notes": 3.0,
+            "dyn_groups": 1.0,
+            "comparable": 1.0,
+        }
+    )
     row.update(over)
     return row
 
@@ -783,15 +861,28 @@ TOM_NOTES = (41, 43, 45, 47, 48, 50)
 KIT_GROUPS = {"toms": TOM_NOTES}
 
 
-def _drum_row(note: int, *, f0: float | None = None, decay_ms: float = 300.0,
-              centroid: float = 500.0, level: float = -30.0,
-              capped: bool = False, velocity: int = 100) -> dict:
+def _drum_row(
+    note: int,
+    *,
+    f0: float | None = None,
+    decay_ms: float = 300.0,
+    centroid: float = 500.0,
+    level: float = -30.0,
+    capped: bool = False,
+    velocity: int = 100,
+) -> dict:
     """One percussion row carrying only what the kit relations read."""
     return {
-        "note": note, "velocity": velocity,
-        "bands_db": [-6.0] * 25, "band_decay_db_s": [None] * 8,
-        "attack_ms": 3.0, "decay_ms": decay_ms, "decay_capped": capped,
-        "crest_db": 20.0, "tone_f0_hz": f0, "centroid_hz": centroid,
+        "note": note,
+        "velocity": velocity,
+        "bands_db": [-6.0] * 25,
+        "band_decay_db_s": [None] * 8,
+        "attack_ms": 3.0,
+        "decay_ms": decay_ms,
+        "decay_capped": capped,
+        "crest_db": 20.0,
+        "tone_f0_hz": f0,
+        "centroid_hz": centroid,
         "peak_dbfs": level,
     }
 
@@ -819,13 +910,14 @@ def test_a_tom_series_half_as_wide_as_the_reference_s_is_charged_for_being_so():
     # Widening the model's series towards the reference's spread reduces it,
     # which is the gradient the capped per-hit terms do not have.
     wider = percussion_terms(
-        _tom_rows([100.0 * (f / 116.0) ** 1.6 for f in MODEL_TOMS]), oracle,
-        groups=KIT_GROUPS)
+        _tom_rows([100.0 * (f / 116.0) ** 1.6 for f in MODEL_TOMS]), oracle, groups=KIT_GROUPS
+    )
     assert wider["kit"] < narrow["kit"]
     # And a series with the reference's own shape is free, however far the whole
     # group sits from it — that part is `modes`, not this.
-    matched = percussion_terms(_tom_rows([f * 1.5 for f in REFERENCE_TOMS]), oracle,
-                               groups=KIT_GROUPS)
+    matched = percussion_terms(
+        _tom_rows([f * 1.5 for f in REFERENCE_TOMS]), oracle, groups=KIT_GROUPS
+    )
     assert matched["kit"] == pytest.approx(0.0, abs=1e-9)
 
 
@@ -838,8 +930,7 @@ def test_a_kit_relation_needs_no_note_map_because_a_family_is_a_set():
     """
     oracle = _tom_rows(REFERENCE_TOMS)
     straight = percussion_terms(_tom_rows(MODEL_TOMS), oracle, groups=KIT_GROUPS)
-    shuffled = percussion_terms(_tom_rows(list(reversed(MODEL_TOMS))), oracle,
-                                groups=KIT_GROUPS)
+    shuffled = percussion_terms(_tom_rows(list(reversed(MODEL_TOMS))), oracle, groups=KIT_GROUPS)
     assert shuffled["kit"] == pytest.approx(straight["kit"])
     assert shuffled["kit_notes"] == straight["kit_notes"]
 
@@ -852,14 +943,14 @@ def test_a_relation_the_reference_does_not_hold_is_not_one_to_reproduce():
     holds is read off the rows rather than declared, for the same reason the
     capture's band edge is measured rather than chosen.
     """
-    flat = [-29.4, -29.3, -29.4, -29.0, -28.5, -28.2]     # the shipped medians
-    oracle = [_drum_row(n, f0=f, level=v)
-              for n, f, v in zip(TOM_NOTES, REFERENCE_TOMS, flat)]
+    flat = [-29.4, -29.3, -29.4, -29.0, -28.5, -28.2]  # the shipped medians
+    oracle = [_drum_row(n, f0=f, level=v) for n, f, v in zip(TOM_NOTES, REFERENCE_TOMS, flat)]
     # A model whose toms are spread over 20 dB, and identical to the reference
     # in every other relation.
-    spread = [_drum_row(n, f0=f, level=v)
-              for n, f, v in zip(TOM_NOTES, REFERENCE_TOMS,
-                                 [-40.0, -36.0, -32.0, -28.0, -24.0, -20.0])]
+    spread = [
+        _drum_row(n, f0=f, level=v)
+        for n, f, v in zip(TOM_NOTES, REFERENCE_TOMS, [-40.0, -36.0, -32.0, -28.0, -24.0, -20.0])
+    ]
     assert percussion_terms(spread, oracle, groups=KIT_GROUPS)["kit"] == pytest.approx(0.0)
     # The same 20 dB against a reference that DOES hold a level relation — the
     # hi-hat trio spans 10 dB — is charged.
@@ -872,8 +963,10 @@ def test_a_relation_the_reference_does_not_hold_is_not_one_to_reproduce():
 def test_a_decay_the_capture_ran_out_of_room_for_is_not_a_relation_to_match():
     """A capped reference decay is the analysis window, not the instrument."""
     notes = (49, 51, 57)
-    ref = [_drum_row(n, decay_ms=d, capped=c)
-           for n, d, c in zip(notes, (1618.0, 1800.0, 1958.0), (False, True, False))]
+    ref = [
+        _drum_row(n, decay_ms=d, capped=c)
+        for n, d, c in zip(notes, (1618.0, 1800.0, 1958.0), (False, True, False))
+    ]
     model = [_drum_row(n, decay_ms=d) for n, d in zip(notes, (1618.0, 4000.0, 1958.0))]
     cymbals = {"cymbals": notes}
     # The capped member is dropped, so the model's wildly longer ride costs

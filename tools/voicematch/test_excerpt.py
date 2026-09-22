@@ -26,6 +26,7 @@ EXCERPTS = sorted(phrases.EXCERPT_DIR.glob("*.json"))
 # The committed files
 # --------------------------------------------------------------------------- #
 
+
 def test_every_class_but_noise_has_an_excerpt():
     """A class with none has no musical take, so every program in it is judged
     on isolated notes alone. Only `NOISE` is meant to be in that position."""
@@ -81,6 +82,7 @@ def test_every_note_is_playable(path: Path):
 # --------------------------------------------------------------------------- #
 # The take
 # --------------------------------------------------------------------------- #
+
 
 def test_the_musical_take_is_off_unless_asked_for():
     """It is not a measurement: nothing scores ten seconds of polyphony, and the

@@ -87,7 +87,9 @@ def main() -> int:
             )
     else:
         width = max(len(r["item"]) for r in rows)
-        print(f"{'item':<{width}}  {'voices':>6} {'frames':>6} {'P':>6} {'R':>6} {'F':>6} {'poly':>6}")
+        print(
+            f"{'item':<{width}}  {'voices':>6} {'frames':>6} {'P':>6} {'R':>6} {'F':>6} {'poly':>6}"
+        )
         for r in rows:
             print(
                 f"{r['item']:<{width}}  {r['voices']:>6} {r['frames']:>6} "

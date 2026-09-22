@@ -24,6 +24,7 @@ def _write(tmp_path: Path, payload: dict) -> Path:
 # The shipped file
 # --------------------------------------------------------------------------- #
 
+
 def test_the_shipped_file_loads():
     assert isinstance(signoff.load(), dict)
 
@@ -42,7 +43,8 @@ def test_every_recorded_voice_is_a_voice_the_bank_has():
 def test_every_recorded_provenance_names_a_generation_the_registry_has():
     """A claim dated against a bank generation that never existed dates nothing."""
     generation, units = signoff.bank_versions(
-        Path(__file__).resolve().parents[2] / "tools" / "bank-versions.json")
+        Path(__file__).resolve().parents[2] / "tools" / "bank-versions.json"
+    )
     for slug, record in signoff.load().items():
         for claim in (record.structure, record.music):
             if claim is None:
@@ -50,7 +52,8 @@ def test_every_recorded_provenance_names_a_generation_the_registry_has():
             assert claim.provenance.bank_generation, f"{slug}: no bank generation recorded"
             assert claim.provenance.bank_generation <= generation, (
                 f"{slug}: recorded against generation {claim.provenance.bank_generation}, "
-                f"and the registry is only on {generation}")
+                f"and the registry is only on {generation}"
+            )
             if claim.provenance.patch_version:
                 assert claim.provenance.patch_version <= max(units.values() or [0])
 
@@ -59,30 +62,44 @@ def test_every_recorded_provenance_names_a_generation_the_registry_has():
 # An unreachable term is accepted with a reason, or it is open
 # --------------------------------------------------------------------------- #
 
+
 def test_an_accepted_term_needs_a_reason(tmp_path):
-    path = _write(tmp_path, {"v": {"structure": {
-        "unreachable": ["tail"], "accepted": {"tail": "  "}}}})
+    path = _write(
+        tmp_path, {"v": {"structure": {"unreachable": ["tail"], "accepted": {"tail": "  "}}}}
+    )
     with pytest.raises(ValueError, match="carry no reason"):
         signoff.load(path)
 
 
 def test_a_term_the_diagnosis_never_reported_cannot_be_accepted(tmp_path):
     """Otherwise an accepted list drifts into an argument about a term nobody measured."""
-    path = _write(tmp_path, {"v": {"structure": {
-        "unreachable": ["tail"], "accepted": {"harm": "not this one"}}}})
+    path = _write(
+        tmp_path,
+        {"v": {"structure": {"unreachable": ["tail"], "accepted": {"harm": "not this one"}}}},
+    )
     with pytest.raises(ValueError, match="not in `unreachable`"):
         signoff.load(path)
 
 
 def test_an_unreachable_term_with_no_reason_is_open(tmp_path):
-    path = _write(tmp_path, {"v": {"structure": {
-        "unreachable": ["tail", "harm"], "accepted": {"harm": "the reference's room"}}}})
+    path = _write(
+        tmp_path,
+        {
+            "v": {
+                "structure": {
+                    "unreachable": ["tail", "harm"],
+                    "accepted": {"harm": "the reference's room"},
+                }
+            }
+        },
+    )
     assert signoff.load(path)["v"].structure.open_terms == ["tail"]
 
 
 # --------------------------------------------------------------------------- #
 # Expiry
 # --------------------------------------------------------------------------- #
+
 
 def test_a_claim_taken_against_this_bank_is_current():
     p = signoff.Provenance(bank_generation=19, patch_version=2)
@@ -136,16 +153,26 @@ def test_a_kits_own_drum_note_moving_makes_it_stale_not_unverified():
 
 def test_moved_generation_reads_only_the_named_kinds(tmp_path):
     reg = tmp_path / "bank-versions.json"
-    reg.write_text(json.dumps({
-        "bank_generation": 32,
-        "units": {
-            "piano_voice": {"kind": "shared", "version": 2,
-                            "history": [{"generation": 1}, {"generation": 26}]},
-            "lead_voice": {"kind": "patch", "version": 3,
-                           "history": [{"generation": 5}, {"generation": 32}]},
-            "d035": {"kind": "drum", "version": 2, "history": [{"generation": 30}]},
-        },
-    }))
+    reg.write_text(
+        json.dumps(
+            {
+                "bank_generation": 32,
+                "units": {
+                    "piano_voice": {
+                        "kind": "shared",
+                        "version": 2,
+                        "history": [{"generation": 1}, {"generation": 26}],
+                    },
+                    "lead_voice": {
+                        "kind": "patch",
+                        "version": 3,
+                        "history": [{"generation": 5}, {"generation": 32}],
+                    },
+                    "d035": {"kind": "drum", "version": 2, "history": [{"generation": 30}]},
+                },
+            }
+        )
+    )
     assert signoff.moved_generation(reg, {"shared"}) == 26
     # A kit has no patch unit of its own, so the drum kinds stand in for one.
     assert signoff.moved_generation(reg, {"drum"}) == 30
@@ -159,6 +186,7 @@ def test_moved_generation_is_zero_without_a_registry(tmp_path):
 # --------------------------------------------------------------------------- #
 # What the last step needs
 # --------------------------------------------------------------------------- #
+
 
 def _axes(structure=None, music=None):
     return signoff.axis(structure, 19, 1), signoff.axis(music, 19, 1)
@@ -175,8 +203,7 @@ def test_settled_needs_both_claims():
 def test_an_open_term_blocks_settled():
     """Recording a diagnosis that still has one raises nothing, and should not."""
     prov = signoff.Provenance(bank_generation=19, patch_version=1)
-    s, m = _axes(signoff.Structure(prov, unreachable=("tail",), accepted={}),
-                 signoff.Music(prov))
+    s, m = _axes(signoff.Structure(prov, unreachable=("tail",), accepted={}), signoff.Music(prov))
     assert not signoff.settled(s, m)
 
 

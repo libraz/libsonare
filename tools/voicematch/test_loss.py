@@ -53,11 +53,10 @@ def test_a_louder_copy_scores_the_same_as_an_identical_one():
 def test_a_spectral_difference_survives_the_gain_it_is_measured_through():
     """Taking the level out must not take the shape out with it."""
     n = MSS_FFT_SIZES[-1] * 8
-    dull = np.cumsum(_noise(n, 6))          # -6 dB/octave against the source
+    dull = np.cumsum(_noise(n, 6))  # -6 dB/octave against the source
     bright = _noise(n, 6)
     assert mss_distance(dull, bright) > 0.5
-    assert mss_distance(dull * 4.0, bright) == pytest.approx(
-        mss_distance(dull, bright), abs=1e-9)
+    assert mss_distance(dull * 4.0, bright) == pytest.approx(mss_distance(dull, bright), abs=1e-9)
 
 
 def test_a_render_shorter_than_the_largest_window_is_not_scored():

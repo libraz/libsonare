@@ -113,11 +113,7 @@ def _collect_python_cli_file(path: Path, root: Path, commands: dict[str, Functio
             call = node.value
             if _is_attr_call(call, "add_parser") and call.args:
                 cmd = _str_const(call.args[0])
-                if (
-                    cmd
-                    and len(node.targets) == 1
-                    and isinstance(node.targets[0], ast.Name)
-                ):
+                if cmd and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
                     var_to_cmd[node.targets[0].id] = kebab_to_snake(cmd)
 
     # Third pass: `<var>.add_argument("--opt", default=..., type=..., action=...)`
@@ -306,9 +302,7 @@ def _note_cross_cli_spellings(ex: Extraction) -> None:
     """
     keys = {f.key for f in ex.functions}
     pairs = sorted(
-        (key, key.split(".", 1)[1])
-        for key in keys
-        if "." in key and key.split(".", 1)[1] in keys
+        (key, key.split(".", 1)[1]) for key in keys if "." in key and key.split(".", 1)[1] in keys
     )
     if not pairs:
         return

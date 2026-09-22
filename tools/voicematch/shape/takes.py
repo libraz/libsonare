@@ -54,8 +54,17 @@ import numpy as np
 
 #: Octave-ish bands, matching the loss's balance term so the two are readable
 #: against each other.
-BANDS = ((30, 60), (60, 125), (125, 250), (250, 500), (500, 1000),
-         (1000, 2000), (2000, 4000), (4000, 8000), (8000, 16000))
+BANDS = (
+    (30, 60),
+    (60, 125),
+    (125, 250),
+    (250, 500),
+    (500, 1000),
+    (1000, 2000),
+    (2000, 4000),
+    (4000, 8000),
+    (8000, 16000),
+)
 #: dB a band must stand over the take's own tail floor to be worth reading.
 SNR_DB = 10.0
 #: A band no instrument in this harness radiates. Nothing with strings, pipes,
@@ -121,11 +130,14 @@ def _references(manifest, wanted: str = "") -> list[str]:
         names = [w.strip() for w in wanted.split(",") if w.strip()]
         missing = [w for w in names if w not in sources]
         if missing:
-            raise SystemExit(f"no source {', '.join(missing)} on this page; have "
-                             f"{', '.join(sources) or '(none)'}")
+            raise SystemExit(
+                f"no source {', '.join(missing)} on this page; have "
+                f"{', '.join(sources) or '(none)'}"
+            )
         return names
-    declared = [k for k, v in sources.items()
-                if isinstance(v, dict) and v.get("role") == "reference"]
+    declared = [
+        k for k, v in sources.items() if isinstance(v, dict) and v.get("role") == "reference"
+    ]
     if declared:
         return declared
     others = [s for s in sources if s != "model"]
@@ -135,7 +147,8 @@ def _references(manifest, wanted: str = "") -> list[str]:
         f"this page has {len(others)} sources beside `model` and none of them "
         f"declares role=reference: {', '.join(others)}.\n"
         f"Name them with --reference (comma-separated), or re-render the page "
-        f"with a make_audition that writes roles.")
+        f"with a make_audition that writes roles."
+    )
 
 
 def load(directory, reference: str = "") -> dict:
@@ -166,14 +179,14 @@ def load(directory, reference: str = "") -> dict:
 
 
 def rms_db(x, sr, window) -> float:
-    seg = np.asarray(x[int(window[0] * sr):int(window[1] * sr)], dtype=np.float64)
+    seg = np.asarray(x[int(window[0] * sr) : int(window[1] * sr)], dtype=np.float64)
     if len(seg) == 0:
         return -300.0
     return 10 * np.log10(max(float(np.mean(seg * seg)), 1e-30))
 
 
 def band_db(x, sr, band, window) -> float:
-    seg = np.asarray(x[int(window[0] * sr):int(window[1] * sr)], dtype=np.float64)
+    seg = np.asarray(x[int(window[0] * sr) : int(window[1] * sr)], dtype=np.float64)
     if len(seg) < 1024:
         return -300.0
     S = np.fft.rfft(seg)
@@ -208,8 +221,9 @@ def noise_db(x, sr, window, floor) -> float:
     return max(lead, density_db(x, sr, INFRASONIC, window))
 
 
-def usable_until(x, sr, floor, start: float = 0.0, snr_db: float = SNR_DB,
-                 hop_s: float = 0.1) -> float:
+def usable_until(
+    x, sr, floor, start: float = 0.0, snr_db: float = SNR_DB, hop_s: float = 0.1
+) -> float:
     """When this source stops being itself, in seconds.
 
     The first hop, scanning forward from `start`, that has come down to within
@@ -256,7 +270,8 @@ def window_for(item, what: str) -> tuple[float, float]:
     if not notes:
         raise ValueError(
             f"take {item.get('id', '?')} carries no schedule; re-render it with a "
-            "make_audition that writes meta.notes / meta.cc")
+            "make_audition that writes meta.notes / meta.cc"
+        )
     starts = [n["start"] for n in notes]
     ends = [n["start"] + n["duration"] for n in notes]
     total = float(meta["seconds"])
@@ -265,8 +280,7 @@ def window_for(item, what: str) -> tuple[float, float]:
     # stops, not the first one in the take. A phrase that changes pedal on every
     # bass note has several, and taking the earliest collapses the window onto a
     # moment in the middle of the phrase where notes are still being played.
-    ups = sorted(float(t) for t, cc, value in meta.get("cc", ())
-                 if cc == 64 and value < 64)
+    ups = sorted(float(t) for t, cc, value in meta.get("cc", ()) if cc == 64 and value < 64)
     after = [t for t in ups if t > last]
     stop = after[0] if after else total - 0.6
     if what == "body":
@@ -278,7 +292,8 @@ def window_for(item, what: str) -> tuple[float, float]:
         if stop - lo < 0.3:
             raise ValueError(
                 f"take {item.get('id', '?')} has no window between its last "
-                f"note-off ({last:.2f} s) and {stop:.2f} s")
+                f"note-off ({last:.2f} s) and {stop:.2f} s"
+            )
         return (lo, stop)
     if what == "floor":
         # The lead-in, before anything has been struck -- which is where a
@@ -309,12 +324,14 @@ def drawn(x, sr, window, col_s: float = DRAWN_COL_S):
     n = max(1, round(col_s * sr))
     if seg.size < n:
         return (float("nan"),) * 3
-    cols = seg[:(seg.size // n) * n].reshape(-1, n).max(axis=1)
+    cols = seg[: (seg.size // n) * n].reshape(-1, n).max(axis=1)
+
     # A column of digital silence is not a level. Two renders that both end in
     # it would otherwise agree at whatever sentinel stood in for zero, and their
     # difference -- a difference of two sentinels -- would print as a number.
     def to_db(v):
         return 20 * np.log10(float(v)) if v > 0.0 else float("nan")
+
     return tuple(to_db(v) for v in np.percentile(cols, [95, 50, 10]))
 
 
@@ -332,6 +349,7 @@ def envelope_report(tracks, references, window, col_s: float = DRAWN_COL_S) -> s
     disagrees with them, the model's number is inside the spread of real
     instruments and there is nothing there to fix.
     """
+
     def fmt(v, width, sign=""):
         # `v == v` is the NaN test: a percentile that landed on digital silence.
         if v != v:  # noqa: PLR0124
@@ -352,35 +370,43 @@ def envelope_report(tracks, references, window, col_s: float = DRAWN_COL_S) -> s
         return "   no reference render for this take"
     ref = tuple(np.median([rows[r][i] for r in present]) for i in range(3))
 
-    out = [f"   {'':<22}{'spikes':>8}{'body':>8}{'floor':>8}{'spike-body':>12}",
-           f"   {'':<22}{'p95':>8}{'p50':>8}{'p10':>8}{'dB':>12}"]
+    out = [
+        f"   {'':<22}{'spikes':>8}{'body':>8}{'floor':>8}{'spike-body':>12}",
+        f"   {'':<22}{'p95':>8}{'p50':>8}{'p10':>8}{'dB':>12}",
+    ]
     for src, (hi, mid, lo) in rows.items():
         mark = "  (reference)" if src in present else ""
         out.append(f"   {src:<22}{cell(hi)}{cell(mid)}{cell(lo)}{wide(hi - mid)}{mark}")
     if len(present) > 1:
-        out.append(f"   {'reference median':<22}{cell(ref[0])}{cell(ref[1])}"
-                   f"{cell(ref[2])}{wide(ref[0] - ref[1])}")
+        out.append(
+            f"   {'reference median':<22}{cell(ref[0])}{cell(ref[1])}"
+            f"{cell(ref[2])}{wide(ref[0] - ref[1])}"
+        )
     out.append(f"   {'':<22}{'-' * 36:>36}")
     for src, (hi, mid, lo) in rows.items():
         if src in present:
             continue
-        out.append(f"   {src + ' - ref':<22}{cell(hi - ref[0], '+')}"
-                   f"{cell(mid - ref[1], '+')}{cell(lo - ref[2], '+')}"
-                   f"{wide((hi - mid) - (ref[0] - ref[1]), '+')}")
+        out.append(
+            f"   {src + ' - ref':<22}{cell(hi - ref[0], '+')}"
+            f"{cell(mid - ref[1], '+')}{cell(lo - ref[2], '+')}"
+            f"{wide((hi - mid) - (ref[0] - ref[1]), '+')}"
+        )
     # The spread of the references themselves, which is the only thing that says
     # whether a delta above is large. Reported as a range rather than left to be
     # worked out from the rows, because it routinely is not worked out.
     if len(present) > 1:
-        spread = [max(rows[r][i] for r in present) - min(rows[r][i] for r in present)
-                  for i in range(3)]
+        spread = [
+            max(rows[r][i] for r in present) - min(rows[r][i] for r in present) for i in range(3)
+        ]
         sb = [rows[r][0] - rows[r][1] for r in present]
-        out.append(f"   {'(reference spread)':<22}{cell(spread[0])}{cell(spread[1])}"
-                   f"{cell(spread[2])}{wide(max(sb) - min(sb))}")
+        out.append(
+            f"   {'(reference spread)':<22}{cell(spread[0])}{cell(spread[1])}"
+            f"{cell(spread[2])}{wide(max(sb) - min(sb))}"
+        )
     return "\n".join(out)
 
 
-def band_error(tracks, source, reference, body, window, floor, bands=BANDS,
-               snr_db: float = SNR_DB):
+def band_error(tracks, source, reference, body, window, floor, bands=BANDS, snr_db: float = SNR_DB):
     """Per-band dB difference in `window`, with one gain removed on `body`.
 
     Bands the reference does not hold clear of the capture's own floor come back
@@ -419,9 +445,20 @@ def band_error(tracks, source, reference, body, window, floor, bands=BANDS,
 BODY_RANGE_DB = 80.0
 
 
-def band_buildup(tracks, base_tracks, source, window, base_window, floor,
-                 base_floor, body=None, base_body=None, bands=BANDS,
-                 snr_db: float = SNR_DB, range_db: float = BODY_RANGE_DB):
+def band_buildup(
+    tracks,
+    base_tracks,
+    source,
+    window,
+    base_window,
+    floor,
+    base_floor,
+    body=None,
+    base_body=None,
+    bands=BANDS,
+    snr_db: float = SNR_DB,
+    range_db: float = BODY_RANGE_DB,
+):
     """Per-band level of this take's tail against the SAME source's plainest one.
 
     Both windows come out of one render each, so no gain is fitted and no other
@@ -455,10 +492,12 @@ def band_buildup(tracks, base_tracks, source, window, base_window, floor,
     for band in bands:
         here = band_db(x, sr, band, window)
         there = band_db(b, bsr, band, base_window)
-        if (density_db(x, sr, band, window) - here_noise <= snr_db
-                or density_db(b, bsr, band, base_window) - there_noise <= snr_db
-                or (here_body is not None and here < here_body - range_db)
-                or (there_body is not None and there < there_body - range_db)):
+        if (
+            density_db(x, sr, band, window) - here_noise <= snr_db
+            or density_db(b, bsr, band, base_window) - there_noise <= snr_db
+            or (here_body is not None and here < here_body - range_db)
+            or (there_body is not None and there < there_body - range_db)
+        ):
             out.append(None)
             continue
         out.append(here - there)
@@ -472,6 +511,7 @@ def plainest(items) -> str:
     is written into this module. Ties go to the shorter take, then to the id, so
     the choice does not depend on dictionary order.
     """
+
     def key(pair):
         tid, item = pair
         meta = item.get("meta", item)
@@ -500,7 +540,9 @@ def report(rows, bands=BANDS) -> str:
     out = [f"{'':<26}{hdr}{'mean|e|':>9}"]
     for label, vals in rows:
         live = [v for v in vals if v is not None]
-        out.append(f"{label:<26}" + "".join(
-            f"{v:>7.1f}" if v is not None else f"{'--':>7}" for v in vals) +
-            (f"{np.mean(np.abs(live)):>9.1f}" if live else f"{'--':>9}"))
+        out.append(
+            f"{label:<26}"
+            + "".join(f"{v:>7.1f}" if v is not None else f"{'--':>7}" for v in vals)
+            + (f"{np.mean(np.abs(live)):>9.1f}" if live else f"{'--':>9}")
+        )
     return "\n".join(out)

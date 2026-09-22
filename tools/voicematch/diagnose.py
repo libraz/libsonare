@@ -68,16 +68,37 @@ CONNECTED_UNITS = 0.1
 REACHABLE_SHARE = 0.5
 PARTIAL_SHARE = 0.1
 
-VERDICT_ORDER = ("unreachable", "unscored", "spent", "partial", "reachable",
-                 "matched", "not computed")
+VERDICT_ORDER = (
+    "unreachable",
+    "unscored",
+    "spent",
+    "partial",
+    "reachable",
+    "matched",
+    "not computed",
+)
 
 TERM_UNIT_NAMES = {
-    "harm": "dB", "cents": "cents", "tnr": "dB", "env": "composite",
-    "init": "dB", "slope": "dB/s ÷10", "tail": "dB/s ÷10", "hf": "dB",
-    "lf": "dB", "dyn": "dB per 64 velocity", "stiff": "cents",
-    "level": "dB", "crest": "dB", "mss": "ratio", "band": "dB",
-    "bdecay": "octaves of decay rate", "modes": "dB + cents÷25", "mod": "composite",
-    "tilt": "dB", "bright": "% of the reference centroid",
+    "harm": "dB",
+    "cents": "cents",
+    "tnr": "dB",
+    "env": "composite",
+    "init": "dB",
+    "slope": "dB/s ÷10",
+    "tail": "dB/s ÷10",
+    "hf": "dB",
+    "lf": "dB",
+    "dyn": "dB per 64 velocity",
+    "stiff": "cents",
+    "level": "dB",
+    "crest": "dB",
+    "mss": "ratio",
+    "band": "dB",
+    "bdecay": "octaves of decay rate",
+    "modes": "dB + cents÷25",
+    "mod": "composite",
+    "tilt": "dB",
+    "bright": "% of the reference centroid",
     "kit": "doublings",
 }
 
@@ -99,18 +120,17 @@ TERM_MEANS = {
     "band": "the third-octave level profile",
     "bdecay": "how fast each octave band dies, as a ratio to the reference's rate",
     "tilt": "which way the spectrum leans — the level above 2 kHz against the "
-            "level below 500 Hz, which `band` measures the magnitude of and "
-            "never the direction",
-    "bright": "where the hit's energy sits, as a percentage of the reference's "
-              "own centroid",
+    "level below 500 Hz, which `band` measures the magnitude of and "
+    "never the direction",
+    "bright": "where the hit's energy sits, as a percentage of the reference's own centroid",
     "modes": "the partials as measured — where they actually are, not where a "
-             "harmonic series predicts. The only pitched reading a bar, a bell "
-             "or a membrane has",
+    "harmonic series predicts. The only pitched reading a bar, a bell "
+    "or a membrane has",
     "mod": "movement: vibrato, tremolo, and the beat of an ensemble",
     "kit": "the relations inside the kit's own families — how far the six toms "
-           "spread apart, how the three hi-hats stand against each other. The "
-           "one percussion reading that lives between instruments rather than "
-           "inside one",
+    "spread apart, how the three hi-hats stand against each other. The "
+    "one percussion reading that lives between instruments rather than "
+    "inside one",
 }
 
 
@@ -181,18 +201,21 @@ class Diagnosis:
     axes: str = ""
 
     def to_dict(self) -> dict:
-        return {"terms": [t.to_dict() for t in self.terms],
-                "inert_knobs": list(self.inert_knobs),
-                "unscorable": list(self.unscorable),
-                "axes": self.axes}
+        return {
+            "terms": [t.to_dict() for t in self.terms],
+            "inert_knobs": list(self.inert_knobs),
+            "unscorable": list(self.unscorable),
+            "axes": self.axes,
+        }
 
     def structural(self) -> list[TermVerdict]:
         """The terms whose residual no knob reaches. The reason this exists."""
         return [t for t in self.terms if t.verdict == "unreachable"]
 
 
-def _reach(term: str, base: float, probes: list[tuple[str, str, dict | None, str]]
-           ) -> tuple[KnobReach | None, KnobReach | None, set[str], int]:
+def _reach(
+    term: str, base: float, probes: list[tuple[str, str, dict | None, str]]
+) -> tuple[KnobReach | None, KnobReach | None, set[str], int]:
     """Per-knob effect on one term: the best improver, the strongest mover, the count.
 
     Two winners rather than one, because they answer different questions and
@@ -218,8 +241,13 @@ def _reach(term: str, base: float, probes: list[tuple[str, str, dict | None, str
         gains = {end: base - v for end, v in ends.items()}
         at, gain = max(gains.items(), key=lambda kv: kv[1], default=("", 0.0))
         gain = max(0.0, gain)
-        reach = KnobReach(knob=label, swing=swing, gain=gain,
-                          at=at if gain > 0.0 else "", source=source.get(label, "auto"))
+        reach = KnobReach(
+            knob=label,
+            swing=swing,
+            gain=gain,
+            at=at if gain > 0.0 else "",
+            source=source.get(label, "auto"),
+        )
         if swing >= CONNECTED_UNITS * unit_size:
             movers.add(label)
         if best is None or gain > best.gain:
@@ -229,15 +257,22 @@ def _reach(term: str, base: float, probes: list[tuple[str, str, dict | None, str
     return best, strongest, movers, len(by_knob)
 
 
-def _classify(term: str, weight: float, residual: float, best: KnobReach | None,
-              strongest: KnobReach | None, movers: int) -> tuple[str, str]:
+def _classify(
+    term: str,
+    weight: float,
+    residual: float,
+    best: KnobReach | None,
+    strongest: KnobReach | None,
+    movers: int,
+) -> tuple[str, str]:
     """The verdict for one term, and the sentence a reader is meant to act on."""
     unit_size = TERM_UNITS[term]
     units = residual / unit_size
     unit = TERM_UNIT_NAMES.get(term, "")
     if units <= MATCHED_UNITS:
-        return "matched", (f"{residual:.3g} {unit} — at or under the smallest difference "
-                           f"this term resolves.")
+        return "matched", (
+            f"{residual:.3g} {unit} — at or under the smallest difference this term resolves."
+        )
     gap = residual - unit_size
     if movers == 0:
         source = strongest.source if strongest else "auto"
@@ -245,15 +280,20 @@ def _classify(term: str, weight: float, residual: float, best: KnobReach | None,
             "clamp": "over the whole interval the engine accepts",
             "spec": "over the range the spec gave them",
         }.get(source, "over the range each was searched")
-        detail = (f" The largest effect any of them had was {strongest.swing:.3g} {unit}."
-                  if strongest else "")
+        detail = (
+            f" The largest effect any of them had was {strongest.swing:.3g} {unit}."
+            if strongest
+            else ""
+        )
         weak = {
             "clamp": "",
             "spec": " Those ranges were chosen by hand; check they are wide enough before "
-                    "concluding the mechanism is absent.",
-        }.get(source,
-              " Those ranges are heuristic windows around each default and narrow on "
-              "purpose, so widen them before concluding the mechanism is absent.")
+            "concluding the mechanism is absent.",
+        }.get(
+            source,
+            " Those ranges are heuristic windows around each default and narrow on "
+            "purpose, so widen them before concluding the mechanism is absent.",
+        )
         return "unreachable", (
             f"{residual:.3g} {unit} off, and no knob moves it {where}.{detail} "
             f"Nothing in this program's voicing or its engine's calibration is wired to "
@@ -276,8 +316,10 @@ def _classify(term: str, weight: float, residual: float, best: KnobReach | None,
     at_end = f" at its {best.at}" if best.at else ""
     pinned = ""
     if best.at and best.source == "clamp":
-        pinned = (" That is the end of the interval the engine accepts, so this knob has "
-                  "nothing more to give.")
+        pinned = (
+            " That is the end of the interval the engine accepts, so this knob has "
+            "nothing more to give."
+        )
     elif best.at:
         pinned = " That is the end of a searched range; widen it and re-probe."
     if share >= REACHABLE_SHARE:
@@ -295,11 +337,15 @@ def _classify(term: str, weight: float, residual: float, best: KnobReach | None,
     )
 
 
-def diagnose(base_terms: dict[str, float],
-             probes: list[tuple[str, str, dict | None, str]],
-             weights: dict[str, float], *, percussive: bool = False,
-             axes: str = "",
-             unmeasurable: Iterable[tuple[str, str]] = ()) -> Diagnosis:
+def diagnose(
+    base_terms: dict[str, float],
+    probes: list[tuple[str, str, dict | None, str]],
+    weights: dict[str, float],
+    *,
+    percussive: bool = False,
+    axes: str = "",
+    unmeasurable: Iterable[tuple[str, str]] = (),
+) -> Diagnosis:
     """Reduce a base render and its 2n probe renders to a verdict per term.
 
     Pure: `base_terms` and each probe's terms are what `score_terms` returns, and
@@ -312,8 +358,9 @@ def diagnose(base_terms: dict[str, float],
     """
     absent = dict(unmeasurable)
     out = Diagnosis(axes=axes)
-    out.unscorable = sorted(f"{label}:{end}" for label, end, terms, _ in probes
-                            if not scorable(terms))
+    out.unscorable = sorted(
+        f"{label}:{end}" for label, end, terms, _ in probes if not scorable(terms)
+    )
     group = set(measured_terms(percussive))
     moved_something: set[str] = set()
     for term in LOSS_TERMS:
@@ -324,34 +371,56 @@ def diagnose(base_terms: dict[str, float],
         if not math.isfinite(residual):
             continue
         if term in absent:
-            out.terms.append(TermVerdict(
-                term=term, weight=weight, residual=0.0, units=0.0,
-                verdict="not computed", movers=0, probed=0,
-                note=f"not computed — {absent[term]}, so no cell was compared "
-                     f"and the 0.0 below is an absence rather than a match.",
-            ))
+            out.terms.append(
+                TermVerdict(
+                    term=term,
+                    weight=weight,
+                    residual=0.0,
+                    units=0.0,
+                    verdict="not computed",
+                    movers=0,
+                    probed=0,
+                    note=f"not computed — {absent[term]}, so no cell was compared "
+                    f"and the 0.0 below is an absence rather than a match.",
+                )
+            )
             continue
         if term == "mss" and weight <= 0.0:
             # Unlike every other term, this one is not computed unless it is
             # weighted: the renders it needs the audio of are not kept. Its zero
             # is an absence, and reporting it as a match would be a lie the
             # dict's own shape invites.
-            out.terms.append(TermVerdict(
-                term=term, weight=0.0, residual=0.0, units=0.0,
-                verdict="not computed", movers=0, probed=0,
-                note="not computed — the multi-scale term needs --w-mss above zero "
-                     "before the renders it compares are kept.",
-            ))
+            out.terms.append(
+                TermVerdict(
+                    term=term,
+                    weight=0.0,
+                    residual=0.0,
+                    units=0.0,
+                    verdict="not computed",
+                    movers=0,
+                    probed=0,
+                    note="not computed — the multi-scale term needs --w-mss above zero "
+                    "before the renders it compares are kept.",
+                )
+            )
             continue
         best, strongest, movers, probed = _reach(term, residual, probes)
         moved_something |= movers
         verdict, note = _classify(term, weight, residual, best, strongest, len(movers))
-        out.terms.append(TermVerdict(
-            term=term, weight=weight, residual=residual,
-            units=residual / TERM_UNITS[term],
-            verdict=verdict, movers=len(movers), probed=probed,
-            best=best, strongest=strongest, note=note,
-        ))
+        out.terms.append(
+            TermVerdict(
+                term=term,
+                weight=weight,
+                residual=residual,
+                units=residual / TERM_UNITS[term],
+                verdict=verdict,
+                movers=len(movers),
+                probed=probed,
+                best=best,
+                strongest=strongest,
+                note=note,
+            )
+        )
     out.inert_knobs = sorted({p[0] for p in probes} - moved_something)
     return out
 
@@ -366,11 +435,15 @@ def print_report(diag: Diagnosis, *, out_path: str = "") -> None:
     print("-" * 78)
     for t in rows:
         movers = f"{t.movers}/{t.probed}" if t.probed else "-"
-        print(f"{t.term:>7} {t.residual:>10.4g} {t.units:>7.1f} {t.weight:>5.2g} "
-              f"{movers:>7}  {t.verdict}")
-    print("\n  'units' is the residual in multiples of the smallest difference the term "
-          "resolves,\n  and 'movers' is how many knobs shift it at all over the range they "
-          "were searched.")
+        print(
+            f"{t.term:>7} {t.residual:>10.4g} {t.units:>7.1f} {t.weight:>5.2g} "
+            f"{movers:>7}  {t.verdict}"
+        )
+    print(
+        "\n  'units' is the residual in multiples of the smallest difference the term "
+        "resolves,\n  and 'movers' is how many knobs shift it at all over the range they "
+        "were searched."
+    )
 
     for t in rows:
         if t.verdict == "matched":
@@ -380,57 +453,74 @@ def print_report(diag: Diagnosis, *, out_path: str = "") -> None:
 
     structural = diag.structural()
     if structural:
-        print(f"\n== {len(structural)} measurement"
-              f"{'s' if len(structural) > 1 else ''} nothing reaches ==")
+        print(
+            f"\n== {len(structural)} measurement"
+            f"{'s' if len(structural) > 1 else ''} nothing reaches =="
+        )
         for t in structural:
             print(f"  {t.term}: {TERM_MEANS.get(t.term, t.term)}")
-        print("\n  This is a hypothesis to test, not a finding. A one-at-a-time probe "
-              "cannot see\n  a knob that does nothing alone and something in combination, "
-              "so confirm it by\n  adding the mechanism and watching the term move — and "
-              "if it does not, the\n  mechanism was not the missing one either.")
+        print(
+            "\n  This is a hypothesis to test, not a finding. A one-at-a-time probe "
+            "cannot see\n  a knob that does nothing alone and something in combination, "
+            "so confirm it by\n  adding the mechanism and watching the term move — and "
+            "if it does not, the\n  mechanism was not the missing one either."
+        )
     else:
         unscored = [t.term for t in rows if t.verdict == "unscored"]
-        print("\n  Every measurement is reachable by something. Whatever is left is a "
-              "matter of\n  values, weights or budget rather than of physics.")
+        print(
+            "\n  Every measurement is reachable by something. Whatever is left is a "
+            "matter of\n  values, weights or budget rather than of physics."
+        )
         if unscored:
-            print(f"  Start with {', '.join(unscored)}: those carry no weight, so the "
-                  f"residual in them\n  is headroom no fit has ever been pointed at.")
+            print(
+                f"  Start with {', '.join(unscored)}: those carry no weight, so the "
+                f"residual in them\n  is headroom no fit has ever been pointed at."
+            )
 
     if diag.unscorable:
         n = len(diag.unscorable)
         print(f"\n== {n} probe{'s' if n > 1 else ''} had nothing to measure ==")
         print("  " + ", ".join(diag.unscorable))
-        print("  That end of the range leaves the voice with no analysable note — usually a "
-              "gain or\n  a level taken to zero. They are left out of every verdict above "
-              "rather than\n  scored, since a silent render matches nothing and would "
-              "otherwise score as a\n  perfect match. A knob probed at only one end carries "
-              "half the evidence.")
+        print(
+            "  That end of the range leaves the voice with no analysable note — usually a "
+            "gain or\n  a level taken to zero. They are left out of every verdict above "
+            "rather than\n  scored, since a silent render matches nothing and would "
+            "otherwise score as a\n  perfect match. A knob probed at only one end carries "
+            "half the evidence."
+        )
 
     if diag.inert_knobs:
         print(f"\n== {len(diag.inert_knobs)} knobs move no measurement at all ==")
         for label in diag.inert_knobs:
             print(f"  {label}")
-        print("  A knob offered by the catalogue that this voice never reads — a rank that "
-              "is off\n  in this bank, a field an engine reads only in a mode this patch "
-              "does not use — or\n  one whose effect is below the probe's resolution. "
-              "Dropping them from the spec\n  makes the next fit cheaper and its covariance "
-              "better conditioned.")
+        print(
+            "  A knob offered by the catalogue that this voice never reads — a rank that "
+            "is off\n  in this bank, a field an engine reads only in a mode this patch "
+            "does not use — or\n  one whose effect is below the probe's resolution. "
+            "Dropping them from the spec\n  makes the next fit cheaper and its covariance "
+            "better conditioned."
+        )
         if diag.axes:
-            print(f"\n  Before dropping any: this probe varied {diag.axes}. A knob whose "
-                  f"effect only\n  appears along an axis the probe holds fixed is inert "
-                  f"HERE and nowhere else —\n  a velocity-curve control cannot move a "
-                  f"single-velocity probe, and reads exactly\n  like a dead one.")
-        print("\n  And every knob here was judged at the two ENDS of what the engine accepts, "
-              "never\n  between them. Where those bounds are guard rails rather than a search "
-              "range — a\n  time in milliseconds allowed out to 20 seconds, a frequency "
-              "allowed to Nyquist —\n  both ends can be worse than the value that ships while "
-              "an interior one is much\n  better, and the knob reads weak or dead either way. "
-              "One drum note's envelope\n  attack took its dimension from 11.6x the "
-              "references' spread to 1.6x at a value\n  the probe never tried. Sweep a "
-              "wide-clamped knob by hand before believing this\n  list.")
+            print(
+                f"\n  Before dropping any: this probe varied {diag.axes}. A knob whose "
+                f"effect only\n  appears along an axis the probe holds fixed is inert "
+                f"HERE and nowhere else —\n  a velocity-curve control cannot move a "
+                f"single-velocity probe, and reads exactly\n  like a dead one."
+            )
+        print(
+            "\n  And every knob here was judged at the two ENDS of what the engine accepts, "
+            "never\n  between them. Where those bounds are guard rails rather than a search "
+            "range — a\n  time in milliseconds allowed out to 20 seconds, a frequency "
+            "allowed to Nyquist —\n  both ends can be worse than the value that ships while "
+            "an interior one is much\n  better, and the knob reads weak or dead either way. "
+            "One drum note's envelope\n  attack took its dimension from 11.6x the "
+            "references' spread to 1.6x at a value\n  the probe never tried. Sweep a "
+            "wide-clamped knob by hand before believing this\n  list."
+        )
 
     if out_path:
         from pathlib import Path
+
         Path(out_path).write_text(json.dumps(diag.to_dict(), indent=2) + "\n")
         print(f"\nDiagnosis written to {out_path}")
 
@@ -455,8 +545,9 @@ def probe_axes(oracle_rows: list[dict], pattern: str = "") -> str:
         return one if n == 1 else f"{n} {many}"
 
     where = f"the {pattern} pattern over " if pattern else ""
-    return where + " and ".join((count(len(notes), "one note", "notes"),
-                                 count(len(vels), "one velocity", "velocities")))
+    return where + " and ".join(
+        (count(len(notes), "one note", "notes"), count(len(vels), "one velocity", "velocities"))
+    )
 
 
 def run_diagnosis(evaluator, knobs, args, catalogue=None, *, out_path: str = "") -> Diagnosis:
@@ -468,13 +559,18 @@ def run_diagnosis(evaluator, knobs, args, catalogue=None, *, out_path: str = "")
     to let the fit write back and run this afterwards.
     """
     base_values = [k.start_value for k in knobs]
-    print(f"probing {len(knobs)} knobs at both ends ({2 * len(knobs) + 1} renders)...",
-          file=sys.stderr)
+    print(
+        f"probing {len(knobs)} knobs at both ends ({2 * len(knobs) + 1} renders)...",
+        file=sys.stderr,
+    )
     evaluator(base_values)
     base_terms = evaluator.cache.get(evaluator.key(base_values))
     if not scorable(base_terms):
-        print("the base render produced nothing measurable against the oracle; there is "
-              "nothing to diagnose", file=sys.stderr)
+        print(
+            "the base render produced nothing measurable against the oracle; there is "
+            "nothing to diagnose",
+            file=sys.stderr,
+        )
         return Diagnosis()
 
     trials: list[tuple[str, str, list[float]]] = []
@@ -498,11 +594,17 @@ def run_diagnosis(evaluator, knobs, args, catalogue=None, *, out_path: str = "")
             return "clamp"
         return "spec" if hand_written else "auto"
 
-    probes = [(label, end, evaluator.cache.get(evaluator.key(values)), range_source(label))
-              for label, end, values in trials]
-    diag = diagnose(base_terms, probes, evaluator.loss.weights,
-                    percussive=bool(getattr(args, "percussive", False)),
-                    axes=probe_axes(evaluator.oracle, getattr(args, "pattern", "")),
-                    unmeasurable=unmeasurable_terms(args))
+    probes = [
+        (label, end, evaluator.cache.get(evaluator.key(values)), range_source(label))
+        for label, end, values in trials
+    ]
+    diag = diagnose(
+        base_terms,
+        probes,
+        evaluator.loss.weights,
+        percussive=bool(getattr(args, "percussive", False)),
+        axes=probe_axes(evaluator.oracle, getattr(args, "pattern", "")),
+        unmeasurable=unmeasurable_terms(args),
+    )
     print_report(diag, out_path=out_path)
     return diag

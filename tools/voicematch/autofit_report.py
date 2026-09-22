@@ -7,8 +7,9 @@ import sys
 from knobs import at_bound
 
 
-def winner_or_defaults(knobs, best_values: list[float], evaluator,
-                       validation: dict | None = None) -> list[float]:
+def winner_or_defaults(
+    knobs, best_values: list[float], evaluator, validation: dict | None = None
+) -> list[float]:
     """The fit's winner, unless something measured says it is worse than the start.
 
     Three readings can say that, and all are refusals to write rather than
@@ -46,26 +47,34 @@ def winner_or_defaults(knobs, best_values: list[float], evaluator,
     evaluator.write_back_refusal = None
     if getattr(evaluator, "normalize", False) and evaluator.best_loss > 1.0:
         evaluator.write_back_refusal = "lost_to_start"
-        print(f"\nthe winner scores {evaluator.best_loss:.4f} against the defaults' 1.0 — "
-              f"keeping the defaults, since a fit that lost to its own start point has "
-              f"nothing to write", file=sys.stderr)
+        print(
+            f"\nthe winner scores {evaluator.best_loss:.4f} against the defaults' 1.0 — "
+            f"keeping the defaults, since a fit that lost to its own start point has "
+            f"nothing to write",
+            file=sys.stderr,
+        )
         return [k.start_value for k in knobs]
     if validation and validation["best"] - validation["start"] > 0.005:
         evaluator.write_back_refusal = "fitted_to_the_probe"
-        print(f"\nthe winner scores {validation['best']:.4f} against the defaults' "
-              f"{validation['start']:.4f} on the held-out {validation['axis']} — keeping "
-              f"the defaults, since values that lose where the fit could not see are "
-              f"fitted to the probe", file=sys.stderr)
+        print(
+            f"\nthe winner scores {validation['best']:.4f} against the defaults' "
+            f"{validation['start']:.4f} on the held-out {validation['axis']} — keeping "
+            f"the defaults, since values that lose where the fit could not see are "
+            f"fitted to the probe",
+            file=sys.stderr,
+        )
         return [k.start_value for k in knobs]
     start_tnr = getattr(evaluator, "start_tnr_notes", None)
     best_tnr = getattr(evaluator, "best_tnr_notes", None)
     if start_tnr is not None and best_tnr is not None and best_tnr < start_tnr:
         evaluator.write_back_refusal = "objective_went_blind"
-        print(f"\nthe winner is scored against the reference's noise on {best_tnr:g} "
-              f"notes where the start point was scored on {start_tnr:g} — keeping the "
-              f"defaults, since a fit that took the model past the reference collected "
-              f"the whole `tnr` term for going quiet rather than for matching",
-              file=sys.stderr)
+        print(
+            f"\nthe winner is scored against the reference's noise on {best_tnr:g} "
+            f"notes where the start point was scored on {start_tnr:g} — keeping the "
+            f"defaults, since a fit that took the model past the reference collected "
+            f"the whole `tnr` term for going quiet rather than for matching",
+            file=sys.stderr,
+        )
         return [k.start_value for k in knobs]
     return best_values
 

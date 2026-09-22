@@ -74,8 +74,9 @@ SUBJECTS = (
     Subject("harpsichord", (36, 48, 60), (24, 56, 88, 120), 6),
     Subject("drawbar_organ", (48, 60, 72), (48, 127), 16),
     Subject("electric_guitar_di", (48, 56, 64), (32, 56, 104), 27),
-    Subject("drums", (36, 38, 41, 43, 45, 47, 48, 50, 42, 44, 46),
-            (64, 100, 127), 0, percussive=True),
+    Subject(
+        "drums", (36, 38, 41, 43, 45, 47, 48, 50, 42, 44, 46), (64, 100, 127), 0, percussive=True
+    ),
 )
 
 
@@ -250,8 +251,10 @@ def p_invert_dynamics(raw, pattern, rows, amp: float) -> tuple[np.ndarray, str]:
             freqs = _pad_freqs(len(seg))
             out[a:b] = _filter_slot(seg, _brightness_gain(row, freqs, db), freqs)
             moved += 1
-    return out, (f"dynamics slope negated on {moved} slots ({len(groups)} pitches), "
-                 f"{capped} clipped at +/-{INVERT_CAP_DB:g} dB")
+    return out, (
+        f"dynamics slope negated on {moved} slots ({len(groups)} pitches), "
+        f"{capped} clipped at +/-{INVERT_CAP_DB:g} dB"
+    )
 
 
 #: How far the inversion may push one slot. Level with `DYN_DELTA_CAP_DB`, which
@@ -330,23 +333,37 @@ class Perturbation:
 
 
 PERTURBATIONS = (
-    Perturbation("p1_high_partials", "partials 15-30 +12 dB", p_high_partials,
-                 12.0, 0.0, pitched_only=True),
-    Perturbation("p2_slow_attack", "attack -> 8 ms", p_slow_attack, 8.0, 0.0,
-                 witness="attack_fine_ms,attack_ms"),
+    Perturbation(
+        "p1_high_partials", "partials 15-30 +12 dB", p_high_partials, 12.0, 0.0, pitched_only=True
+    ),
+    Perturbation(
+        "p2_slow_attack",
+        "attack -> 8 ms",
+        p_slow_attack,
+        8.0,
+        0.0,
+        witness="attack_fine_ms,attack_ms",
+    ),
     # Two lengths, because 8 ms turned out to be shorter than what these
     # references already do: the captured grands and harpsichords measure 14-15
     # ms to peak and the drawbar organ 62, so an 8 ms ramp leaves `attack_ms`
     # exactly where it was and the row above measures nothing on them. 30 ms
     # clears every melodic capture here and is what actually asks the question.
-    Perturbation("p2b_slow_attack_30", "attack -> 30 ms", p_slow_attack, 30.0, 0.0,
-                 witness="attack_fine_ms,attack_ms"),
-    Perturbation("p3_tremolo", "3 Hz tremolo, 3 dB", p_tremolo, 3.0, 0.0,
-                 witness="trem_db,crest_db"),
-    Perturbation("p4_invert_dyn", "velocity response inverted", p_invert_dynamics,
-                 1.0, 0.0),
-    Perturbation("p5_hiss", "hiss at -30 dB", p_hiss, -30.0, -math.inf,
-                 witness="tnr_db,centroid_hz"),
+    Perturbation(
+        "p2b_slow_attack_30",
+        "attack -> 30 ms",
+        p_slow_attack,
+        30.0,
+        0.0,
+        witness="attack_fine_ms,attack_ms",
+    ),
+    Perturbation(
+        "p3_tremolo", "3 Hz tremolo, 3 dB", p_tremolo, 3.0, 0.0, witness="trem_db,crest_db"
+    ),
+    Perturbation("p4_invert_dyn", "velocity response inverted", p_invert_dynamics, 1.0, 0.0),
+    Perturbation(
+        "p5_hiss", "hiss at -30 dB", p_hiss, -30.0, -math.inf, witness="tnr_db,centroid_hz"
+    ),
     Perturbation("p6_gain", "output -6 dB", p_gain, -6.0, 0.0),
 )
 
@@ -356,17 +373,21 @@ PERTURBATIONS = (
 # --------------------------------------------------------------------------- #
 def _measure(raw: np.ndarray, pattern, threads: int, band_edge: float | None):
     mono = normalize_rms(raw)
-    rows = probe_rows(mono, pattern, SR, raw=raw, max_band_hz=band_edge,
-                      threads=threads)
+    rows = probe_rows(mono, pattern, SR, raw=raw, max_band_hz=band_edge, threads=threads)
     return rows, mono
 
 
-def _terms(model_rows, oracle_rows, model_mono, oracle_mono, subject: Subject,
-           groups) -> dict[str, float] | None:
+def _terms(
+    model_rows, oracle_rows, model_mono, oracle_mono, subject: Subject, groups
+) -> dict[str, float] | None:
     return score_terms(
-        model_rows, oracle_rows, n_harm=HARM_REACH,
+        model_rows,
+        oracle_rows,
+        n_harm=HARM_REACH,
         mss=mss_distance(model_mono, oracle_mono),
-        percussive=subject.percussive, groups=groups)
+        percussive=subject.percussive,
+        groups=groups,
+    )
 
 
 def _witness(rows_a, rows_p, fields: str) -> str:
@@ -378,8 +399,9 @@ def _witness(rows_a, rows_p, fields: str) -> str:
     """
     for field in fields.split(","):
         pairs = [(a.get(field), p.get(field)) for a, p in zip(rows_a, rows_p)]
-        pairs = [(x, y) for x, y in pairs if isinstance(x, (int, float))
-                 and isinstance(y, (int, float))]
+        pairs = [
+            (x, y) for x, y in pairs if isinstance(x, (int, float)) and isinstance(y, (int, float))
+        ]
         if pairs:
             before = sum(x for x, _ in pairs) / len(pairs)
             after = sum(y for _, y in pairs) / len(pairs)
@@ -396,16 +418,20 @@ def _delta_db(raw_a: np.ndarray, raw_p: np.ndarray) -> float:
     """
     n = min(len(raw_a), len(raw_p))
     base = float(np.sqrt(np.mean(np.asarray(raw_a[:n], dtype=np.float64) ** 2)))
-    diff = float(np.sqrt(np.mean(
-        (np.asarray(raw_p[:n], dtype=np.float64)
-         - np.asarray(raw_a[:n], dtype=np.float64)) ** 2)))
+    diff = float(
+        np.sqrt(
+            np.mean(
+                (np.asarray(raw_p[:n], dtype=np.float64) - np.asarray(raw_a[:n], dtype=np.float64))
+                ** 2
+            )
+        )
+    )
     if base <= 0.0:
         return float("-inf")
     return 20.0 * math.log10(max(diff, 1e-18) / base)
 
 
-def _partial_band_db(raw: np.ndarray, pattern, rows, lo_k: float,
-                     hi_k: float) -> float | None:
+def _partial_band_db(raw: np.ndarray, pattern, rows, lo_k: float, hi_k: float) -> float | None:
     """Mean energy between partials `lo_k` and `hi_k`, in dB re the slot's total.
 
     The witness `p1` needs: `attack_ms` and friends cannot see a boost that
@@ -455,8 +481,9 @@ def run_subject(subject: Subject, root: Path, threads: int) -> dict | None:
     base = load_corpus(manifest)
     others = [t for t in _reference_timbres(manifest) if t != base.timbre]
     if not others:
-        print(f"  {subject.capture}: one reference timbre, so no yardstick — skipped",
-              file=sys.stderr)
+        print(
+            f"  {subject.capture}: one reference timbre, so no yardstick — skipped", file=sys.stderr
+        )
         return None
 
     pattern = corpus_pattern(base, notes=subject.notes, velocities=subject.velocities)
@@ -479,8 +506,7 @@ def run_subject(subject: Subject, root: Path, threads: int) -> dict | None:
     out = {
         "capture": subject.capture,
         "timbre": base.timbre,
-        "tone_class": ("percussion" if subject.percussive
-                       else tone_class(subject.program).value),
+        "tone_class": ("percussion" if subject.percussive else tone_class(subject.program).value),
         "weights": weights,
         "slots": len(pattern.notes),
         "notes": list(subject.notes),
@@ -500,29 +526,43 @@ def run_subject(subject: Subject, root: Path, threads: int) -> dict | None:
         fwd = _terms(rows_b, rows_a, mono_b, mono_a, subject, groups)
         rev = _terms(rows_a, rows_b, mono_a, mono_b, subject, groups)
         if fwd is None or rev is None:
-            print(f"  {subject.capture}/{timbre}: the pair did not compare — skipped",
-                  file=sys.stderr)
+            print(
+                f"  {subject.capture}/{timbre}: the pair did not compare — skipped", file=sys.stderr
+            )
             continue
         lw_f, lw_r = LossWeights(dict(weights)), LossWeights(dict(weights))
         lw_f.calibrate(fwd)
         lw_r.calibrate(rev)
         scales.append((timbre, lw_f, lw_r, fwd))
-        out["spread"].append({
-            "against": timbre,
-            "raw": {t: round(fwd.get(t, 0.0), 4) for t in LOSS_TERMS},
-            "counts": {k: fwd.get(k) for k in
-                       ("harm_bins", "modes_notes", "mod_notes", "tnr_notes",
-                        "dyn_groups", "stiff_notes", "band_bins", "bdecay_bins",
-                        "lf_notes", "kit_notes") if fwd.get(k) is not None},
-        })
+        out["spread"].append(
+            {
+                "against": timbre,
+                "raw": {t: round(fwd.get(t, 0.0), 4) for t in LOSS_TERMS},
+                "counts": {
+                    k: fwd.get(k)
+                    for k in (
+                        "harm_bins",
+                        "modes_notes",
+                        "mod_notes",
+                        "tnr_notes",
+                        "dyn_groups",
+                        "stiff_notes",
+                        "band_bins",
+                        "bdecay_bins",
+                        "lf_notes",
+                        "kit_notes",
+                    )
+                    if fwd.get(k) is not None
+                },
+            }
+        )
     if not scales:
         return out
 
     # Every perturbation, at its amplitude and at zero.
     for pert in PERTURBATIONS:
         if pert.pitched_only and subject.percussive:
-            out["perturbations"].append({
-                "key": pert.key, "skipped": "no harmonic ladder on a kit"})
+            out["perturbations"].append({"key": pert.key, "skipped": "no harmonic ladder on a kit"})
             continue
         for tag, amp in (("", pert.amp), ("_zero", pert.zero)):
             raw_p, how = pert.fn(raw_a, pattern, rows_a, amp)
@@ -535,8 +575,7 @@ def run_subject(subject: Subject, root: Path, threads: int) -> dict | None:
                 "how": how,
                 "amp": amp,
                 "delta_db": _round(_delta_db(raw_a, raw_p)),
-                "raw": None if fwd is None else
-                       {t: round(fwd.get(t, 0.0), 4) for t in LOSS_TERMS},
+                "raw": None if fwd is None else {t: round(fwd.get(t, 0.0), 4) for t in LOSS_TERMS},
                 "ratio": {},
                 "ratio_reversed": {},
                 "term_ratio": {},
@@ -549,17 +588,23 @@ def run_subject(subject: Subject, root: Path, threads: int) -> dict | None:
                 after = _partial_band_db(raw_p, pattern, rows_p, 14.5, 30.5)
                 witnesses.append(
                     "h15-h30 share of slot energy: "
-                    + ("not measurable" if before is None or after is None
-                       else f"{before:.2f} -> {after:.2f} dB"))
+                    + (
+                        "not measurable"
+                        if before is None or after is None
+                        else f"{before:.2f} -> {after:.2f} dB"
+                    )
+                )
             if pert.key == "p4_invert_dyn":
                 sa, sp = _brightness_slopes(rows_a), _brightness_slopes(rows_p)
                 witnesses.append(
                     "brightness slope per 64 velocity steps: "
-                    + ", ".join(f"n{n} {sa[n]:+.2f} -> {sp.get(n, float('nan')):+.2f}"
-                                for n in sorted(sa)) or "no velocity axis")
+                    + ", ".join(
+                        f"n{n} {sa[n]:+.2f} -> {sp.get(n, float('nan')):+.2f}" for n in sorted(sa)
+                    )
+                    or "no velocity axis"
+                )
             if pert.key == "p6_gain" and fwd is not None:
-                witnesses.append(
-                    f"level_offset_db: {fwd.get('level_offset_db', 0.0):+.2f}")
+                witnesses.append(f"level_offset_db: {fwd.get('level_offset_db', 0.0):+.2f}")
             entry["witness"] = witnesses
             for timbre, lw_f, lw_r, spread in scales:
                 entry["ratio"][timbre] = _round(lw_f.combine(fwd))
@@ -567,9 +612,9 @@ def run_subject(subject: Subject, root: Path, threads: int) -> dict | None:
             if fwd is not None:
                 ref = scales[0][3]
                 entry["term_ratio"] = {
-                    t: _round(fwd.get(t, 0.0)
-                              / max(ref.get(t, 0.0), TERM_UNITS[t]))
-                    for t in LOSS_TERMS}
+                    t: _round(fwd.get(t, 0.0) / max(ref.get(t, 0.0), TERM_UNITS[t]))
+                    for t in LOSS_TERMS
+                }
             out["perturbations"].append(entry)
     return out
 
@@ -581,28 +626,25 @@ def _round(x: float) -> float | None:
 def _reference_timbres(manifest: Path) -> list[str]:
     """Timbre ids the manifest carries that are references rather than models."""
     data = json.loads(manifest.read_text())
-    return [t["id"] for t in data.get("timbres", [])
-            if isinstance(t, dict) and not t.get("model")]
+    return [t["id"] for t in data.get("timbres", []) if isinstance(t, dict) and not t.get("model")]
 
 
 # --------------------------------------------------------------------------- #
 # Reporting
 # --------------------------------------------------------------------------- #
 def _print(result: dict) -> None:
-    print(f"\n=== {result['capture']} — {result['tone_class']}, "
-          f"base timbre {result['timbre']!r}")
-    print(f"    reach: {result['slots']} slots "
-          f"({len(result['notes'])} notes x {len(result['velocities'])} velocities), "
-          f"{result['seconds']} s per render")
-    print("    weights: " + " ".join(f"{t}={w:g}" for t, w in
-                                      sorted(result["weights"].items())))
+    print(f"\n=== {result['capture']} — {result['tone_class']}, base timbre {result['timbre']!r}")
+    print(
+        f"    reach: {result['slots']} slots "
+        f"({len(result['notes'])} notes x {len(result['velocities'])} velocities), "
+        f"{result['seconds']} s per render"
+    )
+    print("    weights: " + " ".join(f"{t}={w:g}" for t, w in sorted(result["weights"].items())))
     weighted = {t for t, w in result["weights"].items() if w > 0.0}
     for entry in result["spread"]:
-        shown = " ".join(f"{t}={v:g}" for t, v in entry["raw"].items()
-                         if t in weighted)
+        shown = " ".join(f"{t}={v:g}" for t, v in entry["raw"].items() if t in weighted)
         print(f"    yardstick vs {entry['against']!r}: raw {shown}")
-        print("      counts: " + " ".join(f"{k}={v:g}" for k, v in
-                                          entry["counts"].items()))
+        print("      counts: " + " ".join(f"{k}={v:g}" for k, v in entry["counts"].items()))
     if not result["perturbations"]:
         return
     names = [e["against"] for e in result["spread"]]
@@ -617,39 +659,54 @@ def _print(result: dict) -> None:
             got = pert["ratio"].get(name)
             cells.append(f"{'n/a' if got is None else format(got, '.3f'):>12}")
         print(f"    {pert['key']:<30} " + "  ".join(cells))
-        rev = [f"{n}={format(v, '.3f') if v is not None else 'n/a'}"
-               for n, v in pert["ratio_reversed"].items()]
+        rev = [
+            f"{n}={format(v, '.3f') if v is not None else 'n/a'}"
+            for n, v in pert["ratio_reversed"].items()
+        ]
         print("      reversed (perturbed side as the oracle): " + " ".join(rev))
         print(f"      perturbation size: {pert['delta_db']} dB re the render; {pert['how']}")
         for line in pert.get("witness", []):
             print(f"      {line}")
-        moved = {t: r for t, r in pert["term_ratio"].items()
-                 if r is not None and r >= 0.05}
+        moved = {t: r for t, r in pert["term_ratio"].items() if r is not None and r >= 0.05}
         if moved:
-            print("      per-term, against the same spread: " + " ".join(
-                f"{t}{'' if t in weighted else '(w0)'}={r:.2f}"
-                for t, r in sorted(moved.items(), key=lambda kv: -kv[1])))
+            print(
+                "      per-term, against the same spread: "
+                + " ".join(
+                    f"{t}{'' if t in weighted else '(w0)'}={r:.2f}"
+                    for t, r in sorted(moved.items(), key=lambda kv: -kv[1])
+                )
+            )
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--root", default="", help="scratch root (default: "
-                    "$SONARE_VOICEMATCH_ROOT, else .cache/voicematch)")
+    ap.add_argument(
+        "--root",
+        default="",
+        help="scratch root (default: $SONARE_VOICEMATCH_ROOT, else .cache/voicematch)",
+    )
     ap.add_argument("--subject", default="", help="comma-separated capture ids")
-    ap.add_argument("--threads", type=int, default=2,
-                    help="notes measured at once (this machine caps at 2-3)")
+    ap.add_argument(
+        "--threads", type=int, default=2, help="notes measured at once (this machine caps at 2-3)"
+    )
     ap.add_argument("--json", default="", help="write the full result here")
     args = ap.parse_args(argv)
 
     import os
-    root = Path(args.root or os.environ.get("SONARE_VOICEMATCH_ROOT")
-                or ".cache/voicematch").expanduser().resolve()
+
+    root = (
+        Path(args.root or os.environ.get("SONARE_VOICEMATCH_ROOT") or ".cache/voicematch")
+        .expanduser()
+        .resolve()
+    )
     want = {s.strip() for s in args.subject.split(",") if s.strip()}
     subjects = [s for s in SUBJECTS if not want or s.capture in want]
 
     print(f"loss sensitivity — scratch root {root}")
-    print(f"{len(subjects)} subject(s), {len(PERTURBATIONS)} perturbations, "
-          f"each also run at amplitude 0")
+    print(
+        f"{len(subjects)} subject(s), {len(PERTURBATIONS)} perturbations, "
+        f"each also run at amplitude 0"
+    )
     results = []
     for subject in subjects:
         try:
@@ -665,8 +722,7 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.json).write_text(json.dumps(results, indent=1))
         print(f"\nwrote {args.json}")
     if not results:
-        print("\nNOTHING WAS COMPARED — no subject produced a yardstick.",
-              file=sys.stderr)
+        print("\nNOTHING WAS COMPARED — no subject produced a yardstick.", file=sys.stderr)
     return 0
 
 

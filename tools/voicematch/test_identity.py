@@ -21,8 +21,10 @@ import identity
 
 def _hashes(mapping, default="same"):
     """A stand-in for `render_hash` keyed by (library, note, overrides)."""
+
     def fake(lib, note, program, channel, overrides=""):
         return mapping.get((lib, note, overrides), default)
+
     return fake
 
 
@@ -44,29 +46,62 @@ def test_identical_renders_are_not_a_pass_when_no_override_reached_them(monkeypa
     # change: a library that ignores overrides, a key that does not resolve and
     # a branch that is never taken all look exactly like this.
     monkeypatch.setattr(identity, "render_hash", _hashes({}))
-    rc = identity.main(["--base", "b.dylib", "--head", "h.dylib", "--drums", "36",
-                        "--reach", "36:d036.percussion.plate_gain=1.0"])
+    rc = identity.main(
+        [
+            "--base",
+            "b.dylib",
+            "--head",
+            "h.dylib",
+            "--drums",
+            "36",
+            "--reach",
+            "36:d036.percussion.plate_gain=1.0",
+        ]
+    )
     assert rc == 1
     assert "vacuous" in capsys.readouterr().out
 
 
 def test_a_default_that_changed_another_voice_fails(monkeypatch, capsys):
-    moved = _hashes({("h.dylib", 38, ""): "moved",
-                     ("h.dylib", 36, "d036.percussion.plate_gain=1.0"): "on"})
+    moved = _hashes(
+        {("h.dylib", 38, ""): "moved", ("h.dylib", 36, "d036.percussion.plate_gain=1.0"): "on"}
+    )
     monkeypatch.setattr(identity, "render_hash", moved)
-    rc = identity.main(["--base", "b.dylib", "--head", "h.dylib", "--drums", "36,38",
-                        "--reach", "36:d036.percussion.plate_gain=1.0"])
+    rc = identity.main(
+        [
+            "--base",
+            "b.dylib",
+            "--head",
+            "h.dylib",
+            "--drums",
+            "36,38",
+            "--reach",
+            "36:d036.percussion.plate_gain=1.0",
+        ]
+    )
     assert rc == 1
     out = capsys.readouterr().out
     assert "drum 38" in out.split("the identity for")[1]
 
 
 def test_both_halves_together_are_the_pass(monkeypatch, capsys):
-    monkeypatch.setattr(identity, "render_hash", _hashes(
-        {("h.dylib", 36, "d036.percussion.plate_gain=1.0"): "on"}))
-    rc = identity.main(["--base", "b.dylib", "--head", "h.dylib", "--drums", "36,38",
-                        "--programs", "0", "--reach",
-                        "36:d036.percussion.plate_gain=1.0"])
+    monkeypatch.setattr(
+        identity, "render_hash", _hashes({("h.dylib", 36, "d036.percussion.plate_gain=1.0"): "on"})
+    )
+    rc = identity.main(
+        [
+            "--base",
+            "b.dylib",
+            "--head",
+            "h.dylib",
+            "--drums",
+            "36,38",
+            "--programs",
+            "0",
+            "--reach",
+            "36:d036.percussion.plate_gain=1.0",
+        ]
+    )
     assert rc == 0
     assert "3 voices bit-identical" in capsys.readouterr().out
 
@@ -74,28 +109,41 @@ def test_both_halves_together_are_the_pass(monkeypatch, capsys):
 _ISOLATE = "d042.percussion.strike_r=0.4,d049.percussion.plate_gain=2.0"
 
 
-def test_isolation_passes_when_each_piece_hears_its_own_key_and_no_other(
-        monkeypatch, capsys):
+def test_isolation_passes_when_each_piece_hears_its_own_key_and_no_other(monkeypatch, capsys):
     # Each note answers its own key and is deaf to the other's, which is the
     # arrangement the per-note render cache is keyed on.
-    monkeypatch.setattr(identity, "render_hash", _hashes({
-        ("h.dylib", 42, "d042.percussion.strike_r=0.4"): "hat",
-        ("h.dylib", 42, _ISOLATE): "hat",
-        ("h.dylib", 49, "d049.percussion.plate_gain=2.0"): "crash",
-        ("h.dylib", 49, _ISOLATE): "crash",
-    }, default="default"))
+    monkeypatch.setattr(
+        identity,
+        "render_hash",
+        _hashes(
+            {
+                ("h.dylib", 42, "d042.percussion.strike_r=0.4"): "hat",
+                ("h.dylib", 42, _ISOLATE): "hat",
+                ("h.dylib", 49, "d049.percussion.plate_gain=2.0"): "crash",
+                ("h.dylib", 49, _ISOLATE): "crash",
+            },
+            default="default",
+        ),
+    )
     rc = identity.main(["--head", "h.dylib", "--isolate", _ISOLATE])
     assert rc == 0
     assert "2 pieces read their own constants" in capsys.readouterr().out
 
 
 def test_a_piece_that_changes_under_another_pieces_key_fails(monkeypatch, capsys):
-    monkeypatch.setattr(identity, "render_hash", _hashes({
-        ("h.dylib", 42, "d042.percussion.strike_r=0.4"): "hat",
-        ("h.dylib", 42, _ISOLATE): "hat and crash",
-        ("h.dylib", 49, "d049.percussion.plate_gain=2.0"): "crash",
-        ("h.dylib", 49, _ISOLATE): "crash",
-    }, default="default"))
+    monkeypatch.setattr(
+        identity,
+        "render_hash",
+        _hashes(
+            {
+                ("h.dylib", 42, "d042.percussion.strike_r=0.4"): "hat",
+                ("h.dylib", 42, _ISOLATE): "hat and crash",
+                ("h.dylib", 49, "d049.percussion.plate_gain=2.0"): "crash",
+                ("h.dylib", 49, _ISOLATE): "crash",
+            },
+            default="default",
+        ),
+    )
     rc = identity.main(["--head", "h.dylib", "--isolate", _ISOLATE])
     assert rc == 1
     out = capsys.readouterr().out

@@ -45,9 +45,7 @@ _NUMERIC_RE = re.compile(r"^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?[fFlLuU]*$"
 _QUALIFIED_RE = re.compile(r"^(?:[A-Za-z_]\w*::)+[A-Za-z_]\w*$")
 
 # A ``constexpr`` / ``const`` numeric constant definition: ``kName = <literal>;``.
-_CONST_RE = re.compile(
-    r"\bconst(?:expr)?\s+[A-Za-z_][\w:]*\s+(k[A-Za-z]\w*)\s*=\s*([^;{}]+?)\s*;"
-)
+_CONST_RE = re.compile(r"\bconst(?:expr)?\s+[A-Za-z_][\w:]*\s+(k[A-Za-z]\w*)\s*=\s*([^;{}]+?)\s*;")
 
 
 def scan_constants(paths: list[Path]) -> dict[str, str]:

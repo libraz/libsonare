@@ -117,8 +117,9 @@ def _under_peak_db(window: np.ndarray, note: np.ndarray) -> float:
     return 20.0 * np.log10(max(rms, 1e-30) / peak)
 
 
-def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float,
-                 *, onset: float | None = None) -> NoteMetrics:
+def analyze_note(
+    mono: np.ndarray, sr: int, note: Note, render_end: float, *, onset: float | None = None
+) -> NoteMetrics:
     """Compute all per-note metrics from the mono render.
 
     `onset` is where the note actually starts sounding, which is not always
@@ -167,8 +168,7 @@ def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float,
     # How far this string's partials have been stretched by its own stiffness.
     # Zero for anything that is not a stiff string, which is what makes every
     # such voice read exactly what it read before this was measured at all.
-    inharmonicity_b, inharmonicity_partials = estimate_inharmonicity_b(
-        freqs, mag, f0, h1_mag, sr)
+    inharmonicity_b, inharmonicity_partials = estimate_inharmonicity_b(freqs, mag, f0, h1_mag, sr)
 
     # Harmonic profile relative to h1, each partial searched where the string
     # actually puts it rather than at an integer multiple.
@@ -266,9 +266,9 @@ def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float,
     fine_end = min(int((at + min(0.5, note_dur)) * sr), len(mono))
     attack_fine_ms = 0.0
     if fine_end - fine_start > int(0.004 * sr):
-        f_times, f_env = _rms_envelope(mono[fine_start:fine_end], sr,
-                                       hop_ms=HIT_ENVELOPE_HOP_MS,
-                                       win_ms=HIT_ENVELOPE_WIN_MS)
+        f_times, f_env = _rms_envelope(
+            mono[fine_start:fine_end], sr, hop_ms=HIT_ENVELOPE_HOP_MS, win_ms=HIT_ENVELOPE_WIN_MS
+        )
         f_peak = float(np.max(f_env)) if f_env.size else 0.0
         if f_peak > 0:
             a10 = np.where(f_env >= 0.1 * f_peak)[0]
@@ -359,8 +359,7 @@ def level_of(raw: np.ndarray, sr: int, note: Note, window_end: float) -> dict:
     peak_db = float(_db(peak))
     held_db = float(_db(held_rms))
     if peak_db - held_db > HELD_FLOOR_DB:
-        return {"peak_dbfs": round(peak_db, 2), "held_rms_dbfs": None,
-                "held_crest_db": None}
+        return {"peak_dbfs": round(peak_db, 2), "held_rms_dbfs": None, "held_crest_db": None}
     return {
         "peak_dbfs": round(peak_db, 2),
         "held_rms_dbfs": round(held_db, 2),
@@ -406,8 +405,10 @@ def compare_note(model: NoteMetrics, oracle: NoteMetrics) -> dict:
         "tnr_delta_db": round(model.tnr_db - oracle.tnr_db, 2),
         "attack_delta_ms": round(model.attack_ms - oracle.attack_ms, 1),
         "sustain_slope_delta_db_s": (
-            None if model.sustain_slope_db_s is None or oracle.sustain_slope_db_s is None
-            else round(model.sustain_slope_db_s - oracle.sustain_slope_db_s, 2)),
+            None
+            if model.sustain_slope_db_s is None or oracle.sustain_slope_db_s is None
+            else round(model.sustain_slope_db_s - oracle.sustain_slope_db_s, 2)
+        ),
         "release_delta_ms": round(model.release_ms - oracle.release_ms, 1),
         "level_delta_db": round(model.sustain_rms_db - oracle.sustain_rms_db, 2),
     }

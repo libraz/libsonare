@@ -86,8 +86,13 @@ def _edc_slope(series_power: np.ndarray, times: np.ndarray) -> tuple[float, floa
 
 
 def _band_decay(
-    seg: np.ndarray, sr: int, centers, ratio: float,
-    *, n_fft: int = 1024, hop: int = 256,
+    seg: np.ndarray,
+    sr: int,
+    centers,
+    ratio: float,
+    *,
+    n_fft: int = 1024,
+    hop: int = 256,
 ) -> list[float | None]:
     """Post-peak decay rate in dB/s for each band, or None where unfittable.
 

@@ -74,10 +74,15 @@ class Spectro:
 
     def __post_init__(self) -> None:
         for n_fft, hop, rows in self.scales:
-            self._plan.append((
-                n_fft, hop, rows, np.hanning(n_fft),
-                _aggregator(n_fft, rows, self.sample_rate, self.f_lo, self.f_hi),
-            ))
+            self._plan.append(
+                (
+                    n_fft,
+                    hop,
+                    rows,
+                    np.hanning(n_fft),
+                    _aggregator(n_fft, rows, self.sample_rate, self.f_lo, self.f_hi),
+                )
+            )
 
     def rows_hz(self, scale: int) -> np.ndarray:
         return rows_hz(self.scales[scale][2], self.f_lo, self.f_hi)
@@ -106,9 +111,12 @@ class Spectro:
         out = []
         for n_fft, hop, _rows, win, agg in self._plan:
             cols = (n - n_fft) // hop + 1
-            frames = np.lib.stride_tricks.as_strided(
-                x, shape=(cols, n_fft),
-                strides=(x.strides[0] * hop, x.strides[0])) * win
+            frames = (
+                np.lib.stride_tricks.as_strided(
+                    x, shape=(cols, n_fft), strides=(x.strides[0] * hop, x.strides[0])
+                )
+                * win
+            )
             p = np.abs(np.fft.rfft(frames, axis=1)) ** 2
             out.append(10 * np.log10(np.maximum(agg @ p.T, 1e-30)))
         return out

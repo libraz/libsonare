@@ -130,9 +130,7 @@ def to_markdown(rep: Report) -> str:
     if rep.not_compared:
         causes: dict[tuple[str, str], int] = {}
         for n in rep.not_compared:
-            causes[(n["category"], n["reason"])] = (
-                causes.get((n["category"], n["reason"]), 0) + 1
-            )
+            causes[(n["category"], n["reason"])] = causes.get((n["category"], n["reason"]), 0) + 1
         out.append("## Comparisons not performed\n")
         out.append(
             f"**{len(rep.not_compared)}** (key, surface) pairs carried nothing to "
@@ -162,9 +160,7 @@ def to_markdown(rep: Report) -> str:
             for scope, pattern, state in expired:
                 out.append(f"| `{scope}` | `{pattern}` | {state} |")
         else:
-            out.append(
-                "None — every entry excused a divergence a comparison found."
-            )
+            out.append("None — every entry excused a divergence a comparison found.")
         out.append("")
 
         # What each live entry actually suppressed. An entry can be live and
@@ -215,9 +211,7 @@ def to_markdown(rep: Report) -> str:
     # of verdicts the category reached: `default` reaches one in twenty-five of
     # its candidates, because a default a facade spells inside a request-object
     # normalizer is not in the signature the extractor reads.
-    out.append(
-        "| category | compared | not compared | active | informational | allowlisted |"
-    )
+    out.append("| category | compared | not compared | active | informational | allowlisted |")
     out.append("|---|---|---|---|---|---|")
     for c in CATEGORIES:
         compared = summary["compared_by_category"][c]
@@ -246,10 +240,7 @@ def to_markdown(rep: Report) -> str:
     by_surface = summary["allowlisted_by_surface"]
     out.append(
         "Intentional exclusions (allowlisted, suppressed) by surface: "
-        + (
-            ", ".join(f"{s} {by_surface[s]}" for s in rep.surfaces if by_surface.get(s))
-            or "_none_"
-        )
+        + (", ".join(f"{s} {by_surface[s]}" for s in rep.surfaces if by_surface.get(s)) or "_none_")
         + "\n"
     )
 

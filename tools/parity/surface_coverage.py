@@ -150,27 +150,35 @@ def render(missing, c_signatures: dict[str, str]) -> str:
     lines = [
         "# Runtime capability matrix",
         "",
-        ("One C++ core, four hand-written runtimes. This table is what "
-        '"the same engine everywhere" means concretely: per domain, how many of '
-        "the C ABI's entry points each runtime can reach."),
+        (
+            "One C++ core, four hand-written runtimes. This table is what "
+            '"the same engine everywhere" means concretely: per domain, how many of '
+            "the C ABI's entry points each runtime can reach."
+        ),
         "",
-        ("**Generated — do not edit.** Run `make surface-coverage` to regenerate; "
-        "`make surface-coverage-check` fails on a stale copy. The reachability "
-        "decision is the parity checker's, so class methods, handle-prefix "
-        "renames and verified aliases all count as reached; see "
-        "[README.md](README.md) for how that decision is made."),
+        (
+            "**Generated — do not edit.** Run `make surface-coverage` to regenerate; "
+            "`make surface-coverage-check` fails on a stale copy. The reachability "
+            "decision is the parity checker's, so class methods, handle-prefix "
+            "renames and verified aliases all count as reached; see "
+            "[README.md](README.md) for how that decision is made."
+        ),
         "",
-        ("A gap here is a statement about reach, not about quality: both CLIs are "
-        "a curated subset by design, and WASM cannot expose the host filesystem or "
-        "anything that needs threads. An allowlisted divergence still counts as "
-        "a gap, because a reviewed absence is still an absence."),
+        (
+            "A gap here is a statement about reach, not about quality: both CLIs are "
+            "a curated subset by design, and WASM cannot expose the host filesystem or "
+            "anything that needs threads. An allowlisted divergence still counts as "
+            "a gap, because a reviewed absence is still an absence."
+        ),
         "",
-        ("The two command-line front-ends get a column each because they are two "
-        "binaries: the Python `sonare` CLI and the native `sonare-cli`. The parity "
-        "checker compares their union against the C ABI, so a capability only one "
-        "of them ships is not drift there — this table is where that difference "
-        "is visible. Which commands the two must keep identical is a separate "
-        "contract, in `tests/conformance/cli_contract_v2.json`."),
+        (
+            "The two command-line front-ends get a column each because they are two "
+            "binaries: the Python `sonare` CLI and the native `sonare-cli`. The parity "
+            "checker compares their union against the C ABI, so a capability only one "
+            "of them ships is not drift there — this table is where that difference "
+            "is visible. Which commands the two must keep identical is a separate "
+            "contract, in `tests/conformance/cli_contract_v2.json`."
+        ),
         "",
         "| domain | C entry points | " + " | ".join(COLUMN_TITLES[c] for c in COLUMNS) + " |",
         "|---|---:|" + "---:|" * len(COLUMNS),
@@ -185,7 +193,11 @@ def render(missing, c_signatures: dict[str, str]) -> str:
             cells.append(f"{counts[column]}/{total}")
         lines.append(f"| {domain} | {total} | " + " | ".join(cells) + " |")
     totals_cells = [f"{grand_reached[column]}/{grand_total}" for column in COLUMNS]
-    lines.append(f"| **all domains** | **{grand_total}** | " + " | ".join(f"**{c}**" for c in totals_cells) + " |")
+    lines.append(
+        f"| **all domains** | **{grand_total}** | "
+        + " | ".join(f"**{c}**" for c in totals_cells)
+        + " |"
+    )
     lines.append("")
     return "\n".join(lines)
 
@@ -210,8 +222,7 @@ def main() -> int:
             return 1
         if args.output.read_text(encoding="utf-8") != rendered:
             print(
-                f"runtime capability matrix is stale: {args.output} "
-                "(run make surface-coverage)",
+                f"runtime capability matrix is stale: {args.output} (run make surface-coverage)",
                 file=sys.stderr,
             )
             return 1

@@ -30,8 +30,15 @@ ATTACK_WINDOWS = (0.005, 0.010, 0.020, 0.040, 0.120, 0.250)
 
 #: Octave-ish bands, low enough to catch a plate's fundamental field and high
 #: enough to catch the contact.
-ATTACK_BANDS = ((60, 250), (250, 500), (500, 1000), (1000, 2000), (2000, 4000),
-                (4000, 8000), (8000, 16000))
+ATTACK_BANDS = (
+    (60, 250),
+    (250, 500),
+    (500, 1000),
+    (1000, 2000),
+    (2000, 4000),
+    (4000, 8000),
+    (8000, 16000),
+)
 
 #: The span every cell is normalised by. Fixed rather than per-row: it is what
 #: makes a column a shape in time instead of a level, and what keeps two rows of
@@ -63,7 +70,7 @@ def onset_index(sig: np.ndarray, sr: float) -> int:
     peak = int(np.argmax(env))
     if peak == 0:
         return 0
-    return int(np.argmax(env[:peak + 1] >= _ONSET_FRACTION * env[peak]))
+    return int(np.argmax(env[: peak + 1] >= _ONSET_FRACTION * env[peak]))
 
 
 #: Cells below this, relative to the normalising span, are reported at the
@@ -74,7 +81,7 @@ FLOOR_DB = -120.0
 
 
 def _band_power(sig: np.ndarray, i0: int, span: float, sr: float, bands) -> np.ndarray:
-    seg = sig[i0:i0 + int(span * sr)]
+    seg = sig[i0 : i0 + int(span * sr)]
     if seg.size < 4:
         return np.full(len(bands), np.nan)
     n = 1
@@ -86,12 +93,11 @@ def _band_power(sig: np.ndarray, i0: int, span: float, sr: float, bands) -> np.n
     return np.array([float(power[(freq >= lo) & (freq < hi)].sum()) for lo, hi in bands])
 
 
-def profile(sig: np.ndarray, sr: float, windows=ATTACK_WINDOWS,
-            bands=ATTACK_BANDS) -> np.ndarray:
+def profile(sig: np.ndarray, sr: float, windows=ATTACK_WINDOWS, bands=ATTACK_BANDS) -> np.ndarray:
     """Band level in each onset-anchored window, in dB relative to this side's
     own energy over NORM_SPAN_S. Shape is (len(windows), len(bands))."""
     i0 = onset_index(sig, sr)
-    norm = float(np.sum(np.asarray(sig, dtype=np.float64)[i0:i0 + int(NORM_SPAN_S * sr)] ** 2))
+    norm = float(np.sum(np.asarray(sig, dtype=np.float64)[i0 : i0 + int(NORM_SPAN_S * sr)] ** 2))
     if norm <= 0.0:
         return np.full((len(windows), len(bands)), np.nan)
     ratio = np.array([_band_power(sig, i0, w, sr, bands) for w in windows]) / norm
@@ -99,22 +105,25 @@ def profile(sig: np.ndarray, sr: float, windows=ATTACK_WINDOWS,
         return np.maximum(10.0 * np.log10(ratio), FLOOR_DB)
 
 
-def compare(model: np.ndarray, reference: np.ndarray, sr: float,
-            windows=ATTACK_WINDOWS, bands=ATTACK_BANDS) -> np.ndarray:
+def compare(
+    model: np.ndarray, reference: np.ndarray, sr: float, windows=ATTACK_WINDOWS, bands=ATTACK_BANDS
+) -> np.ndarray:
     """Model minus reference, dB, per window and band. Positive = the model has
     that band earlier, or louder relative to its own strike, than the
     reference does."""
-    return (profile(model, sr, windows, bands)
-            - profile(reference, sr, windows, bands))
+    return profile(model, sr, windows, bands) - profile(reference, sr, windows, bands)
 
 
 def format_table(diff: np.ndarray, windows=ATTACK_WINDOWS, bands=ATTACK_BANDS) -> str:
     """The comparison as the rows a reader scans down a band and across time."""
+
     def label(lo):
         return str(lo) if lo < 1000 else f"{lo // 1000}k"
 
     lines = [f"{'window':>8}" + "".join(f"{label(lo):>8}" for lo, _ in bands)]
     for w, row in zip(windows, diff):
-        lines.append(f"{int(w * 1000):>6d}ms"
-                     + "".join("     nan" if np.isnan(v) else f"{v:>+8.1f}" for v in row))
+        lines.append(
+            f"{int(w * 1000):>6d}ms"
+            + "".join("     nan" if np.isnan(v) else f"{v:>+8.1f}" for v in row)
+        )
     return "\n".join(lines)

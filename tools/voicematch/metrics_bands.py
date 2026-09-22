@@ -11,16 +11,38 @@ import numpy as np
 # move with every knob and are not what a fit should chase; coarser would merge
 # a snare's shell into its wires.
 THIRD_OCTAVE_CENTERS = (
-    50.0, 63.0, 80.0, 100.0, 125.0, 160.0, 200.0, 250.0, 315.0, 400.0, 500.0, 630.0,
-    800.0, 1000.0, 1250.0, 1600.0, 2000.0, 2500.0, 3150.0, 4000.0, 5000.0, 6300.0,
-    8000.0, 10000.0, 12500.0,
+    50.0,
+    63.0,
+    80.0,
+    100.0,
+    125.0,
+    160.0,
+    200.0,
+    250.0,
+    315.0,
+    400.0,
+    500.0,
+    630.0,
+    800.0,
+    1000.0,
+    1250.0,
+    1600.0,
+    2000.0,
+    2500.0,
+    3150.0,
+    4000.0,
+    5000.0,
+    6300.0,
+    8000.0,
+    10000.0,
+    12500.0,
 )
 THIRD_OCTAVE_RATIO = 2.0 ** (1.0 / 6.0)
 
 # Decay is fit per octave band rather than per third-octave: a third-octave
 # band of a noisy hit carries too few modes for a slope fit to be stable.
 OCTAVE_CENTERS = (63.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0)
-OCTAVE_RATIO = 2.0 ** 0.5
+OCTAVE_RATIO = 2.0**0.5
 
 
 #: The two ends of the 1/3-octave profile a hit's tilt is taken between. The
@@ -46,8 +68,8 @@ def band_tilt_db(bands_db: list[float] | None) -> float | None:
     """
     if not bands_db:
         return None
-    centres = np.asarray(THIRD_OCTAVE_CENTERS[:len(bands_db)], dtype=np.float64)
-    vals = np.asarray(bands_db[:len(centres)], dtype=np.float64)
+    centres = np.asarray(THIRD_OCTAVE_CENTERS[: len(bands_db)], dtype=np.float64)
+    vals = np.asarray(bands_db[: len(centres)], dtype=np.float64)
     low, high = vals[centres <= TILT_LOW_HZ], vals[centres >= TILT_HIGH_HZ]
     if not len(low) or not len(high):
         return None
@@ -204,11 +226,14 @@ def measure_agreement_edge(rows: list[dict]) -> float | None:
             continue
         cell = (row.get("note"), row.get("velocity"))
         by_timbre.setdefault(str(row.get("timbre", "")), {})[cell] = np.asarray(
-            profile, dtype=np.float64)
+            profile, dtype=np.float64
+        )
     if len(by_timbre) < 2:
         return None
-    edges = [_pair_agreement_edge(by_timbre[x], by_timbre[y])
-             for x, y in itertools.combinations(sorted(by_timbre), 2)]
+    edges = [
+        _pair_agreement_edge(by_timbre[x], by_timbre[y])
+        for x, y in itertools.combinations(sorted(by_timbre), 2)
+    ]
     known = [e for e in edges if e is not None]
     return min(known) if known else None
 
@@ -216,8 +241,9 @@ def measure_agreement_edge(rows: list[dict]) -> float | None:
 def band_edges_by_timbre(rows: list[dict]) -> dict[str, float | None]:
     """Each reference's own measurable ceiling, one per timbre."""
     timbres = sorted({str(r.get("timbre", "")) for r in rows})
-    return {t: measure_band_edge([r for r in rows if str(r.get("timbre", "")) == t])
-            for t in timbres}
+    return {
+        t: measure_band_edge([r for r in rows if str(r.get("timbre", "")) == t]) for t in timbres
+    }
 
 
 def shared_band_edge(rows: list[dict]) -> float | None:
@@ -257,8 +283,9 @@ def shared_band_edge(rows: list[dict]) -> float | None:
     return min(known) if known else None
 
 
-def band_edge_index(max_band_hz: float | None,
-                    centres: tuple[float, ...] = THIRD_OCTAVE_CENTERS) -> int:
+def band_edge_index(
+    max_band_hz: float | None, centres: tuple[float, ...] = THIRD_OCTAVE_CENTERS
+) -> int:
     """How many of `centres` sit at or below `max_band_hz`.
 
     Takes the centre list so the octave decay bands are cut at the same place as

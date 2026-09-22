@@ -18,8 +18,7 @@ SR = 8000
 
 
 def item(notes, seconds=4.0, tid="take", label="A take"):
-    return {"id": tid, "label": label,
-            "meta": {"seconds": seconds, "notes": notes, "cc": []}}
+    return {"id": tid, "label": label, "meta": {"seconds": seconds, "notes": notes, "cc": []}}
 
 
 def note(n, start, velocity=100, duration=0.05):
@@ -34,8 +33,7 @@ def test_hits_are_numbered_by_when_they_sound_not_by_manifest_order():
     "the second one" a different instrument at each end of the conversation,
     which is the whole failure this module exists to remove.
     """
-    rows = hits.hit_rows(item([note(42, 0.3), note(42, 0.6), note(36, 0.3),
-                               note(38, 0.9)]))
+    rows = hits.hit_rows(item([note(42, 0.3), note(42, 0.6), note(36, 0.3), note(38, 0.9)]))
     assert [r["n"] for r in rows] == [1, 2, 3]
     assert [r["start"] for r in rows] == [0.3, 0.6, 0.9]
     assert sorted(n["note"] for n in rows[0]["notes"]) == [36, 42]
@@ -74,7 +72,7 @@ def test_the_onset_shift_finds_a_strike_the_plugin_rendered_late():
     measures instead.
     """
     x = np.zeros(SR * 2, dtype=np.float64)
-    x[int(0.5 * SR):int(0.5 * SR) + 200] = 1.0
+    x[int(0.5 * SR) : int(0.5 * SR) + 200] = 1.0
     assert hits.onset_shift(x, SR, 0.5) == pytest.approx(0.0, abs=0.002)
     assert hits.onset_shift(x, SR, 0.44) == pytest.approx(0.06, abs=0.002)
 
@@ -94,9 +92,11 @@ def page(tmp_path, model, ref, notes, seconds=2.0):
     (d / "take").mkdir(parents=True)
     write_wav(d / "take" / "model.wav", model.astype(np.float32), SR)
     write_wav(d / "take" / "kit-a.wav", ref.astype(np.float32), SR)
-    man = {"title": "t",
-           "sources": {"model": {"role": "model"}, "kit-a": {"role": "reference"}},
-           "items": [item(notes, seconds=seconds)]}
+    man = {
+        "title": "t",
+        "sources": {"model": {"role": "model"}, "kit-a": {"role": "reference"}},
+        "items": [item(notes, seconds=seconds)],
+    }
     (d / "manifest.json").write_text(json.dumps(man))
     return d
 
@@ -140,8 +140,9 @@ def band_burst(at, lo, hi, amp, seconds=2.0, decay=12.0, seed=0):
 
 
 def two_bands(at, low_amp, high_amp, seed=0):
-    return (band_burst(at, 250.0, 500.0, low_amp, seed=seed)
-            + band_burst(at, 1000.0, 2000.0, high_amp, seed=seed + 1))
+    return band_burst(at, 250.0, 500.0, low_amp, seed=seed) + band_burst(
+        at, 1000.0, 2000.0, high_amp, seed=seed + 1
+    )
 
 
 def test_a_plain_level_offset_reads_as_no_band_difference(tmp_path):
@@ -172,14 +173,15 @@ def test_a_tilt_survives_the_shared_gain(tmp_path):
     assert cell(rows[0], gain, (1000, 2000)) < -8.0
 
 
-def test_a_page_with_no_reference_says_so_rather_than_comparing_a_render_with_itself(
-        tmp_path):
+def test_a_page_with_no_reference_says_so_rather_than_comparing_a_render_with_itself(tmp_path):
     d = tmp_path / "model-only"
     (d / "take").mkdir(parents=True)
-    write_wav(d / "take" / "model.wav",
-              burst(SR, 2.0, 0.3, 250.0).astype(np.float32), SR)
-    man = {"title": "t", "sources": {"model": {"role": "model"}},
-           "items": [item([note(42, 0.3)], seconds=2.0)]}
+    write_wav(d / "take" / "model.wav", burst(SR, 2.0, 0.3, 250.0).astype(np.float32), SR)
+    man = {
+        "title": "t",
+        "sources": {"model": {"role": "model"}},
+        "items": [item([note(42, 0.3)], seconds=2.0)],
+    }
     (d / "manifest.json").write_text(json.dumps(man))
     with pytest.raises(ValueError, match="no reference"):
         hits.run(d, "u/")

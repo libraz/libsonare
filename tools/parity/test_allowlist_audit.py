@@ -44,25 +44,20 @@ from model import (
 
 def _c(*keys: str) -> Extraction:
     ex = Extraction(surface="c")
-    ex.functions = [
-        FunctionSig(key=k, surface="c", raw_name=k, file="c.h", line=1) for k in keys
-    ]
+    ex.functions = [FunctionSig(key=k, surface="c", raw_name=k, file="c.h", line=1) for k in keys]
     return ex
 
 
 def _facade(surface: str, *keys: str) -> Extraction:
     ex = Extraction(surface=surface)
     ex.functions = [
-        FunctionSig(key=k, surface=surface, raw_name=k, file=f"{surface}.ts", line=1)
-        for k in keys
+        FunctionSig(key=k, surface=surface, raw_name=k, file=f"{surface}.ts", line=1) for k in keys
     ]
     return ex
 
 
 def _report(c: Extraction, facade: Extraction, allow):
-    return compare.build_report(
-        {"c": c, facade.surface: facade}, allow, ["c", facade.surface]
-    )
+    return compare.build_report({"c": c, facade.surface: facade}, allow, ["c", facade.surface])
 
 
 def _sig(surface: str, key: str, *param_names: str) -> Extraction:
@@ -98,9 +93,7 @@ def test_an_entry_whose_gap_was_fixed_is_reported_with_its_section() -> None:
     allow = allowlist_mod.Allowlist()
     allow.coverage = {"python": ["mastering_apply"]}
     _report(_c("mastering_apply"), _facade("python", "mastering_apply"), allow)
-    assert allow.expired_entries() == [
-        ("coverage.python", "mastering_apply", allowlist_mod.STALE)
-    ]
+    assert allow.expired_entries() == [("coverage.python", "mastering_apply", allowlist_mod.STALE)]
 
 
 def test_a_wildcard_is_used_when_any_name_matches_it() -> None:
@@ -163,9 +156,7 @@ def test_an_order_entry_whose_surfaces_agree_is_reported_as_stale() -> None:
         allow,
     )
     assert _state(allow, "order.node", "resample") == allowlist_mod.STALE
-    assert allow.expired_entries() == [
-        ("order.node", "resample", allowlist_mod.STALE)
-    ]
+    assert allow.expired_entries() == [("order.node", "resample", allowlist_mod.STALE)]
 
 
 def test_an_order_entry_the_facade_folded_out_of_reach_is_unconsulted() -> None:
@@ -182,9 +173,7 @@ def test_an_order_entry_the_facade_folded_out_of_reach_is_unconsulted() -> None:
         allow,
     )
     assert _state(allow, "order.node", "resample") == allowlist_mod.UNCONSULTED
-    assert allow.expired_entries() == [
-        ("order.node", "resample", allowlist_mod.UNCONSULTED)
-    ]
+    assert allow.expired_entries() == [("order.node", "resample", allowlist_mod.UNCONSULTED)]
 
 
 def test_a_comparison_the_facade_folded_away_is_reported_as_not_compared() -> None:
@@ -218,9 +207,7 @@ def test_an_entry_no_comparison_looked_up_is_reported_as_unconsulted() -> None:
     allow.order = {"node": ["resample"]}
     _report(_sig("c", "decimate", "target_rate"), _sig("node", "decimate", "target_rate"), allow)
     assert _state(allow, "order.node", "resample") == allowlist_mod.UNCONSULTED
-    assert allow.expired_entries() == [
-        ("order.node", "resample", allowlist_mod.UNCONSULTED)
-    ]
+    assert allow.expired_entries() == [("order.node", "resample", allowlist_mod.UNCONSULTED)]
 
 
 def test_an_input_naming_entry_whose_surfaces_agree_is_reported_as_stale() -> None:
@@ -244,13 +231,8 @@ def test_an_input_naming_entry_with_one_group_left_is_unconsulted() -> None:
         _sig("node", "spectral_flux", "samples"),
         allow,
     )
-    assert (
-        _state(allow, "input_naming.keys", "spectral_flux")
-        == allowlist_mod.UNCONSULTED
-    )
-    assert [n["key"] for n in rep.not_compared if n["category"] == "input"] == [
-        "spectral_flux"
-    ]
+    assert _state(allow, "input_naming.keys", "spectral_flux") == allowlist_mod.UNCONSULTED
+    assert [n["key"] for n in rep.not_compared if n["category"] == "input"] == ["spectral_flux"]
 
 
 def test_the_audit_records_which_divergence_each_entry_suppressed() -> None:
@@ -288,9 +270,7 @@ def test_the_suppression_record_does_not_depend_on_declaration_order() -> None:
         )
         return allow.suppressed_divergences()
 
-    assert by_symbol_order("helper_a", "helper_b") == by_symbol_order(
-        "helper_b", "helper_a"
-    )
+    assert by_symbol_order("helper_a", "helper_b") == by_symbol_order("helper_b", "helper_a")
 
     def by_field_order(*field_names: str):
         allow = allowlist_mod.Allowlist()

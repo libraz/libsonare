@@ -22,20 +22,35 @@ import heard
 def _log(root: Path, set_id: str, entries: list[dict]) -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / f"{set_id}.jsonl").write_text(
-        "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in entries),
-        encoding="utf-8")
+        "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in entries), encoding="utf-8"
+    )
 
 
 def _note(at: str, grade: str, tag: str = "", text: str = "", hit: dict | None = None) -> dict:
-    return {"at": at, "grade": grade, "tag": tag, "text": text, "lang": "en",
-            "conditions": {"set": "p040-violin", "take": "single-long",
-                           "take_label": "Single note", "version": "model",
-                           "playhead": 1.5, "hit": hit}}
+    return {
+        "at": at,
+        "grade": grade,
+        "tag": tag,
+        "text": text,
+        "lang": "en",
+        "conditions": {
+            "set": "p040-violin",
+            "take": "single-long",
+            "take_label": "Single note",
+            "version": "model",
+            "playhead": 1.5,
+            "hit": hit,
+        },
+    }
 
 
 def _hit(n: int, *notes: int) -> dict:
-    return {"n": n, "start": 0.3, "into": 0.2,
-            "notes": [{"note": note, "velocity": 100} for note in notes]}
+    return {
+        "n": n,
+        "start": 0.3,
+        "into": 0.2,
+        "notes": [{"note": note, "velocity": 100} for note in notes],
+    }
 
 
 def _bank(root: Path, units: dict[str, dict[str, int]]) -> None:
@@ -47,12 +62,24 @@ def _bank(root: Path, units: dict[str, dict[str, int]]) -> None:
     is, not compute one a reader has to re-derive to check the assertion.
     """
     heard.BANK_VERSIONS = root / "bank-versions.json"
-    heard.BANK_VERSIONS.write_text(json.dumps({"units": {
-        name: {"kind": "patch", "version": len(bumps),
-               "history": [{"date": d, "version": i + 1, "generation": g}
-                           for i, (d, g) in enumerate(sorted(bumps.items()))]}
-        for name, bumps in units.items()
-    }}), encoding="utf-8")
+    heard.BANK_VERSIONS.write_text(
+        json.dumps(
+            {
+                "units": {
+                    name: {
+                        "kind": "patch",
+                        "version": len(bumps),
+                        "history": [
+                            {"date": d, "version": i + 1, "generation": g}
+                            for i, (d, g) in enumerate(sorted(bumps.items()))
+                        ],
+                    }
+                    for name, bumps in units.items()
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def _audition(root: Path, set_id: str, patch: str, kit: bool = False) -> None:
@@ -61,8 +88,7 @@ def _audition(root: Path, set_id: str, patch: str, kit: bool = False) -> None:
     voice = {"program": 40, "patch": patch}
     if kit:
         voice = {"program": 0, "kit": True}
-    (root / set_id / "manifest.json").write_text(
-        json.dumps({"voice": voice}), encoding="utf-8")
+    (root / set_id / "manifest.json").write_text(json.dumps({"voice": voice}), encoding="utf-8")
 
 
 def _with_scratch(fn):
@@ -72,6 +98,7 @@ def _with_scratch(fn):
             fn()
         finally:
             (heard.FEEDBACK_ROOT, heard.AUDITION_ROOT, heard.BANK_VERSIONS) = saved
+
     wrapped.__name__ = fn.__name__
     wrapped.__doc__ = fn.__doc__
     return wrapped
@@ -90,10 +117,14 @@ def test_a_note_taken_before_the_voice_moved_is_marked() -> None:
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
         _bank(root, {"violin": {"2026-08-15": 1, "2026-09-11": 2}})
-        _log(heard.FEEDBACK_ROOT, "p040-violin", [
-            _note("2026-08-01T10:00:00+00:00", "wrong-instrument"),
-            _note("2026-09-19T10:00:00+00:00", "acceptable"),
-        ])
+        _log(
+            heard.FEEDBACK_ROOT,
+            "p040-violin",
+            [
+                _note("2026-08-01T10:00:00+00:00", "wrong-instrument"),
+                _note("2026-09-19T10:00:00+00:00", "acceptable"),
+            ],
+        )
         voice = heard.collect([], "")[0]
         assert voice["last_moved"] == "2026-09-11", voice
         by_date = {n["at"][:10]: n for n in voice["notes"]}
@@ -115,10 +146,14 @@ def test_the_headline_verdict_is_the_worst_one_still_standing() -> None:
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
         _bank(root, {"violin": {"2026-09-11": 1}})
-        _log(heard.FEEDBACK_ROOT, "p040-violin", [
-            _note("2026-08-01T10:00:00+00:00", "wrong-instrument"),
-            _note("2026-09-19T10:00:00+00:00", "acceptable"),
-        ])
+        _log(
+            heard.FEEDBACK_ROOT,
+            "p040-violin",
+            [
+                _note("2026-08-01T10:00:00+00:00", "wrong-instrument"),
+                _note("2026-09-19T10:00:00+00:00", "acceptable"),
+            ],
+        )
         voice = heard.collect([], "")[0]
         assert voice["worst"] == "acceptable", voice
         assert not voice["worst_predates_last_move"], voice
@@ -126,8 +161,11 @@ def test_the_headline_verdict_is_the_worst_one_still_standing() -> None:
         # With nothing said since the move there is no standing verdict, so the
         # old one is reported rather than dropped -- and marked, because the
         # two cases look identical on the line otherwise.
-        _log(heard.FEEDBACK_ROOT, "p040-violin",
-             [_note("2026-08-01T10:00:00+00:00", "wrong-instrument")])
+        _log(
+            heard.FEEDBACK_ROOT,
+            "p040-violin",
+            [_note("2026-08-01T10:00:00+00:00", "wrong-instrument")],
+        )
         stale = heard.collect([], "")[0]
         assert stale["worst"] == "wrong-instrument", stale
         assert stale["worst_predates_last_move"], stale
@@ -147,11 +185,15 @@ def test_a_kit_note_is_about_the_drum_it_was_struck_on() -> None:
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "kit000-standard-kit", "", kit=True)
         _bank(root, {"d038": {"2026-09-11": 2}, "d042": {"2026-05-01": 1}})
-        _log(heard.FEEDBACK_ROOT, "kit000-standard-kit", [
-            # The snare has moved since this was said; the hi-hat has not.
-            _note("2026-08-01T10:00:00+00:00", "wrong-instrument", hit=_hit(1, 38)),
-            _note("2026-08-01T10:00:00+00:00", "acceptable", hit=_hit(2, 42)),
-        ])
+        _log(
+            heard.FEEDBACK_ROOT,
+            "kit000-standard-kit",
+            [
+                # The snare has moved since this was said; the hi-hat has not.
+                _note("2026-08-01T10:00:00+00:00", "wrong-instrument", hit=_hit(1, 38)),
+                _note("2026-08-01T10:00:00+00:00", "acceptable", hit=_hit(2, 42)),
+            ],
+        )
         voice = heard.collect([], "")[0]
         assert voice["kit"] and voice["patch"] == "", voice
         by_unit = {n["units"][0]: n for n in voice["notes"]}
@@ -177,8 +219,11 @@ def test_a_fill_is_stale_as_soon_as_any_drum_under_it_moves() -> None:
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "kit000-standard-kit", "", kit=True)
         _bank(root, {"d043": {"2026-01-01": 1}, "d041": {"2026-09-11": 2}})
-        _log(heard.FEEDBACK_ROOT, "kit000-standard-kit",
-             [_note("2026-08-01T10:00:00+00:00", "acceptable", hit=_hit(1, 43, 41))])
+        _log(
+            heard.FEEDBACK_ROOT,
+            "kit000-standard-kit",
+            [_note("2026-08-01T10:00:00+00:00", "acceptable", hit=_hit(1, 43, 41))],
+        )
         note = heard.collect([], "")[0]["notes"][0]
         assert note["units"] == ["d043", "d041"], note
         assert note["last_moved"] == "2026-09-11", note
@@ -198,8 +243,7 @@ def test_a_voice_nothing_can_be_dated_against_is_never_marked() -> None:
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p007-clavi", "")
         _bank(root, {"violin": {"2026-09-11": 1}})
-        _log(heard.FEEDBACK_ROOT, "p007-clavi",
-             [_note("2026-01-01T10:00:00+00:00", "broken")])
+        _log(heard.FEEDBACK_ROOT, "p007-clavi", [_note("2026-01-01T10:00:00+00:00", "broken")])
         voice = heard.collect([], "")[0]
         assert voice["patch"] == "", voice
         assert voice["notes"][0]["units"] == [], voice
@@ -227,14 +271,18 @@ def test_the_versions_put_forward_to_keep_are_counted_apart_from_the_verdicts() 
             entry["conditions"].update({"version": version, "take": take, "blind": blind})
             return entry
 
-        _log(heard.FEEDBACK_ROOT, "p019-church-organ", [
-            prefer("hall", "single-long"),
-            prefer("hall", "music"),
-            prefer("chiff-strong", "tongued", blind=True),
-            # A verdict on the same voice, which is a different statement and
-            # must not be counted as a vote for anything.
-            _note("2026-09-19T11:00:00+00:00", "acceptable", "tone/dark"),
-        ])
+        _log(
+            heard.FEEDBACK_ROOT,
+            "p019-church-organ",
+            [
+                prefer("hall", "single-long"),
+                prefer("hall", "music"),
+                prefer("chiff-strong", "tongued", blind=True),
+                # A verdict on the same voice, which is a different statement and
+                # must not be counted as a vote for anything.
+                _note("2026-09-19T11:00:00+00:00", "acceptable", "tone/dark"),
+            ],
+        )
         voice = heard.collect([], "")[0]
         kept = {p["version"]: p for p in voice["preferred"]}
         assert [p["version"] for p in voice["preferred"]] == ["hall", "chiff-strong"], voice
@@ -274,8 +322,14 @@ def test_what_was_sounding_is_carried_through_to_the_line() -> None:
         _audition(root / "audition", "p040-violin", "violin")
         _bank(root, {"violin": {"2026-09-11": 1}})
         entry = _note("2026-09-19T10:00:00+00:00", "acceptable", "tone/dark")
-        entry["conditions"].update({"take_label": "Legato — a scale", "version": "gm041",
-                                    "hit": _hit(3, 67), "playhead": 2.25})
+        entry["conditions"].update(
+            {
+                "take_label": "Legato — a scale",
+                "version": "gm041",
+                "hit": _hit(3, 67),
+                "playhead": 2.25,
+            }
+        )
         _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
         line = heard.collect([], "")[0]["notes"][0]["where"]
         for part in ("Legato — a scale", "gm041", "hit 3", "2.25s"):
@@ -303,7 +357,9 @@ def test_a_clean_verdict_signs_off_with_both_provenance_numbers_resolved() -> No
         block = heard.signoff("p040-violin")
         assert block == {
             "provenance": {"date": "2026-09-19", "bank_generation": 2, "patch_version": 2},
-            "take": "single-long", "by": "", "note": "",
+            "take": "single-long",
+            "by": "",
+            "note": "",
         }, block
 
 
@@ -343,8 +399,11 @@ def test_wrong_instrument_or_broken_refuses_naming_the_verdict_and_its_date() ->
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
         _bank(root, {"violin": {"2026-09-11": 1}})
-        _log(heard.FEEDBACK_ROOT, "p040-violin",
-             [_note("2026-09-19T10:00:00+00:00", "wrong-instrument")])
+        _log(
+            heard.FEEDBACK_ROOT,
+            "p040-violin",
+            [_note("2026-09-19T10:00:00+00:00", "wrong-instrument")],
+        )
         try:
             heard.signoff("p040-violin")
             raise AssertionError("expected a refusal")
@@ -360,8 +419,7 @@ def test_a_preference_tag_alone_refuses() -> None:
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
         _bank(root, {"violin": {"2026-09-11": 1}})
-        _log(heard.FEEDBACK_ROOT, "p040-violin",
-             [_note("2026-09-19T10:00:00+00:00", "", "prefer")])
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [_note("2026-09-19T10:00:00+00:00", "", "prefer")])
         try:
             heard.signoff("p040-violin")
             raise AssertionError("expected a refusal")
@@ -376,8 +434,7 @@ def test_a_note_predating_the_last_bump_refuses() -> None:
         heard.FEEDBACK_ROOT = root / "feedback"
         _audition(root / "audition", "p040-violin", "violin")
         _bank(root, {"violin": {"2026-08-15": 1, "2026-09-11": 2}})
-        _log(heard.FEEDBACK_ROOT, "p040-violin",
-             [_note("2026-08-01T10:00:00+00:00", "ok")])
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [_note("2026-08-01T10:00:00+00:00", "ok")])
         try:
             heard.signoff("p040-violin")
             raise AssertionError("expected a refusal")
@@ -441,8 +498,11 @@ def _run_all() -> int:
         # ends the whole run with no line saying which test it was.
         except Exception as e:  # noqa: BLE001
             failed += 1
-            print(f"FAIL {t.__name__}: {type(e).__name__}: {e}"
-                  if not isinstance(e, AssertionError) else f"FAIL {t.__name__}: {e}")
+            print(
+                f"FAIL {t.__name__}: {type(e).__name__}: {e}"
+                if not isinstance(e, AssertionError)
+                else f"FAIL {t.__name__}: {e}"
+            )
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     return 1 if failed else 0
 

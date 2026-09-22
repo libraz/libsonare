@@ -122,8 +122,7 @@ def _window_ends(pattern, monkeypatch) -> list[tuple[float, float]]:
     monkeypatch.setattr(loss_module, "analyze_note", spy)
     monkeypatch.setattr(loss_module, "analyze_hit", spy)
     monkeypatch.setattr(loss_module, "skeleton_note", lambda *a, **k: {})
-    probe_rows(np.zeros(int(pattern_length(pattern) * 48000), dtype=np.float32),
-               pattern, 48000)
+    probe_rows(np.zeros(int(pattern_length(pattern) * 48000), dtype=np.float32), pattern, 48000)
     return seen
 
 
@@ -179,11 +178,11 @@ def test_the_fluidsynth_oracle_is_dry_by_construction():
 def test_an_au_oracle_has_its_room_measured(monkeypatch):
     """The measurement is what the model is then convolved to match."""
     measured = []
-    monkeypatch.setattr(autofit, "obtain_oracle",
-                        lambda *a, **k: np.zeros((48000, 1), dtype=np.float32))
+    monkeypatch.setattr(
+        autofit, "obtain_oracle", lambda *a, **k: np.zeros((48000, 1), dtype=np.float32)
+    )
     monkeypatch.setattr(autofit, "probe_rows", lambda *a, **k: [])
-    monkeypatch.setattr(autofit, "estimate_room",
-                        lambda *a, **k: measured.append(1) or DRY)
+    monkeypatch.setattr(autofit, "estimate_room", lambda *a, **k: measured.append(1) or DRY)
     args = _probe_args(au="Pianoteq", au_dry=False, oracle_wav="", room="auto")
     resolve_probe(args)
     autofit.oracle_reference(args)
@@ -200,8 +199,11 @@ def test_a_hold_out_against_a_fixed_wav_is_refused_before_the_fit_starts():
 
 
 def test_a_hold_out_reference_satisfies_the_check():
-    resolve_probe(_probe_args(oracle_wav="probe.wav", validate_notes="43,55,67",
-                              validate_oracle_wav="holdout.wav"))
+    resolve_probe(
+        _probe_args(
+            oracle_wav="probe.wav", validate_notes="43,55,67", validate_oracle_wav="holdout.wav"
+        )
+    )
 
 
 def test_a_re_rendering_oracle_route_needs_no_hold_out_reference():
@@ -226,8 +228,9 @@ def test_the_hold_out_is_scored_against_its_own_reference(monkeypatch):
         return [], None, None, None
 
     monkeypatch.setattr(autofit, "oracle_reference", fake_oracle)
-    args = _probe_args(oracle_wav="probe.wav", validate_notes="43,55,67",
-                       validate_oracle_wav="holdout.wav")
+    args = _probe_args(
+        oracle_wav="probe.wav", validate_notes="43,55,67", validate_oracle_wav="holdout.wav"
+    )
     resolve_probe(args)
     assert validate(args, Path("."), [], [], [], None) is None
     assert seen == {"wav": "holdout.wav", "notes": "43,55,67"}
@@ -244,8 +247,9 @@ def test_a_capture_that_lays_its_instruments_out_differently_is_answered_note_fo
     RANK or every tom is fitted against a different sized drum. `profile.py
     compare` has always read `note_map`; the corpus the fit scores against did
     not, so the two disagreed about which drum a number meant."""
-    root = _write_corpus(tmp_path / "c", notes=(60, 72), velocities=(56,),
-                         note_map={"60": 72, "72": 60})
+    root = _write_corpus(
+        tmp_path / "c", notes=(60, 72), velocities=(56,), note_map={"60": 72, "72": 60}
+    )
     corpus = load_corpus(root)
     assert corpus.note_map == {60: 72, 72: 60}
     # The probe strikes the model's notes, in the captured notes' order.
@@ -259,8 +263,10 @@ def test_a_capture_that_lays_its_instruments_out_differently_is_answered_note_fo
     # under a probe that strikes 72 there.
     plain_root = _write_corpus(tmp_path / "d", notes=(60, 72), velocities=(56,))
     plain_corpus = load_corpus(plain_root)
-    assert np.allclose(corpus_oracle(corpus, probe, 48000),
-                       corpus_oracle(plain_corpus, corpus_pattern(plain_corpus), 48000))
+    assert np.allclose(
+        corpus_oracle(corpus, probe, 48000),
+        corpus_oracle(plain_corpus, corpus_pattern(plain_corpus), 48000),
+    )
     first = corpus_oracle(corpus, probe, 48000)[4800:24800, 0]
     peak = float(np.argmax(np.abs(np.fft.rfft(first)))) * 48000.0 / len(first)
     assert peak == pytest.approx(440.0 * 2 ** ((60 - 69) / 12.0), rel=0.02)
@@ -276,9 +282,7 @@ def test_a_corpus_probe_is_laid_out_by_the_capture_not_by_a_builder(tmp_path):
     """Its notes, its velocities and its gate all come from the manifest."""
     corpus = load_corpus(_write_corpus(tmp_path / "c"))
     probe = corpus_pattern(corpus)
-    assert [(n.note, n.velocity) for n in probe.notes] == [
-        (60, 56), (60, 120), (72, 56), (72, 120)
-    ]
+    assert [(n.note, n.velocity) for n in probe.notes] == [(60, 56), (60, 120), (72, 56), (72, 120)]
     assert {n.dur for n in probe.notes} == {8.0}
     assert probe.analysis_notes == probe.notes
 
@@ -309,8 +313,7 @@ def test_a_note_captured_for_longer_is_analysed_for_longer(tmp_path):
     metric sees them — which reads as a model whose bands all decay too fast,
     on the notes the longer tail was captured for.
     """
-    root = _write_corpus(tmp_path / "c", gate_ms=1000,
-                         seconds={60: 4.1, 72: 10.1})
+    root = _write_corpus(tmp_path / "c", gate_ms=1000, seconds={60: 4.1, 72: 10.1})
     corpus = load_corpus(root)
     probe = corpus_pattern(corpus, velocities=(56,))
     starts = [n.start for n in probe.notes]
@@ -329,8 +332,7 @@ def test_a_note_captured_for_longer_is_analysed_for_longer(tmp_path):
 
 def test_the_long_note_keeps_its_tail_when_the_grid_also_holds_short_ones(tmp_path):
     """The assembled oracle carries the full capture, not the shortest slot's worth."""
-    root = _write_corpus(tmp_path / "c", gate_ms=1000,
-                         seconds={60: 4.1, 72: 10.1})
+    root = _write_corpus(tmp_path / "c", gate_ms=1000, seconds={60: 4.1, 72: 10.1})
     corpus = load_corpus(root)
     probe = corpus_pattern(corpus, notes=(72,), velocities=(56,))
     audio = corpus_oracle(corpus, probe, 48000)
@@ -519,8 +521,11 @@ def test_comparing_and_diagnosing_a_rigged_reference_are_unaffected(tmp_path):
 
 def test_the_rig_refusal_can_be_pushed_through_and_says_so(tmp_path, capsys):
     """Explicitly, and loudly: the values a forced run produces transfer to nothing."""
-    args = _probe_args(program=30, allow_rigged_oracle=True,
-                       corpus=str(_write_corpus(tmp_path / "amp", rig=RIG_BAKED)))
+    args = _probe_args(
+        program=30,
+        allow_rigged_oracle=True,
+        corpus=str(_write_corpus(tmp_path / "amp", rig=RIG_BAKED)),
+    )
     resolve_probe(args)
     assert args.pattern == "corpus"
     assert "--allow-rigged-oracle" in capsys.readouterr().err
@@ -563,8 +568,13 @@ def test_the_gm_oracle_refusal_takes_the_same_override_as_the_capture_one(capsys
 
 def test_a_corpus_carries_the_families_its_capture_identified(tmp_path):
     """A kit's own note numbers say nothing about which of them are one drum."""
-    kit = _write_corpus(tmp_path / "kit", notes=(41, 43, 45), velocities=(56, 120),
-                        channel=10, groups={"toms": [41, 43, 45]})
+    kit = _write_corpus(
+        tmp_path / "kit",
+        notes=(41, 43, 45),
+        velocities=(56, 120),
+        channel=10,
+        groups={"toms": [41, 43, 45]},
+    )
     assert load_corpus(kit).groups == {"toms": (41, 43, 45)}
     # A capture that named none gives none rather than a guess from note numbers,
     # and so does a manifest written before the block existed.
@@ -577,8 +587,13 @@ def test_the_kit_relations_are_dropped_when_a_probe_has_no_family_to_read(tmp_pa
     default supplies `kit` for every drum fit and it turns itself off there,
     rather than scoring 0.0 — which is also its best value.
     """
-    kit = _write_corpus(tmp_path / "kit", notes=(41, 43, 45), velocities=(56, 120),
-                        channel=10, groups={"toms": [41, 43, 45]})
+    kit = _write_corpus(
+        tmp_path / "kit",
+        notes=(41, 43, 45),
+        velocities=(56, 120),
+        channel=10,
+        groups={"toms": [41, 43, 45]},
+    )
     one = _probe_args(corpus=str(kit), drum_note=41)
     resolve_probe(one)
     assert one.notes == "41"
@@ -593,8 +608,13 @@ def test_the_kit_relations_are_dropped_when_a_probe_has_no_family_to_read(tmp_pa
 
 def test_an_explicit_kit_weight_is_refused_rather_than_scored_at_its_best(tmp_path):
     """Dropping a class default is right; dropping what someone asked for is not."""
-    kit = _write_corpus(tmp_path / "kit", notes=(41, 43, 45), velocities=(56, 120),
-                        channel=10, groups={"toms": [41, 43, 45]})
+    kit = _write_corpus(
+        tmp_path / "kit",
+        notes=(41, 43, 45),
+        velocities=(56, 120),
+        channel=10,
+        groups={"toms": [41, 43, 45]},
+    )
     args = _probe_args(corpus=str(kit), drum_note=41, w_kit=1.0)
     with pytest.raises(ValueError, match="relations inside a kit"):
         resolve_probe(args)

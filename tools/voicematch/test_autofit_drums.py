@@ -105,10 +105,10 @@ def test_a_drum_fit_weights_the_percussion_terms_not_the_harmonic_ones():
     # 1/3-octave profile cannot resolve. None of the harmonic ones: a hit has no
     # fundamental, so a ladder or an intonation error would be measuring a
     # frequency the sound does not contain.
-    assert set(weights) == {"band", "bdecay", "tilt", "bright", "lf", "env",
-                            "modes", "crest"}
-    assert not {"harm", "cents", "tnr", "init", "slope", "tail", "hf",
-                "stiff", "mod"} & set(weights)
+    assert set(weights) == {"band", "bdecay", "tilt", "bright", "lf", "env", "modes", "crest"}
+    assert not {"harm", "cents", "tnr", "init", "slope", "tail", "hf", "stiff", "mod"} & set(
+        weights
+    )
     # `band` is an L1 per band and carries no direction, so the lean of the
     # spectrum and where its energy sits are their own terms — the two the kit's
     # gate names and the two a whole-kit fit under `band` alone took backwards.
@@ -146,8 +146,13 @@ def test_a_weight_this_metric_set_cannot_produce_is_named_rather_than_dropped():
 
 
 def _hit(bands, decay, attack=1.0, decay_ms=200.0, crest=10.0) -> dict:
-    return {"bands_db": bands, "band_decay_db_s": decay, "attack_ms": attack,
-            "decay_ms": decay_ms, "crest_db": crest}
+    return {
+        "bands_db": bands,
+        "band_decay_db_s": decay,
+        "attack_ms": attack,
+        "decay_ms": decay_ms,
+        "crest_db": crest,
+    }
 
 
 def test_a_matching_hit_scores_zero_on_every_percussion_term():
@@ -175,8 +180,7 @@ def test_the_lean_of_the_spectrum_is_scored_where_the_band_profile_cannot_see_it
 
     ref = _hit(sloped(0.0), [-20.0], attack=1.0)
     bright, dull = _hit(sloped(+6.0), [-20.0]), _hit(sloped(-6.0), [-20.0])
-    assert (percussion_terms([bright], [ref])["band"]
-            == percussion_terms([dull], [ref])["band"])
+    assert percussion_terms([bright], [ref])["band"] == percussion_terms([dull], [ref])["band"]
     assert percussion_terms([bright], [ref])["tilt"] == pytest.approx(6.0)
     assert percussion_terms([dull], [ref])["tilt"] == pytest.approx(6.0)
     # The direction survives where it is read: a hit that leans the same way as
@@ -184,8 +188,9 @@ def test_the_lean_of_the_spectrum_is_scored_where_the_band_profile_cannot_see_it
     both = _hit(sloped(+6.0), [-20.0])
     assert percussion_terms([both], [_hit(sloped(+6.0), [-20.0])])["tilt"] == 0.0
     # And the centroid is the gate's own ratio, absent when the reference has none.
-    assert percussion_terms([{**bright, "centroid_hz": 4000.0}],
-                            [{**ref, "centroid_hz": 2000.0}])["bright"] == pytest.approx(100.0)
+    assert percussion_terms([{**bright, "centroid_hz": 4000.0}], [{**ref, "centroid_hz": 2000.0}])[
+        "bright"
+    ] == pytest.approx(100.0)
     assert percussion_terms([bright], [ref])["bright_hits"] == 0.0
 
 
@@ -226,9 +231,12 @@ def test_percussion_knobs_land_in_the_stage_their_evidence_is_in():
 def test_a_drum_spec_comes_from_the_note_not_from_the_program_map():
     """A drum note is not a GM program, so the program map has no entry for it."""
     cat = Catalogue(
-        defaults={"d038.percussion.wire_buzz": 0.5, "d038.amp_env.decay_ms": 250.0,
-                  "percussion_voice.kPhisemCollisionRate": 100.0,
-                  "violin.bowed_string.bow_force": 0.55},
+        defaults={
+            "d038.percussion.wire_buzz": 0.5,
+            "d038.amp_env.decay_ms": 250.0,
+            "percussion_voice.kPhisemCollisionRate": 100.0,
+            "violin.bowed_string.bow_force": 0.55,
+        },
         programs={40: "violin"},
         bounds={"percussion.wire_buzz": (0.0, 4.0)},
     )
@@ -261,17 +269,19 @@ def test_the_output_gain_is_not_offered_as_a_knob():
     down with a bit-identical band profile and a better score.
     """
     cat = Catalogue(
-        defaults={"d038.gain": 0.8, "d038.percussion.wire_buzz": 0.5,
-                  "violin.gain": 1.0, "violin.bowed_string.bow_force": 0.55},
+        defaults={
+            "d038.gain": 0.8,
+            "d038.percussion.wire_buzz": 0.5,
+            "violin.gain": 1.0,
+            "violin.bowed_string.bow_force": 0.55,
+        },
         programs={(40, 0): "violin"},
         bounds={},
     )
     assert "d038.gain" not in {e["tunable"] for e in auto_spec(0, cat, drum_note=38)}
     assert "violin.gain" not in {e["tunable"] for e in auto_spec(40, cat)}
     # And the exclusion is by field name, not by a substring of the path.
-    assert "d038.percussion.wire_buzz" in {
-        e["tunable"] for e in auto_spec(0, cat, drum_note=38)
-    }
+    assert "d038.percussion.wire_buzz" in {e["tunable"] for e in auto_spec(0, cat, drum_note=38)}
 
 
 def test_a_modes_bessel_zero_is_not_offered_but_its_ratio_is():
@@ -283,10 +293,12 @@ def test_a_modes_bessel_zero_is_not_offered_but_its_ratio_is():
     eight times the first zero of J0 while dropping alpha1 underneath it.
     """
     cat = Catalogue(
-        defaults={"d036.percussion.mode_alpha0": 2.4048,
-                  "d036.percussion.mode_alpha1": 3.8317,
-                  "d036.percussion.mode_ratios1": 1.59,
-                  "d036.percussion.mode_decay_s": 0.22},
+        defaults={
+            "d036.percussion.mode_alpha0": 2.4048,
+            "d036.percussion.mode_alpha1": 3.8317,
+            "d036.percussion.mode_ratios1": 1.59,
+            "d036.percussion.mode_decay_s": 0.22,
+        },
         programs={},
         bounds={},
     )
@@ -304,8 +316,7 @@ def test_the_first_modes_ratio_is_the_base_frequency_and_is_not_offered():
     moved five octaves either way.
     """
     cat = Catalogue(
-        defaults={"d036.percussion.mode_ratios0": 1.0,
-                  "d036.percussion.mode_ratios1": 1.59},
+        defaults={"d036.percussion.mode_ratios0": 1.0, "d036.percussion.mode_ratios1": 1.59},
         programs={},
         bounds={},
     )
@@ -324,13 +335,14 @@ def test_the_drums_dimensions_are_read_off_it_but_the_air_spring_is_fitted():
     drums, so it is a scalar a fit lands rather than a number read off the shell.
     """
     cat = Catalogue(
-        defaults={"d038.percussion.head_diameter_m": 0.36,
-                  "d038.percussion.shell_depth_m": 0.14,
-                  "d038.percussion.air_spring": 2.0,
-                  "d038.percussion.mallet_ms": 2.0},
+        defaults={
+            "d038.percussion.head_diameter_m": 0.36,
+            "d038.percussion.shell_depth_m": 0.14,
+            "d038.percussion.air_spring": 2.0,
+            "d038.percussion.mallet_ms": 2.0,
+        },
         programs={},
-        bounds={"d038.percussion.air_spring": (0.0, 8.0),
-                "d038.percussion.mallet_ms": (0.0, 50.0)},
+        bounds={"d038.percussion.air_spring": (0.0, 8.0), "d038.percussion.mallet_ms": (0.0, 50.0)},
     )
     offered = {e["tunable"] for e in auto_spec(0, cat, drum_note=38)}
     assert "d038.percussion.head_diameter_m" not in offered
@@ -353,7 +365,9 @@ def test_a_mode_ratio_is_searched_over_a_window_a_write_back_cannot_widen():
     floor, ceiling = MODE_RATIO_RANGE
     for escaped in (44.9033, 0.0251234):
         assert _auto_range("d036.percussion.mode_ratios1", escaped, (0.0, 64.0)) == (
-            floor, ceiling, True
+            floor,
+            ceiling,
+            True,
         )
 
     # A mode switched off is off: a range would turn a silent slot into a partial.
@@ -371,10 +385,12 @@ def test_the_pitch_a_drum_is_built_with_is_not_offered_but_its_voicing_is():
     improved, because a different object can match the same band profile.
     """
     cat = Catalogue(
-        defaults={"d066.percussion.base_freq_hz": 200.0,
-                  "d066.percussion.shell_freq_hz0": 180.0,
-                  "d066.percussion.mode_ratios1": 1.59,
-                  "d066.percussion.mode_decay_s": 0.22},
+        defaults={
+            "d066.percussion.base_freq_hz": 200.0,
+            "d066.percussion.shell_freq_hz0": 180.0,
+            "d066.percussion.mode_ratios1": 1.59,
+            "d066.percussion.mode_decay_s": 0.22,
+        },
         programs={},
         bounds={},
     )
@@ -445,14 +461,14 @@ def test_a_count_is_written_as_an_integer_and_a_switch_is_not_written_at_all():
     float literal spliced into one of those does not compile: the kick's fit
     emitted `t[35].one_shot = 0.884586f;` and five -Werror errors with it. Which
     is which comes from the override layer's own `I` / `I_TYPED` declarations."""
+
     def at(label: str, start: float) -> Knob:
-        return Knob(label=label, lo=0.0, hi=8.0, log=False, start_value=start,
-                    tunable=label)
+        return Knob(label=label, lo=0.0, hi=8.0, log=False, start_value=start, tunable=label)
 
     knobs = [
-        at("d035.percussion.num_modes", 2.0),      # a count
-        at("d035.percussion.noise_output", 0.0),   # an enum: its type is its range
-        at("d035.one_shot", 1.0),                  # a bool, and the fit's 0.885 is 1
+        at("d035.percussion.num_modes", 2.0),  # a count
+        at("d035.percussion.noise_output", 0.0),  # an enum: its type is its range
+        at("d035.one_shot", 1.0),  # a bool, and the fit's 0.885 is 1
         at("d035.percussion.shell_num_modes", 1.0),
     ]
     per_patch, per_drum, other = patch_field_assignments(knobs, [3.94, 0.717, 0.885, 1.18])
@@ -484,9 +500,11 @@ def test_a_note_whose_table_line_wraps_is_written_after_the_whole_statement():
     table = (REPO_ROOT / DRUM_TABLE_FILE).resolve()
     # Synthetic rather than the real table, whose t[56] block is whatever the
     # last fit left there.
-    before = ("  t[56] = make_metal(587.0f, {1.0f, 1.44f}, 2, 0.25f,\n"
-              "                     0.5f);  // Cowbell (587/845 Hz)\n"
-              "  t[67] = make_metal(1200.0f, {1.0f, 2.7f}, 2, 0.25f, 0.45f);\n")
+    before = (
+        "  t[56] = make_metal(587.0f, {1.0f, 1.44f}, 2, 0.25f,\n"
+        "                     0.5f);  // Cowbell (587/845 Hz)\n"
+        "  t[67] = make_metal(1200.0f, {1.0f, 2.7f}, 2, 0.25f, 0.45f);\n"
+    )
     text = write_drum_fields({56: [("percussion.tone_gain", 0.7)]}, {table: before})[table]
     lines = text.splitlines()
     written = next(i for i, ln in enumerate(lines) if "t[56].percussion.tone_gain" in ln)
@@ -504,8 +522,7 @@ def test_a_labelled_assignment_is_replaced_rather_than_shadowed():
     note on a dead line.
     """
     table = (REPO_ROOT / DRUM_TABLE_FILE).resolve()
-    before = ("  t[49] = make_cymbal(3600.0f, 1.10f);\n"
-              "  t[49].gain = 1.2698f;  // Crash 1\n")
+    before = "  t[49] = make_cymbal(3600.0f, 1.10f);\n  t[49].gain = 1.2698f;  // Crash 1\n"
     text = write_drum_fields({49: [("gain", 0.6029)]}, {table: before})[table]
     assert text.count("t[49].gain") == 1
     assert "t[49].gain = 0.6029f;  // Crash 1" in text

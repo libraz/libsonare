@@ -187,8 +187,7 @@ def test_ctypes_class_without_a_literal_fields_list_is_recorded_unparsed() -> No
     accepting one would flood the report with the noisiest possible finding.
     """
     ex = _py_records(
-        "import ctypes\n\n\nclass SonareDyn(ctypes.Structure):\n"
-        "    _fields_ = build_fields()\n"
+        "import ctypes\n\n\nclass SonareDyn(ctypes.Structure):\n    _fields_ = build_fields()\n"
     )
     assert ex.records == []
     assert ex.unparsed == 1
@@ -389,9 +388,7 @@ def test_peer_declared_absence_is_informational() -> None:
 
 
 def test_allowlist_suppresses_a_record_and_a_field() -> None:
-    allow = allowlist_mod.Allowlist(
-        record={"node": ["other"]}, record_fields=["thing.gain"]
-    )
+    allow = allowlist_mod.Allowlist(record={"node": ["other"]}, record_fields=["thing.gain"])
     rep = _report(
         {
             "c": _ex(
@@ -497,9 +494,7 @@ def test_real_repo_extracts_records_on_every_surface() -> None:
         assert counts.get(surface, 0) > 50, counts
     # The comparison is only meaningful where a C record and a facade record
     # actually meet; assert that the overlap is substantial, not incidental.
-    compared = {
-        f.key for f in rep.findings if f.category == "record" and not f.informational
-    }
+    compared = {f.key for f in rep.findings if f.category == "record" and not f.informational}
     assert isinstance(compared, set)
     assert counts["c"] >= 100, counts
     # The allowlisted entries must stay countable too: a suppression that never

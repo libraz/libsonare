@@ -110,8 +110,7 @@ def test_a_set_keeps_each_group_in_one_run(name):
             if seen and seen[-1] == take.group:
                 continue
             assert take.group not in seen, (
-                f"{name}/{program}: group {take.group!r} reappears after "
-                f"{seen[-1]!r}"
+                f"{name}/{program}: group {take.group!r} reappears after {seen[-1]!r}"
             )
             seen.append(take.group)
 

@@ -213,9 +213,7 @@ def _chain(feed: np.ndarray, sample_rate: int, overrides: dict | None) -> np.nda
 
 
 def _chain_stereo(feed: np.ndarray, sample_rate: int) -> np.ndarray:
-    result = libsonare.master_audio_stereo(
-        _f32(feed[:, 0]), _f32(feed[:, 1]), sample_rate, PRESET
-    )
+    result = libsonare.master_audio_stereo(_f32(feed[:, 0]), _f32(feed[:, 1]), sample_rate, PRESET)
     return np.stack(
         [np.asarray(result.left, dtype=np.float64), np.asarray(result.right, dtype=np.float64)],
         axis=1,
@@ -947,9 +945,7 @@ def evaluate(
     values: dict[str, Any] = {
         "seg_snr_db": float(report.value) if report is not None else None,
         "log_kurtosis_ratio": (
-            float(metrics_repair.log_kurtosis_ratio(src, out, sample_rate))
-            if one_channel
-            else None
+            float(metrics_repair.log_kurtosis_ratio(src, out, sample_rate)) if one_channel else None
         ),
         "stoi": (
             _maybe(

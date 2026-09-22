@@ -63,7 +63,13 @@ FORMATS = [
     ("pcm8", 1, 8, lambda x: np.round(x * 127 + 128).astype("u1").tobytes(), 1e-2),
     ("pcm16", 1, 16, lambda x: np.round(x * 32767).astype("<i2").tobytes(), 4e-5),
     ("pcm24", 1, 24, _pack_24, 2e-7),
-    ("pcm32", 1, 32, lambda x: np.round(x * (2**31 - 1)).astype("<i4").tobytes(), FLOAT32_RESOLUTION),
+    (
+        "pcm32",
+        1,
+        32,
+        lambda x: np.round(x * (2**31 - 1)).astype("<i4").tobytes(),
+        FLOAT32_RESOLUTION,
+    ),
 ]
 
 

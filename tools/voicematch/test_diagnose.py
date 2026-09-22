@@ -60,12 +60,16 @@ def row(diag: Diagnosis, term: str):
 
 def test_a_term_no_knob_moves_is_unreachable():
     base = terms(harm=8.0)
-    diag = diagnose(base, probes(
-        ("a.x", "lo", terms(harm=8.0), "clamp"),
-        ("a.x", "hi", terms(harm=8.0), "clamp"),
-        ("a.y", "lo", terms(harm=7.999), "clamp"),
-        ("a.y", "hi", terms(harm=8.001), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(harm=8.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+            ("a.y", "lo", terms(harm=7.999), "clamp"),
+            ("a.y", "hi", terms(harm=8.001), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert verdict_of(diag, "harm") == "unreachable"
     assert [t.term for t in diag.structural()] == ["harm"]
 
@@ -78,10 +82,14 @@ def test_unreachable_over_a_clamp_bound_does_not_ask_for_a_wider_range():
     way this verdict wastes someone's afternoon.
     """
     base = terms(harm=8.0)
-    diag = diagnose(base, probes(
-        ("a.x", "lo", terms(harm=8.0), "clamp"),
-        ("a.x", "hi", terms(harm=8.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(harm=8.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     note = row(diag, "harm").note
     assert "widen" not in note
     assert "interval the engine accepts" in note
@@ -89,10 +97,14 @@ def test_unreachable_over_a_clamp_bound_does_not_ask_for_a_wider_range():
 
 def test_unreachable_over_a_heuristic_range_asks_for_a_wider_one_first():
     base = terms(harm=8.0)
-    diag = diagnose(base, probes(
-        ("a.x", "lo", terms(harm=8.0), "auto"),
-        ("a.x", "hi", terms(harm=8.0), "auto"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(harm=8.0), "auto"),
+            ("a.x", "hi", terms(harm=8.0), "auto"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert "widen" in row(diag, "harm").note
 
 
@@ -104,20 +116,28 @@ def test_a_converged_term_is_spent_not_unreachable():
     well-modelled voice reports every measurement as structurally missing.
     """
     base = terms(harm=8.0)
-    diag = diagnose(base, probes(
-        ("a.x", "lo", terms(harm=12.0), "clamp"),
-        ("a.x", "hi", terms(harm=11.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(harm=12.0), "clamp"),
+            ("a.x", "hi", terms(harm=11.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert verdict_of(diag, "harm") == "spent"
     assert not diag.structural()
 
 
 def test_a_knob_that_closes_most_of_the_gap_is_reachable():
     base = terms(harm=8.0)
-    diag = diagnose(base, probes(
-        ("a.x", "lo", terms(harm=1.5), "clamp"),
-        ("a.x", "hi", terms(harm=9.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(harm=1.5), "clamp"),
+            ("a.x", "hi", terms(harm=9.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert verdict_of(diag, "harm") == "reachable"
     best = row(diag, "harm").best
     assert best.knob == "a.x" and best.at == "lo"
@@ -125,18 +145,26 @@ def test_a_knob_that_closes_most_of_the_gap_is_reachable():
 
 def test_a_knob_that_closes_a_little_of_the_gap_is_partial():
     base = terms(harm=8.0)
-    diag = diagnose(base, probes(
-        ("a.x", "lo", terms(harm=6.5), "clamp"),
-        ("a.x", "hi", terms(harm=8.4), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(harm=6.5), "clamp"),
+            ("a.x", "hi", terms(harm=8.4), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert verdict_of(diag, "harm") == "partial"
 
 
 def test_a_term_inside_one_perceptual_unit_is_matched():
-    diag = diagnose(terms(cents=0.4), probes(
-        ("a.x", "lo", terms(cents=0.4), "clamp"),
-        ("a.x", "hi", terms(cents=0.4), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        terms(cents=0.4),
+        probes(
+            ("a.x", "lo", terms(cents=0.4), "clamp"),
+            ("a.x", "hi", terms(cents=0.4), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert verdict_of(diag, "cents") == "matched"
 
 
@@ -147,10 +175,14 @@ def test_an_unweighted_term_is_reported_as_never_looked_at():
     it, and the knobs that would are right there.
     """
     base = terms(tnr=9.0)
-    diag = diagnose(base, probes(
-        ("a.x", "lo", terms(tnr=2.0), "clamp"),
-        ("a.x", "hi", terms(tnr=9.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(tnr=2.0), "clamp"),
+            ("a.x", "hi", terms(tnr=9.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert verdict_of(diag, "tnr") == "unscored"
     assert "no weight" in row(diag, "tnr").note
 
@@ -165,10 +197,15 @@ def test_a_percussion_probe_does_not_report_the_harmonic_terms():
     Reporting that zero as `matched` would tell a drum fit its harmonic ladder
     is perfect, which is not a thing a drum has.
     """
-    diag = diagnose(terms(band=6.0), probes(
-        ("a.x", "lo", terms(band=6.0), "clamp"),
-        ("a.x", "hi", terms(band=6.0), "clamp"),
-    ), {"band": 1.0, "bdecay": 1.0}, percussive=True)
+    diag = diagnose(
+        terms(band=6.0),
+        probes(
+            ("a.x", "lo", terms(band=6.0), "clamp"),
+            ("a.x", "hi", terms(band=6.0), "clamp"),
+        ),
+        {"band": 1.0, "bdecay": 1.0},
+        percussive=True,
+    )
     reported = {t.term for t in diag.terms}
     assert "harm" not in reported and "cents" not in reported
     assert reported == set(measured_terms(percussive=True))
@@ -198,10 +235,14 @@ def test_a_term_the_probe_produced_no_cell_for_is_absent_rather_than_matched():
 
 def test_the_multiscale_term_is_absent_rather_than_matched_when_unweighted():
     """It is the one term not computed unless weighted, so its zero is a gap."""
-    diag = diagnose(terms(), probes(
-        ("a.x", "lo", terms(), "clamp"),
-        ("a.x", "hi", terms(), "clamp"),
-    ), {"harm": 1.0})
+    diag = diagnose(
+        terms(),
+        probes(
+            ("a.x", "lo", terms(), "clamp"),
+            ("a.x", "hi", terms(), "clamp"),
+        ),
+        {"harm": 1.0},
+    )
     assert verdict_of(diag, "mss") == "not computed"
 
 
@@ -212,31 +253,43 @@ def test_the_multiscale_term_is_absent_rather_than_matched_when_unweighted():
 def test_connectivity_counts_movement_in_either_direction():
     """A knob that only makes a term worse still proves the mechanism is wired."""
     base = terms(harm=8.0)
-    diag = diagnose(base, probes(
-        ("worse.only", "lo", terms(harm=13.0), "clamp"),
-        ("worse.only", "hi", terms(harm=14.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        base,
+        probes(
+            ("worse.only", "lo", terms(harm=13.0), "clamp"),
+            ("worse.only", "hi", terms(harm=14.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert row(diag, "harm").movers == 1
     assert verdict_of(diag, "harm") == "spent"
 
 
 def test_movement_under_the_connectivity_threshold_does_not_count():
     base = terms(harm=8.0)
-    diag = diagnose(base, probes(
-        ("a.x", "lo", terms(harm=8.0 - 0.5 * CONNECTED_UNITS), "clamp"),
-        ("a.x", "hi", terms(harm=8.0 + 0.5 * CONNECTED_UNITS), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        base,
+        probes(
+            ("a.x", "lo", terms(harm=8.0 - 0.5 * CONNECTED_UNITS), "clamp"),
+            ("a.x", "hi", terms(harm=8.0 + 0.5 * CONNECTED_UNITS), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert row(diag, "harm").movers == 0
     assert verdict_of(diag, "harm") == "unreachable"
 
 
 def test_a_knob_moving_no_measurement_is_named():
-    diag = diagnose(terms(harm=8.0), probes(
-        ("live.knob", "lo", terms(harm=2.0), "clamp"),
-        ("live.knob", "hi", terms(harm=8.0), "clamp"),
-        ("dead.knob", "lo", terms(harm=8.0), "clamp"),
-        ("dead.knob", "hi", terms(harm=8.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("live.knob", "lo", terms(harm=2.0), "clamp"),
+            ("live.knob", "hi", terms(harm=8.0), "clamp"),
+            ("dead.knob", "lo", terms(harm=8.0), "clamp"),
+            ("dead.knob", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert diag.inert_knobs == ["dead.knob"]
 
 
@@ -247,10 +300,14 @@ def test_a_knob_moving_no_measurement_is_named():
 def test_a_probe_that_did_not_render_is_skipped_rather_than_scored_as_zero():
     """An unscorable render comes back as None; counting it as 0.0 would read
     as a knob that closes the whole gap."""
-    diag = diagnose(terms(harm=8.0), probes(
-        ("a.x", "lo", None, "clamp"),
-        ("a.x", "hi", terms(harm=8.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", None, "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert verdict_of(diag, "harm") == "unreachable"
     assert row(diag, "harm").best.gain == 0.0
 
@@ -265,10 +322,14 @@ def test_a_silenced_render_is_not_scored_as_a_perfect_match():
     everything, and it wins on every term at once.
     """
     silent = terms() | {"comparable": 0.0}
-    diag = diagnose(terms(harm=8.0) | {"comparable": 1.0}, probes(
-        ("a.gain", "lo", silent, "clamp"),
-        ("a.gain", "hi", terms(harm=8.2) | {"comparable": 1.0}, "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        terms(harm=8.0) | {"comparable": 1.0},
+        probes(
+            ("a.gain", "lo", silent, "clamp"),
+            ("a.gain", "hi", terms(harm=8.2) | {"comparable": 1.0}, "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert verdict_of(diag, "harm") != "reachable"
     assert row(diag, "harm").best.gain == 0.0
     assert diag.unscorable == ["a.gain:lo"]
@@ -276,10 +337,14 @@ def test_a_silenced_render_is_not_scored_as_a_perfect_match():
 
 def test_an_unflagged_term_dict_is_taken_at_face_value():
     """Terms measured before the flag existed, and every hand-built case here."""
-    diag = diagnose(terms(harm=8.0), probes(
-        ("a.x", "lo", terms(harm=1.0), "clamp"),
-        ("a.x", "hi", terms(harm=8.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", terms(harm=1.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert verdict_of(diag, "harm") == "reachable"
     assert diag.unscorable == []
 
@@ -296,10 +361,15 @@ def test_the_probe_axes_are_counted_off_the_rows_that_were_scored():
 def test_a_fixed_axis_is_named_next_to_the_inert_knobs(capsys):
     """A dynamics control cannot move a single-velocity probe, and reads exactly
     like a knob the voice never touches."""
-    diag = diagnose(terms(harm=8.0), probes(
-        ("a.velocity_range_db", "lo", terms(harm=8.0), "clamp"),
-        ("a.velocity_range_db", "hi", terms(harm=8.0), "clamp"),
-    ), PITCHED_WEIGHTS, axes="the sustain pattern over 3 notes and one velocity")
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.velocity_range_db", "lo", terms(harm=8.0), "clamp"),
+            ("a.velocity_range_db", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+        axes="the sustain pattern over 3 notes and one velocity",
+    )
     print_report(diag)
     out = capsys.readouterr().out
     assert "one velocity" in out
@@ -314,18 +384,26 @@ def test_no_probes_at_all_still_produces_a_report():
 
 
 def test_a_non_finite_residual_is_dropped_rather_than_ranked():
-    diag = diagnose(terms(harm=float("inf")), probes(
-        ("a.x", "lo", terms(harm=1.0), "clamp"),
-        ("a.x", "hi", terms(harm=1.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        terms(harm=float("inf")),
+        probes(
+            ("a.x", "lo", terms(harm=1.0), "clamp"),
+            ("a.x", "hi", terms(harm=1.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     assert "harm" not in {t.term for t in diag.terms}
 
 
 def test_the_json_record_round_trips():
-    diag = diagnose(terms(harm=8.0), probes(
-        ("a.x", "lo", terms(harm=2.0), "clamp"),
-        ("a.x", "hi", terms(harm=8.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", terms(harm=2.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     record = diag.to_dict()
     harm = next(t for t in record["terms"] if t["term"] == "harm")
     assert harm["best"]["knob"] == "a.x"
@@ -335,10 +413,15 @@ def test_the_json_record_round_trips():
 
 @pytest.mark.parametrize("percussive", [False, True])
 def test_the_report_prints_for_either_metric_set(capsys, percussive):
-    diag = diagnose(terms(harm=8.0, band=6.0), probes(
-        ("a.x", "lo", terms(harm=8.0, band=6.0), "clamp"),
-        ("a.x", "hi", terms(harm=8.0, band=6.0), "clamp"),
-    ), PITCHED_WEIGHTS | {"band": 1.0}, percussive=percussive)
+    diag = diagnose(
+        terms(harm=8.0, band=6.0),
+        probes(
+            ("a.x", "lo", terms(harm=8.0, band=6.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0, band=6.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS | {"band": 1.0},
+        percussive=percussive,
+    )
     print_report(diag)
     out = capsys.readouterr().out
     assert "what the residual is made of" in out
@@ -346,20 +429,28 @@ def test_the_report_prints_for_either_metric_set(capsys, percussive):
 
 
 def test_the_report_says_so_when_nothing_is_structural(capsys):
-    diag = diagnose(terms(harm=8.0), probes(
-        ("a.x", "lo", terms(harm=1.0), "clamp"),
-        ("a.x", "hi", terms(harm=8.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", terms(harm=1.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     print_report(diag)
     out = capsys.readouterr().out
     assert "Every measurement is reachable" in out
 
 
 def test_the_verdict_can_be_written_to_a_file(tmp_path, capsys):
-    diag = diagnose(terms(harm=8.0), probes(
-        ("a.x", "lo", terms(harm=8.0), "clamp"),
-        ("a.x", "hi", terms(harm=8.0), "clamp"),
-    ), PITCHED_WEIGHTS)
+    diag = diagnose(
+        terms(harm=8.0),
+        probes(
+            ("a.x", "lo", terms(harm=8.0), "clamp"),
+            ("a.x", "hi", terms(harm=8.0), "clamp"),
+        ),
+        PITCHED_WEIGHTS,
+    )
     out = tmp_path / "diag.json"
     print_report(diag, out_path=str(out))
     capsys.readouterr()

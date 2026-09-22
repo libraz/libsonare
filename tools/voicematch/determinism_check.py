@@ -68,7 +68,9 @@ ENGINES: list[tuple[str, int, str]] = [
 
 
 def single_note_smf(program: int) -> bytes:
-    return write_smf([Note(note=NOTE, velocity=VELOCITY, start=ONSET, dur=HIT_DUR)], program=program)
+    return write_smf(
+        [Note(note=NOTE, velocity=VELOCITY, start=ONSET, dur=HIT_DUR)], program=program
+    )
 
 
 def double_hit_smf(program: int) -> bytes:
@@ -112,7 +114,11 @@ def compare_a(program: int, tmp_dir: Path, tag: str) -> tuple[bool, float, float
     n = min(len(a1), len(a2))
     diff = a1[:n].astype(np.float64) - a2[:n].astype(np.float64)
     identical = bool(np.array_equal(a1, a2))
-    return identical, float(np.max(np.abs(diff))) if n else 0.0, rms_db(diff) if n else float("-inf")
+    return (
+        identical,
+        float(np.max(np.abs(diff))) if n else 0.0,
+        rms_db(diff) if n else float("-inf"),
+    )
 
 
 INAUDIBLE_RATIO_DB = -60.0  # diff/hit1 rms ratio at or below this reads as "unchanged"
@@ -137,15 +143,19 @@ def compare_b(program: int) -> dict:
     start1 = round(ONSET * SR)
     start2 = round((ONSET + GAP) * SR)
 
-    a_audio = np.atleast_2d(render_model(single_note_smf(program), total_seconds=total_seconds, sr=SR))
-    b_audio = np.atleast_2d(render_model(double_hit_smf(program), total_seconds=total_seconds, sr=SR))
+    a_audio = np.atleast_2d(
+        render_model(single_note_smf(program), total_seconds=total_seconds, sr=SR)
+    )
+    b_audio = np.atleast_2d(
+        render_model(double_hit_smf(program), total_seconds=total_seconds, sr=SR)
+    )
     a = np.asarray(a_audio, dtype=np.float64)
     b = np.asarray(b_audio, dtype=np.float64)
     residual = b - a
 
     pre_hit2_bleed = float(np.max(np.abs(residual[:start2])))  # must be 0.0 for B-A to mean hit2
 
-    hit1 = a[start1 : start1 + window]                 # hit1's own output (A has no hit2)
+    hit1 = a[start1 : start1 + window]  # hit1's own output (A has no hit2)
     hit2_isolated = residual[start2 : start2 + window]  # hit2's own output (B minus A)
     diff = hit1 - hit2_isolated
 

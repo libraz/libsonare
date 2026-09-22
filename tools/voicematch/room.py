@@ -88,8 +88,11 @@ class Room:
         choose its probe should choose a longer silence instead (the
         `room-probe` pattern exists for this).
         """
-        return (self.rt60_s > 0.0 and self.tail_window_s > 0.0
-                and self.tail_window_s < self.rt60_s * 25.0 / 60.0)
+        return (
+            self.rt60_s > 0.0
+            and self.tail_window_s > 0.0
+            and self.tail_window_s < self.rt60_s * 25.0 / 60.0
+        )
 
     def gated(self) -> bool:
         """True when the note windows were too short to hold the notes.
@@ -116,8 +119,11 @@ class Room:
         pitched patterns hold their notes for seconds against rooms of well under
         one second, and a drum's gate is under a tenth of one.
         """
-        return (self.rt60_s > 0.0 and self.note_window_s > 0.0
-                and self.note_window_s < self.rt60_s * 0.5)
+        return (
+            self.rt60_s > 0.0
+            and self.note_window_s > 0.0
+            and self.note_window_s < self.rt60_s * 0.5
+        )
 
     def is_dry(self) -> bool:
         """True when the space is too small or too quiet to be worth modelling.
@@ -268,7 +274,10 @@ def estimate_room(audio: np.ndarray, sr: int, notes: list[tuple[float, float]]) 
     tail_db = 10.0 * np.log10(max(note_energy, 1e-20) / max(tail_energy, 1e-20))
 
     return Room(
-        rt60_s=rt60, hf_ratio=hf_ratio, tail_db=float(tail_db), predelay_ms=15.0,
+        rt60_s=rt60,
+        hf_ratio=hf_ratio,
+        tail_db=float(tail_db),
+        predelay_ms=15.0,
         tail_window_s=min(len(t) for t in tails) / sr,
         note_window_s=min(off - on for on, off in spans),
     )
@@ -419,7 +428,10 @@ def measurable_room(
 
 
 def place_model_in(
-    model: np.ndarray, sr: int, notes: list[tuple[float, float]], room: Room,
+    model: np.ndarray,
+    sr: int,
+    notes: list[tuple[float, float]],
+    room: Room,
     ir: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Convolve `model` into `room`, returning the audio and the IR used.
@@ -536,8 +548,12 @@ def match_sends(target: Room | Sequence[Room], measure, log=None) -> dict:
     targets = [target] if isinstance(target, Room) else list(target)
     if not targets or all(t.is_dry() for t in targets):
         return {
-            "cc91": 0, "decay_scale": 1.0, "send_factor": 0.0,
-            "residual": 0.0, "measured": DRY.to_dict(), "dry": True,
+            "cc91": 0,
+            "decay_scale": 1.0,
+            "send_factor": 0.0,
+            "residual": 0.0,
+            "measured": DRY.to_dict(),
+            "dry": True,
         }
 
     # Staged rather than a full 8x10 grid: the measured response separates
@@ -552,8 +568,10 @@ def match_sends(target: Room | Sequence[Room], measure, log=None) -> dict:
         got = measure(cc91, decay_scale)
         d = room_span_distance(got, targets)
         if log is not None:
-            log(f"  cc91={cc91:3d} decay_scale={decay_scale:.2f} -> "
-                f"rt60={got.rt60_s:.2f}s tail={got.tail_db:+.1f}dB  dist={d:.2f}")
+            log(
+                f"  cc91={cc91:3d} decay_scale={decay_scale:.2f} -> "
+                f"rt60={got.rt60_s:.2f}s tail={got.tail_db:+.1f}dB  dist={d:.2f}"
+            )
         if best is None or d < best[0]:
             best = (d, cc91, decay_scale, got)
         return d

@@ -235,9 +235,7 @@ def _validate_melody(melody: Any, label: str, errors: list[str]) -> None:
                 errors.append(f"{note_label}.{key}: expected an integer {bound}")
 
 
-def _validate_command_requires(
-    record: Any, label: str, errors: list[str]
-) -> None:
+def _validate_command_requires(record: Any, label: str, errors: list[str]) -> None:
     """Check the build options a command needs the native binary to carry.
 
     Absent means unconditional, which is most commands. Present means the
@@ -396,9 +394,7 @@ def _validate_option(option: Any, label: str, errors: list[str]) -> None:
         return
     if repeatable:
         if default != []:
-            errors.append(
-                f"{label}.default: repeatable option needs an empty array default"
-            )
+            errors.append(f"{label}.default: repeatable option needs an empty array default")
         return
     if default is None:
         return
@@ -413,9 +409,7 @@ def _validate_option(option: Any, label: str, errors: list[str]) -> None:
         and default is not None
         and not isinstance(default, str)
     ):
-        errors.append(
-            f"{label}.default: string/path option needs a string or null default"
-        )
+        errors.append(f"{label}.default: string/path option needs a string or null default")
 
 
 def _validate_schema_alternatives(value: Any, label: str, errors: list[str]) -> None:
@@ -426,9 +420,7 @@ def _validate_schema_alternatives(value: Any, label: str, errors: list[str]) -> 
         _validate_payload_schema(schema, f"{label}[{index}]", errors)
 
 
-def _validate_object_schema(
-    value: dict[str, Any], label: str, errors: list[str]
-) -> None:
+def _validate_object_schema(value: dict[str, Any], label: str, errors: list[str]) -> None:
     """Validate the object form of the recursive payload schema.
 
     ``keys`` is the compact legacy spelling and makes every field required.
@@ -474,9 +466,7 @@ def _validate_object_schema(
             continue
         for key, schema in fields.items():
             if not isinstance(key, str) or not key:
-                errors.append(
-                    f"{label}.{source}: field names must be non-empty strings"
-                )
+                errors.append(f"{label}.{source}: field names must be non-empty strings")
                 continue
             if key in field_schemas and field_sources[key] != source:
                 errors.append(f"{label}: field {key!r} is declared more than once")
@@ -488,17 +478,13 @@ def _validate_object_schema(
     if isinstance(required, list):
         for key in required:
             if not isinstance(key, str) or not key:
-                errors.append(
-                    f"{label}.required: field names must be non-empty strings"
-                )
+                errors.append(f"{label}.required: field names must be non-empty strings")
             elif key not in field_schemas:
                 errors.append(f"{label}.required: unknown property {key!r}")
     if isinstance(optional, list):
         for key in optional:
             if not isinstance(key, str) or not key:
-                errors.append(
-                    f"{label}.optional: field names must be non-empty strings"
-                )
+                errors.append(f"{label}.optional: field names must be non-empty strings")
             elif key not in field_schemas:
                 errors.append(f"{label}.optional: unknown property {key!r}")
 
@@ -673,9 +659,7 @@ def _validate_closed_payload_schema(value: Any, label: str, errors: list[str]) -
     if "optional" in value:
         errors.append(f"{label}: active payload schemas cannot declare optional fields")
     if value.get("additional_properties", value.get("additionalProperties", False)):
-        errors.append(
-            f"{label}: active payload schemas must reject additional properties"
-        )
+        errors.append(f"{label}: active payload schemas must reject additional properties")
     if isinstance(value.get("keys"), dict):
         for key, child in value["keys"].items():
             _validate_closed_payload_schema(child, f"{label}.keys.{key}", errors)
@@ -685,9 +669,7 @@ def _validate_closed_payload_schema(value: Any, label: str, errors: list[str]) -
     for key in ("required", "optional"):
         if isinstance(value.get(key), dict):
             for child_name, child in value[key].items():
-                _validate_closed_payload_schema(
-                    child, f"{label}.{key}.{child_name}", errors
-                )
+                _validate_closed_payload_schema(child, f"{label}.{key}.{child_name}", errors)
     if "items" in value:
         _validate_closed_payload_schema(value["items"], f"{label}.items", errors)
     for key in ("one_of", "any_of", "oneOf", "anyOf", "variants"):
@@ -789,22 +771,14 @@ def _require_schema_keys(
     return schema["keys"]
 
 
-def _require_array_item_schema(
-    schema: Any, label: str, errors: list[str]
-) -> Any | None:
-    if (
-        not isinstance(schema, dict)
-        or schema.get("type") != "array"
-        or "items" not in schema
-    ):
+def _require_array_item_schema(schema: Any, label: str, errors: list[str]) -> Any | None:
+    if not isinstance(schema, dict) or schema.get("type") != "array" or "items" not in schema:
         errors.append(f"{label}: expected an array schema with item schema")
         return None
     return schema["items"]
 
 
-def _require_schema_shape(
-    schema: Any, expected: Any, label: str, errors: list[str]
-) -> None:
+def _require_schema_shape(schema: Any, expected: Any, label: str, errors: list[str]) -> None:
     """Require a canonical schema node's keys and primitive types.
 
     ``_validate_payload_schema`` deliberately accepts the generic recursive
@@ -828,9 +802,7 @@ def _require_schema_shape(
         if not isinstance(schema, dict) or schema.get("type") != "array":
             errors.append(f"{label}: canonical type differs (expected array)")
             return
-        _require_schema_shape(
-            schema.get("items"), expected.get("items"), f"{label}.items", errors
-        )
+        _require_schema_shape(schema.get("items"), expected.get("items"), f"{label}.items", errors)
         return
 
     expected_keys = expected.get("keys")
@@ -852,9 +824,7 @@ def _validate_canonical_payload_schema(
 
     success = payloads.get("success")
     if path == "analyze":
-        top = _require_schema_keys(
-            success, _ANALYZE_TOP_LEVEL_KEYS, f"{label}.success", errors
-        )
+        top = _require_schema_keys(success, _ANALYZE_TOP_LEVEL_KEYS, f"{label}.success", errors)
         if top is None:
             return
         nested = {
@@ -865,26 +835,18 @@ def _validate_canonical_payload_schema(
             "rhythm": _ANALYZE_RHYTHM_KEYS,
         }
         for name, expected in nested.items():
-            _require_schema_keys(
-                top.get(name), expected, f"{label}.success.{name}", errors
-            )
+            _require_schema_keys(top.get(name), expected, f"{label}.success.{name}", errors)
         arrays = {
             "beats": _ANALYZE_BEAT_KEYS,
             "chords": _ANALYZE_CHORD_KEYS,
             "sections": _ANALYZE_SECTION_KEYS,
         }
         for name, expected in arrays.items():
-            item = _require_array_item_schema(
-                top.get(name), f"{label}.success.{name}", errors
-            )
+            item = _require_array_item_schema(top.get(name), f"{label}.success.{name}", errors)
             if item is not None:
-                _require_schema_keys(
-                    item, expected, f"{label}.success.{name}.items", errors
-                )
+                _require_schema_keys(item, expected, f"{label}.success.{name}.items", errors)
     elif path == "spectral":
-        top = _require_schema_keys(
-            success, {"n_frames", "features"}, f"{label}.success", errors
-        )
+        top = _require_schema_keys(success, {"n_frames", "features"}, f"{label}.success", errors)
         if top is None:
             return
         feature_schemas = _require_schema_keys(
@@ -912,9 +874,7 @@ def _validate_canonical_payload_schema(
             _require_schema_keys(schema, expected, f"{label}.{name}", errors)
     elif path == "project.compile":
         success = payloads.get("success")
-        top = _require_schema_keys(
-            success, _PROJECT_COMPILE_KEYS, f"{label}.success", errors
-        )
+        top = _require_schema_keys(success, _PROJECT_COMPILE_KEYS, f"{label}.success", errors)
         if top is not None:
             item = _require_array_item_schema(
                 top.get("diagnostics"), f"{label}.success.diagnostics", errors
@@ -935,13 +895,9 @@ def _validate_canonical_payload_schema(
             payloads.get("success"), _MASTERING_REPORT_KEYS, f"{label}.success", errors
         )
     elif path == "rhythm":
-        _require_schema_shape(
-            success, _RHYTHM_PAYLOAD_SCHEMA, f"{label}.success", errors
-        )
+        _require_schema_shape(success, _RHYTHM_PAYLOAD_SCHEMA, f"{label}.success", errors)
     elif path == "pitch":
-        _require_schema_shape(
-            success, _PITCH_PAYLOAD_SCHEMA, f"{label}.success", errors
-        )
+        _require_schema_shape(success, _PITCH_PAYLOAD_SCHEMA, f"{label}.success", errors)
     elif path == "eq":
         _require_schema_shape(success, _EQ_PAYLOAD_SCHEMA, f"{label}.success", errors)
     elif path == "mastering-processor":
@@ -965,9 +921,7 @@ def _validate_payload_property_exemptions(manifest: Any, errors: list[str]) -> f
 
     registry = manifest.get("payload_property_exemptions")
     if not isinstance(registry, dict) or not registry:
-        errors.append(
-            "manifest.payload_property_exemptions: expected a non-empty object"
-        )
+        errors.append("manifest.payload_property_exemptions: expected a non-empty object")
         return frozenset()
     commands = manifest.get("commands")
     pointers: set[str] = set()

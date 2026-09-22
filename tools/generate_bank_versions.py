@@ -62,11 +62,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "voicematch"))
 DEFAULT_OUTPUT = Path("tools/bank-versions.json")
 
 #: Constant groups that are not a patch. Everything else the dump reports is one.
-SHARED_PREFIXES = frozenset({
-    "gm_fallback_families",
-    "gm_fallback_map",
-    "gs_effects",
-})
+SHARED_PREFIXES = frozenset(
+    {
+        "gm_fallback_families",
+        "gm_fallback_map",
+        "gs_effects",
+    }
+)
 
 DRUM_UNIT = re.compile(r"^d(\d{3})$")
 FAMILY_UNIT = re.compile(r"^fam(\d+)$")
@@ -150,12 +152,18 @@ DOC = (
 )
 
 
-def rebuild(registry: dict, units: dict[str, dict[str, float | str]], patches: set[str],
-            note: str, when: str) -> tuple[dict, list[str], list[str]]:
+def rebuild(
+    registry: dict,
+    units: dict[str, dict[str, float | str]],
+    patches: set[str],
+    note: str,
+    when: str,
+) -> tuple[dict, list[str], list[str]]:
     """The registry as it should be, plus the units that changed and vanished."""
     held = registry["units"]
     changed = [
-        name for name, values in sorted(units.items())
+        name
+        for name, values in sorted(units.items())
         if held.get(name, {}).get("fingerprint") != fingerprint(values)
     ]
     gone = sorted(set(held) - set(units))
@@ -169,12 +177,14 @@ def rebuild(registry: dict, units: dict[str, dict[str, float | str]], patches: s
         history = list(previous.get("history", []))
         if name in changed:
             version += 1
-            history.append({
-                "version": version,
-                "generation": generation,
-                "date": when,
-                "note": note or ("initial" if version == 1 else "unrecorded"),
-            })
+            history.append(
+                {
+                    "version": version,
+                    "generation": generation,
+                    "date": when,
+                    "note": note or ("initial" if version == 1 else "unrecorded"),
+                }
+            )
         out[name] = {
             "kind": unit_kind(name, patches),
             "version": version,
@@ -192,8 +202,10 @@ def rebuild(registry: dict, units: dict[str, dict[str, float | str]], patches: s
 def report(changed: list[str], gone: list[str], generation: int, limit: int = 20) -> None:
     """Name what moved. A count alone sends the reader back to the diff."""
     if gone:
-        print(f"  {len(gone)} unit(s) no longer in the bank: {', '.join(gone[:limit])}"
-              + (" …" if len(gone) > limit else ""))
+        print(
+            f"  {len(gone)} unit(s) no longer in the bank: {', '.join(gone[:limit])}"
+            + (" …" if len(gone) > limit else "")
+        )
     if changed:
         print(f"  {len(changed)} unit(s) changed, now generation {generation}:")
         for name in changed[:limit]:
@@ -204,18 +216,26 @@ def report(changed: list[str], gone: list[str], generation: int, limit: int = 20
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--library", type=Path, required=True,
-                        help="path to a -DBUILD_TUNING=ON libsonare shared library")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT,
-                        help="tracked registry path")
-    parser.add_argument("--check", action="store_true",
-                        help="fail instead of rewriting a stale registry")
-    parser.add_argument("--note", default="",
-                        help="one line recorded against every unit bumped by this run, "
-                             "saying what the change was")
-    parser.add_argument("--date", default="",
-                        help="the date recorded on this run's history entries "
-                             "(default: today)")
+    parser.add_argument(
+        "--library",
+        type=Path,
+        required=True,
+        help="path to a -DBUILD_TUNING=ON libsonare shared library",
+    )
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="tracked registry path")
+    parser.add_argument(
+        "--check", action="store_true", help="fail instead of rewriting a stale registry"
+    )
+    parser.add_argument(
+        "--note",
+        default="",
+        help="one line recorded against every unit bumped by this run, saying what the change was",
+    )
+    parser.add_argument(
+        "--date",
+        default="",
+        help="the date recorded on this run's history entries (default: today)",
+    )
     return parser.parse_args()
 
 
@@ -231,14 +251,18 @@ def main() -> int:
 
     if args.check:
         if not changed and not gone:
-            print(f"{args.output}: current at generation {rebuilt['bank_generation']} "
-                  f"({len(units)} units)")
+            print(
+                f"{args.output}: current at generation {rebuilt['bank_generation']} "
+                f"({len(units)} units)"
+            )
             return 0
         print(f"{args.output} is stale — the bank has changed and the registry has not.")
         report(changed, gone, rebuilt["bank_generation"])
-        print(f"\nRegenerate it in the same change as the edit that moved them:\n"
-              f"  python3 {Path(__file__).name} --library {args.library} "
-              f"--note '<what changed>'")
+        print(
+            f"\nRegenerate it in the same change as the edit that moved them:\n"
+            f"  python3 {Path(__file__).name} --library {args.library} "
+            f"--note '<what changed>'"
+        )
         return 1
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -247,11 +271,15 @@ def main() -> int:
         print(f"{args.output}: generation {rebuilt['bank_generation']}")
         report(changed, gone, rebuilt["bank_generation"])
         if not args.note:
-            print("\nnote: no --note given, so every bump is recorded as 'unrecorded'. "
-                  "The version says a voice moved and only the note can say why.")
+            print(
+                "\nnote: no --note given, so every bump is recorded as 'unrecorded'. "
+                "The version says a voice moved and only the note can say why."
+            )
     else:
-        print(f"{args.output}: unchanged at generation {rebuilt['bank_generation']} "
-              f"({len(units)} units)")
+        print(
+            f"{args.output}: unchanged at generation {rebuilt['bank_generation']} "
+            f"({len(units)} units)"
+        )
     return 0
 
 

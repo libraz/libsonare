@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
 
 def require_object(value: Any, path: str) -> dict[str, Any]:
     if not isinstance(value, dict):
-        raise ValueError(# noqa: TRY004 -- one error class per document
+        raise ValueError(  # noqa: TRY004 -- one error class per document
             f"{path} must be an object"
         )
     return value
@@ -54,9 +54,7 @@ def require_object(value: Any, path: str) -> dict[str, Any]:
 def require_keys(value: dict[str, Any], path: str, keys: set[str]) -> None:
     missing = keys - value.keys()
     if missing:
-        raise ValueError(
-            f"{path} is missing required keys: {', '.join(sorted(missing))}"
-        )
+        raise ValueError(f"{path} is missing required keys: {', '.join(sorted(missing))}")
 
 
 def optional_number(value: Any) -> bool:
@@ -102,7 +100,7 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
     root = require_object(catalog, "catalog")
     require_keys(root, "catalog", {"version", "abi", "processors", "presets"})
     if not isinstance(root["version"], str):
-        raise ValueError(# noqa: TRY004 -- one error class per document
+        raise ValueError(  # noqa: TRY004 -- one error class per document
             "catalog.version must be a string"
         )
     abi = require_object(root["abi"], "catalog.abi")
@@ -110,7 +108,7 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
     if not all(isinstance(abi[name], int) for name in ("project", "engine")):
         raise ValueError("catalog.abi values must be integers")
     if not isinstance(root["processors"], list):
-        raise ValueError(# noqa: TRY004 -- one error class per document
+        raise ValueError(  # noqa: TRY004 -- one error class per document
             "catalog.processors must be an array"
         )
     for index, processor_value in enumerate(root["processors"]):
@@ -132,7 +130,7 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
             },
         )
         if not isinstance(processor["params"], list):
-            raise ValueError(# noqa: TRY004 -- one error class per document
+            raise ValueError(  # noqa: TRY004 -- one error class per document
                 f"catalog.processors[{index}].params must be an array"
             )
         realtime_cost = processor["realtimeCost"]
@@ -162,17 +160,13 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
     unexpected_groups = set(presets) - set(PRESET_GROUPS)
     if unexpected_groups:
         raise ValueError(
-            "catalog.presets has unexpected groups: "
-            + ", ".join(sorted(unexpected_groups))
+            "catalog.presets has unexpected groups: " + ", ".join(sorted(unexpected_groups))
         )
     if not all(isinstance(presets[name], list) for name in presets):
         raise ValueError("catalog preset groups must be arrays")
     for name in PRESET_GROUPS:
         preset_names = presets[name]
-        if any(
-            not isinstance(preset_name, str) or not preset_name
-            for preset_name in preset_names
-        ):
+        if any(not isinstance(preset_name, str) or not preset_name for preset_name in preset_names):
             raise ValueError(f"catalog.presets.{name} must contain non-empty strings")
         if len(preset_names) != len(set(preset_names)):
             raise ValueError(f"catalog.presets.{name} must contain unique names")
@@ -204,8 +198,7 @@ def validate_documented_counts(catalog_text: str) -> None:
     catalog = validate_catalog(json.loads(catalog_text))
     processor_count = len(catalog["processors"])
     feature_off_count = sum(
-        not processor["id"].startswith("effects.")
-        for processor in catalog["processors"]
+        not processor["id"].startswith("effects.") for processor in catalog["processors"]
     )
 
     for path, pattern in README_DEFAULT_COUNT_PATTERNS.items():

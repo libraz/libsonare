@@ -36,8 +36,14 @@ from wavio import write_wav
 SR = 48000
 
 
-def stiff_string(note: int, b: float, sr: int = SR, seconds: float = 1.5,
-                 n_partials: int = 14, decay_per_partial: float = 1.6) -> np.ndarray:
+def stiff_string(
+    note: int,
+    b: float,
+    sr: int = SR,
+    seconds: float = 1.5,
+    n_partials: int = 14,
+    decay_per_partial: float = 1.6,
+) -> np.ndarray:
     """A struck stiff string: partials at n*f0*sqrt(1 + B n^2), each decaying.
 
     The higher partials decay faster, as they do on a real string, so the test
@@ -82,8 +88,9 @@ def test_inharmonicity_zero_for_a_harmonic_series():
     """A harmonic series must not be reported as a stiff string."""
     f0 = midi_to_hz(60)
     t = np.arange(int(1.5 * SR)) / SR
-    y = sum((1.0 / n) * np.exp(-1.6 * n * t) * np.sin(2 * np.pi * n * f0 * t)
-            for n in range(1, 15)).astype(np.float32)
+    y = sum(
+        (1.0 / n) * np.exp(-1.6 * n * t) * np.sin(2 * np.pi * n * f0 * t) for n in range(1, 15)
+    ).astype(np.float32)
     got = find_partials(y / np.abs(y).max(), SR, 60)
     assert got["inharmonicity_b"] < 2e-5
 
@@ -108,8 +115,7 @@ def test_damper_release_is_measured_from_note_off():
     off = preroll + gate
     # 40 dB down 150 ms after note-off.
     env[t >= off] = 10.0 ** (-40.0 / 20.0 * (t[t >= off] - off) / 0.150)
-    got = measure_note((tone * env).astype(np.float32), SR, 60,
-                       preroll_s=preroll, gate_s=gate)
+    got = measure_note((tone * env).astype(np.float32), SR, 60, preroll_s=preroll, gate_s=gate)
     assert got["damper_release_ms"] == pytest.approx(150.0, abs=40.0)
     assert got["damper_capped"] is False
 
@@ -119,8 +125,7 @@ def test_measure_note_returns_nothing_for_silence():
     assert measure_note(silence, SR, 60, preroll_s=0.1, gate_s=1.0) == {}
 
 
-def _short_ring(note: int, ring_ms: float, preroll: float = 0.1,
-                gate: float = 0.5) -> np.ndarray:
+def _short_ring(note: int, ring_ms: float, preroll: float = 0.1, gate: float = 0.5) -> np.ndarray:
     """A struck bar: partials over in `ring_ms`, silence for the rest of the gate."""
     t = np.arange(int((preroll + gate + 0.5) * SR)) / SR
     f0 = midi_to_hz(note)
@@ -154,7 +159,7 @@ def test_an_empty_window_over_a_noise_floor_is_caught_too():
     """
     short = _short_ring(72, 35.0)
     rng = np.random.default_rng(11)
-    noisy = (short + rng.standard_normal(short.size).astype(np.float32) * 1e-6)
+    noisy = short + rng.standard_normal(short.size).astype(np.float32) * 1e-6
     got = measure_note(noisy, SR, 72, preroll_s=0.1, gate_s=0.5)
     assert got, "a 35 ms ring over a noise floor measured as nothing"
     # The bar's strongest line, not the floor: the ring is built at 2.03x the key.
@@ -172,7 +177,7 @@ def test_the_short_ring_fallback_is_reached_only_after_the_fixed_window_fails():
     # The fallback window on this note is the strike, which is where the fixed
     # window deliberately does NOT look — so if it had been taken, the fitted
     # partial levels would differ from the ones the fixed window reports.
-    a, b = _short_ring_window(padded[int(0.1 * SR):], SR)
+    a, b = _short_ring_window(padded[int(0.1 * SR) :], SR)
     assert a < int(0.12 * SR) <= b, "the fallback window is not the strike here"
     assert before["f0_hz"] == pytest.approx(midi_to_hz(60), rel=0.02)
 
@@ -203,8 +208,15 @@ def test_every_host_setting_is_part_of_the_cache_key():
     that decide whether the render contains the instrument at all.
     """
     base = _identity()
-    for kw in ({"settle_ms": 8000}, {"realtime": False}, {"params": ("Reverb On/Off=0",)},
-               {"preroll_ms": 250}, {"tail": "6s"}, {"sample_rate": 44100}, {"program": 3}):
+    for kw in (
+        {"settle_ms": 8000},
+        {"realtime": False},
+        {"params": ("Reverb On/Off=0",)},
+        {"preroll_ms": 250},
+        {"tail": "6s"},
+        {"sample_rate": 44100},
+        {"program": 3},
+    ):
         assert _identity(**kw) != base, f"{kw} does not reach the cache key"
 
 
@@ -232,7 +244,9 @@ def test_argv_carries_realtime_and_settle(monkeypatch):
     argv = AuSource(plugin="x:y:z", settle_ms=4000, realtime=True).argv(Path("/tmp/o.wav"))
     assert "--realtime" in argv
     assert argv[argv.index("--settle-ms") + 1] == "4000"
-    assert AuSource(plugin="x:y:z", realtime=False).argv(Path("/tmp/o.wav")).count("--realtime") == 0
+    assert (
+        AuSource(plugin="x:y:z", realtime=False).argv(Path("/tmp/o.wav")).count("--realtime") == 0
+    )
 
 
 def test_a_slot_is_asked_for_by_channel_only_when_the_notes_are_ours(monkeypatch):
@@ -284,7 +298,8 @@ def test_a_capture_declaring_sends_carries_them_and_its_slot_in_the_score(monkey
 
 
 def test_a_transposed_instrument_is_asked_for_the_key_that_sounds_the_grid_note(
-        monkeypatch, tmp_path):
+    monkeypatch, tmp_path
+):
     """The grid is sounding pitch; only the key sent to the plugin moves.
 
     A mapped sampler may sit anywhere on the keyboard, so a grid written where
@@ -317,8 +332,9 @@ def test_a_key_switch_precedes_its_note_and_comes_out_of_the_preroll(monkeypatch
     assert bytes([0x90, 60, 100]) in score
     # The switch is at tick 0 and the note 300 ms later; the note-off of the
     # switch lands between them rather than after the note.
-    assert score.index(bytes([0x90, 92, au_oracle.KEYSWITCH_VELOCITY])) < \
-        score.index(bytes([0x90, 60, 100]))
+    assert score.index(bytes([0x90, 92, au_oracle.KEYSWITCH_VELOCITY])) < score.index(
+        bytes([0x90, 60, 100])
+    )
 
 
 def test_a_phrase_gets_one_switch_per_onset_and_a_chord_gets_one():
@@ -329,9 +345,13 @@ def test_a_phrase_gets_one_switch_per_onset_and_a_chord_gets_one():
     level that is mostly the unswitched timbre.
     """
     from smf import Note
+
     source = AuSource(plugin="x:y:z", preroll_ms=500, keyswitch=89, keyswitch_lead_ms=300)
-    take = [Note(60, 100, 0.0, 0.4), Note(64, 100, 0.0, 0.4),   # a chord: one onset
-            Note(67, 100, 1.0, 0.4)]                            # room for a full lead
+    take = [
+        Note(60, 100, 0.0, 0.4),
+        Note(64, 100, 0.0, 0.4),  # a chord: one onset
+        Note(67, 100, 1.0, 0.4),
+    ]  # room for a full lead
     out = with_keyswitches(source, take)
     switches = [n for n in out if n.note == 89]
     assert len(switches) == 2
@@ -339,13 +359,17 @@ def test_a_phrase_gets_one_switch_per_onset_and_a_chord_gets_one():
     assert [n.start for n in switches] == [0.0, 1.0]
     # Every phrase note moved back by the lead, and nothing else about it changed.
     assert sorted((n.note, n.start, n.dur) for n in out if n.note != 89) == [
-        (60, 0.3, 0.4), (64, 0.3, 0.4), (67, 1.3, 0.4)]
+        (60, 0.3, 0.4),
+        (64, 0.3, 0.4),
+        (67, 1.3, 0.4),
+    ]
 
 
 def test_two_onsets_closer_than_the_lead_put_the_switch_between_them():
     """It may overlap a sounding note; it must not precede the note that consumed
     the previous one."""
     from smf import Note
+
     source = AuSource(plugin="x:y:z", preroll_ms=500, keyswitch=89, keyswitch_lead_ms=300)
     out = with_keyswitches(source, [Note(60, 100, 0.0, 0.5), Note(62, 100, 0.1, 0.5)])
     switches = sorted(n.start for n in out if n.note == 89)
@@ -358,6 +382,7 @@ def test_two_onsets_closer_than_the_lead_put_the_switch_between_them():
 def test_a_source_with_no_switch_leaves_a_phrase_exactly_alone():
     """The null: every capture measured before the field existed keeps its score."""
     from smf import Note
+
     take = [Note(60, 100, 0.0, 0.4), Note(67, 100, 1.0, 0.4)]
     assert with_keyswitches(AuSource(plugin="x:y:z"), take) == take
 
@@ -413,9 +438,16 @@ def test_no_key_switch_fits_inside_a_zero_preroll(tmp_path):
 def test_a_lead_still_has_to_fit_a_preroll_that_exists(tmp_path):
     """The relaxation above must not have retired the bound it sits next to."""
     path = tmp_path / "over.json"
-    path.write_text(json.dumps({
-        "id": "over", "preroll_ms": 100, "keyswitch_lead_ms": 100, "timbres": [],
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "id": "over",
+                "preroll_ms": 100,
+                "keyswitch_lead_ms": 100,
+                "timbres": [],
+            }
+        )
+    )
     with pytest.raises(ValueError, match="does not fit"):
         capture.load_config(path)
 
@@ -517,16 +549,30 @@ def test_a_grid_note_no_key_can_sound_is_refused_at_load(tmp_path):
     authoring mistake rather than a rare one, and the grid is what moves.
     """
     path = tmp_path / "harm.json"
-    path.write_text(json.dumps({
-        "id": "harm", "plugin": "x:y:z", "dry": False, "notes": [40, 45, 52],
-        "timbres": [{"id": "t", "key_map": {"40": 5, "52": 12}}],
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "id": "harm",
+                "plugin": "x:y:z",
+                "dry": False,
+                "notes": [40, 45, 52],
+                "timbres": [{"id": "t", "key_map": {"40": 5, "52": 12}}],
+            }
+        )
+    )
     with pytest.raises(ValueError, match="no key for grid note 45"):
         capture.load_config(path)
-    path.write_text(json.dumps({
-        "id": "harm", "plugin": "x:y:z", "dry": False, "notes": [40, 52],
-        "timbres": [{"id": "t", "key_map": {"40": 5, "52": 12}}],
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "id": "harm",
+                "plugin": "x:y:z",
+                "dry": False,
+                "notes": [40, 52],
+                "timbres": [{"id": "t", "key_map": {"40": 5, "52": 12}}],
+            }
+        )
+    )
     cfg = capture.load_config(path)
     assert capture.source_for(cfg, cfg["timbres"][0]).key(52) == 12
 
@@ -541,8 +587,9 @@ def test_sends_must_name_all_three_controllers():
 # --------------------------------------------------------------------------- #
 # A render that arrived late is not the note
 # --------------------------------------------------------------------------- #
-def _render_file(path: Path, onset_ms: float, *, peak: float = 0.4,
-                 seconds: float = 2.0, sr: int = SR) -> Path:
+def _render_file(
+    path: Path, onset_ms: float, *, peak: float = 0.4, seconds: float = 2.0, sr: int = SR
+) -> Path:
     """A capture-shaped WAV: digital silence, then a decaying burst."""
     n = int(seconds * sr)
     audio = np.zeros((n, 2), dtype=np.float32)
@@ -556,8 +603,12 @@ def _render_file(path: Path, onset_ms: float, *, peak: float = 0.4,
 
 
 def test_a_render_is_timed_from_where_its_audio_actually_begins(tmp_path):
-    assert capture._onset_ms(_render_file(tmp_path / "a.wav", 100.0), SR) == pytest.approx(100.0, abs=0.5)
-    assert capture._onset_ms(_render_file(tmp_path / "b.wav", 280.0), SR) == pytest.approx(280.0, abs=0.5)
+    assert capture._onset_ms(_render_file(tmp_path / "a.wav", 100.0), SR) == pytest.approx(
+        100.0, abs=0.5
+    )
+    assert capture._onset_ms(_render_file(tmp_path / "b.wav", 280.0), SR) == pytest.approx(
+        280.0, abs=0.5
+    )
     # Silence has no onset, and says so rather than answering zero — which is
     # the one answer that would read as a render arriving perfectly on time.
     write_wav(tmp_path / "c.wav", np.zeros((SR, 2), dtype=np.float32), SR)
@@ -593,25 +644,41 @@ def test_a_capture_can_widen_the_onset_guard_and_the_default_stays_put(tmp_path,
     def fake_run(argv, **kwargs):
         calls.append(len(calls))
         _render_file(out, 122.0, peak=0.02)
-        return SimpleNamespace(returncode=0,
-                               stdout=json.dumps({"peak": 0.02, "seconds": 2.0}), stderr="")
+        return SimpleNamespace(
+            returncode=0, stdout=json.dumps({"peak": 0.02, "seconds": 2.0}), stderr=""
+        )
 
     monkeypatch.setattr(capture.subprocess, "run", fake_run)
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
     src = AuSource(plugin="aumu:test:test")
     with pytest.raises(capture.AuRenderError):
-        capture._render_note(src, out, 60, 32, 50, floor_peak=0.0,
-                             preroll_ms=100.0, sample_rate=SR, attempts=1)
-    summary = capture._render_note(src, out, 60, 32, 50, floor_peak=0.0,
-                                   preroll_ms=100.0, onset_slack_ms=30.0,
-                                   sample_rate=SR, attempts=1)
+        capture._render_note(
+            src, out, 60, 32, 50, floor_peak=0.0, preroll_ms=100.0, sample_rate=SR, attempts=1
+        )
+    summary = capture._render_note(
+        src,
+        out,
+        60,
+        32,
+        50,
+        floor_peak=0.0,
+        preroll_ms=100.0,
+        onset_slack_ms=30.0,
+        sample_rate=SR,
+        attempts=1,
+    )
     assert summary["onset_ms"] == pytest.approx(122.0, abs=1.0)
 
 
 def test_a_capture_that_says_nothing_about_the_onset_guard_gets_the_measured_width(tmp_path):
     """The default is filled in, so every manifest records the width it used."""
-    cfg = {"id": "x", "plugin": "aumu:test:test", "notes": [60], "velocities": [64],
-           "timbres": [{"id": "t"}]}
+    cfg = {
+        "id": "x",
+        "plugin": "aumu:test:test",
+        "notes": [60],
+        "velocities": [64],
+        "timbres": [{"id": "t"}],
+    }
     path = tmp_path / "x.json"
     path.write_text(json.dumps(cfg))
     assert capture.load_config(path)["onset_slack_ms"] == capture.ONSET_SLACK_MS
@@ -631,11 +698,12 @@ def test_a_late_render_is_retried_rather_than_recorded(tmp_path, monkeypatch):
     def fake_run(argv, **kwargs):
         calls.append(len(calls))
         # Late and loud the first two times, then the real note.
-        _render_file(out, 280.0 if len(calls) <= 2 else 100.0,
-                     peak=0.9 if len(calls) <= 2 else 0.1)
+        _render_file(out, 280.0 if len(calls) <= 2 else 100.0, peak=0.9 if len(calls) <= 2 else 0.1)
         return SimpleNamespace(
-            returncode=0, stdout=json.dumps({"peak": 0.9 if len(calls) <= 2 else 0.1,
-                                             "seconds": 2.0}), stderr="")
+            returncode=0,
+            stdout=json.dumps({"peak": 0.9 if len(calls) <= 2 else 0.1, "seconds": 2.0}),
+            stderr="",
+        )
 
     monkeypatch.setattr(capture.subprocess, "run", fake_run)
     # The argv is built but never executed, so the binary only has to be
@@ -643,8 +711,9 @@ def test_a_late_render_is_retried_rather_than_recorded(tmp_path, monkeypatch):
     # sibling beside it and fails everywhere else.
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
     src = AuSource(plugin="aumu:test:test")
-    summary = capture._render_note(src, out, 42, 127, 50, floor_peak=0.0,
-                                   preroll_ms=100.0, sample_rate=SR)
+    summary = capture._render_note(
+        src, out, 42, 127, 50, floor_peak=0.0, preroll_ms=100.0, sample_rate=SR
+    )
     assert len(calls) == 3
     assert summary["attempts"] == 3
     assert summary["onset_ms"] == pytest.approx(100.0, abs=1.0)
@@ -658,13 +727,22 @@ def test_a_render_on_time_is_taken_first_try(tmp_path, monkeypatch):
     def fake_run(argv, **kwargs):
         calls.append(len(calls))
         _render_file(out, 100.0)
-        return SimpleNamespace(returncode=0,
-                               stdout=json.dumps({"peak": 0.4, "seconds": 2.0}), stderr="")
+        return SimpleNamespace(
+            returncode=0, stdout=json.dumps({"peak": 0.4, "seconds": 2.0}), stderr=""
+        )
 
     monkeypatch.setattr(capture.subprocess, "run", fake_run)
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
-    summary = capture._render_note(AuSource(plugin="aumu:test:test"), out, 38, 100, 50,
-                                   floor_peak=0.0, preroll_ms=100.0, sample_rate=SR)
+    summary = capture._render_note(
+        AuSource(plugin="aumu:test:test"),
+        out,
+        38,
+        100,
+        50,
+        floor_peak=0.0,
+        preroll_ms=100.0,
+        sample_rate=SR,
+    )
     assert len(calls) == 1
     assert summary["attempts"] == 1
 
@@ -686,16 +764,17 @@ def test_a_key_switch_that_sounds_is_refused_rather_than_recorded(tmp_path, monk
     def fake_run(argv, **kwargs):
         # The switch at the host's preroll, 300 ms before the note.
         _render_file(out, 200.0)
-        return SimpleNamespace(returncode=0,
-                               stdout=json.dumps({"peak": 0.4, "seconds": 2.0}), stderr="")
+        return SimpleNamespace(
+            returncode=0, stdout=json.dumps({"peak": 0.4, "seconds": 2.0}), stderr=""
+        )
 
     monkeypatch.setattr(capture.subprocess, "run", fake_run)
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
-    src = AuSource(plugin="aumu:test:test", preroll_ms=500,
-                   keyswitch=92, keyswitch_lead_ms=300)
+    src = AuSource(plugin="aumu:test:test", preroll_ms=500, keyswitch=92, keyswitch_lead_ms=300)
     with pytest.raises(capture.AuRenderError, match="sounding rather than selecting"):
-        capture._render_note(src, out, 60, 100, 50, floor_peak=0.0,
-                             preroll_ms=500.0, sample_rate=SR)
+        capture._render_note(
+            src, out, 60, 100, 50, floor_peak=0.0, preroll_ms=500.0, sample_rate=SR
+        )
 
 
 def test_a_silent_key_switch_leaves_the_note_where_the_preroll_says(tmp_path, monkeypatch):
@@ -704,15 +783,16 @@ def test_a_silent_key_switch_leaves_the_note_where_the_preroll_says(tmp_path, mo
 
     def fake_run(argv, **kwargs):
         _render_file(out, 500.0)
-        return SimpleNamespace(returncode=0,
-                               stdout=json.dumps({"peak": 0.4, "seconds": 2.0}), stderr="")
+        return SimpleNamespace(
+            returncode=0, stdout=json.dumps({"peak": 0.4, "seconds": 2.0}), stderr=""
+        )
 
     monkeypatch.setattr(capture.subprocess, "run", fake_run)
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
-    src = AuSource(plugin="aumu:test:test", preroll_ms=500,
-                   keyswitch=92, keyswitch_lead_ms=300)
-    summary = capture._render_note(src, out, 60, 100, 50, floor_peak=0.0,
-                                   preroll_ms=500.0, sample_rate=SR)
+    src = AuSource(plugin="aumu:test:test", preroll_ms=500, keyswitch=92, keyswitch_lead_ms=300)
+    summary = capture._render_note(
+        src, out, 60, 100, 50, floor_peak=0.0, preroll_ms=500.0, sample_rate=SR
+    )
     assert summary["onset_ms"] == pytest.approx(500.0, abs=1.0)
 
 
@@ -742,12 +822,21 @@ def test_a_quiet_render_that_carries_the_note_is_kept(tmp_path, monkeypatch):
         calls.append(len(calls))
         _body_file(out, _harmonic(midi_to_hz(86), seconds=1.0) * 0.0024)
         return SimpleNamespace(
-            returncode=0, stdout=json.dumps({"peak": 0.0024, "seconds": 1.1}), stderr="")
+            returncode=0, stdout=json.dumps({"peak": 0.0024, "seconds": 1.1}), stderr=""
+        )
 
     monkeypatch.setattr(capture.subprocess, "run", fake_run)
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
-    summary = capture._render_note(AuSource(plugin="aumu:test:test"), out, 86, 32, 50,
-                                   floor_peak=0.237, preroll_ms=100.0, sample_rate=SR)
+    summary = capture._render_note(
+        AuSource(plugin="aumu:test:test"),
+        out,
+        86,
+        32,
+        50,
+        floor_peak=0.237,
+        preroll_ms=100.0,
+        sample_rate=SR,
+    )
     assert len(calls) == 1
     assert summary["attempts"] == 1
     assert summary["quiet_tone_share"] >= capture.QUIET_TONE_SHARE
@@ -768,13 +857,22 @@ def test_a_quiet_render_with_no_note_in_it_still_fails(tmp_path, monkeypatch):
         calls.append(len(calls))
         _body_file(out, noise)
         return SimpleNamespace(
-            returncode=0, stdout=json.dumps({"peak": 0.0024, "seconds": 1.1}), stderr="")
+            returncode=0, stdout=json.dumps({"peak": 0.0024, "seconds": 1.1}), stderr=""
+        )
 
     monkeypatch.setattr(capture.subprocess, "run", fake_run)
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
     with pytest.raises(capture.AuRenderError, match="the samples did not arrive"):
-        capture._render_note(AuSource(plugin="aumu:test:test"), out, 86, 32, 50,
-                             floor_peak=0.237, preroll_ms=100.0, sample_rate=SR)
+        capture._render_note(
+            AuSource(plugin="aumu:test:test"),
+            out,
+            86,
+            32,
+            50,
+            floor_peak=0.237,
+            preroll_ms=100.0,
+            sample_rate=SR,
+        )
     assert len(calls) == 5
 
 
@@ -789,34 +887,56 @@ def test_a_silent_render_is_a_failure_rather_than_an_unmeasurable_share(tmp_path
     def fake_run(argv, **kwargs):
         write_wav(out, np.zeros((SR, 2), dtype=np.float32), SR)
         return SimpleNamespace(
-            returncode=0, stdout=json.dumps({"peak": 0.0, "seconds": 1.0}), stderr="")
+            returncode=0, stdout=json.dumps({"peak": 0.0, "seconds": 1.0}), stderr=""
+        )
 
     monkeypatch.setattr(capture.subprocess, "run", fake_run)
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
     with pytest.raises(capture.AuRenderError, match="no tone at all"):
-        capture._render_note(AuSource(plugin="aumu:test:test"), out, 86, 32, 50,
-                             floor_peak=0.237, preroll_ms=100.0, sample_rate=SR)
+        capture._render_note(
+            AuSource(plugin="aumu:test:test"),
+            out,
+            86,
+            32,
+            50,
+            floor_peak=0.237,
+            preroll_ms=100.0,
+            sample_rate=SR,
+        )
 
 
 def _calibration_cfg(tmp_path) -> Path:
     """A capture definition thin enough for `calibrate` and complete enough to load."""
     path = tmp_path / "probe.json"
-    path.write_text(json.dumps({
-        "id": "probe", "plugin": "aumu:test:test", "program": 0, "dry": False,
-        "sample_rate": SR, "settle_ms": 8000, "realtime": True, "preroll_ms": 100,
-        "gate_ms": 2000, "tail": "500ms", "notes": [60], "velocities": [100],
-        "timbres": [{"id": "one", "channel": 1}],
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "id": "probe",
+                "plugin": "aumu:test:test",
+                "program": 0,
+                "dry": False,
+                "sample_rate": SR,
+                "settle_ms": 8000,
+                "realtime": True,
+                "preroll_ms": 100,
+                "gate_ms": 2000,
+                "tail": "500ms",
+                "notes": [60],
+                "velocities": [100],
+                "timbres": [{"id": "one", "channel": 1}],
+            }
+        )
+    )
     return path
 
 
-def _settling_plugin(out_root: Path, *, needs_ms: int, weak: float = 0.12,
-                     late_ms: float = 2800.0):
+def _settling_plugin(out_root: Path, *, needs_ms: int, weak: float = 0.12, late_ms: float = 2800.0):
     """A fake host whose plugin is only intact once it has had `needs_ms` to load.
 
     Under that it renders the failure this rack really produced: the note arrives
     late and far below the level it reaches once settled, but nowhere near silent.
     """
+
     def fake_run(argv, **kwargs):
         wav = Path(argv[argv.index("-o") + 1])
         settle = int(argv[argv.index("--settle-ms") + 1])
@@ -825,8 +945,11 @@ def _settling_plugin(out_root: Path, *, needs_ms: int, weak: float = 0.12,
         onset = 100.0 if intact else late_ms
         _body_file(wav, _harmonic(midi_to_hz(60), seconds=1.2) * peak, onset_ms=onset)
         return SimpleNamespace(
-            returncode=0, stdout=json.dumps({"peak": peak, "seconds": 2.6, "dropout_ms": 0}),
-            stderr="")
+            returncode=0,
+            stdout=json.dumps({"peak": peak, "seconds": 2.6, "dropout_ms": 0}),
+            stderr="",
+        )
+
     return fake_run
 
 
@@ -841,8 +964,9 @@ def test_calibrate_will_not_recommend_a_settle_that_degrades_the_render(tmp_path
     cfg = _calibration_cfg(tmp_path)
     monkeypatch.setattr(capture.subprocess, "run", _settling_plugin(tmp_path, needs_ms=8000))
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
-    report = capture.calibrate(capture.load_config(cfg), tmp_path / "out",
-                               note=60, velocity=100, verbose=False)
+    report = capture.calibrate(
+        capture.load_config(cfg), tmp_path / "out", note=60, velocity=100, verbose=False
+    )
     assert report["settle_min_ms"] >= 8000
     assert report["settle_recommended_ms"] >= 8000
     quiet = [r for r in report["settle"] if r["settle_ms"] < 8000]
@@ -859,8 +983,9 @@ def test_calibrate_still_accepts_a_plugin_that_loads_at_once(tmp_path, monkeypat
     cfg = _calibration_cfg(tmp_path)
     monkeypatch.setattr(capture.subprocess, "run", _settling_plugin(tmp_path, needs_ms=0))
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
-    report = capture.calibrate(capture.load_config(cfg), tmp_path / "out",
-                               note=60, velocity=100, verbose=False)
+    report = capture.calibrate(
+        capture.load_config(cfg), tmp_path / "out", note=60, velocity=100, verbose=False
+    )
     assert report["settle_min_ms"] <= 500
     assert all(r["ok"] for r in report["settle"])
 
@@ -873,11 +998,15 @@ def test_calibrate_rejects_a_settle_whose_render_is_merely_late(tmp_path, monkey
     to recommend.
     """
     cfg = _calibration_cfg(tmp_path)
-    monkeypatch.setattr(capture.subprocess, "run",
-                        _settling_plugin(tmp_path, needs_ms=8000, weak=1.0, late_ms=2800.0))
+    monkeypatch.setattr(
+        capture.subprocess,
+        "run",
+        _settling_plugin(tmp_path, needs_ms=8000, weak=1.0, late_ms=2800.0),
+    )
     monkeypatch.setattr(au_oracle, "find_aubounce", lambda: Path("/bin/true"))
-    report = capture.calibrate(capture.load_config(cfg), tmp_path / "out",
-                               note=60, velocity=100, verbose=False)
+    report = capture.calibrate(
+        capture.load_config(cfg), tmp_path / "out", note=60, velocity=100, verbose=False
+    )
     assert report["settle_min_ms"] >= 8000
     late = [r for r in report["settle"] if r["settle_ms"] < 8000]
     assert late and not any(r["ok"] for r in late)
@@ -954,8 +1083,7 @@ def test_a_tail_in_milliseconds_is_read_as_milliseconds():
 
 
 def test_channel_spec_reads_ranges_and_singles_without_repeats():
-    assert capture.parse_channels("1-8,11-13,15,16") == (1, 2, 3, 4, 5, 6, 7, 8,
-                                                         11, 12, 13, 15, 16)
+    assert capture.parse_channels("1-8,11-13,15,16") == (1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 15, 16)
     assert capture.parse_channels("10") == (10,)
     # A repeat is the probe order the caller wrote, deduplicated rather than
     # rendered twice; out-of-range numbers are not MIDI channels.

@@ -68,10 +68,15 @@ def build(args):
     # the harness's own predicate rather than from a flag here, so one answer
     # serves `profile.py` and this package alike.
     percussion = is_percussion(cap)
-    sigs = Signals(corpus_root=Path(args.corpus), program=int(cap["program"]),
-                   channel=PERCUSSION_CHANNEL - 1 if percussion else 0,
-                   timbre=corpus.timbre,
-                   gate_s=gate_s, seconds=seconds, lib_path=args.lib)
+    sigs = Signals(
+        corpus_root=Path(args.corpus),
+        program=int(cap["program"]),
+        channel=PERCUSSION_CHANNEL - 1 if percussion else 0,
+        timbre=corpus.timbre,
+        gate_s=gate_s,
+        seconds=seconds,
+        lib_path=args.lib,
+    )
     notes = tuple(int(x) for x in args.notes.split(",")) if args.notes else corpus.notes
     # Every velocity but the softest. Fitted at one dynamic, a contact model has
     # no reason to get the others right and every knob that grades brightness or
@@ -79,8 +84,11 @@ def build(args):
     # suits the single layer it was shown. The softest layer is left out because
     # at that dynamic most of the plane is the recorded floor, and the
     # comparison would mostly be mask.
-    vels = tuple(int(x) for x in args.velocities.split(",")) if args.velocities \
+    vels = (
+        tuple(int(x) for x in args.velocities.split(","))
+        if args.velocities
         else tuple(sorted(corpus.velocities)[1:]) or corpus.velocities
+    )
 
     bed = None
     if not args.no_bed:
@@ -100,13 +108,21 @@ def build(args):
             cache.parent.mkdir(parents=True, exist_ok=True)
             bed.save(cache)
         if not bed.usable:
-            print(f"bed refused: across-note spread {bed.agreement_db:.1f} dB is too "
-                  f"wide to be one source, so the reference has no recorded floor "
-                  f"to subtract", file=sys.stderr)
+            print(
+                f"bed refused: across-note spread {bed.agreement_db:.1f} dB is too "
+                f"wide to be one source, so the reference has no recorded floor "
+                f"to subtract",
+                file=sys.stderr,
+            )
             bed = None
-    loss = ShapeLoss(signals=sigs, spectro=spectro, bed=bed,
-                     note_off_s=preroll + gate_s, velocities=vels,
-                     pitched=not percussion)
+    loss = ShapeLoss(
+        signals=sigs,
+        spectro=spectro,
+        bed=bed,
+        note_off_s=preroll + gate_s,
+        velocities=vels,
+        pitched=not percussion,
+    )
     return cap, corpus, sigs, loss, notes
 
 
@@ -141,15 +157,18 @@ def holdout(loss, notes):
 
 def _report_prune(args, loss, base, moves, fit_notes, hold_notes, hold_loss):
     """Price every move, run the threshold ladder, and print both."""
-    kept, report = prune(loss, base, moves, fit_notes, hold_notes,
-                         workers=args.workers, hold_loss=hold_loss)
+    kept, report = prune(
+        loss, base, moves, fit_notes, hold_notes, workers=args.workers, hold_loss=hold_loss
+    )
     print("\n" + summarise(report["contributions"], base, moves))
     print(f"\nbefore  fit {report['before']['fit']:.3f}  hold {report['before']['hold']:.3f}")
     for a in report["attempts"]:
         mark = "*" if a["keep_db"] == report["keep_db"] else " "
         thresh = "all" if a["keep_db"] is None else f"{a['keep_db']:g}"
-        print(f"prune{mark} keep>{thresh:<5} fit {a['fit']:.3f}  hold {a['hold']:.3f}"
-              f"   ({a['kept']} of {len(moves)} moves)")
+        print(
+            f"prune{mark} keep>{thresh:<5} fit {a['fit']:.3f}  hold {a['hold']:.3f}"
+            f"   ({a['kept']} of {len(moves)} moves)"
+        )
     out = write_overrides({**base, **kept}, base)
     print("\n" + out)
     if args.out:
@@ -158,13 +177,19 @@ def _report_prune(args, loss, base, moves, fit_notes, hold_notes, hold_loss):
 
 def cmd_fit(args):
     _cap, _corpus, _sigs, loss, notes = build(args)
-    base = load_knob_dump(args.knobs, tuple(args.namespaces.split(","))
-                          if args.namespaces else ())
+    base = load_knob_dump(args.knobs, tuple(args.namespaces.split(",")) if args.namespaces else ())
     deny = set(Path(args.deny).read_text().split()) if args.deny else set()
     fit_notes, hold_notes, hold_loss = holdout(loss, notes)
-    d = Descent(loss=loss, base=base, fit_notes=fit_notes, hold_notes=hold_notes,
-                deny=deny, workers=args.workers, passes=args.passes,
-                hold_loss=hold_loss)
+    d = Descent(
+        loss=loss,
+        base=base,
+        fit_notes=fit_notes,
+        hold_notes=hold_notes,
+        deny=deny,
+        workers=args.workers,
+        passes=args.passes,
+        hold_loss=hold_loss,
+    )
     start = read_overrides(Path(args.start).read_text()) if args.start else None
     moves = d.run(start)
     _report_prune(args, loss, base, moves, fit_notes, hold_notes, hold_loss)
@@ -178,8 +203,7 @@ def cmd_prune(args):
     re-priced in minutes rather than in the hour the search cost.
     """
     _cap, _corpus, _sigs, loss, notes = build(args)
-    base = load_knob_dump(args.knobs, tuple(args.namespaces.split(","))
-                          if args.namespaces else ())
+    base = load_knob_dump(args.knobs, tuple(args.namespaces.split(",")) if args.namespaces else ())
     moves = read_overrides(Path(args.overrides).read_text())
     fit_notes, hold_notes, hold_loss = holdout(loss, notes)
     _report_prune(args, loss, base, moves, fit_notes, hold_notes, hold_loss)
@@ -187,12 +211,12 @@ def cmd_prune(args):
 
 def cmd_ablate(args):
     _cap, _corpus, _sigs, loss, notes = build(args)
-    base = load_knob_dump(args.knobs, tuple(args.namespaces.split(","))
-                          if args.namespaces else ())
+    base = load_knob_dump(args.knobs, tuple(args.namespaces.split(",")) if args.namespaces else ())
     moves = read_overrides(Path(args.overrides).read_text())
     fit_notes, hold_notes, hold_loss = holdout(loss, notes)
-    scores, (f0, h0) = ablate(loss, base, moves, fit_notes, hold_notes, args.workers,
-                              hold_loss=hold_loss)
+    scores, (f0, h0) = ablate(
+        loss, base, moves, fit_notes, hold_notes, args.workers, hold_loss=hold_loss
+    )
     print(f"fitted set  fit {f0:.3f}  hold {h0:.3f}\n")
     print(summarise(scores, base, moves))
 
@@ -216,29 +240,35 @@ def cmd_struck(args):
     _cap, _corpus, sigs, loss, notes = build(args)
     ov = ""
     if args.overrides:
-        ov = ",".join(f"{k}={v!r}" for k, v in sorted(
-            read_overrides(Path(args.overrides).read_text()).items()))
+        ov = ",".join(
+            f"{k}={v!r}"
+            for k, v in sorted(read_overrides(Path(args.overrides).read_text()).items())
+        )
     vel = loss.velocities[len(loss.velocities) // 2]
     pairs = [(n, vel) for n in notes]
     ref, mod = sigs(pairs, ref=True), sigs(pairs, ov=ov)
     sr = loss.spectro.sample_rate
     bands = struck.STRUCK_BANDS
 
-    print(f"velocity {vel}. modes = resonances counted in a {struck.DENSITY_SPAN_S:.2f} s "
-          "slice of the aftersound;")
-    print("prompt = each band's share of the strike minus its share of the "
-          "aftersound, in dB.")
-    print("A band the recording could not answer is left blank rather than "
-          "counted as zero.")
+    print(
+        f"velocity {vel}. modes = resonances counted in a {struck.DENSITY_SPAN_S:.2f} s "
+        "slice of the aftersound;"
+    )
+    print("prompt = each band's share of the strike minus its share of the aftersound, in dB.")
+    print("A band the recording could not answer is left blank rather than counted as zero.")
     for n in notes:
         print(f"\nnote {n}" + "".join(f"{f'{lo}-{hi}':>13}" for lo, hi in bands))
         for label, sig in (("reference", ref[(n, vel)]), ("model", mod[(n, vel)])):
             body, late = struck.windows(sig, sr)
             counts, ok = struck.mode_count(sig, late, sr)
             prompt, alive = struck.prompt_late(sig, body, late, sr)
-            print(f"{label:>10}" + "".join(
-                f"{c:>7.0f}/{p:<5.0f}" if o and a else f"{'-':>13}"
-                for c, o, p, a in zip(counts, ok, prompt, alive)))
+            print(
+                f"{label:>10}"
+                + "".join(
+                    f"{c:>7.0f}/{p:<5.0f}" if o and a else f"{'-':>13}"
+                    for c, o, p, a in zip(counts, ok, prompt, alive)
+                )
+            )
 
 
 def cmd_attack(args):
@@ -259,18 +289,21 @@ def cmd_attack(args):
     _cap, _corpus, sigs, loss, notes = build(args)
     ov = ""
     if args.overrides:
-        ov = ",".join(f"{k}={v!r}" for k, v in sorted(
-            read_overrides(Path(args.overrides).read_text()).items()))
+        ov = ",".join(
+            f"{k}={v!r}"
+            for k, v in sorted(read_overrides(Path(args.overrides).read_text()).items())
+        )
     vel = loss.velocities[len(loss.velocities) // 2]
     pairs = [(n, vel) for n in notes]
     ref, mod = sigs(pairs, ref=True), sigs(pairs, ov=ov)
     sr = loss.spectro.sample_rate
 
     print(f"velocity {vel}. Model minus reference, dB, in onset-anchored windows.")
-    print(f"Each side is normalised by its own energy over {attack.NORM_SPAN_S * 1000:.0f} ms, "
-          "so a cell is a position in time and not a level.")
-    print("Positive = the model puts that band earlier in the strike than the "
-          "reference does.")
+    print(
+        f"Each side is normalised by its own energy over {attack.NORM_SPAN_S * 1000:.0f} ms, "
+        "so a cell is a position in time and not a level."
+    )
+    print("Positive = the model puts that band earlier in the strike than the reference does.")
     for n in notes:
         print(f"\nnote {n}")
         print(attack.format_table(attack.compare(mod[(n, vel)], ref[(n, vel)], sr)))
@@ -283,28 +316,40 @@ def cmd_probe(args):
     ref = sigs(pairs, ref=True)
     sets = [("shipped", "")]
     if args.overrides:
-        sets.append(("overrides", ",".join(
-            f"{k}={v!r}" for k, v in sorted(
-                read_overrides(Path(args.overrides).read_text()).items()))))
+        sets.append(
+            (
+                "overrides",
+                ",".join(
+                    f"{k}={v!r}"
+                    for k, v in sorted(read_overrides(Path(args.overrides).read_text()).items())
+                ),
+            )
+        )
     mods = {lab: sigs(pairs, ov=ov) for lab, ov in sets}
 
-    print(f"velocity {vel}. tail = late residue in {probes.METAL_BAND[0]:.0f}-"
-          f"{probes.METAL_BAND[1]:.0f} Hz relative to the note's early level;")
+    print(
+        f"velocity {vel}. tail = late residue in {probes.METAL_BAND[0]:.0f}-"
+        f"{probes.METAL_BAND[1]:.0f} Hz relative to the note's early level;"
+    )
     print("colour = partials 3-10 minus 1-2 at 1.5 s; rate = mean decay in dB/s.")
     print(f"\n{'note':>6}{'':>12}{'tail':>9}{'colour':>9}{'rate':>9}")
     pooled = {lab: [] for lab, _ in [("reference", "")] + sets}
     for n in notes:
         track = Track(ref[(n, vel)], n, loss.spectro.sample_rate)
-        for lab, sig in [("reference", ref[(n, vel)])] + \
-                [(lab, mods[lab][(n, vel)]) for lab, _ in sets]:
+        for lab, sig in [("reference", ref[(n, vel)])] + [
+            (lab, mods[lab][(n, vel)]) for lab, _ in sets
+        ]:
             prof = probes.decay_profile(track, sig)
             pooled[lab].append(prof)
-            t = probes.tail_residue(loss.spectro, sig, n,
-                                    bed=loss.bed if lab == "reference" else None)
+            t = probes.tail_residue(
+                loss.spectro, sig, n, bed=loss.bed if lab == "reference" else None
+            )
             c = probes.sustain_colour(track, sig)
             r = np.mean([x for _, x in prof]) if prof else float("nan")
-            print(f"{n if lab == 'reference' else '':>6}{lab:>12}"
-                  f"{t:>9.1f}{c if c is not None else float('nan'):>9.1f}{r:>9.1f}")
+            print(
+                f"{n if lab == 'reference' else '':>6}{lab:>12}"
+                f"{t:>9.1f}{c if c is not None else float('nan'):>9.1f}{r:>9.1f}"
+            )
 
     print("\ndecay rate by band, pooled. The slope across these bands is what the")
     print("ear calls metallic when it is too flat.")
@@ -312,9 +357,15 @@ def cmd_probe(args):
     print(f"{'':>12}" + "".join(f"{f'{lo}-{hi}':>13}" for lo, hi in bands))
     for lab, pool in pooled.items():
         cells = probes.decay_bins(pool)
-        print(f"{lab:>12}" + "".join(
-            f"{cells[b][0]:>9.1f}/{cells[b][1]:<3d}" if cells[b][0] is not None
-            else f"{'-':>13}" for b in bands))
+        print(
+            f"{lab:>12}"
+            + "".join(
+                f"{cells[b][0]:>9.1f}/{cells[b][1]:<3d}"
+                if cells[b][0] is not None
+                else f"{'-':>13}"
+                for b in bands
+            )
+        )
 
 
 def cmd_purity(args):
@@ -330,31 +381,41 @@ def cmd_purity(args):
     ref = sigs(pairs, ref=True)
     sets = [("shipped", "")]
     if args.overrides:
-        sets.append(("overrides", ",".join(
-            f"{k}={v!r}" for k, v in sorted(
-                read_overrides(Path(args.overrides).read_text()).items()))))
+        sets.append(
+            (
+                "overrides",
+                ",".join(
+                    f"{k}={v!r}"
+                    for k, v in sorted(read_overrides(Path(args.overrides).read_text()).items())
+                ),
+            )
+        )
 
     print(f"velocity {vel}. Harmonic over non-harmonic energy, dB. The number has")
     print("no absolute zero -- read each column against the reference above it,")
     print("never one note against another.\n")
     rp = purity.profile(loss.spectro, ref, notes, vel)
     floor_win = (loss.note_off_s + 0.9, loss.spectro.seconds)
-    share = {n: purity.floor_share(loss.spectro, ref[(n, vel)], n,
-                                   (3.5, 6.5), floor_win) for n in notes}
+    share = {
+        n: purity.floor_share(loss.spectro, ref[(n, vel)], n, (3.5, 6.5), floor_win) for n in notes
+    }
     print(f"{'':<14}" + "".join(f"{n:>7}" for n in notes))
     for w, _, _ in purity.WINDOWS:
-        print(f"{'ref ' + w:<14}" + "".join(f"{rp[w].get(n, float('nan')):>7.1f}"
-                                            for n in notes))
-    print(f"{'floor share %':<14}" + "".join(f"{share[n]:>7.0f}" for n in notes)
-          + f"   (over {purity.FLOOR_SHARE_LIMIT:.0f} means the tail column is")
+        print(f"{'ref ' + w:<14}" + "".join(f"{rp[w].get(n, float('nan')):>7.1f}" for n in notes))
+    print(
+        f"{'floor share %':<14}"
+        + "".join(f"{share[n]:>7.0f}" for n in notes)
+        + f"   (over {purity.FLOOR_SHARE_LIMIT:.0f} means the tail column is"
+    )
     print(f"{'':<14}" + " " * (7 * len(notes)) + "    the recording, not the note)")
     for lab, ov in sets:
         mp = purity.profile(loss.spectro, sigs(pairs, ov=ov), notes, vel)
         print()
         for w, _, _ in purity.WINDOWS:
             d = {n: mp[w][n] - rp[w][n] for n in notes if n in mp[w] and n in rp[w]}
-            print(f"{lab + ' ' + w:<14}" + "".join(
-                f"{d.get(n, float('nan')):>+7.1f}" for n in notes))
+            print(
+                f"{lab + ' ' + w:<14}" + "".join(f"{d.get(n, float('nan')):>+7.1f}" for n in notes)
+            )
 
 
 def cmd_admittance(args):
@@ -367,8 +428,14 @@ def cmd_admittance(args):
     """
     _cap, _corpus, sigs, loss, notes = build(args)
     pairs = [(n, v) for n in notes for v in loss.velocities]
-    ov = ",".join(f"{k}={v!r}" for k, v in sorted(
-        read_overrides(Path(args.overrides).read_text()).items())) if args.overrides else ""
+    ov = (
+        ",".join(
+            f"{k}={v!r}"
+            for k, v in sorted(read_overrides(Path(args.overrides).read_text()).items())
+        )
+        if args.overrides
+        else ""
+    )
     print(admittance.report(sigs(pairs, ref=True), sigs(pairs, ov=ov)))
 
 
@@ -389,7 +456,8 @@ def clamped(tracks, item):
         raise ValueError(
             f"take {item.get('id', '?')} has no window in which every source is "
             f"still decaying (last note-off {ring[0]:.2f} s, earliest source ends "
-            f"{end:.2f} s)")
+            f"{end:.2f} s)"
+        )
     return (ring[0], min(ring[1], end))
 
 
@@ -404,8 +472,7 @@ def cmd_takes(args):
     page = takes.load(args.page, args.reference)
     refs = takes.pick_references(page["_manifest"], args.reference)
     if not refs:
-        raise SystemExit(f"{args.page} has no reference source; render it without "
-                         "--model-only")
+        raise SystemExit(f"{args.page} has no reference source; render it without --model-only")
     ref = refs[0]
     items = {it["id"]: it for it in page["_manifest"]["items"]}
     # The take everything else is read against for accumulation. Derived from
@@ -452,8 +519,7 @@ def cmd_takes(args):
             vals, g = takes.band_error(tracks, src, ref, body, body, floor)
             srows.append((f"{src} ({g:+.1f} dB on body)", vals))
         if srows:
-            print(f"   bands against {ref} while sounding, "
-                  f"{body[0]:.1f}-{body[1]:.1f} s")
+            print(f"   bands against {ref} while sounding, {body[0]:.1f}-{body[1]:.1f} s")
             print(takes.report(srows))
 
         try:
@@ -470,10 +536,15 @@ def cmd_takes(args):
             rows.append((f"{src} ({g:+.1f} dB on body)", vals))
         if not rows:
             continue
-        cut = (f", cut from {schedule[1]:.1f} where a source stopped decaying"
-               if ring[1] < schedule[1] - 0.05 else "")
-        print(f"   bands against {ref}, body {body[0]:.1f}-{body[1]:.1f} s, "
-              f"measured {ring[0]:.1f}-{ring[1]:.1f} s{cut}")
+        cut = (
+            f", cut from {schedule[1]:.1f} where a source stopped decaying"
+            if ring[1] < schedule[1] - 0.05
+            else ""
+        )
+        print(
+            f"   bands against {ref}, body {body[0]:.1f}-{body[1]:.1f} s, "
+            f"measured {ring[0]:.1f}-{ring[1]:.1f} s{cut}"
+        )
         print(takes.report(rows))
 
         # What the phrase ADDED over the plainest take, each source against its
@@ -493,13 +564,21 @@ def cmd_takes(args):
             span = min(ring[1] - ring[0], base_window[1] - base_window[0])
             here = (ring[0], ring[0] + span)
             there = (base_window[0], base_window[0] + span)
-            brows = [(src, takes.band_buildup(tracks, base_tracks, src, here,
-                                              there, floor, base_floor,
-                                              body, base_body))
-                     for src in tracks if src in base_tracks]
+            brows = [
+                (
+                    src,
+                    takes.band_buildup(
+                        tracks, base_tracks, src, here, there, floor, base_floor, body, base_body
+                    ),
+                )
+                for src in tracks
+                if src in base_tracks
+            ]
             if brows:
-                print(f"   built up over {base_id}, each source against itself, "
-                      f"{span:.1f} s from each last damper")
+                print(
+                    f"   built up over {base_id}, each source against itself, "
+                    f"{span:.1f} s from each last damper"
+                )
                 print(takes.report(brows))
 
 
@@ -516,16 +595,13 @@ def main(argv=None):
         q = argparse.ArgumentParser(add_help=False)
         q.add_argument("--capture", default="piano", help="capture definition id")
         if corpus:
-            q.add_argument("--corpus", required=True,
-                           help="directory holding manifest.json")
+            q.add_argument("--corpus", required=True, help="directory holding manifest.json")
         q.add_argument("--timbre", default="", help="which timbre of the capture")
         q.add_argument("--notes", default="", help="subset of the capture's notes")
-        q.add_argument("--velocities", default="",
-                       help="subset of the capture's velocities")
+        q.add_argument("--velocities", default="", help="subset of the capture's velocities")
         q.add_argument("--lib", default="", help="SONARE_LIB_PATH for model renders")
         q.add_argument("--cache", default="/tmp/voicematch-shape")
-        q.add_argument("--no-bed", action="store_true",
-                       help="skip the recorded-floor subtraction")
+        q.add_argument("--no-bed", action="store_true", help="skip the recorded-floor subtraction")
         q.add_argument("--workers", type=int, default=7)
         return q
 
@@ -583,11 +659,15 @@ def main(argv=None):
     # Reads a rendered audition page rather than the corpus, so it is given the
     # target options WITHOUT --corpus.
     s = sub.add_parser("takes", parents=[target(corpus=False)])
-    s.add_argument("--page", required=True,
-                   help="audition directory holding manifest.json and the takes")
-    s.add_argument("--reference", default="",
-                   help="source key everything is measured against (default: the "
-                        "one declaring role=reference, or the only non-model one)")
+    s.add_argument(
+        "--page", required=True, help="audition directory holding manifest.json and the takes"
+    )
+    s.add_argument(
+        "--reference",
+        default="",
+        help="source key everything is measured against (default: the "
+        "one declaring role=reference, or the only non-model one)",
+    )
     s.set_defaults(fn=cmd_takes)
 
     args = p.parse_args(argv)

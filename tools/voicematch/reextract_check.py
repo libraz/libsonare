@@ -82,8 +82,10 @@ def _diff(old: object, new: object, path: str, out: list[str]) -> None:
             # grid and then blames the wrong note for someone else's change.
             label = f"{path}[{i}]"
             if isinstance(a, dict) and "note" in a:
-                label = (f"{path}[timbre={a.get('timbre')!r} note={a.get('note')} "
-                         f"velocity={a.get('velocity')}]")
+                label = (
+                    f"{path}[timbre={a.get('timbre')!r} note={a.get('note')} "
+                    f"velocity={a.get('velocity')}]"
+                )
             _diff(a, b, label, out)
             if len(out) >= MAX_DIFFS:
                 return
@@ -151,17 +153,27 @@ def reextract_one(cap_id: str, scratch: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--ids", default="",
-                    help="comma-separated capture ids (default: every shipped capture)")
-    ap.add_argument("--out", default="",
-                    help="scratch root for re-extracted profiles (default: a fresh temp dir)")
-    ap.add_argument("--json", action="store_true",
-                    help="print the full per-id results as JSON instead of a summary")
+    ap.add_argument(
+        "--ids", default="", help="comma-separated capture ids (default: every shipped capture)"
+    )
+    ap.add_argument(
+        "--out",
+        default="",
+        help="scratch root for re-extracted profiles (default: a fresh temp dir)",
+    )
+    ap.add_argument(
+        "--json",
+        action="store_true",
+        help="print the full per-id results as JSON instead of a summary",
+    )
     args = ap.parse_args(argv)
 
     ids = [i.strip() for i in args.ids.split(",") if i.strip()] or shipped_ids()
-    scratch = (Path(args.out).expanduser().resolve() if args.out
-               else Path(tempfile.mkdtemp(prefix="voicematch-reextract-")))
+    scratch = (
+        Path(args.out).expanduser().resolve()
+        if args.out
+        else Path(tempfile.mkdtemp(prefix="voicematch-reextract-"))
+    )
     scratch.mkdir(parents=True, exist_ok=True)
 
     results = []
@@ -180,8 +192,10 @@ def main(argv: list[str] | None = None) -> int:
     for r in results:
         by_status.setdefault(r["status"], []).append(r["id"])
     matched = len(by_status.get("match", []))
-    print(f"\n{matched}/{len(ids)} identical to the committed reference "
-          f"(measured_utc excluded) -- scratch root {scratch}")
+    print(
+        f"\n{matched}/{len(ids)} identical to the committed reference "
+        f"(measured_utc excluded) -- scratch root {scratch}"
+    )
     for status, cap_ids in sorted(by_status.items()):
         if status == "match":
             continue

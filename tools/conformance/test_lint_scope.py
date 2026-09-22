@@ -67,21 +67,30 @@ def test_the_ruff_target_is_read_out_of_a_workflow_too() -> None:
 def test_a_narrower_workflow_scope_is_a_disagreement() -> None:
     """The defect this exists for: the Makefile widened, the workflow did not."""
     failures: list[str] = []
-    mod.check_agreement("the ruff scope", {
-        "Makefile": mod.ruff_targets(MAKEFILE),
-        "ci.yml": mod.ruff_targets(WORKFLOW.replace("ruff check .",
-                                                    "ruff check bindings/python")),
-    }, failures)
+    mod.check_agreement(
+        "the ruff scope",
+        {
+            "Makefile": mod.ruff_targets(MAKEFILE),
+            "ci.yml": mod.ruff_targets(
+                WORKFLOW.replace("ruff check .", "ruff check bindings/python")
+            ),
+        },
+        failures,
+    )
     assert len(failures) == 1, failures
     assert "disagrees" in failures[0]
 
 
 def test_matching_scopes_raise_nothing() -> None:
     failures: list[str] = []
-    mod.check_agreement("the ruff scope", {
-        "Makefile": mod.ruff_targets(MAKEFILE),
-        "ci.yml": mod.ruff_targets(WORKFLOW),
-    }, failures)
+    mod.check_agreement(
+        "the ruff scope",
+        {
+            "Makefile": mod.ruff_targets(MAKEFILE),
+            "ci.yml": mod.ruff_targets(WORKFLOW),
+        },
+        failures,
+    )
     assert failures == []
 
 
@@ -103,10 +112,14 @@ def test_only_a_pathspec_reaching_clang_format_counts() -> None:
 def test_a_glob_dropped_from_one_workflow_is_a_disagreement() -> None:
     narrowed = WORKFLOW.replace("'*.h' '*.cpp'", "'*.h'")
     failures: list[str] = []
-    mod.check_agreement("the clang-format pathspec", {
-        "Makefile": sorted(set(mod.clang_format_specs(MAKEFILE))),
-        "ci.yml": sorted(set(mod.clang_format_specs(narrowed))),
-    }, failures)
+    mod.check_agreement(
+        "the clang-format pathspec",
+        {
+            "Makefile": sorted(set(mod.clang_format_specs(MAKEFILE))),
+            "ci.yml": sorted(set(mod.clang_format_specs(narrowed))),
+        },
+        failures,
+    )
     assert len(failures) == 1, failures
 
 

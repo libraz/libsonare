@@ -24,9 +24,29 @@ HARM_REACH = N_HARMONICS
 # from the percussion one; `env`, `mss`, `level` and `crest` are computed for
 # both. A run uses one group or the other — which one the probe pattern decides
 # — and the unused terms stay at zero weight.
-LOSS_TERMS = ("harm", "modes", "cents", "tnr", "mod", "env", "init", "slope",
-              "tail", "hf", "lf", "stiff", "level", "crest", "dyn", "mss",
-              "band", "bdecay", "tilt", "bright", "kit")
+LOSS_TERMS = (
+    "harm",
+    "modes",
+    "cents",
+    "tnr",
+    "mod",
+    "env",
+    "init",
+    "slope",
+    "tail",
+    "hf",
+    "lf",
+    "stiff",
+    "level",
+    "crest",
+    "dyn",
+    "mss",
+    "band",
+    "bdecay",
+    "tilt",
+    "bright",
+    "kit",
+)
 
 # Per-note caps, in each term's own units. A reference row can be measuring
 # almost nothing — a partial 58 dB under the fundamental, a band the capture has
@@ -52,8 +72,18 @@ LEVEL_DELTA_CAP_DB = 18.0
 # term the model matched perfectly. Anything that reasons about a residual
 # rather than about the combined loss has to know the difference.
 _SHARED_TERMS = ("env", "mss", "level", "crest", "dyn", "modes")
-PITCHED_TERMS = ("harm", "cents", "tnr", "mod", "init", "slope", "tail", "hf",
-                 "lf", "stiff") + _SHARED_TERMS
+PITCHED_TERMS = (
+    "harm",
+    "cents",
+    "tnr",
+    "mod",
+    "init",
+    "slope",
+    "tail",
+    "hf",
+    "lf",
+    "stiff",
+) + _SHARED_TERMS
 #: `modes` is shared because a drum has one too. A tom, a conga, a timbale, a
 #: woodblock and a cowbell all have a definite pitch, and the 1/3-octave band
 #: profile cannot see it: a band is four semitones wide, so a tom two semitones
@@ -128,8 +158,9 @@ def _level_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[floa
             offsets.append(mo - oo)
         mc, oc = m.get("held_crest_db"), o.get("held_crest_db")
         if oc is not None:
-            crests.append(LEVEL_DELTA_CAP_DB if mc is None
-                          else min(abs(mc - oc), LEVEL_DELTA_CAP_DB))
+            crests.append(
+                LEVEL_DELTA_CAP_DB if mc is None else min(abs(mc - oc), LEVEL_DELTA_CAP_DB)
+            )
     if not offsets:
         return 0.0, (sum(crests) / len(crests) if crests else 0.0), 0.0
     median = sorted(offsets)[len(offsets) // 2]
@@ -173,8 +204,7 @@ def _brightness(row: dict) -> float | None:
         # rows, so without this filter a third of what the drum branch reads is
         # the capture's own bottom rather than the hit's brightness — a term
         # nominally about how tone tracks force, partly measuring a constant.
-        upper = [v for v in bands[len(bands) * 2 // 3:]
-                 if v > BAND_REFERENCE_FLOOR_DB]
+        upper = [v for v in bands[len(bands) * 2 // 3 :] if v > BAND_REFERENCE_FLOOR_DB]
         return sum(upper) / len(upper) if upper else None
     return None
 
@@ -275,8 +305,9 @@ def _pair_modes(m_hz, o_hz) -> list[tuple[int, int, float]]:
     return pairs
 
 
-def _modes_terms(model_rows: list[dict], oracle_rows_: list[dict],
-                 tally: CellCount | None = None) -> tuple[float, int]:
+def _modes_terms(
+    model_rows: list[dict], oracle_rows_: list[dict], tally: CellCount | None = None
+) -> tuple[float, int]:
     """How differently the two instruments place their partials, and on how many notes.
 
     The harmonic ladder searches for partial n at `n*f0*sqrt(1+B*n^2)`, which
@@ -341,8 +372,9 @@ MOD_RATE_MIN_CENTS = 5.0
 MOD_RATE_MIN_DB = 1.0
 
 
-def _mod_terms(model_rows: list[dict], oracle_rows_: list[dict],
-               tally: CellCount | None = None) -> tuple[float, int]:
+def _mod_terms(
+    model_rows: list[dict], oracle_rows_: list[dict], tally: CellCount | None = None
+) -> tuple[float, int]:
     """How differently the two voices move, and how many notes said so.
 
     A sampled reference is a recording of a player, so it carries vibrato,
@@ -372,19 +404,22 @@ def _mod_terms(model_rows: list[dict], oracle_rows_: list[dict],
     for m, o in zip(model_rows, oracle_rows_):
         parts: list[float] = []
         scored = False
-        for field, scale, cap in (("vib_cents", MOD_VIB_CENTS_PER_UNIT, MOD_CENTS_CAP),
-                                  ("trem_db", 1.0, MOD_DEPTH_CAP),
-                                  ("beat_db", 1.0, MOD_DEPTH_CAP),
-                                  ("f0_width_cents", MOD_WIDTH_CENTS_PER_UNIT,
-                                   MOD_WIDTH_CAP)):
+        for field, scale, cap in (
+            ("vib_cents", MOD_VIB_CENTS_PER_UNIT, MOD_CENTS_CAP),
+            ("trem_db", 1.0, MOD_DEPTH_CAP),
+            ("beat_db", 1.0, MOD_DEPTH_CAP),
+            ("f0_width_cents", MOD_WIDTH_CENTS_PER_UNIT, MOD_WIDTH_CAP),
+        ):
             mv, ov = m.get(field), o.get(field)
             if ov is None:
                 continue
             scored = True
             parts.append(_absent_or(mv, ov, cap, tally) / scale)
-        for depth, rate, floor in (("vib_cents", "vib_rate_hz", MOD_RATE_MIN_CENTS),
-                                   ("trem_db", "trem_rate_hz", MOD_RATE_MIN_DB),
-                                   ("beat_db", "beat_rate_hz", MOD_RATE_MIN_DB)):
+        for depth, rate, floor in (
+            ("vib_cents", "vib_rate_hz", MOD_RATE_MIN_CENTS),
+            ("trem_db", "trem_rate_hz", MOD_RATE_MIN_DB),
+            ("beat_db", "beat_rate_hz", MOD_RATE_MIN_DB),
+        ):
             md, od = m.get(depth), o.get(depth)
             mr, orr = m.get(rate), o.get(rate)
             if od is None or orr is None or od < floor:
@@ -441,8 +476,10 @@ def _stiff_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[floa
         mb, ob = m.get("inharmonicity_b"), o.get("inharmonicity_b")
         if mb is None or ob is None:
             continue
-        if (m.get("inharmonicity_partials", 0) < MIN_PARTIALS_FOR_B
-                or o.get("inharmonicity_partials", 0) < MIN_PARTIALS_FOR_B):
+        if (
+            m.get("inharmonicity_partials", 0) < MIN_PARTIALS_FOR_B
+            or o.get("inharmonicity_partials", 0) < MIN_PARTIALS_FOR_B
+        ):
             continue
         delta = abs(stretch_cents(mb) - stretch_cents(ob))
         total += min(delta, STIFF_DELTA_CENTS_CAP)
@@ -509,10 +546,12 @@ class CellCount:
         return self.clipped + self.absent
 
     def out(self, term: str) -> dict[str, float]:
-        return {f"{term}_cells": float(self.compared + self.capped),
-                f"{term}_capped": float(self.capped),
-                f"{term}_absent": float(self.absent),
-                f"{term}_skipped": float(self.skipped)}
+        return {
+            f"{term}_cells": float(self.compared + self.capped),
+            f"{term}_capped": float(self.capped),
+            f"{term}_absent": float(self.absent),
+            f"{term}_skipped": float(self.skipped),
+        }
 
 
 def _absent_or(model, oracle, cap: float, tally: CellCount | None = None) -> float:
@@ -665,8 +704,7 @@ def _lf_balance_db(bands_db, valid) -> float | None:
     return sum(low) / len(low) - sum(rest) / len(rest)
 
 
-def _perc_lf_terms(model_rows: list[dict],
-                   oracle_rows_: list[dict]) -> tuple[float, int]:
+def _perc_lf_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float, int]:
     """How far the model's low end sits from the reference's, as one region.
 
     Bands the reference floored are left out for the reason they are left out of
@@ -679,8 +717,7 @@ def _perc_lf_terms(model_rows: list[dict],
         mb, ob = m.get("bands_db") or [], o.get("bands_db") or []
         if len(mb) != len(THIRD_OCTAVE_CENTERS) or len(ob) != len(THIRD_OCTAVE_CENTERS):
             continue
-        valid = [i for i in range(len(THIRD_OCTAVE_CENTERS))
-                 if ob[i] > BAND_REFERENCE_FLOOR_DB]
+        valid = [i for i in range(len(THIRD_OCTAVE_CENTERS)) if ob[i] > BAND_REFERENCE_FLOOR_DB]
         m_lf, o_lf = _lf_balance_db(mb, valid), _lf_balance_db(ob, valid)
         if m_lf is None or o_lf is None:
             continue

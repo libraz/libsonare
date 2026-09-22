@@ -54,11 +54,11 @@ def test_take_dirs_of_a_set_are_not_sets() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         scratch = Path(tmp).resolve()
         # The kit set, written to the default `--out`.
-        _write_set(scratch / "audition",
-                   {"groove": ["model", "kit-a"], "tom-fill": ["model", "kit-a"]})
+        _write_set(
+            scratch / "audition", {"groove": ["model", "kit-a"], "tom-fill": ["model", "kit-a"]}
+        )
         # A named set, written under it.
-        _write_set(scratch / "audition" / "piano-body",
-                   {"single-c4": ["model", "grand-227"]})
+        _write_set(scratch / "audition" / "piano-body", {"single-c4": ["model", "grand-227"]})
 
         ids = _discover(scratch)
         assert "groove" not in ids, ids
@@ -167,10 +167,11 @@ def test_a_probe_is_not_a_set() -> None:
     """
     with tempfile.TemporaryDirectory() as tmp:
         scratch = Path(tmp).resolve()
-        _write_set(scratch / "audition" / "p000-acoustic-grand-piano",
-                   {"single-c4": ["model", "grand-227"]})
-        probe = _write_set(scratch / "audition" / "p000-isolate",
-                           {"single-c4": ["model", "D_AIR"]})
+        _write_set(
+            scratch / "audition" / "p000-acoustic-grand-piano",
+            {"single-c4": ["model", "grand-227"]},
+        )
+        probe = _write_set(scratch / "audition" / "p000-isolate", {"single-c4": ["model", "D_AIR"]})
         manifest = json.loads((probe / "manifest.json").read_text())
         manifest["probe"] = True
         (probe / "manifest.json").write_text(json.dumps(manifest))
@@ -183,8 +184,7 @@ def test_a_probe_is_not_a_set() -> None:
 def test_a_probe_named_explicitly_is_still_skipped() -> None:
     """The flag travels with the data, so pointing at one does not serve it."""
     with tempfile.TemporaryDirectory() as tmp:
-        probe = _write_set(Path(tmp).resolve() / "p000-isolate",
-                           {"single-c4": ["model", "D_AIR"]})
+        probe = _write_set(Path(tmp).resolve() / "p000-isolate", {"single-c4": ["model", "D_AIR"]})
         manifest = json.loads((probe / "manifest.json").read_text())
         manifest["probe"] = True
         (probe / "manifest.json").write_text(json.dumps(manifest))
@@ -195,8 +195,9 @@ def test_a_probe_named_explicitly_is_still_skipped() -> None:
 def test_an_ordinary_set_is_not_a_probe() -> None:
     """A guard that cannot go either way is worth nothing."""
     with tempfile.TemporaryDirectory() as tmp:
-        ordinary = _write_set(Path(tmp).resolve() / "p000-acoustic-grand-piano",
-                              {"single-c4": ["model", "grand-227"]})
+        ordinary = _write_set(
+            Path(tmp).resolve() / "p000-acoustic-grand-piano", {"single-c4": ["model", "grand-227"]}
+        )
         assert not serve.is_probe(ordinary)
         assert serve.discover([str(ordinary)]) == [ordinary]
 
@@ -215,6 +216,7 @@ def _with_feedback_root(fn):
             fn()
         finally:
             serve.FEEDBACK_ROOT = original
+
     run.__name__ = fn.__name__
     run.__doc__ = fn.__doc__
     return run
@@ -266,8 +268,17 @@ def test_a_set_name_cannot_write_outside_the_feedback_directory() -> None:
         # The invariant is containment, not refusal: a name that sanitises to
         # something is written under the directory, and one that sanitises to
         # nothing is refused. Either way nothing lands elsewhere.
-        for name in ("", "..", "../..", "/etc/passwd", "...", "./.",
-                     "../p040-violin", "p040-violin", "a/b/c"):
+        for name in (
+            "",
+            "..",
+            "../..",
+            "/etc/passwd",
+            "...",
+            "./.",
+            "../p040-violin",
+            "p040-violin",
+            "a/b/c",
+        ):
             got = serve.feedback_path(name)
             assert got is None or got.parent == root, (name, got)
         for empty in ("", "..", "...", "./.", "///"):
@@ -313,15 +324,19 @@ def test_the_index_marks_each_voice_with_the_worst_thing_said_about_it() -> None
     with tempfile.TemporaryDirectory() as tmp:
         _feedback_in(tmp)
         path = serve.feedback_path("p081-lead")
-        serve.append_feedback(path, {"at": "2026-09-01T00:00:00+00:00",
-                                     "grade": "broken", "tag": "broken"})
-        serve.append_feedback(path, {"at": "2026-09-19T00:00:00+00:00",
-                                     "grade": "acceptable", "tag": "tone/dark"})
-        serve.append_feedback(path, {"at": "2026-09-20T00:00:00+00:00",
-                                     "grade": "", "tag": "prefer"})
+        serve.append_feedback(
+            path, {"at": "2026-09-01T00:00:00+00:00", "grade": "broken", "tag": "broken"}
+        )
+        serve.append_feedback(
+            path, {"at": "2026-09-19T00:00:00+00:00", "grade": "acceptable", "tag": "tone/dark"}
+        )
+        serve.append_feedback(
+            path, {"at": "2026-09-20T00:00:00+00:00", "grade": "", "tag": "prefer"}
+        )
         quiet = serve.feedback_path("p040-violin")
-        serve.append_feedback(quiet, {"at": "2026-09-05T00:00:00+00:00",
-                                      "grade": "ok", "tag": "ok"})
+        serve.append_feedback(
+            quiet, {"at": "2026-09-05T00:00:00+00:00", "grade": "ok", "tag": "ok"}
+        )
 
         index = serve.feedback_index()
         assert index["p081-lead"]["worst"] == "broken", index
@@ -336,12 +351,14 @@ def test_the_index_marks_each_voice_with_the_worst_thing_said_about_it() -> None
 
 def _with_bank_files(fn):
     """Point the policy and the capture definitions at a scratch tree."""
+
     def wrapped() -> None:
         policy, captures = serve.POLICY_PATH, serve.CAPTURE_DIR
         try:
             fn()
         finally:
             serve.POLICY_PATH, serve.CAPTURE_DIR = policy, captures
+
     wrapped.__name__ = fn.__name__
     wrapped.__doc__ = fn.__doc__
     return wrapped
@@ -352,17 +369,29 @@ def _with_bank_files(fn):
 _POLICY = {
     "reference_layer": {
         "_": "prose the reader skips",
-        "default": {"timbre": "instrument", "behaviour": "instrument",
-                    "reason": "names a real instrument"},
-        "machine_defined": {"timbre": "machine", "behaviour": "machine",
-                            "programs": [81], "reason": "the machine invented it"},
-        "kits": {"timbre": "instrument", "behaviour": "machine",
-                 "reason": "real drums, the machine's relations"},
+        "default": {
+            "timbre": "instrument",
+            "behaviour": "instrument",
+            "reason": "names a real instrument",
+        },
+        "machine_defined": {
+            "timbre": "machine",
+            "behaviour": "machine",
+            "programs": [81],
+            "reason": "the machine invented it",
+        },
+        "kits": {
+            "timbre": "instrument",
+            "behaviour": "machine",
+            "reason": "real drums, the machine's relations",
+        },
     },
     "no_reference": {
         "p000b016-acoustic-grand-piano": {
-            "names": "Piano 1d", "carries": "European Pf",
-            "reason": "the recordings hold a different instrument at this address"},
+            "names": "Piano 1d",
+            "carries": "European Pf",
+            "reason": "the recordings hold a different instrument at this address",
+        },
     },
 }
 
@@ -387,11 +416,14 @@ def test_a_machine_defined_slot_wants_the_module_and_says_when_it_did_not_get_it
     page has to say so rather than leave it to be remembered.
     """
     with tempfile.TemporaryDirectory() as tmp:
-        _bank_files(Path(tmp), {
-            "lead_saw": {"label": "Lead 2", "source_class": "library"},
-            "lead_saw_hw": {"label": "Lead 2", "source_class": "module"},
-            "violin": {"label": "Violin", "source_class": "library"},
-        })
+        _bank_files(
+            Path(tmp),
+            {
+                "lead_saw": {"label": "Lead 2", "source_class": "library"},
+                "lead_saw_hw": {"label": "Lead 2", "source_class": "module"},
+                "violin": {"label": "Violin", "source_class": "library"},
+            },
+        )
         off = serve.provenance({"program": 81, "capture": "lead_saw"}, "p081-lead")
         assert off["state"] == "off-target", off
         assert off["want"]["timbre"] == "machine", off
@@ -418,8 +450,7 @@ def test_a_kit_takes_the_kit_branch_whatever_number_selects_it() -> None:
     """
     with tempfile.TemporaryDirectory() as tmp:
         _bank_files(Path(tmp), {"drums": {"label": "kit", "source_class": "library"}})
-        kit = serve.provenance({"program": 81, "kit": True, "capture": "drums"},
-                               "kit081-whatever")
+        kit = serve.provenance({"program": 81, "kit": True, "capture": "drums"}, "kit081-whatever")
         assert kit["want"]["branch"] == "kits", kit
         assert kit["state"] == "aimed", kit
 
@@ -434,8 +465,7 @@ def test_an_address_held_to_have_no_reference_is_not_one_nobody_captured() -> No
     """
     with tempfile.TemporaryDirectory() as tmp:
         _bank_files(Path(tmp), {})
-        declined = serve.provenance({"program": 0, "bank": 16},
-                                    "p000b016-acoustic-grand-piano")
+        declined = serve.provenance({"program": 0, "bank": 16}, "p000b016-acoustic-grand-piano")
         assert declined["state"] == "declined", declined
         assert declined["declined"]["names"] == "Piano 1d", declined
 
@@ -454,22 +484,27 @@ def test_the_product_is_read_from_the_overlay_and_the_class_from_the_definition(
     """
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
-        _bank_files(tmp_path, {"violin": {"label": "Violin, sampled",
-                                          "source_class": "library", "room": "none"}})
+        _bank_files(
+            tmp_path,
+            {"violin": {"label": "Violin, sampled", "source_class": "library", "room": "none"}},
+        )
         bare = serve.capture_facts("violin")
         assert bare["source_class"] == "library", bare
         assert bare["product"] == "", bare
         assert bare["room"] == "none", bare
 
         (serve.CAPTURE_DIR / "violin.local.json").write_text(
-            json.dumps({"label": "Some Sampler 9"}), encoding="utf-8")
+            json.dumps({"label": "Some Sampler 9"}), encoding="utf-8"
+        )
         assert serve.capture_facts("violin")["product"] == "Some Sampler 9"
 
         # An unclassified capture is its own state rather than a quiet pass:
         # a definition that says nothing cannot be compared with the policy.
         _bank_files(tmp_path, {"mystery": {"label": "?"}})
-        assert serve.provenance({"program": 81, "capture": "mystery"},
-                                "p081-lead")["state"] == "unclassified"
+        assert (
+            serve.provenance({"program": 81, "capture": "mystery"}, "p081-lead")["state"]
+            == "unclassified"
+        )
 
 
 def test_every_capture_this_tree_holds_resolves_to_a_state() -> None:
@@ -481,8 +516,9 @@ def test_every_capture_this_tree_holds_resolves_to_a_state() -> None:
     """
     states = {"aimed", "off-target", "unclassified", "declined", "uncaptured"}
     seen = set()
-    definitions = sorted(p for p in serve.CAPTURE_DIR.glob("*.json")
-                         if not p.name.endswith(".local.json"))
+    definitions = sorted(
+        p for p in serve.CAPTURE_DIR.glob("*.json") if not p.name.endswith(".local.json")
+    )
     assert len(definitions) >= 100, len(definitions)
     for path in definitions:
         cfg = json.loads(path.read_text(encoding="utf-8"))
@@ -511,12 +547,14 @@ def test_a_page_rendered_before_the_words_existed_still_gets_them() -> None:
     assert variants, "the shipped registry has no settings for this voice"
     name = next(iter(variants))
 
-    manifest = {"sources": {
-        "model": {"role": "model"},
-        name: {"role": "model"},
-        f"{name}-di": {"role": "model"},
-        "mine": {"role": "model", "title": {"en": "kept", "ja": "kept"}},
-    }}
+    manifest = {
+        "sources": {
+            "model": {"role": "model"},
+            name: {"role": "model"},
+            f"{name}-di": {"role": "model"},
+            "mine": {"role": "model", "title": {"en": "kept", "ja": "kept"}},
+        }
+    }
     assert serve.label_sources(manifest, slug)
     src = manifest["sources"]
     assert set(src[name]["title"]) == {"en", "ja"}, src[name]
@@ -538,12 +576,16 @@ def test_the_knob_never_reaches_the_page_and_the_signal_path_does() -> None:
     is the other way round: it is missing, and without it the switch cannot tell
     a second path from a second candidate.
     """
-    manifest = {"sources": {
-        "felt-worn": {"role": "model",
-                      "detail": "the felt is flat — fam0.piano.brightness=0.30"},
-        "felt-worn-di": {"role": "model", "detail": "the same, rig cleared — a.b=1,c.d=2"},
-        "prose": {"role": "model", "detail": "two references — both of them dark"},
-    }}
+    manifest = {
+        "sources": {
+            "felt-worn": {
+                "role": "model",
+                "detail": "the felt is flat — fam0.piano.brightness=0.30",
+            },
+            "felt-worn-di": {"role": "model", "detail": "the same, rig cleared — a.b=1,c.d=2"},
+            "prose": {"role": "model", "detail": "two references — both of them dark"},
+        }
+    }
     assert serve.label_sources(manifest, "p000-acoustic-grand-piano")
     src = manifest["sources"]
     assert src["felt-worn"]["detail"] == "the felt is flat"
@@ -574,8 +616,11 @@ def _run_all() -> int:
         # ends the whole run with no line saying which test it was.
         except Exception as e:  # noqa: BLE001
             failed += 1
-            print(f"FAIL {t.__name__}: {type(e).__name__}: {e}"
-                  if not isinstance(e, AssertionError) else f"FAIL {t.__name__}: {e}")
+            print(
+                f"FAIL {t.__name__}: {type(e).__name__}: {e}"
+                if not isinstance(e, AssertionError)
+                else f"FAIL {t.__name__}: {e}"
+            )
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     return 1 if failed else 0
 

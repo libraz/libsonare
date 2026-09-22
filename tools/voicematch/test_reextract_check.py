@@ -65,8 +65,12 @@ def test_compare_caps_the_diff_count_rather_than_flooding():
 
 def test_compare_treats_two_nans_as_the_same_unmeasurable_answer():
     """`nan != nan`, so a plain `!=` would flag every unscorable partial as drift."""
-    old = {"rows": [{"timbre": "t", "note": 60, "velocity": 80, "partial_decay_db_s": [float("nan")]}]}
-    new = {"rows": [{"timbre": "t", "note": 60, "velocity": 80, "partial_decay_db_s": [float("nan")]}]}
+    old = {
+        "rows": [{"timbre": "t", "note": 60, "velocity": 80, "partial_decay_db_s": [float("nan")]}]
+    }
+    new = {
+        "rows": [{"timbre": "t", "note": 60, "velocity": 80, "partial_decay_db_s": [float("nan")]}]
+    }
     assert reextract_check.compare(old, new) == []
 
 
@@ -78,9 +82,13 @@ def test_compare_still_catches_nan_becoming_a_number():
 
 
 def test_compare_reads_zero_for_a_profile_against_itself():
-    profile = {"id": "x", "measured_utc": "now", "capture": {"a": 1},
-               "rows": [{"timbre": "t", "note": 60, "velocity": 80, "v": 1.0}],
-               "summary": {"s": 1.0}}
+    profile = {
+        "id": "x",
+        "measured_utc": "now",
+        "capture": {"a": 1},
+        "rows": [{"timbre": "t", "note": 60, "velocity": 80, "v": 1.0}],
+        "summary": {"s": 1.0},
+    }
     assert reextract_check.compare(profile, json.loads(json.dumps(profile))) == []
 
 

@@ -100,20 +100,26 @@ def main() -> int:
             print(f"specs/{name}: {len(knobs)} knob(s) name nothing the library reports")
             for knob in knobs:
                 print(f"  {knob}")
-        print("\nA spec keeps the name of a mechanism the engine no longer has. Delete the knob, "
-              "or point it at what replaced it.\n")
+        print(
+            "\nA spec keeps the name of a mechanism the engine no longer has. Delete the knob, "
+            "or point it at what replaced it.\n"
+        )
     else:
         print(f"every knob in {len(paths)} spec(s) resolves against the library's catalogue")
 
     collapsed = collapsed_bounds(catalogue)
     if collapsed:
         failed = True
-        print(f"\n{len(collapsed)} patch field(s) clamp to a single point, so no fit and no "
-              f"census reaches them and neither records that it did not:")
+        print(
+            f"\n{len(collapsed)} patch field(s) clamp to a single point, so no fit and no "
+            f"census reaches them and neither records that it did not:"
+        )
         for name in collapsed:
             print(f"  {name}")
-        print("\nA clamp that resets a field rather than narrowing it reads back the same value "
-              "at both probe ends. Fix the clamp, or say why the field is fixed.")
+        print(
+            "\nA clamp that resets a field rather than narrowing it reads back the same value "
+            "at both probe ends. Fix the clamp, or say why the field is fixed."
+        )
     else:
         print(f"none of {len(catalogue.bounds)} clamped field(s) collapses to a single point")
 

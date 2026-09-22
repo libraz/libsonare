@@ -86,7 +86,7 @@ def rms_envelope(sig: np.ndarray, sr: int = 48000, hop_ms: float = 2.0) -> np.nd
     n = len(x) // hop
     if n < 2:
         return np.zeros(1)
-    e = np.sqrt(np.array([np.mean(x[i * hop:(i + 1) * hop] ** 2) for i in range(n)]) + 1e-20)
+    e = np.sqrt(np.array([np.mean(x[i * hop : (i + 1) * hop] ** 2) for i in range(n)]) + 1e-20)
     return e / max(float(e.max()), 1e-20)
 
 
@@ -179,8 +179,7 @@ def texture_window(late, span_s: float = DENSITY_SPAN_S):
     return (start, end)
 
 
-def mode_count(sig: np.ndarray, late, sr: int = 48000, bands=STRUCK_BANDS,
-               floor=None):
+def mode_count(sig: np.ndarray, late, sr: int = 48000, bands=STRUCK_BANDS, floor=None):
     """Per band: resonances counted in the aftersound, and whether it was read.
 
     Returns (count, usable). A band that never stood over the recording's own
@@ -217,7 +216,7 @@ def _band_db(sig: np.ndarray, band, window, sr: int) -> float:
     if x.ndim > 1:
         x = x.mean(axis=1)
     a, b = int(window[0] * sr), int(window[1] * sr)
-    seg = x[max(0, a):min(len(x), b)]
+    seg = x[max(0, a) : min(len(x), b)]
     if len(seg) < 64:
         return -400.0
     n = 1

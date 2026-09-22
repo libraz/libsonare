@@ -53,8 +53,7 @@ from .partials import fit_inharmonicity, harmonic_rows, note_hz
 
 #: Windows the complaint is usually made about. The attack is read on the short
 #: scale by callers that need it; these are the coarse scale's.
-WINDOWS = (("attack", 0.10, 0.25), ("body", 0.3, 1.0),
-           ("sustain", 1.5, 3.0), ("tail", 3.5, 6.5))
+WINDOWS = (("attack", 0.10, 0.25), ("body", 0.3, 1.0), ("sustain", 1.5, 3.0), ("tail", 3.5, 6.5))
 #: Partials above this multiple of the fundamental are outside the comparison.
 #: A fixed 16 kHz ceiling as well, so the top of the keyboard does not have its
 #: ratio decided by the anti-alias filter.
@@ -65,8 +64,7 @@ TOP_HZ = 16000.0
 FLOOR_SHARE_LIMIT = 25.0
 
 
-def _split(spectro, S, note, B, window, top_partial=TOP_PARTIAL, top_hz=TOP_HZ,
-           scale: int = 0):
+def _split(spectro, S, note, B, window, top_partial=TOP_PARTIAL, top_hz=TOP_HZ, scale: int = 0):
     hz = spectro.rows_hz(scale)
     f0 = note_hz(note)
     hm = harmonic_rows(hz, f0, B)
@@ -144,6 +142,9 @@ def report(model_profile, ref_profile) -> str:
     notes = rows[0][2]
     out = [f"{'window':<12}" + "".join(f"{n:>7}" for n in notes) + "   worst"]
     for worst, w, ns, d in rows:
-        out.append(f"{w:<12}" + "".join(f"{d.get(n, float('nan')):>7.1f}"
-                                        for n in notes) + f"{worst:>8.1f}")
+        out.append(
+            f"{w:<12}"
+            + "".join(f"{d.get(n, float('nan')):>7.1f}" for n in notes)
+            + f"{worst:>8.1f}"
+        )
     return "\n".join(out)

@@ -49,9 +49,13 @@ def _definition(tmp_path: Path, font: Path, preset: str, **overrides) -> Path:
     cfg.update(overrides)
     path = tmp_path / "probe.json"
     path.write_text(json.dumps(cfg))
-    path.with_suffix(".local.json").write_text(json.dumps({
-        "timbres": [{"id": "t0", "sf2": str(font), "preset": preset}],
-    }))
+    path.with_suffix(".local.json").write_text(
+        json.dumps(
+            {
+                "timbres": [{"id": "t0", "sf2": str(font), "preset": preset}],
+            }
+        )
+    )
     return path
 
 
@@ -84,9 +88,7 @@ def test_an_imported_corpus_loads_as_a_corpus(tmp_path: Path, font: Path):
     assert set(got.renders) == {(60, 100), (72, 100)}
 
 
-def test_a_note_the_font_does_not_hold_is_reported_rather_than_dropped(
-    tmp_path: Path, font: Path
-):
+def test_a_note_the_font_does_not_hold_is_reported_rather_than_dropped(tmp_path: Path, font: Path):
     """A grid asking for notes the font never recorded must say so by number.
 
     Silence here is the failure the reach field exists for: a screening run that
@@ -133,9 +135,7 @@ def test_a_font_that_needs_a_player_is_refused(tmp_path: Path):
         import_corpus(cfg, tmp_path / "corpus")
 
 
-def test_an_unknown_preset_name_is_refused_with_what_the_font_holds(
-    tmp_path: Path, font: Path
-):
+def test_an_unknown_preset_name_is_refused_with_what_the_font_holds(tmp_path: Path, font: Path):
     cfg = _load(_definition(tmp_path, font, "Piano 2"))
     with pytest.raises(ImportRefused, match="no preset called"):
         import_corpus(cfg, tmp_path / "corpus")
@@ -175,8 +175,9 @@ def _wet(dry: np.ndarray, rt60_s: float) -> np.ndarray:
 @pytest.fixture
 def module_cfg_and_corpus(tmp_path: Path):
     def build(audio: list[np.ndarray], gate_ms: int):
-        f = _font(tmp_path, zones=[(58, 62, 0), (70, 74, 1)], audio=audio,
-                  pitches=[60, 72], name="mod")
+        f = _font(
+            tmp_path, zones=[(58, 62, 0), (70, 74, 1)], audio=audio, pitches=[60, 72], name="mod"
+        )
         cfg = _load(_definition(tmp_path, f, "mod", gate_ms=gate_ms))
         out = tmp_path / f"corpus{gate_ms}"
         return cfg, import_corpus(cfg, out), out
@@ -198,8 +199,7 @@ def test_a_module_corpus_that_measures_a_space_fails(module_cfg_and_corpus, caps
     capture below declares `room: none` and its own audio says otherwise, which
     is the case a declaration cannot catch.
     """
-    wet = [_wet(_burst(seconds=1.0, freq=261.6), 1.3),
-           _wet(_burst(seconds=1.0, freq=440.0), 1.3)]
+    wet = [_wet(_burst(seconds=1.0, freq=261.6), 1.3), _wet(_burst(seconds=1.0, freq=440.0), 1.3)]
     cfg, manifest, out = module_cfg_and_corpus(wet, 900)
     assert cfg["room"] == "none", "the declaration must not be what fails it"
     assert check_module_is_dry(cfg, manifest, out) == 1

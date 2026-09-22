@@ -29,8 +29,12 @@ from knobs import Knob, format_value
 
 
 def materialize(
-    knobs: list[Knob], values: list[float], pristine: dict[Path, str],
-    *, source_only: bool = True, full: bool = False,
+    knobs: list[Knob],
+    values: list[float],
+    pristine: dict[Path, str],
+    *,
+    source_only: bool = True,
+    full: bool = False,
 ) -> dict[Path, str]:
     """Produce each touched file's text with its knob values spliced in.
 
@@ -102,8 +106,11 @@ def restore(pristine: dict[Path, str], written: dict[Path, str]) -> None:
         if path not in pristine:
             continue
         if path.exists() and path.read_text() != text:
-            print(f"note: {path} was edited after the fit wrote it — left as it is; "
-                  f"its pristine text was NOT restored", file=sys.stderr)
+            print(
+                f"note: {path} was edited after the fit wrote it — left as it is; "
+                f"its pristine text was NOT restored",
+                file=sys.stderr,
+            )
             continue
         path.write_text(pristine[path])
     written.clear()
@@ -160,7 +167,7 @@ def array_members() -> tuple[str, ...]:
     happens to exist.
     """
     text = (REPO_ROOT / TUNING_LAYER_FILE).read_text()
-    found = [k.rsplit('.', 1)[-1] for k in _INDEXED_KEY.findall(text)]
+    found = [k.rsplit(".", 1)[-1] for k in _INDEXED_KEY.findall(text)]
     if not found:
         raise ValueError(f"no indexed tuning keys found in {TUNING_LAYER_FILE}")
     return tuple(sorted(set(found)))
@@ -271,9 +278,7 @@ def patch_field_assignments(
         if patch in named:
             per_patch.setdefault(patch, []).append((key_to_member_path(path), value))
         elif drum is not None:
-            per_drum.setdefault(int(drum.group(1)), []).append(
-                (key_to_member_path(path), value)
-            )
+            per_drum.setdefault(int(drum.group(1)), []).append((key_to_member_path(path), value))
         else:
             other.append(knob.tunable)
     return per_patch, per_drum, other
@@ -301,16 +306,21 @@ def _splice_field_lines(
     for path, value in sorted(fields):
         member = f"{prefix}{path}"
         existing = re.compile(
-            rf"^([ \t]*){re.escape(member)}\s*=\s*[^;]+;([ \t]*//[^\n]*)?$", re.MULTILINE)
+            rf"^([ \t]*){re.escape(member)}\s*=\s*[^;]+;([ \t]*//[^\n]*)?$", re.MULTILINE
+        )
         # A count takes an integer literal. `2.0f` into an `int` member is a
         # -Wliteral-conversion error under this tree's -Werror, so the type has
         # to reach the literal — see `_typed_members`.
-        literal = (f"{int(_lround(value))}" if integer_field(_key_path(path))
-                   else f"{format_value(value)}f")
+        literal = (
+            f"{int(_lround(value))}"
+            if integer_field(_key_path(path))
+            else f"{format_value(value)}f"
+        )
         line = f"{member} = {literal};"
         if existing.search(text):
             text = existing.sub(
-                lambda m, s=line: f"{m.group(1)}{s}{m.group(2) or ''}", text, count=1)
+                lambda m, s=line: f"{m.group(1)}{s}{m.group(2) or ''}", text, count=1
+            )
         else:
             append.append(line)
     if append:
@@ -390,7 +400,12 @@ def _patch_site(text: str, patch: str) -> tuple[re.Pattern, str, int, int] | Non
         text, decl.end()
     )
     end = following.start() if following is not None else len(text)
-    return re.compile(rf"^[ \t]*{re.escape(alias)}\b.*$", re.MULTILINE), f"{alias}.", decl.start(), end
+    return (
+        re.compile(rf"^[ \t]*{re.escape(alias)}\b.*$", re.MULTILINE),
+        f"{alias}.",
+        decl.start(),
+        end,
+    )
 
 
 def write_patch_fields(
@@ -434,8 +449,11 @@ def write_patch_fields(
         edited[target] = texts[target]
 
     if unplaced:
-        print(f"note: no assignment site found for {len(unplaced)} patch fields "
-              f"({', '.join(unplaced[:3])}...); reported only", file=sys.stderr)
+        print(
+            f"note: no assignment site found for {len(unplaced)} patch fields "
+            f"({', '.join(unplaced[:3])}...); reported only",
+            file=sys.stderr,
+        )
     return edited
 
 
@@ -461,8 +479,7 @@ def write_drum_fields(
     """
     path = (REPO_ROOT / DRUM_TABLE_FILE).resolve()
     if not path.exists():
-        print(f"note: {DRUM_TABLE_FILE} not found; drum-note values reported only",
-              file=sys.stderr)
+        print(f"note: {DRUM_TABLE_FILE} not found; drum-note values reported only", file=sys.stderr)
         return {}
     text = _current_text(path, base)
     original = text
@@ -474,6 +491,9 @@ def write_drum_fields(
             continue
         text = _splice_field_lines(text, anchor, f"t[{note}].", fields)
     if unplaced:
-        print(f"note: the drum table has no line for {len(unplaced)} fields "
-              f"({', '.join(unplaced[:3])}...); reported only", file=sys.stderr)
+        print(
+            f"note: the drum table has no line for {len(unplaced)} fields "
+            f"({', '.join(unplaced[:3])}...); reported only",
+            file=sys.stderr,
+        )
     return {path: text} if text != original else {}

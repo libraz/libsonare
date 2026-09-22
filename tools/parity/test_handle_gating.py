@@ -33,22 +33,16 @@ from model import Extraction, FunctionSig
 
 def _c(*keys: str) -> Extraction:
     ex = Extraction(surface="c")
-    ex.functions = [
-        FunctionSig(key=k, surface="c", raw_name=k, file="c.h", line=1) for k in keys
-    ]
+    ex.functions = [FunctionSig(key=k, surface="c", raw_name=k, file="c.h", line=1) for k in keys]
     return ex
 
 
-def _py(
-    methods: dict[str, str] | None = None, frees: list[str] | None = None
-) -> Extraction:
+def _py(methods: dict[str, str] | None = None, frees: list[str] | None = None) -> Extraction:
     """Build a Python extraction. ``methods`` maps key -> owning class name."""
     ex = Extraction(surface="python")
     for key, cls in (methods or {}).items():
         ex.functions.append(
-            FunctionSig(
-                key=key, surface="python", raw_name=f"{cls}.{key}", file="py.py", line=1
-            )
+            FunctionSig(key=key, surface="python", raw_name=f"{cls}.{key}", file="py.py", line=1)
         )
     for key in frees or []:
         ex.functions.append(
@@ -135,9 +129,7 @@ def test_an_alias_may_still_name_a_free_function() -> None:
         _c("realtime_voice_changer_config_default"),
         _py(frees=["realtime_voice_changer_preset_config"]),
     )
-    assert ("realtime_voice_changer_config_default", "python") not in _active(rep), (
-        _active(rep)
-    )
+    assert ("realtime_voice_changer_config_default", "python") not in _active(rep), _active(rep)
 
 
 def test_a_free_export_does_not_credit_a_handle_op_of_the_same_name() -> None:
@@ -159,9 +151,7 @@ def test_a_free_export_does_not_credit_a_handle_op_of_the_same_name() -> None:
         ex = check_parity._EXTRACTORS[surface](repo)
         assert tail in compare._free_keys(ex), surface
         ex.functions = [
-            f
-            for f in ex.functions
-            if not (f.raw_name.startswith("Audio.") and f.key == tail)
+            f for f in ex.functions if not (f.raw_name.startswith("Audio.") and f.key == tail)
         ]
         rep = compare.build_report(
             {"c": _c(key), surface: ex},
@@ -223,9 +213,7 @@ def test_typed_project_automation_overload_is_covered_by_base_method() -> None:
         _c("project_add_automation_lane_ex"),
         _py(methods={"add_automation_lane": "Project"}),
     )
-    assert ("project_add_automation_lane_ex", "python") not in _active(rep), _active(
-        rep
-    )
+    assert ("project_add_automation_lane_ex", "python") not in _active(rep), _active(rep)
 
 
 def test_alias_does_not_match_unrelated_member() -> None:

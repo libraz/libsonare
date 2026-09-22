@@ -261,9 +261,7 @@ def main() -> int:
         print(f"MISSING {marker}")
 
     unexported = unexported_from_entry()
-    print(
-        f"entry-export coverage: {len(unexported)} request types unexported from entry"
-    )
+    print(f"entry-export coverage: {len(unexported)} request types unexported from entry")
     for marker in unexported:
         print(f"UNEXPORTED {marker}")
 

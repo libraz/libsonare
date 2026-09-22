@@ -49,7 +49,9 @@ def _pluck(sr: int, freq: float, dur: float, decay_s: float) -> np.ndarray:
     return out.astype(np.float32)
 
 
-def _score(sr: int, notes: int = 4, gap: float = 2.5) -> tuple[np.ndarray, list[tuple[float, float]]]:
+def _score(
+    sr: int, notes: int = 4, gap: float = 2.5
+) -> tuple[np.ndarray, list[tuple[float, float]]]:
     """A few spaced notes plus their (start, end) spans."""
     total = int((notes * gap + 3.0) * sr)
     audio = np.zeros((total, 2), dtype=np.float32)
@@ -123,12 +125,8 @@ def test_fitted_ir_for_a_dry_target_is_a_passthrough():
 def test_tail_level_orders_correctly():
     """A wetter room leaves more energy after note-off, so `tail_db` falls."""
     audio, spans = _score(SR)
-    near = estimate_room(
-        apply_room(audio, synth_room_ir(Room(1.5, 0.5, 6.0, 15.0), SR)), SR, spans
-    )
-    far = estimate_room(
-        apply_room(audio, synth_room_ir(Room(1.5, 0.5, -6.0, 15.0), SR)), SR, spans
-    )
+    near = estimate_room(apply_room(audio, synth_room_ir(Room(1.5, 0.5, 6.0, 15.0), SR)), SR, spans)
+    far = estimate_room(apply_room(audio, synth_room_ir(Room(1.5, 0.5, -6.0, 15.0), SR)), SR, spans)
     assert far.tail_db < near.tail_db
 
 
@@ -350,4 +348,6 @@ def test_a_reused_ir_places_a_probe_that_could_not_measure_its_own_room():
     assert measurable_room(apply_room(short, room_ir), SR, short_spans) is None
     placed, reused = place_model_in(short, SR, short_spans, room, ir)
     assert reused is ir, "the fit ran again instead of reusing the IR"
-    assert float(np.abs(placed).sum()) > float(np.abs(short).sum()), "the IR did not reach the audio"
+    assert float(np.abs(placed).sum()) > float(np.abs(short).sum()), (
+        "the IR did not reach the audio"
+    )

@@ -136,7 +136,9 @@ def resolve_preset(spec: str) -> Path:
         if needle in unicodedata.normalize("NFC", str(p)).lower()
     ]
     if not hits:
-        raise FileNotFoundError(f"no preset matches {spec!r} under {', '.join(map(str, PRESET_ROOTS))}")
+        raise FileNotFoundError(
+            f"no preset matches {spec!r} under {', '.join(map(str, PRESET_ROOTS))}"
+        )
     if len(hits) > 1:
         listing = "\n  ".join(str(p) for p in sorted(hits)[:12])
         more = f"\n  ... and {len(hits) - 12} more" if len(hits) > 12 else ""
@@ -349,9 +351,12 @@ class AuSource:
         elif self.channel != 1:
             argv += ["--channel", str(self.channel)]
         argv += [
-            "--sample-rate", str(self.sample_rate),
-            "--preroll-ms", str(self.au_preroll_ms),
-            "--settle-ms", str(self.settle_ms),
+            "--sample-rate",
+            str(self.sample_rate),
+            "--preroll-ms",
+            str(self.au_preroll_ms),
+            "--settle-ms",
+            str(self.settle_ms),
         ]
         if self.tail:
             argv += ["--tail", self.tail]
@@ -398,8 +403,9 @@ def with_keyswitches(source: AuSource, notes: list) -> list:
     previous = None
     for onset in sorted({n.start for n in moved}):
         at = onset - lead if previous is None else max(onset - lead, (previous + onset) / 2.0)
-        switches.append(Note(source.keyswitch, KEYSWITCH_VELOCITY, max(0.0, at),
-                             KEYSWITCH_GATE_MS / 1000.0))
+        switches.append(
+            Note(source.keyswitch, KEYSWITCH_VELOCITY, max(0.0, at), KEYSWITCH_GATE_MS / 1000.0)
+        )
         previous = onset
     return switches + moved
 
@@ -446,7 +452,9 @@ def dry_params(plugin: str, *, candidates=DRY_PARAM_CANDIDATES) -> tuple[str, ..
     """
     proc = subprocess.run(
         [str(find_aubounce()), "info", plugin, "--params"],
-        capture_output=True, check=False, text=True,
+        capture_output=True,
+        check=False,
+        text=True,
     )
     if proc.returncode != 0:
         raise AuRenderError(f"aubounce info failed for {plugin!r}:\n{proc.stderr.strip()}")
@@ -611,33 +619,70 @@ def _strip_preroll(audio: np.ndarray, preroll_ms: int, sr: int) -> np.ndarray:
 
 def add_au_args(parser) -> None:
     """Register the AU-oracle flags, alongside `render_oracle.add_oracle_args`."""
-    parser.add_argument("--au", default="", dest="au",
-                        help="render the oracle with this AudioUnit instrument "
-                             "(name or type:subtype:manufacturer triple) via aubounce")
-    parser.add_argument("--au-preset", default="", dest="au_preset",
-                        help="a .vstpreset path, or a unique fragment of one "
-                             "(e.g. 'Close/Natural Ambience')")
-    parser.add_argument("--au-param", action="append", default=[], dest="au_param",
-                        help="plugin parameter as 'name=value'; repeatable")
-    parser.add_argument("--au-dry", action="store_true", dest="au_dry",
-                        help="switch off every effect section the plugin advertises")
-    parser.add_argument("--au-settle-ms", type=int, default=4000, dest="au_settle_ms",
-                        help="main-thread time before the first note (default 4000; "
-                             "a large sampler renders near silence below ~2000)")
-    parser.add_argument("--au-no-realtime", action="store_true", dest="au_no_realtime",
-                        help="drive the plugin as fast as it will go (a disk-streaming "
-                             "sampler drops the middle of a note when you do)")
-    parser.add_argument("--au-no-warmup", action="store_true", dest="au_no_warmup",
-                        help="record the plugin's first note instead of discarding one first "
-                             "(a large sampler plays it differently from every later one, and "
-                             "the probe's first note is its softest)")
-    parser.add_argument("--au-gm", action="store_true", dest="au_gm",
-                        help="the plugin is a General MIDI synth, so keep the probe's program "
-                             "change (by default it is stripped: an instrument selected by a "
-                             "preset does not need one, and a multitimbral rack answers it by "
-                             "loading a different program into the slot)")
-    parser.add_argument("--au-no-cache", action="store_true", dest="au_no_cache",
-                        help="re-render instead of reusing an identical earlier render")
+    parser.add_argument(
+        "--au",
+        default="",
+        dest="au",
+        help="render the oracle with this AudioUnit instrument "
+        "(name or type:subtype:manufacturer triple) via aubounce",
+    )
+    parser.add_argument(
+        "--au-preset",
+        default="",
+        dest="au_preset",
+        help="a .vstpreset path, or a unique fragment of one (e.g. 'Close/Natural Ambience')",
+    )
+    parser.add_argument(
+        "--au-param",
+        action="append",
+        default=[],
+        dest="au_param",
+        help="plugin parameter as 'name=value'; repeatable",
+    )
+    parser.add_argument(
+        "--au-dry",
+        action="store_true",
+        dest="au_dry",
+        help="switch off every effect section the plugin advertises",
+    )
+    parser.add_argument(
+        "--au-settle-ms",
+        type=int,
+        default=4000,
+        dest="au_settle_ms",
+        help="main-thread time before the first note (default 4000; "
+        "a large sampler renders near silence below ~2000)",
+    )
+    parser.add_argument(
+        "--au-no-realtime",
+        action="store_true",
+        dest="au_no_realtime",
+        help="drive the plugin as fast as it will go (a disk-streaming "
+        "sampler drops the middle of a note when you do)",
+    )
+    parser.add_argument(
+        "--au-no-warmup",
+        action="store_true",
+        dest="au_no_warmup",
+        help="record the plugin's first note instead of discarding one first "
+        "(a large sampler plays it differently from every later one, and "
+        "the probe's first note is its softest)",
+    )
+    parser.add_argument(
+        "--au-gm",
+        action="store_true",
+        dest="au_gm",
+        help="the plugin is a General MIDI synth, so keep the probe's program "
+        "change (by default it is stripped: an instrument selected by a "
+        "preset does not need one, and a multitimbral rack answers it by "
+        "loading a different program into the slot)",
+    )
+    parser.add_argument(
+        "--au-no-cache",
+        action="store_true",
+        dest="au_no_cache",
+        help="re-render instead of reusing an identical earlier render",
+    )
 
 
 def source_from_args(args) -> AuSource | None:

@@ -90,8 +90,7 @@ class Descent:
         state = dict(self.base)
         state.update(start or {})
         state.update(self.fixed)
-        coords = [k for k in sorted(self.base)
-                  if k not in self.deny and k not in self.fixed]
+        coords = [k for k in sorted(self.base) if k not in self.deny and k not in self.fixed]
         best = self.evaluate(write_overrides(state, self.base), self.fit_notes)
         h = self.evaluate(write_overrides(state, self.base), self.hold_notes, hold=True)
         self.log(f"start  fit {best:.3f}  hold {h:.3f}  ({len(coords)} coordinates)")
@@ -101,20 +100,26 @@ class Descent:
                 moved = 0
                 for name in coords:
                     cur = state[name]
-                    cands = ([c for c in ZERO_LADDER if c != cur] if cur == 0.0
-                             else [cur * s for s in self.steps])
-                    futs = {pool.submit(self.evaluate,
-                                        write_overrides({**state, name: c}, self.base),
-                                        self.fit_notes): c for c in cands}
+                    cands = (
+                        [c for c in ZERO_LADDER if c != cur]
+                        if cur == 0.0
+                        else [cur * s for s in self.steps]
+                    )
+                    futs = {
+                        pool.submit(
+                            self.evaluate,
+                            write_overrides({**state, name: c}, self.base),
+                            self.fit_notes,
+                        ): c
+                        for c in cands
+                    }
                     res = sorted((f.result(), futs[f]) for f in cf.as_completed(futs))
                     t, c = res[0]
                     if t < best - ACCEPT_DB:
                         state[name] = c
-                        self.log(f"  p{p} {name:<44} {cur:<12.6g} -> {c:<12.6g} "
-                                 f"fit {t:.3f}")
+                        self.log(f"  p{p} {name:<44} {cur:<12.6g} -> {c:<12.6g} fit {t:.3f}")
                         best, moved = t, moved + 1
-                h = self.evaluate(write_overrides(state, self.base), self.hold_notes,
-                                  hold=True)
+                h = self.evaluate(write_overrides(state, self.base), self.hold_notes, hold=True)
                 self.log(f"pass {p}: fit {best:.3f}  hold {h:.3f}  ({moved} moves)")
                 if moved == 0:
                     break
@@ -123,8 +128,7 @@ class Descent:
         return {k: v for k, v in state.items() if v != self.base.get(k)}
 
 
-def ablate(loss, base: dict, moves: dict, fit_notes, hold_notes, workers: int = 7,
-           hold_loss=None):
+def ablate(loss, base: dict, moves: dict, fit_notes, hold_notes, workers: int = 7, hold_loss=None):
     """Price each accepted move by reverting it alone in the final state.
 
     Returned per move as (change in fit, change in hold-out). Positive means the
@@ -137,8 +141,7 @@ def ablate(loss, base: dict, moves: dict, fit_notes, hold_notes, workers: int = 
 
     def one(name):
         ov = write_overrides({**base, **moves, name: base[name]}, base)
-        return (loss.score(ov, notes=fit_notes).total,
-                hl.score(ov, notes=hold_notes).total)
+        return (loss.score(ov, notes=fit_notes).total, hl.score(ov, notes=hold_notes).total)
 
     full = write_overrides({**base, **moves}, base)
     f0 = loss.score(full, notes=fit_notes).total
@@ -152,8 +155,16 @@ def ablate(loss, base: dict, moves: dict, fit_notes, hold_notes, workers: int = 
     return out, (f0, h0)
 
 
-def prune(loss, base: dict, moves: dict, fit_notes, hold_notes,
-          keep_db: float = KEEP_DB, workers: int = 7, hold_loss=None):
+def prune(
+    loss,
+    base: dict,
+    moves: dict,
+    fit_notes,
+    hold_notes,
+    keep_db: float = KEEP_DB,
+    workers: int = 7,
+    hold_loss=None,
+):
     """Keep only the moves that still pay on notes the descent never saw.
 
     The hold-out and not the fit is the criterion, and the difference matters:
@@ -176,14 +187,17 @@ def prune(loss, base: dict, moves: dict, fit_notes, hold_notes,
     honest result when no smaller set holds: a smaller set of constants is worth
     having, but not at the cost of the thing they were fitted to.
     """
-    scores, (f0, h0) = ablate(loss, base, moves, fit_notes, hold_notes, workers,
-                              hold_loss=hold_loss)
+    scores, (f0, h0) = ablate(
+        loss, base, moves, fit_notes, hold_notes, workers, hold_loss=hold_loss
+    )
     hl = hold_loss or loss
     attempts = []
     for thresh in PRUNE_LADDER:
-        kept = (dict(moves) if thresh is None else
-                {k: v for k, v in moves.items()
-                 if k not in scores or scores[k][1] > thresh})
+        kept = (
+            dict(moves)
+            if thresh is None
+            else {k: v for k, v in moves.items() if k not in scores or scores[k][1] > thresh}
+        )
         ov = write_overrides({**base, **kept}, base)
         f = loss.score(ov, notes=fit_notes).total
         h = hl.score(ov, notes=hold_notes).total
@@ -234,6 +248,5 @@ def summarise(contributions, base, moves, limit: int = 0):
         rows = rows[:limit]
     out = [f"{'move':<46}{'dFit':>8}{'dHold':>8}   value"]
     for k, (df, dh) in rows:
-        out.append(f"{k.split('.')[-1]:<46}{df:>+8.3f}{dh:>+8.3f}   "
-                   f"{base[k]:g} -> {moves[k]:g}")
+        out.append(f"{k.split('.')[-1]:<46}{df:>+8.3f}{dh:>+8.3f}   {base[k]:g} -> {moves[k]:g}")
     return "\n".join(out)

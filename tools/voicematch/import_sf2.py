@@ -65,7 +65,7 @@ def _resolve_font(cfg: dict, timbre: dict) -> tuple[Path, str]:
         raise ImportRefused(
             f"timbre {timbre.get('id', '?')!r} names no SoundFont preset. The font and "
             f"the preset live in the untracked {Path(cfg['_path']).stem}.local.json — "
-            f"a timbre block of {{\"id\": ..., \"sf2\": \"FAMILY.sf2\", \"preset\": \"Tone Name\"}}, "
+            f'a timbre block of {{"id": ..., "sf2": "FAMILY.sf2", "preset": "Tone Name"}}, '
             f"with `soundfont_dir` beside it"
         )
     path = Path(root).expanduser() / file if root else Path(file).expanduser()
@@ -87,8 +87,7 @@ def _preset(font: SoundFont, name: str) -> object:
         near = [p.name for p in font.presets if name.lower() in p.name.lower()][:6]
         raise ImportRefused(
             f"{font.path.name} has no preset called {name!r}"
-            + (f" — did you mean {near}?" if near else
-               f" (it has {len(font.presets)} presets)")
+            + (f" — did you mean {near}?" if near else f" (it has {len(font.presets)} presets)")
         )
     if len(hits) > 1:
         raise ImportRefused(
@@ -175,22 +174,28 @@ def import_corpus(cfg: dict, out: Path, *, verbose: bool = False) -> dict:
                 (out / rel).parent.mkdir(parents=True, exist_ok=True)
                 write_wav(out / rel, audio, rate)
                 found[tid][note] = sample.seconds
-                renders.append({
-                    "id": f"{tid}/n{note:03d}_v{velocity:03d}",
-                    "timbre": tid, "note": note, "velocity": velocity,
-                    "path": str(rel),
-                    "peak": float(np.max(np.abs(audio))) if audio.size else 0.0,
-                    "seconds": sample.seconds,
-                    # There is no lead-in: an extracted recording begins at its
-                    # own first frame, which is why `preroll_ms` is held at 0.
-                    "preroll_peak": 0.0,
-                    "onset_ms": 0.0,
-                    "attempts": 1,
-                    "sf2_sample": sample.name,
-                })
+                renders.append(
+                    {
+                        "id": f"{tid}/n{note:03d}_v{velocity:03d}",
+                        "timbre": tid,
+                        "note": note,
+                        "velocity": velocity,
+                        "path": str(rel),
+                        "peak": float(np.max(np.abs(audio))) if audio.size else 0.0,
+                        "seconds": sample.seconds,
+                        # There is no lead-in: an extracted recording begins at its
+                        # own first frame, which is why `preroll_ms` is held at 0.
+                        "preroll_peak": 0.0,
+                        "onset_ms": 0.0,
+                        "attempts": 1,
+                        "sf2_sample": sample.name,
+                    }
+                )
                 if verbose:
-                    print(f"  {tid}/n{note:03d} <- {sample.name!r} "
-                          f"({sample.seconds:.2f}s @ {rate})", file=sys.stderr)
+                    print(
+                        f"  {tid}/n{note:03d} <- {sample.name!r} ({sample.seconds:.2f}s @ {rate})",
+                        file=sys.stderr,
+                    )
 
         if not renders:
             raise ImportRefused(f"{cfg['id']}: no note of the grid has a recording")
@@ -273,13 +278,15 @@ def check_module_is_dry(cfg: dict, manifest: dict, out: Path) -> int:
     # no space was found — a pass that means the measurement never ran, which is
     # the assertion this check exists to stop standing in for.
     rooms = measure_rooms(
-        manifest, out, {t["id"] for t in cfg["timbres"]},
-        preroll_s=0.0, gate_s=float(cfg["gate_ms"]) / 1000.0,
+        manifest,
+        out,
+        {t["id"] for t in cfg["timbres"]},
+        preroll_s=0.0,
+        gate_s=float(cfg["gate_ms"]) / 1000.0,
         answer=ROOM_UNCLASSIFIED,
     )
     if not rooms:
-        print("  module capture measures no space, as a module capture must",
-              file=sys.stderr)
+        print("  module capture measures no space, as a module capture must", file=sys.stderr)
         return 0
     for tid, room in sorted(rooms.items()):
         print(f"  {tid}: RT60 {room.get('rt60_s', 0.0):.2f} s", file=sys.stderr)
@@ -297,8 +304,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("config", type=Path, help="tools/voicematch/capture/<id>.json")
     ap.add_argument("--out", default="", help="corpus directory (default: the scratch root)")
-    ap.add_argument("--report", action="store_true",
-                    help="print what each font sets, and import nothing")
+    ap.add_argument(
+        "--report", action="store_true", help="print what each font sets, and import nothing"
+    )
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
 

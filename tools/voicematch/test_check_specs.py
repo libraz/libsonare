@@ -46,10 +46,15 @@ def test_a_knob_the_library_reports_passes(tmp_path):
 
 def test_a_knob_nothing_has_is_named(tmp_path):
     """The failure this exists for: a spec outliving the mechanism it swept."""
-    path = _spec(tmp_path, {"knobs": [
-        {"tunable": "harpsichord_voice.kContactWide"},
-        {"tunable": "harpsichord.harpsichord.pluck_8a"},
-    ]})
+    path = _spec(
+        tmp_path,
+        {
+            "knobs": [
+                {"tunable": "harpsichord_voice.kContactWide"},
+                {"tunable": "harpsichord.harpsichord.pluck_8a"},
+            ]
+        },
+    )
     dead = check_specs.missing([path], _catalogue("harpsichord.harpsichord.pluck_8a"))
     assert dead == {"spec.json": ["harpsichord_voice.kContactWide"]}
 
@@ -65,5 +70,4 @@ def test_a_field_the_clamp_leaves_a_range_passes():
 def test_a_field_clamped_to_one_point_is_named():
     """The failure this exists for: the field leaves the knob list and the bank
     census together, and absent reads as an engine that never offered it."""
-    assert check_specs.collapsed_bounds(
-        _bounds(body=(0.0, 0.0), gain=(0.0, 4.0))) == ["body"]
+    assert check_specs.collapsed_bounds(_bounds(body=(0.0, 0.0), gain=(0.0, 4.0))) == ["body"]

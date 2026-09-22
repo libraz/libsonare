@@ -31,8 +31,7 @@ def mean_band_decay_delta(model: list, ref: list) -> float | None:
     rather than counted as agreement: `analyze_hit` reports `None` there, and
     a hit with no energy in a band has no decay rate to be right about.
     """
-    pairs = [(m, r) for m, r in zip(model or [], ref or [])
-             if m is not None and r is not None]
+    pairs = [(m, r) for m, r in zip(model or [], ref or []) if m is not None and r is not None]
     return float(np.mean([m - r for m, r in pairs])) if pairs else None
 
 
@@ -92,14 +91,17 @@ def band_decay_reach(model: dict, ref: dict) -> tuple[int, int]:
     describes, a hit four times too short, is `ring`'s to report.
     """
     ref_cells = [r for r in (ref.get("band_decay_db_s") or []) if r is not None]
-    both = [1 for m, r in zip(model.get("band_decay_db_s") or [],
-                              ref.get("band_decay_db_s") or [])
-            if m is not None and r is not None]
+    both = [
+        1
+        for m, r in zip(model.get("band_decay_db_s") or [], ref.get("band_decay_db_s") or [])
+        if m is not None and r is not None
+    ]
     return len(both), len(ref_cells)
 
 
-def print_kit_relations(kit_rows: list[tuple[dict, dict]],
-                        groups: dict[str, tuple[int, ...]]) -> None:
+def print_kit_relations(
+    kit_rows: list[tuple[dict, dict]], groups: dict[str, tuple[int, ...]]
+) -> None:
     """What the kit's own families do, against what the reference's do.
 
     Every column of the table above is one instrument against its own reference
@@ -116,21 +118,29 @@ def print_kit_relations(kit_rows: list[tuple[dict, dict]],
         return
     rows = kit_report([m for m, _ in kit_rows], [r for _, r in kit_rows], groups)
     if not rows:
-        print("\n  no kit relation could be read: no family the capture declares has "
-              f"{KIT_MIN_MEMBERS} members in this run's note filter.")
+        print(
+            "\n  no kit relation could be read: no family the capture declares has "
+            f"{KIT_MIN_MEMBERS} members in this run's note filter."
+        )
         return
-    print(f"\n{'family':>12} {'relation':>9} | {'reference':>10} {'model':>8} "
-          f"{'charge':>8} {'members':>8}")
+    print(
+        f"\n{'family':>12} {'relation':>9} | {'reference':>10} {'model':>8} "
+        f"{'charge':>8} {'members':>8}"
+    )
     print("-" * 62)
     for row in rows:
-        print(f"{row['family']:>12} {row['relation']:>9} | {row['spread']:10.2f} "
-              f"{row['model_spread']:8.2f} {row['charge']:8.2f} {row['members']:8d}")
-    print("\n  In doublings — a factor of two in frequency, in milliseconds or in "
-          "amplitude.\n  `reference` and `model` are how far the family's members "
-          "spread apart on each\n  side; a model spread well under the reference's is a "
-          "family collapsed towards\n  one instrument. A relation the reference does not "
-          "itself hold is not listed:\n  which relations a family has is read off the "
-          "rows, never declared.")
+        print(
+            f"{row['family']:>12} {row['relation']:>9} | {row['spread']:10.2f} "
+            f"{row['model_spread']:8.2f} {row['charge']:8.2f} {row['members']:8d}"
+        )
+    print(
+        "\n  In doublings — a factor of two in frequency, in milliseconds or in "
+        "amplitude.\n  `reference` and `model` are how far the family's members "
+        "spread apart on each\n  side; a model spread well under the reference's is a "
+        "family collapsed towards\n  one instrument. A relation the reference does not "
+        "itself hold is not listed:\n  which relations a family has is read off the "
+        "rows, never declared."
+    )
 
 
 def percussion_row_deltas(m: dict, r: dict) -> dict[str, float | None]:
@@ -145,12 +155,12 @@ def percussion_row_deltas(m: dict, r: dict) -> dict[str, float | None]:
     return {
         "band_tilt": None if tilt_m is None or tilt_r is None else tilt_m - tilt_r,
         "band_shape": band_shape_error_db(m.get("bands_db"), r.get("bands_db")),
-        "band_decay": mean_band_decay_delta(m.get("band_decay_db_s"),
-                                            r.get("band_decay_db_s")),
+        "band_decay": mean_band_decay_delta(m.get("band_decay_db_s"), r.get("band_decay_db_s")),
         "attack": m["attack_ms"] - r["attack_ms"],
         "crest": m["crest_db"] - r["crest_db"],
-        "centroid_pct": (100.0 * (m["centroid_hz"] / r["centroid_hz"] - 1.0)
-                         if r.get("centroid_hz") else None),
+        "centroid_pct": (
+            100.0 * (m["centroid_hz"] / r["centroid_hz"] - 1.0) if r.get("centroid_hz") else None
+        ),
         # How long the hit rings, which is the whole of dry against wet and is
         # the one gestural dimension `band_decay` cannot stand in for: that one
         # averages the octaves both sides resolved, so a hit that ends early
@@ -159,12 +169,18 @@ def percussion_row_deltas(m: dict, r: dict) -> dict[str, float | None]:
         # How much of the hit stands in peaks, which is metal against filtered
         # noise. Absent on either side where the window was too short to
         # transform, which is not a flat spectrum.
-        "tonality": (None if m.get("flatness_db") is None or r.get("flatness_db") is None
-                     else m["flatness_db"] - r["flatness_db"]),
+        "tonality": (
+            None
+            if m.get("flatness_db") is None or r.get("flatness_db") is None
+            else m["flatness_db"] - r["flatness_db"]
+        ),
         # The image. 38 of the kit's drum notes carry a `stereo_spread` and
         # nothing faced it until this column existed.
-        "stereo": (None if m.get("stereo_width") is None or r.get("stereo_width") is None
-                   else m["stereo_width"] - r["stereo_width"]),
+        "stereo": (
+            None
+            if m.get("stereo_width") is None or r.get("stereo_width") is None
+            else m["stereo_width"] - r["stereo_width"]
+        ),
         # How loud the hit actually is. Every other column here is normalised —
         # a band profile against its own loudest band, a crest against its own
         # RMS, a decay against its own peak — which is what makes them measure
@@ -172,14 +188,17 @@ def percussion_row_deltas(m: dict, r: dict) -> dict[str, float | None]:
         # eighteen of the kit's output levels moved not one of them by a digit.
         # `vel_range` is a span and cancels an offset by construction, so it is
         # not this either.
-        "level": (m["peak_dbfs"] - r["peak_dbfs"]
-                  if m.get("peak_dbfs") is not None
-                  and r.get("peak_dbfs") is not None else None),
+        "level": (
+            m["peak_dbfs"] - r["peak_dbfs"]
+            if m.get("peak_dbfs") is not None and r.get("peak_dbfs") is not None
+            else None
+        ),
     }
 
 
-def percussion_reference_spread(profile: dict,
-                                dimensions: list[str] | None = None) -> dict[str, float]:
+def percussion_reference_spread(
+    profile: dict, dimensions: list[str] | None = None
+) -> dict[str, float]:
     """How far a kit's references sit from EACH OTHER, dimension by dimension.
 
     The percussion counterpart of `reference_spread`, which computes the pitched
@@ -204,7 +223,7 @@ def percussion_reference_spread(profile: dict,
 
     pooled: dict[str, list[float]] = {}
     for i, a in enumerate(timbres):
-        for b in timbres[i + 1:]:
+        for b in timbres[i + 1 :]:
             peaks: dict[str, dict[int, dict[int, float]]] = {}
             for key in sorted(set(by_key[a]) & set(by_key[b])):
                 x, y = by_key[a][key], by_key[b][key]
@@ -213,14 +232,16 @@ def percussion_reference_spread(profile: dict,
                         pooled.setdefault(k, []).append(abs(float(v)))
                 for side, src in ((a, x), (b, y)):
                     if src.get("peak_dbfs") is not None:
-                        peaks.setdefault(side, {}).setdefault(key[0], {})[key[1]] = \
-                            src["peak_dbfs"]
+                        peaks.setdefault(side, {}).setdefault(key[0], {})[key[1]] = src["peak_dbfs"]
             for note, pa in sorted(peaks.get(a, {}).items()):
                 pb = peaks.get(b, {}).get(note, {})
                 both = sorted(set(pa) & set(pb))
                 if len(both) >= 2:
-                    pooled.setdefault("vel_range", []).append(abs(
-                        (max(pa[v] for v in both) - min(pa[v] for v in both))
-                        - (max(pb[v] for v in both) - min(pb[v] for v in both))))
+                    pooled.setdefault("vel_range", []).append(
+                        abs(
+                            (max(pa[v] for v in both) - min(pa[v] for v in both))
+                            - (max(pb[v] for v in both) - min(pb[v] for v in both))
+                        )
+                    )
     spread = {k: float(np.median(v)) for k, v in pooled.items() if v}
     return {k: v for k, v in spread.items() if not dimensions or k in dimensions}

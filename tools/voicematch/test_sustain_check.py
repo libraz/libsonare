@@ -104,20 +104,22 @@ def test_the_check_fires_on_a_bore_that_rings_down_and_not_on_one_that_holds(mon
     control owns both sides of its own boundary; everything downstream of the
     render is the shipped code, including the reference this is scored against.
     """
+
     def verdict(fall_db: float) -> dict:
-        monkeypatch.setattr(sustain_check, "render_held",
-                            lambda *a, **k: _held_tone(fall_db))
+        monkeypatch.setattr(sustain_check, "render_held", lambda *a, **k: _held_tone(fall_db))
         return check_one(SPECIMEN_ID, Path("/nonexistent"))
 
     holds = verdict(0.0)
     assert holds["status"] == "compared", holds["status"]
     assert not holds["beyond_tolerance"], (
-        f"a bore that does not move was flagged at excess {holds['excess_db']:+.1f} dB")
+        f"a bore that does not move was flagged at excess {holds['excess_db']:+.1f} dB"
+    )
 
     rings_down = verdict(-(EXCESS_TOLERANCE_DB * 3.0))
     assert rings_down["beyond_tolerance"], (
         f"a bore falling {EXCESS_TOLERANCE_DB * 3.0:.0f} dB under a reference that holds "
-        f"was passed at excess {rings_down['excess_db']:+.1f} dB")
+        f"was passed at excess {rings_down['excess_db']:+.1f} dB"
+    )
     assert rings_down["excess_db"] < 0.0, "a ring-down falls SHORT of its reference"
 
     # And the boundary is where the constant says it is, in both directions.
@@ -151,7 +153,8 @@ def test_both_reed_branches_reach_a_verdict_and_hold_their_note():
     for name, r in seen.items():
         assert r["status"] == "compared", f"{name} did not reach a verdict: {r['status']}"
         assert not r["beyond_tolerance"], (
-            f"{name} no longer holds its note: excess {r['excess_db']:+.1f} dB")
+            f"{name} no longer holds its note: excess {r['excess_db']:+.1f} dB"
+        )
 
     # Passing is not enough — they have to stand CLEAR of the tolerance. A voice
     # sitting half a decibel inside it is one calibration round from crossing
@@ -159,4 +162,5 @@ def test_both_reed_branches_reach_a_verdict_and_hold_their_note():
     worst = max(abs(r["excess_db"]) for r in seen.values())
     assert worst * 2.0 < EXCESS_TOLERANCE_DB, (
         f"the reeds reach {worst:.1f} dB against a {EXCESS_TOLERANCE_DB:.0f} dB "
-        f"tolerance — too close to call one of them a pass")
+        f"tolerance — too close to call one of them a pass"
+    )

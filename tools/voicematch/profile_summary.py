@@ -49,10 +49,18 @@ def summarize(rows: list[dict]) -> dict:
     """The per-timbre curves: what a voice is fitted to rather than a table of takes."""
     out: dict = {}
     for row in rows:
-        t = out.setdefault(row["timbre"], {"stretch_cents": {}, "inharmonicity_b": {},
-                                           "level_dbfs": {}, "centroid_hz": {},
-                                           "decay_db_s": {}, "damper_release_ms": {},
-                                           "tnr_db": {}})
+        t = out.setdefault(
+            row["timbre"],
+            {
+                "stretch_cents": {},
+                "inharmonicity_b": {},
+                "level_dbfs": {},
+                "centroid_hz": {},
+                "decay_db_s": {},
+                "damper_release_ms": {},
+                "tnr_db": {},
+            },
+        )
         n = str(row["note"])
         v = str(row["velocity"])
         # The tuning and the stiffness belong to the string, not to how hard it
@@ -61,18 +69,22 @@ def summarize(rows: list[dict]) -> dict:
             t["stretch_cents"].setdefault(n, []).append(row["cents_vs_et"])
         if "inharmonicity_b" in row and row.get("inharmonicity_reliable"):
             t["inharmonicity_b"].setdefault(n, []).append(row["inharmonicity_b"])
-        for key, dest in (("rms_dbfs", "level_dbfs"), ("centroid_hz", "centroid_hz"),
-                          ("decay_db_s", "decay_db_s"), ("damper_release_ms", "damper_release_ms"),
-                          ("tnr_db", "tnr_db")):
+        for key, dest in (
+            ("rms_dbfs", "level_dbfs"),
+            ("centroid_hz", "centroid_hz"),
+            ("decay_db_s", "decay_db_s"),
+            ("damper_release_ms", "damper_release_ms"),
+            ("tnr_db", "tnr_db"),
+        ):
             if key in row:
                 t[dest].setdefault(n, {})[v] = row[key]
     for timbre, t in out.items():
         for key in ("stretch_cents", "inharmonicity_b"):
-            t[key] = {n: round(float(np.median(vals)), 4 if key == "stretch_cents" else 8)
-                      for n, vals in sorted(t[key].items(), key=lambda kv: int(kv[0]))}
-        t["velocity_response"] = velocity_response(
-            [r for r in rows if r["timbre"] == timbre]
-        )
+            t[key] = {
+                n: round(float(np.median(vals)), 4 if key == "stretch_cents" else 8)
+                for n, vals in sorted(t[key].items(), key=lambda kv: int(kv[0]))
+            }
+        t["velocity_response"] = velocity_response([r for r in rows if r["timbre"] == timbre])
     return out
 
 
@@ -86,23 +98,34 @@ def summarize_percussion(rows: list[dict]) -> dict:
     """
     out: dict = {}
     for row in rows:
-        t = out.setdefault(row["timbre"], {"bands_db": {}, "band_decay_db_s": {},
-                                           "centroid_hz": {}, "onset_ms": {},
-                                           "attack_ms": {},
-                                           "decay_ms": {}, "crest_db": {},
-                                           "level_dbfs": {}})
+        t = out.setdefault(
+            row["timbre"],
+            {
+                "bands_db": {},
+                "band_decay_db_s": {},
+                "centroid_hz": {},
+                "onset_ms": {},
+                "attack_ms": {},
+                "decay_ms": {},
+                "crest_db": {},
+                "level_dbfs": {},
+            },
+        )
         n, v = str(row["note"]), str(row["velocity"])
-        for key, dest in (("bands_db", "bands_db"), ("band_decay_db_s", "band_decay_db_s"),
-                          ("centroid_hz", "centroid_hz"), ("onset_ms", "onset_ms"),
-                          ("attack_ms", "attack_ms"),
-                          ("decay_ms", "decay_ms"), ("crest_db", "crest_db"),
-                          ("level_db", "level_dbfs")):
+        for key, dest in (
+            ("bands_db", "bands_db"),
+            ("band_decay_db_s", "band_decay_db_s"),
+            ("centroid_hz", "centroid_hz"),
+            ("onset_ms", "onset_ms"),
+            ("attack_ms", "attack_ms"),
+            ("decay_ms", "decay_ms"),
+            ("crest_db", "crest_db"),
+            ("level_db", "level_dbfs"),
+        ):
             if key in row:
                 t[dest].setdefault(n, {})[v] = row[key]
     for timbre, t in out.items():
-        t["velocity_response"] = velocity_response(
-            [r for r in rows if r["timbre"] == timbre]
-        )
+        t["velocity_response"] = velocity_response([r for r in rows if r["timbre"] == timbre])
     return out
 
 
@@ -114,24 +137,36 @@ def print_percussion_summary(summary: dict) -> None:
             continue
         print("  note   centroid(Hz)   attack(ms)   decay(ms)   crest(dB)", file=sys.stderr)
         for n in notes:
+
             def loudest(table, n=n):
                 by_vel = table.get(n) or {}
                 return by_vel[max(by_vel, key=int)] if by_vel else float("nan")
-            print(f"  {int(n):4d}   {loudest(s['centroid_hz']):12.0f}   "
-                  f"{loudest(s['attack_ms']):10.1f}   {loudest(s['decay_ms']):9.0f}   "
-                  f"{loudest(s['crest_db']):9.1f}", file=sys.stderr)
+
+            print(
+                f"  {int(n):4d}   {loudest(s['centroid_hz']):12.0f}   "
+                f"{loudest(s['attack_ms']):10.1f}   {loudest(s['decay_ms']):9.0f}   "
+                f"{loudest(s['crest_db']):9.1f}",
+                file=sys.stderr,
+            )
         vel = s.get("velocity_response") or {}
         if vel:
             ranges = [row["range_db"] for row in vel.values()]
             non_mono = [int(n) for n, row in vel.items() if not row["monotonic"]]
-            print(f"  velocity range {min(ranges):.1f} to {max(ranges):.1f} dB "
-                  f"across {len(vel)} notes", file=sys.stderr)
+            print(
+                f"  velocity range {min(ranges):.1f} to {max(ranges):.1f} dB "
+                f"across {len(vel)} notes",
+                file=sys.stderr,
+            )
             if non_mono:
                 # On a kit this is usually a sample-layer boundary rather than
                 # an instrument that genuinely plays quieter when hit harder.
                 print(f"  (level is not monotonic in velocity at {non_mono})", file=sys.stderr)
-        late = [(int(n), v, ms) for n, by_vel in (s.get("onset_ms") or {}).items()
-                for v, ms in by_vel.items() if ms > LATE_ONSET_MS]
+        late = [
+            (int(n), v, ms)
+            for n, by_vel in (s.get("onset_ms") or {}).items()
+            for v, ms in by_vel.items()
+            if ms > LATE_ONSET_MS
+        ]
         if late:
             # Every measurement here is taken from the strike rather than from
             # the note-on, so a late one costs nothing but its own tail. Said
@@ -139,9 +174,12 @@ def print_percussion_summary(summary: dict) -> None:
             # were retried during capture, and a hit late enough to fall outside
             # the window would be lost silently.
             worst = max(ms for _, _, ms in late)
-            print(f"  ({len(late)} of {sum(len(x) for x in s['onset_ms'].values())} rows "
-                  f"sounded up to {worst:.0f} ms after their note-on; measured from the "
-                  f"strike)", file=sys.stderr)
+            print(
+                f"  ({len(late)} of {sum(len(x) for x in s['onset_ms'].values())} rows "
+                f"sounded up to {worst:.0f} ms after their note-on; measured from the "
+                f"strike)",
+                file=sys.stderr,
+            )
 
 
 def print_summary(summary: dict) -> None:
@@ -161,17 +199,26 @@ def print_summary(summary: dict) -> None:
         if dropped:
             # Named rather than silently absent: a curve that quietly stops
             # short reads afterwards as a curve that covered the keyboard.
-            print(f"  (stiffness not fitted at {dropped} — too few partials under "
-                  f"the Nyquist frequency to fit two parameters)", file=sys.stderr)
+            print(
+                f"  (stiffness not fitted at {dropped} — too few partials under "
+                f"the Nyquist frequency to fit two parameters)",
+                file=sys.stderr,
+            )
         vel = s.get("velocity_response") or {}
         if vel:
             ranges = [row["range_db"] for row in vel.values()]
             non_mono = [int(n) for n, row in vel.items() if not row["monotonic"]]
-            print(f"  velocity range {min(ranges):.1f} to {max(ranges):.1f} dB "
-                  f"across {len(vel)} notes", file=sys.stderr)
+            print(
+                f"  velocity range {min(ranges):.1f} to {max(ranges):.1f} dB "
+                f"across {len(vel)} notes",
+                file=sys.stderr,
+            )
             if non_mono:
-                print(f"  (level is not monotonic in velocity at {non_mono} — a property "
-                      f"of the instrument, not a fault, on anything plucked)", file=sys.stderr)
+                print(
+                    f"  (level is not monotonic in velocity at {non_mono} — a property "
+                    f"of the instrument, not a fault, on anything plucked)",
+                    file=sys.stderr,
+                )
 
 
 def profile_program(profile: dict, cfg: dict) -> int:
@@ -277,7 +324,7 @@ def band_db(partials_db: list[float] | None, lo: int, hi: int) -> float | None:
     if not partials_db or len(partials_db) < lo:
         return None
     ref = partials_db[0]
-    band = [d for d in partials_db[lo - 1:hi] if d > -200.0]
+    band = [d for d in partials_db[lo - 1 : hi] if d > -200.0]
     if not band:
         return None
     return float(np.mean(band) - ref)

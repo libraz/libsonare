@@ -72,14 +72,10 @@ def _validate_comparison(comparison: Any, errors: list[str]) -> None:
     if _exact(comparison, {"absolute", "relative"}, "manifest.comparison", errors):
         for key in comparison:
             if not _is_number(comparison[key]) or comparison[key] <= 0:
-                errors.append(
-                    f"manifest.comparison.{key}: expected a positive finite number"
-                )
+                errors.append(f"manifest.comparison.{key}: expected a positive finite number")
 
 
-def _validate_declared_inventory(
-    manifest: Any, inventory: Any, errors: list[str]
-) -> None:
+def _validate_declared_inventory(manifest: Any, inventory: Any, errors: list[str]) -> None:
     """The declared command and option field lists, and the canonical shared options.
 
     Reads the command records straight off the manifest because the expected
@@ -115,8 +111,7 @@ def _validate_declared_inventory(
                 {
                     path
                     for path, record in command_records.items()
-                    if isinstance(record, dict)
-                    and record.get("option_status") == "active"
+                    if isinstance(record, dict) and record.get("option_status") == "active"
                 }
                 if isinstance(command_records, dict)
                 else set()
@@ -125,13 +120,11 @@ def _validate_declared_inventory(
             unknown = sorted(set(expected_options) - active_option_paths)
             if missing:
                 errors.append(
-                    "manifest.inventory.expected_options: missing paths "
-                    + ", ".join(missing)
+                    "manifest.inventory.expected_options: missing paths " + ", ".join(missing)
                 )
             if unknown:
                 errors.append(
-                    "manifest.inventory.expected_options: unknown paths "
-                    + ", ".join(unknown)
+                    "manifest.inventory.expected_options: unknown paths " + ", ".join(unknown)
                 )
             for path, options in expected_options.items():
                 option_label = f"manifest.inventory.expected_options.{path}"
@@ -144,9 +137,7 @@ def _validate_declared_inventory(
                     _validate_option(option, label, errors)
                     if isinstance(option, dict) and isinstance(option.get("name"), str):
                         if option["name"] in names:
-                            errors.append(
-                                f"{label}: duplicate option name {option['name']}"
-                            )
+                            errors.append(f"{label}: duplicate option name {option['name']}")
                         names.add(option["name"])
 
 
@@ -160,21 +151,15 @@ def _validate_commands(commands: Any, errors: list[str]) -> tuple[set[str], set[
         for path, record in commands.items():
             label = f"manifest.commands.{path}"
             if not isinstance(path, str) or not path:
-                errors.append(
-                    "manifest.commands: command paths must be non-empty strings"
-                )
+                errors.append("manifest.commands: command paths must be non-empty strings")
                 continue
             command_paths.add(path)
             base_keys = {"classification", "status", "option_status"}
             # A command both front-ends carry needs no excuse, so it may not
             # write one; anything else states why in the ledger rather than
             # leaving the divergence to be re-derived by the next reader.
-            one_sided = (
-                not isinstance(record, dict) or record.get("classification") != "shared"
-            )
-            expected_keys = (
-                base_keys | {"reason_kind", "reason"} if one_sided else base_keys
-            )
+            one_sided = not isinstance(record, dict) or record.get("classification") != "shared"
+            expected_keys = base_keys | {"reason_kind", "reason"} if one_sided else base_keys
             # Optional: only a command the native binary can be built without
             # carries one, and most cannot.
             if isinstance(record, dict) and "requires" in record:
@@ -188,9 +173,7 @@ def _validate_commands(commands: Any, errors: list[str]) -> tuple[set[str], set[
             if one_sided:
                 _validate_command_reason(record, classification, label, errors)
             if classification not in _CLASSIFICATIONS:
-                errors.append(
-                    f"{label}.classification: unknown classification {classification!r}"
-                )
+                errors.append(f"{label}.classification: unknown classification {classification!r}")
             if status not in _STATUSES:
                 errors.append(f"{label}.status: unknown status {status!r}")
             if option_status not in {"active", "pending"}:
@@ -248,9 +231,7 @@ def _validate_active_paths(
                     _validate_option(option, option_label, errors)
                     if isinstance(option, dict) and isinstance(option.get("name"), str):
                         if option["name"] in names:
-                            errors.append(
-                                f"{option_label}: duplicate option name {option['name']}"
-                            )
+                            errors.append(f"{option_label}: duplicate option name {option['name']}")
                         names.add(option["name"])
             positionals = contract["positionals"]
             if not isinstance(positionals, list):
@@ -266,21 +247,14 @@ def _validate_active_paths(
                         errors,
                     ):
                         continue
-                    if (
-                        not isinstance(positional["name"], str)
-                        or not positional["name"]
-                    ):
-                        errors.append(
-                            f"{positional_label}.name: expected a non-empty string"
-                        )
+                    if not isinstance(positional["name"], str) or not positional["name"]:
+                        errors.append(f"{positional_label}.name: expected a non-empty string")
                     if positional["type"] not in _POSITIONAL_TYPES:
                         errors.append(
                             f"{positional_label}.type: unknown type {positional['type']!r}"
                         )
                     if not _is_bool(positional["required"]):
-                        errors.append(
-                            f"{positional_label}.required: expected a boolean"
-                        )
+                        errors.append(f"{positional_label}.required: expected a boolean")
                     if positional.get("name") in names:
                         errors.append(
                             f"{positional_label}: duplicate positional name {positional['name']}"
@@ -291,9 +265,7 @@ def _validate_active_paths(
                 errors.append(f"{label}.payloads: expected a non-empty object")
             else:
                 for payload_name, payload in payloads.items():
-                    _validate_payload_schema(
-                        payload, f"{label}.payloads.{payload_name}", errors
-                    )
+                    _validate_payload_schema(payload, f"{label}.payloads.{payload_name}", errors)
                     _validate_closed_payload_schema(
                         payload, f"{label}.payloads.{payload_name}", errors
                     )
@@ -337,11 +309,7 @@ def _validate_active_paths(
                             "artifact",
                             "stdout",
                         }
-                        | (
-                            {"stderr"}
-                            if isinstance(case, dict) and "stderr" in case
-                            else set()
-                        )
+                        | ({"stderr"} if isinstance(case, dict) and "stderr" in case else set())
                         | _declared_text_keys(case),
                         case_label,
                         errors,
@@ -355,29 +323,19 @@ def _validate_active_paths(
                     case_ids.add(case_id)
                     _argv(case["argv"], f"{case_label}.argv", errors)
                     if case["exit"] not in _EXIT_CODES:
-                        errors.append(
-                            f"{case_label}.exit: unsupported exit {case['exit']!r}"
-                        )
+                        errors.append(f"{case_label}.exit: unsupported exit {case['exit']!r}")
                     if case["legacy_exit"] not in {0, 1}:
                         errors.append(f"{case_label}.legacy_exit: expected 0 or 1")
                     elif (case["exit"] == 0) != (case["legacy_exit"] == 0):
-                        errors.append(
-                            f"{case_label}: legacy exit must fold non-zero to 1"
-                        )
+                        errors.append(f"{case_label}: legacy exit must fold non-zero to 1")
                     if case["payload"] != "none" and case["payload"] not in payloads:
-                        errors.append(
-                            f"{case_label}.payload: unknown payload {case['payload']!r}"
-                        )
+                        errors.append(f"{case_label}.payload: unknown payload {case['payload']!r}")
                     if not isinstance(case["artifact"], str):
                         errors.append(f"{case_label}.artifact: expected a string")
                     if case["stdout"] not in {"json", "empty", "text"}:
-                        errors.append(
-                            f"{case_label}.stdout: expected json, empty or text"
-                        )
+                        errors.append(f"{case_label}.stdout: expected json, empty or text")
                     if case.get("stderr", "empty") not in {"empty", "nonempty"}:
-                        errors.append(
-                            f"{case_label}.stderr: expected empty or nonempty"
-                        )
+                        errors.append(f"{case_label}.stderr: expected empty or nonempty")
                     _validate_text_expectations(case, case_label, errors)
             artifacts = contract["artifacts"]
             if not isinstance(artifacts, dict):
@@ -406,14 +364,10 @@ def _validate_active_paths(
                             errors,
                         ):
                             continue
-                        if not _strings(
-                            artifact["keys"], f"{artifact_label}.keys", errors
-                        ):
+                        if not _strings(artifact["keys"], f"{artifact_label}.keys", errors):
                             pass
                         if not artifact["keys"]:
-                            errors.append(
-                                f"{artifact_label}.keys: expected a non-empty array"
-                            )
+                            errors.append(f"{artifact_label}.keys: expected a non-empty array")
                     else:
                         if not _exact(
                             artifact,
@@ -514,9 +468,7 @@ def _validate_parser_cases(parser_cases: Any, errors: list[str]) -> None:
                 errors.append(f"{label}.stdout: expected json, empty or text")
             _validate_text_expectations(case, label, errors)
             if case["payload"] != "none":
-                errors.append(
-                    f"{label}.payload: parser cases must not declare a JSON payload"
-                )
+                errors.append(f"{label}.payload: parser cases must not declare a JSON payload")
 
 
 def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
@@ -535,14 +487,10 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
             errors,
         ):
             if not _is_int(audio["sample_rate"]) or audio["sample_rate"] <= 0:
-                errors.append(
-                    "manifest.fixtures.audio.sample_rate: expected a positive integer"
-                )
+                errors.append("manifest.fixtures.audio.sample_rate: expected a positive integer")
             for key in ("frames", "take_frames"):
                 if not _is_int(audio[key]) or audio[key] <= 0:
-                    errors.append(
-                        f"manifest.fixtures.audio.{key}: expected a positive integer"
-                    )
+                    errors.append(f"manifest.fixtures.audio.{key}: expected a positive integer")
             # The two lengths carry the same tone and must differ: an alignment
             # reports a frame count per side, so equal lengths would let the two
             # front-ends swap reference for take and still compare equal.
@@ -556,9 +504,7 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
                 )
             for key in ("frequency_hz", "amplitude"):
                 if not _is_number(audio[key]):
-                    errors.append(
-                        f"manifest.fixtures.audio.{key}: expected a finite number"
-                    )
+                    errors.append(f"manifest.fixtures.audio.{key}: expected a finite number")
         melodies = fixtures["melodies"]
         if not isinstance(melodies, dict) or not melodies:
             errors.append("manifest.fixtures.melodies: expected a non-empty object")
@@ -574,17 +520,13 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
         ):
             for key in ("clean", "warning", "malformed", "takes", "takes_many", "takes_single"):
                 if not isinstance(projects[key], str):
-                    errors.append(
-                        f"manifest.fixtures.projects.{key}: expected a string"
-                    )
+                    errors.append(f"manifest.fixtures.projects.{key}: expected a string")
             for key in ("clean", "warning", "takes", "takes_many", "takes_single"):
                 if isinstance(projects.get(key), str):
                     try:
                         json.loads(projects[key])
                     except json.JSONDecodeError as exc:
-                        errors.append(
-                            f"manifest.fixtures.projects.{key}: invalid JSON: {exc.msg}"
-                        )
+                        errors.append(f"manifest.fixtures.projects.{key}: invalid JSON: {exc.msg}")
         presets = fixtures["presets"]
         if _exact(
             presets,
@@ -594,9 +536,7 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
         ):
             for key in ("valid", "invalid", "custom"):
                 if not isinstance(presets[key], dict):
-                    errors.append(
-                        f"manifest.fixtures.presets.{key}: expected an object"
-                    )
+                    errors.append(f"manifest.fixtures.presets.{key}: expected an object")
 
 
 def validate_manifest(manifest: Any) -> list[str]:
@@ -620,9 +560,7 @@ def validate_manifest(manifest: Any) -> list[str]:
     commands = manifest["commands"]
     command_paths, active_from_commands = _validate_commands(commands, errors)
     active = manifest["active_paths"]
-    active_paths, suppressed_exemptions = _validate_active_paths(
-        active, exempt_properties, errors
-    )
+    active_paths, suppressed_exemptions = _validate_active_paths(active, exempt_properties, errors)
     _validate_expected_options(inventory, commands, active, errors)
 
     if active_paths != active_from_commands:

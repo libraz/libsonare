@@ -177,9 +177,7 @@ def _short_term_series(
 ) -> npt.NDArray[np.float64]:
     """The channel-summed BS.1770-4 short-term loudness series in LUFS."""
     interleaved = np.ascontiguousarray(feed.reshape(-1), dtype=np.float32)
-    _, short_term = libsonare.lufs_series_interleaved(
-        interleaved, feed.shape[1], int(sample_rate)
-    )
+    _, short_term = libsonare.lufs_series_interleaved(interleaved, feed.shape[1], int(sample_rate))
     return np.asarray(short_term, dtype=float)
 
 

@@ -132,8 +132,9 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
         "partials_fit": fitted_on,
         "inharmonicity_reliable": fitted_on >= MIN_PARTIALS_FOR_B,
         "partials_hz": [round(fn, 2) for _, fn, _ in found],
-        "partials_db": [round(float(20 * np.log10(max(an, 1e-12) / anchor)), 2)
-                        for _, _, an in found],
+        "partials_db": [
+            round(float(20 * np.log10(max(an, 1e-12) / anchor)), 2) for _, _, an in found
+        ],
     }
 
 
@@ -206,7 +207,7 @@ def decay_origin_index(env_db: np.ndarray, hop_s: float) -> int:
         return 0
     start = arrival_index(env_db)
     span = max(1, round(RISE_WINDOW_S / max(hop_s, 1e-9)))
-    return start + int(np.argmax(env_db[start:min(env_db.size, start + span)]))
+    return start + int(np.argmax(env_db[start : min(env_db.size, start + span)]))
 
 
 #: Where the body reading is taken, in seconds from the onset. After the strike,
@@ -277,8 +278,9 @@ def double_decay_gap(row: dict) -> float | None:
 REGISTER_MIN_NOTES = 4
 
 
-def register_deltas(model: dict[int, dict[int, float]],
-                    ref: dict[int, dict[int, float]]) -> list[float]:
+def register_deltas(
+    model: dict[int, dict[int, float]], ref: dict[int, dict[int, float]]
+) -> list[float]:
     """How the two keyboards' own loudness curves differ, note by note, in dB.
 
     Every other dimension here is a ratio, a rate, a time or a range, so not one
@@ -305,19 +307,16 @@ def register_deltas(model: dict[int, dict[int, float]],
     velocities = {v for per_vel in model.values() for v in per_vel}
     velocities &= {v for per_vel in ref.values() for v in per_vel}
     for vel in sorted(velocities):
-        notes = sorted(n for n in set(model) & set(ref)
-                       if vel in model[n] and vel in ref[n])
+        notes = sorted(n for n in set(model) & set(ref) if vel in model[n] and vel in ref[n])
         if len(notes) < REGISTER_MIN_NOTES:
             continue
         m_mid = float(np.median([model[n][vel] for n in notes]))
         r_mid = float(np.median([ref[n][vel] for n in notes]))
-        out.extend((n, vel, (model[n][vel] - m_mid) - (ref[n][vel] - r_mid))
-                   for n in notes)
+        out.extend((n, vel, (model[n][vel] - m_mid) - (ref[n][vel] - r_mid)) for n in notes)
     return out
 
 
-def usable_decay_end(env_db: np.ndarray, start_i: int,
-                     range_db: float = DECAY_RANGE_DB) -> int:
+def usable_decay_end(env_db: np.ndarray, start_i: int, range_db: float = DECAY_RANGE_DB) -> int:
     """Index one past the last envelope point still within @p range_db of @p start_i.
 
     The LAST point inside the range, not the first one outside it: a decaying
@@ -368,8 +367,9 @@ def double_decay(env_db: np.ndarray, t: np.ndarray) -> dict:
     }
 
 
-def partial_decay(seg: np.ndarray, sr: int, partials_hz: list[float],
-                  n_partials: int = 8) -> list[float]:
+def partial_decay(
+    seg: np.ndarray, sr: int, partials_hz: list[float], n_partials: int = 8
+) -> list[float]:
     """Decay rate in dB/s of each of the first partials, each from its own peak.
 
     The top of a piano's spectrum dies far faster than the bottom, and that
@@ -390,7 +390,7 @@ def partial_decay(seg: np.ndarray, sr: int, partials_hz: list[float],
     t = np.arange(n_frames) * hop / sr
     for f in partials_hz[:n_partials]:
         k = int(np.argmin(np.abs(fr - f)))
-        band = spec[:, max(0, k - 1):k + 2].max(axis=1)
+        band = spec[:, max(0, k - 1) : k + 2].max(axis=1)
         db = _db(band / max(band.max(), 1e-12))
         keep = db > -55.0
         if keep.sum() < 5:
@@ -425,8 +425,9 @@ def _above_fundamental(seg: np.ndarray, sr: int, f0_hz: float) -> np.ndarray:
     return np.fft.irfft(spec, n)
 
 
-def tone_to_noise_db(freqs: np.ndarray, mag: np.ndarray, f0_hz: float,
-                     n_partials: int = 16) -> float:
+def tone_to_noise_db(
+    freqs: np.ndarray, mag: np.ndarray, f0_hz: float, n_partials: int = 16
+) -> float:
     """Energy in the partials against everything else in the audible band.
 
     What it separates is the string from the mechanism: a plucked or struck
@@ -485,8 +486,7 @@ def _short_ring_window(held: np.ndarray, sr: int) -> tuple[int, int]:
     return (a, b) if b - a >= sr // 200 else (0, 0)
 
 
-def measure_note(audio: np.ndarray, sr: int, note: int, *,
-                 preroll_s: float, gate_s: float) -> dict:
+def measure_note(audio: np.ndarray, sr: int, note: int, *, preroll_s: float, gate_s: float) -> dict:
     """Every measurement this profile carries, for one captured note.
 
     The gate window is placed on the onset the render actually has rather than
@@ -575,8 +575,9 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
     # How much of the held note the two rates were fitted over. Both are slopes,
     # so they only compare against a reference fitted over a comparable span --
     # a two-stage decay read to 4 s and one read to 8 is two different questions.
-    row["decay_span_s"] = round(float(t_env[tail][-1] - t_env[origin_i]), 3) \
-        if t_env[tail].size else 0.0
+    row["decay_span_s"] = (
+        round(float(t_env[tail][-1] - t_env[origin_i]), 3) if t_env[tail].size else 0.0
+    )
     if t_env[tail].size > 8:
         row["decay_db_s"] = round(float(np.polyfit(t_env[tail], env_db[tail], 1)[0]), 2)
         row.update(double_decay(env_db[tail], t_env[tail]))
@@ -595,12 +596,15 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
         t_rel, env_rel = _rms_envelope(_above_fundamental(rel, sr, row["f0_hz"]), sr)
         start_db = float(_db(env_rel[0]))
         under = np.where(_db(env_rel) < start_db - 40.0)[0]
-        row["damper_release_ms"] = round(float(t_rel[under[0]] * 1000.0), 1) if under.size \
+        row["damper_release_ms"] = (
+            round(float(t_rel[under[0]] * 1000.0), 1)
+            if under.size
             else round(float(t_rel[-1] * 1000.0), 1)
+        )
         row["damper_capped"] = not bool(under.size)
 
     freqs, mag = _spectrum(held[a:b], sr)
-    p = mag ** 2
+    p = mag**2
     row["centroid_hz"] = round(float((freqs * p).sum() / max(p.sum(), 1e-20)), 1)
     tnr = tone_to_noise_db(freqs, mag, row["f0_hz"])
     if np.isfinite(tnr):
@@ -611,9 +615,16 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
     return row
 
 
-def measure_hit(audio: np.ndarray, sr: int, note: int, velocity: int, *,
-                preroll_s: float, gate_s: float,
-                max_band_hz: float | None = None) -> dict:
+def measure_hit(
+    audio: np.ndarray,
+    sr: int,
+    note: int,
+    velocity: int,
+    *,
+    preroll_s: float,
+    gate_s: float,
+    max_band_hz: float | None = None,
+) -> dict:
     """One percussion hit, as a profile row.
 
     A struck instrument has no fundamental, so none of the measurements above it
@@ -632,10 +643,15 @@ def measure_hit(audio: np.ndarray, sr: int, note: int, velocity: int, *,
     same one played higher.
     """
     mono = to_mono(audio)
-    hit = analyze_hit(mono, sr, Note(note, velocity, preroll_s, gate_s), len(mono) / sr,
-                      max_band_hz=max_band_hz,
-                      stereo=audio if audio.ndim == 2 and audio.shape[1] == 2 else None)
+    hit = analyze_hit(
+        mono,
+        sr,
+        Note(note, velocity, preroll_s, gate_s),
+        len(mono) / sr,
+        max_band_hz=max_band_hz,
+        stereo=audio if audio.ndim == 2 and audio.shape[1] == 2 else None,
+    )
     row = hit.to_dict()
-    strike = mono[int(preroll_s * sr):]
+    strike = mono[int(preroll_s * sr) :]
     row["peak_dbfs"] = round(float(_db(float(np.max(np.abs(strike))))), 2) if len(strike) else None
     return row

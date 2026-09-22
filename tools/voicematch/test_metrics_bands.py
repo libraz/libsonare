@@ -80,11 +80,16 @@ def _reference(
                 if deaf_from_hz is not None and centre > deaf_from_hz:
                     profile[i] = -20.0
                 elif rolloff_from_hz is not None and centre > rolloff_from_hz:
-                    steps = sum(1 for c in THIRD_OCTAVE_CENTERS
-                                if rolloff_from_hz < c <= centre)
+                    steps = sum(1 for c in THIRD_OCTAVE_CENTERS if rolloff_from_hz < c <= centre)
                     profile[i] -= rolloff_db_per_band * steps
-            rows.append({"timbre": timbre, "note": note, "velocity": velocity,
-                         "bands_db": [float(max(v, BAND_FLOOR_DB)) for v in profile]})
+            rows.append(
+                {
+                    "timbre": timbre,
+                    "note": note,
+                    "velocity": velocity,
+                    "bands_db": [float(max(v, BAND_FLOOR_DB)) for v in profile],
+                }
+            )
     return rows
 
 
@@ -128,9 +133,9 @@ def test_two_references_of_the_same_kit_agree_to_the_top(rng):
 
 def _chained(ids, slope: float) -> list[dict]:
     """Two references of one kit, one of them darkened above 4 kHz."""
-    return (_reference("kit-a", ids, np.random.default_rng(7),
-                       rolloff_from_hz=4000.0, rolloff_db_per_band=slope)
-            + _reference("kit-b", ids, np.random.default_rng(8)))
+    return _reference(
+        "kit-a", ids, np.random.default_rng(7), rolloff_from_hz=4000.0, rolloff_db_per_band=slope
+    ) + _reference("kit-b", ids, np.random.default_rng(8))
 
 
 def test_a_band_limited_reference_is_caught_while_it_still_discriminates(rng):
@@ -184,9 +189,14 @@ def test_references_that_share_no_band_report_the_bottom_not_the_absence(rng):
     for timbre, offset in (("kit-a", 0.0), ("kit-b", -40.0)):
         for note in NOTES:
             for velocity in VELOCITIES:
-                rows.append({
-                    "timbre": timbre, "note": note, "velocity": velocity,
-                    "bands_db": [offset + 0.1 * note] * N_BANDS})
+                rows.append(
+                    {
+                        "timbre": timbre,
+                        "note": note,
+                        "velocity": velocity,
+                        "bands_db": [offset + 0.1 * note] * N_BANDS,
+                    }
+                )
     assert measure_agreement_edge(rows) == THIRD_OCTAVE_CENTERS[0]
 
 
@@ -198,9 +208,9 @@ def test_a_band_floored_on_one_side_does_not_soften_the_verdict(rng):
     answer back up.
     """
     ids = _identities(rng)
-    steep = (_reference("kit-a", ids, rng, rolloff_from_hz=4000.0,
-                        rolloff_db_per_band=40.0)
-             + _reference("kit-b", ids, rng))
+    steep = _reference(
+        "kit-a", ids, rng, rolloff_from_hz=4000.0, rolloff_db_per_band=40.0
+    ) + _reference("kit-b", ids, rng)
     assert measure_agreement_edge(steep) <= 4000.0
 
 
@@ -217,17 +227,21 @@ def test_the_narrower_of_the_two_tests_sets_the_shared_edge(rng):
     """
     ids = _identities(rng)
     rows = _chained(ids, 8.0)
-    assert all(e is None for e in
-               (measure_band_edge([r for r in rows if r["timbre"] == t])
-                for t in ("kit-a", "kit-b")))
+    assert all(
+        e is None
+        for e in (
+            measure_band_edge([r for r in rows if r["timbre"] == t]) for t in ("kit-a", "kit-b")
+        )
+    )
     assert shared_band_edge(rows) == 4000.0
 
 
 def test_a_deaf_reference_still_sets_the_edge_when_they_agree(rng):
     """The other direction, so the fold cannot be satisfied by one test alone."""
     ids = _identities(rng)
-    rows = (_reference("kit-a", ids, rng, deaf_from_hz=2000.0)
-            + _reference("kit-b", ids, rng, deaf_from_hz=2000.0))
+    rows = _reference("kit-a", ids, rng, deaf_from_hz=2000.0) + _reference(
+        "kit-b", ids, rng, deaf_from_hz=2000.0
+    )
     assert measure_agreement_edge(rows) is None
     assert shared_band_edge(rows) == 2000.0
 
@@ -259,8 +273,7 @@ def _bright_hit(sr: int = 48000, seconds: float = 0.6) -> np.ndarray:
     return (body + wash).astype(np.float64)
 
 
-@pytest.mark.parametrize("field", ["bands_db", "band_decay_db_s", "centroid_hz",
-                                   "flatness_db"])
+@pytest.mark.parametrize("field", ["bands_db", "band_decay_db_s", "centroid_hz", "flatness_db"])
 def test_every_field_a_comparison_reads_is_cut_at_the_edge(field):
     """The guard has four siblings and had been on one of them.
 
@@ -279,14 +292,15 @@ def test_a_capture_with_no_edge_is_measured_exactly_as_before():
     """The other half: `None` must leave every field at its full range."""
     hit = _bright_hit()
     note = Note(49, 100, 0.0, 0.05)
-    assert (analyze_hit(hit, 48000, note, 0.6).to_dict()
-            == analyze_hit(hit, 48000, note, 0.6, max_band_hz=None).to_dict())
+    assert (
+        analyze_hit(hit, 48000, note, 0.6).to_dict()
+        == analyze_hit(hit, 48000, note, 0.6, max_band_hz=None).to_dict()
+    )
 
 
 def test_the_octave_decay_reports_a_cut_band_as_unmeasured_not_as_zero():
     """`None` is what every reader already skips; a number there would be scored."""
-    cut = analyze_hit(_bright_hit(), 48000, Note(49, 100, 0.0, 0.05), 0.6,
-                      max_band_hz=5000.0)
+    cut = analyze_hit(_bright_hit(), 48000, Note(49, 100, 0.0, 0.05), 0.6, max_band_hz=5000.0)
     keep = band_edge_index(5000.0, OCTAVE_CENTERS)
     assert all(v is None for v in cut.band_decay_db_s[keep:])
     assert any(v is not None for v in cut.band_decay_db_s[:keep])

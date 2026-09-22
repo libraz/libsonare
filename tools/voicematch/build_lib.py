@@ -57,8 +57,10 @@ def configure_build(build_dir: Path, cmake: str, *, tuning: bool) -> None:
     stale = {n: v for n, v in want.items() if _cached_option(build_dir, n) != v}
     if not stale:
         return
-    print(f"configuring {build_dir} ("
-          + ", ".join(f"{n}={v}" for n, v in want.items()) + ")...", file=sys.stderr)
+    print(
+        f"configuring {build_dir} (" + ", ".join(f"{n}={v}" for n, v in want.items()) + ")...",
+        file=sys.stderr,
+    )
     subprocess.run(
         [cmake, "-S", str(REPO_ROOT), "-B", str(build_dir)]
         + [f"-D{n}={v}" for n, v in want.items()],
@@ -70,7 +72,9 @@ def build_shared(build_dir: Path, cmake: str, jobs: int) -> None:
     """Rebuild the shared library target in the isolated build dir."""
     proc = subprocess.run(
         [cmake, "--build", str(build_dir), "--target", "sonare_shared", f"-j{jobs}"],
-        capture_output=True, check=False, text=True,
+        capture_output=True,
+        check=False,
+        text=True,
     )
     if proc.returncode != 0:
         raise RuntimeError(
@@ -81,7 +85,9 @@ def build_shared(build_dir: Path, cmake: str, jobs: int) -> None:
     if sys.platform == "darwin" and dylib is not None and shutil.which("install_name_tool"):
         subprocess.run(
             ["install_name_tool", "-id", "@loader_path/libsonare.dylib", str(dylib)],
-            capture_output=True, check=False, text=True,
+            capture_output=True,
+            check=False,
+            text=True,
         )
 
 

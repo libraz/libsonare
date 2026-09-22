@@ -34,48 +34,48 @@ _PROGRAM_REGISTERS: dict[int, tuple[int, int, int]] = {
     # top note is where the mixture lands in the audible band and the bottom
     # note is where the sub-octave rank does. C3/C4/C5 would probe none of it.
     **{p: (36, 60, 84) for p in range(16, 20)},  # drawbar / percussive / rock / church
-    20: (41, 60, 79),   # reed organ
-    21: (53, 69, 84),   # accordion (right-hand manual)
-    22: (60, 72, 84),   # harmonica
-    23: (53, 69, 84),   # tango accordion
+    20: (41, 60, 79),  # reed organ
+    21: (53, 69, 84),  # accordion (right-hand manual)
+    22: (60, 72, 84),  # harmonica
+    23: (53, 69, 84),  # tango accordion
     # 32-39 basses
     **{p: (28, 40, 52) for p in range(32, 40)},
     # 40-47 strings & orchestral
-    40: (55, 67, 79),   # violin
-    41: (48, 60, 72),   # viola
-    42: (36, 48, 60),   # cello
-    43: (28, 40, 52),   # contrabass
-    44: (48, 60, 72),   # tremolo strings
-    45: (48, 60, 72),   # pizzicato strings
-    46: (48, 60, 72),   # harp
-    47: (41, 48, 55),   # timpani
+    40: (55, 67, 79),  # violin
+    41: (48, 60, 72),  # viola
+    42: (36, 48, 60),  # cello
+    43: (28, 40, 52),  # contrabass
+    44: (48, 60, 72),  # tremolo strings
+    45: (48, 60, 72),  # pizzicato strings
+    46: (48, 60, 72),  # harp
+    47: (41, 48, 55),  # timpani
     # 56-63 brass
-    56: (54, 66, 76),   # trumpet
-    57: (40, 52, 64),   # trombone
-    58: (28, 40, 52),   # tuba
-    59: (54, 66, 76),   # muted trumpet
-    60: (41, 53, 65),   # french horn
-    61: (48, 60, 72),   # brass section
-    62: (48, 60, 72),   # synth brass 1
-    63: (48, 60, 72),   # synth brass 2
+    56: (54, 66, 76),  # trumpet
+    57: (40, 52, 64),  # trombone
+    58: (28, 40, 52),  # tuba
+    59: (54, 66, 76),  # muted trumpet
+    60: (41, 53, 65),  # french horn
+    61: (48, 60, 72),  # brass section
+    62: (48, 60, 72),  # synth brass 1
+    63: (48, 60, 72),  # synth brass 2
     # 64-71 reeds
-    64: (56, 68, 80),   # soprano sax
-    65: (49, 61, 73),   # alto sax
-    66: (44, 56, 68),   # tenor sax
-    67: (36, 48, 60),   # baritone sax
-    68: (58, 70, 82),   # oboe
-    69: (52, 64, 76),   # english horn
-    70: (34, 46, 58),   # bassoon
-    71: (50, 62, 74),   # clarinet
+    64: (56, 68, 80),  # soprano sax
+    65: (49, 61, 73),  # alto sax
+    66: (44, 56, 68),  # tenor sax
+    67: (36, 48, 60),  # baritone sax
+    68: (58, 70, 82),  # oboe
+    69: (52, 64, 76),  # english horn
+    70: (34, 46, 58),  # bassoon
+    71: (50, 62, 74),  # clarinet
     # 72-79 pipes
-    72: (74, 82, 90),   # piccolo
-    73: (60, 72, 84),   # flute
-    74: (60, 72, 84),   # recorder
-    75: (60, 72, 84),   # pan flute
-    76: (60, 72, 84),   # blown bottle
-    77: (60, 72, 84),   # shakuhachi
-    78: (72, 79, 86),   # whistle
-    79: (60, 72, 84),   # ocarina
+    72: (74, 82, 90),  # piccolo
+    73: (60, 72, 84),  # flute
+    74: (60, 72, 84),  # recorder
+    75: (60, 72, 84),  # pan flute
+    76: (60, 72, 84),  # blown bottle
+    77: (60, 72, 84),  # shakuhachi
+    78: (72, 79, 86),  # whistle
+    79: (60, 72, 84),  # ocarina
 }
 
 
@@ -275,9 +275,7 @@ def drum_pattern(
     the kit and one of the longest, is the single exception at -15 dB.
     """
     gap = drum_gap_for(notes) if gap is None else gap
-    return _drum_pattern(
-        "drum", notes=notes, velocities=velocities, dur=dur, gap=gap, tail=gap
-    )
+    return _drum_pattern("drum", notes=notes, velocities=velocities, dur=dur, gap=gap, tail=gap)
 
 
 def drum_holdout_pattern(
@@ -364,11 +362,12 @@ def drum_sequence_pattern(
         events = DRUM_SEQUENCES[sequence]
     except KeyError:
         raise ValueError(
-            f"unknown drum sequence {sequence!r} (choose from "
-            f"{sorted(DRUM_SEQUENCES)})") from None
+            f"unknown drum sequence {sequence!r} (choose from {sorted(DRUM_SEQUENCES)})"
+        ) from None
     seq = [Note(n, v, 0.1 + t, dur) for n, v, t in events]
-    return Pattern(f"drum-sequence:{sequence}", seq, analysis_notes=[],
-                   tail=3.0, channel=9, percussive=True)
+    return Pattern(
+        f"drum-sequence:{sequence}", seq, analysis_notes=[], tail=3.0, channel=9, percussive=True
+    )
 
 
 def scale_pattern(
@@ -445,7 +444,9 @@ def build_pattern(name: str, program: int, **kwargs) -> Pattern:
     try:
         builder = PATTERN_BUILDERS[name]
     except KeyError:
-        raise ValueError(f"unknown pattern '{name}' (choose from {sorted(PATTERN_BUILDERS)})") from None
+        raise ValueError(
+            f"unknown pattern '{name}' (choose from {sorted(PATTERN_BUILDERS)})"
+        ) from None
     return builder(program, **_adapt_kwargs(name, builder, kwargs))
 
 

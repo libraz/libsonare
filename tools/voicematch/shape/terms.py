@@ -66,11 +66,14 @@ def onset_stats(sig: np.ndarray, sr: int = 48000, start: float = 0.1):
     freq = np.fft.rfftfreq(ONSET_NFFT, 1.0 / sr)
     sel = [np.where((freq >= lo) & (freq < hi))[0] for lo, hi in ONSET_BANDS]
     i0 = int(start * sr)
-    x = np.ascontiguousarray(sig[i0:i0 + int(ONSET_SPAN * sr)])
+    x = np.ascontiguousarray(sig[i0 : i0 + int(ONSET_SPAN * sr)])
     cols = (len(x) - ONSET_NFFT) // ONSET_HOP + 1
-    fr = np.lib.stride_tricks.as_strided(
-        x, shape=(cols, ONSET_NFFT),
-        strides=(x.strides[0] * ONSET_HOP, x.strides[0])) * _OWIN
+    fr = (
+        np.lib.stride_tricks.as_strided(
+            x, shape=(cols, ONSET_NFFT), strides=(x.strides[0] * ONSET_HOP, x.strides[0])
+        )
+        * _OWIN
+    )
     p = np.abs(np.fft.rfft(fr, axis=1)) ** 2
     n60 = max(1, int(0.06 * sr / ONSET_HOP))
     lvl, rise = [], []
@@ -100,13 +103,23 @@ def residue_ratio(spectro, S: np.ndarray, harmonic: np.ndarray, scale: int = 0):
             out.append(0.0)
             continue
         col = P[:, c].mean(axis=1)
-        out.append(10 * np.log10(max(float(col[~harmonic].sum()), 1e-30)
-                                 / max(float(col[harmonic].sum()), 1e-30)))
+        out.append(
+            10
+            * np.log10(
+                max(float(col[~harmonic].sum()), 1e-30) / max(float(col[harmonic].sum()), 1e-30)
+            )
+        )
     return np.array(out)
 
 
-def residue_valid(spectro, clean: np.ndarray, bed: np.ndarray, harmonic: np.ndarray,
-                  scale: int = 0, margin: float = 10.0):
+def residue_valid(
+    spectro,
+    clean: np.ndarray,
+    bed: np.ndarray,
+    harmonic: np.ndarray,
+    scale: int = 0,
+    margin: float = 10.0,
+):
     """Windows where the reference still has a note to take a ratio of.
 
     Once a note has decayed into its own recorded floor the ratio stops being a
@@ -129,8 +142,9 @@ def residue_valid(spectro, clean: np.ndarray, bed: np.ndarray, harmonic: np.ndar
     return np.array(out)
 
 
-def residue_curve(spectro, S: np.ndarray, harmonic: np.ndarray, scale: int = 0,
-                  window=(0.8, 3.0)) -> np.ndarray:
+def residue_curve(
+    spectro, S: np.ndarray, harmonic: np.ndarray, scale: int = 0, window=(0.8, 3.0)
+) -> np.ndarray:
     """The sustain spectrum on its own level, with the note's partials removed."""
     c = spectro.columns(scale, S.shape[1], *window)
     col = (10.0 ** (S / 10.0))[:, c].mean(axis=1)
@@ -162,8 +176,9 @@ RECUR_PROMINENCE_DB = 6.0
 RECUR_CLIP = 100.0
 
 
-def peak_rows(spectro, S, harmonic, window=RECUR_WINDOW,
-              prominence_db=RECUR_PROMINENCE_DB, scale: int = 0):
+def peak_rows(
+    spectro, S, harmonic, window=RECUR_WINDOW, prominence_db=RECUR_PROMINENCE_DB, scale: int = 0
+):
     """Rows this note's aftersound peaks at, with its own partials removed.
 
     Half of the recurrence term; the other half is counting how many notes
@@ -180,13 +195,22 @@ def peak_rows(spectro, S, harmonic, window=RECUR_WINDOW,
     col = S[:, c].mean(axis=1)
     w = max(9, (len(col) // 24) | 1)
     pad = np.pad(col, w // 2, mode="edge")
-    local = np.array([np.median(pad[i:i + w]) for i in range(len(col))])
+    local = np.array([np.median(pad[i : i + w]) for i in range(len(col))])
     return (col > local + prominence_db) & ~harmonic
 
 
 #: Octave bands the balance term compares, from the bottom of a keyboard up.
-BALANCE_BANDS = ((30, 60), (60, 125), (125, 250), (250, 500), (500, 1000),
-                 (1000, 2000), (2000, 4000), (4000, 8000), (8000, 16000))
+BALANCE_BANDS = (
+    (30, 60),
+    (60, 125),
+    (125, 250),
+    (250, 500),
+    (500, 1000),
+    (1000, 2000),
+    (2000, 4000),
+    (4000, 8000),
+    (8000, 16000),
+)
 #: Body of the note, then the aftersound. Two windows because "thin" and
 #: "the tail is dead" are different complaints with different levers.
 BALANCE_WINDOWS = ((0.2, 0.8), (2.5, 6.0))
@@ -219,9 +243,12 @@ def band_balance(spectro, S: np.ndarray, window, bands=BALANCE_BANDS, scale: int
     c = spectro.columns(scale, S.shape[1], *window)
     col = (10.0 ** (S / 10.0))[:, c].mean(axis=1)
     total = max(float(col.sum()), 1e-30)
-    return np.array([
-        10 * np.log10(max(float(col[(hz >= lo) & (hz < hi)].sum()), 1e-30) / total)
-        for lo, hi in bands])
+    return np.array(
+        [
+            10 * np.log10(max(float(col[(hz >= lo) & (hz < hi)].sum()), 1e-30) / total)
+            for lo, hi in bands
+        ]
+    )
 
 
 def _rms_db(seg: np.ndarray, floor: float = 1e-14) -> float:
@@ -243,12 +270,13 @@ def _rms_db(seg: np.ndarray, floor: float = 1e-14) -> float:
 
 def release_stats(sig: np.ndarray, pre, post, sr: int = 48000):
     """Level just before and well after note-off, both relative to the peak."""
-    peak = 20 * np.log10(max(float(np.max(np.abs(np.asarray(sig, dtype=np.float64)))),
-                             1e-14))
-    return (_rms_db(sig[int(pre[0] * sr):int(pre[1] * sr)]) - peak,
-            _rms_db(sig[int(post[0] * sr):int(post[1] * sr)]) - peak)
+    peak = 20 * np.log10(max(float(np.max(np.abs(np.asarray(sig, dtype=np.float64)))), 1e-14))
+    return (
+        _rms_db(sig[int(pre[0] * sr) : int(pre[1] * sr)]) - peak,
+        _rms_db(sig[int(post[0] * sr) : int(post[1] * sr)]) - peak,
+    )
 
 
 def held_db(sig: np.ndarray, window=(0.4, 1.4), sr: int = 48000) -> float:
     """The level the whole-set gain alignment is taken from."""
-    return _rms_db(sig[int(window[0] * sr):int(window[1] * sr)], floor=1e-12)
+    return _rms_db(sig[int(window[0] * sr) : int(window[1] * sr)], floor=1e-12)

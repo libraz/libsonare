@@ -62,8 +62,9 @@ def profile_body(profile: dict) -> str:
     that was a tuple in memory or a float printed at a different width cannot
     read as a change when nothing changed.
     """
-    return json.dumps({k: v for k, v in profile.items() if k != "measured_utc"},
-                      indent=1, ensure_ascii=False)
+    return json.dumps(
+        {k: v for k, v in profile.items() if k != "measured_utc"}, indent=1, ensure_ascii=False
+    )
 
 
 def measurement_stamp(profile: dict, out_path: Path) -> str:
@@ -112,8 +113,13 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
     disk, because a checkout reorders those.
     """
     ident = cfg["id"]
-    out: dict = {"id": ident, "program": int(cfg.get("program", 0)),
-                 "takes_set": cfg.get("takes") or "", "blocking": [], "next": []}
+    out: dict = {
+        "id": ident,
+        "program": int(cfg.get("program", 0)),
+        "takes_set": cfg.get("takes") or "",
+        "blocking": [],
+        "next": [],
+    }
 
     profile_path = reference_dir / f"{ident}.json"
     profile = json.loads(profile_path.read_text()) if profile_path.exists() else None
@@ -122,7 +128,8 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
     if profile is None:
         out["blocking"].append(
             "no reference profile: capture.py calibrate/corpus/verify then profile.py measure. "
-            "Needs the plugin, so it cannot be done from a plain clone")
+            "Needs the plugin, so it cannot be done from a plain clone"
+        )
         return out
 
     # Which dimensions the reference can actually adjudicate. A column missing
@@ -130,17 +137,28 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
     # the profile predates, and nothing downstream will ever say so.
     present = {k for r in profile["rows"] for k in r}
     wanted = list(cfg.get("dimensions") or [])
-    needs = {"stretch": "cents_vs_et", "decay": "decay_db_s", "aftersound": "decay_late_db_s",
-             "doubling": "decay_early_db_s", "body": "body_below_f0_db",
-             "attack": "attack_ms", "stereo": "stereo_width", "damper": "damper_release_ms",
-             "balance": "partials_db", "centroid_pct": "centroid_hz", "tnr": "tnr_db",
-             "vel_range": "peak_dbfs", "register": "held_peak_dbfs"}
+    needs = {
+        "stretch": "cents_vs_et",
+        "decay": "decay_db_s",
+        "aftersound": "decay_late_db_s",
+        "doubling": "decay_early_db_s",
+        "body": "body_below_f0_db",
+        "attack": "attack_ms",
+        "stereo": "stereo_width",
+        "damper": "damper_release_ms",
+        "balance": "partials_db",
+        "centroid_pct": "centroid_hz",
+        "tnr": "tnr_db",
+        "vel_range": "peak_dbfs",
+        "register": "held_peak_dbfs",
+    }
     out["dimensions"] = wanted or ["(all measured)"]
     out["unbacked"] = sorted(d for d in wanted if needs.get(d) and needs[d] not in present)
     if out["unbacked"]:
         out["next"].append(
             f"the profile carries no {', '.join(needs[d] for d in out['unbacked'])}: "
-            f"re-run profile.py measure over the corpus, or drop those from `dimensions`")
+            f"re-run profile.py measure over the corpus, or drop those from `dimensions`"
+        )
 
     gate_path = reference_dir / f"{ident}_gate.json"
     gate = json.loads(gate_path.read_text()) if gate_path.exists() else None
@@ -149,27 +167,31 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
     if gate is None:
         out["next"].append(
             "no gate: nothing holds this voice to anything. profile.py compare "
-            "--write-gate reference/<id>_gate.json once the numbers are worth holding")
+            "--write-gate reference/<id>_gate.json once the numbers are worth holding"
+        )
     else:
         against = gate.get("reference_measured_utc")
         if against is None:
             out["gate_stale"] = "unknown"
             out["next"].append(
                 "the gate predates the field recording which reference it was measured "
-                "against, so its staleness cannot be checked: re-record it once")
+                "against, so its staleness cannot be checked: re-record it once"
+            )
         elif against != out["measured_utc"]:
             out["gate_stale"] = "stale"
             out["next"].append(
                 f"the gate was recorded against a reference measured {against} and the "
                 f"profile now reads {out['measured_utc']}: its bounds compare against an "
-                f"instrument no longer in the file. Re-record before trusting a failure")
+                f"instrument no longer in the file. Re-record before trusting a failure"
+            )
         else:
             out["gate_stale"] = "current"
         missing_bounds = [d for d in wanted if d not in gate.get("bounds", {})]
         if missing_bounds:
             out["next"].append(
                 f"gated dimensions with no bound recorded: {', '.join(missing_bounds)} — "
-                f"listed but unchecked, which reads as passing. Re-record the gate")
+                f"listed but unchecked, which reads as passing. Re-record the gate"
+            )
 
     index = archive / "index.json"
     held = set(json.loads(index.read_text()).get(ident, {})) if index.exists() else set()
@@ -184,12 +206,14 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
             out["next"].append(
                 f"{len(wanted_takes - held)} of {len(wanted_takes)} phrase takes have no "
                 f"archived reference, so `profile.py takes` is blind to them: run "
-                f"make_audition.py --archive-references once. Needs the plugin")
+                f"make_audition.py --archive-references once. Needs the plugin"
+            )
     else:
         out["takes_total"] = 0
         out["next"].append(
             "the capture names no phrase set, so nothing measures what happens BETWEEN "
-            "notes — every coupling in this voice is unmeasured. Add one to the capture")
+            "notes — every coupling in this voice is unmeasured. Add one to the capture"
+        )
     return out
 
 
@@ -205,15 +229,22 @@ def status(cfg: dict, *, archive: Path, reference_dir: Path, every: bool) -> int
         configs = [cfg]
 
     rows = [readiness(c, archive=archive, reference_dir=reference_dir) for c in configs]
-    print(f"  {'instrument':<14}{'prog':>5}{'rows':>6}{'gate':>7}{'gate vs ref':>13}"
-          f"{'takes':>8}{'unbacked dims':>16}")
+    print(
+        f"  {'instrument':<14}{'prog':>5}{'rows':>6}{'gate':>7}{'gate vs ref':>13}"
+        f"{'takes':>8}{'unbacked dims':>16}"
+    )
     for r in rows:
         gate = f"{r['gate_bounds']}" if r["gate_bounds"] else "-"
         stale = r.get("gate_stale", "-") if r["gate_bounds"] else "-"
-        took = (f"{r.get('takes_archived', 0)}/{r.get('takes_total', 0)}"
-                if r.get("takes_total") else "-")
-        print(f"  {r['id']:<14}{r['program']:>5}{r['profile_rows']:>6}{gate:>7}{stale:>13}"
-              f"{took:>8}{','.join(r['unbacked']) or '-':>16}")
+        took = (
+            f"{r.get('takes_archived', 0)}/{r.get('takes_total', 0)}"
+            if r.get("takes_total")
+            else "-"
+        )
+        print(
+            f"  {r['id']:<14}{r['program']:>5}{r['profile_rows']:>6}{gate:>7}{stale:>13}"
+            f"{took:>8}{','.join(r['unbacked']) or '-':>16}"
+        )
     for r in rows:
         if not (r["blocking"] or r["next"]):
             continue

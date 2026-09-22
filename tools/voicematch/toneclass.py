@@ -43,8 +43,7 @@ class ToneClass(str, Enum):
         The harmonic ladder and the inharmonicity fit are only meaningful here;
         `MODAL` needs the measured-partial path instead.
         """
-        return self in (ToneClass.STRUCK_STRING, ToneClass.PLUCKED_STRING,
-                        ToneClass.SUSTAINED)
+        return self in (ToneClass.STRUCK_STRING, ToneClass.PLUCKED_STRING, ToneClass.SUSTAINED)
 
     @property
     def fast_attack(self) -> bool:
@@ -56,8 +55,7 @@ class ToneClass(str, Enum):
         itself. A bowed or blown note rises over tens of milliseconds and is
         resolved fine by the coarse grid.
         """
-        return self in (ToneClass.STRUCK_STRING, ToneClass.PLUCKED_STRING,
-                        ToneClass.MODAL)
+        return self in (ToneClass.STRUCK_STRING, ToneClass.PLUCKED_STRING, ToneClass.MODAL)
 
 
 #: GM programs whose class is not the one their family implies. Everything else
@@ -67,45 +65,45 @@ _PROGRAM_CLASS: dict[int, ToneClass] = {
     # 8-15 chromatic percussion is modal, except the hammered dulcimer, which
     # libsonare voices on Karplus-Strong because it physically is a struck
     # string rather than a bar.
-    15: ToneClass.STRUCK_STRING,   # dulcimer
+    15: ToneClass.STRUCK_STRING,  # dulcimer
     # 40-47 strings: bowed, except the three that are not.
     45: ToneClass.PLUCKED_STRING,  # pizzicato strings
     46: ToneClass.PLUCKED_STRING,  # orchestral harp
-    47: ToneClass.MODAL,           # timpani — a tuned kettledrum, 1 : 1.5 : 2 : 2.44
-    55: ToneClass.MODAL,           # orchestra hit
+    47: ToneClass.MODAL,  # timpani — a tuned kettledrum, 1 : 1.5 : 2 : 2.44
+    55: ToneClass.MODAL,  # orchestra hit
     # 104-111 ethnic: plucked, blown and struck in one family.
     104: ToneClass.PLUCKED_STRING,  # sitar
     105: ToneClass.PLUCKED_STRING,  # banjo
     106: ToneClass.PLUCKED_STRING,  # shamisen
     107: ToneClass.PLUCKED_STRING,  # koto
-    108: ToneClass.MODAL,           # kalimba — a plucked steel tine, a bar not a string
-    109: ToneClass.SUSTAINED,       # bagpipe
-    110: ToneClass.SUSTAINED,       # fiddle
-    111: ToneClass.SUSTAINED,       # shanai
+    108: ToneClass.MODAL,  # kalimba — a plucked steel tine, a bar not a string
+    109: ToneClass.SUSTAINED,  # bagpipe
+    110: ToneClass.SUSTAINED,  # fiddle
+    111: ToneClass.SUSTAINED,  # shanai
     # 112-119 percussive: pitched, on the melodic channel, and none of them
     # harmonic. This is the range the harness used to score with a harmonic
     # ladder because `percussive` was tied to the drum channel rather than to
     # the instrument.
-    119: ToneClass.NOISE,           # reverse cymbal
+    119: ToneClass.NOISE,  # reverse cymbal
 }
 
 _FAMILY_CLASS: dict[int, ToneClass] = {
-    0: ToneClass.STRUCK_STRING,    # 0-7    piano
-    8: ToneClass.MODAL,            # 8-15   chromatic percussion
-    16: ToneClass.SUSTAINED,       # 16-23  organ
+    0: ToneClass.STRUCK_STRING,  # 0-7    piano
+    8: ToneClass.MODAL,  # 8-15   chromatic percussion
+    16: ToneClass.SUSTAINED,  # 16-23  organ
     24: ToneClass.PLUCKED_STRING,  # 24-31  guitar
     32: ToneClass.PLUCKED_STRING,  # 32-39  bass
-    40: ToneClass.SUSTAINED,       # 40-47  strings (bowed)
-    48: ToneClass.SUSTAINED,       # 48-55  ensemble
-    56: ToneClass.SUSTAINED,       # 56-63  brass
-    64: ToneClass.SUSTAINED,       # 64-71  reed
-    72: ToneClass.SUSTAINED,       # 72-79  pipe
-    80: ToneClass.SUSTAINED,       # 80-87  synth lead
-    88: ToneClass.SUSTAINED,       # 88-95  synth pad
-    96: ToneClass.SUSTAINED,       # 96-103 synth effects
+    40: ToneClass.SUSTAINED,  # 40-47  strings (bowed)
+    48: ToneClass.SUSTAINED,  # 48-55  ensemble
+    56: ToneClass.SUSTAINED,  # 56-63  brass
+    64: ToneClass.SUSTAINED,  # 64-71  reed
+    72: ToneClass.SUSTAINED,  # 72-79  pipe
+    80: ToneClass.SUSTAINED,  # 80-87  synth lead
+    88: ToneClass.SUSTAINED,  # 88-95  synth pad
+    96: ToneClass.SUSTAINED,  # 96-103 synth effects
     104: ToneClass.PLUCKED_STRING,  # 104-111 ethnic
-    112: ToneClass.MODAL,          # 112-119 percussive
-    120: ToneClass.NOISE,          # 120-127 sound effects
+    112: ToneClass.MODAL,  # 112-119 percussive
+    120: ToneClass.NOISE,  # 120-127 sound effects
 }
 
 
@@ -148,22 +146,45 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
     # catches — a note whose envelope never falls after its attack — is the
     # characteristic failure of a sustained voice rather than an incidental one.
     ToneClass.SUSTAINED: {
-        "harm": 1.0, "cents": 0.5, "tnr": 1.0, "mod": 1.0, "env": 0.5,
-        "slope": 0.5, "dyn": 1.0, "crest": 1.0,
+        "harm": 1.0,
+        "cents": 0.5,
+        "tnr": 1.0,
+        "mod": 1.0,
+        "env": 0.5,
+        "slope": 0.5,
+        "dyn": 1.0,
+        "crest": 1.0,
     },
     # A hammered string: the decay and the strike carry it, and the aftersound
     # is most of the note. `stiff` is weighted because the series itself is a
     # property of the string rather than of the voicing.
     ToneClass.STRUCK_STRING: {
-        "harm": 1.0, "cents": 0.5, "tnr": 0.5, "env": 1.0, "init": 1.0,
-        "slope": 1.0, "tail": 1.0, "hf": 0.5, "lf": 0.5, "stiff": 0.5,
-        "crest": 1.0, "dyn": 1.0,
+        "harm": 1.0,
+        "cents": 0.5,
+        "tnr": 0.5,
+        "env": 1.0,
+        "init": 1.0,
+        "slope": 1.0,
+        "tail": 1.0,
+        "hf": 0.5,
+        "lf": 0.5,
+        "stiff": 0.5,
+        "crest": 1.0,
+        "dyn": 1.0,
     },
     # A plucked string: the same shape, weighted toward the onset, since the
     # pluck sets the spectrum and nothing feeds it afterwards.
     ToneClass.PLUCKED_STRING: {
-        "harm": 1.0, "cents": 0.5, "tnr": 0.5, "env": 1.0, "init": 1.5,
-        "slope": 1.0, "hf": 0.5, "crest": 1.0, "stiff": 0.5, "dyn": 1.0,
+        "harm": 1.0,
+        "cents": 0.5,
+        "tnr": 0.5,
+        "env": 1.0,
+        "init": 1.5,
+        "slope": 1.0,
+        "hf": 0.5,
+        "crest": 1.0,
+        "stiff": 0.5,
+        "dyn": 1.0,
     },
     # A bar, bell or membrane. `harm` is deliberately absent: the ladder it
     # measures is not this instrument's series, and weighting it would score the
@@ -175,14 +196,20 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
     # measurement dropping `harm` removed. The axis is real on a bar — a harder
     # strike is brighter — and reaching it needs a brightness read off `modes`.
     ToneClass.MODAL: {
-        "modes": 1.0, "env": 1.0, "init": 1.0, "slope": 1.0, "crest": 1.0,
+        "modes": 1.0,
+        "env": 1.0,
+        "init": 1.0,
+        "slope": 1.0,
+        "crest": 1.0,
         "hf": 0.5,
     },
     # Nothing has a pitch, so only the whole-render measures say anything —
     # which is also why `dyn` is not here: it is fitted per pitch, and this
     # class has none to hold fixed.
     ToneClass.NOISE: {
-        "mss": 1.0, "env": 1.0, "crest": 1.0,
+        "mss": 1.0,
+        "env": 1.0,
+        "crest": 1.0,
     },
 }
 
@@ -190,13 +217,18 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
 #: class: the percussion metric set produces `band` / `bdecay` and no ladder,
 #: whatever the kit piece is.
 PERCUSSION_WEIGHTS: dict[str, float] = {
-    "band": 1.0, "bdecay": 1.0, "env": 1.0, "modes": 0.5, "crest": 0.5,
+    "band": 1.0,
+    "bdecay": 1.0,
+    "env": 1.0,
+    "modes": 0.5,
+    "crest": 0.5,
     # Which way the spectrum leans and where its energy sits. Level with the
     # profile they are drawn from, because `band` measures a magnitude per band
     # and neither of these: a whole-kit fit under `band` alone improved it while
     # taking the tilt and the centroid the wrong way, and brightness was the one
     # gated dimension of eight that had been inside the reference kits' spread.
-    "tilt": 1.0, "bright": 1.0,
+    "tilt": 1.0,
+    "bright": 1.0,
     # Weighted as heavily as the whole band profile it is drawn from, because
     # it is one region against that profile's twenty-five bands and the kick is
     # the loudest thing in the kit. See `loss._perc_lf_terms`.
@@ -216,8 +248,9 @@ PERCUSSION_WEIGHTS: dict[str, float] = {
 }
 
 
-def default_weights(program: int, *, drum_note: int | None = None,
-                    percussive: bool = False) -> dict[str, float]:
+def default_weights(
+    program: int, *, drum_note: int | None = None, percussive: bool = False
+) -> dict[str, float]:
     """The term weights a run starts from when the command line names none."""
     if percussive or drum_note is not None:
         return dict(PERCUSSION_WEIGHTS)
@@ -240,19 +273,19 @@ def default_weights(program: int, *, drum_note: int | None = None,
 # one says so in its own `dimensions_na`, with a reason — an organ has no
 # velocity response, and that is a fact about flue pipes rather than a gap.
 _MELODIC_ALL = (
-    "stretch",       # cents_vs_et       — the ladder against equal temperament
-    "decay",         # decay_db_s        — the free fall while the key is held
-    "aftersound",    # decay_late_db_s   — what is left after the prompt stage
-    "doubling",      # decay_early_db_s  — the prompt stage itself
-    "body",          # body_below_f0_db  — radiated energy under the fundamental
-    "attack",        # attack_ms         — time to peak
-    "stereo",        # stereo_width      — the image
-    "damper",        # damper_release_ms — how the note is stopped
-    "balance",       # partials_db       — the partial levels against each other
+    "stretch",  # cents_vs_et       — the ladder against equal temperament
+    "decay",  # decay_db_s        — the free fall while the key is held
+    "aftersound",  # decay_late_db_s   — what is left after the prompt stage
+    "doubling",  # decay_early_db_s  — the prompt stage itself
+    "body",  # body_below_f0_db  — radiated energy under the fundamental
+    "attack",  # attack_ms         — time to peak
+    "stereo",  # stereo_width      — the image
+    "damper",  # damper_release_ms — how the note is stopped
+    "balance",  # partials_db       — the partial levels against each other
     "centroid_pct",  # centroid_hz       — brightness, as a fraction
-    "tnr",           # tnr_db            — tone against noise
-    "vel_range",     # peak_dbfs         — the dynamic span
-    "register",      # held_peak_dbfs    — level against register
+    "tnr",  # tnr_db            — tone against noise
+    "vel_range",  # peak_dbfs         — the dynamic span
+    "register",  # held_peak_dbfs    — level against register
 )
 
 CANONICAL_DIMENSIONS: dict[ToneClass, tuple[str, ...]] = {
@@ -266,7 +299,8 @@ CANONICAL_DIMENSIONS: dict[ToneClass, tuple[str, ...]] = {
     # the pipe or the bow stops, which is measurable and is where a sustained
     # voice most often gives itself away.
     ToneClass.SUSTAINED: tuple(
-        d for d in _MELODIC_ALL if d not in ("decay", "aftersound", "doubling")),
+        d for d in _MELODIC_ALL if d not in ("decay", "aftersound", "doubling")
+    ),
     # A bar, bell or membrane has no series equal temperament predicts, so
     # `stretch` measures the distance between two things that were never meant
     # to agree.
@@ -287,13 +321,23 @@ CANONICAL_DIMENSIONS: dict[ToneClass, tuple[str, ...]] = {
 #: stands where `tnr` stands in `_MELODIC_ALL` and is a different measurement,
 #: because that one masks around a harmonic ladder and a drum has none.
 PERCUSSION_DIMENSIONS: tuple[str, ...] = (
-    "band_tilt", "band_shape", "band_decay", "attack", "crest", "centroid_pct",
-    "level", "vel_range", "ring", "tonality", "stereo",
+    "band_tilt",
+    "band_shape",
+    "band_decay",
+    "attack",
+    "crest",
+    "centroid_pct",
+    "level",
+    "vel_range",
+    "ring",
+    "tonality",
+    "stereo",
 )
 
 
-def canonical_dimensions(program: int, *, drum_note: int | None = None,
-                         percussive: bool = False) -> tuple[str, ...]:
+def canonical_dimensions(
+    program: int, *, drum_note: int | None = None, percussive: bool = False
+) -> tuple[str, ...]:
     """Every dimension this voice's class can be judged on.
 
     The denominator of gate coverage. What a capture actually gates is its
@@ -318,23 +362,23 @@ PROGRAM_REGISTERS: dict[int, tuple[int, int, int]] = {
     # and a physical model diverges most at the ends of it.
     **{p: (36, 60, 84) for p in range(8)},
     # 8-15 chromatic percussion, each in its own written compass.
-    8: (60, 72, 84),    # celesta (written C4-C8, sounds an octave up)
-    9: (79, 91, 100),   # glockenspiel
-    10: (72, 84, 96),   # music box
-    11: (53, 65, 77),   # vibraphone (F3-F6)
-    12: (45, 60, 79),   # marimba (A2-C7)
-    13: (65, 77, 89),   # xylophone (F4-C8)
-    14: (53, 65, 77),   # tubular bells (F3-F5, sounding)
-    15: (48, 60, 72),   # dulcimer
+    8: (60, 72, 84),  # celesta (written C4-C8, sounds an octave up)
+    9: (79, 91, 100),  # glockenspiel
+    10: (72, 84, 96),  # music box
+    11: (53, 65, 77),  # vibraphone (F3-F6)
+    12: (45, 60, 79),  # marimba (A2-C7)
+    13: (65, 77, 89),  # xylophone (F4-C8)
+    14: (53, 65, 77),  # tubular bells (F3-F5, sounding)
+    15: (48, 60, 72),  # dulcimer
     # 24-31 guitars: E2-E5 is the fretboard, and the top string's open E is 64.
     **{p: (40, 52, 64) for p in range(24, 32)},
     # 48-55 ensembles and voices. The choir programs sit in a singer's range
     # rather than a string section's, which runs an octave lower at the bottom.
     **{p: (48, 60, 72) for p in range(48, 52)},
-    52: (48, 60, 72),   # choir aahs
-    53: (48, 60, 72),   # voice oohs
-    54: (48, 60, 72),   # synth voice
-    55: (48, 60, 72),   # orchestra hit
+    52: (48, 60, 72),  # choir aahs
+    53: (48, 60, 72),  # voice oohs
+    54: (48, 60, 72),  # synth voice
+    55: (48, 60, 72),  # orchestra hit
     # 80-95 synth leads and pads: no acoustic compass to respect, so the probe
     # is the widest range the voices are actually written across.
     **{p: (36, 60, 84) for p in range(80, 96)},

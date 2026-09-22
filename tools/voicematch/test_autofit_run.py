@@ -60,8 +60,7 @@ def _screen_args(threshold=0.001, max_evals=1000):
 
 
 def _reach_knob(label, lo, hi, start):
-    return Knob(label=label, lo=lo, hi=hi, log=False, start_value=start,
-                tunable=f"file.{label}")
+    return Knob(label=label, lo=lo, hi=hi, log=False, start_value=start, tunable=f"file.{label}")
 
 
 def test_a_screen_that_moves_nothing_is_an_error_rather_than_a_full_knob_list():
@@ -129,8 +128,7 @@ def test_a_winner_that_loses_off_the_probe_writes_nothing_either():
     """
     knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
     won = argparse.Namespace(normalize=True, best_loss=0.8692)
-    overfit = {"axis": "velocities", "held_out": "48,88,112",
-               "start": 1.0, "best": 1.1924}
+    overfit = {"axis": "velocities", "held_out": "48,88,112", "start": 1.0, "best": 1.1924}
     assert winner_or_defaults(knobs, [0.9], won, overfit) == [0.25]
     generalises = {**overfit, "best": 0.4803}
     assert winner_or_defaults(knobs, [0.9], won, generalises) == [0.9]
@@ -151,21 +149,25 @@ def test_a_winner_that_stopped_being_scored_on_noise_writes_nothing():
     separates those, and it falls as the model walks past the reference.
     """
     knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
-    quit_early = argparse.Namespace(normalize=True, best_loss=0.5071,
-                                    start_tnr_notes=7.0, best_tnr_notes=0.0)
+    quit_early = argparse.Namespace(
+        normalize=True, best_loss=0.5071, start_tnr_notes=7.0, best_tnr_notes=0.0
+    )
     assert winner_or_defaults(knobs, [0.9], quit_early) == [0.25]
     # Still scored on every note it started with: nothing went quiet.
-    held = argparse.Namespace(normalize=True, best_loss=0.5071,
-                              start_tnr_notes=7.0, best_tnr_notes=7.0)
+    held = argparse.Namespace(
+        normalize=True, best_loss=0.5071, start_tnr_notes=7.0, best_tnr_notes=7.0
+    )
     assert winner_or_defaults(knobs, [0.9], held) == [0.9]
     # A model cleaner than a sampled reference from the start is ordinary, and
     # the term never spoke about any candidate — there is no delta to read.
-    silent = argparse.Namespace(normalize=True, best_loss=0.5071,
-                                start_tnr_notes=0.0, best_tnr_notes=0.0)
+    silent = argparse.Namespace(
+        normalize=True, best_loss=0.5071, start_tnr_notes=0.0, best_tnr_notes=0.0
+    )
     assert winner_or_defaults(knobs, [0.9], silent) == [0.9]
     # A --raw-loss run leaves both anchors unset; the guard has nothing to read.
-    unanchored = argparse.Namespace(normalize=True, best_loss=0.5071,
-                                    start_tnr_notes=None, best_tnr_notes=None)
+    unanchored = argparse.Namespace(
+        normalize=True, best_loss=0.5071, start_tnr_notes=None, best_tnr_notes=None
+    )
     assert winner_or_defaults(knobs, [0.9], unanchored) == [0.9]
 
 
@@ -184,8 +186,9 @@ def test_the_fit_refuses_a_library_that_ignores_the_override_table(monkeypatch):
     """
     ev = Evaluator.__new__(Evaluator)
     ev.build_dir = Path("build")
-    monkeypatch.setattr(ev, "_render_terms",
-                        lambda values: {t: 1.0 for t in LOSS_TERMS}, raising=False)
+    monkeypatch.setattr(
+        ev, "_render_terms", lambda values: {t: 1.0 for t in LOSS_TERMS}, raising=False
+    )
     with pytest.raises(RuntimeError, match="not reaching the library"):
         ev.check_overrides_reach([_reach_knob("a", 0.0, 1.0, 0.5)])
 
@@ -226,14 +229,16 @@ def test_a_knob_that_silences_the_voice_does_not_read_as_broken_plumbing(monkeyp
         return {t: float(values[0]) for t in LOSS_TERMS}
 
     monkeypatch.setattr(ev, "_render_terms", render, raising=False)
-    ev.check_overrides_reach([_reach_knob("a", 0.0, 1.0, 0.25),
-                              _reach_knob("silencer", 0.0, 1.0, 0.25)])
+    ev.check_overrides_reach(
+        [_reach_knob("a", 0.0, 1.0, 0.25), _reach_knob("silencer", 0.0, 1.0, 0.25)]
+    )
     # Start, the unscorable all-at-once render, then the first knob on its own.
     assert seen == [[0.25, 0.25], [1.0, 1.0], [1.0, 0.25]]
 
 
 def test_a_probe_that_measures_nothing_as_shipped_says_so_rather_than_blaming_overrides(
-        monkeypatch):
+    monkeypatch,
+):
     """No baseline means no fit, and the reason is the probe rather than the
     environment — a message about BUILD_TUNING would send the reader nowhere."""
     ev = Evaluator.__new__(Evaluator)
@@ -243,8 +248,7 @@ def test_a_probe_that_measures_nothing_as_shipped_says_so_rather_than_blaming_ov
         ev.check_overrides_reach([_reach_knob("a", 0.0, 1.0, 0.25)])
 
 
-def test_the_one_at_a_time_fallback_still_catches_a_library_that_ignores_overrides(
-        monkeypatch):
+def test_the_one_at_a_time_fallback_still_catches_a_library_that_ignores_overrides(monkeypatch):
     """The fallback must not turn the plumbing failure into a pass: if no single
     knob moves anything either, the run is still searching nothing."""
     ev = Evaluator.__new__(Evaluator)
@@ -255,19 +259,34 @@ def test_the_one_at_a_time_fallback_still_catches_a_library_that_ignores_overrid
 
     monkeypatch.setattr(ev, "_render_terms", render, raising=False)
     with pytest.raises(RuntimeError, match="one range at a time"):
-        ev.check_overrides_reach([_reach_knob("a", 0.0, 1.0, 0.25),
-                                  _reach_knob("b", 0.0, 1.0, 0.25)])
+        ev.check_overrides_reach(
+            [_reach_knob("a", 0.0, 1.0, 0.25), _reach_knob("b", 0.0, 1.0, 0.25)]
+        )
 
 
 def test_a_source_only_spec_has_no_override_plumbing_to_check(monkeypatch):
     """A rebuilding knob does not travel through the environment at all."""
     ev = Evaluator.__new__(Evaluator)
     ev.build_dir = Path("build")
-    monkeypatch.setattr(ev, "_render_terms",
-                        lambda values: pytest.fail("a source knob needs no reach check"),
-                        raising=False)
-    ev.check_overrides_reach([Knob(label="a", lo=0.0, hi=1.0, log=False,
-                                   start_value=0.5, file=Path("x.cpp"), pattern="p")])
+    monkeypatch.setattr(
+        ev,
+        "_render_terms",
+        lambda values: pytest.fail("a source knob needs no reach check"),
+        raising=False,
+    )
+    ev.check_overrides_reach(
+        [
+            Knob(
+                label="a",
+                lo=0.0,
+                hi=1.0,
+                log=False,
+                start_value=0.5,
+                file=Path("x.cpp"),
+                pattern="p",
+            )
+        ]
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -290,14 +309,13 @@ def _cached_evaluator(tmp_path, monkeypatch, *, corpus=None, **kwargs):
     monkeypatch.setattr(autofit, "build_shared", lambda *a, **k: None)
     knob = Knob(label="x.k", lo=0.0, hi=1.0, log=False, start_value=0.5, tunable="x.k")
     args = _fit_args(no_cache=False, **kwargs)
-    return Evaluator([knob], {}, [{"note": 60}], None, args, _stub_build(tmp_path),
-                     corpus=corpus)
+    return Evaluator([knob], {}, [{"note": 60}], None, args, _stub_build(tmp_path), corpus=corpus)
 
 
 def test_the_store_hands_back_what_it_was_given(tmp_path):
     store = open_cache(tmp_path, "sig")
     store.put(("1.0",), {"harm": 2.0})
-    store.put(("2.0",), None)   # a render that produced nothing scorable
+    store.put(("2.0",), None)  # a render that produced nothing scorable
     reopened = open_cache(tmp_path, "sig")
     assert reopened.entries == {("1.0",): {"harm": 2.0}, ("2.0",): None}
     assert reopened.loaded == 2
@@ -328,16 +346,20 @@ def test_an_off_store_writes_nothing_anywhere(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "change", ["library", "harness", "oracle", "probe", "knobs", "corpus"],
+    "change",
+    ["library", "harness", "oracle", "probe", "knobs", "corpus"],
 )
 def test_the_signature_moves_with_everything_a_stored_value_depends_on(
-    tmp_path, monkeypatch, change,
+    tmp_path,
+    monkeypatch,
+    change,
 ):
     """A stored term is a number some particular code produced from some
     particular inputs. Anything the key leaves out is something the store will
     happily answer with after it has changed."""
     ev = _cached_evaluator(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         corpus=load_corpus(_write_corpus(tmp_path / "corpus", notes=(60, 72))),
     )
     before = ev.cache_signature()
@@ -378,7 +400,8 @@ def test_a_second_run_reads_what_the_first_one_measured(tmp_path, monkeypatch):
 
 
 def test_a_run_that_starts_from_the_store_still_normalises_against_its_start(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """Every loss is a ratio of what the START point scored, and that division
     used to live on the rendering path alone. A run whose first candidate came
@@ -413,8 +436,9 @@ def test_a_rebuilding_fit_keeps_no_store(tmp_path, monkeypatch):
     monkeypatch.setattr(autofit, "CORPUS_ROOT", tmp_path / "scratch")
     monkeypatch.setattr(autofit, "build_shared", lambda *a, **k: None)
     path, knob = _source_knob(tmp_path, "a.cpp", "1.0")
-    ev = Evaluator([knob], {path: path.read_text()}, [], None,
-                   _fit_args(no_cache=False), _stub_build(tmp_path))
+    ev = Evaluator(
+        [knob], {path: path.read_text()}, [], None, _fit_args(no_cache=False), _stub_build(tmp_path)
+    )
     ev._render_terms = lambda values: _terms(harm=1.0)
     ev([2.0])
     assert ev.disk.path is None
@@ -422,7 +446,8 @@ def test_a_rebuilding_fit_keeps_no_store(tmp_path, monkeypatch):
 
 
 def test_the_notes_of_a_render_are_measured_at_once_only_when_nothing_else_is(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """Threads inside a render and renders beside each other are alternatives.
 
@@ -437,7 +462,8 @@ def test_the_notes_of_a_render_are_measured_at_once_only_when_nothing_else_is(
 
 
 def test_the_thread_count_reaches_the_process_that_does_the_measuring(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """It is resolved in the parent and spent in the child, and nothing in
     between would notice the flag being dropped: the rows come back correct
@@ -480,9 +506,9 @@ def _init_git_repo(root: Path) -> None:
     (root / "src" / "a.cpp").write_text("int a = 1;\n")
     subprocess.run(["git", "add", "."], cwd=root, check=True)
     subprocess.run(
-        ["git", "-c", "user.email=t@t", "-c", "user.name=t",
-         "commit", "-q", "-m", "init"],
-        cwd=root, check=True,
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init"],
+        cwd=root,
+        check=True,
     )
 
 
@@ -517,8 +543,7 @@ class _PastGuard(Exception):
 
 def test_a_clean_tree_proceeds(monkeypatch):
     monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", []))
-    monkeypatch.setattr(autofit, "resolve_probe",
-                        lambda args: (_ for _ in ()).throw(_PastGuard()))
+    monkeypatch.setattr(autofit, "resolve_probe", lambda args: (_ for _ in ()).throw(_PastGuard()))
     with pytest.raises(_PastGuard):
         autofit.run(_precondition_args())
 
@@ -528,8 +553,9 @@ def test_a_dirty_tree_refuses_and_names_the_paths(monkeypatch):
     tell "my own edit" from "someone else's" apart, which a count cannot say."""
     dirty = ["M src/midi/synth/bowed_string_voice.cpp", "?? src/midi/synth/new.cpp"]
     monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", dirty))
-    monkeypatch.setattr(autofit, "resolve_probe",
-                        lambda args: pytest.fail("the guard let a dirty tree through"))
+    monkeypatch.setattr(
+        autofit, "resolve_probe", lambda args: pytest.fail("the guard let a dirty tree through")
+    )
     with pytest.raises(RuntimeError) as exc:
         autofit.run(_precondition_args())
     assert "bowed_string_voice.cpp" in str(exc.value)
@@ -539,8 +565,7 @@ def test_a_dirty_tree_refuses_and_names_the_paths(monkeypatch):
 def test_allow_dirty_src_proceeds_past_the_guard(monkeypatch):
     dirty = ["M src/midi/synth/bowed_string_voice.cpp"]
     monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", dirty))
-    monkeypatch.setattr(autofit, "resolve_probe",
-                        lambda args: (_ for _ in ()).throw(_PastGuard()))
+    monkeypatch.setattr(autofit, "resolve_probe", lambda args: (_ for _ in ()).throw(_PastGuard()))
     with pytest.raises(_PastGuard):
         autofit.run(_precondition_args(allow_dirty_src=True))
 
@@ -548,12 +573,13 @@ def test_allow_dirty_src_proceeds_past_the_guard(monkeypatch):
 def test_fold_tree_provenance_adds_to_an_existing_out_artifact(tmp_path):
     out = tmp_path / "result.json"
     out.write_text(json.dumps({"loss": {"best": 0.5}}))
-    autofit._fold_tree_provenance(str(out), "deadbeef",
-                                  ["M src/midi/synth/bowed_string_voice.cpp"])
+    autofit._fold_tree_provenance(str(out), "deadbeef", ["M src/midi/synth/bowed_string_voice.cpp"])
     record = json.loads(out.read_text())
     assert record["loss"] == {"best": 0.5}  # what was already there survives
-    assert record["tree"] == {"head": "deadbeef",
-                              "dirty_src": ["M src/midi/synth/bowed_string_voice.cpp"]}
+    assert record["tree"] == {
+        "head": "deadbeef",
+        "dirty_src": ["M src/midi/synth/bowed_string_voice.cpp"],
+    }
 
 
 def test_fold_tree_provenance_is_a_noop_without_an_out_path(tmp_path):
@@ -568,8 +594,9 @@ def test_a_refusal_names_itself_in_the_out_artifact(tmp_path):
     fit result, and it is the one worth counting later.
     """
     knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
-    blind = argparse.Namespace(normalize=True, best_loss=0.5071,
-                               start_tnr_notes=7.0, best_tnr_notes=0.0)
+    blind = argparse.Namespace(
+        normalize=True, best_loss=0.5071, start_tnr_notes=7.0, best_tnr_notes=0.0
+    )
     assert winner_or_defaults(knobs, [0.9], blind) == [0.25]
     assert blind.write_back_refusal == "objective_went_blind"
 
@@ -578,8 +605,10 @@ def test_a_refusal_names_itself_in_the_out_artifact(tmp_path):
     autofit._fold_write_back_verdict(str(out), blind)
     record = json.loads(out.read_text())
     assert record["loss"] == {"best": 0.5071}  # what was already there survives
-    assert record["write_back"] == {"refused": "objective_went_blind",
-                                    "tnr_notes": {"start": 7.0, "best": 0.0}}
+    assert record["write_back"] == {
+        "refused": "objective_went_blind",
+        "tnr_notes": {"start": 7.0, "best": 0.0},
+    }
 
 
 def test_each_refusal_is_distinguishable_and_a_write_names_none():
@@ -589,14 +618,16 @@ def test_each_refusal_is_distinguishable_and_a_write_names_none():
     assert lost.write_back_refusal == "lost_to_start"
 
     overfit = argparse.Namespace(normalize=True, best_loss=0.8692)
-    winner_or_defaults(knobs, [0.9], overfit,
-                       {"axis": "velocities", "held_out": "48,88,112",
-                        "start": 1.0, "best": 1.1924})
+    winner_or_defaults(
+        knobs,
+        [0.9],
+        overfit,
+        {"axis": "velocities", "held_out": "48,88,112", "start": 1.0, "best": 1.1924},
+    )
     assert overfit.write_back_refusal == "fitted_to_the_probe"
 
     # A run that wrote its winner must not leave a stale refusal behind it.
-    won = argparse.Namespace(normalize=True, best_loss=0.5071,
-                             write_back_refusal="lost_to_start")
+    won = argparse.Namespace(normalize=True, best_loss=0.5071, write_back_refusal="lost_to_start")
     assert winner_or_defaults(knobs, [0.9], won) == [0.9]
     assert won.write_back_refusal is None
 
@@ -618,7 +649,8 @@ def test_allow_dirty_src_run_records_provenance_in_out(tmp_path, monkeypatch):
     monkeypatch.setattr(autofit, "resolve_corpus", lambda args: None)
     monkeypatch.setattr(autofit, "CORPUS_ROOT", tmp_path / "scratch")
     monkeypatch.setattr(
-        autofit, "oracle_reference",
+        autofit,
+        "oracle_reference",
         lambda args: ([], np.zeros(4, dtype=np.float32), None, None),
     )
 
@@ -630,10 +662,22 @@ def test_allow_dirty_src_run_records_provenance_in_out(tmp_path, monkeypatch):
 
     out = tmp_path / "diag.json"
     args = _fit_args(
-        spec="ignored", program=0, drum_note=None, dump_knobs=False,
-        program_only=False, bank=0, build_dir="build-precondition-test",
-        screen=False, stages=False, diagnose=True, grid=0, optimizer="coord",
-        metric_threads=0, out=str(out), dry_run=True, allow_dirty_src=True,
+        spec="ignored",
+        program=0,
+        drum_note=None,
+        dump_knobs=False,
+        program_only=False,
+        bank=0,
+        build_dir="build-precondition-test",
+        screen=False,
+        stages=False,
+        diagnose=True,
+        grid=0,
+        optimizer="coord",
+        metric_threads=0,
+        out=str(out),
+        dry_run=True,
+        allow_dirty_src=True,
         drum_gate_ms=0,
     )
     assert autofit.run(args) == 0

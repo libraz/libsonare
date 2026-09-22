@@ -51,7 +51,7 @@ def solo_processor_names(catalog: Any) -> list[str]:
     diffing this set against ``processor_names()``.
     """
     if not isinstance(catalog, dict) or not isinstance(catalog.get("processors"), list):
-        raise ValueError(# noqa: TRY004 -- one error class per document
+        raise ValueError(  # noqa: TRY004 -- one error class per document
             "catalog must be an object with a processors array"
         )
     names: list[str] = []

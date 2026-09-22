@@ -120,8 +120,11 @@ def report_effect_distribution(effects: list[tuple[str, float]], threshold: floa
         return
     largest = values[-1]
     edges = [0.0, *EFFECT_BUCKETS, math.inf]
-    print(f"  effect distribution ({len(values)} knobs, threshold {threshold:g}, "
-          f"largest effect {largest:.4g}):", file=sys.stderr)
+    print(
+        f"  effect distribution ({len(values)} knobs, threshold {threshold:g}, "
+        f"largest effect {largest:.4g}):",
+        file=sys.stderr,
+    )
     for lo, hi in itertools.pairwise(edges):
         count = sum(1 for v in values if lo <= v < hi)
         if not count:
@@ -138,15 +141,26 @@ def report_effect_distribution(effects: list[tuple[str, float]], threshold: floa
     if below and above:
         last_out = max(below, key=lambda kv: kv[1])
         first_in = min(above, key=lambda kv: kv[1])
-        apart = (f" ({first_in[1] / last_out[1]:.1f}x apart)" if last_out[1] > 0
-                 else " (the dropped one moved nothing at all)")
-        print(f"    straddling the bar: {last_out[0]} {last_out[1]:.5f} dropped, "
-              f"{first_in[0]} {first_in[1]:.5f} kept{apart}", file=sys.stderr)
+        apart = (
+            f" ({first_in[1] / last_out[1]:.1f}x apart)"
+            if last_out[1] > 0
+            else " (the dropped one moved nothing at all)"
+        )
+        print(
+            f"    straddling the bar: {last_out[0]} {last_out[1]:.5f} dropped, "
+            f"{first_in[0]} {first_in[1]:.5f} kept{apart}",
+            file=sys.stderr,
+        )
     if largest > 0:
-        print(f"    the bar is {threshold / largest * 100:.2f}% of this voice's largest "
-              f"effect; knobs kept by share: "
-              + "  ".join(f"{s:g}%->{sum(1 for v in values if v >= s / 100 * largest)}"
-                          for s in (0.1, 0.5, 1.0, 5.0)), file=sys.stderr)
+        print(
+            f"    the bar is {threshold / largest * 100:.2f}% of this voice's largest "
+            f"effect; knobs kept by share: "
+            + "  ".join(
+                f"{s:g}%->{sum(1 for v in values if v >= s / 100 * largest)}"
+                for s in (0.1, 0.5, 1.0, 5.0)
+            ),
+            file=sys.stderr,
+        )
 
 
 def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
@@ -172,9 +186,12 @@ def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
     """
     cost = 2 * len(knobs) + 1
     if cost > args.max_evals // 3:
-        print(f"screening: {cost} of {args.max_evals} evaluations go on the probe itself. "
-              f"It pays for itself only when the budget is several times the knob count — "
-              f"raise --max-evals or drop --screen.", file=sys.stderr)
+        print(
+            f"screening: {cost} of {args.max_evals} evaluations go on the probe itself. "
+            f"It pays for itself only when the budget is several times the knob count — "
+            f"raise --max-evals or drop --screen.",
+            file=sys.stderr,
+        )
     print(f"screening {len(knobs)} knobs ({cost} renders)...", file=sys.stderr)
     start = [k.start_value for k in knobs]
     baseline = evaluator(start)
@@ -193,17 +210,22 @@ def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
     effects: list[tuple[str, float]] = []
     for i, knob in enumerate(knobs):
         pair = losses[2 * i : 2 * i + 2]
-        effect = max(abs(v - baseline) for v in pair if math.isfinite(v)) if any(
-            math.isfinite(v) for v in pair
-        ) else 0.0
+        effect = (
+            max(abs(v - baseline) for v in pair if math.isfinite(v))
+            if any(math.isfinite(v) for v in pair)
+            else 0.0
+        )
         effects.append((knob.label, effect))
         if effect >= args.screen_threshold:
             keep.append(i)
         else:
             dropped.append((knob.label, effect))
 
-    print(f"screening: {len(keep)}/{len(knobs)} knobs move the loss by at least "
-          f"{args.screen_threshold} over their range", file=sys.stderr)
+    print(
+        f"screening: {len(keep)}/{len(knobs)} knobs move the loss by at least "
+        f"{args.screen_threshold} over their range",
+        file=sys.stderr,
+    )
     report_effect_distribution(effects, args.screen_threshold)
     if dropped:
         print("  dropped (largest effect first):", file=sys.stderr)
@@ -243,14 +265,41 @@ def screen_knobs(evaluator, knobs: list[Knob], args) -> list[int]:
 # every knob, so a misclassification costs efficiency and never reach.
 STAGE_TOKENS = {
     "excitation": (
-        "attack", "chiff", "strike", "pick", "pluck", "hammer", "exc_", "click", "slap",
-        "breath_pressure", "breath_noise", "jet_ratio", "jet_turbulence", "lip_tension",
-        "bow_force", "bow_speed", "bow_position", "vel_to", "nail", "wind_sag", "phisem",
-        "noise_", "pitch_drop",
+        "attack",
+        "chiff",
+        "strike",
+        "pick",
+        "pluck",
+        "hammer",
+        "exc_",
+        "click",
+        "slap",
+        "breath_pressure",
+        "breath_noise",
+        "jet_ratio",
+        "jet_turbulence",
+        "lip_tension",
+        "bow_force",
+        "bow_speed",
+        "bow_position",
+        "vel_to",
+        "nail",
+        "wind_sag",
+        "phisem",
+        "noise_",
+        "pitch_drop",
     ),
     "decay": (
-        "decay", "release", "damp", "t60", "sustain", "stretch", "reflection", "shimmer",
-        "ring_s", "wire",
+        "decay",
+        "release",
+        "damp",
+        "t60",
+        "sustain",
+        "stretch",
+        "reflection",
+        "shimmer",
+        "ring_s",
+        "wire",
     ),
 }
 
@@ -312,8 +361,10 @@ def run_stages(evaluator, knobs: list[Knob], args, optimizer) -> list[float]:
     plan = [(name, staged_indices(knobs, name)) for name in ("excitation", "decay")]
     plan = [(name, idx) for name, idx in plan if len(idx) >= 2]
     if not plan:
-        print("stages: nothing classified as excitation or decay — fitting in one stage",
-              file=sys.stderr)
+        print(
+            "stages: nothing classified as excitation or decay — fitting in one stage",
+            file=sys.stderr,
+        )
         return optimizer(evaluator, knobs, args)
 
     total_evals = args.max_evals
@@ -325,8 +376,11 @@ def run_stages(evaluator, knobs: list[Knob], args, optimizer) -> list[float]:
     base = [k.start_value for k in knobs]
 
     if early_budget < 2 * len(plan):
-        print(f"stages: only {early_budget * 2} evaluations left after screening — "
-              f"fitting in one stage instead", file=sys.stderr)
+        print(
+            f"stages: only {early_budget * 2} evaluations left after screening — "
+            f"fitting in one stage instead",
+            file=sys.stderr,
+        )
         return optimizer(evaluator, knobs, args)
 
     weights_for = stage_weights(args)
@@ -339,15 +393,20 @@ def run_stages(evaluator, knobs: list[Knob], args, optimizer) -> list[float]:
         # originals carry the compiled-in defaults that the final report diffs
         # against, and a stage must not rewrite what "start" meant.
         sub_knobs = [replace(knobs[i], start_value=base[i]) for i in indices]
-        print(f"\n== stage '{name}': {len(indices)} knobs, "
-              f"{share} evaluations, weights {weights_for[name]} ==", file=sys.stderr)
+        print(
+            f"\n== stage '{name}': {len(indices)} knobs, "
+            f"{share} evaluations, weights {weights_for[name]} ==",
+            file=sys.stderr,
+        )
         optimizer(SubEvaluator(evaluator, indices, base), sub_knobs, stage_args)
         if evaluator.best_values is not None:
             base = list(evaluator.best_values)
 
-    print(f"\n== stage 'all': {len(knobs)} knobs, "
-          f"{total_evals - len(evaluator.trajectory)} evaluations, CLI weights ==",
-          file=sys.stderr)
+    print(
+        f"\n== stage 'all': {len(knobs)} knobs, "
+        f"{total_evals - len(evaluator.trajectory)} evaluations, CLI weights ==",
+        file=sys.stderr,
+    )
     evaluator.restage(cli_weights(args), "all")
     base = _better_seed(evaluator, knobs, base)
     return optimizer(evaluator, [replace(k, start_value=v) for k, v in zip(knobs, base)], args)
@@ -368,7 +427,9 @@ def _better_seed(evaluator, knobs: list[Knob], base: list[float]) -> list[float]
     staged, plain = evaluator(base), evaluator(defaults)
     if staged <= plain:
         return base
-    print(f"stages: the staged point scores {staged:.4f} against the defaults' {plain:.4f} "
-          f"under the CLI weights — starting the final stage from the defaults instead",
-          file=sys.stderr)
+    print(
+        f"stages: the staged point scores {staged:.4f} against the defaults' {plain:.4f} "
+        f"under the CLI weights — starting the final stage from the defaults instead",
+        file=sys.stderr,
+    )
     return defaults

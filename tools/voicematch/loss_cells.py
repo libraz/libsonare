@@ -82,13 +82,13 @@ def rebuild_pattern(report: dict, rows: list[dict], wav_s: float):
     if name == "velocity":
         return velocity_pattern(program, note=pitches[0], velocities=tuple(velocities))
     if name == "drum":
-        pattern = drum_pattern(program, notes=(pitches[0],),
-                               velocities=tuple(velocities))
+        pattern = drum_pattern(program, notes=(pitches[0],), velocities=tuple(velocities))
         if pattern_length(pattern) > wav_s + 0.05:
             # The long-decay gap postdates some of these renders, so a pattern
             # longer than the WAV is the gap rather than the note list.
-            pattern = drum_pattern(program, notes=(pitches[0],),
-                                   velocities=tuple(velocities), gap=2.0)
+            pattern = drum_pattern(
+                program, notes=(pitches[0],), velocities=tuple(velocities), gap=2.0
+            )
         return pattern
     return None
 
@@ -102,12 +102,14 @@ def census(terms: dict[str, float]) -> dict[str, Counter]:
             continue
         capped = terms.get(f"{term}_capped", 0.0)
         absent = terms.get(f"{term}_absent", 0.0)
-        out[term] = Counter({
-            "compared": int(cells - capped),
-            "clipped": int(capped - absent),
-            "absent": int(absent),
-            "skipped": int(terms.get(f"{term}_skipped", 0.0)),
-        })
+        out[term] = Counter(
+            {
+                "compared": int(cells - capped),
+                "clipped": int(capped - absent),
+                "absent": int(absent),
+                "skipped": int(terms.get(f"{term}_skipped", 0.0)),
+            }
+        )
     return out
 
 
@@ -124,13 +126,13 @@ def resolved_weights(report: dict, rows: list[dict], pattern) -> dict[str, float
         velocities.setdefault(note.note, set()).add(note.velocity)
     tail_min = band_min_note_s("tail_db_s")
     args = SimpleNamespace(
-        program=report["program"], percussive=pattern.percussive,
+        program=report["program"],
+        percussive=pattern.percussive,
         drum_note=rows[0]["note"] if pattern.percussive else None,
         has_analysis_notes=bool(pattern.analysis_notes),
         has_kit_groups=False,
         has_velocity_spread=any(len(v) >= 2 for v in velocities.values()),
-        has_tail_window=any(min(n.dur, SKELETON_MAX_S) >= tail_min
-                            for n in pattern.analysis_notes),
+        has_tail_window=any(min(n.dur, SKELETON_MAX_S) >= tail_min for n in pattern.analysis_notes),
         **{f"w_{term}": None for term in LOSS_TERMS},
     )
     return cli_weights(args)
@@ -145,7 +147,7 @@ def measure(directory: Path) -> dict | None:
     try:
         model_wav, sr = read_wav(directory / "model.wav")
         oracle_wav, oracle_sr = read_wav(directory / "oracle.wav")
-    except Exception as exc:                                  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         return {"skip": f"render missing: {exc}"}
     if sr != oracle_sr:
         return {"skip": "the two renders disagree about the sample rate"}
@@ -163,17 +165,21 @@ def measure(directory: Path) -> dict | None:
     # Did the rebuilt pattern land on the notes the render actually holds? The
     # report was measured through the same windows, so its f0 is the check: a
     # window off by one note moves it by hundreds of cents.
-    drift = [abs(1200.0 * np.log2(got["f0_hz"] / want["f0_hz"]))
-             for got, want in zip(model_rows, rows)
-             if got.get("f0_hz") and want.get("f0_hz")]
+    drift = [
+        abs(1200.0 * np.log2(got["f0_hz"] / want["f0_hz"]))
+        for got, want in zip(model_rows, rows)
+        if got.get("f0_hz") and want.get("f0_hz")
+    ]
     if drift and max(drift) > 50.0:
         return {"skip": f"rebuilt windows are {max(drift):.0f} cents off the report"}
-    terms = score_terms(model_rows, oracle_rows, mss=mss_distance(model, oracle),
-                        percussive=pattern.percussive)
+    terms = score_terms(
+        model_rows, oracle_rows, mss=mss_distance(model, oracle), percussive=pattern.percussive
+    )
     if terms is None:
         return {"skip": "the pair does not score (a render produced no partials)"}
     return {
-        "gm_name": report.get("gm_name", ""), "pattern": report["pattern"],
+        "gm_name": report.get("gm_name", ""),
+        "pattern": report["pattern"],
         "notes": len(model_rows),
         "weighted": sorted(resolved_weights(report, rows, pattern)),
         "cells": {t: dict(c) for t, c in census(terms).items()},
@@ -182,8 +188,9 @@ def measure(directory: Path) -> dict | None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--probes", default=str(DEFAULT_PROBES),
-                    help="directory of rendered probe directories")
+    ap.add_argument(
+        "--probes", default=str(DEFAULT_PROBES), help="directory of rendered probe directories"
+    )
     ap.add_argument("--run", default="", help="comma-separated probe names")
     ap.add_argument("--json", default="", help="write the full census here")
     args = ap.parse_args(argv)
@@ -207,32 +214,41 @@ def main(argv: list[str] | None = None) -> int:
     cells = sum(sum(c.values()) for c in grand.values())
     # Reach first and unmissable: a run that classified nothing must not read
     # like a run that found nothing wrong.
-    print(f"probes scored: {len(results)}   skipped: {len(skipped)}   "
-          f"notes: {sum(g['notes'] for g in results.values())}   cells: {cells}")
+    print(
+        f"probes scored: {len(results)}   skipped: {len(skipped)}   "
+        f"notes: {sum(g['notes'] for g in results.values())}   cells: {cells}"
+    )
     for name, why in skipped:
         print(f"  skip {name}: {why}")
     if not cells:
         print("NOTHING WAS CLASSIFIED — this is not a clean result, it is no result")
         return 0
 
-    print(f"\n{'term':8s} {'cells':>7s} " + " ".join(f"{o:>9s}" for o in OUTCOMES)
-          + f" {'capped':>8s} {'skipped':>8s}")
+    print(
+        f"\n{'term':8s} {'cells':>7s} "
+        + " ".join(f"{o:>9s}" for o in OUTCOMES)
+        + f" {'capped':>8s} {'skipped':>8s}"
+    )
     for term in sorted(grand, key=lambda t: -sum(grand[t].values())):
         counts = grand[term]
         total = sum(counts.values())
         capped = counts["clipped"] + counts["absent"]
         measurable = total - counts["skipped"]
-        print(f"{term:8s} {total:7d} "
-              + " ".join(f"{counts[o]:9d}" for o in OUTCOMES)
-              + f" {100.0 * capped / measurable if measurable else 0.0:7.1f}%"
-              + f" {100.0 * counts['skipped'] / total:7.1f}%")
+        print(
+            f"{term:8s} {total:7d} "
+            + " ".join(f"{counts[o]:9d}" for o in OUTCOMES)
+            + f" {100.0 * capped / measurable if measurable else 0.0:7.1f}%"
+            + f" {100.0 * counts['skipped'] / total:7.1f}%"
+        )
 
     # A term with no comparison behind it, per probe. Both ends are reported
     # together because they are the same blindness: the number is not a
     # measurement, and which direction it lies in depends only on which of the
     # two reasons it had.
-    print("\nterms with no comparison behind them, by probe "
-          "(w = a fit on this probe would weight it):")
+    print(
+        "\nterms with no comparison behind them, by probe "
+        "(w = a fit on this probe would weight it):"
+    )
     found = 0
     for name, got in sorted(results.items()):
         for term, counts in sorted(got["cells"].items()):
@@ -241,15 +257,27 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             found += 1
             mark = "w" if term in got["weighted"] else " "
-            reason = ("the reference offered no cell" if counts["skipped"] == total
-                      else "every cell is a cap")
-            print(f"  {mark} {name:16s} {got['gm_name'][:22]:22s} {term:7s} "
-                  f"{total:4d} cells — {reason}")
+            reason = (
+                "the reference offered no cell"
+                if counts["skipped"] == total
+                else "every cell is a cap"
+            )
+            print(
+                f"  {mark} {name:16s} {got['gm_name'][:22]:22s} {term:7s} "
+                f"{total:4d} cells — {reason}"
+            )
     print(f"  {found} (probe, term) pairs" if found else "  none")
     if args.json:
-        Path(args.json).write_text(json.dumps(
-            {"probes": results, "skipped": skipped,
-             "totals": {t: dict(c) for t, c in grand.items()}}, indent=1))
+        Path(args.json).write_text(
+            json.dumps(
+                {
+                    "probes": results,
+                    "skipped": skipped,
+                    "totals": {t: dict(c) for t, c in grand.items()},
+                },
+                indent=1,
+            )
+        )
     return 0
 
 

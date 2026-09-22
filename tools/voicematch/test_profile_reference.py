@@ -23,9 +23,19 @@ def _audition_capture(cap_id: str, *, plugin: str = "") -> object:
     from bank import Capture
 
     raw = {"id": cap_id, "plugin": plugin} if plugin else {"id": cap_id}
-    return Capture(path=Path(f"{cap_id}.json"), id=cap_id, label=cap_id, program=0,
-                   bank=0, take_set="drums", timbres=(), dry=True, title=cap_id,
-                   source_class=None, raw=raw)
+    return Capture(
+        path=Path(f"{cap_id}.json"),
+        id=cap_id,
+        label=cap_id,
+        program=0,
+        bank=0,
+        take_set="drums",
+        timbres=(),
+        dry=True,
+        title=cap_id,
+        source_class=None,
+        raw=raw,
+    )
 
 
 def test_a_capture_that_can_render_no_reference_does_not_represent_the_page(tmp_path):
@@ -75,9 +85,16 @@ def test_a_voice_whose_captures_can_all_supply_one_is_left_in_policy_order(tmp_p
 
 def _hit(**kw) -> dict:
     """A measured percussion cell, with every field `agreement_row` reads."""
-    base = {"peak_dbfs": -10.0, "bands_db": [-20.0] * 8, "centroid_hz": 400.0,
-            "attack_ms": 5.0, "crest_db": 12.0, "band_decay_db_s": -40.0,
-            "decay_ms": 200.0, "decay_capped": False}
+    base = {
+        "peak_dbfs": -10.0,
+        "bands_db": [-20.0] * 8,
+        "centroid_hz": 400.0,
+        "attack_ms": 5.0,
+        "crest_db": 12.0,
+        "band_decay_db_s": -40.0,
+        "decay_ms": 200.0,
+        "decay_capped": False,
+    }
     return {**base, **kw}
 
 
@@ -119,8 +136,13 @@ def test_a_capped_decay_yields_no_ring_on_either_side():
 
 def test_a_melodic_cell_reports_the_percussion_dimensions_as_unmeasured():
     """They must come back None rather than raising, and count nothing."""
-    melodic = {"peak_dbfs": -10.0, "bands_db": [-20.0] * 8, "centroid_hz": 400.0,
-               "attack_ms": 5.0, "crest_db": 12.0}
+    melodic = {
+        "peak_dbfs": -10.0,
+        "bands_db": [-20.0] * 8,
+        "centroid_hz": 400.0,
+        "attack_ms": 5.0,
+        "crest_db": 12.0,
+    }
     row = profile_module.agreement_row(melodic, melodic)
     assert row["ring"] is None and row["band_decay"] is None
 

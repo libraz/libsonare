@@ -214,9 +214,11 @@ class Allowlist:
 
     def ratcheted_entries(self) -> list[tuple[str, str]]:
         """Entries in a section currently held at zero, as (scope, pattern)."""
-        return [(f"{section}.params", pattern)
-                for section in RATCHETED_SECTIONS
-                for pattern in getattr(self, section)]
+        return [
+            (f"{section}.params", pattern)
+            for section in RATCHETED_SECTIONS
+            for pattern in getattr(self, section)
+        ]
 
     # Each accessor below takes the verdict its caller reached and returns True
     # only for DIVERGED, so every consult site has to state what it compared
@@ -233,17 +235,13 @@ class Allowlist:
 
     def coverage_ok(self, key: str, surface: str, verdict: str, div: str = "") -> bool:
         self._counted("coverage")
-        return self._mark(
-            f"coverage.{surface}", key, self.coverage.get(surface, []), verdict, div
-        )
+        return self._mark(f"coverage.{surface}", key, self.coverage.get(surface, []), verdict, div)
 
     def input_naming_ok(self, key: str, verdict: str, div: str = "") -> bool:
         self._counted("input")
         return self._mark("input_naming.keys", key, self.input_naming, verdict, div)
 
-    def surface_only_ok(
-        self, key: str, surface: str, verdict: str, div: str = ""
-    ) -> bool:
+    def surface_only_ok(self, key: str, surface: str, verdict: str, div: str = "") -> bool:
         self._counted("coverage")
         scope = f"surface_only.{surface}"
         if self._mark(scope, key, self.surface_only.get(surface, []), verdict, div):
@@ -252,23 +250,15 @@ class Allowlist:
 
     def order_ok(self, key: str, surface: str, verdict: str, div: str = "") -> bool:
         self._counted("order")
-        return self._mark(
-            f"order.{surface}", key, self.order.get(surface, []), verdict, div
-        )
+        return self._mark(f"order.{surface}", key, self.order.get(surface, []), verdict, div)
 
     def default_ok(self, key: str, param: str, verdict: str, div: str = "") -> bool:
         self._counted("default")
-        return self._mark(
-            "default.params", f"{key}.{param}", self.default, verdict, div
-        )
+        return self._mark("default.params", f"{key}.{param}", self.default, verdict, div)
 
-    def core_default_ok(
-        self, key: str, param: str, verdict: str, div: str = ""
-    ) -> bool:
+    def core_default_ok(self, key: str, param: str, verdict: str, div: str = "") -> bool:
         self._counted("core_default")
-        return self._mark(
-            "core_default.params", f"{key}.{param}", self.core_default, verdict, div
-        )
+        return self._mark("core_default.params", f"{key}.{param}", self.core_default, verdict, div)
 
     def enum_ok(self, key: str, param: str, verdict: str, div: str = "") -> bool:
         self._counted("enum")
@@ -276,22 +266,16 @@ class Allowlist:
 
     def wasm_internal_ok(self, name: str, verdict: str, div: str = "") -> bool:
         self._counted("wasm_internal")
-        return self._mark(
-            "wasm_internal.names", name, self.wasm_internal, verdict, div
-        )
+        return self._mark("wasm_internal.names", name, self.wasm_internal, verdict, div)
 
     def record_ok(self, key: str, surface: str, verdict: str, div: str = "") -> bool:
         self._counted("record")
         scope = f"record.records.{surface}"
-        return self._mark(
-            scope, key, self.record.get(surface, []), verdict, div
-        ) or self._mark(
+        return self._mark(scope, key, self.record.get(surface, []), verdict, div) or self._mark(
             "record.records.any", key, self.record.get("any", []), verdict, div
         )
 
-    def record_extra_ok(
-        self, key: str, surface: str, verdict: str, div: str = ""
-    ) -> bool:
+    def record_extra_ok(self, key: str, surface: str, verdict: str, div: str = "") -> bool:
         """True when EXTRA fields on this record are expected on ``surface``.
 
         Missing C fields on the same record still report — this is deliberately
@@ -309,13 +293,9 @@ class Allowlist:
             div,
         )
 
-    def record_field_ok(
-        self, key: str, field_name: str, verdict: str, div: str = ""
-    ) -> bool:
+    def record_field_ok(self, key: str, field_name: str, verdict: str, div: str = "") -> bool:
         self._counted("record")
-        return self._mark(
-            "record.fields", f"{key}.{field_name}", self.record_fields, verdict, div
-        )
+        return self._mark("record.fields", f"{key}.{field_name}", self.record_fields, verdict, div)
 
 
 def load(path: Path) -> Allowlist:
@@ -331,12 +311,9 @@ def load(path: Path) -> Allowlist:
         enum=list(data.get("enum", {}).get("params", [])),
         input_naming=list(data.get("input_naming", {}).get("keys", [])),
         wasm_internal=list(data.get("wasm_internal", {}).get("names", [])),
-        record={
-            k: list(v) for k, v in data.get("record", {}).get("records", {}).items()
-        },
+        record={k: list(v) for k, v in data.get("record", {}).get("records", {}).items()},
         record_extra={
-            k: list(v)
-            for k, v in data.get("record", {}).get("extra_fields", {}).items()
+            k: list(v) for k, v in data.get("record", {}).get("extra_fields", {}).items()
         },
         record_fields=list(data.get("record", {}).get("fields", [])),
         input_roles=list(data.get("tuning", {}).get("input_roles", [])),

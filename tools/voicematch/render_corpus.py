@@ -144,7 +144,13 @@ def _harmonic_count(mono: np.ndarray, sr: int, t: float) -> int:
     for i in range(2, len(db) - 2):
         if freqs[i] > 8000:
             break
-        if db[i] > -50 and db[i] > db[i - 1] and db[i] >= db[i + 1] and db[i] > db[i - 2] and db[i] >= db[i + 2]:
+        if (
+            db[i] > -50
+            and db[i] > db[i - 1]
+            and db[i] >= db[i + 1]
+            and db[i] > db[i - 2]
+            and db[i] >= db[i + 2]
+        ):
             peaks += 1
     return peaks
 

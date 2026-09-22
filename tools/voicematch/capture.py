@@ -142,10 +142,10 @@ def model_rig(rig: str) -> bool:
 #: it is a room, and a room is measured and convolved onto the model rather than
 #: refused (`src/midi/synth/docs/voicing.md`).
 RIG_CAPABLE_PROGRAMS = frozenset(
-    {4, 5, 7}              # electric pianos and the clavinet, played through an amp
-    | {16, 17, 18}         # drawbar, percussive and rock organ, through a rotary cabinet
-    | set(range(26, 32))   # electric guitars, jazz through harmonics
-    | set(range(33, 38))   # electric basses, fingered through slap
+    {4, 5, 7}  # electric pianos and the clavinet, played through an amp
+    | {16, 17, 18}  # drawbar, percussive and rock organ, through a rotary cabinet
+    | set(range(26, 32))  # electric guitars, jazz through harmonics
+    | set(range(33, 38))  # electric basses, fingered through slap
 )
 
 
@@ -181,9 +181,7 @@ def merge_overlay(cfg: dict, overlay: dict) -> dict:
         return cfg
     timbres = {t["id"]: dict(t) for t in overlay.get("timbres", [])}
     merged = {**cfg, **{k: v for k, v in overlay.items() if k != "timbres"}}
-    merged["timbres"] = [
-        {**t, **timbres.get(t["id"], {})} for t in cfg.get("timbres", [])
-    ]
+    merged["timbres"] = [{**t, **timbres.get(t["id"], {})} for t in cfg.get("timbres", [])]
     return merged
 
 
@@ -239,8 +237,7 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("rig", RIG_UNCLASSIFIED)
     if cfg["rig"] not in RIG_VALUES:
         raise ValueError(
-            f"{cfg.get('id', path.name)}: rig is one of {', '.join(RIG_VALUES)}, "
-            f"not {cfg['rig']!r}"
+            f"{cfg.get('id', path.name)}: rig is one of {', '.join(RIG_VALUES)}, not {cfg['rig']!r}"
         )
     # And whether it carries a room, which `dry` cannot answer either (see
     # ROOM_VALUES). `none` is what stops `profile.py measure` recording a space
@@ -280,8 +277,9 @@ def load_config(path: Path) -> dict:
             )
         # A grid note this timbre cannot sound is refused here rather than at the
         # render, which is hours in and one note at a time.
-        unreachable = [n for n in cfg.get("notes") or ()
-                       if int(n) not in {sounding for sounding, _ in mapped}]
+        unreachable = [
+            n for n in cfg.get("notes") or () if int(n) not in {sounding for sounding, _ in mapped}
+        ]
         if mapped and unreachable:
             raise ValueError(
                 f"{cfg.get('id', path.name)}: timbre {timbre.get('id', '?')!r} has no "
@@ -401,8 +399,9 @@ def note_groups(cfg: dict) -> dict[str, tuple[int, ...]]:
     normal case, and gives a fit with no kit relations rather than an error:
     only a capture whose families were identified in its own rows carries one.
     """
-    return {str(name): tuple(int(n) for n in notes)
-            for name, notes in (cfg.get("groups") or {}).items()}
+    return {
+        str(name): tuple(int(n) for n in notes) for name, notes in (cfg.get("groups") or {}).items()
+    }
 
 
 def slot_channel(timbre: dict) -> int:
@@ -507,34 +506,54 @@ def config_sends(cfg: dict) -> tuple[int, int, int] | None:
     return tuple(int(v) for v in sends)  # type: ignore[return-value]
 
 
-def _note_argv(source: AuSource, out: Path, note: int, velocity: int, gate_ms: int,
-               *, sends: tuple[int, int, int] | None = None) -> list[str]:
+def _note_argv(
+    source: AuSource,
+    out: Path,
+    note: int,
+    velocity: int,
+    gate_ms: int,
+    *,
+    sends: tuple[int, int, int] | None = None,
+) -> list[str]:
     if sends is not None or source.keyswitch:
         # A file supplies its own channel, and aubounce refuses `--channel`
         # beside `--midi` rather than dropping it, so the slot goes in here.
         midi = out.with_suffix(".mid")
         midi.parent.mkdir(parents=True, exist_ok=True)
-        notes = with_keyswitches(
-            source, [Note(source.key(note), velocity, 0.0, gate_ms / 1000.0)])
-        midi.write_bytes(write_smf(
-            notes, program=-1, channel=source.channel - 1,
-            # A capture that declares no sends took its reference through the
-            # note arguments, which write no controllers at all. `write_smf`
-            # zeroes all three by default, so a key switch alone would silently
-            # add a dry command to a render that never had one and stop being
-            # comparable with the rows captured beside it.
-            sends=sends if sends is not None else (None, None, None),
-        ))
+        notes = with_keyswitches(source, [Note(source.key(note), velocity, 0.0, gate_ms / 1000.0)])
+        midi.write_bytes(
+            write_smf(
+                notes,
+                program=-1,
+                channel=source.channel - 1,
+                # A capture that declares no sends took its reference through the
+                # note arguments, which write no controllers at all. `write_smf`
+                # zeroes all three by default, so a key switch alone would silently
+                # add a dry command to a render that never had one and stop being
+                # comparable with the rows captured beside it.
+                sends=sends if sends is not None else (None, None, None),
+            )
+        )
         return source.argv(out, midi=midi)
     argv = source.argv(out)
     # `argv` builds a render with no notes in it; a single note is what a
     # calibration probe needs and what the corpus grid is made of.
-    return argv[:3] + ["--note", str(source.key(note)), "--velocity", str(velocity),
-                       "--gate-ms", str(gate_ms)] + argv[3:]
+    return (
+        argv[:3]
+        + ["--note", str(source.key(note)), "--velocity", str(velocity), "--gate-ms", str(gate_ms)]
+        + argv[3:]
+    )
 
 
-def _probe(source: AuSource, out: Path, note: int, velocity: int, gate_ms: int,
-           *, sends: tuple[int, int, int] | None = None) -> dict:
+def _probe(
+    source: AuSource,
+    out: Path,
+    note: int,
+    velocity: int,
+    gate_ms: int,
+    *,
+    sends: tuple[int, int, int] | None = None,
+) -> dict:
     """One calibration render. Returns aubounce's summary, or the refusal as data."""
     argv = _note_argv(source, out, note, velocity, gate_ms, sends=sends)
     started = time.monotonic()
@@ -581,12 +600,25 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
     print("== real time ==", file=sys.stderr)
     rt_rows = []
     for realtime in (True, False):
-        s = _probe(replace(base, realtime=realtime, settle_ms=max(4000, base.settle_ms)),
-                   scratch / f"rt_{realtime}.wav", note, velocity, gate_ms, sends=sends)
-        rt_rows.append({"realtime": realtime, **{k: s.get(k) for k in
-                                                 ("peak", "dropout_ms", "seconds", "wall_s", "error")}})
-        print(f"  realtime={realtime!s:5s} peak={s.get('peak', 0):.4f} "
-              f"dropout={s.get('dropout_ms', '?')}ms wall={s.get('wall_s', 0):.1f}s", file=sys.stderr)
+        s = _probe(
+            replace(base, realtime=realtime, settle_ms=max(4000, base.settle_ms)),
+            scratch / f"rt_{realtime}.wav",
+            note,
+            velocity,
+            gate_ms,
+            sends=sends,
+        )
+        rt_rows.append(
+            {
+                "realtime": realtime,
+                **{k: s.get(k) for k in ("peak", "dropout_ms", "seconds", "wall_s", "error")},
+            }
+        )
+        print(
+            f"  realtime={realtime!s:5s} peak={s.get('peak', 0):.4f} "
+            f"dropout={s.get('dropout_ms', '?')}ms wall={s.get('wall_s', 0):.1f}s",
+            file=sys.stderr,
+        )
     report["realtime"] = rt_rows
     realtime_required = bool(next(r for r in rt_rows if not r["realtime"])["dropout_ms"])
     report["realtime_required"] = realtime_required
@@ -620,14 +652,30 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
         quiet = reference_peak > 0.0 and peak < reference_peak * SETTLE_PEAK_RATIO
         late = onset is not None and onset > float(src.preroll_ms) + slack_ms
         ok = peak >= src.min_peak and not drop and not quiet and not late
-        why = ("ok" if ok else
-               "SILENT" if peak < src.min_peak else
-               "DROPOUT" if drop else
-               f"QUIET ({peak / reference_peak:.2f}x the settled peak)" if quiet else
-               f"LATE ({onset:.0f} ms)" if late else "not ok")
-        settle_rows.append({"settle_ms": ms, "peak": peak, "dropout_ms": drop,
-                            "onset_ms": None if onset is None else round(onset, 2),
-                            "seconds": s.get("seconds"), "wall_s": s.get("wall_s"), "ok": ok})
+        why = (
+            "ok"
+            if ok
+            else "SILENT"
+            if peak < src.min_peak
+            else "DROPOUT"
+            if drop
+            else f"QUIET ({peak / reference_peak:.2f}x the settled peak)"
+            if quiet
+            else f"LATE ({onset:.0f} ms)"
+            if late
+            else "not ok"
+        )
+        settle_rows.append(
+            {
+                "settle_ms": ms,
+                "peak": peak,
+                "dropout_ms": drop,
+                "onset_ms": None if onset is None else round(onset, 2),
+                "seconds": s.get("seconds"),
+                "wall_s": s.get("wall_s"),
+                "ok": ok,
+            }
+        )
         print(f"  settle={ms:6d} peak={peak:.4f} dropout={drop}ms -> {why}", file=sys.stderr)
         return ok
 
@@ -665,8 +713,7 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
         wb, _ = read_wav(scratch / "det_b.wav")
         same = wa.shape == wb.shape and bool(np.array_equal(wa, wb))
     report["deterministic"] = same
-    report["determinism"] = {"a": a.get("peak"), "b": b.get("peak"),
-                             "identical_samples": same}
+    report["determinism"] = {"a": a.get("peak"), "b": b.get("peak"), "identical_samples": same}
     print(f"  two renders identical: {same}", file=sys.stderr)
 
     # 4. Dryness. A reference with a room in it makes every timbre metric lie in
@@ -682,8 +729,10 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
         room = estimate_room(audio, sr, [(on, on + gate_ms / 1000.0)])
         rt60 = float(getattr(room, "rt60_s", 0.0) or 0.0)
         report["room"] = {"rt60_s": rt60, "hf_ratio": float(getattr(room, "hf_ratio", 0.0) or 0.0)}
-        print(f"  measured RT60 {rt60:.2f}s "
-              f"({'dry' if rt60 < 0.35 else 'A ROOM IS IN THE CAPTURE'})", file=sys.stderr)
+        print(
+            f"  measured RT60 {rt60:.2f}s ({'dry' if rt60 < 0.35 else 'A ROOM IS IN THE CAPTURE'})",
+            file=sys.stderr,
+        )
     except Exception as exc:  # noqa: BLE001 -- room measurement is a report, never a gate
         report["room"] = {"error": f"{type(exc).__name__}: {exc}"}
 
@@ -692,15 +741,19 @@ def calibrate(cfg: dict, out: Path, *, note: int, velocity: int, verbose: bool) 
     audio, sr = read_wav(scratch / "det_a.wav")
     mono = audio.mean(axis=1)
     report["reference_level"] = {
-        "note": note, "velocity": velocity,
+        "note": note,
+        "velocity": velocity,
         "peak_dbfs": round(float(20 * np.log10(max(np.abs(mono).max(), 1e-12))), 2),
-        "rms_dbfs": round(float(20 * np.log10(max(np.sqrt((mono ** 2).mean()), 1e-12))), 2),
+        "rms_dbfs": round(float(20 * np.log10(max(np.sqrt((mono**2).mean()), 1e-12))), 2),
     }
 
     _write(out / "calibration.json", report)
-    print(f"\nrecipe: --realtime={'required' if realtime_required else 'optional'} "
-          f"--settle-ms {report['settle_recommended_ms']} "
-          f"(minimum measured {report['settle_min_ms']})", file=sys.stderr)
+    print(
+        f"\nrecipe: --realtime={'required' if realtime_required else 'optional'} "
+        f"--settle-ms {report['settle_recommended_ms']} "
+        f"(minimum measured {report['settle_min_ms']})",
+        file=sys.stderr,
+    )
     print(f"-> {out / 'calibration.json'}", file=sys.stderr)
     return report
 
@@ -728,8 +781,9 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         prior = json.loads(manifest_path.read_text())
         done = {r["id"]: r for r in prior.get("renders", [])}
         ours = {t["id"] for t in cfg["timbres"]}
-        foreign = [t for t in prior.get("timbres", [])
-                   if isinstance(t, dict) and t.get("id") not in ours]
+        foreign = [
+            t for t in prior.get("timbres", []) if isinstance(t, dict) and t.get("id") not in ours
+        ]
 
     # Loudest velocity of a note first, so every quieter render of that note can
     # be checked against a level that is known to have loaded.
@@ -772,10 +826,15 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         "rig": cfg["rig"],
     }
 
-    todo = [j for j in jobs if _job_id(*j) not in done or not (out / done[_job_id(*j)]["path"]).exists()]
+    todo = [
+        j for j in jobs if _job_id(*j) not in done or not (out / done[_job_id(*j)]["path"]).exists()
+    ]
     per = (cfg["settle_ms"] / 1000.0) + (cfg["gate_ms"] / 1000.0) + 2.5
-    print(f"{len(todo)} renders to go of {len(jobs)} "
-          f"(~{per:.0f}s each, ~{len(todo) * per / 60:.0f} min)", file=sys.stderr)
+    print(
+        f"{len(todo)} renders to go of {len(jobs)} "
+        f"(~{per:.0f}s each, ~{len(todo) * per / 60:.0f} min)",
+        file=sys.stderr,
+    )
 
     # The reference level per (timbre, note): its loudest velocity, from this run
     # or from a previous one that is already in the manifest.
@@ -792,7 +851,12 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         src = source_for(cfg, timbre, tail=tail_for(cfg, note))
         try:
             summary = _render_note(
-                src, out / rel, note, vel, int(cfg["gate_ms"]), sends=config_sends(cfg),
+                src,
+                out / rel,
+                note,
+                vel,
+                int(cfg["gate_ms"]),
+                sends=config_sends(cfg),
                 floor_peak=loudest.get((timbre["id"], note), 0.0),
                 preroll_ms=float(cfg["preroll_ms"]),
                 onset_slack_ms=float(cfg["onset_slack_ms"]),
@@ -802,8 +866,13 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
                 loudest.get((timbre["id"], note), 0.0), float(summary["peak"])
             )
             done[jid] = {
-                "id": jid, "timbre": timbre["id"], "note": note, "velocity": vel,
-                "path": str(rel), "peak": summary["peak"], "seconds": summary["seconds"],
+                "id": jid,
+                "timbre": timbre["id"],
+                "note": note,
+                "velocity": vel,
+                "path": str(rel),
+                "peak": summary["peak"],
+                "seconds": summary["seconds"],
                 "preroll_peak": summary.get("preroll_peak", 0.0),
                 "onset_ms": summary.get("onset_ms"),
                 "attempts": summary.get("attempts", 1),
@@ -815,8 +884,11 @@ def corpus(cfg: dict, out: Path, *, resume: bool, limit: int, verbose: bool) -> 
         else:
             elapsed = time.monotonic() - started
             eta = elapsed / i * (len(todo) - i)
-            print(f"[{i}/{len(todo)}] {jid} peak {summary['peak']:.4f} "
-                  f"({summary['seconds']:.1f}s)  eta {eta / 60:.0f}m", file=sys.stderr)
+            print(
+                f"[{i}/{len(todo)}] {jid} peak {summary['peak']:.4f} "
+                f"({summary['seconds']:.1f}s)  eta {eta / 60:.0f}m",
+                file=sys.stderr,
+            )
         # Written every time, so an interrupted run is an exact record rather
         # than an approximate one.
         _write(manifest_path, {**header, "renders": sorted(done.values(), key=lambda r: r["id"])})
@@ -936,15 +1008,24 @@ def _tone_share(path: Path, note: int, sr: int, preroll_ms: float) -> float | No
     if audio.size == 0:
         return None
     rate = int(file_sr or sr)
-    mono = to_mono(audio)[int(rate * preroll_ms / 1000.0):]
+    mono = to_mono(audio)[int(rate * preroll_ms / 1000.0) :]
     return harmonic_share(mono, rate, midi_to_hz(note))
 
 
-def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
-                 *, floor_peak: float, preroll_ms: float = 0.0,
-                 onset_slack_ms: float = ONSET_SLACK_MS,
-                 sample_rate: int = 48000, attempts: int = 5,
-                 sends: tuple[int, int, int] | None = None) -> dict:
+def _render_note(
+    src: AuSource,
+    out: Path,
+    note: int,
+    vel: int,
+    gate_ms: int,
+    *,
+    floor_peak: float,
+    preroll_ms: float = 0.0,
+    onset_slack_ms: float = ONSET_SLACK_MS,
+    sample_rate: int = 48000,
+    attempts: int = 5,
+    sends: tuple[int, int, int] | None = None,
+) -> dict:
     """One corpus render, retried while it comes back too quiet to be the note.
 
     The failure this catches is a race inside the plugin rather than a setting:
@@ -971,7 +1052,9 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
     for attempt in range(attempts):
         proc = subprocess.run(
             _note_argv(src, out, note, vel, gate_ms, sends=sends),
-            capture_output=True, check=False, text=True,
+            capture_output=True,
+            check=False,
+            text=True,
         )
         if proc.returncode != 0:
             last = proc.stderr.strip()[:400]
@@ -995,8 +1078,10 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
             share = _tone_share(out, note, sample_rate, preroll_ms)
             if share is None or share < QUIET_TONE_SHARE:
                 heard = "no tone at all" if share is None else f"a tone share of {share:.3f}"
-                last = (f"peak {peak:.5f} against a floor of {floor:.5f} and {heard}: "
-                        f"the samples did not arrive")
+                last = (
+                    f"peak {peak:.5f} against a floor of {floor:.5f} and {heard}: "
+                    f"the samples did not arrive"
+                )
                 continue
             summary["quiet_tone_share"] = round(share, 4)
         onset = _onset_ms(out, sample_rate)
@@ -1004,8 +1089,10 @@ def _render_note(src: AuSource, out: Path, note: int, vel: int, gate_ms: int,
         if onset is not None and onset > preroll_ms + onset_slack_ms:
             # See ONSET_SLACK_MS. Loud enough to pass the ratio above and not
             # the note: retried rather than recorded.
-            last = (f"the render begins {onset:.0f} ms in against a {preroll_ms:.0f} ms "
-                    f"preroll: this is not the note")
+            last = (
+                f"the render begins {onset:.0f} ms in against a {preroll_ms:.0f} ms "
+                f"preroll: this is not the note"
+            )
             continue
         if src.keyswitch and onset is not None and onset < preroll_ms - onset_slack_ms:
             # A key switch is supposed to select rather than sound, and a library
@@ -1041,8 +1128,15 @@ PITCH_PROBE_NOTES = (48, 60, 72)
 MELODIC_SHARE = 0.5
 
 
-def _pitch_probe(src: AuSource, scratch: Path, channel: int, velocity: int,
-                 gate_ms: int, sample_rate: int, onset_slack_ms: float) -> dict:
+def _pitch_probe(
+    src: AuSource,
+    scratch: Path,
+    channel: int,
+    velocity: int,
+    gate_ms: int,
+    sample_rate: int,
+    onset_slack_ms: float,
+) -> dict:
     """Stage one: does this slot answer a note number with that note's pitch?
 
     The discriminator is deliberately not a fact about drums. `harmonic_share`
@@ -1060,9 +1154,17 @@ def _pitch_probe(src: AuSource, scratch: Path, channel: int, velocity: int,
     for note in PITCH_PROBE_NOTES:
         wav = scratch / f"ch{channel:02d}-pitch-{note}.wav"
         try:
-            _render_note(replace(src, channel=channel), wav, note, velocity, gate_ms,
-                         floor_peak=0.0, preroll_ms=float(src.preroll_ms),
-                         onset_slack_ms=onset_slack_ms, sample_rate=sample_rate)
+            _render_note(
+                replace(src, channel=channel),
+                wav,
+                note,
+                velocity,
+                gate_ms,
+                floor_peak=0.0,
+                preroll_ms=float(src.preroll_ms),
+                onset_slack_ms=onset_slack_ms,
+                sample_rate=sample_rate,
+            )
         except AuRenderError as exc:
             return {"error": str(exc)[:200]}
         audio, sr = read_wav(wav)
@@ -1076,8 +1178,11 @@ def _pitch_probe(src: AuSource, scratch: Path, channel: int, velocity: int,
         # decides.
         return {"share": [], "median_share": None, "melodic": False}
     median = float(np.median(shares))
-    return {"share": [round(s, 3) for s in shares], "median_share": round(median, 3),
-            "melodic": median >= MELODIC_SHARE}
+    return {
+        "share": [round(s, 3) for s in shares],
+        "median_share": round(median, 3),
+        "melodic": median >= MELODIC_SHARE,
+    }
 
 
 def _reference_bands(ident: str) -> tuple[dict[tuple[int, int], list[float]], float | None]:
@@ -1091,8 +1196,10 @@ def _reference_bands(ident: str) -> tuple[dict[tuple[int, int], list[float]], fl
     if not path.exists():
         return {}, None
     profile = json.loads(path.read_text())
-    rows = {(int(r["note"]), int(r["velocity"])): r.get("bands_db") or []
-            for r in profile.get("rows") or []}
+    rows = {
+        (int(r["note"]), int(r["velocity"])): r.get("bands_db") or []
+        for r in profile.get("rows") or []
+    }
     return rows, (profile.get("capture") or {}).get("band_edge_hz")
 
 
@@ -1110,11 +1217,18 @@ def holds_a_whole_kit(distinct_peak_bands: int, notes_measured: int) -> bool:
     return distinct_peak_bands >= max(3, notes_measured // 2)
 
 
-def _kit_likeness(src: AuSource, scratch: Path, channel: int, notes: tuple[int, ...],
-                  velocity: int, gate_ms: int, sample_rate: int,
-                  onset_slack_ms: float,
-                  reference: dict[tuple[int, int], list[float]],
-                  band_edge: float | None) -> dict:
+def _kit_likeness(
+    src: AuSource,
+    scratch: Path,
+    channel: int,
+    notes: tuple[int, ...],
+    velocity: int,
+    gate_ms: int,
+    sample_rate: int,
+    onset_slack_ms: float,
+    reference: dict[tuple[int, int], list[float]],
+    band_edge: float | None,
+) -> dict:
     """Stage two: how far this slot's diagnostic hits sit from the known kit's.
 
     Reported as the median absolute band-profile difference in decibels, over
@@ -1138,27 +1252,43 @@ def _kit_likeness(src: AuSource, scratch: Path, channel: int, notes: tuple[int, 
             continue
         wav = scratch / f"ch{channel:02d}-kit-{note}.wav"
         try:
-            _render_note(replace(src, channel=channel), wav, note, velocity, gate_ms,
-                         floor_peak=0.0, preroll_ms=float(src.preroll_ms),
-                         onset_slack_ms=onset_slack_ms, sample_rate=sample_rate)
+            _render_note(
+                replace(src, channel=channel),
+                wav,
+                note,
+                velocity,
+                gate_ms,
+                floor_peak=0.0,
+                preroll_ms=float(src.preroll_ms),
+                onset_slack_ms=onset_slack_ms,
+                sample_rate=sample_rate,
+            )
         except AuRenderError as exc:
             per_note[note] = {"error": str(exc)[:120]}
             continue
         audio, sr = read_wav(wav)
         mono = to_mono(audio)
-        hit = analyze_hit(mono, sr, Note(note, velocity, float(src.preroll_ms) / 1000.0,
-                                         gate_ms / 1000.0),
-                          len(mono) / sr, max_band_hz=band_edge)
+        hit = analyze_hit(
+            mono,
+            sr,
+            Note(note, velocity, float(src.preroll_ms) / 1000.0, gate_ms / 1000.0),
+            len(mono) / sr,
+            max_band_hz=band_edge,
+        )
         delta = float(np.median(np.abs(np.asarray(hit.bands_db) - np.asarray(ref))))
         distances.append(delta)
-        per_note[note] = {"peak_band_hz": hit.peak_band_hz,
-                          "attack_ms": round(hit.attack_ms, 2),
-                          "band_delta_db": round(delta, 2)}
+        per_note[note] = {
+            "peak_band_hz": hit.peak_band_hz,
+            "attack_ms": round(hit.attack_ms, 2),
+            "band_delta_db": round(delta, 2),
+        }
     bands = [e["peak_band_hz"] for e in per_note.values() if e.get("peak_band_hz")]
-    return {"notes": per_note,
-            "band_delta_db": round(float(np.median(distances)), 2) if distances else None,
-            "distinct_peak_bands": len(set(bands)),
-            "notes_measured": len(bands)}
+    return {
+        "notes": per_note,
+        "band_delta_db": round(float(np.median(distances)), 2) if distances else None,
+        "distinct_peak_bands": len(set(bands)),
+        "notes_measured": len(bands),
+    }
 
 
 def parse_channels(spec: str) -> tuple[int, ...]:
@@ -1181,8 +1311,9 @@ def parse_channels(spec: str) -> tuple[int, ...]:
     return tuple(ordered)
 
 
-def identify(cfg: dict, out: Path, *, channels: tuple[int, ...], velocity: int,
-             verbose: bool) -> int:
+def identify(
+    cfg: dict, out: Path, *, channels: tuple[int, ...], velocity: int, verbose: bool
+) -> int:
     """Say what is loaded in each slot of a multitimbral rack.
 
     A rack answers on sixteen channels and publishes no slot names, so the only
@@ -1210,20 +1341,36 @@ def identify(cfg: dict, out: Path, *, channels: tuple[int, ...], velocity: int,
     # capture already recorded which keys are different instruments.
     diagnostic = tuple(sorted({notes[0] for notes in groups.values() if notes}))
 
-    report: dict = {"config": cfg["_path"], "plugin": cfg["plugin"],
-                    "velocity": velocity, "band_edge_hz": band_edge,
-                    "pitch_probe": list(PITCH_PROBE_NOTES),
-                    "diagnostic_notes": list(diagnostic), "channels": {}}
+    report: dict = {
+        "config": cfg["_path"],
+        "plugin": cfg["plugin"],
+        "velocity": velocity,
+        "band_edge_hz": band_edge,
+        "pitch_probe": list(PITCH_PROBE_NOTES),
+        "diagnostic_notes": list(diagnostic),
+        "channels": {},
+    }
     for channel in probe:
         control = channel in claimed
         if verbose:
             print(f"  ch {channel:2d}{' (control)' if control else ''}", file=sys.stderr)
-        entry: dict = {"control": control, "pitch": _pitch_probe(
-            base, scratch, channel, velocity, gate_ms, sample_rate, slack_ms)}
+        entry: dict = {
+            "control": control,
+            "pitch": _pitch_probe(base, scratch, channel, velocity, gate_ms, sample_rate, slack_ms),
+        }
         if not entry["pitch"].get("melodic") and diagnostic and reference:
-            entry["kit"] = _kit_likeness(base, scratch, channel, diagnostic, velocity,
-                                         gate_ms, sample_rate, slack_ms, reference,
-                                         band_edge)
+            entry["kit"] = _kit_likeness(
+                base,
+                scratch,
+                channel,
+                diagnostic,
+                velocity,
+                gate_ms,
+                sample_rate,
+                slack_ms,
+                reference,
+                band_edge,
+            )
         report["channels"][str(channel)] = entry
 
     _write(scratch / "report.json", report)
@@ -1244,13 +1391,20 @@ def identify(cfg: dict, out: Path, *, channels: tuple[int, ...], velocity: int,
         delta = kit.get("band_delta_db")
         measured = kit.get("notes_measured") or 0
         distinct = kit.get("distinct_peak_bands") or 0
-        layout = "-" if not measured else (
-            f"{distinct}/{measured} bands"
-            f"{'  a kit' if holds_a_whole_kit(distinct, measured) else '  ONE INSTRUMENT'}")
-        print(f"  {channel:2d}   {'-' if share is None else f'{share:10.3f}'}"
-              f"   {verdict:<14} {'-' if delta is None else f'{delta:6.2f} dB'}"
-              f"   {layout}"
-              f"{'   <- the kit already captured' if e['control'] else ''}")
+        layout = (
+            "-"
+            if not measured
+            else (
+                f"{distinct}/{measured} bands"
+                f"{'  a kit' if holds_a_whole_kit(distinct, measured) else '  ONE INSTRUMENT'}"
+            )
+        )
+        print(
+            f"  {channel:2d}   {'-' if share is None else f'{share:10.3f}'}"
+            f"   {verdict:<14} {'-' if delta is None else f'{delta:6.2f} dB'}"
+            f"   {layout}"
+            f"{'   <- the kit already captured' if e['control'] else ''}"
+        )
     print(f"\n  {scratch / 'report.json'}")
     return 0
 
@@ -1295,8 +1449,10 @@ def verify(out: Path) -> int:
         onset = _onset_ms(path, sr)
         slack = float(manifest.get("onset_slack_ms", ONSET_SLACK_MS))
         if onset is not None and onset > manifest["preroll_ms"] + slack:
-            faults.append(f"{row['id']}: begins {onset:.0f} ms in, against a "
-                          f"{manifest['preroll_ms']:.0f} ms preroll — not the note")
+            faults.append(
+                f"{row['id']}: begins {onset:.0f} ms in, against a "
+                f"{manifest['preroll_ms']:.0f} ms preroll — not the note"
+            )
             continue
         rms = float(np.sqrt((mono[pre:] ** 2).mean()))
         levels.setdefault((row["timbre"], row["note"]), []).append((row["velocity"], rms))
@@ -1350,10 +1506,13 @@ def main() -> int:
     cor.add_argument("--limit", type=int, default=0, help="stop after this many renders")
 
     idf = sub.choices["identify"]
-    idf.add_argument("--channels", default="1-16",
-                     help="channels to probe, as `1-8,11-13,15,16` (default: all sixteen). "
-                          "The capture's own timbre channels are the control and are "
-                          "worth leaving in")
+    idf.add_argument(
+        "--channels",
+        default="1-16",
+        help="channels to probe, as `1-8,11-13,15,16` (default: all sixteen). "
+        "The capture's own timbre channels are the control and are "
+        "worth leaving in",
+    )
     idf.add_argument("--velocity", type=int, default=100)
 
     args = ap.parse_args()
@@ -1366,8 +1525,13 @@ def main() -> int:
     if args.cmd == "corpus":
         return corpus(cfg, out, resume=not args.no_resume, limit=args.limit, verbose=args.verbose)
     if args.cmd == "identify":
-        return identify(cfg, out, channels=parse_channels(args.channels),
-                        velocity=args.velocity, verbose=args.verbose)
+        return identify(
+            cfg,
+            out,
+            channels=parse_channels(args.channels),
+            velocity=args.velocity,
+            verbose=args.verbose,
+        )
     return verify(out)
 
 

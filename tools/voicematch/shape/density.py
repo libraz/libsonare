@@ -41,8 +41,15 @@ from __future__ import annotations
 import numpy as np
 
 #: Octave bands the count is reported in.
-DENSITY_BANDS = ((60, 125), (125, 250), (250, 500), (500, 1000),
-                 (1000, 2000), (2000, 4000), (4000, 8000))
+DENSITY_BANDS = (
+    (60, 125),
+    (125, 250),
+    (250, 500),
+    (500, 1000),
+    (1000, 2000),
+    (2000, 4000),
+    (4000, 8000),
+)
 #: dB a peak must stand over the local median to count as a resonance.
 PEAK_PROMINENCE_DB = 6.0
 #: Rayleigh's coefficient of variation, for the unsmoothed envelope only. This
@@ -55,15 +62,16 @@ TEXTURE_SNR_DB = 10.0
 
 
 def _fine_spectrum(sig, window, sr):
-    seg = np.asarray(sig[int(window[0] * sr):int(window[1] * sr)], dtype=np.float64)
+    seg = np.asarray(sig[int(window[0] * sr) : int(window[1] * sr)], dtype=np.float64)
     if len(seg) < 4096:
         return None, None
     sp = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2
     return np.fft.rfftfreq(len(seg), 1.0 / sr), sp
 
 
-def modal_density(sig, note, window=(2.5, 6.0), sr=48000, bands=DENSITY_BANDS,
-                  B=0.0, notch_cents=35.0, notch=True):
+def modal_density(
+    sig, note, window=(2.5, 6.0), sr=48000, bands=DENSITY_BANDS, B=0.0, notch_cents=35.0, notch=True
+):
     """Peaks per octave in the aftersound, with the played note's partials removed.
 
     The note's own partials are notched out rather than left in, because a
@@ -81,6 +89,7 @@ def modal_density(sig, note, window=(2.5, 6.0), sr=48000, bands=DENSITY_BANDS,
     not a way to get an unnotched count.
     """
     from .partials import note_hz, partial_hz
+
     fr, sp = _fine_spectrum(sig, window, sr)
     if fr is None:
         return {b: (0, 0.0) for b in bands}
@@ -105,7 +114,7 @@ def modal_density(sig, note, window=(2.5, 6.0), sr=48000, bands=DENSITY_BANDS,
         # otherwise decide how many peaks its quiet end is allowed to have.
         w = max(9, (len(band) // 24) | 1)
         pad = np.pad(band, w // 2, mode="edge")
-        local = np.array([np.median(pad[i:i + w]) for i in range(len(band))])
+        local = np.array([np.median(pad[i : i + w]) for i in range(len(band))])
         above = band > local + PEAK_PROMINENCE_DB
         # One peak per contiguous run, so a resonance a few bins wide is one
         # resonance and not the width of its own skirt.
@@ -125,7 +134,7 @@ def envelope_diffuseness(sig, band, window=(2.5, 6.0), sr=48000):
     because a band that holds almost no energy at all will produce a number and
     it will mean nothing -- check the band's level against the floor first.
     """
-    x = np.asarray(sig[int(window[0] * sr):int(window[1] * sr)], dtype=np.float64)
+    x = np.asarray(sig[int(window[0] * sr) : int(window[1] * sr)], dtype=np.float64)
     if len(x) < 4096:
         return float("nan")
     S = np.fft.rfft(x)
@@ -137,7 +146,7 @@ def envelope_diffuseness(sig, band, window=(2.5, 6.0), sr=48000):
     Y = np.fft.fft(y)
     h = np.zeros(n)
     h[0] = 1.0
-    h[1:(n + 1) // 2] = 2.0
+    h[1 : (n + 1) // 2] = 2.0
     if n % 2 == 0:
         h[n // 2] = 1.0
     env = np.abs(np.fft.ifft(Y * h))
@@ -165,8 +174,15 @@ def envelope_diffuseness(sig, band, window=(2.5, 6.0), sr=48000):
     return float(env.std() / mu)
 
 
-def recurrence(spectro, signals, notes, velocity, window=(2.5, 6.0),
-               prominence_db=PEAK_PROMINENCE_DB, scale: int = 0):
+def recurrence(
+    spectro,
+    signals,
+    notes,
+    velocity,
+    window=(2.5, 6.0),
+    prominence_db=PEAK_PROMINENCE_DB,
+    scale: int = 0,
+):
     """Per spectral row, the fraction of notes whose aftersound peaks there.
 
     What makes a bell is not a level, it is a coincidence: the same frequencies
@@ -201,6 +217,7 @@ def recurrence(spectro, signals, notes, velocity, window=(2.5, 6.0),
         harmonic_rows,
         note_hz,
     )
+
     hz = spectro.rows_hz(scale)
     hits = np.zeros(len(hz))
     seen = 0
@@ -214,11 +231,12 @@ def recurrence(spectro, signals, notes, velocity, window=(2.5, 6.0),
             continue
         col = S[:, c].mean(axis=1)
         f0 = note_hz(n)
-        hm = harmonic_rows(hz, f0, fit_inharmonicity(sig, f0, spectro.sample_rate),
-                           max_partial=RESOLVABLE_PARTIAL)
+        hm = harmonic_rows(
+            hz, f0, fit_inharmonicity(sig, f0, spectro.sample_rate), max_partial=RESOLVABLE_PARTIAL
+        )
         w = max(9, (len(col) // 24) | 1)
         pad = np.pad(col, w // 2, mode="edge")
-        local = np.array([np.median(pad[i:i + w]) for i in range(len(col))])
+        local = np.array([np.median(pad[i : i + w]) for i in range(len(col))])
         hits += ((col > local + prominence_db) & ~hm).astype(float)
         seen += 1
     return hz, (hits / seen if seen else hits)
@@ -253,8 +271,9 @@ def band_snr_db(sig, band, window=(2.5, 6.0), floor_window=(9.0, 10.0), sr=48000
     not the floor under a soft one, and a single figure for the corpus would
     understate it exactly where it does the most damage.
     """
+
     def p(win):
-        x = np.asarray(sig[int(win[0] * sr):int(win[1] * sr)], dtype=np.float64)
+        x = np.asarray(sig[int(win[0] * sr) : int(win[1] * sr)], dtype=np.float64)
         if len(x) < 256:
             return 0.0
         S = np.fft.rfft(x)
@@ -282,6 +301,5 @@ def diffuse_floor(band, window=(2.5, 6.0), sr=48000, seed=20240517):
     """
     rng = np.random.default_rng(seed)
     n = int((window[1] - window[0]) * sr)
-    vals = [envelope_diffuseness(rng.standard_normal(n), band, (0.0, n / sr), sr)
-            for _ in range(4)]
+    vals = [envelope_diffuseness(rng.standard_normal(n), band, (0.0, n / sr), sr) for _ in range(4)]
     return float(np.nanmean(vals))

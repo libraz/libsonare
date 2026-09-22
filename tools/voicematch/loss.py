@@ -142,8 +142,7 @@ SKELETON_MAX_S = 8.0
 # two are the prompt sound and the start of the aftersound; the third only has
 # frames to fit when the probe holds the note that long, and is what a
 # two-second window could never reach.
-SKELETON_BANDS = {"early_db_s": (0.08, 0.40), "late_db_s": (0.80, 1.80),
-                  "tail_db_s": (2.00, 6.00)}
+SKELETON_BANDS = {"early_db_s": (0.08, 0.40), "late_db_s": (0.80, 1.80), "tail_db_s": (2.00, 6.00)}
 
 # The envelope grid every band is fitted on, and the fewest frames a fit is
 # allowed to run on. Module constants rather than locals because the shortest
@@ -185,9 +184,7 @@ REFINE_POINTS = 41
 
 
 def _refine_grid(guess: float) -> np.ndarray:
-    return np.linspace(
-        guess * (1.0 - REFINE_SPAN), guess * (1.0 + REFINE_SPAN), REFINE_POINTS
-    )
+    return np.linspace(guess * (1.0 - REFINE_SPAN), guess * (1.0 + REFINE_SPAN), REFINE_POINTS)
 
 
 def _refine_partial_direct(ref_w: np.ndarray, t_ref: np.ndarray, guess: float) -> float:
@@ -291,7 +288,7 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> 
         freqs.append(_refine(guess))
 
     n_frames = (len(seg) - win_n) // hop
-    frames = np.lib.stride_tricks.sliding_window_view(seg, win_n)[:: hop][:n_frames]
+    frames = np.lib.stride_tricks.sliding_window_view(seg, win_n)[::hop][:n_frames]
     frames = frames * np.hanning(win_n)
     t_win = np.arange(win_n) / sr
     active = [f for f in freqs if f is not None]
@@ -337,14 +334,21 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> 
     init_db = [None if v is None else v - ref_db for v in init_db]
     return {"init_db": init_db, **slopes}
 
+
 # The spectral centroid is deliberately excluded from the loss: it depends on
 # the probe note set (register weighting) and has been an unreliable, noisy
 # signal in this harness. Match harmonic profile, intonation, and noise floor
 # instead.
 
 
-def probe_rows(mono: np.ndarray, pattern, sr: int, raw: np.ndarray | None = None,
-               max_band_hz: float | None = None, threads: int = 1) -> list[dict]:
+def probe_rows(
+    mono: np.ndarray,
+    pattern,
+    sr: int,
+    raw: np.ndarray | None = None,
+    max_band_hz: float | None = None,
+    threads: int = 1,
+) -> list[dict]:
     """Measure every analysis note of `pattern` with the metric set it calls for.
 
     A drum hit and a bowed note are both "one note of the probe", but nothing
@@ -378,10 +382,13 @@ def probe_rows(mono: np.ndarray, pattern, sr: int, raw: np.ndarray | None = None
     level up.
     """
     if pattern.percussive:
+
         def measure(note) -> dict:
-            return analyze_hit(mono, sr, note, analysis_window_end(pattern, note),
-                               max_band_hz=max_band_hz).to_dict()
+            return analyze_hit(
+                mono, sr, note, analysis_window_end(pattern, note), max_band_hz=max_band_hz
+            ).to_dict()
     else:
+
         def measure(note) -> dict:
             end = analysis_window_end(pattern, note)
             # Found once and shared, so nothing that reads the attack can
@@ -452,8 +459,7 @@ RESONANCE_MIN_NOTES = 2
 RESONANCE_RECURRENCE_FRACTION = 0.8
 
 
-def fixed_resonances(rows: list[dict], *,
-                     recurrence_only: bool = False) -> list[dict]:
+def fixed_resonances(rows: list[dict], *, recurrence_only: bool = False) -> list[dict]:
     """Attack peaks that recur across the probe's notes at a fixed frequency.
 
     A free resonance rung by the strike — an undamped filter, a fold-back, a
@@ -498,8 +504,7 @@ def fixed_resonances(rows: list[dict], *,
             if clear or recurrence_only:
                 peaks.append((float(freq), float(prom), note, not clear))
     if recurrence_only:
-        need = max(RESONANCE_MIN_NOTES,
-                   round(len(contributing) * RESONANCE_RECURRENCE_FRACTION))
+        need = max(RESONANCE_MIN_NOTES, round(len(contributing) * RESONANCE_RECURRENCE_FRACTION))
     else:
         need = RESONANCE_MIN_NOTES
     peaks.sort()
@@ -517,22 +522,28 @@ def fixed_resonances(rows: list[dict], *,
         # One note may contribute several bins of the same ring; the frequency
         # is the prominence-weighted centre so a broad shoulder does not drag it.
         weight = sum(p for _, p, _, _ in group)
-        out.append({
-            "hz": round(sum(f * p for f, p, _, _ in group) / weight, 1),
-            "prominence_db": round(weight / len(group), 1),
-            "notes": notes,
-            # How many of those notes it landed on a partial for. Under the
-            # default that is zero by construction; under `recurrence_only` it
-            # is the note to read the finding with.
-            "on_partial_notes": len({n for _, _, n, on in group if on}),
-        })
+        out.append(
+            {
+                "hz": round(sum(f * p for f, p, _, _ in group) / weight, 1),
+                "prominence_db": round(weight / len(group), 1),
+                "notes": notes,
+                # How many of those notes it landed on a partial for. Under the
+                # default that is zero by construction; under `recurrence_only` it
+                # is the note to read the finding with.
+                "on_partial_notes": len({n for _, _, n, on in group if on}),
+            }
+        )
     out.sort(key=lambda d: -d["prominence_db"])
     return out
 
 
 def loss_terms(
-    model_rows: list[dict], oracle_rows_: list[dict], *,
-    n_harm: int = HARM_REACH, mss: float = 0.0, audibility: bool = True,
+    model_rows: list[dict],
+    oracle_rows_: list[dict],
+    *,
+    n_harm: int = HARM_REACH,
+    mss: float = 0.0,
+    audibility: bool = True,
 ) -> dict[str, float] | None:
     """Per-term mean mismatch between the model and the oracle, unweighted.
 
@@ -595,8 +606,7 @@ def loss_terms(
     # cap standing in for one. See `CellCount`: the raw value of a term whose
     # cells all hit the cap is its worst, not its best, so none of the empty-set
     # guards above can see it and a reader cannot tell it from a real distance.
-    cells = {t: CellCount() for t in ("init", "slope", "tail", "hf", "lf",
-                                     "mod", "modes")}
+    cells = {t: CellCount() for t in ("init", "slope", "tail", "hf", "lf", "mod", "modes")}
     for m, o in zip(model_rows, oracle_rows_):
         pairs = list(zip(m["harmonics_db"][:n_harm], o["harmonics_db"][:n_harm]))
         available += max(0, len(pairs) - 1)
@@ -614,14 +624,16 @@ def loss_terms(
         # 50 dB under the loudest one in the same note in full.
         # A row that names neither a measured f0 nor a pitch has no frequency to
         # weight by, so it is weighted by level alone rather than by a guess.
-        f0_hz = m.get("f0_hz") or (midi_to_hz(m["note"]) if m.get("note") is not None
-                                   else 0.0)
+        f0_hz = m.get("f0_hz") or (midi_to_hz(m["note"]) if m.get("note") is not None else 0.0)
         b = m.get("inharmonicity_b") or 0.0
-        weights = (audibility_weights(
-            [partial_hz(f0_hz, k + 1, b) if f0_hz > 0.0 else None
-             for k in range(len(pairs))],
-            [max(mh, oh) for mh, oh in pairs])
-            if audibility else np.ones(len(pairs)))
+        weights = (
+            audibility_weights(
+                [partial_hz(f0_hz, k + 1, b) if f0_hz > 0.0 else None for k in range(len(pairs))],
+                [max(mh, oh) for mh, oh in pairs],
+            )
+            if audibility
+            else np.ones(len(pairs))
+        )
         for i, (mh, oh) in enumerate(pairs):
             if mh <= -120.0 or oh <= -120.0:
                 continue
@@ -637,8 +649,9 @@ def loss_terms(
         shortfall = max(0.0, o["tnr_db"] - m["tnr_db"])  # only when the model is noisier
         totals["tnr"] += shortfall
         tnr_notes += shortfall > 0.0
-        totals["env"] += _absent_or(m["sustain_slope_db_s"], o["sustain_slope_db_s"],
-                                    SUSTAIN_SLOPE_CAP_DB_S)
+        totals["env"] += _absent_or(
+            m["sustain_slope_db_s"], o["sustain_slope_db_s"], SUSTAIN_SLOPE_CAP_DB_S
+        )
         totals["env"] += abs(m["release_ms"] - o["release_ms"]) / 100.0
         totals["env"] += _attack_delta_ms(m, o) / 10.0
         if "skeleton" in m and "skeleton" in o:
@@ -649,8 +662,7 @@ def loss_terms(
                 for a, b in zip(sm[key][:6], so[key][:6]):
                     totals["slope"] += _absent_or(a, b, 30.0, cells["slope"]) / 10.0
             for a, b in zip(sm.get("tail_db_s", [])[:6], so.get("tail_db_s", [])[:6]):
-                totals["tail"] += _absent_or(a, b, TAIL_DELTA_CAP_DB_S,
-                                             cells["tail"]) / 10.0
+                totals["tail"] += _absent_or(a, b, TAIL_DELTA_CAP_DB_S, cells["tail"]) / 10.0
         for a, b in zip(m.get("attack_hf_db", []), o.get("attack_hf_db", [])):
             totals["hf"] += _absent_or(a, b, HF_DELTA_CAP_DB, cells["hf"])
         # Averaged over the bands the reference offered, not summed over them,
@@ -658,9 +670,11 @@ def loss_terms(
         # number per hit: summed, one name would carry two aggregates five
         # times apart and no single unit could scale both. The denominator is
         # the ORACLE's band count, so a candidate cannot shrink it.
-        lf_parts = [_absent_or(a, b, LF_DELTA_CAP_DB, cells["lf"])
-                    for a, b in zip(m.get("attack_lf_db", []),
-                                    o.get("attack_lf_db", [])) if b is not None]
+        lf_parts = [
+            _absent_or(a, b, LF_DELTA_CAP_DB, cells["lf"])
+            for a, b in zip(m.get("attack_lf_db", []), o.get("attack_lf_db", []))
+            if b is not None
+        ]
         if lf_parts:
             totals["lf"] += sum(lf_parts) / len(lf_parts)
     if _fell_silent(model_rows, oracle_rows_):
@@ -705,7 +719,10 @@ def loss_terms(
 
 
 def percussion_terms(
-    model_rows: list[dict], oracle_rows_: list[dict], *, mss: float = 0.0,
+    model_rows: list[dict],
+    oracle_rows_: list[dict],
+    *,
+    mss: float = 0.0,
     groups: dict[str, list[int]] | None = None,
 ) -> dict[str, float] | None:
     """Per-term mismatch for a drum probe, from the percussion metric set.
@@ -830,12 +847,16 @@ def percussion_terms(
 
 
 def score_terms(
-    model_rows: list[dict], oracle_rows_: list[dict],
-    *, n_harm: int = HARM_REACH, mss: float = 0.0, percussive: bool = False,
-    audibility: bool = True, groups: dict[str, list[int]] | None = None,
+    model_rows: list[dict],
+    oracle_rows_: list[dict],
+    *,
+    n_harm: int = HARM_REACH,
+    mss: float = 0.0,
+    percussive: bool = False,
+    audibility: bool = True,
+    groups: dict[str, list[int]] | None = None,
 ) -> dict[str, float] | None:
     """Reduce a rendered probe to raw loss terms, by the metric set it carries."""
     if percussive:
         return percussion_terms(model_rows, oracle_rows_, mss=mss, groups=groups)
-    return loss_terms(model_rows, oracle_rows_, n_harm=n_harm, mss=mss,
-                      audibility=audibility)
+    return loss_terms(model_rows, oracle_rows_, n_harm=n_harm, mss=mss, audibility=audibility)

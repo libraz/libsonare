@@ -83,8 +83,7 @@ class Provenance:
     bank_generation: int = 0
     patch_version: int = 0
 
-    def state(self, shared_generation: int, patch_version: int,
-              own_generation: int = 0) -> str:
+    def state(self, shared_generation: int, patch_version: int, own_generation: int = 0) -> str:
         """`current`, `stale` or `unverified` against the registry as it stands.
 
         The first argument is the generation at which a *shared* calibration
@@ -172,13 +171,15 @@ def load(path: Path | None = None) -> dict[str, Record]:
             if blank:
                 raise ValueError(
                     f"{path.name}: {slug}: accepted term(s) {', '.join(blank)} carry no "
-                    f"reason; a term with no reason is open, not accepted")
+                    f"reason; a term with no reason is open, not accepted"
+                )
             unreachable = tuple(str(t) for t in (s.get("unreachable") or []))
             stray = sorted(set(accepted) - set(unreachable))
             if stray:
                 raise ValueError(
                     f"{path.name}: {slug}: accepted term(s) {', '.join(stray)} are not in "
-                    f"`unreachable`; the diagnosis did not report them")
+                    f"`unreachable`; the diagnosis did not report them"
+                )
             structure = Structure(
                 provenance=_provenance(s.get("provenance") or {}),
                 spec=str(s.get("spec", "")).strip(),
@@ -239,13 +240,20 @@ def moved_generation(path: Path, kinds: set[str]) -> int:
     if not path.is_file():
         return 0
     raw = json.loads(path.read_text())
-    return max((int(h.get("generation", 0) or 0)
-                for u in (raw.get("units") or {}).values() if u.get("kind") in kinds
-                for h in (u.get("history") or [])), default=0)
+    return max(
+        (
+            int(h.get("generation", 0) or 0)
+            for u in (raw.get("units") or {}).values()
+            if u.get("kind") in kinds
+            for h in (u.get("history") or [])
+        ),
+        default=0,
+    )
 
 
-def axis(claim: Structure | Music | None, dating: int, patch_version: int,
-         own_generation: int = 0) -> dict | None:
+def axis(
+    claim: Structure | Music | None, dating: int, patch_version: int, own_generation: int = 0
+) -> dict | None:
     """One claim as `status.py` records it, or None where nothing is recorded.
 
     `dating` is the generation at which a shared unit last moved, and the pair

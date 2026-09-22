@@ -29,8 +29,9 @@ def _continuum(n: int = 34):
 
 def _cliff():
     """Seven knobs that move nothing and ten that move a lot."""
-    return ([(f"dead{i}", 1e-7) for i in range(7)]
-            + [(f"live{i}", 0.05 + 0.01 * i) for i in range(10)])
+    return [(f"dead{i}", 1e-7) for i in range(7)] + [
+        (f"live{i}", 0.05 + 0.01 * i) for i in range(10)
+    ]
 
 
 def test_a_bar_inside_a_continuum_is_reported_as_one(capsys):

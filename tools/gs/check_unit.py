@@ -587,36 +587,54 @@ def main() -> int:
         },
         "derived_from": provenance(unit, (META, BOUNDARY, *power_on_files, *write_probe_files)),
         "what_the_comparison_cannot_see": [
-            ("The records are not shown to be one state of the machine. Several do not "
-            "hold the moment they were taken, so the ordering available for those is the "
-            "day each was published, under derived_from, and that bounds them from above "
-            "rather than placing them. A setting changed between two runs would read "
-            "here as a property of the unit."),
-            ("Where two captures of the power-on state disagree, neither is preferred: the "
-            "address is carried under power_on_reads_disagree and no default verdict is "
-            "taken from it. It still counts among the addresses a read answered, which is "
-            "not what the two disagree about."),
-            ("No row is shown to be absent from the machine. A read that answers nothing "
-            "leaves the address unproven, because a block read starting earlier reaches "
-            "addresses a single-byte read does not -- which is the boundary probe's own "
-            "finding about this unit."),
-            ("The extent a read reached is taken as contiguous, the count being all the "
-            "boundary probe keeps. It bounds the reach; it does not say each address "
-            "inside it answered on its own."),
+            (
+                "The records are not shown to be one state of the machine. Several do not "
+                "hold the moment they were taken, so the ordering available for those is the "
+                "day each was published, under derived_from, and that bounds them from above "
+                "rather than placing them. A setting changed between two runs would read "
+                "here as a property of the unit."
+            ),
+            (
+                "Where two captures of the power-on state disagree, neither is preferred: the "
+                "address is carried under power_on_reads_disagree and no default verdict is "
+                "taken from it. It still counts among the addresses a read answered, which is "
+                "not what the two disagree about."
+            ),
+            (
+                "No row is shown to be absent from the machine. A read that answers nothing "
+                "leaves the address unproven, because a block read starting earlier reaches "
+                "addresses a single-byte read does not -- which is the boundary probe's own "
+                "finding about this unit."
+            ),
+            (
+                "The extent a read reached is taken as contiguous, the count being all the "
+                "boundary probe keeps. It bounds the reach; it does not say each address "
+                "inside it answered on its own."
+            ),
             "The window blocks are excluded, so nothing is said about them at all.",
-            ("A range is compared only against the values the write probe actually sent; a "
-            "value it never tried is neither inside nor outside as far as this is concerned."),
-            ("A range is compared only where the probe reached a verdict. A byte it read "
-            "back unchanged for every value is carried apart, since the machine's answer "
-            "there is one held value rather than a range."),
-            ("Whether the machine clamps an out-of-range value or refuses it is not "
-            "compared. It bounds the range either way, which is what is being read here, "
-            "and which of the two libsonare does is a decision gs.md takes rather than a "
-            "property the table records."),
-            ("Levels are libsonare's own promises about its implementation and are not a "
-            "property of the machine, so they are reported and never compared."),
-            ("One unit is one unit. A disagreement is between this table and this machine, "
-            "and a second SC-8850 has not been measured."),
+            (
+                "A range is compared only against the values the write probe actually sent; a "
+                "value it never tried is neither inside nor outside as far as this is concerned."
+            ),
+            (
+                "A range is compared only where the probe reached a verdict. A byte it read "
+                "back unchanged for every value is carried apart, since the machine's answer "
+                "there is one held value rather than a range."
+            ),
+            (
+                "Whether the machine clamps an out-of-range value or refuses it is not "
+                "compared. It bounds the range either way, which is what is being read here, "
+                "and which of the two libsonare does is a decision gs.md takes rather than a "
+                "property the table records."
+            ),
+            (
+                "Levels are libsonare's own promises about its implementation and are not a "
+                "property of the machine, so they are reported and never compared."
+            ),
+            (
+                "One unit is one unit. A disagreement is between this table and this machine, "
+                "and a second SC-8850 has not been measured."
+            ),
         ],
         "summary": {
             "table_rows": len(table["rows"]),

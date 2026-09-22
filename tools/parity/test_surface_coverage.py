@@ -46,9 +46,7 @@ def _facade(surface: str, *keys: str) -> Extraction:
 
 def _report(c: Extraction, facades: dict[str, Extraction], allow=None):
     extractions = {"c": c, **facades}
-    return compare.build_report(
-        extractions, allow or allowlist_mod.Allowlist(), ["c", *facades]
-    )
+    return compare.build_report(extractions, allow or allowlist_mod.Allowlist(), ["c", *facades])
 
 
 def _headers(c: Extraction) -> dict[str, str]:
@@ -66,10 +64,7 @@ def test_domain_folds_the_split_project_headers_into_one_row() -> None:
 
 def test_an_unmapped_header_still_gets_a_row() -> None:
     """A new public header adds a domain instead of vanishing from the table."""
-    assert (
-        surface_coverage.domain_of("include/sonare/sonare_c_time_stretch.h")
-        == "time stretch"
-    )
+    assert surface_coverage.domain_of("include/sonare/sonare_c_time_stretch.h") == "time stretch"
 
 
 def test_an_allowlisted_gap_still_counts_as_a_gap() -> None:
@@ -145,9 +140,7 @@ def test_the_tracked_table_matches_the_current_surfaces() -> None:
         surface_coverage.unreachable_by_column(root, check_parity.run(root=root)),
         surface_coverage.c_declaration_headers(root),
     )
-    assert tracked.read_text(encoding="utf-8") == rendered, (
-        "run make surface-coverage"
-    )
+    assert tracked.read_text(encoding="utf-8") == rendered, "run make surface-coverage"
 
 
 def _run_all() -> int:

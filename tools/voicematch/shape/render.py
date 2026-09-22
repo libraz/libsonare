@@ -48,7 +48,7 @@ def corpus_fingerprint(root) -> str:
         return ""
 
 
-_WORKER = r'''
+_WORKER = r"""
 import json, sys
 import numpy as np
 sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
@@ -74,7 +74,7 @@ else:
         a = np.asarray(render_model(smf, seconds, 48000), dtype=np.float32)
         return a.mean(axis=1) if a.ndim > 1 else a
 np.savez(out, **{f"{n}_{v}": get(n, v) for n, v in pairs})
-'''
+"""
 
 
 @dataclass
@@ -127,13 +127,26 @@ class Signals:
         self._corpus_fp = corpus_fingerprint(self.corpus_root)
 
     def _key(self, pairs, ov: str, ref: bool) -> str:
-        blob = json.dumps([sorted(pairs), ov, ref, str(self.corpus_root),
-                           self._corpus_fp, self.program, self.channel,
-                           self.timbre, self.gate_s, self.seconds, self.lib_path])
+        blob = json.dumps(
+            [
+                sorted(pairs),
+                ov,
+                ref,
+                str(self.corpus_root),
+                self._corpus_fp,
+                self.program,
+                self.channel,
+                self.timbre,
+                self.gate_s,
+                self.seconds,
+                self.lib_path,
+            ]
+        )
         return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
-    def _render(self, pairs, ov: str, ref: bool, out_path: Path,
-                extra_env: dict | None = None) -> None:
+    def _render(
+        self, pairs, ov: str, ref: bool, out_path: Path, extra_env: dict | None = None
+    ) -> None:
         env = dict(os.environ)
         if self.lib_path:
             env["SONARE_LIB_PATH"] = self.lib_path
@@ -144,10 +157,24 @@ class Signals:
         env.update(extra_env or {})
         tmp = out_path.with_suffix(".partial.npz")
         p = subprocess.run(
-            [sys.executable, "-c", _WORKER, json.dumps(pairs), str(tmp),
-             str(self.corpus_root) if ref else "", str(self.program),
-             str(self.gate_s), str(self.seconds), str(self.channel), self.timbre],
-            capture_output=True, check=False, text=True, env=env)
+            [
+                sys.executable,
+                "-c",
+                _WORKER,
+                json.dumps(pairs),
+                str(tmp),
+                str(self.corpus_root) if ref else "",
+                str(self.program),
+                str(self.gate_s),
+                str(self.seconds),
+                str(self.channel),
+                self.timbre,
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+            env=env,
+        )
         if p.returncode:
             tmp.unlink(missing_ok=True)
             raise RuntimeError(p.stderr[-4000:])
@@ -182,8 +209,9 @@ class Signals:
             probe = self.cache_dir / f"tunable-{os.getpid()}.npz"
             dump = self.cache_dir / f"tunable-{os.getpid()}.txt"
             try:
-                self._render([(60, 100)], "", False, probe,
-                             extra_env={"SONARE_TUNING_DUMP": str(dump)})
+                self._render(
+                    [(60, 100)], "", False, probe, extra_env={"SONARE_TUNING_DUMP": str(dump)}
+                )
                 self._tunable = dump.exists() and dump.stat().st_size > 0
             finally:
                 probe.unlink(missing_ok=True)
@@ -194,9 +222,11 @@ class Signals:
     @property
     def _not_tunable(self) -> str:
         where = self.lib_path or "the library the loader picked (SONARE_LIB_PATH unset)"
-        return (f"{where} was not built with -DBUILD_TUNING=ON, so every override "
-                "would render the shipped voice and score as inert. Point --lib at "
-                "a tuning build.")
+        return (
+            f"{where} was not built with -DBUILD_TUNING=ON, so every override "
+            "would render the shipped voice and score as inert. Point --lib at "
+            "a tuning build."
+        )
 
     def __call__(self, pairs, ov: str = "", ref: bool = False) -> dict:
         """(note, velocity) -> mono signal.
@@ -252,8 +282,7 @@ def write_overrides(state: dict[str, float], base: dict[str, float]) -> str:
     still miss the cache. The difference is also the reviewable artefact: it is
     the list of constants a change would have to justify.
     """
-    return ",".join(f"{k}={v!r}" for k, v in sorted(state.items())
-                    if k not in base or v != base[k])
+    return ",".join(f"{k}={v!r}" for k, v in sorted(state.items()) if k not in base or v != base[k])
 
 
 #: An override key addressed to one drum note. The three digits are the MIDI

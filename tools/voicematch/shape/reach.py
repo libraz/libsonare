@@ -51,8 +51,12 @@ from .terms import held_db
 
 #: When in the note. The attack is read through the spectrogram's short scale,
 #: which is the only one whose first frame is inside it.
-SEGMENTS = (("attack", 0.10, 0.17, 1), ("body", 0.2, 0.8, 0),
-            ("sustain", 0.8, 3.0, 0), ("tail", 3.0, 7.0, 0))
+SEGMENTS = (
+    ("attack", 0.10, 0.17, 1),
+    ("body", 0.2, 0.8, 0),
+    ("sustain", 0.8, 3.0, 0),
+    ("tail", 3.0, 7.0, 0),
+)
 #: Bands wide enough that every bucket holds something on every note.
 BANDS = (("lo", 30.0, 250.0), ("mid", 250.0, 2000.0), ("hi", 2000.0, 16000.0))
 #: dB of bucket movement below which a coordinate has not touched it.
@@ -81,8 +85,9 @@ def buckets(spectro, S, f0, B, gain_db=0.0):
         for band, lo, hi in BANDS:
             m = (hz >= lo) & (hz < hi)
             for tag, sel in (("on", m & hm), ("off", m & ~hm)):
-                out[f"{seg}.{band}.{tag}"] = \
+                out[f"{seg}.{band}.{tag}"] = (
                     10 * np.log10(max(float(col[sel].sum()), 1e-30)) - gain_db
+                )
     return out
 
 
@@ -96,8 +101,7 @@ def bucket_error(loss, overrides, notes, velocity):
     ref_sigs = loss.signals(pairs, ref=True)
     mod_sigs = loss.signals(pairs, ov=overrides)
     sr = loss.spectro.sample_rate
-    g = float(np.mean([held_db(mod_sigs[k], sr=sr) - held_db(ref_sigs[k], sr=sr)
-                       for k in pairs]))
+    g = float(np.mean([held_db(mod_sigs[k], sr=sr) - held_db(ref_sigs[k], sr=sr) for k in pairs]))
     acc: dict[str, list] = {}
     for k in pairs:
         f0 = note_hz(k[0])
@@ -125,8 +129,7 @@ def term_error(loss, overrides, notes):
     A term is already a distance from the reference, so it enters as its own
     value: zero is the target and the sign is fixed.
     """
-    return {f"term.{k}": v
-            for k, v in loss.score(overrides, notes=notes).parts.items()}
+    return {f"term.{k}": v for k, v in loss.score(overrides, notes=notes).parts.items()}
 
 
 def measure_all(loss, overrides, notes, velocity):
@@ -143,8 +146,18 @@ def measure_all(loss, overrides, notes, velocity):
     return out
 
 
-def reach(loss, base, moves, notes, velocity, steps=(0.8, 1.25),
-          zero_ladder=(0.15, 0.4), workers=7, log=print, measure=measure_all):
+def reach(
+    loss,
+    base,
+    moves,
+    notes,
+    velocity,
+    steps=(0.8, 1.25),
+    zero_ladder=(0.15, 0.4),
+    workers=7,
+    log=print,
+    measure=measure_all,
+):
     """Per bucket: how far the best coordinate moves it, and how far toward zero.
 
     Returns (errors, movement, best, mover) -- the error at the starting point,
@@ -162,8 +175,9 @@ def reach(loss, base, moves, notes, velocity, steps=(0.8, 1.25),
         out = []
         for c in cands:
             try:
-                out.append(measure(
-                    loss, write_overrides({**start, coord: c}, base), notes, velocity))
+                out.append(
+                    measure(loss, write_overrides({**start, coord: c}, base), notes, velocity)
+                )
             except Exception:  # noqa: BLE001, S112 -- a candidate that fails to render is dropped
                 continue
         return coord, out
@@ -195,13 +209,22 @@ def report(err0, movement, best, mover):
     for n in sorted(err0):
         rows.append((movement[n] < DEAD_DB, -abs(err0[n]), n))
     rows.sort()
-    out = [(f"{'bucket':<18}{'error':>9}{'best knob moves it':>20}"
-           f"{'best reaches':>14}   verdict / largest mover")]
+    out = [
+        (
+            f"{'bucket':<18}{'error':>9}{'best knob moves it':>20}"
+            f"{'best reaches':>14}   verdict / largest mover"
+        )
+    ]
     for dead, _, n in rows:
-        verdict = "UNREACHABLE" if dead else (
-            "reachable" if best[n] < abs(err0[n]) - DEAD_DB else "moves, no gain")
-        out.append(f"{n:<18}{err0[n]:>+9.1f}{movement[n]:>20.1f}{best[n]:>14.1f}"
-                   f"   {verdict:<15} {mover[n].split('.')[-1]}")
+        verdict = (
+            "UNREACHABLE"
+            if dead
+            else ("reachable" if best[n] < abs(err0[n]) - DEAD_DB else "moves, no gain")
+        )
+        out.append(
+            f"{n:<18}{err0[n]:>+9.1f}{movement[n]:>20.1f}{best[n]:>14.1f}"
+            f"   {verdict:<15} {mover[n].split('.')[-1]}"
+        )
     return "\n".join(out)
 
 
@@ -221,17 +244,21 @@ def coordinates(args, cap, corpus, notes, percussion, namespaces):
     from catalogue import dump_catalogue
 
     cat = dump_catalogue(
-        int(cap["program"]), "drum" if percussion else "sustain", args.lib or None,
-        sr=corpus.sample_rate, notes=",".join(str(n) for n in notes))
-    return {k: v for k, v in cat.defaults.items()
-            if not namespaces or k.startswith(namespaces)}
+        int(cap["program"]),
+        "drum" if percussion else "sustain",
+        args.lib or None,
+        sr=corpus.sample_rate,
+        notes=",".join(str(n) for n in notes),
+    )
+    return {k: v for k, v in cat.defaults.items() if not namespaces or k.startswith(namespaces)}
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="shape.reach",
         description="Ask every coordinate whether it can move each bucket at "
-                    "all, before asking whether any of them improves it.")
+        "all, before asking whether any of them improves it.",
+    )
     # The target options are declared here rather than shared with `shape`'s own
     # parser, whose parent factory is a closure inside its `main`. They are the
     # same names and the same defaults; a subcommand would take them from there.
@@ -242,25 +269,35 @@ def main(argv=None) -> int:
     ap.add_argument("--velocities", default="", help="subset of the capture's velocities")
     ap.add_argument("--lib", default="", help="SONARE_LIB_PATH for model renders")
     ap.add_argument("--cache", default="/tmp/voicematch-shape")
-    ap.add_argument("--no-bed", action="store_true",
-                    help="skip the recorded-floor subtraction")
+    ap.add_argument("--no-bed", action="store_true", help="skip the recorded-floor subtraction")
     ap.add_argument("--workers", type=int, default=7)
-    ap.add_argument("--knobs", default="",
-                    help="a saved SONARE_TUNING_DUMP; without one the library "
-                         "is asked directly")
-    ap.add_argument("--write-knobs", default="",
-                    help="write the resolved coordinate list here and stop. "
-                         "`shape fit` requires a dump file and nothing else in "
-                         "the harness produces one without a rebuild")
+    ap.add_argument(
+        "--knobs",
+        default="",
+        help="a saved SONARE_TUNING_DUMP; without one the library is asked directly",
+    )
+    ap.add_argument(
+        "--write-knobs",
+        default="",
+        help="write the resolved coordinate list here and stop. "
+        "`shape fit` requires a dump file and nothing else in "
+        "the harness produces one without a rebuild",
+    )
     ap.add_argument("--namespaces", default="", help="comma-separated key prefixes")
-    ap.add_argument("--overrides", default="",
-                    help="the point to sweep around (default: the shipped voice)")
-    ap.add_argument("--steps", default="0.25,0.4,0.6,0.8,1.25,1.6,2.5,4.0",
-                    help="multiples of each coordinate's current value. A null "
-                         "over a narrow ladder is a statement about the ladder")
-    ap.add_argument("--zero-ladder", default="0.15,0.4",
-                    help="absolute values tried for a coordinate sitting at zero, "
-                         "which no multiple can leave")
+    ap.add_argument(
+        "--overrides", default="", help="the point to sweep around (default: the shipped voice)"
+    )
+    ap.add_argument(
+        "--steps",
+        default="0.25,0.4,0.6,0.8,1.25,1.6,2.5,4.0",
+        help="multiples of each coordinate's current value. A null "
+        "over a narrow ladder is a statement about the ladder",
+    )
+    ap.add_argument(
+        "--zero-ladder",
+        default="0.15,0.4",
+        help="absolute values tried for a coordinate sitting at zero, which no multiple can leave",
+    )
     a = ap.parse_args(argv)
 
     from . import __main__ as cli
@@ -272,9 +309,9 @@ def main(argv=None) -> int:
     if not base:
         raise SystemExit(f"no coordinates matched {a.namespaces!r}")
     from pathlib import Path
+
     if a.write_knobs:
-        Path(a.write_knobs).write_text(
-            "".join(f"{k}\t{v!r}\n" for k, v in sorted(base.items())))
+        Path(a.write_knobs).write_text("".join(f"{k}\t{v!r}\n" for k, v in sorted(base.items())))
         print(f"{len(base)} coordinates -> {a.write_knobs}", file=sys.stderr)
         return 0
     moves = read_overrides(Path(a.overrides).read_text()) if a.overrides else {}
@@ -284,8 +321,16 @@ def main(argv=None) -> int:
     # loudest layer is the one whose bands stand clearest of the recorded floor.
     velocity = max(loss.velocities)
     err0, movement, best, mover = reach(
-        loss, base, moves, notes, velocity, steps=steps, zero_ladder=ladder,
-        workers=a.workers, log=lambda m: print(m, file=sys.stderr))
+        loss,
+        base,
+        moves,
+        notes,
+        velocity,
+        steps=steps,
+        zero_ladder=ladder,
+        workers=a.workers,
+        log=lambda m: print(m, file=sys.stderr),
+    )
     print(report(err0, movement, best, mover))
     return 0
 

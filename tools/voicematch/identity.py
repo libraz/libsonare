@@ -69,7 +69,7 @@ GATE_S = 0.5
 VELOCITY = 100
 PERCUSSION_CHANNEL = 9
 
-_WORKER = r'''
+_WORKER = r"""
 import hashlib, json, sys
 import numpy as np
 sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
@@ -84,11 +84,17 @@ for note, velocity in json.loads(sys.argv[5]):
     a = np.asarray(render_model(smf, seconds, 48000), dtype=np.float32)
     peak = float(np.max(np.abs(a))) if a.size else 0.0
     sys.stdout.write(hashlib.sha256(a.tobytes()).hexdigest() + " " + repr(peak) + "\n")
-'''
+"""
 
 
-def render_batch(lib: str, program: int, channel: int, pairs: list[tuple[int, int]],
-                 overrides: str = "", bank: int = 0) -> list[tuple[str, float]]:
+def render_batch(
+    lib: str,
+    program: int,
+    channel: int,
+    pairs: list[tuple[int, int]],
+    overrides: str = "",
+    bank: int = 0,
+) -> list[tuple[str, float]]:
     """One sha256 and peak per (note, velocity), all from a single subprocess.
 
     A hash and not a comparison of arrays: two libraries cannot be loaded into
@@ -118,9 +124,23 @@ def render_batch(lib: str, program: int, channel: int, pairs: list[tuple[int, in
     else:
         env.pop("SONARE_TUNING_OVERRIDES", None)
     p = subprocess.run(
-        [sys.executable, "-c", _WORKER, str(program), str(channel),
-         str(SECONDS), str(GATE_S), json.dumps([list(x) for x in pairs]), str(bank)],
-        capture_output=True, check=False, text=True, env=env, cwd=REPO_ROOT)
+        [
+            sys.executable,
+            "-c",
+            _WORKER,
+            str(program),
+            str(channel),
+            str(SECONDS),
+            str(GATE_S),
+            json.dumps([list(x) for x in pairs]),
+            str(bank),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        env=env,
+        cwd=REPO_ROOT,
+    )
     if p.returncode:
         raise RuntimeError(f"{lib}: {p.stderr[-2000:]}")
     out = []
@@ -128,25 +148,27 @@ def render_batch(lib: str, program: int, channel: int, pairs: list[tuple[int, in
         digest, _, peak = line.partition(" ")
         out.append((digest, float(peak)))
     if len(out) != len(pairs):
-        raise RuntimeError(
-            f"{lib}: asked for {len(pairs)} render(s) and got {len(out)} back")
+        raise RuntimeError(f"{lib}: asked for {len(pairs)} render(s) and got {len(out)} back")
     return out
 
 
-def render_probe(lib: str, note: int, program: int, channel: int,
-                 overrides: str = "", velocity: int = VELOCITY) -> tuple[str, float]:
+def render_probe(
+    lib: str, note: int, program: int, channel: int, overrides: str = "", velocity: int = VELOCITY
+) -> tuple[str, float]:
     """One render's sha256 and its peak amplitude (see `render_batch`)."""
     return render_batch(lib, program, channel, [(note, velocity)], overrides)[0]
 
 
-def render_hash(lib: str, note: int, program: int, channel: int,
-                overrides: str = "", velocity: int = VELOCITY) -> str:
+def render_hash(
+    lib: str, note: int, program: int, channel: int, overrides: str = "", velocity: int = VELOCITY
+) -> str:
     """sha256 of one render's raw float32 bytes (see `render_probe`)."""
     return render_probe(lib, note, program, channel, overrides, velocity)[0]
 
 
-def render_peak(lib: str, note: int, program: int, channel: int,
-                overrides: str = "", velocity: int = VELOCITY) -> float:
+def render_peak(
+    lib: str, note: int, program: int, channel: int, overrides: str = "", velocity: int = VELOCITY
+) -> float:
     """Peak amplitude of one render, for telling silence from an inert knob."""
     return render_probe(lib, note, program, channel, overrides, velocity)[1]
 
@@ -182,8 +204,7 @@ def check_isolation(lib: str, ov: str, out: list) -> tuple[bool, str]:
     """
     notes = isolate_notes(ov)
     if len(notes) < 2:
-        return False, ("--isolate needs keys for at least two drum notes, "
-                       f"got {notes or 'none'}")
+        return False, (f"--isolate needs keys for at least two drum notes, got {notes or 'none'}")
     print(f"\n{'isolate':<14}{'scoped':<18}{'whole':<18}{'default':<18}verdict")
     leaked, deaf = [], []
     for n in notes:
@@ -195,36 +216,58 @@ def check_isolation(lib: str, ov: str, out: list) -> tuple[bool, str]:
             leaked.append(n)
         if a == d:
             deaf.append(n)
-        out.append({"note": n, "scoped": a, "whole": b, "default": d,
-                    "isolated": a == b, "hears_own": a != d})
-        print(f"drum {n:<9}{a[:16]:<18}{b[:16]:<18}{d[:16]:<18}"
-              + ("LEAKS" if a != b else "DEAF" if a == d else "isolated"))
+        out.append(
+            {
+                "note": n,
+                "scoped": a,
+                "whole": b,
+                "default": d,
+                "isolated": a == b,
+                "hears_own": a != d,
+            }
+        )
+        print(
+            f"drum {n:<9}{a[:16]:<18}{b[:16]:<18}{d[:16]:<18}"
+            + ("LEAKS" if a != b else "DEAF" if a == d else "isolated")
+        )
     if leaked:
-        return False, ("FAIL: a constant addressed to another piece changed what "
-                       f"{', '.join(str(n) for n in leaked)} rendered, so a "
-                       "per-note render cache keyed on the scoped string would "
-                       "serve a stale note")
+        return False, (
+            "FAIL: a constant addressed to another piece changed what "
+            f"{', '.join(str(n) for n in leaked)} rendered, so a "
+            "per-note render cache keyed on the scoped string would "
+            "serve a stale note"
+        )
     if deaf:
-        return False, ("FAIL: " + ", ".join(str(n) for n in deaf) + " rendered "
-                       "its default under its own keys, so the isolation result "
-                       "is vacuous -- check the keys exist and the library was "
-                       "built with -DBUILD_TUNING=ON")
+        return False, (
+            "FAIL: " + ", ".join(str(n) for n in deaf) + " rendered "
+            "its default under its own keys, so the isolation result "
+            "is vacuous -- check the keys exist and the library was "
+            "built with -DBUILD_TUNING=ON"
+        )
     return True, f"OK: {len(notes)} pieces read their own constants and no other's"
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--base", default="", help="dylib built before the mechanism")
     p.add_argument("--head", required=True, help="dylib built with it")
-    p.add_argument("--isolate", default="",
-                   help="override string spanning several drum notes; each must "
-                        "render the same with and without the other notes' keys")
+    p.add_argument(
+        "--isolate",
+        default="",
+        help="override string spanning several drum notes; each must "
+        "render the same with and without the other notes' keys",
+    )
     p.add_argument("--programs", default="", help="melodic programs, comma separated")
     p.add_argument("--drums", default="", help="drum notes, comma separated")
     p.add_argument("--note", type=int, default=60, help="note the programs are played at")
-    p.add_argument("--reach", action="append", default=[],
-                   help="<note>:<key=value> the mechanism must be audible through")
+    p.add_argument(
+        "--reach",
+        action="append",
+        default=[],
+        help="<note>:<key=value> the mechanism must be audible through",
+    )
     p.add_argument("--json", default="", help="write the case table here")
     args = p.parse_args(argv)
 
@@ -261,17 +304,20 @@ def main(argv=None) -> int:
         if moved:
             reached.append(ov)
         reach_rows.append({"override": ov, "off": off, "on": on, "reaches": moved})
-        print(f"{ov.split('=')[0].split('.')[-1]:<14}{off[:16]:<18}{on[:16]:<18}"
-              f"{'reaches' if moved else 'INERT'}")
+        print(
+            f"{ov.split('=')[0].split('.')[-1]:<14}{off[:16]:<18}{on[:16]:<18}"
+            f"{'reaches' if moved else 'INERT'}"
+        )
 
     iso_rows, iso_ok, iso_msg = [], True, ""
     if args.isolate:
         iso_ok, iso_msg = check_isolation(args.head, args.isolate, iso_rows)
 
     if args.json:
-        Path(args.json).write_text(json.dumps(
-            {"identity": rows, "reach": reach_rows, "isolate": iso_rows},
-            indent=1) + "\n")
+        Path(args.json).write_text(
+            json.dumps({"identity": rows, "reach": reach_rows, "isolate": iso_rows}, indent=1)
+            + "\n"
+        )
 
     ok = True
     if not iso_ok:
@@ -283,9 +329,11 @@ def main(argv=None) -> int:
     if args.reach and not reached:
         # Without this the run above has confirmed only that nothing happened,
         # which every broken setup also confirms.
-        print("\nFAIL: no override reached the render, so the identity result is "
-              "vacuous -- check the library was built with -DBUILD_TUNING=ON and "
-              "that the override keys exist")
+        print(
+            "\nFAIL: no override reached the render, so the identity result is "
+            "vacuous -- check the library was built with -DBUILD_TUNING=ON and "
+            "that the override keys exist"
+        )
         ok = False
     if ok:
         parts = []

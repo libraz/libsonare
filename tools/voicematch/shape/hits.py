@@ -135,9 +135,10 @@ def measure_hit(tracks, rows, shifts, floors, source: str) -> None:
         if hi - lo < MIN_WINDOW_S:
             r.setdefault("miss", set()).add(source)
             continue
-        seg = np.abs(np.asarray(x[int(lo * sr):int(hi * sr)], dtype=np.float64))
+        seg = np.abs(np.asarray(x[int(lo * sr) : int(hi * sr)], dtype=np.float64))
         r.setdefault("peak", {})[source] = (
-            20 * np.log10(max(float(seg.max()), 1e-30)) if len(seg) else -300.0)
+            20 * np.log10(max(float(seg.max()), 1e-30)) if len(seg) else -300.0
+        )
         floor = noise_db(x, sr, (lo, hi), floors[source])
         band = {}
         for b in BANDS:
@@ -149,18 +150,19 @@ def measure_hit(tracks, rows, shifts, floors, source: str) -> None:
 
 def describe(row, name) -> str:
     """The notes a row plays, as the ear meets them."""
-    return " + ".join(f"{n['note']} {name(n['note'])} v{n['velocity']}"
-                      for n in row["notes"])
+    return " + ".join(f"{n['note']} {name(n['note'])} v{n['velocity']}" for n in row["notes"])
 
 
-def report(page, item, rows, source: str, reference: str, gain_db: float,
-           name) -> str:
+def report(page, item, rows, source: str, reference: str, gain_db: float, name) -> str:
     """The per-hit table for one take, ids first."""
-    out = [f"== {item['id']}: {item['label']}",
-           f"   {page}{item['id']}/{source}   vs   {page}{item['id']}/{reference}",
-           f"   one gain of {gain_db:+.1f} dB applied to {source} over the take body"]
-    head = "".join(f"{lo // 1000 if lo >= 1000 else lo}{'k' if lo >= 1000 else ''}"
-                   .rjust(7) for lo, _ in BANDS)
+    out = [
+        f"== {item['id']}: {item['label']}",
+        f"   {page}{item['id']}/{source}   vs   {page}{item['id']}/{reference}",
+        f"   one gain of {gain_db:+.1f} dB applied to {source} over the take body",
+    ]
+    head = "".join(
+        f"{lo // 1000 if lo >= 1000 else lo}{'k' if lo >= 1000 else ''}".rjust(7) for lo, _ in BANDS
+    )
     tag_w = max(len(item["id"]) + 4, 8)
     out.append(f"   {'hit':<{tag_w}}{'plays':<44}{'win':>6}{'peak':>7}{head}")
     for r in rows:
@@ -178,19 +180,28 @@ def report(page, item, rows, source: str, reference: str, gain_db: float,
         for b in BANDS:
             m = r.get("band", {}).get(source, {}).get(b)
             k = r.get("band", {}).get(reference, {}).get(b)
-            cells += ("--" if m is None or k is None
-                      else f"{m + gain_db - k:+.1f}").rjust(7)
-        pk = ("--" if source not in peak or reference not in peak
-              else f"{peak[source] + gain_db - peak[reference]:+.1f}")
+            cells += ("--" if m is None or k is None else f"{m + gain_db - k:+.1f}").rjust(7)
+        pk = (
+            "--"
+            if source not in peak or reference not in peak
+            else f"{peak[source] + gain_db - peak[reference]:+.1f}"
+        )
         out.append(f"   {tag:<{tag_w}}{note:<44}{win:>5.2f}s{pk:>7}{cells}")
-    out.append(f"   cells are {source} - {reference} in dB after that gain; "
-               "-- is a band under one side's own floor; [fused] rows play "
-               "several notes at once and cannot be separated")
+    out.append(
+        f"   cells are {source} - {reference} in dB after that gain; "
+        "-- is a band under one side's own floor; [fused] rows play "
+        "several notes at once and cannot be separated"
+    )
     return "\n".join(out)
 
 
-def run(directory, page_url: str = "", reference: str = "", source: str = "model",
-        only: tuple[str, ...] = ()) -> str:
+def run(
+    directory,
+    page_url: str = "",
+    reference: str = "",
+    source: str = "model",
+    only: tuple[str, ...] = (),
+) -> str:
     """Every take of an audition page, one row per strike."""
     from gm_names import drum_name, gm_name  # noqa: F401  (drum_name is the one used)
 
@@ -223,15 +234,18 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="shape.hits",
         description="Break an audition page down one strike at a time, so a "
-                    "listening note can name a hit instead of counting.")
-    ap.add_argument("--page", required=True,
-                    help="audition directory holding manifest.json and the takes")
-    ap.add_argument("--url", default="http://127.0.0.1:8730/",
-                    help="base of the audition server, so every row prints a "
-                         "link that sounds exactly it")
+        "listening note can name a hit instead of counting.",
+    )
+    ap.add_argument(
+        "--page", required=True, help="audition directory holding manifest.json and the takes"
+    )
+    ap.add_argument(
+        "--url",
+        default="http://127.0.0.1:8730/",
+        help="base of the audition server, so every row prints a link that sounds exactly it",
+    )
     ap.add_argument("--source", default="model", help="the side under test")
-    ap.add_argument("--reference", default="",
-                    help="source key everything is measured against")
+    ap.add_argument("--reference", default="", help="source key everything is measured against")
     ap.add_argument("--only", default="", help="comma-separated take ids")
     a = ap.parse_args(argv)
     # The set id is the directory's name, which is what `serve.py` publishes it

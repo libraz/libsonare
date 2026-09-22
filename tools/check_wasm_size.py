@@ -135,10 +135,10 @@ def main() -> int:
             limit = old * (1 + args.max_increase)
             print(f"{name} {metric}: {now} bytes (baseline {old}, limit {limit:.0f})")
             if now > limit:
-                failures.append(f"{name}: {metric} {now} exceeds {limit:.0f} (+{args.max_increase:.0%})")
-        print(
-            f"{name} code={result['code']} data={result['data']} sha256={result['sha256']}"
-        )
+                failures.append(
+                    f"{name}: {metric} {now} exceeds {limit:.0f} (+{args.max_increase:.0%})"
+                )
+        print(f"{name} code={result['code']} data={result['data']} sha256={result['sha256']}")
 
     if failures:
         print("WASM size budget failed:", *failures, sep="\n  ", file=sys.stderr)

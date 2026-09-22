@@ -67,20 +67,35 @@ def test_a_capture_is_matched_to_its_own_voice_and_not_another():
 
 def _capture_at(bank_number: int, capture_id: str) -> bank.Capture:
     return bank.Capture(
-        path=Path(f"{capture_id}.json"), id=capture_id, label=capture_id,
-        program=6, bank=bank_number, take_set="sustained", timbres=(), dry=True,
-        title=capture_id, source_class="module", raw={},
+        path=Path(f"{capture_id}.json"),
+        id=capture_id,
+        label=capture_id,
+        program=6,
+        bank=bank_number,
+        take_set="sustained",
+        timbres=(),
+        dry=True,
+        title=capture_id,
+        source_class="module",
+        raw={},
     )
 
 
 def _harpsichord_catalogue():
     """Program 6 as the library reports it: three variations, two addresses each."""
     from catalogue import Catalogue
-    return Catalogue(defaults={}, bounds={}, programs={
-        (6, 0): "fam1",
-        (6, 8): "harpsichord_octave", (6, 1): "harpsichord_octave",
-        (6, 16): "harpsichord_wide", (6, 2): "harpsichord_wide",
-    })
+
+    return Catalogue(
+        defaults={},
+        bounds={},
+        programs={
+            (6, 0): "fam1",
+            (6, 8): "harpsichord_octave",
+            (6, 1): "harpsichord_octave",
+            (6, 16): "harpsichord_wide",
+            (6, 2): "harpsichord_wide",
+        },
+    )
 
 
 def test_a_patchs_two_bank_addresses_share_one_reference():
@@ -129,8 +144,9 @@ def test_every_capture_says_what_kind_of_source_answered_it():
 def test_an_unclassified_capture_reads_as_unclassified_and_not_as_a_default(tmp_path):
     """The dangerous reading is the one a missing field falls into."""
     definition = tmp_path / "unclassified.json"
-    definition.write_text(json.dumps(
-        {"id": "unclassified", "program": 0, "takes": "sustained", "timbres": []}))
+    definition.write_text(
+        json.dumps({"id": "unclassified", "program": 0, "takes": "sustained", "timbres": []})
+    )
     assert bank.load_capture(definition).source_class is None
 
 
@@ -141,8 +157,9 @@ def test_a_captured_voice_keeps_the_captures_phrase_set():
     captured voice finds none of them and drops to model-only without a word.
     """
     for capture in bank.captures():
-        voice = bank.Voice(program=capture.program, bank=capture.bank,
-                           kit=capture.drums, captures=(capture,))
+        voice = bank.Voice(
+            program=capture.program, bank=capture.bank, kit=capture.drums, captures=(capture,)
+        )
         assert voice.take_set == capture.take_set
 
 
@@ -162,13 +179,16 @@ def test_describe_says_which_voice_answered():
     assert described["tone_class"] == "sustained"
 
 
-@pytest.mark.parametrize("spec,expected", [
-    ("", []),
-    ("40", [40]),
-    ("0-3", [0, 1, 2, 3]),
-    ("7,0-2,7", [0, 1, 2, 7]),
-    (" 5 , 6 ", [5, 6]),
-])
+@pytest.mark.parametrize(
+    "spec,expected",
+    [
+        ("", []),
+        ("40", [40]),
+        ("0-3", [0, 1, 2, 3]),
+        ("7,0-2,7", [0, 1, 2, 7]),
+        (" 5 , 6 ", [5, 6]),
+    ],
+)
 def test_parse_selection(spec, expected):
     assert bank.parse_selection(spec) == expected
 

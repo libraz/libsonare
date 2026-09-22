@@ -48,8 +48,9 @@ INHARMONICITY_MIN_CENTS = 5.0
 MAX_INHARMONICITY_B = 0.01
 
 
-def fit_partial_series(freqs: np.ndarray, mag: np.ndarray, f0_seed: float,
-                       h1_mag: float, sr: int) -> tuple[float, float, int]:
+def fit_partial_series(
+    freqs: np.ndarray, mag: np.ndarray, f0_seed: float, h1_mag: float, sr: int
+) -> tuple[float, float, int]:
     """Fit the stiff-string law to a measured spectrum -> (f0, B, partials_fit).
 
     `(f_n / n)² = f0² + f0²·B·n²` is linear in `n²`, so both unknowns come out
@@ -117,8 +118,9 @@ def fit_partial_series(freqs: np.ndarray, mag: np.ndarray, f0_seed: float,
     return f0, b, fitted_on
 
 
-def estimate_inharmonicity_b(freqs: np.ndarray, mag: np.ndarray, f0: float,
-                             h1_mag: float, sr: int) -> tuple[float, int]:
+def estimate_inharmonicity_b(
+    freqs: np.ndarray, mag: np.ndarray, f0: float, h1_mag: float, sr: int
+) -> tuple[float, int]:
     """Stiffness of the series, or exactly 0.0 when it is harmonic.
 
     The zero is deliberate and is what keeps an organ, a brass voice or any
@@ -199,8 +201,7 @@ def stretch_cents(b: float, n: int = N_HARMONICS) -> float:
 LADDER_FLOOR_MARGIN_DB = 80.0
 
 
-def ladder_present(harmonics_db: list[float],
-                   margin: float = LADDER_FLOOR_MARGIN_DB) -> list[bool]:
+def ladder_present(harmonics_db: list[float], margin: float = LADDER_FLOOR_MARGIN_DB) -> list[bool]:
     """Which ladder bins found a partial rather than the noise floor.
 
     Read against the loudest bin of that note's own ladder, so it needs no
@@ -222,8 +223,9 @@ HARMONIC_SHARE_WINDOW_S = 0.50
 HARMONIC_SHARE_TOLERANCE_CENTS = 60.0
 
 
-def harmonic_share(seg: np.ndarray, sr: int, f0_hz: float, *,
-                   partials: int = N_HARMONICS) -> float | None:
+def harmonic_share(
+    seg: np.ndarray, sr: int, f0_hz: float, *, partials: int = N_HARMONICS
+) -> float | None:
     """How much of a segment's energy sits on the harmonic series of `f0_hz`.
 
     The question this answers is not what pitch a sound has but whether it has

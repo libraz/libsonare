@@ -70,12 +70,17 @@ def render_oracle_fluidsynth(
         mid_path.write_bytes(smf_bytes)
         cmd = [
             "fluidsynth",
-            "-ni",                # no shell, no MIDI driver
-            "-r", str(sr),
-            "-g", str(gain),
-            "-R", "0",            # dry render: reverb/chorus tails would
-            "-C", "0",            # contaminate release and TNR metrics
-            "-F", str(wav_path),  # fast render to file
+            "-ni",  # no shell, no MIDI driver
+            "-r",
+            str(sr),
+            "-g",
+            str(gain),
+            "-R",
+            "0",  # dry render: reverb/chorus tails would
+            "-C",
+            "0",  # contaminate release and TNR metrics
+            "-F",
+            str(wav_path),  # fast render to file
             str(sf2),
             str(mid_path),
         ]
@@ -116,8 +121,11 @@ def resample_linear(audio: np.ndarray, src_sr: int, dst_sr: int) -> np.ndarray:
     base = np.floor(src_pos).astype(np.int64)
     out = np.zeros((n_out, audio.shape[1]), dtype=np.float32)
     offsets = np.arange(-taps // 2 + 1, taps // 2 + 1)
-    window = 0.42 - 0.5 * np.cos(2 * np.pi * (np.arange(taps) + 0.5) / taps) + \
-        0.08 * np.cos(4 * np.pi * (np.arange(taps) + 0.5) / taps)
+    window = (
+        0.42
+        - 0.5 * np.cos(2 * np.pi * (np.arange(taps) + 0.5) / taps)
+        + 0.08 * np.cos(4 * np.pi * (np.arange(taps) + 0.5) / taps)
+    )
     for ch in range(audio.shape[1]):
         col = audio[:, ch]
         acc = np.zeros(n_out, dtype=np.float64)
@@ -136,17 +144,35 @@ def add_oracle_args(parser) -> None:
     """Register the oracle-source flags shared by `voicematch` and `autofit`."""
     from au_oracle import add_au_args
 
-    parser.add_argument("--sf2", default="",
-                        help="oracle SoundFont path (default: assets/MuseScore_General.sf3)")
-    parser.add_argument("--oracle-wav", default="", dest="oracle_wav",
-                        help="use an externally rendered WAV of the probe instead of fluidsynth "
-                             "(export the probe with `voicematch.py export-probe`)")
-    parser.add_argument("--oracle-offset", type=float, default=None, dest="oracle_offset",
-                        help="seconds of lead-in to strip from --oracle-wav (default: estimated)")
-    parser.add_argument("--oracle-no-align", action="store_true", dest="oracle_no_align",
-                        help="take --oracle-wav as-is instead of aligning it to the score")
-    parser.add_argument("--oracle-resample", action="store_true", dest="oracle_resample",
-                        help="resample --oracle-wav if its rate differs from the harness rate")
+    parser.add_argument(
+        "--sf2", default="", help="oracle SoundFont path (default: assets/MuseScore_General.sf3)"
+    )
+    parser.add_argument(
+        "--oracle-wav",
+        default="",
+        dest="oracle_wav",
+        help="use an externally rendered WAV of the probe instead of fluidsynth "
+        "(export the probe with `voicematch.py export-probe`)",
+    )
+    parser.add_argument(
+        "--oracle-offset",
+        type=float,
+        default=None,
+        dest="oracle_offset",
+        help="seconds of lead-in to strip from --oracle-wav (default: estimated)",
+    )
+    parser.add_argument(
+        "--oracle-no-align",
+        action="store_true",
+        dest="oracle_no_align",
+        help="take --oracle-wav as-is instead of aligning it to the score",
+    )
+    parser.add_argument(
+        "--oracle-resample",
+        action="store_true",
+        dest="oracle_resample",
+        help="resample --oracle-wav if its rate differs from the harness rate",
+    )
     add_au_args(parser)
 
 
@@ -194,14 +220,22 @@ def check_oracle_rig(args, program: int, *, allow: bool = False) -> None:
 
     if not rig_capable(program):
         return
-    external = ("--oracle-wav" if getattr(args, "oracle_wav", "")
-                else f"--au {getattr(args, 'au', '')}" if getattr(args, "au", "") else "")
+    external = (
+        "--oracle-wav"
+        if getattr(args, "oracle_wav", "")
+        else f"--au {getattr(args, 'au', '')}"
+        if getattr(args, "au", "")
+        else ""
+    )
     if external:
-        print(f"{external} carries no record of a rig, and program {program} is a family "
-              f"that can have one: if this reference was recorded through an amplifier, the "
-              f"fit reproduces the amplifier with the instrument's own parameters and the "
-              f"values are lost the moment the rig becomes a stage of its own. Only a "
-              f"capture can answer this.", file=sys.stderr)
+        print(
+            f"{external} carries no record of a rig, and program {program} is a family "
+            f"that can have one: if this reference was recorded through an amplifier, the "
+            f"fit reproduces the amplifier with the instrument's own parameters and the "
+            f"values are lost the moment the rig becomes a stage of its own. Only a "
+            f"capture can answer this.",
+            file=sys.stderr,
+        )
         return
     why = (
         f"the built-in GM oracle cannot be a DI for program {program}: general MIDI defines "
@@ -210,11 +244,14 @@ def check_oracle_rig(args, program: int, *, allow: bool = False) -> None:
         f"than merely unrecorded, which is why no capture field can change this answer. A "
         f"rig has no inverse, so the fit would reproduce the amplifier with the "
         f"instrument's own parameters. Fit against a reference captured at the instrument's "
-        f"own boundary instead (`--corpus` on a capture that says \"rig\": \"none\")"
+        f'own boundary instead (`--corpus` on a capture that says "rig": "none")'
     )
     if allow:
-        print(f"--allow-rigged-oracle: {why}. Proceeding; the values this produces "
-              f"transfer to nothing once the rig is a stage of its own.", file=sys.stderr)
+        print(
+            f"--allow-rigged-oracle: {why}. Proceeding; the values this produces "
+            f"transfer to nothing once the rig is a stage of its own.",
+            file=sys.stderr,
+        )
         return
     raise ValueError(f"{why}. --allow-rigged-oracle overrides.")
 
@@ -233,17 +270,23 @@ def obtain_oracle(args, smf_bytes: bytes, total_seconds: float, sr: int, onsets_
         source = source_from_args(args)
         if source is not None:
             return render_oracle_au(
-                smf_bytes, total_seconds, sr,
+                smf_bytes,
+                total_seconds,
+                sr,
                 source=source,
                 cache_dir=None if getattr(args, "au_no_cache", False) else DEFAULT_AU_CACHE,
                 verbose=True,
             )
         return render_oracle_fluidsynth(
-            smf_bytes, total_seconds, sr,
+            smf_bytes,
+            total_seconds,
+            sr,
             soundfont=Path(args.sf2) if getattr(args, "sf2", "") else None,
         )
     audio, shift = load_oracle_wav(
-        Path(wav), total_seconds, sr,
+        Path(wav),
+        total_seconds,
+        sr,
         onsets_s=onsets_s,
         align=not getattr(args, "oracle_no_align", False),
         offset_s=getattr(args, "oracle_offset", None),
@@ -265,7 +308,10 @@ def _onset_strength(mono: np.ndarray, sr: int, hop: int) -> np.ndarray:
 
 
 def estimate_alignment(
-    audio: np.ndarray, sr: int, onsets_s, max_shift_s: float = 3.0,
+    audio: np.ndarray,
+    sr: int,
+    onsets_s,
+    max_shift_s: float = 3.0,
 ) -> float:
     """Seconds the WAV must be shifted EARLIER to line up with the probe.
 

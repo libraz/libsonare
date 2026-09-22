@@ -39,8 +39,15 @@ def test_the_compare_table_has_a_dimension_that_moves_when_a_gain_does():
     is not this either.
     """
     assert "level" in profile_module.DELTA_LABELS
-    normalised = {"band_tilt", "band_shape", "band_decay", "attack", "crest",
-                  "centroid_pct", "vel_range"}
+    normalised = {
+        "band_tilt",
+        "band_shape",
+        "band_decay",
+        "attack",
+        "crest",
+        "centroid_pct",
+        "vel_range",
+    }
     assert "level" not in normalised
 
 
@@ -65,9 +72,17 @@ def test_the_model_grid_stops_where_the_capture_says_its_reference_did(tmp_path,
     monkeypatch.setattr(profile_module, "render_model", fake_render)
     monkeypatch.setattr(profile_module, "write_wav", lambda *a, **k: None)
 
-    cfg = {"id": "g", "notes": [52], "velocities": [100], "sample_rate": 48000,
-           "gate_ms": 50, "preroll_ms": 100, "tail": "1s", "program": 30,
-           "timbres": [{"id": "t"}]}
+    cfg = {
+        "id": "g",
+        "notes": [52],
+        "velocities": [100],
+        "sample_rate": 48000,
+        "gate_ms": 50,
+        "preroll_ms": 100,
+        "tail": "1s",
+        "program": 30,
+        "timbres": [{"id": "t"}],
+    }
     profile_module.render_grid({**cfg, "rig": "none"}, tmp_path / "di", timbre="t", program=30)
     profile_module.render_grid({**cfg, "rig": "baked"}, tmp_path / "amp", timbre="t", program=30)
     # And a capture that never answered gets the product sound, since comparing
@@ -103,10 +118,18 @@ def test_the_model_grid_is_rendered_over_each_note_s_own_tail(tmp_path, monkeypa
 
     monkeypatch.setattr(profile_module, "write_smf", spy_smf)
 
-    cfg = {"id": "kit", "notes": [35, 51, 81], "velocities": [100],
-           "sample_rate": 48000, "gate_ms": 50, "preroll_ms": 100,
-           "tail": "2s", "tail_by_note": {"49-59": "8s", "80-81": "6s"},
-           "channel": 10, "timbres": [{"id": "t", "channel": 10}]}
+    cfg = {
+        "id": "kit",
+        "notes": [35, 51, 81],
+        "velocities": [100],
+        "sample_rate": 48000,
+        "gate_ms": 50,
+        "preroll_ms": 100,
+        "tail": "2s",
+        "tail_by_note": {"49-59": "8s", "80-81": "6s"},
+        "channel": 10,
+        "timbres": [{"id": "t", "channel": 10}],
+    }
     profile_module.render_grid(cfg, tmp_path, timbre="model", program=0)
 
     # preroll 0.1 + gate 0.05 + the note's own tail.
@@ -118,27 +141,50 @@ def test_the_model_grid_is_rendered_over_each_note_s_own_tail(tmp_path, monkeypa
     recorded = {r["note"]: r["seconds"] for r in manifest["renders"]}
     # And the manifest records it, which is what `load_corpus` reads the
     # analysis window back out of.
-    assert recorded == {35: pytest.approx(2.15), 51: pytest.approx(8.15),
-                        81: pytest.approx(6.15)}
+    assert recorded == {35: pytest.approx(2.15), 51: pytest.approx(8.15), 81: pytest.approx(6.15)}
 
 
-def _recorded_corpus(root: Path, *, timbre: str, seconds: dict[int, float],
-                     gate_ms: int, preroll_ms: int, tail: str,
-                     channel: int = 10) -> Path:
+def _recorded_corpus(
+    root: Path,
+    *,
+    timbre: str,
+    seconds: dict[int, float],
+    gate_ms: int,
+    preroll_ms: int,
+    tail: str,
+    channel: int = 10,
+) -> Path:
     """A manifest whose slots carry their own recorded lengths, with no audio.
 
     `load_corpus` resolves render paths and never opens them, so the lengths are
     all that has to be there for the window to be read back.
     """
     root.mkdir(parents=True, exist_ok=True)
-    (root / "manifest.json").write_text(json.dumps({
-        "id": "w", "sample_rate": 48000, "gate_ms": gate_ms, "tail": tail,
-        "preroll_ms": preroll_ms, "notes": sorted(seconds), "velocities": [100],
-        "timbres": [{"id": timbre, "channel": channel}],
-        "renders": [{"id": f"{timbre}/n{n:03d}_v100", "timbre": timbre, "note": n,
-                     "velocity": 100, "path": f"{timbre}/n{n:03d}_v100.wav",
-                     "seconds": s} for n, s in sorted(seconds.items())],
-    }))
+    (root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "id": "w",
+                "sample_rate": 48000,
+                "gate_ms": gate_ms,
+                "tail": tail,
+                "preroll_ms": preroll_ms,
+                "notes": sorted(seconds),
+                "velocities": [100],
+                "timbres": [{"id": timbre, "channel": channel}],
+                "renders": [
+                    {
+                        "id": f"{timbre}/n{n:03d}_v100",
+                        "timbre": timbre,
+                        "note": n,
+                        "velocity": 100,
+                        "path": f"{timbre}/n{n:03d}_v100.wav",
+                        "seconds": s,
+                    }
+                    for n, s in sorted(seconds.items())
+                ],
+            }
+        )
+    )
     return root
 
 
@@ -159,8 +205,9 @@ def _spy_render(monkeypatch, rows=None):
     monkeypatch.setattr(profile_module, "render_model", fake_render)
     monkeypatch.setattr(profile_module, "write_smf", spy_smf)
     if rows is not None:
-        monkeypatch.setattr(profile_module, "measure_hit",
-                            lambda audio, sr, note, vel, **kw: dict(rows[note]))
+        monkeypatch.setattr(
+            profile_module, "measure_hit", lambda audio, sr, note, vel, **kw: dict(rows[note])
+        )
     return asked
 
 
@@ -173,22 +220,48 @@ def test_a_hit_is_rendered_over_the_window_its_reference_was_recorded_in(tmp_pat
     to 2.09 s of audio, and against a 400 ms model buffer the cymbals reported a
     decay of 397.6 ms — the length of the buffer, not the voice.
     """
-    corpus = _recorded_corpus(tmp_path / "c", timbre="t", gate_ms=400,
-                              preroll_ms=0, tail="0s",
-                              seconds={41: 0.66, 49: 2.09})
-    profile = {"id": "w", "label": "W",
-               "capture": {"program": 0, "gate_ms": 400, "preroll_ms": 0,
-                           "sample_rate": 48000, "channel": 10},
-               "rows": [{"timbre": "t", "note": n, "velocity": 100}
-                        for n in (41, 49)]}
-    cfg = {"id": "w", "notes": [41, 49], "velocities": [100], "gate_ms": 400,
-           "preroll_ms": 0, "tail": "0s", "program": 0,
-           "timbres": [{"id": "t", "channel": 10}]}
+    corpus = _recorded_corpus(
+        tmp_path / "c",
+        timbre="t",
+        gate_ms=400,
+        preroll_ms=0,
+        tail="0s",
+        seconds={41: 0.66, 49: 2.09},
+    )
+    profile = {
+        "id": "w",
+        "label": "W",
+        "capture": {
+            "program": 0,
+            "gate_ms": 400,
+            "preroll_ms": 0,
+            "sample_rate": 48000,
+            "channel": 10,
+        },
+        "rows": [{"timbre": "t", "note": n, "velocity": 100} for n in (41, 49)],
+    }
+    cfg = {
+        "id": "w",
+        "notes": [41, 49],
+        "velocities": [100],
+        "gate_ms": 400,
+        "preroll_ms": 0,
+        "tail": "0s",
+        "program": 0,
+        "timbres": [{"id": "t", "channel": 10}],
+    }
 
     asked = _spy_render(monkeypatch)
-    profile_module.compare_percussion(cfg, profile, timbre="t", notes_filter=set(),
-                                      gate_path="", write_gate="", margin=1.25,
-                                      corpus_dir=corpus)
+    profile_module.compare_percussion(
+        cfg,
+        profile,
+        timbre="t",
+        notes_filter=set(),
+        gate_path="",
+        write_gate="",
+        margin=1.25,
+        corpus_dir=corpus,
+    )
     assert asked == {41: pytest.approx(0.66), 49: pytest.approx(2.09)}
 
 
@@ -201,25 +274,55 @@ def test_a_grid_the_manifest_records_at_the_declared_length_does_not_move(tmp_pa
     slot length would round the two together.
     """
     declared = {35: 0.1 + 0.05 + 2.0, 51: 0.1 + 0.05 + 8.0}
-    corpus = _recorded_corpus(tmp_path / "c", timbre="t", gate_ms=50,
-                              preroll_ms=100, tail="2s", seconds=declared)
-    profile = {"id": "w", "label": "W",
-               "capture": {"program": 0, "gate_ms": 50, "preroll_ms": 100,
-                           "sample_rate": 48000, "channel": 10},
-               "rows": [{"timbre": "t", "note": n, "velocity": 100}
-                        for n in (35, 51)]}
-    cfg = {"id": "w", "notes": [35, 51], "velocities": [100], "gate_ms": 50,
-           "preroll_ms": 100, "tail": "2s", "tail_by_note": {"49-59": "8s"},
-           "program": 0, "timbres": [{"id": "t", "channel": 10}]}
+    corpus = _recorded_corpus(
+        tmp_path / "c", timbre="t", gate_ms=50, preroll_ms=100, tail="2s", seconds=declared
+    )
+    profile = {
+        "id": "w",
+        "label": "W",
+        "capture": {
+            "program": 0,
+            "gate_ms": 50,
+            "preroll_ms": 100,
+            "sample_rate": 48000,
+            "channel": 10,
+        },
+        "rows": [{"timbre": "t", "note": n, "velocity": 100} for n in (35, 51)],
+    }
+    cfg = {
+        "id": "w",
+        "notes": [35, 51],
+        "velocities": [100],
+        "gate_ms": 50,
+        "preroll_ms": 100,
+        "tail": "2s",
+        "tail_by_note": {"49-59": "8s"},
+        "program": 0,
+        "timbres": [{"id": "t", "channel": 10}],
+    }
 
     with_corpus = _spy_render(monkeypatch)
-    profile_module.compare_percussion(cfg, profile, timbre="t", notes_filter=set(),
-                                      gate_path="", write_gate="", margin=1.25,
-                                      corpus_dir=corpus)
+    profile_module.compare_percussion(
+        cfg,
+        profile,
+        timbre="t",
+        notes_filter=set(),
+        gate_path="",
+        write_gate="",
+        margin=1.25,
+        corpus_dir=corpus,
+    )
     without = _spy_render(monkeypatch)
-    profile_module.compare_percussion(cfg, profile, timbre="t", notes_filter=set(),
-                                      gate_path="", write_gate="", margin=1.25,
-                                      corpus_dir=None)
+    profile_module.compare_percussion(
+        cfg,
+        profile,
+        timbre="t",
+        notes_filter=set(),
+        gate_path="",
+        write_gate="",
+        margin=1.25,
+        corpus_dir=None,
+    )
     assert with_corpus == {35: pytest.approx(2.15), 51: pytest.approx(8.15)}
     assert with_corpus == without
 
@@ -228,23 +331,42 @@ def test_a_note_is_rendered_over_its_recorded_window_on_the_pitched_path_too(tmp
     """The same pair, one comparator over: a damper release is read to the end of
     the buffer, so a pitched reference recorded past its gate is differenced
     against a model that stopped at one."""
-    corpus = _recorded_corpus(tmp_path / "c", timbre="t", gate_ms=1000,
-                              preroll_ms=0, tail="0s", seconds={60: 3.4},
-                              channel=1)
-    profile = {"id": "w", "label": "W",
-               "capture": {"program": 0, "gate_ms": 1000, "preroll_ms": 0,
-                           "sample_rate": 48000, "channel": 1},
-               "rows": [{"timbre": "t", "note": 60, "velocity": 100,
-                         "f0_hz": 261.6, "cents_vs_et": 0.0}]}
-    cfg = {"id": "w", "notes": [60], "velocities": [100], "gate_ms": 1000,
-           "preroll_ms": 0, "tail": "0s", "program": 0,
-           "timbres": [{"id": "t", "channel": 1}]}
+    corpus = _recorded_corpus(
+        tmp_path / "c",
+        timbre="t",
+        gate_ms=1000,
+        preroll_ms=0,
+        tail="0s",
+        seconds={60: 3.4},
+        channel=1,
+    )
+    profile = {
+        "id": "w",
+        "label": "W",
+        "capture": {
+            "program": 0,
+            "gate_ms": 1000,
+            "preroll_ms": 0,
+            "sample_rate": 48000,
+            "channel": 1,
+        },
+        "rows": [{"timbre": "t", "note": 60, "velocity": 100, "f0_hz": 261.6, "cents_vs_et": 0.0}],
+    }
+    cfg = {
+        "id": "w",
+        "notes": [60],
+        "velocities": [100],
+        "gate_ms": 1000,
+        "preroll_ms": 0,
+        "tail": "0s",
+        "program": 0,
+        "timbres": [{"id": "t", "channel": 1}],
+    }
     path = tmp_path / "ref.json"
     path.write_text(json.dumps(profile))
 
     asked = _spy_render(monkeypatch)
-    profile_module.compare(cfg, path, timbre="t", notes_filter=set(),
-                           corpus_dir=corpus)
+    profile_module.compare(cfg, path, timbre="t", notes_filter=set(), corpus_dir=corpus)
     assert asked == {60: pytest.approx(3.4)}
 
 
@@ -260,25 +382,56 @@ def test_a_capped_hit_is_censored_from_the_decay_column_and_counted(tmp_path, mo
         41: _hit_row(decay_ms=300.0, decay_capped=False),
         49: _hit_row(decay_ms=2000.0, decay_capped=True, band_decay_db_s=[-1.0] * 8),
     }
-    corpus = _recorded_corpus(tmp_path / "c", timbre="t", gate_ms=400,
-                              preroll_ms=0, tail="0s", seconds={41: 0.66, 49: 2.09})
-    profile = {"id": "w", "label": "W",
-               "capture": {"program": 0, "gate_ms": 400, "preroll_ms": 0,
-                           "sample_rate": 48000, "channel": 10},
-               "rows": [{"timbre": "t", "note": n, "velocity": 100,
-                         **_hit_row(decay_ms=400.0)} for n in (41, 49)]}
-    cfg = {"id": "w", "notes": [41, 49], "velocities": [100], "gate_ms": 400,
-           "preroll_ms": 0, "tail": "0s", "program": 0,
-           "dimensions": ["band_decay", "ring"],
-           "timbres": [{"id": "t", "channel": 10}]}
+    corpus = _recorded_corpus(
+        tmp_path / "c",
+        timbre="t",
+        gate_ms=400,
+        preroll_ms=0,
+        tail="0s",
+        seconds={41: 0.66, 49: 2.09},
+    )
+    profile = {
+        "id": "w",
+        "label": "W",
+        "capture": {
+            "program": 0,
+            "gate_ms": 400,
+            "preroll_ms": 0,
+            "sample_rate": 48000,
+            "channel": 10,
+        },
+        "rows": [
+            {"timbre": "t", "note": n, "velocity": 100, **_hit_row(decay_ms=400.0)}
+            for n in (41, 49)
+        ],
+    }
+    cfg = {
+        "id": "w",
+        "notes": [41, 49],
+        "velocities": [100],
+        "gate_ms": 400,
+        "preroll_ms": 0,
+        "tail": "0s",
+        "program": 0,
+        "dimensions": ["band_decay", "ring"],
+        "timbres": [{"id": "t", "channel": 10}],
+    }
 
     _spy_render(monkeypatch, rows=rows)
     printed: list[str] = []
-    monkeypatch.setattr("builtins.print",
-                        lambda *a, **k: printed.append(" ".join(str(x) for x in a)))
-    profile_module.compare_percussion(cfg, profile, timbre="t", notes_filter=set(),
-                                      gate_path="", write_gate="", margin=1.25,
-                                      corpus_dir=corpus)
+    monkeypatch.setattr(
+        "builtins.print", lambda *a, **k: printed.append(" ".join(str(x) for x in a))
+    )
+    profile_module.compare_percussion(
+        cfg,
+        profile,
+        timbre="t",
+        notes_filter=set(),
+        gate_path="",
+        write_gate="",
+        margin=1.25,
+        corpus_dir=corpus,
+    )
     text = "\n".join(printed)
     # Named and counted, with the side that ran out said rather than left to be
     # inferred from a row that is simply missing.
@@ -294,8 +447,9 @@ def test_a_capped_hit_is_censored_from_the_decay_column_and_counted(tmp_path, mo
     assert ring.split()[-2:] == ["1", "1"]
 
 
-def test_a_ring_that_has_collapsed_to_nothing_is_reported_rather_than_dropped(tmp_path,
-                                                                             monkeypatch):
+def test_a_ring_that_has_collapsed_to_nothing_is_reported_rather_than_dropped(
+    tmp_path, monkeypatch
+):
     """`decay_ms` 0.0 is a piece that stopped ringing, and no ratio of it exists.
 
     `ring_doublings` refuses a zero, and a refusal reduced with a skip takes the
@@ -308,24 +462,56 @@ def test_a_ring_that_has_collapsed_to_nothing_is_reported_rather_than_dropped(tm
         51: _hit_row(decay_ms=0.0),
         59: _hit_row(decay_ms=0.0),
     }
-    corpus = _recorded_corpus(tmp_path / "c", timbre="t", gate_ms=400, preroll_ms=0,
-                              tail="0s", seconds={41: 0.66, 51: 1.16, 59: 1.09})
-    profile = {"id": "w", "label": "W",
-               "capture": {"program": 0, "gate_ms": 400, "preroll_ms": 0,
-                           "sample_rate": 48000, "channel": 10},
-               "rows": [{"timbre": "t", "note": n, "velocity": 100,
-                         **_hit_row(decay_ms=400.0)} for n in (41, 51, 59)]}
-    cfg = {"id": "w", "notes": [41, 51, 59], "velocities": [100], "gate_ms": 400,
-           "preroll_ms": 0, "tail": "0s", "program": 0, "dimensions": ["ring"],
-           "timbres": [{"id": "t", "channel": 10}]}
+    corpus = _recorded_corpus(
+        tmp_path / "c",
+        timbre="t",
+        gate_ms=400,
+        preroll_ms=0,
+        tail="0s",
+        seconds={41: 0.66, 51: 1.16, 59: 1.09},
+    )
+    profile = {
+        "id": "w",
+        "label": "W",
+        "capture": {
+            "program": 0,
+            "gate_ms": 400,
+            "preroll_ms": 0,
+            "sample_rate": 48000,
+            "channel": 10,
+        },
+        "rows": [
+            {"timbre": "t", "note": n, "velocity": 100, **_hit_row(decay_ms=400.0)}
+            for n in (41, 51, 59)
+        ],
+    }
+    cfg = {
+        "id": "w",
+        "notes": [41, 51, 59],
+        "velocities": [100],
+        "gate_ms": 400,
+        "preroll_ms": 0,
+        "tail": "0s",
+        "program": 0,
+        "dimensions": ["ring"],
+        "timbres": [{"id": "t", "channel": 10}],
+    }
 
     _spy_render(monkeypatch, rows=rows)
     printed: list[str] = []
-    monkeypatch.setattr("builtins.print",
-                        lambda *a, **k: printed.append(" ".join(str(x) for x in a)))
-    profile_module.compare_percussion(cfg, profile, timbre="t", notes_filter=set(),
-                                      gate_path="", write_gate="", margin=1.25,
-                                      corpus_dir=corpus)
+    monkeypatch.setattr(
+        "builtins.print", lambda *a, **k: printed.append(" ".join(str(x) for x in a))
+    )
+    profile_module.compare_percussion(
+        cfg,
+        profile,
+        timbre="t",
+        notes_filter=set(),
+        gate_path="",
+        write_gate="",
+        margin=1.25,
+        corpus_dir=corpus,
+    )
     text = "\n".join(printed)
     assert "2 of 3 scored rows report NO ring at all" in text
     assert "model side" in text
@@ -390,14 +576,18 @@ def test_a_stamp_moves_only_when_the_measurement_does(tmp_path):
     gate as predating its own reference.
     """
     out = tmp_path / "ref.json"
-    body = {"id": "x", "label": "X", "capture": {"program": 0},
-            "rows": [{"note": 60, "f0_hz": 261.6}], "summary": {}}
+    body = {
+        "id": "x",
+        "label": "X",
+        "capture": {"program": 0},
+        "rows": [{"note": 60, "f0_hz": 261.6}],
+        "summary": {},
+    }
     # A stamp from the past rather than one taken here: the resolution is one
     # second, so a "changed" case written in the same second as the file it is
     # compared against would read as unchanged and prove nothing.
     first = "2026-01-01T00:00:00+00:00"
-    out.write_text(json.dumps({**body, "measured_utc": first}, indent=1,
-                              ensure_ascii=False) + "\n")
+    out.write_text(json.dumps({**body, "measured_utc": first}, indent=1, ensure_ascii=False) + "\n")
 
     # Same numbers, later run: the stamp is carried forward.
     assert profile_module.measurement_stamp({**body, "measured_utc": ""}, out) == first
@@ -413,8 +603,10 @@ def test_a_stamp_moves_only_when_the_measurement_does(tmp_path):
 
     # No file yet, and an unreadable one, both mean "stamp it now" rather than
     # an exception — a first measure and a half-written file are both normal.
-    assert profile_module.measurement_stamp({**body, "measured_utc": ""},
-                                            tmp_path / "absent.json") != first
+    assert (
+        profile_module.measurement_stamp({**body, "measured_utc": ""}, tmp_path / "absent.json")
+        != first
+    )
     out.write_text("{ not json")
     assert profile_module.measurement_stamp({**body, "measured_utc": ""}, out) != first
 
@@ -427,13 +619,18 @@ def test_a_profile_read_back_compares_equal_to_the_one_that_wrote_it(tmp_path):
     stamp would then move on every run, which is the defect this replaces.
     """
     out = tmp_path / "ref.json"
-    profile = {"id": "x", "label": "X", "measured_utc": "",
-               "capture": {"notes": (60, 72), "band_edge_hz": None},
-               "rows": [{"note": 60, "partials_db": [0.0, -12.5, -18.25]}],
-               "summary": {}}
+    profile = {
+        "id": "x",
+        "label": "X",
+        "measured_utc": "",
+        "capture": {"notes": (60, 72), "band_edge_hz": None},
+        "rows": [{"note": 60, "partials_db": [0.0, -12.5, -18.25]}],
+        "summary": {},
+    }
     stamp = "2026-01-01T00:00:00+00:00"
-    out.write_text(json.dumps({**profile, "measured_utc": stamp}, indent=1,
-                              ensure_ascii=False) + "\n")
+    out.write_text(
+        json.dumps({**profile, "measured_utc": stamp}, indent=1, ensure_ascii=False) + "\n"
+    )
     assert profile_module.measurement_stamp(profile, out) == stamp
 
 
@@ -446,8 +643,8 @@ def test_a_faded_sample_does_not_have_the_slope_of_its_silence_read_as_an_afters
     corpus, a C7 whose aftersound is 12 s read as 54.
     """
     t = np.linspace(0.0, 8.0, 400)
-    real = -28.0 - 5.0 * t                     # a 12 s aftersound, unbroken
-    faded = np.where(t < 3.0, real, -240.0)    # the same note, cut at 3 s
+    real = -28.0 - 5.0 * t  # a 12 s aftersound, unbroken
+    faded = np.where(t < 3.0, real, -240.0)  # the same note, cut at 3 s
 
     end = profile_module.usable_decay_end(faded, 0)
     assert t[end - 1] == pytest.approx(3.0, abs=0.1)
@@ -471,9 +668,11 @@ def test_a_held_note_arrives_where_it_got_loud_not_where_it_wobbled():
     rise = np.clip(t / 0.025, 0.0, 1.0)
     # A tremolo alone crests first at its own first period; what puts the maximum
     # late is the slow wander under it, which is what the level actually does.
-    env_db = (20.0 * np.log10(np.maximum(rise, 1e-6))
-              + 0.9 * np.sin(2.0 * np.pi * 5.0 * t)
-              + 0.6 * np.sin(2.0 * np.pi * 0.2 * t - 1.194))
+    env_db = (
+        20.0 * np.log10(np.maximum(rise, 1e-6))
+        + 0.9 * np.sin(2.0 * np.pi * 5.0 * t)
+        + 0.6 * np.sin(2.0 * np.pi * 0.2 * t - 1.194)
+    )
 
     late = int(np.argmax(env_db))
     assert t[late] > 1.0, "the fixture has to crest late to be a test"
@@ -500,9 +699,14 @@ def test_a_struck_notes_decay_is_still_fitted_from_its_peak():
     sr = 200
     t = np.linspace(0.0, 3.0, int(3.0 * sr))
     env_db = np.piecewise(
-        t, [t < 0.01, (t >= 0.01) & (t < 0.04), t >= 0.04],
-        [lambda u: -40.0 + 3700.0 * u, lambda u: -3.0 + 100.0 * (u - 0.01),
-         lambda u: -63.0 * (u - 0.04)])
+        t,
+        [t < 0.01, (t >= 0.01) & (t < 0.04), t >= 0.04],
+        [
+            lambda u: -40.0 + 3700.0 * u,
+            lambda u: -3.0 + 100.0 * (u - 0.01),
+            lambda u: -63.0 * (u - 0.04),
+        ],
+    )
     peak = int(np.argmax(env_db))
 
     onset = profile_module.arrival_index(env_db)
@@ -511,9 +715,10 @@ def test_a_struck_notes_decay_is_still_fitted_from_its_peak():
     assert origin == pytest.approx(peak, abs=1)
 
     knee = int(0.05 * sr)
-    assert np.polyfit(t[onset:onset + knee], env_db[onset:onset + knee], 1)[0] > 0.0, \
+    assert np.polyfit(t[onset : onset + knee], env_db[onset : onset + knee], 1)[0] > 0.0, (
         "fitting from the arrival is what reports a climb"
-    assert np.polyfit(t[origin:origin + knee], env_db[origin:origin + knee], 1)[0] < -60.0
+    )
+    assert np.polyfit(t[origin : origin + knee], env_db[origin : origin + knee], 1)[0] < -60.0
 
 
 def test_a_beating_unison_dips_below_the_range_without_having_stopped():
@@ -588,8 +793,9 @@ def test_a_long_note_is_not_a_loud_one():
 
     def measured(rate):
         x = (tone * np.exp(-rate * t)).astype(np.float32)
-        return profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
-                                           preroll_s=0.0, gate_s=2.5)
+        return profile_module.measure_note(
+            np.stack([x] * 2, axis=1), sr, 69, preroll_s=0.0, gate_s=2.5
+        )
 
     quick, sustained = measured(6.0), measured(0.2)
     assert quick["held_peak_dbfs"] == pytest.approx(sustained["held_peak_dbfs"], abs=1.0)
@@ -605,8 +811,9 @@ def test_the_hammer_reaches_the_body_level_only_through_the_window():
     clicked[:8] += 1.0
 
     def measured(x):
-        return profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
-                                           preroll_s=0.0, gate_s=2.5)
+        return profile_module.measure_note(
+            np.stack([x] * 2, axis=1), sr, 69, preroll_s=0.0, gate_s=2.5
+        )
 
     plain, hammered = measured(tone), measured(clicked)
     on_peak = hammered["peak_dbfs"] - plain["peak_dbfs"]
@@ -615,8 +822,9 @@ def test_the_hammer_reaches_the_body_level_only_through_the_window():
     assert 0.0 < on_body < on_peak / 4.0
 
 
-def _ramped_tone(sr: int, seconds: float, ramp_s: float = 0.05,
-                 decay: float = 1.0, hz: float = 440.0) -> np.ndarray:
+def _ramped_tone(
+    sr: int, seconds: float, ramp_s: float = 0.05, decay: float = 1.0, hz: float = 440.0
+) -> np.ndarray:
     t = np.arange(int(seconds * sr)) / sr
     env = np.minimum(1.0, t / ramp_s) * np.exp(-decay * t)
     return (np.sin(2 * np.pi * hz * t) * env).astype(np.float32)
@@ -640,8 +848,9 @@ def test_a_note_the_host_sounded_late_measures_the_same_as_one_it_sounded_on_tim
 
     def measured(lead_s: float) -> dict:
         x = np.concatenate([preroll, np.zeros(int(lead_s * sr), dtype=np.float32), tone])
-        return profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
-                                           preroll_s=0.1, gate_s=2.0)
+        return profile_module.measure_note(
+            np.stack([x] * 2, axis=1), sr, 69, preroll_s=0.1, gate_s=2.0
+        )
 
     on_time, late = measured(0.0), measured(0.04)
     assert on_time["onset_ms"] == pytest.approx(0.0, abs=3.0)
@@ -666,14 +875,16 @@ def test_the_window_never_opens_inside_the_preroll():
     preroll = np.zeros(int(0.1 * sr), dtype=np.float32)
 
     click = preroll.copy()
-    click[int(0.02 * sr):int(0.03 * sr)] = 0.2
-    bed = preroll + (0.01 * np.sin(2 * np.pi * 300.0 * np.arange(len(preroll)) / sr)
-                     ).astype(np.float32)
+    click[int(0.02 * sr) : int(0.03 * sr)] = 0.2
+    bed = preroll + (0.01 * np.sin(2 * np.pi * 300.0 * np.arange(len(preroll)) / sr)).astype(
+        np.float32
+    )
 
     for lead in (click, bed):
         x = np.concatenate([lead, tone])
-        row = profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
-                                          preroll_s=0.1, gate_s=2.0)
+        row = profile_module.measure_note(
+            np.stack([x] * 2, axis=1), sr, 69, preroll_s=0.1, gate_s=2.0
+        )
         assert row["onset_ms"] >= 0.0
         assert row["onset_ms"] == pytest.approx(0.0, abs=3.0)
 
@@ -691,11 +902,11 @@ def test_the_ladder_is_reported_against_its_fundamental_not_its_loudest_partial(
     """
     sr = SR
     t = np.arange(int(3.0 * sr)) / sr
-    x = (0.25 * np.sin(2 * np.pi * 440.0 * t)
-         + 0.5 * np.sin(2 * np.pi * 880.0 * t)).astype(np.float32)
+    x = (0.25 * np.sin(2 * np.pi * 440.0 * t) + 0.5 * np.sin(2 * np.pi * 880.0 * t)).astype(
+        np.float32
+    )
 
-    row = profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69,
-                                      preroll_s=0.0, gate_s=2.5)
+    row = profile_module.measure_note(np.stack([x] * 2, axis=1), sr, 69, preroll_s=0.0, gate_s=2.5)
 
     assert row["partials_db"][0] == pytest.approx(0.0, abs=0.05)
     assert row["partials_db"][1] == pytest.approx(6.0, abs=1.0)
@@ -704,12 +915,14 @@ def test_the_ladder_is_reported_against_its_fundamental_not_its_loudest_partial(
 def test_a_tail_window_stops_where_the_references_do():
     """A render that finishes before its file does must not lend its silence to the window."""
     sr = SR
-    ran_out = np.concatenate([np.ones(int(2.0 * sr), dtype=np.float32),
-                              np.zeros(int(2.0 * sr), dtype=np.float32)])
+    ran_out = np.concatenate(
+        [np.ones(int(2.0 * sr), dtype=np.float32), np.zeros(int(2.0 * sr), dtype=np.float32)]
+    )
     full = np.ones(int(4.0 * sr), dtype=np.float32)
     assert profile_module.signal_end_s(ran_out, sr) == pytest.approx(2.0, abs=0.01)
-    assert profile_module.usable_tail([ran_out, full], sr, (1.0, 4.0)) == \
-        pytest.approx((1.0, 2.0), abs=0.01)
+    assert profile_module.usable_tail([ran_out, full], sr, (1.0, 4.0)) == pytest.approx(
+        (1.0, 2.0), abs=0.01
+    )
     # The model's own length never widens it, and a window with nothing left is None.
     assert profile_module.usable_tail([full], sr, (1.0, 4.0)) == (1.0, 4.0)
     assert profile_module.usable_tail([ran_out], sr, (2.5, 4.0)) is None
@@ -739,14 +952,14 @@ def test_a_high_pass_does_not_lend_a_loud_passage_to_a_quiet_one():
     sr = SR
     t = np.arange(3 * sr) / sr
     x = np.zeros_like(t)
-    x[:sr // 2] = np.sin(2 * np.pi * 440.0 * t[:sr // 2])
+    x[: sr // 2] = np.sin(2 * np.pi * 440.0 * t[: sr // 2])
     tail = np.arange(2 * sr) / sr
     x[sr:] = 1e-3 * np.sin(2 * np.pi * 200.0 * tail) * np.exp(-3.0 * tail)
     y = profile_module.highpass(x, sr, profile_module.TAKE_SUBSONIC_HZ)
 
     def db(sig, a, b):
-        seg = sig[int(a * sr):int(b * sr)]
-        return 20.0 * np.log10(max(float(np.sqrt(np.mean(seg ** 2))), 1e-18))
+        seg = sig[int(a * sr) : int(b * sr)]
+        return 20.0 * np.log10(max(float(np.sqrt(np.mean(seg**2))), 1e-18))
 
     # The tail runs 70 to 110 dB under the burst and has to survive untouched:
     # a brick wall on the rfft put a flat floor across all of it.
@@ -762,7 +975,7 @@ def test_the_high_pass_stops_what_no_instrument_radiates():
 
     def through(f):
         y = profile_module.highpass(np.sin(2 * np.pi * f * t), sr, hz)
-        return 20.0 * np.log10(float(np.sqrt(np.mean(y[sr // 4:-sr // 4] ** 2))) / np.sqrt(0.5))
+        return 20.0 * np.log10(float(np.sqrt(np.mean(y[sr // 4 : -sr // 4] ** 2))) / np.sqrt(0.5))
 
     assert through(hz / 5.0) < -60.0
     assert through(hz * 2.5) == pytest.approx(0.0, abs=0.5)
@@ -780,8 +993,9 @@ def test_model_sends_gs_reaches_a_dry_captured_voice(monkeypatch):
     from smf import Note
 
     seen: list[tuple] = []
-    monkeypatch.setattr(make_audition, "write_smf",
-                        lambda *a, **kw: seen.append(kw.get("sends")) or b"")
+    monkeypatch.setattr(
+        make_audition, "write_smf", lambda *a, **kw: seen.append(kw.get("sends")) or b""
+    )
 
     class Capture:
         dry = True
@@ -831,21 +1045,42 @@ def test_measure_reads_only_the_timbres_the_capture_declares(tmp_path):
         env = np.where(t < 0.1, 0.0, np.exp(-2.0 * (t - 0.1)))
         y = (0.5 * np.sin(2 * np.pi * f0 * t) * env).astype(np.float32)
         write_wav(root / tid / "n060_v100.wav", np.stack([y, y], axis=1), sr)
-    (root / "manifest.json").write_text(json.dumps({
-        "id": "x", "plugin": "aumu:xxxx:Yyyy", "params": [], "sample_rate": sr,
-        "gate_ms": 1000, "tail": "0s", "preroll_ms": 100, "notes": [note],
-        "velocities": [100],
-        "timbres": [{"id": "di"}, {"id": "retired"}],
-        "renders": [
-            {"id": "di/060/100", "timbre": "di", "note": note, "velocity": 100,
-             "path": "di/n060_v100.wav"},
-            {"id": "retired/060/100", "timbre": "retired", "note": note, "velocity": 100,
-             "path": "retired/n060_v100.wav"},
-        ],
-    }))
+    (root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "id": "x",
+                "plugin": "aumu:xxxx:Yyyy",
+                "params": [],
+                "sample_rate": sr,
+                "gate_ms": 1000,
+                "tail": "0s",
+                "preroll_ms": 100,
+                "notes": [note],
+                "velocities": [100],
+                "timbres": [{"id": "di"}, {"id": "retired"}],
+                "renders": [
+                    {
+                        "id": "di/060/100",
+                        "timbre": "di",
+                        "note": note,
+                        "velocity": 100,
+                        "path": "di/n060_v100.wav",
+                    },
+                    {
+                        "id": "retired/060/100",
+                        "timbre": "retired",
+                        "note": note,
+                        "velocity": 100,
+                        "path": "retired/n060_v100.wav",
+                    },
+                ],
+            }
+        )
+    )
     config = tmp_path / "x.json"
-    config.write_text(json.dumps(
-        {"id": "x", "label": "One declared timbre", "timbres": [{"id": "di"}]}))
+    config.write_text(
+        json.dumps({"id": "x", "label": "One declared timbre", "timbres": [{"id": "di"}]})
+    )
     cfg = {"id": "x", "program": 0, "timbres": [{"id": "di"}], "_path": str(config)}
 
     out = tmp_path / "x_profile.json"
@@ -868,8 +1103,9 @@ def _grid_corpus(tmp_path: Path, notes: list[int], wet: set[int], rt60: float = 
     for note in notes:
         f0 = 440.0 * 2.0 ** ((note - 69) / 12.0)
         span = np.arange(int(4.0 * sr)) / sr
-        env = np.where((span < preroll_s) | (span > preroll_s + gate_s), 0.0,
-                       np.exp(-(span - preroll_s) / 0.4))
+        env = np.where(
+            (span < preroll_s) | (span > preroll_s + gate_s), 0.0, np.exp(-(span - preroll_s) / 0.4)
+        )
         dry = sum(np.sin(2 * np.pi * f0 * k * span) / k for k in (1, 2, 3, 4))
         y = (0.3 * dry * env).astype(np.float32)
         audio = np.stack([y, y], axis=1)
@@ -877,13 +1113,32 @@ def _grid_corpus(tmp_path: Path, notes: list[int], wet: set[int], rt60: float = 
             audio = apply_room(audio, ir).astype(np.float32)
         name = f"n{note:03d}_v100.wav"
         write_wav(root / "t" / name, audio, sr)
-        renders.append({"id": f"t/{note}/100", "timbre": "t", "note": note,
-                        "velocity": 100, "path": f"t/{name}"})
-    (root / "manifest.json").write_text(json.dumps({
-        "id": "x", "plugin": "aumu:xxxx:Yyyy", "params": [], "sample_rate": sr,
-        "gate_ms": int(gate_s * 1000), "tail": "2s", "preroll_ms": int(preroll_s * 1000),
-        "notes": notes, "velocities": [100], "timbres": [{"id": "t"}], "renders": renders,
-    }))
+        renders.append(
+            {
+                "id": f"t/{note}/100",
+                "timbre": "t",
+                "note": note,
+                "velocity": 100,
+                "path": f"t/{name}",
+            }
+        )
+    (root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "id": "x",
+                "plugin": "aumu:xxxx:Yyyy",
+                "params": [],
+                "sample_rate": sr,
+                "gate_ms": int(gate_s * 1000),
+                "tail": "2s",
+                "preroll_ms": int(preroll_s * 1000),
+                "notes": notes,
+                "velocities": [100],
+                "timbres": [{"id": "t"}],
+                "renders": renders,
+            }
+        )
+    )
     return root
 
 
@@ -940,8 +1195,13 @@ def test_the_model_is_placed_in_the_room_the_profile_recorded():
     room = Room(rt60_s=1.6, hf_ratio=0.5, tail_db=0.0, predelay_ms=15.0)
     assert estimate_room(model, sr, spans).is_dry(), "the bare model already has a room"
 
-    recorded = {**room.to_dict(), "notes_measured": 6, "notes_probed": 6,
-                "rt60_min_s": 1.5, "rt60_max_s": 1.7}
+    recorded = {
+        **room.to_dict(),
+        "notes_measured": 6,
+        "notes_probed": 6,
+        "rt60_min_s": 1.5,
+        "rt60_max_s": 1.7,
+    }
     placed = profile_module.ModelPlacer({"rooms": {"t": recorded}}, "t", spans)
     got = estimate_room(placed(model, sr), sr, spans)
     assert not got.is_dry()
@@ -965,21 +1225,34 @@ def _spy_smf_bytes(monkeypatch):
         return data
 
     monkeypatch.setattr(profile_module, "write_smf", spy_smf)
-    monkeypatch.setattr(profile_module, "render_model",
-                        lambda smf, seconds, sr, *, rig=True:
-                        np.zeros((max(int(seconds * sr), 1), 2), dtype=np.float32))
+    monkeypatch.setattr(
+        profile_module,
+        "render_model",
+        lambda smf, seconds, sr, *, rig=True: np.zeros(
+            (max(int(seconds * sr), 1), 2), dtype=np.float32
+        ),
+    )
     return emitted
 
 
 def _bank_capture(tmp_path, bank):
-    profile = {"id": "v", "label": "V",
-               "capture": {"program": 14, "gate_ms": 500, "preroll_ms": 0,
-                           "sample_rate": 48000},
-               "rows": [{"timbre": "t", "note": 60, "velocity": 100,
-                         "f0_hz": 261.6, "cents_vs_et": 0.0}]}
-    cfg = {"id": "v", "notes": [60], "velocities": [100], "gate_ms": 500,
-           "preroll_ms": 0, "tail": "0s", "program": 14, "bank": bank,
-           "timbres": [{"id": "t"}]}
+    profile = {
+        "id": "v",
+        "label": "V",
+        "capture": {"program": 14, "gate_ms": 500, "preroll_ms": 0, "sample_rate": 48000},
+        "rows": [{"timbre": "t", "note": 60, "velocity": 100, "f0_hz": 261.6, "cents_vs_et": 0.0}],
+    }
+    cfg = {
+        "id": "v",
+        "notes": [60],
+        "velocities": [100],
+        "gate_ms": 500,
+        "preroll_ms": 0,
+        "tail": "0s",
+        "program": 14,
+        "bank": bank,
+        "timbres": [{"id": "t"}],
+    }
     path = tmp_path / "ref.json"
     path.write_text(json.dumps(profile))
     return cfg, path

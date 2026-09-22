@@ -31,13 +31,11 @@ from test_shape import synth
 
 # --- override scoping ----------------------------------------------------
 
+
 def test_scope_keeps_a_notes_own_keys_and_everything_addressed_to_no_note():
-    ov = ("d042.percussion.strike_r=0.4,d049.percussion.plate_gain=2.0,"
-          "cymbal_voice.kWash=0.5")
-    assert scope_overrides(ov, 42) == \
-        "d042.percussion.strike_r=0.4,cymbal_voice.kWash=0.5"
-    assert scope_overrides(ov, 49) == \
-        "d049.percussion.plate_gain=2.0,cymbal_voice.kWash=0.5"
+    ov = "d042.percussion.strike_r=0.4,d049.percussion.plate_gain=2.0,cymbal_voice.kWash=0.5"
+    assert scope_overrides(ov, 42) == "d042.percussion.strike_r=0.4,cymbal_voice.kWash=0.5"
+    assert scope_overrides(ov, 49) == "d049.percussion.plate_gain=2.0,cymbal_voice.kWash=0.5"
     # A piece with nothing addressed to it still reads the unscoped constant.
     assert scope_overrides(ov, 51) == "cymbal_voice.kWash=0.5"
     assert scope_overrides("", 42) == ""
@@ -72,22 +70,26 @@ class _Scoped:
         keys = read_overrides(ov)
         if self.leaky:
             return sum(keys.values())
-        return sum(v for k, v in keys.items()
-                   if not DRUM_SCOPE.match(k) or int(k[1:4]) == note)
+        return sum(v for k, v in keys.items() if not DRUM_SCOPE.match(k) or int(k[1:4]) == note)
 
     def __call__(self, pairs, ov: str = "", ref: bool = False) -> dict:
         out = {}
         for p in pairs:
             n, v = tuple(p)
             x = 0.0 if ref else self._tilt(n, ov)
-            out[(n, v)] = synth(n, seconds=10.0,
-                                level=[(-6.0 + x) * k for k in range(8)])
+            out[(n, v)] = synth(n, seconds=10.0, level=[(-6.0 + x) * k for k in range(8)])
         return out
 
 
 #: One coordinate moved at a time, which is what a descent does.
-_CANDIDATES = ("", "d042.x=3.0", "d042.x=6.0", "d042.x=6.0,d044.y=2.0",
-               "d044.y=2.0", "d044.y=2.0,d046.z=1.0")
+_CANDIDATES = (
+    "",
+    "d042.x=3.0",
+    "d042.x=6.0",
+    "d042.x=6.0,d044.y=2.0",
+    "d044.y=2.0",
+    "d044.y=2.0,d046.z=1.0",
+)
 
 
 def _cache_pair(leaky: bool = False):
@@ -147,8 +149,13 @@ def test_a_budget_too_small_for_two_grids_is_raised_to_two_grids():
     budget rather than the other way round, and the result stays identical.
     """
     notes, _, cold = _cache_pair()
-    loss = ShapeLoss(signals=_Scoped(), spectro=Spectro(seconds=10.0),
-                     velocities=(64, 100), pitched=False, cache_mb=1e-6)
+    loss = ShapeLoss(
+        signals=_Scoped(),
+        spectro=Spectro(seconds=10.0),
+        velocities=(64, 100),
+        pitched=False,
+        cache_mb=1e-6,
+    )
     got = [loss.score(o, notes=notes).total for o in _CANDIDATES]
     want = [cold.score(o, notes=notes).total for o in _CANDIDATES]
     assert got == want
@@ -156,6 +163,7 @@ def test_a_budget_too_small_for_two_grids_is_raised_to_two_grids():
 
 
 # --- the reference grid on disk ------------------------------------------
+
 
 def test_the_reference_key_changes_when_the_corpus_does(tmp_path):
     """A re-captured note must not be read back from the previous capture.
@@ -170,13 +178,15 @@ def test_the_reference_key_changes_when_the_corpus_does(tmp_path):
     root.mkdir()
     mf = root / "manifest.json"
     mf.write_text('{"renders": [{"note": 46, "seconds": 2.15}]}')
-    sigs = Signals(corpus_root=root, program=0, gate_s=0.05, seconds=8.15,
-                   cache_dir=tmp_path / "cache")
+    sigs = Signals(
+        corpus_root=root, program=0, gate_s=0.05, seconds=8.15, cache_dir=tmp_path / "cache"
+    )
     before = sigs._key([(46, 100)], "", True)
 
     mf.write_text('{"renders": [{"note": 46, "seconds": 5.15}]}')
-    after = Signals(corpus_root=root, program=0, gate_s=0.05, seconds=8.15,
-                    cache_dir=tmp_path / "cache")._key([(46, 100)], "", True)
+    after = Signals(
+        corpus_root=root, program=0, gate_s=0.05, seconds=8.15, cache_dir=tmp_path / "cache"
+    )._key([(46, 100)], "", True)
     assert before != after
 
 
@@ -184,6 +194,11 @@ def test_a_corpus_with_no_manifest_still_keys(tmp_path):
     # Model-only work names a corpus root that may not exist yet; a missing
     # manifest is not an error, it is simply nothing to fingerprint.
     assert corpus_fingerprint(tmp_path / "nowhere") == ""
-    sigs = Signals(corpus_root=tmp_path / "nowhere", program=0, gate_s=0.05,
-                   seconds=8.15, cache_dir=tmp_path / "cache")
+    sigs = Signals(
+        corpus_root=tmp_path / "nowhere",
+        program=0,
+        gate_s=0.05,
+        seconds=8.15,
+        cache_dir=tmp_path / "cache",
+    )
     assert sigs._key([(60, 100)], "", False)

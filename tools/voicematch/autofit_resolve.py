@@ -36,8 +36,14 @@ from render_oracle import check_oracle_rig
 HERE = Path(__file__).resolve().parent
 
 
-def _score(program: int, pattern_name: str, notes_csv: str, velocities_csv: str = "",
-           corpus: Corpus | None = None, gate_ms: int = 0):
+def _score(
+    program: int,
+    pattern_name: str,
+    notes_csv: str,
+    velocities_csv: str = "",
+    corpus: Corpus | None = None,
+    gate_ms: int = 0,
+):
     kwargs = {}
     if notes_csv:
         kwargs["notes"] = tuple(int(n) for n in notes_csv.split(","))
@@ -48,8 +54,11 @@ def _score(program: int, pattern_name: str, notes_csv: str, velocities_csv: str 
     # A corpus probe is laid out by the capture rather than by a builder: its
     # note list, its gate and its slot spacing all come from the manifest, so
     # the model renders the same stimulus the reference was recorded under.
-    pattern = corpus_pattern(corpus, **kwargs) if corpus is not None \
+    pattern = (
+        corpus_pattern(corpus, **kwargs)
+        if corpus is not None
         else build_pattern(pattern_name, program, **kwargs)
+    )
     return pattern, pattern_length(pattern), pattern.analysis_notes
 
 
@@ -97,11 +106,14 @@ def reference_band_edge(corpus: Corpus | None, rows: list[dict]) -> float | None
         return None
     edge = min(known)
     if committed is not None and edge == committed and edge != own:
-        print(f"oracle bandwidth: "
-              f"{'no measurable ceiling' if own is None else f'{own / 1000.0:.1f} kHz'} "
-              f"on its own, held to {edge / 1000.0:.1f} kHz — the ceiling "
-              f"{corpus.capture_id} measured across its references, which is the "
-              f"one the gate scores against", file=sys.stderr)
+        print(
+            f"oracle bandwidth: "
+            f"{'no measurable ceiling' if own is None else f'{own / 1000.0:.1f} kHz'} "
+            f"on its own, held to {edge / 1000.0:.1f} kHz — the ceiling "
+            f"{corpus.capture_id} measured across its references, which is the "
+            f"one the gate scores against",
+            file=sys.stderr,
+        )
     return edge
 
 
@@ -142,8 +154,11 @@ def check_holdout_oracle(args) -> None:
             )
         return
     percussive = getattr(args, "percussive", False)
-    held = (getattr(args, "validate_velocities", "") if percussive
-            else getattr(args, "validate_notes", ""))
+    held = (
+        getattr(args, "validate_velocities", "")
+        if percussive
+        else getattr(args, "validate_notes", "")
+    )
     if not held or getattr(args, "validate_oracle_wav", ""):
         return
     axis = "--validate-velocities" if percussive else "--validate-notes"
@@ -205,17 +220,19 @@ def resolve_probe(args) -> None:
         # moving any of them towards the reference, and is exempt; `--grid`
         # evaluates the same objective a fit would search and is not.
         if not getattr(args, "diagnose", False):
-            check_rig(corpus, args.program,
-                      allow=getattr(args, "allow_rigged_oracle", False))
+            check_rig(corpus, args.program, allow=getattr(args, "allow_rigged_oracle", False))
         args.pattern = "corpus"
     elif not getattr(args, "diagnose", False):
         # No capture, so no record of a rig — and the hazard is the same size.
         # What the route means by carrying no record is not the same for all
         # three of them, which is what `check_oracle_rig` sorts out.
-        check_oracle_rig(args, args.program,
-                         allow=getattr(args, "allow_rigged_oracle", False))
+        check_oracle_rig(args, args.program, allow=getattr(args, "allow_rigged_oracle", False))
     pattern, _, analysis_notes = _score(
-        args.program, args.pattern, args.notes, args.velocities, corpus=corpus,
+        args.program,
+        args.pattern,
+        args.notes,
+        args.velocities,
+        corpus=corpus,
         gate_ms=getattr(args, "drum_gate_ms", 0),
     )
     if corpus is not None:
@@ -250,8 +267,9 @@ def resolve_probe(args) -> None:
     # charged — so the term scored exactly 0.0, its BEST value, on every
     # candidate of every fit that ever weighted it.
     tail_min = band_min_note_s("tail_db_s")
-    args.has_tail_window = any(min(n.dur, SKELETON_MAX_S) >= tail_min
-                               for n in pattern.analysis_notes)
+    args.has_tail_window = any(
+        min(n.dur, SKELETON_MAX_S) >= tail_min for n in pattern.analysis_notes
+    )
     probe_notes = {n.note for n in pattern.analysis_notes}
     args.has_kit_groups = any(
         len(probe_notes.intersection(members)) >= KIT_MIN_MEMBERS
@@ -337,8 +355,7 @@ def apply_spec_weights(args, argv: list[str]) -> None:
     for term, value in spec_weights.items():
         if term not in LOSS_TERMS:
             raise ValueError(
-                f"spec {args.spec}: {term!r} is not a loss term "
-                f"(they are {', '.join(LOSS_TERMS)})"
+                f"spec {args.spec}: {term!r} is not a loss term (they are {', '.join(LOSS_TERMS)})"
             )
         flag = f"--w-{term}"
         if flag in explicit:

@@ -115,9 +115,11 @@ def test_a_term_is_scaled_by_its_unit_and_never_by_its_start_value():
     assert near.scales["harm"] == far.scales["harm"] == TERM_UNITS["harm"]
     # One dB off the ladder is worth the same on both, before the display layer
     # each divides by.
-    assert (near.combine(_terms(harm=5.0)) - near.combine(_terms(harm=6.0))) * near.reference \
-        == pytest.approx(
-            (far.combine(_terms(harm=59.0)) - far.combine(_terms(harm=60.0))) * far.reference)
+    assert (
+        near.combine(_terms(harm=5.0)) - near.combine(_terms(harm=6.0))
+    ) * near.reference == pytest.approx(
+        (far.combine(_terms(harm=59.0)) - far.combine(_terms(harm=60.0))) * far.reference
+    )
 
 
 def test_a_term_made_entirely_of_caps_is_reported_as_unreached():
@@ -173,16 +175,23 @@ def test_the_harmonic_term_reaches_every_bin_the_ladder_measures():
     as partials rather than as noise, so the difference between the two is a
     band of the spectrum no term prices in either direction.
     """
-    ladder = [0.0, -6.0, -12.0, -18.0, -24.0, -30.0,
-              -36.0, -42.0, -48.0, -54.0, -60.0, -66.0]
+    ladder = [0.0, -6.0, -12.0, -18.0, -24.0, -30.0, -36.0, -42.0, -48.0, -54.0, -60.0, -66.0]
     assert HARM_REACH == len(ladder)
 
     def row(top: float) -> dict:
         out = list(ladder)
         out[-1] = out[-2] = top
-        return {"harmonics_db": out, "f0_cents_err": 0.0, "tnr_db": 40.0,
-                "f0_hz": 440.0, "note": 69, "velocity": 100,
-                "sustain_slope_db_s": 0.0, "release_ms": 0.0, "attack_ms": 0.0}
+        return {
+            "harmonics_db": out,
+            "f0_cents_err": 0.0,
+            "tnr_db": 40.0,
+            "f0_hz": 440.0,
+            "note": 69,
+            "velocity": 100,
+            "sustain_slope_db_s": 0.0,
+            "release_ms": 0.0,
+            "attack_ms": 0.0,
+        }
 
     quiet, loud = row(-66.0), row(-50.0)
     assert loss_terms([quiet], [loud], n_harm=10)["harm"] == pytest.approx(0.0)
@@ -199,8 +208,14 @@ def test_unscorable_renders_are_infinite():
 
 
 def test_loss_terms_rejects_a_row_count_mismatch():
-    row = {"harmonics_db": [0.0], "f0_cents_err": 0.0, "tnr_db": 0.0,
-           "sustain_slope_db_s": 0.0, "release_ms": 0.0, "attack_ms": 0.0}
+    row = {
+        "harmonics_db": [0.0],
+        "f0_cents_err": 0.0,
+        "tnr_db": 0.0,
+        "sustain_slope_db_s": 0.0,
+        "release_ms": 0.0,
+        "attack_ms": 0.0,
+    }
     assert loss_terms([row], [row, row], n_harm=1) is None
 
 
@@ -218,8 +233,14 @@ def test_a_pattern_with_no_analysis_notes_is_scorable_on_the_whole_timeline():
 
 def test_a_model_cleaner_than_its_oracle_is_not_penalised():
     def row(tnr):
-        return {"harmonics_db": [0.0], "f0_cents_err": 0.0, "tnr_db": tnr,
-                "sustain_slope_db_s": 0.0, "release_ms": 0.0, "attack_ms": 0.0}
+        return {
+            "harmonics_db": [0.0],
+            "f0_cents_err": 0.0,
+            "tnr_db": tnr,
+            "sustain_slope_db_s": 0.0,
+            "release_ms": 0.0,
+            "attack_ms": 0.0,
+        }
 
     cleaner = loss_terms([row(40.0)], [row(20.0)], n_harm=1)
     noisier = loss_terms([row(10.0)], [row(20.0)], n_harm=1)
@@ -236,28 +257,48 @@ def test_a_silent_render_does_not_win_the_harmonic_term():
     is not a match, it is the absence of anything to match, and the candidate
     has to be unscorable rather than optimal.
     """
-    silent = {"harmonics_db": [0.0] + [-120.0] * 11, "f0_cents_err": 0.0,
-              "tnr_db": 0.0, "sustain_slope_db_s": 0.0, "release_ms": 0.0,
-              "attack_ms": 0.0}
-    sounding = {"harmonics_db": [0.0, -6.0, -12.0] + [-20.0] * 9,
-                "f0_cents_err": 0.0, "tnr_db": 30.0, "sustain_slope_db_s": -3.0,
-                "release_ms": 80.0, "attack_ms": 5.0}
+    silent = {
+        "harmonics_db": [0.0] + [-120.0] * 11,
+        "f0_cents_err": 0.0,
+        "tnr_db": 0.0,
+        "sustain_slope_db_s": 0.0,
+        "release_ms": 0.0,
+        "attack_ms": 0.0,
+    }
+    sounding = {
+        "harmonics_db": [0.0, -6.0, -12.0] + [-20.0] * 9,
+        "f0_cents_err": 0.0,
+        "tnr_db": 30.0,
+        "sustain_slope_db_s": -3.0,
+        "release_ms": 80.0,
+        "attack_ms": 5.0,
+    }
     assert loss_terms([silent], [sounding], n_harm=12) is None
     assert loss_terms([sounding], [sounding], n_harm=12) is not None
 
 
 def skeleton(bands, n=6):
     """A skeleton block whose three decay bands all carry `bands`."""
-    return {"init_db": list(bands) + [None] * (12 - len(bands)),
-            "early_db_s": list(bands), "late_db_s": list(bands),
-            "tail_db_s": list(bands)}
+    return {
+        "init_db": list(bands) + [None] * (12 - len(bands)),
+        "early_db_s": list(bands),
+        "late_db_s": list(bands),
+        "tail_db_s": list(bands),
+    }
 
 
 def sounding_row(**over):
-    row = {"harmonics_db": [0.0, -6.0, -12.0] + [-20.0] * 9, "f0_cents_err": 0.0,
-           "tnr_db": 30.0, "sustain_slope_db_s": -3.0, "release_ms": 80.0,
-           "attack_ms": 5.0, "skeleton": skeleton([-2.0] * 6),
-           "held_rms_dbfs": -20.0, "held_crest_db": 12.0}
+    row = {
+        "harmonics_db": [0.0, -6.0, -12.0] + [-20.0] * 9,
+        "f0_cents_err": 0.0,
+        "tnr_db": 30.0,
+        "sustain_slope_db_s": -3.0,
+        "release_ms": 80.0,
+        "attack_ms": 5.0,
+        "skeleton": skeleton([-2.0] * 6),
+        "held_rms_dbfs": -20.0,
+        "held_crest_db": 12.0,
+    }
     return row | over
 
 
@@ -300,12 +341,22 @@ def test_a_render_that_lost_only_its_top_partials_is_still_scored():
     A dark note is a defect the harmonic term exists to report, so rejecting it
     as unscorable would hide exactly what the fit is for.
     """
-    dark = {"harmonics_db": [0.0, -8.0] + [-120.0] * 10, "f0_cents_err": 0.0,
-            "tnr_db": 20.0, "sustain_slope_db_s": -3.0, "release_ms": 80.0,
-            "attack_ms": 5.0}
-    bright = {"harmonics_db": [0.0, -3.0, -6.0] + [-9.0] * 9, "f0_cents_err": 0.0,
-              "tnr_db": 30.0, "sustain_slope_db_s": -3.0, "release_ms": 80.0,
-              "attack_ms": 5.0}
+    dark = {
+        "harmonics_db": [0.0, -8.0] + [-120.0] * 10,
+        "f0_cents_err": 0.0,
+        "tnr_db": 20.0,
+        "sustain_slope_db_s": -3.0,
+        "release_ms": 80.0,
+        "attack_ms": 5.0,
+    }
+    bright = {
+        "harmonics_db": [0.0, -3.0, -6.0] + [-9.0] * 9,
+        "f0_cents_err": 0.0,
+        "tnr_db": 30.0,
+        "sustain_slope_db_s": -3.0,
+        "release_ms": 80.0,
+        "attack_ms": 5.0,
+    }
     terms = loss_terms([dark], [bright], n_harm=12)
     assert terms is not None and terms["harm"] > 0.0
     # 5 dB on h2, weighted by how audible that partial is: these rows name
@@ -352,7 +403,7 @@ def _rows_discriminating_to(index: int, count: int = 12) -> list[dict]:
         profile = rng.normal(-20.0, 9.0, len(THIRD_OCTAVE_CENTERS))
         # One shared value above the index: no scatter is what a band that has
         # stopped separating the kit looks like.
-        profile[index + 1:] = -30.0
+        profile[index + 1 :] = -30.0
         rows.append({"bands_db": [float(v) for v in profile]})
     return rows
 
@@ -362,7 +413,8 @@ def _committed_profile(tmp_path: Path, monkeypatch, ident: str, edge) -> None:
     reference = tmp_path / "reference"
     reference.mkdir(parents=True, exist_ok=True)
     (reference / f"{ident}.json").write_text(
-        json.dumps({"id": ident, "capture": {"band_edge_hz": edge}, "rows": []}))
+        json.dumps({"id": ident, "capture": {"band_edge_hz": edge}, "rows": []})
+    )
     monkeypatch.setattr(autofit_resolve, "HERE", tmp_path)
 
 
@@ -383,7 +435,8 @@ def test_a_fit_is_held_to_the_ceiling_the_gate_scores_against(tmp_path, monkeypa
 
 
 def test_an_oracle_that_shows_no_ceiling_of_its_own_still_takes_the_measured_one(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """A reference discriminating all the way up is the case the announcement
     formats differently, and it is the one where the committed ceiling matters
@@ -396,7 +449,9 @@ def test_an_oracle_that_shows_no_ceiling_of_its_own_still_takes_the_measured_one
 
 
 def test_a_narrower_oracle_is_not_widened_by_the_committed_profile(
-    tmp_path, monkeypatch, capsys,
+    tmp_path,
+    monkeypatch,
+    capsys,
 ):
     """The lower of the two wins in both directions. A corpus re-captured since
     the profile was measured can be the narrower one, and a ceiling that rises
@@ -472,8 +527,10 @@ def test_a_note_that_reached_digital_zero_is_charged_rather_than_skipped():
     render holding exactly like it.
     """
     oracle = [_slope_row(60, 100, -1.0), _slope_row(64, 100, -1.0)]
-    gone = [{"note": 60, "velocity": 100, "sustain_slope_db_s": None},
-            {"note": 64, "velocity": 100, "sustain_slope_db_s": None}]
+    gone = [
+        {"note": 60, "velocity": 100, "sustain_slope_db_s": None},
+        {"note": 64, "velocity": 100, "sustain_slope_db_s": None},
+    ]
     worst, pairs = sustain_excess_db_s(gone, oracle)
     assert (worst, pairs) == (-SUSTAIN_SLOPE_CAP_DB_S, 2)
     # And it must stay worse than any voice that is actually sounding.
@@ -516,7 +573,8 @@ def test_the_sustain_fence_charges_a_candidate_that_falls_further():
     assert ev._sustain_drift_penalty({"sustain_excess_db_s": -5.0}) == 0.0
     # One dB/s past it, at the documented rate.
     assert ev._sustain_drift_penalty({"sustain_excess_db_s": -6.0}) == pytest.approx(
-        autofit.SUSTAIN_DRIFT_PENALTY_PER_DB_S)
+        autofit.SUSTAIN_DRIFT_PENALTY_PER_DB_S
+    )
     # And it is one-sided: holding better than the start is never charged.
     assert ev._sustain_drift_penalty({"sustain_excess_db_s": +40.0}) == 0.0
 
@@ -598,8 +656,10 @@ def test_a_class_default_the_probe_cannot_fit_is_dropped_and_named():
     """
     args = _probe_args(program=70, percussive=False, has_velocity_spread=False)
     # Could this have gone red: the class does ask for it on a probe that can.
-    assert cli_weights(_probe_args(program=70, percussive=False,
-                                   has_velocity_spread=True))["dyn"] > 0.0
+    assert (
+        cli_weights(_probe_args(program=70, percussive=False, has_velocity_spread=True))["dyn"]
+        > 0.0
+    )
     assert "dyn" not in cli_weights(args)
     assert [t for t, _ in dropped_weights(args)] == ["dyn"]
     # Named on the command line it is refused by the caller instead, so the two
@@ -623,8 +683,7 @@ def test_the_aftersound_band_is_dropped_when_no_note_reaches_it():
     probes, `tail` came to 546 cells of which 546 were skipped.
     """
     args = _probe_args(program=0, percussive=False, has_tail_window=False)
-    assert cli_weights(_probe_args(program=0, percussive=False,
-                                   has_tail_window=True))["tail"] > 0.0
+    assert cli_weights(_probe_args(program=0, percussive=False, has_tail_window=True))["tail"] > 0.0
     assert "tail" not in cli_weights(args)
     assert [t for t, _ in dropped_weights(args)] == ["tail"]
 
@@ -644,15 +703,19 @@ def test_the_cell_census_reads_what_the_loss_reported():
     loss right up until one of them changed, and the one that drifted would be
     the one nobody was reading.
     """
-    terms = {"slope_cells": 24.0, "slope_capped": 24.0, "slope_absent": 13.0,
-             "slope_skipped": 0.0,
-             "tail_cells": 0.0, "tail_capped": 0.0, "tail_absent": 0.0,
-             "tail_skipped": 18.0}
+    terms = {
+        "slope_cells": 24.0,
+        "slope_capped": 24.0,
+        "slope_absent": 13.0,
+        "slope_skipped": 0.0,
+        "tail_cells": 0.0,
+        "tail_capped": 0.0,
+        "tail_absent": 0.0,
+        "tail_skipped": 18.0,
+    }
     got = loss_cells.census(terms)
-    assert dict(got["slope"]) == {"compared": 0, "clipped": 11, "absent": 13,
-                                  "skipped": 0}
-    assert dict(got["tail"]) == {"compared": 0, "clipped": 0, "absent": 0,
-                                 "skipped": 18}
+    assert dict(got["slope"]) == {"compared": 0, "clipped": 11, "absent": 13, "skipped": 0}
+    assert dict(got["tail"]) == {"compared": 0, "clipped": 0, "absent": 0, "skipped": 18}
     # A term that reports no cells at all is absent from the census rather than
     # present with four zeros, which would read as a term that was looked at.
     assert "harm" not in got
@@ -660,18 +723,31 @@ def test_the_cell_census_reads_what_the_loss_reported():
 
 def test_the_four_cell_outcomes_are_what_the_loss_actually_emits():
     """A round trip through the real reducer, so the key names cannot drift."""
-    ladder = [0.0, -6.0, -12.0, -18.0, -24.0, -30.0,
-              -36.0, -42.0, -48.0, -54.0, -60.0, -66.0]
-    base = {"harmonics_db": ladder, "f0_cents_err": 0.0, "tnr_db": 40.0,
-            "f0_hz": 440.0, "note": 69, "velocity": 100,
-            "sustain_slope_db_s": 0.0, "release_ms": 0.0, "attack_ms": 0.0}
-    skeleton = {"init_db": [0.0] * 12, "early_db_s": [-1.0] * 12,
-                "late_db_s": [-1.0] * 12, "tail_db_s": [None] * 12}
+    ladder = [0.0, -6.0, -12.0, -18.0, -24.0, -30.0, -36.0, -42.0, -48.0, -54.0, -60.0, -66.0]
+    base = {
+        "harmonics_db": ladder,
+        "f0_cents_err": 0.0,
+        "tnr_db": 40.0,
+        "f0_hz": 440.0,
+        "note": 69,
+        "velocity": 100,
+        "sustain_slope_db_s": 0.0,
+        "release_ms": 0.0,
+        "attack_ms": 0.0,
+    }
+    skeleton = {
+        "init_db": [0.0] * 12,
+        "early_db_s": [-1.0] * 12,
+        "late_db_s": [-1.0] * 12,
+        "tail_db_s": [None] * 12,
+    }
     model = {**base, "skeleton": skeleton}
     # The oracle's aftersound band is empty, exactly as a two-second probe
     # leaves it; its early and late bands are 100 dB/s away, past the cap.
-    oracle = {**base, "skeleton": {**skeleton, "early_db_s": [-101.0] * 12,
-                                   "late_db_s": [-101.0] * 12}}
+    oracle = {
+        **base,
+        "skeleton": {**skeleton, "early_db_s": [-101.0] * 12, "late_db_s": [-101.0] * 12},
+    }
     terms = loss_terms([model], [oracle])
     assert terms is not None
     census = loss_cells.census(terms)

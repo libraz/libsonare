@@ -38,8 +38,7 @@ def _expected_paths(
     return {
         path
         for path, record in commands.items()
-        if record["classification"]
-        in {"shared", "intentional_variant", f"{surface}_only"}
+        if record["classification"] in {"shared", "intentional_variant", f"{surface}_only"}
         and not (disabled_features & set(record.get("requires") or ()))
     }
 
@@ -61,8 +60,7 @@ def _tolerated_paths(
     return {
         path
         for path, record in commands.items()
-        if record["classification"]
-        in {"shared", "intentional_variant", f"{surface}_only"}
+        if record["classification"] in {"shared", "intentional_variant", f"{surface}_only"}
         and (disabled_features & set(record.get("requires") or ()))
     }
 
@@ -85,13 +83,9 @@ def _accepted_names(commands: dict[str, dict[str, Any]]) -> set[str]:
     return names
 
 
-def _validate_inventory(
-    value: Any, surface: str
-) -> tuple[list[str], dict[str, dict[str, Any]]]:
+def _validate_inventory(value: Any, surface: str) -> tuple[list[str], dict[str, dict[str, Any]]]:
     errors: list[str] = []
-    if not _exact(
-        value, {"schema_version", "surface", "commands"}, f"inventory.{surface}", errors
-    ):
+    if not _exact(value, {"schema_version", "surface", "commands"}, f"inventory.{surface}", errors):
         return errors, {}
     if value["schema_version"] != 2:
         errors.append(f"inventory.{surface}.schema_version: expected 2")
@@ -123,9 +117,7 @@ def _validate_inventory(
                 _validate_option(option, option_label, errors)
                 if isinstance(option, dict) and isinstance(option.get("name"), str):
                     if option["name"] in names:
-                        errors.append(
-                            f"{option_label}: duplicate option {option['name']}"
-                        )
+                        errors.append(f"{option_label}: duplicate option {option['name']}")
                     names.add(option["name"])
         commands[path] = command
     return errors, commands
@@ -165,9 +157,7 @@ def _build_shared_option_snapshot(
     errors: list[str] = []
     inventories: dict[str, dict[str, dict[str, Any]]] = {}
     for surface, value in (("native", native), ("python", python)):
-        validation_errors, commands = _snapshot_inventory_validation(
-            value, surface, manifest
-        )
+        validation_errors, commands = _snapshot_inventory_validation(value, surface, manifest)
         errors.extend(validation_errors)
         inventories[surface] = commands
 
@@ -190,13 +180,9 @@ def _build_shared_option_snapshot(
         native_options = _normalized_option_inventory(native_command.get("options"))
         python_options = _normalized_option_inventory(python_command.get("options"))
         if native_options is None:
-            errors.append(
-                f"inventory.native.{path}: malformed option metadata cannot be compared"
-            )
+            errors.append(f"inventory.native.{path}: malformed option metadata cannot be compared")
         if python_options is None:
-            errors.append(
-                f"inventory.python.{path}: malformed option metadata cannot be compared"
-            )
+            errors.append(f"inventory.python.{path}: malformed option metadata cannot be compared")
         if native_options is None or python_options is None:
             continue
         if native_options != python_options:
@@ -209,9 +195,7 @@ def _build_shared_option_snapshot(
         snapshot[path] = native_options
 
     if errors:
-        raise ValueError(
-            "shared option snapshot validation failed:\n" + "\n".join(errors)
-        )
+        raise ValueError("shared option snapshot validation failed:\n" + "\n".join(errors))
     return snapshot
 
 
@@ -257,8 +241,10 @@ def _compare_active_inventory_options(
             report.append(
                 (
                     "fail",
-                    (f"inventory.shared.{path}: native/Python active option schemas differ\n"
-                    f"  native: {left!r}\n"
-                    f"  python: {right!r}"),
+                    (
+                        f"inventory.shared.{path}: native/Python active option schemas differ\n"
+                        f"  native: {left!r}\n"
+                        f"  python: {right!r}"
+                    ),
                 )
             )

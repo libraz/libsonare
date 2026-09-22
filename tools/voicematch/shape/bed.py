@@ -50,8 +50,14 @@ class Bed:
     scales: tuple
 
     @classmethod
-    def measure(cls, spectro, ref_signals: dict, anchor=DEFAULT_ANCHOR,
-                window=(0.7, 1.7), agree_band=(4000.0, 14000.0)) -> Bed:
+    def measure(
+        cls,
+        spectro,
+        ref_signals: dict,
+        anchor=DEFAULT_ANCHOR,
+        window=(0.7, 1.7),
+        agree_band=(4000.0, 14000.0),
+    ) -> Bed:
         """Freeze the shape from a set of reference renders.
 
         Each note is put on its own bed gain, read off the anchor band, and the
@@ -88,10 +94,19 @@ class Bed:
             stack = np.stack(per_note)
             shapes[s] = stack.min(axis=0)
             band = (hz >= agree_band[0]) & (hz < agree_band[1])
-            spreads.append(float(np.median(
-                np.percentile(stack[:, band], 25, axis=0) - stack[:, band].min(axis=0))))
-        return cls(shapes=shapes, anchor_rows=anchor_rows,
-                   agreement_db=float(np.max(spreads)), scales=spectro.scales)
+            spreads.append(
+                float(
+                    np.median(
+                        np.percentile(stack[:, band], 25, axis=0) - stack[:, band].min(axis=0)
+                    )
+                )
+            )
+        return cls(
+            shapes=shapes,
+            anchor_rows=anchor_rows,
+            agreement_db=float(np.max(spreads)),
+            scales=spectro.scales,
+        )
 
     @property
     def usable(self) -> bool:
@@ -125,9 +140,12 @@ class Bed:
         return 10 * np.log10(np.maximum(resid, 1e-30)), bed
 
     def save(self, path: Path | str) -> None:
-        np.savez(path, agreement=self.agreement_db,
-                 **{f"shape{s}": v for s, v in self.shapes.items()},
-                 **{f"anchor{s}": v for s, v in self.anchor_rows.items()})
+        np.savez(
+            path,
+            agreement=self.agreement_db,
+            **{f"shape{s}": v for s, v in self.shapes.items()},
+            **{f"anchor{s}": v for s, v in self.anchor_rows.items()},
+        )
 
     @classmethod
     def load(cls, path: Path | str, scales) -> Bed:
@@ -144,6 +162,9 @@ class Bed:
                 f"geometry has {n} — the noise bed belongs to the scales it was "
                 f"measured on. Delete it and measure it again."
             )
-        return cls(shapes={s: z[f"shape{s}"] for s in range(n)},
-                   anchor_rows={s: z[f"anchor{s}"] for s in range(n)},
-                   agreement_db=float(z["agreement"]), scales=scales)
+        return cls(
+            shapes={s: z[f"shape{s}"] for s in range(n)},
+            anchor_rows={s: z[f"anchor{s}"] for s in range(n)},
+            agreement_db=float(z["agreement"]),
+            scales=scales,
+        )

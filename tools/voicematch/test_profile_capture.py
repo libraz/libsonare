@@ -66,8 +66,18 @@ def test_a_capture_that_names_no_phrase_set_still_resolves_one(tmp_path):
     from capture import load_config
 
     cfg_path = tmp_path / "c.json"
-    cfg_path.write_text(json.dumps({"id": "x", "label": "x", "plugin": "a:b:c",
-                                    "timbres": [], "notes": [60], "velocities": [100]}))
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "id": "x",
+                "label": "x",
+                "plugin": "a:b:c",
+                "timbres": [],
+                "notes": [60],
+                "velocities": [100],
+            }
+        )
+    )
     cfg = load_config(cfg_path)
     assert cfg["takes"] == ""
     assert (cfg.get("takes") or "piano") == "piano"
@@ -77,17 +87,37 @@ def test_a_capture_declares_the_program_the_model_answers_with(tmp_path):
     from capture import load_config
 
     cfg_path = tmp_path / "c.json"
-    cfg_path.write_text(json.dumps({"id": "x", "label": "x", "plugin": "a:b:c",
-                                    "program": 6, "timbres": [], "notes": [60],
-                                    "velocities": [100]}))
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "id": "x",
+                "label": "x",
+                "plugin": "a:b:c",
+                "program": 6,
+                "timbres": [],
+                "notes": [60],
+                "velocities": [100],
+            }
+        )
+    )
     assert load_config(cfg_path)["program"] == 6
 
 
 def _rig_config(tmp_path: Path, **extra) -> Path:
     cfg_path = tmp_path / "c.json"
-    cfg_path.write_text(json.dumps({"id": "x", "label": "x", "plugin": "a:b:c",
-                                    "timbres": [], "notes": [60], "velocities": [100],
-                                    **extra}))
+    cfg_path.write_text(
+        json.dumps(
+            {
+                "id": "x",
+                "label": "x",
+                "plugin": "a:b:c",
+                "timbres": [],
+                "notes": [60],
+                "velocities": [100],
+                **extra,
+            }
+        )
+    )
     return cfg_path
 
 
@@ -168,8 +198,9 @@ def test_every_shipped_capture_answers_the_room_question_legibly():
         assert load_config(CAPTURE_DIR / f"{name}.json")["room"] in ROOM_VALUES
 
 
-def _released_note(sr: int, *, preroll: float, gate: float, tail: float,
-                   rt60: float, f0: float = 220.0) -> np.ndarray:
+def _released_note(
+    sr: int, *, preroll: float, gate: float, tail: float, rt60: float, f0: float = 220.0
+) -> np.ndarray:
     """A held tone whose release is a plain envelope, damped faster up the stack.
 
     There is no room in this signal at all: every partial is switched on at the
@@ -206,11 +237,19 @@ def _release_corpus(root: Path, *, rt60: float) -> tuple[dict, Path]:
     renders = []
     for note in notes:
         rel = f"t/n{note:03d}_v100.wav"
-        write_wav(root / rel, _released_note(sr, preroll=preroll, gate=gate,
-                                             tail=tail, rt60=rt60,
-                                             f0=440.0 * 2 ** ((note - 69) / 12)), sr)
-        renders.append({"id": rel[:-4], "timbre": "t", "note": note,
-                        "velocity": 100, "path": rel})
+        write_wav(
+            root / rel,
+            _released_note(
+                sr,
+                preroll=preroll,
+                gate=gate,
+                tail=tail,
+                rt60=rt60,
+                f0=440.0 * 2 ** ((note - 69) / 12),
+            ),
+            sr,
+        )
+        renders.append({"id": rel[:-4], "timbre": "t", "note": note, "velocity": 100, "path": rel})
     return {"renders": renders}, root
 
 
@@ -254,23 +293,37 @@ def test_the_identity_overlay_matches_timbres_by_id(tmp_path):
     """
     from capture import load_config, slot_channel
 
-    (tmp_path / "c.json").write_text(json.dumps({
-        "id": "c", "label": "Concert grands, close", "notes": [60], "velocities": [100],
-        "timbres": [{"id": "grand-227", "label": "227 cm concert grand", "slot_channel": 1},
-                    {"id": "grand-274", "label": "274 cm concert grand", "slot_channel": 2}],
-    }))
-    (tmp_path / "c.local.json").write_text(json.dumps({
-        "plugin": "aumu:xxxx:Vend",
-        "timbres": [{"id": "grand-227", "preset": "A/Close"},
-                    {"id": "grand-274", "preset": "B/Close"}],
-    }))
+    (tmp_path / "c.json").write_text(
+        json.dumps(
+            {
+                "id": "c",
+                "label": "Concert grands, close",
+                "notes": [60],
+                "velocities": [100],
+                "timbres": [
+                    {"id": "grand-227", "label": "227 cm concert grand", "slot_channel": 1},
+                    {"id": "grand-274", "label": "274 cm concert grand", "slot_channel": 2},
+                ],
+            }
+        )
+    )
+    (tmp_path / "c.local.json").write_text(
+        json.dumps(
+            {
+                "plugin": "aumu:xxxx:Vend",
+                "timbres": [
+                    {"id": "grand-227", "preset": "A/Close"},
+                    {"id": "grand-274", "preset": "B/Close"},
+                ],
+            }
+        )
+    )
     cfg = load_config(tmp_path / "c.json")
     assert cfg["plugin"] == "aumu:xxxx:Vend"
     assert [t["preset"] for t in cfg["timbres"]] == ["A/Close", "B/Close"]
     # The tracked side still owns everything it declared.
     assert [slot_channel(t) for t in cfg["timbres"]] == [1, 2]
-    assert [t["label"] for t in cfg["timbres"]] == ["227 cm concert grand",
-                                                    "274 cm concert grand"]
+    assert [t["label"] for t in cfg["timbres"]] == ["227 cm concert grand", "274 cm concert grand"]
 
 
 def test_a_capture_without_its_overlay_loads_and_carries_no_product(tmp_path):
@@ -278,10 +331,17 @@ def test_a_capture_without_its_overlay_loads_and_carries_no_product(tmp_path):
     everything downstream reads the committed reference profile."""
     from capture import load_config
 
-    (tmp_path / "c.json").write_text(json.dumps({
-        "id": "c", "label": "Concert grands, close", "notes": [60], "velocities": [100],
-        "timbres": [{"id": "grand-227", "label": "227 cm concert grand", "channel": 1}],
-    }))
+    (tmp_path / "c.json").write_text(
+        json.dumps(
+            {
+                "id": "c",
+                "label": "Concert grands, close",
+                "notes": [60],
+                "velocities": [100],
+                "timbres": [{"id": "grand-227", "label": "227 cm concert grand", "channel": 1}],
+            }
+        )
+    )
     cfg = load_config(tmp_path / "c.json")
     assert "plugin" not in cfg
     assert cfg["timbres"][0]["id"] == "grand-227"
@@ -304,16 +364,29 @@ def test_the_identity_guard_fails_on_a_capture_that_does_name_a_product(tmp_path
     capture, reference = tmp_path / "capture", tmp_path / "reference"
     capture.mkdir()
     reference.mkdir()
-    (capture / "x.json").write_text(json.dumps({
-        "id": "x", "program": 0, "plugin": "aumu:xxxx:Yyyy", "timbres": [{"id": "t"}],
-    }))
+    (capture / "x.json").write_text(
+        json.dumps(
+            {
+                "id": "x",
+                "program": 0,
+                "plugin": "aumu:xxxx:Yyyy",
+                "timbres": [{"id": "t"}],
+            }
+        )
+    )
     assert shipped_captures(capture) == ["x"]
     with pytest.raises(AssertionError, match="names its plugin"):
         assert_names_no_product("x", capture_dir=capture, reference_dir=reference)
 
-    (capture / "x.json").write_text(json.dumps({
-        "id": "x", "program": 0, "timbres": [{"id": "t", "preset": "Grand/Close.fxp"}],
-    }))
+    (capture / "x.json").write_text(
+        json.dumps(
+            {
+                "id": "x",
+                "program": 0,
+                "timbres": [{"id": "t", "preset": "Grand/Close.fxp"}],
+            }
+        )
+    )
     with pytest.raises(AssertionError, match="names a preset"):
         assert_names_no_product("x", capture_dir=capture, reference_dir=reference)
 
@@ -339,8 +412,13 @@ def test_measure_records_the_method_and_not_the_captured_product(tmp_path):
     }
     manifest = {
         "plugin": "aumu:xxxx:Yyyy",
-        "params": [], "sample_rate": 48000, "gate_ms": 1000, "tail": "2s",
-        "preroll_ms": 100, "notes": [60], "velocities": [100],
+        "params": [],
+        "sample_rate": 48000,
+        "gate_ms": 1000,
+        "tail": "2s",
+        "preroll_ms": 100,
+        "notes": [60],
+        "velocities": [100],
         "timbres": [
             {"id": "t", "label": "Product Name 9 Concert", "preset": "Product/Close.vstpreset"},
             {"id": "model", "label": "libsonare, GM program 19"},
@@ -364,8 +442,12 @@ def test_a_kit_is_recognised_from_the_channel_its_notes_are_played_on():
     from capture import load_config
 
     here = Path(__file__).resolve().parent
-    for name, percussion in (("drums", True), ("piano", False), ("harpsichord", False),
-                             ("pipe_organ", False)):
+    for name, percussion in (
+        ("drums", True),
+        ("piano", False),
+        ("harpsichord", False),
+        ("pipe_organ", False),
+    ):
         cfg = load_config(here / "capture" / f"{name}.json")
         assert profile_module.is_percussion(cfg) is percussion, name
 
@@ -415,9 +497,17 @@ def test_a_slot_number_written_as_the_semantic_channel_is_refused(tmp_path):
 
     def written(**timbre) -> Path:
         path = tmp_path / "c.json"
-        path.write_text(json.dumps({"id": "c", "label": "x", "notes": [60],
-                                    "velocities": [100],
-                                    "timbres": [{"id": "t", **timbre}]}))
+        path.write_text(
+            json.dumps(
+                {
+                    "id": "c",
+                    "label": "x",
+                    "notes": [60],
+                    "velocities": [100],
+                    "timbres": [{"id": "t", **timbre}],
+                }
+            )
+        )
         return path
 
     with pytest.raises(ValueError, match="slot_channel"):
@@ -438,16 +528,18 @@ def test_every_shipped_capture_reads_as_one_kind_of_instrument():
     from capture import load_config
 
     here = Path(__file__).resolve().parent / "capture"
-    percussion = sorted(name for name in shipped_captures()
-                        if profile_module.is_percussion(load_config(here / f"{name}.json")))
+    percussion = sorted(
+        name
+        for name in shipped_captures()
+        if profile_module.is_percussion(load_config(here / f"{name}.json"))
+    )
     assert len(shipped_captures()) >= 70
     # Four, and they are one kit read on two reference axes: `drums` is the
     # modern recording that answers its colour, and the three `drums_module`
     # grids the module that answers how it rings, damps and sits against
     # itself — one per gate, because a gate is what the analysis window is
     # promised to be and the kit's pieces do not all fill the same one.
-    assert percussion == ["drums", "drums_module", "drums_module_hit",
-                          "drums_module_mid"]
+    assert percussion == ["drums", "drums_module", "drums_module_hit", "drums_module_mid"]
 
 
 def _corpus_manifest(root: Path, timbres: list[dict], *, config: str = "") -> Path:
@@ -458,24 +550,47 @@ def _corpus_manifest(root: Path, timbres: list[dict], *, config: str = "") -> Pa
     """
     root.mkdir(parents=True, exist_ok=True)
     path = root / "manifest.json"
-    path.write_text(json.dumps({
-        "id": "m", "config": config, "sample_rate": 48000, "gate_ms": 1000,
-        "tail": "2s", "preroll_ms": 100, "notes": [60], "velocities": [100],
-        "timbres": timbres,
-        "renders": [{"id": f"{t['id']}/n060_v100", "timbre": t["id"], "note": 60,
-                     "velocity": 100, "path": f"{t['id']}/n060_v100.wav",
-                     "seconds": 1.1} for t in timbres],
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "id": "m",
+                "config": config,
+                "sample_rate": 48000,
+                "gate_ms": 1000,
+                "tail": "2s",
+                "preroll_ms": 100,
+                "notes": [60],
+                "velocities": [100],
+                "timbres": timbres,
+                "renders": [
+                    {
+                        "id": f"{t['id']}/n060_v100",
+                        "timbre": t["id"],
+                        "note": 60,
+                        "velocity": 100,
+                        "path": f"{t['id']}/n060_v100.wav",
+                        "seconds": 1.1,
+                    }
+                    for t in timbres
+                ],
+            }
+        )
+    )
     return path
 
 
 def _tracked_capture(path: Path, timbres: list[dict]) -> str:
-    path.write_text(json.dumps({"id": path.stem, "label": "x", "notes": [60],
-                                "velocities": [100], "timbres": timbres}))
+    path.write_text(
+        json.dumps(
+            {"id": path.stem, "label": "x", "notes": [60], "velocities": [100], "timbres": timbres}
+        )
+    )
     return str(path)
 
 
-def test_a_corpus_captured_before_the_slot_had_a_name_reads_its_meaning_from_the_definition(tmp_path):
+def test_a_corpus_captured_before_the_slot_had_a_name_reads_its_meaning_from_the_definition(
+    tmp_path,
+):
     """The manifest's copy is ambiguous where the definition is not.
 
     A manifest's timbre block is copied from the capture definition as it stood,
@@ -486,19 +601,21 @@ def test_a_corpus_captured_before_the_slot_had_a_name_reads_its_meaning_from_the
     """
     from corpus import load_corpus
 
-    config = _tracked_capture(tmp_path / "banjo.json",
-                              [{"id": "gm106", "label": "y", "slot_channel": 10}])
-    manifest = _corpus_manifest(tmp_path / "banjo",
-                                [{"id": "gm106", "label": "y", "channel": 10}],
-                                config=config)
+    config = _tracked_capture(
+        tmp_path / "banjo.json", [{"id": "gm106", "label": "y", "slot_channel": 10}]
+    )
+    manifest = _corpus_manifest(
+        tmp_path / "banjo", [{"id": "gm106", "label": "y", "channel": 10}], config=config
+    )
     assert not load_corpus(manifest).percussive()
 
     # And a kit is still a kit, from the same ambiguous block.
-    config = _tracked_capture(tmp_path / "drums.json",
-                              [{"id": "kit-a", "label": "y", "channel": 10}])
-    manifest = _corpus_manifest(tmp_path / "drums",
-                                [{"id": "kit-a", "label": "y", "channel": 10}],
-                                config=config)
+    config = _tracked_capture(
+        tmp_path / "drums.json", [{"id": "kit-a", "label": "y", "channel": 10}]
+    )
+    manifest = _corpus_manifest(
+        tmp_path / "drums", [{"id": "kit-a", "label": "y", "channel": 10}], config=config
+    )
     assert load_corpus(manifest).percussive()
 
 
@@ -511,8 +628,7 @@ def test_a_corpus_captured_since_the_split_answers_from_its_own_manifest(tmp_pat
     melodic = _corpus_manifest(tmp_path / "a", [{"id": "t", "slot_channel": 10}])
     assert not load_corpus(melodic).percussive()
 
-    kit = _corpus_manifest(tmp_path / "b", [{"id": "t", "channel": 10,
-                                             "slot_channel": 15}])
+    kit = _corpus_manifest(tmp_path / "b", [{"id": "t", "channel": 10, "slot_channel": 15}])
     assert load_corpus(kit).percussive()
 
 
@@ -521,10 +637,10 @@ def test_a_corpus_whose_definition_cannot_be_found_falls_back_to_its_own_block(t
     left when a capture definition has been renamed out from under a corpus."""
     from corpus import load_corpus
 
-    assert load_corpus(_corpus_manifest(tmp_path / "a",
-                                        [{"id": "t", "channel": 10}])).percussive()
-    assert load_corpus(_corpus_manifest(tmp_path / "b", [{"id": "t", "channel": 10}],
-                                        config="nowhere/gone.json")).percussive()
+    assert load_corpus(_corpus_manifest(tmp_path / "a", [{"id": "t", "channel": 10}])).percussive()
+    assert load_corpus(
+        _corpus_manifest(tmp_path / "b", [{"id": "t", "channel": 10}], config="nowhere/gone.json")
+    ).percussive()
 
 
 def test_the_definition_a_manifest_names_is_found_from_any_directory(monkeypatch, tmp_path):

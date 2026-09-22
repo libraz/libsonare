@@ -78,9 +78,21 @@ def profile_levels(config: str, notes, lib: str, overrides: str) -> dict[int, fl
     else:
         env.pop("SONARE_TUNING_OVERRIDES", None)
     p = subprocess.run(
-        [sys.executable, str(here / "profile.py"), "compare", "--config", config,
-         "--notes", ",".join(str(n) for n in notes)],
-        capture_output=True, check=False, text=True, env=env, cwd=here.parents[1])
+        [
+            sys.executable,
+            str(here / "profile.py"),
+            "compare",
+            "--config",
+            config,
+            "--notes",
+            ",".join(str(n) for n in notes),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        env=env,
+        cwd=here.parents[1],
+    )
     if p.returncode:
         raise RuntimeError(p.stderr[-3000:])
     return parse_profile_levels(p.stdout)
@@ -137,7 +149,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="shape.regain",
         description="Measure each piece's level against the reference and "
-                    "write it back into that piece's own gain.")
+        "write it back into that piece's own gain.",
+    )
     ap.add_argument("--capture", default="drums", help="capture definition id")
     ap.add_argument("--corpus", required=True, help="directory holding manifest.json")
     ap.add_argument("--timbre", default="", help="which timbre of the capture")
@@ -145,23 +158,30 @@ def main(argv=None) -> int:
     ap.add_argument("--velocities", default="", help="subset of the capture's velocities")
     ap.add_argument("--lib", default="", help="SONARE_LIB_PATH for model renders")
     ap.add_argument("--cache", default="/tmp/voicematch-shape")
-    ap.add_argument("--no-bed", action="store_true",
-                    help="skip the recorded-floor subtraction")
+    ap.add_argument("--no-bed", action="store_true", help="skip the recorded-floor subtraction")
     ap.add_argument("--workers", type=int, default=7)
-    ap.add_argument("--knobs", default="",
-                    help="a saved SONARE_TUNING_DUMP; without one the library "
-                         "is asked directly")
+    ap.add_argument(
+        "--knobs",
+        default="",
+        help="a saved SONARE_TUNING_DUMP; without one the library is asked directly",
+    )
     ap.add_argument("--namespaces", default="", help="comma-separated key prefixes")
-    ap.add_argument("--overrides", required=True,
-                    help="the fitted set whose levels are to be corrected")
+    ap.add_argument(
+        "--overrides", required=True, help="the fitted set whose levels are to be corrected"
+    )
     ap.add_argument("--out", default="", help="write the corrected set here")
-    ap.add_argument("--config", default="",
-                    help="capture definition path for the profile run "
-                         "(default: the capture id's own file)")
-    ap.add_argument("--held-level", action="store_true",
-                    help="correct against the loss's own held level instead of "
-                         "the gate's. They disagree on a long piece; this is "
-                         "here to reproduce that, not to be used")
+    ap.add_argument(
+        "--config",
+        default="",
+        help="capture definition path for the profile run (default: the capture id's own file)",
+    )
+    ap.add_argument(
+        "--held-level",
+        action="store_true",
+        help="correct against the loss's own held level instead of "
+        "the gate's. They disagree on a long piece; this is "
+        "here to reproduce that, not to be used",
+    )
     a = ap.parse_args(argv)
 
     from pathlib import Path
@@ -179,17 +199,24 @@ def main(argv=None) -> int:
     if a.held_level:
         offsets = held_offsets(loss, text, notes)
     else:
-        offsets = profile_levels(a.config or f"tools/voicematch/capture/{a.capture}.json",
-                                 notes, a.lib, text)
+        offsets = profile_levels(
+            a.config or f"tools/voicematch/capture/{a.capture}.json", notes, a.lib, text
+        )
     gains, stuck = corrections(base, ov, offsets)
     for n, off in sorted(offsets.items()):
         key = f"d{n:03d}.gain"
-        print(f"note {n:3d}  {off:+6.2f} dB   gain "
-              f"{ov.get(key, base.get(key, float('nan'))):.4f} -> "
-              f"{gains.get(key, float('nan')):.4f}", file=sys.stderr)
+        print(
+            f"note {n:3d}  {off:+6.2f} dB   gain "
+            f"{ov.get(key, base.get(key, float('nan'))):.4f} -> "
+            f"{gains.get(key, float('nan')):.4f}",
+            file=sys.stderr,
+        )
     for n, want, got in stuck:
-        print(f"note {n:3d} needs gain {want:.3f}, clamp gives {got:.3f} — "
-              f"a gain cannot correct this piece", file=sys.stderr)
+        print(
+            f"note {n:3d} needs gain {want:.3f}, clamp gives {got:.3f} — "
+            f"a gain cannot correct this piece",
+            file=sys.stderr,
+        )
 
     out = write_overrides({**base, **ov, **gains}, base)
     if a.out:

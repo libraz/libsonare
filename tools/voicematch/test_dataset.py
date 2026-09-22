@@ -36,7 +36,7 @@ def test_a_log_knob_is_sampled_evenly_across_its_decades():
     knob = _knob("k", 0.001, 1.0, True, 0.03)
     rng = random.Random(0)
     draws = [dataset.sample_values([knob], rng)[0] for _ in range(3000)]
-    per_decade = [sum(1 for d in draws if 10 ** -e > d >= 10 ** -(e + 1)) for e in range(3)]
+    per_decade = [sum(1 for d in draws if 10**-e > d >= 10 ** -(e + 1)) for e in range(3)]
     assert all(800 < n < 1200 for n in per_decade), per_decade
 
 
@@ -118,8 +118,14 @@ def test_the_manifest_carries_the_knob_order_the_rows_depend_on():
     man = dataset.manifest(0, "sustain", "48,60", "", knobs, seed=3)
     assert man["schema"] == dataset.SCHEMA
     assert [k["label"] for k in man["knobs"]] == ["a", "b"]
-    assert man["knobs"][1] == {"label": "b", "tunable": "b", "lo": 0.1, "hi": 10.0,
-                               "log": True, "default": 1.0}
+    assert man["knobs"][1] == {
+        "label": "b",
+        "tunable": "b",
+        "lo": 0.1,
+        "hi": 10.0,
+        "log": True,
+        "default": 1.0,
+    }
 
 
 @pytest.mark.parametrize("suffix", [".jsonl", ".jsonl.gz"])

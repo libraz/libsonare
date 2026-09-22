@@ -86,9 +86,12 @@ SR = 48000
 
 #: Same untracked root the capture corpus uses, for the same reason: this is
 #: bulk generated data, it is large, and it does not belong in the tree.
-DATASET_ROOT = Path(
-    os.environ.get("SONARE_VOICEMATCH_ROOT") or REPO_ROOT / ".cache" / "voicematch"
-).expanduser() / "dataset"
+DATASET_ROOT = (
+    Path(
+        os.environ.get("SONARE_VOICEMATCH_ROOT") or REPO_ROOT / ".cache" / "voicematch"
+    ).expanduser()
+    / "dataset"
+)
 
 #: Bumped when the row schema changes, so a reader can refuse a corpus written
 #: against a different measurement rather than silently training on two.
@@ -128,8 +131,9 @@ def _silent(rows: list[dict]) -> bool:
     return True
 
 
-def manifest(program: int, pattern: str, notes: str, velocities: str,
-             knobs: list[Knob], seed: int) -> dict:
+def manifest(
+    program: int, pattern: str, notes: str, velocities: str, knobs: list[Knob], seed: int
+) -> dict:
     """What a reader needs to interpret every row that follows.
 
     The knob order is fixed here and never repeated per row — a hundred labels
@@ -143,8 +147,14 @@ def manifest(program: int, pattern: str, notes: str, velocities: str,
         "velocities": velocities,
         "seed": seed,
         "knobs": [
-            {"label": k.label, "tunable": k.tunable, "lo": k.lo, "hi": k.hi,
-             "log": k.log, "default": k.start_value}
+            {
+                "label": k.label,
+                "tunable": k.tunable,
+                "lo": k.lo,
+                "hi": k.hi,
+                "log": k.log,
+                "default": k.start_value,
+            }
             for k in knobs
         ],
     }
@@ -185,8 +195,9 @@ def generate(args) -> int:
     # The library reports its own knob space, defaults and clamp bounds, so the
     # generator's ranges are the same ones a fit would search rather than a
     # second list that can drift from them.
-    catalogue = dump_catalogue(args.program, args.pattern, str(dylib),
-                               sr=SR, notes=args.notes, bank=args.bank)
+    catalogue = dump_catalogue(
+        args.program, args.pattern, str(dylib), sr=SR, notes=args.notes, bank=args.bank
+    )
     spec = auto_spec(args.program, catalogue, bank=args.bank)
     knobs = build_knobs(spec, {}, catalogue)
     runtime = [k for k in knobs if k.tunable is not None]
@@ -201,14 +212,23 @@ def generate(args) -> int:
     done = existing_rows(out)
     if done == 0:
         with _open(out, "w") as fh:
-            fh.write(json.dumps(manifest(args.program, args.pattern, args.notes,
-                                         args.velocities, knobs, args.seed)) + "\n")
+            fh.write(
+                json.dumps(
+                    manifest(
+                        args.program, args.pattern, args.notes, args.velocities, knobs, args.seed
+                    )
+                )
+                + "\n"
+            )
     want = args.samples - done
     if want <= 0:
         print(f"{out} already holds {done} samples; nothing to do")
         return 0
-    print(f"{out}: {done} samples present, generating {want} more "
-          f"({len(knobs)} knobs, {args.workers} workers)", file=sys.stderr)
+    print(
+        f"{out}: {done} samples present, generating {want} more "
+        f"({len(knobs)} knobs, {args.workers} workers)",
+        file=sys.stderr,
+    )
 
     # Seeded from the run's seed AND the resume point, so a resumed run does not
     # redraw the points it already has.
@@ -216,8 +236,7 @@ def generate(args) -> int:
     plan: list[tuple[int, list[float]]] = []
     for i in range(done, done + want):
         # Sample 0 is the compiled-in default; see the module docstring.
-        plan.append((i, [k.start_value for k in knobs] if i == 0
-                     else sample_values(knobs, rng)))
+        plan.append((i, [k.start_value for k in knobs] if i == 0 else sample_values(knobs, rng)))
 
     def render(item: tuple[int, list[float]]) -> dict:
         index, values = item
@@ -231,11 +250,15 @@ def generate(args) -> int:
         row: dict = {"i": index, "v": values}
         try:
             rows, _ = render_model_rows_subprocess(
-                build_dir, args.program, args.pattern, args.notes,
-                velocities_csv=args.velocities, bank=args.bank,
+                build_dir,
+                args.program,
+                args.pattern,
+                args.notes,
+                velocities_csv=args.velocities,
+                bank=args.bank,
                 overrides=tunable_overrides(knobs, values),
             )
-        except Exception as exc:                      # noqa: BLE001 - recorded, not raised
+        except Exception as exc:  # noqa: BLE001 - recorded, not raised
             row["ok"] = False
             row["why"] = f"{type(exc).__name__}: {exc}"[:400]
             return row
@@ -260,10 +283,11 @@ def generate(args) -> int:
             failures += not row["ok"]
             if written % 25 == 0:
                 fh.flush()
-                print(f"  {done + written}/{args.samples}  ({failures} unusable)",
-                      file=sys.stderr)
-    print(f"{out}: {done + written} samples, {failures} of this run's {written} unusable",
-          file=sys.stderr)
+                print(f"  {done + written}/{args.samples}  ({failures} unusable)", file=sys.stderr)
+    print(
+        f"{out}: {done + written} samples, {failures} of this run's {written} unusable",
+        file=sys.stderr,
+    )
     return 0
 
 
@@ -278,17 +302,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pattern", default="sustain")
     p.add_argument("--notes", default="", help="probe notes, CSV; the pattern's own if empty")
     p.add_argument("--velocities", default="")
-    p.add_argument("--samples", type=int, default=1000,
-                   help="total the corpus should hold, counting what it already has")
+    p.add_argument(
+        "--samples",
+        type=int,
+        default=1000,
+        help="total the corpus should hold, counting what it already has",
+    )
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--workers", type=int, default=8)
-    p.add_argument("--build-dir", default="build-tuning",
-                   help="a BUILD_TUNING=ON build; the knobs are pushed in through "
-                        "SONARE_TUNING_OVERRIDES, so it is built once and never rebuilt")
-    p.add_argument("--out", default="",
-                   help=f"output path; default {DATASET_ROOT}/p<NNN>.jsonl.gz. "
-                        f"A .gz suffix is compressed — at 7 kB a sample uncompressed, "
-                        f"a corpus large enough to invert from is worth it")
+    p.add_argument(
+        "--build-dir",
+        default="build-tuning",
+        help="a BUILD_TUNING=ON build; the knobs are pushed in through "
+        "SONARE_TUNING_OVERRIDES, so it is built once and never rebuilt",
+    )
+    p.add_argument(
+        "--out",
+        default="",
+        help=f"output path; default {DATASET_ROOT}/p<NNN>.jsonl.gz. "
+        f"A .gz suffix is compressed — at 7 kB a sample uncompressed, "
+        f"a corpus large enough to invert from is worth it",
+    )
     return generate(p.parse_args(argv))
 
 

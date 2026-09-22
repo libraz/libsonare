@@ -106,6 +106,7 @@ def test_within_one_band_it_answers_coarsely_and_the_size_of_that_is_the_point()
     a band stays unmeasured, and reading a small `tonality` delta as evidence
     about it would be reading noise.
     """
+
     def in_the_2k_band(sig):
         freqs = np.fft.rfftfreq(len(sig), 1.0 / SR)
         spectrum = np.fft.rfft(sig)
@@ -205,8 +206,7 @@ def test_the_window_decides_the_answer_which_is_why_the_caller_supplies_it(rng):
 def test_a_hit_measured_without_its_channels_reports_no_image(rng):
     """`measure_hit` passes them only when the render has two, so this is the
     ordinary case for a mono corpus and must not read as a centred source."""
-    hit = rng.standard_normal(int(0.4 * SR)) * np.exp(
-        -np.arange(int(0.4 * SR)) / (0.05 * SR))
+    hit = rng.standard_normal(int(0.4 * SR)) * np.exp(-np.arange(int(0.4 * SR)) / (0.05 * SR))
     note = Note(38, 100, 0.0, 0.05)
     assert analyze_hit(hit, SR, note, 0.4).stereo_width is None
     two = np.stack([hit, rng.standard_normal(len(hit))], axis=1)

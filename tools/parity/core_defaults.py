@@ -58,8 +58,7 @@ def load(map_path: Path, root: Path) -> dict[str, CoreConfig]:
     # ``kEpsilon`` / ``kDefaultSampleRate`` appear as free-fn default args).
     const_headers = [root / h for h in _GLOBAL_CONSTANT_HEADERS]
     const_headers += [
-        root / spec["header"]
-        for spec in (*struct_entries.values(), *func_entries.values())
+        root / spec["header"] for spec in (*struct_entries.values(), *func_entries.values())
     ]
     constants = scan_constants(const_headers)
     out: dict[str, CoreConfig] = {}

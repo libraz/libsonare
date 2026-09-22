@@ -46,9 +46,11 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 
 #: The same root the server writes to and the rest of the harness renders into.
-SCRATCH_ROOT = Path(
-    os.environ.get("SONARE_VOICEMATCH_ROOT") or REPO_ROOT / ".cache" / "voicematch"
-).expanduser().resolve()
+SCRATCH_ROOT = (
+    Path(os.environ.get("SONARE_VOICEMATCH_ROOT") or REPO_ROOT / ".cache" / "voicematch")
+    .expanduser()
+    .resolve()
+)
 FEEDBACK_ROOT = SCRATCH_ROOT / "feedback"
 AUDITION_ROOT = SCRATCH_ROOT / "audition"
 
@@ -116,8 +118,9 @@ def voice_of(set_id: str) -> dict:
     decision that moves.
     """
     try:
-        manifest = json.loads((AUDITION_ROOT / set_id / "manifest.json")
-                              .read_text(encoding="utf-8"))
+        manifest = json.loads(
+            (AUDITION_ROOT / set_id / "manifest.json").read_text(encoding="utf-8")
+        )
     except (OSError, ValueError):
         return {}
     voice = manifest.get("voice")
@@ -153,8 +156,11 @@ def note_units(entry: dict, voice: dict) -> list[str]:
     if voice.get("kit"):
         hit = (entry.get("conditions") or {}).get("hit") or {}
         struck = hit.get("notes") or [] if isinstance(hit, dict) else []
-        return [f"d{n['note']:03d}" for n in struck
-                if isinstance(n, dict) and isinstance(n.get("note"), int)]
+        return [
+            f"d{n['note']:03d}"
+            for n in struck
+            if isinstance(n, dict) and isinstance(n.get("note"), int)
+        ]
     patch = voice.get("patch") or ""
     return [patch] if patch else []
 
@@ -191,8 +197,11 @@ def where(entry: dict, voice: dict) -> str:
         # than left as a number a reader has to look up to know whether the
         # verdict was about a snare or a cymbal.
         if voice.get("kit") and struck:
-            named = [f"{drum_name(n['note']) or 'note'} {n['note']}" for n in struck
-                     if isinstance(n.get("note"), int)]
+            named = [
+                f"{drum_name(n['note']) or 'note'} {n['note']}"
+                for n in struck
+                if isinstance(n.get("note"), int)
+            ]
             bits.append(" + ".join(named))
         bits.append(f"hit {hit.get('n')}")
     at = cond.get("playhead")
@@ -215,20 +224,22 @@ def digest(set_id: str, entries: list[dict]) -> dict:
         # The latest of them: a fill strikes six toms and a note about it is
         # stale as soon as any one of the six has moved under it.
         moved = max((facts.get(u, (0, ""))[1] for u in units), default="")
-        notes.append({
-            "at": at,
-            "grade": str(entry.get("grade") or ""),
-            "tag": str(entry.get("tag") or ""),
-            "text": str(entry.get("text") or ""),
-            "lang": str(entry.get("lang") or ""),
-            "where": where(entry, voice),
-            "units": units,
-            "last_moved": moved,
-            # Compared as dates, which is all the log records to a day's
-            # resolution on the bump side. A note ON the day a voice moved is
-            # not marked: nothing here can order two events inside one day.
-            "predates_last_move": bool(moved and at[:10] < moved),
-        })
+        notes.append(
+            {
+                "at": at,
+                "grade": str(entry.get("grade") or ""),
+                "tag": str(entry.get("tag") or ""),
+                "text": str(entry.get("text") or ""),
+                "lang": str(entry.get("lang") or ""),
+                "where": where(entry, voice),
+                "units": units,
+                "last_moved": moved,
+                # Compared as dates, which is all the log records to a day's
+                # resolution on the bump side. A note ON the day a voice moved is
+                # not marked: nothing here can order two events inside one day.
+                "predates_last_move": bool(moved and at[:10] < moved),
+            }
+        )
     notes.sort(key=lambda n: n["at"], reverse=True)
     # The worst verdict still standing, which is the one a reader acts on. A
     # note taken before the voice moved is not it: the render it describes is
@@ -283,8 +294,7 @@ def preferred(entries: list[dict]) -> list[dict]:
         version = cond.get("version")
         if not version:
             continue
-        seen = tally.setdefault(version, {"version": version, "n": 0,
-                                          "takes": [], "sighted": 0})
+        seen = tally.setdefault(version, {"version": version, "n": 0, "takes": [], "sighted": 0})
         seen["n"] += 1
         if not cond.get("blind"):
             seen["sighted"] += 1
@@ -317,8 +327,10 @@ def collect(only: list[str], grade: str) -> list[dict]:
 
 def render(voices: list[dict], full: bool) -> str:
     if not voices:
-        return (f"nothing has been said yet — {FEEDBACK_ROOT}\n"
-                "the page writes here as it is listened to: tools/audition/serve.py")
+        return (
+            f"nothing has been said yet — {FEEDBACK_ROOT}\n"
+            "the page writes here as it is listened to: tools/audition/serve.py"
+        )
     lines = []
     total = sum(len(v["notes"]) for v in voices)
     lines.append(f"{total} note(s) on {len(voices)} voice(s) — {FEEDBACK_ROOT}")
@@ -339,23 +351,30 @@ def render(voices: list[dict], full: bool) -> str:
         lines.append(head)
         if voice["preferred"]:
             kept = "   ".join(
-                f"{p['version']} {p['n']}" + ("" if p["sighted"] == p["n"] else
-                                              f" ({p['sighted']} sighted)")
-                for p in voice["preferred"])
+                f"{p['version']} {p['n']}"
+                + ("" if p["sighted"] == p["n"] else f" ({p['sighted']} sighted)")
+                for p in voice["preferred"]
+            )
             lines.append(f"  put forward to keep:  {kept}")
         shown = voice["notes"] if full else voice["notes"][:4]
         for note in shown:
-            mark = (f"  ·  taken before {'/'.join(note['units'])} last moved "
-                    f"({note['last_moved']})") if note["predates_last_move"] else ""
+            mark = (
+                (f"  ·  taken before {'/'.join(note['units'])} last moved ({note['last_moved']})")
+                if note["predates_last_move"]
+                else ""
+            )
             unit = f"[{'/'.join(note['units'])}] " if voice["kit"] and note["units"] else ""
-            lines.append(f"  {note['at'][:16]}  {note['grade'] or '-':<16} "
-                         f"{note['tag'] or '-':<23} {unit}{note['where']}{mark}")
+            lines.append(
+                f"  {note['at'][:16]}  {note['grade'] or '-':<16} "
+                f"{note['tag'] or '-':<23} {unit}{note['where']}{mark}"
+            )
             if note["text"]:
                 for row in note["text"].splitlines():
                     lines.append(f"      {row}")
         if len(voice["notes"]) > len(shown):
-            lines.append(f"      … {len(voice['notes']) - len(shown)} more "
-                         f"(heard.py {voice['set']})")
+            lines.append(
+                f"      … {len(voice['notes']) - len(shown)} more (heard.py {voice['set']})"
+            )
     return "\n".join(lines)
 
 
@@ -370,11 +389,16 @@ def bank_generation_at(day: str) -> int:
         raw = json.loads(BANK_VERSIONS.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return 0
-    return max((int(h.get("generation") or 0)
-                for u in (raw.get("units") or {}).values() if isinstance(u, dict)
-                for h in (u.get("history") or []) if isinstance(h, dict)
-                and str(h.get("date") or "") <= day),
-               default=0)
+    return max(
+        (
+            int(h.get("generation") or 0)
+            for u in (raw.get("units") or {}).values()
+            if isinstance(u, dict)
+            for h in (u.get("history") or [])
+            if isinstance(h, dict) and str(h.get("date") or "") <= day
+        ),
+        default=0,
+    )
 
 
 def _standing_note(voice: dict) -> dict:
@@ -385,8 +409,11 @@ def _standing_note(voice: dict) -> dict:
     name a note the summary line itself would not point to.
     """
     notes = voice["notes"]
-    pool = notes if voice["worst_predates_last_move"] else \
-        [n for n in notes if not n["predates_last_move"]]
+    pool = (
+        notes
+        if voice["worst_predates_last_move"]
+        else [n for n in notes if not n["predates_last_move"]]
+    )
     return next(n for n in pool if n["grade"] == voice["worst"])
 
 
@@ -397,8 +424,10 @@ def _entry_for(entries: list[dict], note: dict) -> dict:
     same grade are indistinguishable here; the first in log order wins.
     """
     for entry in entries:
-        if (str(entry.get("at") or "") == note["at"]
-                and str(entry.get("grade") or "") == note["grade"]):
+        if (
+            str(entry.get("at") or "") == note["at"]
+            and str(entry.get("grade") or "") == note["grade"]
+        ):
             return entry
     return {}
 
@@ -419,16 +448,20 @@ def signoff(set_id: str) -> dict:
     worst = voice["worst"]
     if worst not in ("ok", "acceptable"):
         if not worst:
-            raise ValueError(f"{set_id}: nothing but a preference tag -- "
-                              "a preference carries no grade")
+            raise ValueError(
+                f"{set_id}: nothing but a preference tag -- a preference carries no grade"
+            )
         chosen = _standing_note(voice)
-        raise ValueError(f"{set_id}: standing verdict is {worst} ({chosen['at'][:10]}) -- "
-                          f"{MEANS.get(worst, worst)}")
+        raise ValueError(
+            f"{set_id}: standing verdict is {worst} ({chosen['at'][:10]}) -- "
+            f"{MEANS.get(worst, worst)}"
+        )
     chosen = _standing_note(voice)
     if chosen["predates_last_move"]:
         raise ValueError(
             f"{set_id}: note taken {chosen['at'][:10]} predates "
-            f"{'/'.join(chosen['units'])}'s last move on {chosen['last_moved']}")
+            f"{'/'.join(chosen['units'])}'s last move on {chosen['last_moved']}"
+        )
     entry = _entry_for(entries, chosen)
     take = str((entry.get("conditions") or {}).get("take") or "")
     facts = unit_facts()
@@ -451,12 +484,16 @@ def signoff(set_id: str) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("sets", nargs="*", help="set ids; default every voice with notes")
-    ap.add_argument("--grade", default="", choices=("", *GRADES),
-                    help="only notes carrying this verdict")
+    ap.add_argument(
+        "--grade", default="", choices=("", *GRADES), help="only notes carrying this verdict"
+    )
     ap.add_argument("--json", action="store_true", help="the same, structured")
-    ap.add_argument("--signoff", metavar="SET",
-                     help="print a `music` block for one voice, ready to paste into "
-                          "tools/voicematch/signoff.json")
+    ap.add_argument(
+        "--signoff",
+        metavar="SET",
+        help="print a `music` block for one voice, ready to paste into "
+        "tools/voicematch/signoff.json",
+    )
     args = ap.parse_args(argv)
 
     if args.signoff:

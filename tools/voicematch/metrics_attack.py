@@ -17,8 +17,13 @@ ATTACK_WINDOWS = 6
 # path with the wrong filter order announces itself: a single pole falls at
 # 6 dB/octave, which no radiating mechanism does, and leaves a burst still
 # 23 dB up at 16 kHz that the ear reads as a tick rather than as brightness.
-ATTACK_BANDS_HZ = ((4000.0, 8000.0), (8000.0, 12000.0), (12000.0, 16000.0),
-                   (16000.0, 20000.0), (20000.0, 24000.0))
+ATTACK_BANDS_HZ = (
+    (4000.0, 8000.0),
+    (8000.0, 12000.0),
+    (12000.0, 16000.0),
+    (16000.0, 20000.0),
+    (20000.0, 24000.0),
+)
 
 # What the low attack bands are measured against, and why it is not the
 # window's own broadband level.
@@ -52,8 +57,9 @@ def _anchor_power(freqs: np.ndarray, power: np.ndarray, sr: int) -> float:
     return float(power[mask].sum())
 
 
-def _bands_against_anchor(freqs: np.ndarray, power: np.ndarray, sr: int,
-                          bands, anchor: float) -> list[float | None]:
+def _bands_against_anchor(
+    freqs: np.ndarray, power: np.ndarray, sr: int, bands, anchor: float
+) -> list[float | None]:
     """Each band's level relative to `anchor`, in dB; None above Nyquist."""
     out: list[float | None] = []
     for lo, hi in bands:
@@ -66,8 +72,7 @@ def _bands_against_anchor(freqs: np.ndarray, power: np.ndarray, sr: int,
     return out
 
 
-def attack_bands(mono: np.ndarray, sr: int, note: Note,
-                 onset: float) -> list[float | None]:
+def attack_bands(mono: np.ndarray, sr: int, note: Note, onset: float) -> list[float | None]:
     """High-band balance through the attack: one value per band per time slice.
 
     Each value is the band's level relative to that slice's own broadband level,
@@ -145,12 +150,16 @@ ATTACK_LF_WINDOW_MS = 50.0
 # partition of the anchor itself, which is not degenerate — a band is only
 # self-referential if it IS the anchor — and says how the mid weight is
 # distributed. Only a band that equals ATTACK_ANCHOR_HZ would have to go.
-ATTACK_LF_BANDS_HZ = ((20.0, 60.0), (60.0, 200.0), (200.0, 800.0),
-                      (800.0, 2000.0), (2000.0, 4000.0))
+ATTACK_LF_BANDS_HZ = (
+    (20.0, 60.0),
+    (60.0, 200.0),
+    (200.0, 800.0),
+    (800.0, 2000.0),
+    (2000.0, 4000.0),
+)
 
 
-def attack_low_bands(mono: np.ndarray, sr: int, note: Note,
-                     onset: float) -> list[float | None]:
+def attack_low_bands(mono: np.ndarray, sr: int, note: Note, onset: float) -> list[float | None]:
     """Low- and mid-band balance through the attack: one value per band.
 
     Each value is the band's level relative to `ATTACK_ANCHOR_HZ`, exactly as
@@ -226,8 +235,7 @@ ATTACK_PEAK_PROMINENCE_DB = 15.0
 ATTACK_PEAK_FLOOR_DB = 80.0
 
 
-def attack_peaks(mono: np.ndarray, sr: int, note: Note,
-                 onset: float) -> list[tuple[float, float]]:
+def attack_peaks(mono: np.ndarray, sr: int, note: Note, onset: float) -> list[tuple[float, float]]:
     """Isolated narrowband peaks in the attack, as (frequency Hz, prominence dB).
 
     Measured over the same span `attack_bands` covers, from the same detected
@@ -267,7 +275,7 @@ def attack_peaks(mono: np.ndarray, sr: int, note: Note,
     # neighbours; see ATTACK_PEAK_FLOOR_DB.
     excess[db < float(db.max()) - ATTACK_PEAK_FLOOR_DB] = 0.0
     lo = int(np.searchsorted(freqs, ATTACK_PEAK_FLOOR_HZ))
-    hi = len(freqs) - half            # the smoothing tapers at the very top
+    hi = len(freqs) - half  # the smoothing tapers at the very top
     out: list[tuple[float, float]] = []
     i = lo
     while i < hi:

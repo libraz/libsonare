@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-TPQ = 480          # ticks per quarter note
+TPQ = 480  # ticks per quarter note
 TEMPO_US = 500000  # microseconds per quarter (120 BPM)
 TICKS_PER_SEC = TPQ * 1_000_000 // TEMPO_US  # 960 at 120 BPM
 
@@ -124,7 +124,13 @@ def write_smf(
         prev = tick
     track += _vlq(_sec_to_ticks(max(0.0, end_pad))) + bytes([0xFF, 0x2F, 0x00])  # end of track
 
-    header = b"MThd" + (6).to_bytes(4, "big") + (0).to_bytes(2, "big") + (1).to_bytes(2, "big") + TPQ.to_bytes(2, "big")
+    header = (
+        b"MThd"
+        + (6).to_bytes(4, "big")
+        + (0).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + TPQ.to_bytes(2, "big")
+    )
     track_chunk = b"MTrk" + len(track).to_bytes(4, "big") + bytes(track)
     return header + track_chunk
 

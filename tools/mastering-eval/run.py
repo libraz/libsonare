@@ -370,9 +370,7 @@ def _mean_of(per_draw: list[dict]) -> dict:
     """Mean of each metric across draws; a single draw passes through unchanged."""
     if len(per_draw) == 1:
         return per_draw[0]
-    return {
-        metric: float(np.mean([draw[metric] for draw in per_draw])) for metric in per_draw[0]
-    }
+    return {metric: float(np.mean([draw[metric] for draw in per_draw])) for metric in per_draw[0]}
 
 
 def _sd_of(per_draw: list[dict]) -> dict:

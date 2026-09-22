@@ -28,11 +28,16 @@ def _catalogue(programs: dict, modes: dict | None = None):
 
 def test_a_knob_without_two_range_ends_is_not_probed(tmp_path):
     """A range of zero width renders the same twice and would read as dead."""
-    path = _spec(tmp_path, {"knobs": [
-        {"tunable": "a.b", "min": 1.0, "max": 1.0},
-        {"tunable": "a.c", "min": 0.0},
-        {"tunable": "a.d", "min": 0.0, "max": 1.0},
-    ]})
+    path = _spec(
+        tmp_path,
+        {
+            "knobs": [
+                {"tunable": "a.b", "min": 1.0, "max": 1.0},
+                {"tunable": "a.c", "min": 0.0},
+                {"tunable": "a.d", "min": 0.0, "max": 1.0},
+            ]
+        },
+    )
     assert [k.name for k in liveness.spec_entries(path)] == ["a.d"]
 
 
@@ -64,7 +69,8 @@ def test_the_engine_stand_in_prefers_a_capital_tone():
     knobs = [liveness.Knob("pipe_organ_voice.kFoo", 0.0, 1.0)]
     catalogue = _catalogue(
         {(19, 0): "church_organ", (19, 16): "aaa_organ_full"},
-        {"church_organ": "pipe_organ", "aaa_organ_full": "pipe_organ"})
+        {"church_organ": "pipe_organ", "aaa_organ_full": "pipe_organ"},
+    )
     assert liveness.derive_program(knobs, catalogue)[:3] == (19, "church_organ", 0)
 
 
@@ -89,11 +95,14 @@ def test_a_spec_reaching_neither_map_is_skipped_with_a_reason():
 
 
 def test_dead_is_live_nowhere_and_partial_is_live_somewhere():
-    r = liveness.SpecReport(spec="s.json", live={
-        "everywhere": [36, 60, 108],
-        "top only": [108],
-        "nowhere": [],
-    })
+    r = liveness.SpecReport(
+        spec="s.json",
+        live={
+            "everywhere": [36, 60, 108],
+            "top only": [108],
+            "nowhere": [],
+        },
+    )
     assert r.dead() == ["nowhere"]
     assert r.partial(NOTES) == ["top only"]
 
@@ -105,16 +114,18 @@ def test_a_note_nothing_moves_is_reported_as_the_positive_control():
 
 
 def test_a_dead_knob_carrying_a_reason_is_excused_not_failed():
-    r = liveness.SpecReport(spec="s.json", live={"gated": []},
-                            excuses={"gated": "its switch ships at zero"})
+    r = liveness.SpecReport(
+        spec="s.json", live={"gated": []}, excuses={"gated": "its switch ships at zero"}
+    )
     assert r.dead() == []
     assert r.excused() == ["gated"]
 
 
 def test_an_excuse_expires_with_the_divergence_it_covers():
     """A knob excused as dead and since come alive keeps asserting a stale decision."""
-    r = liveness.SpecReport(spec="s.json", live={"gated": [60]},
-                            excuses={"gated": "its switch ships at zero"})
+    r = liveness.SpecReport(
+        spec="s.json", live={"gated": [60]}, excuses={"gated": "its switch ships at zero"}
+    )
     assert r.stale() == ["gated"]
     assert r.partial(NOTES) == []
 
@@ -126,16 +137,24 @@ def test_an_empty_reason_does_not_excuse():
 
 
 def test_the_reason_is_read_off_the_knob(tmp_path):
-    path = _spec(tmp_path, {"knobs": [
-        {"tunable": "a.b", "min": 0.0, "max": 1.0, "dead": "gated by a.switch"},
-    ]})
+    path = _spec(
+        tmp_path,
+        {
+            "knobs": [
+                {"tunable": "a.b", "min": 0.0, "max": 1.0, "dead": "gated by a.switch"},
+            ]
+        },
+    )
     assert liveness.spec_entries(path)[0].excuse == "gated by a.switch"
 
 
 def test_a_knob_moving_at_one_velocity_of_two_is_named():
     """The axis the fitting notes name first: a dynamics control on a fixed probe."""
-    r = liveness.SpecReport(spec="s.json", live={"dyn": [60], "both": [60]},
-                            velocities={"dyn": {100}, "both": {32, 100}})
+    r = liveness.SpecReport(
+        spec="s.json",
+        live={"dyn": [60], "both": [60]},
+        velocities={"dyn": {100}, "both": {32, 100}},
+    )
     assert r.velocity_gated((32, 100)) == ["dyn"]
 
 
@@ -146,14 +165,16 @@ def test_one_velocity_cannot_gate_anything():
 
 
 def test_an_excused_knob_is_not_also_reported_velocity_gated():
-    r = liveness.SpecReport(spec="s.json", live={"dyn": []},
-                            velocities={"dyn": {100}}, excuses={"dyn": "gated"})
+    r = liveness.SpecReport(
+        spec="s.json", live={"dyn": []}, velocities={"dyn": {100}}, excuses={"dyn": "gated"}
+    )
     assert r.velocity_gated((32, 100)) == []
 
 
 def test_a_patch_report_shares_its_inert_count():
-    r = liveness.PatchReport(patch="violin", program=40, channel=0,
-                             inert=["violin.a", "violin.b"], total=8)
+    r = liveness.PatchReport(
+        patch="violin", program=40, channel=0, inert=["violin.a", "violin.b"], total=8
+    )
     assert r.share() == 0.25
 
 
@@ -194,9 +215,20 @@ def test_a_drum_note_keeps_its_own_channel_and_a_grid_of_one():
 def test_a_census_records_the_generation_it_was_taken_against(tmp_path, monkeypatch):
     monkeypatch.setattr(liveness, "bank_generation", lambda: 31)
     out = tmp_path / "field-coverage.json"
-    liveness.write_census(out, [liveness.PatchReport(
-        patch="violin", program=40, channel=0, total=8,
-        inert=["violin.bowed_string.stribeck"])], (48, 60), (32, 100))
+    liveness.write_census(
+        out,
+        [
+            liveness.PatchReport(
+                patch="violin",
+                program=40,
+                channel=0,
+                total=8,
+                inert=["violin.bowed_string.stribeck"],
+            )
+        ],
+        (48, 60),
+        (32, 100),
+    )
     d = json.loads(out.read_text())
     assert d["bank_generation"] == 31
     assert d["patches"]["violin"]["inert"] == ["bowed_string.stribeck"]
@@ -209,8 +241,12 @@ def test_a_census_records_the_generation_it_was_taken_against(tmp_path, monkeypa
 def test_a_variation_records_the_address_it_was_probed_at(tmp_path, monkeypatch):
     monkeypatch.setattr(liveness, "bank_generation", lambda: 32)
     out = tmp_path / "field-coverage.json"
-    liveness.write_census(out, [liveness.PatchReport(
-        patch="church_organ_full", program=19, bank=2, channel=0, total=8)], (60,), (100,))
+    liveness.write_census(
+        out,
+        [liveness.PatchReport(patch="church_organ_full", program=19, bank=2, channel=0, total=8)],
+        (60,),
+        (100,),
+    )
     assert json.loads(out.read_text())["patches"]["church_organ_full"]["bank"] == 2
 
 

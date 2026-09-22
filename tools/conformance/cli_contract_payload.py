@@ -59,9 +59,7 @@ def _payload_type(value: Any, token: str) -> bool:
         return isinstance(value, list) and all(isinstance(item, str) for item in value)
     if token == "array:number:12":
         return (
-            isinstance(value, list)
-            and len(value) == 12
-            and all(_is_number(item) for item in value)
+            isinstance(value, list) and len(value) == 12 and all(_is_number(item) for item in value)
         )
     return False
 
@@ -146,9 +144,7 @@ def _object_schema_parts(
         for key in core["optional"]:
             if key in required:
                 optional[key] = required.pop(key)
-    additional = core.get(
-        "additional_properties", core.get("additionalProperties", False)
-    )
+    additional = core.get("additional_properties", core.get("additionalProperties", False))
     return required, optional, bool(additional)
 
 
@@ -159,9 +155,7 @@ def _schema_matches(value: Any, schema: Any, path: str) -> list[str]:
     if alternatives is not None:
         if not isinstance(alternatives, list) or not alternatives:
             return [f"{path}: expected a non-empty alternative schema"]
-        alternative_errors = [
-            _schema_matches(value, item, path) for item in alternatives
-        ]
+        alternative_errors = [_schema_matches(value, item, path) for item in alternatives]
         if any(not errors for errors in alternative_errors):
             return []
         expected = ", ".join(_schema_description(item) for item in alternatives)
@@ -192,26 +186,18 @@ def _schema_matches(value: Any, schema: Any, path: str) -> list[str]:
             errors.append(f"{path}: unknown keys {', '.join(unknown)}")
         for key, field_schema in (*required.items(), *optional.items()):
             if key in value:
-                errors.extend(
-                    _schema_matches(value[key], field_schema, f"{path}.{key}")
-                )
+                errors.extend(_schema_matches(value[key], field_schema, f"{path}.{key}"))
         return errors
     if schema_type == "array":
         if not isinstance(value, list):
             return [f"{path}: expected array, got {type(value).__name__}"]
         errors = []
         if "length" in core and len(value) != core["length"]:
-            errors.append(
-                f"{path}: expected array length {core['length']}, got {len(value)}"
-            )
+            errors.append(f"{path}: expected array length {core['length']}, got {len(value)}")
         if "min_items" in core and len(value) < core["min_items"]:
-            errors.append(
-                f"{path}: expected at least {core['min_items']} items, got {len(value)}"
-            )
+            errors.append(f"{path}: expected at least {core['min_items']} items, got {len(value)}")
         if "max_items" in core and len(value) > core["max_items"]:
-            errors.append(
-                f"{path}: expected at most {core['max_items']} items, got {len(value)}"
-            )
+            errors.append(f"{path}: expected at most {core['max_items']} items, got {len(value)}")
         if "items" in core:
             for index, item in enumerate(value):
                 errors.extend(_schema_matches(item, core["items"], f"{path}[{index}]"))
@@ -272,9 +258,7 @@ def _compare_values(
         if set(left) != set(right):
             return f"{path}: object keys differ ({sorted(left)!r} != {sorted(right)!r})"
         for key in left:
-            mismatch = _compare_values(
-                left[key], right[key], f"{path}.{key}", absolute, relative
-            )
+            mismatch = _compare_values(left[key], right[key], f"{path}.{key}", absolute, relative)
             if mismatch:
                 return mismatch
         return None
@@ -329,9 +313,7 @@ def _compare_payloads(
             right_json = json.loads(right["normalized_json"])
         except (TypeError, json.JSONDecodeError) as exc:
             return f"{path}.{case_id}: normalized_json is not valid JSON: {exc}"
-        return _compare_values(
-            left_json, right_json, f"{path}.normalized_json", absolute, relative
-        )
+        return _compare_values(left_json, right_json, f"{path}.normalized_json", absolute, relative)
     if path == "doctor":
         if not isinstance(left, dict) or not isinstance(right, dict):
             return f"{path}.{case_id}: expected objects for surface comparison"
@@ -430,33 +412,37 @@ def _validate_case_payload(
                 report.append(
                     (
                         "fail",
-                        (f"{label}.sections[{index}].type: expected lowercase-kebab section type, "
-                        f"got {section_type!r}"),
+                        (
+                            f"{label}.sections[{index}].type: expected lowercase-kebab section type, "
+                            f"got {section_type!r}"
+                        ),
                     )
                 )
     if path == "analyze" and case_id == "with_seventh":
-            # What the flag promises is that the template set is not restricted
-            # to the four triads, so that is what this asserts. It used to look
-            # for a name ending in "7", which was a proxy rather than the
-            # contract: the fixture is a single sine with one pitch class, so
-            # whichever non-triad wins is arbitrary, and pinning one spelling
-            # made the check fail whenever the vocabulary changed even though
-            # the flag went on working.
-            chords = payload.get("chords")
-            has_extended = isinstance(chords, list) and any(
-                isinstance(chord, dict)
-                and isinstance(chord.get("name"), str)
-                and _chord_name_is_extended(chord["name"])
-                for chord in chords
-            )
-            if not has_extended:
-                report.append(
+        # What the flag promises is that the template set is not restricted
+        # to the four triads, so that is what this asserts. It used to look
+        # for a name ending in "7", which was a proxy rather than the
+        # contract: the fixture is a single sine with one pitch class, so
+        # whichever non-triad wins is arbitrary, and pinning one spelling
+        # made the check fail whenever the vocabulary changed even though
+        # the flag went on working.
+        chords = payload.get("chords")
+        has_extended = isinstance(chords, list) and any(
+            isinstance(chord, dict)
+            and isinstance(chord.get("name"), str)
+            and _chord_name_is_extended(chord["name"])
+            for chord in chords
+        )
+        if not has_extended:
+            report.append(
+                (
+                    "fail",
                     (
-                        "fail",
-                        (f"{label}.chords: --with-seventh must widen the vocabulary past the "
-                        f"four triads; got {chords!r}"),
-                    )
+                        f"{label}.chords: --with-seventh must widen the vocabulary past the "
+                        f"four triads; got {chords!r}"
+                    ),
                 )
+            )
     if path == "mastering" and case_id == "target_within_ceiling":
         # The flag says the true-peak ceiling, not the target, decided the level.
         # Reading it as a value rather than as a type is what separates a surface
@@ -491,8 +477,10 @@ def _validate_case_payload(
             report.append(
                 (
                     "fail",
-                    (f"{label}.output_lufs: ceiling-limited run must stop short of "
-                    f"its target, got {output_lufs!r}"),
+                    (
+                        f"{label}.output_lufs: ceiling-limited run must stop short of "
+                        f"its target, got {output_lufs!r}"
+                    ),
                 )
             )
     if path == "spectral":
@@ -535,8 +523,10 @@ def _validate_case_payload(
                     report.append(
                         (
                             "fail",
-                            (f"{label}.features.{name}: canonical statistic keys differ "
-                            f"({'; '.join(details)})"),
+                            (
+                                f"{label}.features.{name}: canonical statistic keys differ "
+                                f"({'; '.join(details)})"
+                            ),
                         )
                     )
     if path == "voice-change":
@@ -576,9 +566,7 @@ def _validate_case_payload(
         diagnostics = payload.get("diagnostics")
         diagnostic_count = payload.get("diagnostic_count")
         if isinstance(diagnostics, list) and diagnostic_count != len(diagnostics):
-            report.append(
-                ("fail", f"{label}: diagnostic_count does not equal diagnostics length")
-            )
+            report.append(("fail", f"{label}: diagnostic_count does not equal diagnostics length"))
         if case_id == "clean" and (
             not _is_bool(payload.get("has_timeline")) or diagnostic_count != 0
         ):
@@ -660,9 +648,7 @@ def _validate_case_payload(
                 )
             )
         if case_id == "explicit_output" and not isinstance(payload.get("output"), str):
-            report.append(
-                ("fail", f"{label}.output: explicit output must serialize as a path")
-            )
+            report.append(("fail", f"{label}.output: explicit output must serialize as a path"))
     if path == "mastering-processor":
         expected_stereo = case_id == "stereo"
         if payload.get("stereo") is not expected_stereo:
@@ -684,9 +670,7 @@ def _validate_case_payload(
         diagnostics = payload.get("diagnostics")
         diagnostic_count = payload.get("diagnostic_count")
         if isinstance(diagnostics, list) and diagnostic_count != len(diagnostics):
-            report.append(
-                ("fail", f"{label}: diagnostic_count does not equal diagnostics length")
-            )
+            report.append(("fail", f"{label}: diagnostic_count does not equal diagnostics length"))
         if (
             case_id in {"clean", "warning", "warning_strict_artifact"}
             and payload.get("valid") is not True
@@ -698,9 +682,7 @@ def _validate_case_payload(
                 )
             )
         if case_id == "clean" and diagnostic_count != 0:
-            report.append(
-                ("fail", f"{label}: clean project must not report diagnostics")
-            )
+            report.append(("fail", f"{label}: clean project must not report diagnostics"))
         if case_id in {"warning", "warning_strict_artifact"} and (
             not isinstance(diagnostic_count, int) or diagnostic_count <= 0
         ):
@@ -810,16 +792,20 @@ def _validate_voice_case_relationships(
             report.append(
                 (
                     "fail",
-                    (f"{surface}.voice-change.{case_id}.length: expected {expected_length}, "
-                    f"got {payload.get('length')!r}"),
+                    (
+                        f"{surface}.voice-change.{case_id}.length: expected {expected_length}, "
+                        f"got {payload.get('length')!r}"
+                    ),
                 )
             )
         if payload.get("sample_rate") != expected_rate:
             report.append(
                 (
                     "fail",
-                    (f"{surface}.voice-change.{case_id}.sample_rate: expected {expected_rate}, "
-                    f"got {payload.get('sample_rate')!r}"),
+                    (
+                        f"{surface}.voice-change.{case_id}.sample_rate: expected {expected_rate}, "
+                        f"got {payload.get('sample_rate')!r}"
+                    ),
                 )
             )
     simple = payloads.get(("voice-change", "simple"))
@@ -840,16 +826,20 @@ def _validate_voice_case_relationships(
             report.append(
                 (
                     "fail",
-                    (f"{surface}.voice-change.preset.preset: expected 'bright-idol', "
-                    f"got {preset.get('preset')!r}"),
+                    (
+                        f"{surface}.voice-change.preset.preset: expected 'bright-idol', "
+                        f"got {preset.get('preset')!r}"
+                    ),
                 )
             )
         if preset.get("latency_samples") != 1042:
             report.append(
                 (
                     "fail",
-                    (f"{surface}.voice-change.preset.latency_samples: expected 1042, "
-                    f"got {preset.get('latency_samples')!r}"),
+                    (
+                        f"{surface}.voice-change.preset.latency_samples: expected 1042, "
+                        f"got {preset.get('latency_samples')!r}"
+                    ),
                 )
             )
     custom = payloads.get(("voice-change", "custom"))
@@ -857,7 +847,9 @@ def _validate_voice_case_relationships(
         report.append(
             (
                 "fail",
-                (f"{surface}.voice-change.custom.latency_samples: expected actual custom latency 82, "
-                f"got {custom.get('latency_samples')!r}"),
+                (
+                    f"{surface}.voice-change.custom.latency_samples: expected actual custom latency 82, "
+                    f"got {custom.get('latency_samples')!r}"
+                ),
             )
         )

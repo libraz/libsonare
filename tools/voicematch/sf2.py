@@ -40,21 +40,44 @@ _STRUCTURAL = {43, 53, 41}  # keyRange, sampleID, instrument
 #: A file setting any of these needs a player, so it is not a corpus. `pan` is
 #: here too: a corpus's channel count is part of its identity.
 _SHAPING = {
-    5: "modLfoToPitch", 6: "vibLfoToPitch", 7: "modEnvToPitch",
-    8: "initialFilterFc", 9: "initialFilterQ", 10: "modLfoToFilterFc",
-    11: "modEnvToFilterFc", 13: "modLfoToVolume", 15: "chorusEffectsSend",
-    16: "reverbEffectsSend", 17: "pan",
-    25: "delayModEnv", 26: "attackModEnv", 27: "holdModEnv", 28: "decayModEnv",
-    29: "sustainModEnv", 30: "releaseModEnv",
-    44: "velRange", 46: "keynum", 47: "velocity", 48: "initialAttenuation",
-    51: "coarseTune", 52: "fineTune", 54: "sampleModes", 56: "scaleTuning",
+    5: "modLfoToPitch",
+    6: "vibLfoToPitch",
+    7: "modEnvToPitch",
+    8: "initialFilterFc",
+    9: "initialFilterQ",
+    10: "modLfoToFilterFc",
+    11: "modEnvToFilterFc",
+    13: "modLfoToVolume",
+    15: "chorusEffectsSend",
+    16: "reverbEffectsSend",
+    17: "pan",
+    25: "delayModEnv",
+    26: "attackModEnv",
+    27: "holdModEnv",
+    28: "decayModEnv",
+    29: "sustainModEnv",
+    30: "releaseModEnv",
+    44: "velRange",
+    46: "keynum",
+    47: "velocity",
+    48: "initialAttenuation",
+    51: "coarseTune",
+    52: "fineTune",
+    54: "sampleModes",
+    56: "scaleTuning",
     58: "overridingRootKey",
 }
 
 #: The volume envelope, judged rather than refused outright — every SoundFont
 #: writes one and most write a pass-through. `_envelope_shapes` decides.
-_VOL_ENV = {33: "delayVolEnv", 34: "attackVolEnv", 35: "holdVolEnv",
-            36: "decayVolEnv", 37: "sustainVolEnv", 38: "releaseVolEnv"}
+_VOL_ENV = {
+    33: "delayVolEnv",
+    34: "attackVolEnv",
+    35: "holdVolEnv",
+    36: "decayVolEnv",
+    37: "sustainVolEnv",
+    38: "releaseVolEnv",
+}
 
 #: Attack past this is audible shaping rather than a click guard.
 _ATTACK_CEILING_MS = 20.0
@@ -163,12 +186,14 @@ class SoundFont:
                         self._pdta[sid] = fh.read(ssize)
                     fh.seek(at + ssize + (ssize & 1))
             fh.seek(pos + csize + (csize & 1))
-        missing = [n for n in (b"phdr", b"pbag", b"pgen", b"inst", b"ibag", b"igen", b"shdr")
-                   if n not in self._pdta]
+        missing = [
+            n
+            for n in (b"phdr", b"pbag", b"pgen", b"inst", b"ibag", b"igen", b"shdr")
+            if n not in self._pdta
+        ]
         if missing:
             raise UnplayableAsCorpus(
-                f"{self.path.name}: pdta is missing "
-                f"{', '.join(m.decode() for m in missing)}"
+                f"{self.path.name}: pdta is missing {', '.join(m.decode() for m in missing)}"
             )
 
     def _read_samples(self) -> list[Sample]:
@@ -241,10 +266,17 @@ class SoundFont:
             for op, vals in sorted(seen.items())
             if op in _SHAPING and not _inert(op, vals)
         }
-        envelope = {_VOL_ENV[op]: sorted(vals) for op, vals in sorted(seen.items())
-                    if op in _VOL_ENV}
-        unknown = sorted(op for op in seen if op not in _SHAPING and op not in _VOL_ENV
-                         and op not in _STRUCTURAL and op not in _IGNORABLE)
+        envelope = {
+            _VOL_ENV[op]: sorted(vals) for op, vals in sorted(seen.items()) if op in _VOL_ENV
+        }
+        unknown = sorted(
+            op
+            for op in seen
+            if op not in _SHAPING
+            and op not in _VOL_ENV
+            and op not in _STRUCTURAL
+            and op not in _IGNORABLE
+        )
         return {
             "shaping": shaping,
             "envelope": envelope,
@@ -268,8 +300,9 @@ class SoundFont:
         if report["envelope_shapes"]:
             problems.append(f"its volume envelope shapes the note ({report['envelope_shapes']})")
         if report["unknown_generators"]:
-            problems.append(f"it sets generators this reader does not model: "
-                            f"{report['unknown_generators']}")
+            problems.append(
+                f"it sets generators this reader does not model: {report['unknown_generators']}"
+            )
         if problems:
             raise UnplayableAsCorpus(
                 f"{self.path.name} is an instrument to be played, not a corpus of "
@@ -330,8 +363,22 @@ def _inert(op: int, values: set[int]) -> bool:
 #: The amount at which a shaping generator changes nothing. Absent from this
 #: table means any value shapes.
 _NEUTRAL = {
-    5: 0, 6: 0, 7: 0, 8: 13500, 9: 0, 10: 0, 11: 0, 13: 0,
-    15: 0, 16: 0, 17: 0, 48: 0, 51: 0, 52: 0, 54: 0, 56: 100,
+    5: 0,
+    6: 0,
+    7: 0,
+    8: 13500,
+    9: 0,
+    10: 0,
+    11: 0,
+    13: 0,
+    15: 0,
+    16: 0,
+    17: 0,
+    48: 0,
+    51: 0,
+    52: 0,
+    54: 0,
+    56: 100,
 }
 
 

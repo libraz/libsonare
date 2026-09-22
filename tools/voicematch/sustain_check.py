@@ -113,11 +113,18 @@ def rms_db(x: np.ndarray) -> float:
 
 def render_held(program: int, note: int, velocity: int, out: Path) -> np.ndarray | None:
     """One held note through the GM bank, in a fresh process."""
-    code = _RENDER.format(tools=str(HERE), note=note, velocity=velocity, onset=ONSET_S,
-                          hold=HOLD_S, program=program, total=ONSET_S + HOLD_S + 1.0,
-                          sr=SR, out=str(out))
-    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
-                          check=False)
+    code = _RENDER.format(
+        tools=str(HERE),
+        note=note,
+        velocity=velocity,
+        onset=ONSET_S,
+        hold=HOLD_S,
+        program=program,
+        total=ONSET_S + HOLD_S + 1.0,
+        sr=SR,
+        out=str(out),
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
     if done.returncode != 0 or not out.exists():
         return None
     return np.fromfile(out, dtype="<f4").reshape(-1, 2).astype(np.float64).mean(axis=1)
@@ -131,8 +138,9 @@ def reference_fall(rows: list[dict], note: int) -> float | None:
     the fallback, and a reference carrying no rate at all is unjudgeable rather
     than zero.
     """
-    here = [r["decay_db_s"] for r in rows
-            if r.get("note") == note and r.get("decay_db_s") is not None]
+    here = [
+        r["decay_db_s"] for r in rows if r.get("note") == note and r.get("decay_db_s") is not None
+    ]
     everywhere = [r["decay_db_s"] for r in rows if r.get("decay_db_s") is not None]
     pool = here or everywhere
     return float(np.median(pool)) * HOLD_S if pool else None
@@ -160,26 +168,43 @@ def check_one(cap_id: str, scratch: Path) -> dict:
 
     def at(t: float) -> float:
         i = int(t * SR)
-        return rms_db(audio[i:i + int(WINDOW_S * SR)])
+        return rms_db(audio[i : i + int(WINDOW_S * SR)])
 
     early, late = at(EARLY_S), at(LATE_S)
     model_fall = late - early
     ref_fall = reference_fall(rows, note)
     if ref_fall is None:
-        return {"id": cap_id, "status": "reference-has-no-decay-rate",
-                "program": program, "note": note, "model_fall_db": model_fall}
+        return {
+            "id": cap_id,
+            "status": "reference-has-no-decay-rate",
+            "program": program,
+            "note": note,
+            "model_fall_db": model_fall,
+        }
     if abs(ref_fall) > REFERENCE_SUSTAIN_DB:
         # Out of population, and said so rather than passed: see
         # REFERENCE_SUSTAIN_DB for why an extrapolated target stops meaning
         # anything once the reference has already stopped.
-        return {"id": cap_id, "status": "reference-does-not-sustain",
-                "program": program, "note": note, "model_fall_db": model_fall,
-                "reference_fall_db": ref_fall}
+        return {
+            "id": cap_id,
+            "status": "reference-does-not-sustain",
+            "program": program,
+            "note": note,
+            "model_fall_db": model_fall,
+            "reference_fall_db": ref_fall,
+        }
     excess = model_fall - ref_fall
     return {
-        "id": cap_id, "status": "compared", "program": program, "note": note,
-        "velocity": velocity, "early_dbfs": early, "late_dbfs": late,
-        "model_fall_db": model_fall, "reference_fall_db": ref_fall, "excess_db": excess,
+        "id": cap_id,
+        "status": "compared",
+        "program": program,
+        "note": note,
+        "velocity": velocity,
+        "early_dbfs": early,
+        "late_dbfs": late,
+        "model_fall_db": model_fall,
+        "reference_fall_db": ref_fall,
+        "excess_db": excess,
         "tone_class": str(tone_class(program)).replace("ToneClass.", ""),
         "beyond_tolerance": bool(abs(excess) > EXCESS_TOLERANCE_DB),
     }
@@ -200,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
         for i, cap_id in enumerate(ids, 1):
             r = check_one(cap_id, scratch)
             results.append(r)
-            note = (f" excess {r['excess_db']:+.1f} dB" if r["status"] == "compared" else "")
+            note = f" excess {r['excess_db']:+.1f} dB" if r["status"] == "compared" else ""
             print(f"[{i}/{len(ids)}] {cap_id}: {r['status']}{note}", file=sys.stderr)
 
     if args.json:
@@ -211,18 +236,24 @@ def main(argv: list[str] | None = None) -> int:
     flagged = sorted((r for r in compared if r["beyond_tolerance"]), key=lambda r: r["excess_db"])
     # Reach is an output: a run that compared nothing looks exactly like a clean
     # one, and this is the number that separates them.
-    print(f"\ncomparisons: {len(compared)} of {len(ids)} ids — voices whose own reference is "
-          f"still sounding at the end of the hold, which is the only population an "
-          f"extrapolated target can judge")
+    print(
+        f"\ncomparisons: {len(compared)} of {len(ids)} ids — voices whose own reference is "
+        f"still sounding at the end of the hold, which is the only population an "
+        f"extrapolated target can judge"
+    )
     for status in sorted({r["status"] for r in results} - {"compared"}):
         n = [r["id"] for r in results if r["status"] == status]
         print(f"  {status} ({len(n)}): {', '.join(n[:8])}{' ...' if len(n) > 8 else ''}")
     print(f"beyond {EXCESS_TOLERANCE_DB:.0f} dB of their own reference's fall: {len(flagged)}")
     if flagged:
-        print(f"\n  {'voice':24s} {'prog':>4s} {'class':16s} {'model':>8s} {'ref':>8s} {'excess':>9s}")
+        print(
+            f"\n  {'voice':24s} {'prog':>4s} {'class':16s} {'model':>8s} {'ref':>8s} {'excess':>9s}"
+        )
         for r in flagged:
-            print(f"  {gm_name(r['program']):24s} {r['program']:>4d} {r['tone_class']:16s} "
-                  f"{r['model_fall_db']:8.1f} {r['reference_fall_db']:8.1f} {r['excess_db']:+9.1f}")
+            print(
+                f"  {gm_name(r['program']):24s} {r['program']:>4d} {r['tone_class']:16s} "
+                f"{r['model_fall_db']:8.1f} {r['reference_fall_db']:8.1f} {r['excess_db']:+9.1f}"
+            )
     print(
         "\n`model` and `ref` are dB over one held note; `excess` is the model minus the reference,\n"
         "so it is signed: negative is a voice that stops sounding while its reference holds, and\n"

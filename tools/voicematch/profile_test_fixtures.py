@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
-
 SR = 48000
 
 
@@ -67,9 +66,17 @@ def assert_names_no_product(name: str, *, capture_dir: Path, reference_dir: Path
 
 
 def _hit_row(**over):
-    row = {"bands_db": [0.0] * 25, "band_decay_db_s": [-10.0] * 8, "attack_ms": 2.0,
-           "crest_db": 12.0, "centroid_hz": 1000.0, "decay_ms": 200.0,
-           "decay_capped": False, "flatness_db": -20.0, "stereo_width": 0.4,
-           "peak_dbfs": -6.0}
+    row = {
+        "bands_db": [0.0] * 25,
+        "band_decay_db_s": [-10.0] * 8,
+        "attack_ms": 2.0,
+        "crest_db": 12.0,
+        "centroid_hz": 1000.0,
+        "decay_ms": 200.0,
+        "decay_capped": False,
+        "flatness_db": -20.0,
+        "stereo_width": 0.4,
+        "peak_dbfs": -6.0,
+    }
     row.update(over)
     return row

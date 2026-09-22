@@ -219,8 +219,9 @@ SILENT_HIT_DBFS = -80.0
 ROOM_FIELDS = tuple(f.name for f in dataclasses.fields(Room))
 
 
-def reference_window(cfg: dict, corpus_dir: Path | None, timbre: str, *,
-                     preroll_s: float, gate_s: float):
+def reference_window(
+    cfg: dict, corpus_dir: Path | None, timbre: str, *, preroll_s: float, gate_s: float
+):
     """How long to render one slot for: the span its reference row was read over.
 
     A reference row is measured over the WHOLE recording the corpus holds for it,
@@ -257,9 +258,14 @@ def reference_window(cfg: dict, corpus_dir: Path | None, timbre: str, *,
 # measure
 
 
-def measure_rooms(manifest: dict, corpus_dir: Path, declared: set[str],
-                  preroll_s: float, gate_s: float,
-                  answer: str = ROOM_UNCLASSIFIED) -> dict:
+def measure_rooms(
+    manifest: dict,
+    corpus_dir: Path,
+    declared: set[str],
+    preroll_s: float,
+    gate_s: float,
+    answer: str = ROOM_UNCLASSIFIED,
+) -> dict:
     """The space each timbre was recorded in, where its own grid can say.
 
     Recorded here rather than measured at comparison time because `compare` reads
@@ -288,10 +294,13 @@ def measure_rooms(manifest: dict, corpus_dir: Path, declared: set[str],
     the same answer `takes` has always asked the capture for rather than guessing.
     """
     if answer == ROOM_NONE:
-        print("  the capture answers `room: none`, so no space is measured — "
-              "a note-tail estimate cannot tell a room from a long release, and "
-              "the one it would record is convolved onto every model render "
-              "before any figure is taken", file=sys.stderr)
+        print(
+            "  the capture answers `room: none`, so no space is measured — "
+            "a note-tail estimate cannot tell a room from a long release, and "
+            "the one it would record is convolved onto every model render "
+            "before any figure is taken",
+            file=sys.stderr,
+        )
         return {}
     by_timbre: dict[str, dict[int, tuple[int, Path]]] = {}
     for rec in manifest["renders"]:
@@ -311,30 +320,44 @@ def measure_rooms(manifest: dict, corpus_dir: Path, declared: set[str],
         for note in sorted(by_note):
             audio, sr = read_wav(by_note[note][1])
             mono = audio.mean(axis=1) if audio.ndim > 1 else audio
-            room = measurable_room(np.asarray(mono, dtype=np.float64), sr,
-                                   [(preroll_s, preroll_s + gate_s)])
+            room = measurable_room(
+                np.asarray(mono, dtype=np.float64), sr, [(preroll_s, preroll_s + gate_s)]
+            )
             if room is not None:
                 measured.append(room)
         probed = len(by_note)
         if len(measured) * 2 <= probed:
             if measured:
-                print(f"  {tid}: {len(measured)} of {probed} notes measure a space and the "
-                      f"rest measure none, so what one note decays like is not a room — "
-                      f"compared as rendered", file=sys.stderr)
+                print(
+                    f"  {tid}: {len(measured)} of {probed} notes measure a space and the "
+                    f"rest measure none, so what one note decays like is not a room — "
+                    f"compared as rendered",
+                    file=sys.stderr,
+                )
             continue
         rt60 = sorted(r.rt60_s for r in measured)
         # Rounded like every other measurement in the file. A room quoted to the
         # last bit would also re-stamp the profile — and date every gate against
         # it — on an arithmetic drift far below what the estimate can resolve.
-        entry = {k: round(float(np.median([getattr(r, k) for r in measured])), 4)
-                 for k in ROOM_FIELDS}
-        entry.update({"notes_measured": len(measured), "notes_probed": probed,
-                      "rt60_min_s": round(rt60[0], 4), "rt60_max_s": round(rt60[-1], 4)})
+        entry = {
+            k: round(float(np.median([getattr(r, k) for r in measured])), 4) for k in ROOM_FIELDS
+        }
+        entry.update(
+            {
+                "notes_measured": len(measured),
+                "notes_probed": probed,
+                "rt60_min_s": round(rt60[0], 4),
+                "rt60_max_s": round(rt60[-1], 4),
+            }
+        )
         rooms[tid] = entry
-        print(f"  {tid}: recorded in a space of RT60 {entry['rt60_s']:.2f}s "
-              f"({rt60[0]:.2f}-{rt60[-1]:.2f} over {len(measured)} of {probed} notes), tail "
-              f"level {entry['tail_db']:+.1f}dB, HF ratio {entry['hf_ratio']:.2f} — a "
-              f"comparison places the model in it before measuring", file=sys.stderr)
+        print(
+            f"  {tid}: recorded in a space of RT60 {entry['rt60_s']:.2f}s "
+            f"({rt60[0]:.2f}-{rt60[-1]:.2f} over {len(measured)} of {probed} notes), tail "
+            f"level {entry['tail_db']:+.1f}dB, HF ratio {entry['hf_ratio']:.2f} — a "
+            f"comparison places the model in it before measuring",
+            file=sys.stderr,
+        )
     return rooms
 
 
@@ -376,16 +399,25 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
             if not path.exists():
                 continue
             audio, sr = read_wav(path)
-            m = (measure_hit(audio, sr, rec["note"], rec["velocity"],
-                             preroll_s=preroll_s, gate_s=gate_s,
-                             max_band_hz=max_band_hz)
-                 if percussion else
-                 measure_note(audio, sr, rec["note"], preroll_s=preroll_s, gate_s=gate_s))
+            m = (
+                measure_hit(
+                    audio,
+                    sr,
+                    rec["note"],
+                    rec["velocity"],
+                    preroll_s=preroll_s,
+                    gate_s=gate_s,
+                    max_band_hz=max_band_hz,
+                )
+                if percussion
+                else measure_note(audio, sr, rec["note"], preroll_s=preroll_s, gate_s=gate_s)
+            )
             if not m:
                 print(f"  {rec['id']}: nothing measurable", file=sys.stderr)
                 continue
-            rows.append({"timbre": rec["timbre"], "note": rec["note"],
-                         "velocity": rec["velocity"], **m})
+            rows.append(
+                {"timbre": rec["timbre"], "note": rec["note"], "velocity": rec["velocity"], **m}
+            )
             if i % 20 == 0:
                 print(f"  {i}/{len(manifest['renders'])}", file=sys.stderr)
         return rows
@@ -403,24 +435,31 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         per_timbre = band_edges_by_timbre(rows)
         if len(per_timbre) > 1:
             for tid, edge in per_timbre.items():
-                print(f"  {tid}: bandwidth "
-                      f"{'no measurable ceiling' if edge is None else f'{edge / 1000.0:.1f} kHz'}",
-                      file=sys.stderr)
+                print(
+                    f"  {tid}: bandwidth "
+                    f"{'no measurable ceiling' if edge is None else f'{edge / 1000.0:.1f} kHz'}",
+                    file=sys.stderr,
+                )
             # Printed beside them because it is a different question with the
             # same answer type, and a ceiling nobody can attribute reads as one
             # reference being narrow when it is the two of them disagreeing.
             agreed = measure_agreement_edge(rows)
-            print(f"  references agree to "
-                  f"{'their whole range' if agreed is None else f'{agreed / 1000.0:.1f} kHz'}",
-                  file=sys.stderr)
+            print(
+                f"  references agree to "
+                f"{'their whole range' if agreed is None else f'{agreed / 1000.0:.1f} kHz'}",
+                file=sys.stderr,
+            )
     if band_edge is not None:
-        print(f"\ncapture bandwidth: {band_edge / 1000.0:.1f} kHz — re-measuring so "
-              f"the band profile is normalised over what this capture carries",
-              file=sys.stderr)
+        print(
+            f"\ncapture bandwidth: {band_edge / 1000.0:.1f} kHz — re-measuring so "
+            f"the band profile is normalised over what this capture carries",
+            file=sys.stderr,
+        )
         rows = sweep(band_edge)
 
-    rooms = measure_rooms(manifest, corpus_dir, declared, preroll_s, gate_s,
-                          str(cfg.get("room", ROOM_UNCLASSIFIED)))
+    rooms = measure_rooms(
+        manifest, corpus_dir, declared, preroll_s, gate_s, str(cfg.get("room", ROOM_UNCLASSIFIED))
+    )
 
     tracked = json.loads(Path(cfg["_path"]).read_text())
     profile = {
@@ -429,11 +468,13 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         # Filled in below, once there is a body to compare against what is
         # already on disk. Declared here so the key keeps its place in the file.
         "measured_utc": "",
-        "capture": {**committed_capture(cfg, tracked, manifest),
-                    # Part of the method, not of the instrument: it says what
-                    # this recording chain could hear, so a later comparison can
-                    # decline to score the model where the reference is blind.
-                    "band_edge_hz": band_edge},
+        "capture": {
+            **committed_capture(cfg, tracked, manifest),
+            # Part of the method, not of the instrument: it says what
+            # this recording chain could hear, so a later comparison can
+            # decline to score the model where the reference is blind.
+            "band_edge_hz": band_edge,
+        },
         "rows": rows,
         "summary": summarize_percussion(rows) if percussion else summarize(rows),
     }
@@ -448,9 +489,12 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     written = json.dumps(profile, indent=1, ensure_ascii=False) + "\n"
     out_path.write_text(written)
     print(f"\n{len(rows)} measured notes -> {out_path}", file=sys.stderr)
-    print(f"unchanged since {profile['measured_utc']} — the file is byte-identical"
-          if written == before else
-          f"measurement stamped {profile['measured_utc']}", file=sys.stderr)
+    print(
+        f"unchanged since {profile['measured_utc']} — the file is byte-identical"
+        if written == before
+        else f"measurement stamped {profile['measured_utc']}",
+        file=sys.stderr,
+    )
     if percussion:
         print_percussion_summary(profile["summary"])
     else:
@@ -458,8 +502,15 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     return 0
 
 
-def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int,
-                bank: int = 0, rig: bool | None = None) -> int:
+def render_grid(
+    cfg: dict,
+    corpus_dir: Path,
+    *,
+    timbre: str,
+    program: int,
+    bank: int = 0,
+    rig: bool | None = None,
+) -> int:
     """Render the model over the capture's own grid, as one more timbre of it.
 
     The oracle corpus is one WAV per (note, velocity), and the model has to be
@@ -501,44 +552,60 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int,
     # whole length, so a slot shorter than the row it will be diffed against
     # reports its buffer where the reference reports the instrument.
     reference_timbre = next((t["id"] for t in cfg.get("timbres", []) if t.get("id")), "")
-    window = reference_window(cfg, corpus_dir, reference_timbre,
-                              preroll_s=preroll_s, gate_s=gate_s)
+    window = reference_window(cfg, corpus_dir, reference_timbre, preroll_s=preroll_s, gate_s=gate_s)
     rows = []
     total = len(notes) * len(velocities)
-    for i, (note, vel) in enumerate(
-        ((n, v) for n in notes for v in velocities), start=1
-    ):
+    for i, (note, vel) in enumerate(((n, v) for n in notes for v in velocities), start=1):
         window_s = window(note, vel)
-        smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program, bank=bank,
-                        channel=channel, end_pad=max(0.0, window_s - preroll_s - gate_s))
+        smf = write_smf(
+            [Note(note, vel, preroll_s, gate_s)],
+            program=program,
+            bank=bank,
+            channel=channel,
+            end_pad=max(0.0, window_s - preroll_s - gate_s),
+        )
         audio = render_model(smf, window_s, sr, rig=rig)
         rel = Path(timbre) / f"n{note:03d}_v{vel:03d}.wav"
         write_wav(corpus_dir / rel, np.asarray(audio), sr)
         peak = float(np.abs(audio).max())
-        rows.append({"id": f"{timbre}/n{note:03d}_v{vel:03d}", "timbre": timbre,
-                     "note": note, "velocity": vel, "path": str(rel),
-                     "peak": peak, "seconds": round(window_s, 4)})
+        rows.append(
+            {
+                "id": f"{timbre}/n{note:03d}_v{vel:03d}",
+                "timbre": timbre,
+                "note": note,
+                "velocity": vel,
+                "path": str(rel),
+                "peak": peak,
+                "seconds": round(window_s, 4),
+            }
+        )
         print(f"[{i}/{total}] {rel} peak {peak:.4f}", file=sys.stderr)
 
     header = manifest or {
-        "id": cfg["id"], "config": cfg.get("_path", ""), "plugin": "libsonare",
-        "sample_rate": sr, "gate_ms": cfg["gate_ms"], "tail": cfg["tail"],
-        "preroll_ms": cfg["preroll_ms"], "settle_ms": cfg.get("settle_ms", 0),
-        "realtime": False, "params": [], "timbres": [], "notes": notes,
+        "id": cfg["id"],
+        "config": cfg.get("_path", ""),
+        "plugin": "libsonare",
+        "sample_rate": sr,
+        "gate_ms": cfg["gate_ms"],
+        "tail": cfg["tail"],
+        "preroll_ms": cfg["preroll_ms"],
+        "settle_ms": cfg.get("settle_ms", 0),
+        "realtime": False,
+        "params": [],
+        "timbres": [],
+        "notes": notes,
         "velocities": velocities,
     }
     # Replace this timbre's rows rather than appending to them, so re-rendering
     # after a voice edit leaves one grid behind and not two generations of one.
     kept = [r for r in header.get("renders", []) if r.get("timbre") != timbre]
     timbres = [t for t in header.get("timbres", []) if t.get("id") != timbre]
-    timbres.append({"id": timbre, "label": f"libsonare, GM program {program}",
-                    "model": True})
+    timbres.append({"id": timbre, "label": f"libsonare, GM program {program}", "model": True})
     header["timbres"] = timbres
     header["renders"] = sorted(kept + rows, key=lambda r: r["id"])
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(header, indent=1) + "\n")
-    print(f"\n{len(rows)} renders in {out_dir}, registered as timbre {timbre!r}",
-          file=sys.stderr)
+    print(f"\n{len(rows)} renders in {out_dir}, registered as timbre {timbre!r}", file=sys.stderr)
     return 0
 
 
@@ -546,8 +613,14 @@ def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int,
 # compare
 
 
-def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int],
-             corpus_dir: Path | None = None) -> int:
+def dynamics(
+    cfg: dict,
+    profile_path: Path,
+    *,
+    timbre: str,
+    notes_filter: set[int],
+    corpus_dir: Path | None = None,
+) -> int:
     """How much the timbre changes from the softest blow to the hardest.
 
     `compare` scores one velocity at a time, so a model whose every velocity is
@@ -582,16 +655,17 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
 
     print(f"model vs {timbre}: velocity {lo_v} -> {hi_v} swing, {len(notes)} notes")
     print("(each column is the change ACROSS velocity, not the absolute value)\n")
-    print(f"{'note':>5} | {'level model':>11} {'level ref':>9} | {'h2-7 model':>10} {'h2-7 ref':>8} "
-          f"| {'h8-16 model':>11} {'h8-16 ref':>9}")
+    print(
+        f"{'note':>5} | {'level model':>11} {'level ref':>9} | {'h2-7 model':>10} {'h2-7 ref':>8} "
+        f"| {'h8-16 model':>11} {'h8-16 ref':>9}"
+    )
     print("-" * 82)
 
     # Which side of the instrument's boundary the model stops at, from the
     # capture's own answer: a direct reference is compared against the direct
     # signal, one recorded through an amplifier against the model plus its rig.
     rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
-    window = reference_window(cfg, corpus_dir, timbre,
-                              preroll_s=preroll_s, gate_s=gate_s)
+    window = reference_window(cfg, corpus_dir, timbre, preroll_s=preroll_s, gate_s=gate_s)
     swing: dict[str, list[float]] = {}
     for note in notes:
         got = {}
@@ -599,8 +673,12 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
             if (note, v) not in ref:
                 break
             window_s = window(note, v)
-            smf = write_smf([Note(note, v, preroll_s, gate_s)], program=program, bank=bank,
-                            end_pad=max(0.0, window_s - preroll_s - gate_s))
+            smf = write_smf(
+                [Note(note, v, preroll_s, gate_s)],
+                program=program,
+                bank=bank,
+                end_pad=max(0.0, window_s - preroll_s - gate_s),
+            )
             audio = render_model(smf, window_s, cap["sample_rate"], rig=rig)
             m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
             if not m:
@@ -622,39 +700,60 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
             return None if x is None or y is None else x - y
 
         cols = {
-            "level_m": delta(m_hi, m_lo, "peak_dbfs"), "level_r": delta(r_hi, r_lo, "peak_dbfs"),
-            "low_m": band_delta(m_hi, m_lo, 2, 7), "low_r": band_delta(r_hi, r_lo, 2, 7),
-            "high_m": band_delta(m_hi, m_lo, 8, 16), "high_r": band_delta(r_hi, r_lo, 8, 16),
+            "level_m": delta(m_hi, m_lo, "peak_dbfs"),
+            "level_r": delta(r_hi, r_lo, "peak_dbfs"),
+            "low_m": band_delta(m_hi, m_lo, 2, 7),
+            "low_r": band_delta(r_hi, r_lo, 2, 7),
+            "high_m": band_delta(m_hi, m_lo, 8, 16),
+            "high_r": band_delta(r_hi, r_lo, 8, 16),
         }
         for k, v in cols.items():
             if v is not None and np.isfinite(v):
                 swing.setdefault(k, []).append(float(v))
 
         def fmt(v, width):
-            return format(v, f"+{width}.1f") if v is not None and np.isfinite(v) else "n/a".rjust(width)
+            return (
+                format(v, f"+{width}.1f")
+                if v is not None and np.isfinite(v)
+                else "n/a".rjust(width)
+            )
 
-        print(f"{note:5d} | {fmt(cols['level_m'], 11)} {fmt(cols['level_r'], 9)} "
-              f"| {fmt(cols['low_m'], 10)} {fmt(cols['low_r'], 8)} "
-              f"| {fmt(cols['high_m'], 11)} {fmt(cols['high_r'], 9)}")
+        print(
+            f"{note:5d} | {fmt(cols['level_m'], 11)} {fmt(cols['level_r'], 9)} "
+            f"| {fmt(cols['low_m'], 10)} {fmt(cols['low_r'], 8)} "
+            f"| {fmt(cols['high_m'], 11)} {fmt(cols['high_r'], 9)}"
+        )
 
     print("\nmedian swing (model vs reference, and the error between them):")
-    for label, mk, rk in (("level (dB)", "level_m", "level_r"),
-                          ("h2-h7 vs h1 (dB)", "low_m", "low_r"),
-                          ("h8-h16 vs h1 (dB)", "high_m", "high_r")):
+    for label, mk, rk in (
+        ("level (dB)", "level_m", "level_r"),
+        ("h2-h7 vs h1 (dB)", "low_m", "low_r"),
+        ("h8-h16 vs h1 (dB)", "high_m", "high_r"),
+    ):
         if mk not in swing or rk not in swing:
             continue
         mm, rr = float(np.median(swing[mk])), float(np.median(swing[rk]))
         # Over how many notes, because these medians are taken over the notes
         # that produced a number and a note that stopped producing one leaves
         # the median instead of moving it. Both sides, since they can differ.
-        print(f"  {label:22s} model {mm:+7.2f}   ref {rr:+7.2f}   error {mm - rr:+7.2f}"
-              f"   over {len(swing[mk])}/{len(swing[rk])} of {len(notes)} notes")
+        print(
+            f"  {label:22s} model {mm:+7.2f}   ref {rr:+7.2f}   error {mm - rr:+7.2f}"
+            f"   over {len(swing[mk])}/{len(swing[rk])} of {len(notes)} notes"
+        )
     return 0
 
 
-def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
-                       gate_path: str, write_gate: str, margin: float,
-                       corpus_dir: Path | None = None) -> int:
+def compare_percussion(
+    cfg: dict,
+    profile: dict,
+    *,
+    timbre: str,
+    notes_filter: set[int],
+    gate_path: str,
+    write_gate: str,
+    margin: float,
+    corpus_dir: Path | None = None,
+) -> int:
     """Score the model against a captured kit, one instrument per note.
 
     Separate from `compare` rather than a branch inside it, because almost
@@ -676,30 +775,40 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
 
     ref = {(r["note"], r["velocity"]): r for r in profile["rows"] if r["timbre"] == timbre}
     if not ref:
-        print(f"profile has no timbre {timbre!r}; it has "
-              f"{sorted({r['timbre'] for r in profile['rows']})}")
+        print(
+            f"profile has no timbre {timbre!r}; it has "
+            f"{sorted({r['timbre'] for r in profile['rows']})}"
+        )
         return 2
 
     program = profile_program(profile, cfg)
     bank = profile_bank(profile, cfg)
     pairs = sorted({k for k in ref if not notes_filter or k[0] in notes_filter})
-    print(f"model vs {timbre}: {len(pairs)} hits, model on GM kit {program}, "
-          f"MIDI channel {PERCUSSION_CHANNEL}")
+    print(
+        f"model vs {timbre}: {len(pairs)} hits, model on GM kit {program}, "
+        f"MIDI channel {PERCUSSION_CHANNEL}"
+    )
     if band_edge:
-        print(f"reference bandwidth {band_edge / 1000.0:.1f} kHz — the band columns "
-              f"are read over what the capture carries")
+        print(
+            f"reference bandwidth {band_edge / 1000.0:.1f} kHz — the band columns "
+            f"are read over what the capture carries"
+        )
     if mapping:
-        print("capture note -> model note: "
-              + ", ".join(f"{k}->{v}" for k, v in sorted(mapping.items())))
+        print(
+            "capture note -> model note: "
+            + ", ".join(f"{k}->{v}" for k, v in sorted(mapping.items()))
+        )
     print()
     # Wired for symmetry rather than because a kit needs it: `Room.gated` refuses
     # a probe whose windows are the gate, which every percussion grid's are, so
     # no captured kit records a room and this is a no-op on all of them today.
     place = ModelPlacer(profile, timbre, [(preroll_s, preroll_s + gate_s)])
     place.announce()
-    print(f"{'note':>5} {'vel':>4} | {'tilt Δdb':>9} {'shape db':>9} "
-          f"{'decay Δdb/s':>12} {'centroid Δ%':>12} {'attack Δms':>11} "
-          f"{'crest Δdb':>10} {'level Δdb':>10} {'ring Δ2x':>9} {'tonal Δdb':>10}")
+    print(
+        f"{'note':>5} {'vel':>4} | {'tilt Δdb':>9} {'shape db':>9} "
+        f"{'decay Δdb/s':>12} {'centroid Δ%':>12} {'attack Δms':>11} "
+        f"{'crest Δdb':>10} {'level Δdb':>10} {'ring Δ2x':>9} {'tonal Δdb':>10}"
+    )
     print("-" * 110)
 
     deltas: dict[str, list[float]] = {}
@@ -721,8 +830,7 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
     # The captured note, not the one the map makes the model play: the window has
     # to be the one the reference row was measured over, and both the corpus slot
     # and `tail_by_note` are written in the capture's own numbering.
-    window = reference_window(cfg, corpus_dir, timbre,
-                              preroll_s=preroll_s, gate_s=gate_s)
+    window = reference_window(cfg, corpus_dir, timbre, preroll_s=preroll_s, gate_s=gate_s)
     kit_rows: list[tuple[dict, dict]] = []
     decay_censored: list[tuple[int, int, bool, bool]] = []
     ring_gone: list[tuple[int, int, str]] = []
@@ -734,21 +842,25 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
     for note, vel in pairs:
         played = mapping.get(note, note)
         window_s = window(note, vel)
-        smf = write_smf([Note(played, vel, preroll_s, gate_s)], program=program, bank=bank,
-                        channel=PERCUSSION_CHANNEL - 1,
-                        end_pad=max(0.0, window_s - preroll_s - gate_s))
+        smf = write_smf(
+            [Note(played, vel, preroll_s, gate_s)],
+            program=program,
+            bank=bank,
+            channel=PERCUSSION_CHANNEL - 1,
+            end_pad=max(0.0, window_s - preroll_s - gate_s),
+        )
         audio = render_model(smf, window_s, sr, rig=rig)
         audio = place(audio, sr)
-        m = measure_hit(audio, sr, played, vel, preroll_s=preroll_s, gate_s=gate_s,
-                        max_band_hz=band_edge)
+        m = measure_hit(
+            audio, sr, played, vel, preroll_s=preroll_s, gate_s=gate_s, max_band_hz=band_edge
+        )
         r = ref[(note, vel)]
         # A kit piece the model does not voice at all renders silence, and every
         # normalised metric scores silence as a flat spectrum rather than as an
         # absence. Named and left out, in the same way a capped release is.
         if m.get("peak_dbfs") is None or m["peak_dbfs"] <= SILENT_HIT_DBFS:
             silent.append((note, vel))
-            print(f"{note:5d} {vel:4d} | model renders nothing above "
-                  f"{SILENT_HIT_DBFS:.0f} dBFS")
+            print(f"{note:5d} {vel:4d} | model renders nothing above {SILENT_HIT_DBFS:.0f} dBFS")
             continue
 
         attempted += 1
@@ -768,8 +880,9 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         decay_capped = bool(m.get("decay_capped") or r.get("decay_capped"))
         uncensored_decay = row["band_decay"]
         if decay_capped:
-            decay_censored.append((note, vel, bool(m.get("decay_capped")),
-                                   bool(r.get("decay_capped"))))
+            decay_censored.append(
+                (note, vel, bool(m.get("decay_capped")), bool(r.get("decay_capped")))
+            )
             row["band_decay"] = None
         if not decay_capped:
             # Counted only where the column it describes counted the row, or it
@@ -787,19 +900,24 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         kit_rows.append((m, {**r, "note": note, "velocity": vel}))
 
         def fmt(v, spec):
-            return (format(v, spec) if v is not None and np.isfinite(v)
-                    else "n/a".rjust(len(format(0, spec))))
+            return (
+                format(v, spec)
+                if v is not None and np.isfinite(v)
+                else "n/a".rjust(len(format(0, spec)))
+            )
 
         label = f"{note:5d}" if played == note else f"{note:3d}>{played:<2d}"
         # A censored row still prints its rate, marked, because which side ran
         # out first is the whole content of the finding.
-        decay_col = fmt(uncensored_decay, '+11.2f') + ("~" if decay_capped else " ")
-        ring_col = fmt(row['ring'], '+8.2f') + ("!" if collapsed else " ")
-        print(f"{label} {vel:4d} | {fmt(row['band_tilt'], '+9.1f')} "
-              f"{fmt(row['band_shape'], '9.1f')} {decay_col} "
-              f"{fmt(row['centroid_pct'], '+12.1f')} {fmt(row['attack'], '+11.1f')} "
-              f"{fmt(row['crest'], '+10.1f')} {fmt(row['level'], '+10.1f')} "
-              f"{ring_col} {fmt(row['tonality'], '+10.2f')}")
+        decay_col = fmt(uncensored_decay, "+11.2f") + ("~" if decay_capped else " ")
+        ring_col = fmt(row["ring"], "+8.2f") + ("!" if collapsed else " ")
+        print(
+            f"{label} {vel:4d} | {fmt(row['band_tilt'], '+9.1f')} "
+            f"{fmt(row['band_shape'], '9.1f')} {decay_col} "
+            f"{fmt(row['centroid_pct'], '+12.1f')} {fmt(row['attack'], '+11.1f')} "
+            f"{fmt(row['crest'], '+10.1f')} {fmt(row['level'], '+10.1f')} "
+            f"{ring_col} {fmt(row['tonality'], '+10.2f')}"
+        )
 
     if ring_gone:
         # Loud and separate from the censors below, because this one is a
@@ -808,10 +926,12 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         # ratio of zero exists, and the row it would otherwise vacate is the
         # worst row the median had.
         sides = sorted({s for _n, _v, s in ring_gone})
-        print(f"\n! {len(ring_gone)} of {attempted} scored rows report NO ring at all "
-              f"({', '.join(sides)} side): `decay_ms` is 0, so the hit is a click and "
-              f"`ring` has no ratio to take. Counted here and unscorable, never dropped "
-              f"— a collapsed piece leaving the median reads as the family improving:")
+        print(
+            f"\n! {len(ring_gone)} of {attempted} scored rows report NO ring at all "
+            f"({', '.join(sides)} side): `decay_ms` is 0, so the hit is a click and "
+            f"`ring` has no ratio to take. Counted here and unscorable, never dropped "
+            f"— a collapsed piece leaving the median reads as the family improving:"
+        )
         print("  " + ", ".join(f"n{n}v{v}" for n, v, _s in ring_gone))
     if decay_censored:
         # WHICH side hit its ceiling, because that is the finding the censor
@@ -821,17 +941,23 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         model_only = sum(1 for _n, _v, mc, rc in decay_censored if mc and not rc)
         ref_only = sum(1 for _n, _v, mc, rc in decay_censored if rc and not mc)
         both = len(decay_censored) - model_only - ref_only
-        parts = [f"{model_only} on the model side" if model_only else "",
-                 f"{ref_only} on the reference side" if ref_only else "",
-                 f"{both} on both" if both else ""]
-        print(f"\n~ {len(decay_censored)} of {len(pairs)} rows never fell 20 dB inside "
-              f"the window the reference was recorded over, so their decay covers a "
-              f"different part of the fall on the two sides; shown, not counted, and "
-              f"{', '.join(p for p in parts if p)}:")
+        parts = [
+            f"{model_only} on the model side" if model_only else "",
+            f"{ref_only} on the reference side" if ref_only else "",
+            f"{both} on both" if both else "",
+        ]
+        print(
+            f"\n~ {len(decay_censored)} of {len(pairs)} rows never fell 20 dB inside "
+            f"the window the reference was recorded over, so their decay covers a "
+            f"different part of the fall on the two sides; shown, not counted, and "
+            f"{', '.join(p for p in parts if p)}:"
+        )
         print("  " + ", ".join(f"n{n}v{v}" for n, v, _m, _r in decay_censored))
     if silent:
-        print(f"\n* {len(silent)} of {len(pairs)} hits are silent on the model side; "
-              f"shown, not counted:")
+        print(
+            f"\n* {len(silent)} of {len(pairs)} hits are silent on the model side; "
+            f"shown, not counted:"
+        )
         print("  " + ", ".join(f"n{n}v{v}" for n, v in silent))
     for note, model_peaks in sorted(peaks.get("m", {}).items()):
         ref_peaks = peaks.get("r", {}).get(note, {})
@@ -842,72 +968,90 @@ def compare_percussion(cfg: dict, profile: dict, *, timbre: str, notes_filter: s
         deltas.setdefault("vel_range", []).append(
             (max(span[0]) - min(span[0])) - (max(span[1]) - min(span[1]))
         )
-    summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [],
-                                cfg.get("dimensions_na") or {})
+    summary = select_dimensions(
+        summarize_deltas(deltas), cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
+    )
     spread = percussion_reference_spread(profile, list(summary))
     print_summary_table(summary, spread, attempted)
-    print_vanished_dimensions(offered_keys, summary, cfg.get("dimensions") or [],
-                              cfg.get("dimensions_na") or {})
-    print("\n  A kit has no register to average along: every row is a different "
-          "instrument,\n  so the signed median says only how the kit leans as a whole and the "
-          "absolute\n  one is the column to read. `band shape` is a magnitude already and its "
-          "two\n  columns are the same number by construction.")
-    print("\n  `p90` is the 90th percentile of the same absolute error, and it is the column "
-          "that\n  sees a handful of bad instruments: a kit can sit inside its spread on both "
-          "median\n  columns while nearly half its rows are outside it. Read `p90` against "
-          "`spread`\n  the same way, and where the two medians and `p90` disagree, the "
-          "disagreement is\n  the finding — a few instruments are wrong rather than the kit.")
+    print_vanished_dimensions(
+        offered_keys, summary, cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
+    )
+    print(
+        "\n  A kit has no register to average along: every row is a different "
+        "instrument,\n  so the signed median says only how the kit leans as a whole and the "
+        "absolute\n  one is the column to read. `band shape` is a magnitude already and its "
+        "two\n  columns are the same number by construction."
+    )
+    print(
+        "\n  `p90` is the 90th percentile of the same absolute error, and it is the column "
+        "that\n  sees a handful of bad instruments: a kit can sit inside its spread on both "
+        "median\n  columns while nearly half its rows are outside it. Read `p90` against "
+        "`spread`\n  the same way, and where the two medians and `p90` disagree, the "
+        "disagreement is\n  the finding — a few instruments are wrong rather than the kit."
+    )
     if spread:
-        print("\n  `spread` is how far the REFERENCE KITS sit from each other on the same "
-              "dimension,\n  by the same arithmetic, so `x spread` reads the same in dB, "
-              "milliseconds and\n  percent: 1.0x is as close to them as they are to one "
-              "another, which is as close\n  as this corpus can define. A gate cannot say this "
-              "— its bounds come from what\n  the voice measured the day they were written. "
-              "The largest ratio is where the\n  next round belongs.")
+        print(
+            "\n  `spread` is how far the REFERENCE KITS sit from each other on the same "
+            "dimension,\n  by the same arithmetic, so `x spread` reads the same in dB, "
+            "milliseconds and\n  percent: 1.0x is as close to them as they are to one "
+            "another, which is as close\n  as this corpus can define. A gate cannot say this "
+            "— its bounds come from what\n  the voice measured the day they were written. "
+            "The largest ratio is where the\n  next round belongs."
+        )
     else:
-        print("\n  No `spread`: this capture has one reference kit, so no dimension can be "
-              "judged\n  against anything but itself. A second kit is what makes the column "
-              "exist.")
+        print(
+            "\n  No `spread`: this capture has one reference kit, so no dimension can be "
+            "judged\n  against anything but itself. A second kit is what makes the column "
+            "exist."
+        )
 
     # An attack at the envelope window's floor is the ruler rather than the hit,
     # and the `attack` column above cannot say so: it is a difference, and a
     # difference between a floored reading and a real one looks like any other.
     # Derived from the recorded number rather than read from `attack_floored`,
     # so a profile measured before that field existed reports the same.
-    floored = {side: sum(1 for m, r in kit_rows
-                         if (m if side == "model" else r).get("attack_ms", 1e9)
-                         <= ATTACK_FLOOR_MS)
-               for side in ("model", "reference")}
+    floored = {
+        side: sum(
+            1
+            for m, r in kit_rows
+            if (m if side == "model" else r).get("attack_ms", 1e9) <= ATTACK_FLOOR_MS
+        )
+        for side in ("model", "reference")
+    }
     if kit_rows and floored["model"]:
         total = len(kit_rows)
-        print(f"\n  {floored['model']} of {total} model rows and {floored['reference']} of "
-              f"{total} reference rows sit at\n  the attack floor "
-              f"({ATTACK_FLOOR_MS:g} ms), where a step, an impulse and a "
-              f"{ATTACK_FLOOR_MS:g} ms ramp all\n  measure the same. Those rows say "
-              f"the attack is no slower than that and nothing\n  more, so an `attack` delta "
-              f"taken against a reference above the floor is a LOWER\n  bound on the gap. It "
-              f"understates and never invents.")
+        print(
+            f"\n  {floored['model']} of {total} model rows and {floored['reference']} of "
+            f"{total} reference rows sit at\n  the attack floor "
+            f"({ATTACK_FLOOR_MS:g} ms), where a step, an impulse and a "
+            f"{ATTACK_FLOOR_MS:g} ms ramp all\n  measure the same. Those rows say "
+            f"the attack is no slower than that and nothing\n  more, so an `attack` delta "
+            f"taken against a reference above the floor is a LOWER\n  bound on the gap. It "
+            f"understates and never invents."
+        )
 
     if reach[1]:
-        print(f"\n  per-octave decay read over {reach[0]} of the {reach[1]} octave-cells "
-              f"the reference\n  resolved a rate in ({100.0 * reach[0] / reach[1]:.0f} %). "
-              f"The rest are octaves the model gave no\n  measurable rate, and they leave "
-              f"that row's average rather than being charged\n  to it — so a low figure "
-              f"here says the column is speaking for less of the kit\n  than its row count "
-              f"suggests. Two reference kits reach 94 and 87 % of each other.")
+        print(
+            f"\n  per-octave decay read over {reach[0]} of the {reach[1]} octave-cells "
+            f"the reference\n  resolved a rate in ({100.0 * reach[0] / reach[1]:.0f} %). "
+            f"The rest are octaves the model gave no\n  measurable rate, and they leave "
+            f"that row's average rather than being charged\n  to it — so a low figure "
+            f"here says the column is speaking for less of the kit\n  than its row count "
+            f"suggests. Two reference kits reach 94 and 87 % of each other."
+        )
 
     print_kit_relations(kit_rows, note_groups(cfg))
 
     if gate_path:
         return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))
     if write_gate:
-        return write_gate_file(summary, Path(write_gate), timbre, margin,
-                               profile.get("measured_utc", ""), spread)
+        return write_gate_file(
+            summary, Path(write_gate), timbre, margin, profile.get("measured_utc", ""), spread
+        )
     return 0
 
 
-def takes(cfg: dict, *, archive: Path, only: set[str], program: int,
-          bank: int = 0) -> int:
+def takes(cfg: dict, *, archive: Path, only: set[str], program: int, bank: int = 0) -> int:
     """Measure the phrase takes, which is where the couplings live.
 
     A per-note grid answers what one string does. Everything an instrument does
@@ -948,21 +1092,31 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int,
     for take in selected:
         refs = archived_take_references(archive, cfg["id"], take.id, sr)
         if not refs:
-            print(f"  {take.id}: no archived reference — build a page for it first "
-                  f"(make_audition.py --archive-references)", file=sys.stderr)
+            print(
+                f"  {take.id}: no archived reference — build a page for it first "
+                f"(make_audition.py --archive-references)",
+                file=sys.stderr,
+            )
             continue
         windows = take_windows(take)
         spans = [(n.start, n.start + n.dur) for n in take.notes]
-        smf = write_smf(take.notes, program=program, bank=bank, end_pad=take.tail_s,
-                        cc_events=take.cc_events, channel=take.channel)
+        smf = write_smf(
+            take.notes,
+            program=program,
+            bank=bank,
+            end_pad=take.tail_s,
+            cc_events=take.cc_events,
+            channel=take.channel,
+        )
         # The tail window ends where the references do, not where the phrase
         # nominally does. Clipped for both sides at once, before either is
         # measured, so the model is never read over a span the instrument it is
         # being compared against had already left.
         nominal = windows.get("tail")
         if nominal:
-            clipped = usable_tail([to_mono(np.asarray(a, dtype=np.float64))
-                                   for a in refs.values()], sr, nominal)
+            clipped = usable_tail(
+                [to_mono(np.asarray(a, dtype=np.float64)) for a in refs.values()], sr, nominal
+            )
             windows["tail"] = clipped
         dry_model = render_model(smf, take.duration(), sr, rig=rig)
         # The model renders dry — `write_smf` writes CC91 0 — so on a capture
@@ -976,7 +1130,7 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int,
         model_rows, unplaced = [], []
         if not wet:
             model_rows.append(measure_take(dry_model, sr, windows))
-        for name, audio in (refs.items() if wet else ()):
+        for name, audio in refs.items() if wet else ():
             if name not in room_irs:
                 room = measurable_room(audio, sr, spans)
                 if room is not None:
@@ -986,7 +1140,8 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int,
                 continue
             room, ir = room_irs[name]
             model_rows.append(
-                measure_take(place_model_in(dry_model, sr, spans, room, ir)[0], sr, windows))
+                measure_take(place_model_in(dry_model, sr, spans, room, ir)[0], sr, windows)
+            )
         model = model_rows[0] if model_rows else {}
         ref_rows = [measure_take(a, sr, windows) for a in refs.values()]
         if wet and not model_rows:
@@ -996,9 +1151,12 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int,
             # building. A phrase of short notes cannot measure a room itself
             # (`Room.gated`); one long-note take in the same set gives every
             # other take its IR, so this is a set without one.
-            print(f"  {take.id}: skipped — the reference carries a room and no take in this "
-                  f"run measured one to put the model in (run without --only, or add a "
-                  f"phrase that holds a note)", file=sys.stderr)
+            print(
+                f"  {take.id}: skipped — the reference carries a room and no take in this "
+                f"run measured one to put the model in (run without --only, or add a "
+                f"phrase that holds a note)",
+                file=sys.stderr,
+            )
             continue
         if not model or not any(ref_rows):
             # Almost always a phrase with no tail to measure rather than a
@@ -1006,25 +1164,31 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int,
             # whose notes run to the end, leaves no window in which nothing is
             # being played. Named rather than counted, because the same line
             # would otherwise cover a silent model.
-            reason = ("no window between the last note and the end of the phrase"
-                      if windows.get("tail") is None
-                      else "the render carried no measurable tail")
+            reason = (
+                "no window between the last note and the end of the phrase"
+                if windows.get("tail") is None
+                else "the render carried no measurable tail"
+            )
             print(f"  {take.id}: skipped — {reason}", file=sys.stderr)
             continue
         measured += 1
         print(f"  {take.id} — {take.label}")
         clipped = windows.get("tail")
         if nominal and clipped is None:
-            print("    (no tail reading: the references stop within a fraction of a second "
-                  "of the last note, so there is no span in which they are still sounding)")
+            print(
+                "    (no tail reading: the references stop within a fraction of a second "
+                "of the last note, so there is no span in which they are still sounding)"
+            )
         elif nominal and clipped[1] < nominal[1] - 0.05:
-            print(f"    (tail read {clipped[0]:.1f}-{clipped[1]:.1f} s: the references run "
-                  f"out {nominal[1] - clipped[1]:.1f} s before the phrase does)")
+            print(
+                f"    (tail read {clipped[0]:.1f}-{clipped[1]:.1f} s: the references run "
+                f"out {nominal[1] - clipped[1]:.1f} s before the phrase does)"
+            )
         if wet:
-            placed = ", ".join(f"RT60 {room_irs[n][0].rt60_s:.1f}s"
-                               for n in refs if n in room_irs)
-            missing = (f"; {len(unplaced)} reference(s) left out, no room measured"
-                       if unplaced else "")
+            placed = ", ".join(f"RT60 {room_irs[n][0].rt60_s:.1f}s" for n in refs if n in room_irs)
+            missing = (
+                f"; {len(unplaced)} reference(s) left out, no room measured" if unplaced else ""
+            )
             print(f"    (model placed in {placed}{missing})")
         for key, label in TAKE_LABELS.items():
             vals = [r[key] for r in ref_rows if key in r]
@@ -1035,13 +1199,15 @@ def takes(cfg: dict, *, archive: Path, only: set[str], program: int,
             # Outside their range in EVERY room it was placed in, or it is not
             # the model that is outside — it is which building it was read in.
             flag = "" if any(lo <= g <= hi for g in got) else "*"
-            shown = (f"{got[0]:>9.1f}" if max(got) - min(got) < 0.05
-                     else f"{min(got):>9.1f}..{max(got):<.1f}")
+            shown = (
+                f"{got[0]:>9.1f}"
+                if max(got) - min(got) < 0.05
+                else f"{min(got):>9.1f}..{max(got):<.1f}"
+            )
             print(f"    {label:<58}{lo:>8.1f}..{hi:<8.1f}{shown}{flag}")
         print()
     if not measured:
-        print("nothing measured — see the reason printed against each take above",
-              file=sys.stderr)
+        print("nothing measured — see the reason printed against each take above", file=sys.stderr)
         return 2
     return 0
 
@@ -1062,46 +1228,67 @@ class ModelPlacer:
 
     def __init__(self, profile: dict, timbre: str, spans: list[tuple[float, float]]):
         recorded = (profile.get("rooms") or {}).get(timbre)
-        self.room = (Room(**{k: v for k, v in recorded.items() if k in ROOM_FIELDS})
-                     if recorded else None)
+        self.room = (
+            Room(**{k: v for k, v in recorded.items() if k in ROOM_FIELDS}) if recorded else None
+        )
         self.spans = spans
         self.ir: np.ndarray | None = None
 
     def announce(self) -> None:
         if self.room is None:
             return
-        print(f"the reference carries a room — RT60 {self.room.rt60_s:.2f}s, tail level "
-              f"{self.room.tail_db:+.1f}dB, HF ratio {self.room.hf_ratio:.2f} — and the "
-              f"model is placed in a matching space before every measurement below\n")
+        print(
+            f"the reference carries a room — RT60 {self.room.rt60_s:.2f}s, tail level "
+            f"{self.room.tail_db:+.1f}dB, HF ratio {self.room.hf_ratio:.2f} — and the "
+            f"model is placed in a matching space before every measurement below\n"
+        )
 
     def __call__(self, audio: np.ndarray, sr: int) -> np.ndarray:
         if self.room is None:
             return audio
-        placed, self.ir = place_model_in(np.asarray(audio, dtype=np.float64), sr,
-                                         self.spans, self.room, self.ir)
+        placed, self.ir = place_model_in(
+            np.asarray(audio, dtype=np.float64), sr, self.spans, self.room, self.ir
+        )
         return placed.astype(np.float32)
 
 
-def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int],
-            gate_path: str = "", write_gate: str = "", margin: float = 1.25,
-            corpus_dir: Path | None = None) -> int:
+def compare(
+    cfg: dict,
+    profile_path: Path,
+    *,
+    timbre: str,
+    notes_filter: set[int],
+    gate_path: str = "",
+    write_gate: str = "",
+    margin: float = 1.25,
+    corpus_dir: Path | None = None,
+) -> int:
     """Measure libsonare the same way and print the difference, dimension by dimension."""
     if not profile_path.exists():
         print(f"no profile at {profile_path} — run `profile.py measure` first")
         return 2
     profile = json.loads(profile_path.read_text())
     if is_percussion(profile["capture"]):
-        return compare_percussion(cfg, profile, timbre=timbre, notes_filter=notes_filter,
-                                  gate_path=gate_path, write_gate=write_gate, margin=margin,
-                                  corpus_dir=corpus_dir)
+        return compare_percussion(
+            cfg,
+            profile,
+            timbre=timbre,
+            notes_filter=notes_filter,
+            gate_path=gate_path,
+            write_gate=write_gate,
+            margin=margin,
+            corpus_dir=corpus_dir,
+        )
     cap = profile["capture"]
     preroll_s = cap["preroll_ms"] / 1000.0
     gate_s = cap["gate_ms"] / 1000.0
 
     ref = {(r["note"], r["velocity"]): r for r in profile["rows"] if r["timbre"] == timbre}
     if not ref:
-        print(f"profile has no timbre {timbre!r}; it has "
-              f"{sorted({r['timbre'] for r in profile['rows']})}")
+        print(
+            f"profile has no timbre {timbre!r}; it has "
+            f"{sorted({r['timbre'] for r in profile['rows']})}"
+        )
         return 2
 
     program = profile_program(profile, cfg)
@@ -1109,8 +1296,10 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     pairs = sorted({k for k in ref if not notes_filter or k[0] in notes_filter})
     a4_off = a4_offset_cents(profile["rows"], timbre)
     print(f"model vs {timbre}: {len(pairs)} notes, model on GM program {program}")
-    print(f"reference A4 sits {a4_off:+.2f} c from 440 Hz; "
-          f"that offset is removed from the stretch column\n")
+    print(
+        f"reference A4 sits {a4_off:+.2f} c from 440 Hz; "
+        f"that offset is removed from the stretch column\n"
+    )
     place = ModelPlacer(profile, timbre, [(preroll_s, preroll_s + gate_s)])
     place.announce()
     # Every dimension the summary gates has a column here, so a bound that moves
@@ -1118,10 +1307,12 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     # most needs it: it is the slowest thing the voice does, so it is the least
     # uniform across the keyboard, and a median hides a register that is wrong in
     # the opposite direction from the rest.
-    header = (f"{'note':>5} {'vel':>4} | {'stretch Δc':>10} {'B model':>10} {'B ref':>10} "
-              f"{'decay Δdb/s':>12} {'after Δdb/s':>12} {'h2-6 model':>10} {'h2-6 ref':>9} "
-              f"{'centroid Δ%':>12} {'TNR Δdb':>9} {'damper Δms':>11}"
-              f"{'attack Δms':>11} {'width Δ':>8}")
+    header = (
+        f"{'note':>5} {'vel':>4} | {'stretch Δc':>10} {'B model':>10} {'B ref':>10} "
+        f"{'decay Δdb/s':>12} {'after Δdb/s':>12} {'h2-6 model':>10} {'h2-6 ref':>9} "
+        f"{'centroid Δ%':>12} {'TNR Δdb':>9} {'damper Δms':>11}"
+        f"{'attack Δms':>11} {'width Δ':>8}"
+    )
     print(header)
     print("-" * len(header))
 
@@ -1144,13 +1335,16 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     # capture's own answer: a direct reference is compared against the direct
     # signal, one recorded through an amplifier against the model plus its rig.
     rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
-    window = reference_window(cfg, corpus_dir, timbre,
-                              preroll_s=preroll_s, gate_s=gate_s)
+    window = reference_window(cfg, corpus_dir, timbre, preroll_s=preroll_s, gate_s=gate_s)
     levels: dict[str, dict[int, dict[int, float]]] = {}
     for note, vel in pairs:
         window_s = window(note, vel)
-        smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program, bank=bank,
-                        end_pad=max(0.0, window_s - preroll_s - gate_s))
+        smf = write_smf(
+            [Note(note, vel, preroll_s, gate_s)],
+            program=program,
+            bank=bank,
+            end_pad=max(0.0, window_s - preroll_s - gate_s),
+        )
         audio = render_model(smf, window_s, cap["sample_rate"], rig=rig)
         audio = place(audio, cap["sample_rate"])
         m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
@@ -1182,7 +1376,7 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         # left out, the same as a capped damper.
         gap_m, gap_r = double_decay_gap(m), double_decay_gap(r)
         m_span, r_span = m.get("decay_span_s", 0.0), r.get("decay_span_s", 0.0)
-        span_mismatch = (min(m_span, r_span) < DECAY_SPAN_AGREEMENT * max(m_span, r_span, 1e-9))
+        span_mismatch = min(m_span, r_span) < DECAY_SPAN_AGREEMENT * max(m_span, r_span, 1e-9)
         if span_mismatch:
             span_censored.append((note, vel, m_span, r_span))
         row = {
@@ -1210,8 +1404,7 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
             # line. Measured against three concert grands, this voice sat inside
             # the decay bound while its late rate at C5 was three times theirs.
             "aftersound": None if span_mismatch else d("decay_late_db_s"),
-            "doubling": None if span_mismatch or gap_m is None or gap_r is None
-            else gap_m - gap_r,
+            "doubling": None if span_mismatch or gap_m is None or gap_r is None else gap_m - gap_r,
             "body": d("body_below_f0_db"),
             # The two radiation paths of a real board arrive decorrelated. A
             # model that folds one signal into both legs scores exactly 0.0
@@ -1237,29 +1430,35 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
                 levels.setdefault(side, {}).setdefault(note, {})[vel] = src["held_peak_dbfs"]
 
         def fmt(v, spec):
-            return format(v, spec) if v is not None and np.isfinite(v) else "n/a".rjust(len(format(0, spec)))
+            return (
+                format(v, spec)
+                if v is not None and np.isfinite(v)
+                else "n/a".rjust(len(format(0, spec)))
+            )
 
-        damper_col = fmt(d("damper_release_ms"), '+10.1f') + ("*" if damper_capped else " ")
+        damper_col = fmt(d("damper_release_ms"), "+10.1f") + ("*" if damper_capped else " ")
         # A censored pair still prints its two rates, marked, because seeing
         # which side ran out first is the whole content of the finding.
-        decay_col = (fmt(d("decay_db_s"), '+11.2f') + ("~" if span_mismatch else " "))
-        after_col = (fmt(d("decay_late_db_s"), '+11.2f') + ("~" if span_mismatch else " "))
-        print(f"{note:5d} {vel:4d} | {fmt(row['stretch'], '+10.1f')} "
-              f"{m.get('inharmonicity_b', float('nan')):10.3e} {r.get('inharmonicity_b', float('nan')):10.3e} "
-              f"{decay_col} {after_col} "
-              f"{fmt(bal_m, '+10.1f')} {fmt(bal_r, '+9.1f')} "
-              f"{fmt(centroid_pct, '+12.1f')} {fmt(row['tnr'], '+9.1f')} {damper_col}"
-              f"{fmt(row['attack'], '+11.1f')} {fmt(row['stereo'], '+8.3f')}")
+        decay_col = fmt(d("decay_db_s"), "+11.2f") + ("~" if span_mismatch else " ")
+        after_col = fmt(d("decay_late_db_s"), "+11.2f") + ("~" if span_mismatch else " ")
+        print(
+            f"{note:5d} {vel:4d} | {fmt(row['stretch'], '+10.1f')} "
+            f"{m.get('inharmonicity_b', float('nan')):10.3e} {r.get('inharmonicity_b', float('nan')):10.3e} "
+            f"{decay_col} {after_col} "
+            f"{fmt(bal_m, '+10.1f')} {fmt(bal_r, '+9.1f')} "
+            f"{fmt(centroid_pct, '+12.1f')} {fmt(row['tnr'], '+9.1f')} {damper_col}"
+            f"{fmt(row['attack'], '+11.1f')} {fmt(row['stereo'], '+8.3f')}"
+        )
 
     if damper_censored:
         # Each censored row was rendered over its own slot's tail, so the
         # sentence names the span rather than one number it no longer has.
-        tails = sorted({round(window(n, v) - preroll_s - gate_s, 2)
-                        for n, v in damper_censored})
-        span = (f"{tails[0]:.2g} s" if len(tails) == 1
-                else f"{tails[0]:.2g}-{tails[-1]:.2g} s")
-        print(f"\n* {len(damper_censored)} of {len(pairs)} rows never fell 40 dB inside the "
-              f"{span} tail on one side or the other; shown, not counted:")
+        tails = sorted({round(window(n, v) - preroll_s - gate_s, 2) for n, v in damper_censored})
+        span = f"{tails[0]:.2g} s" if len(tails) == 1 else f"{tails[0]:.2g}-{tails[-1]:.2g} s"
+        print(
+            f"\n* {len(damper_censored)} of {len(pairs)} rows never fell 40 dB inside the "
+            f"{span} tail on one side or the other; shown, not counted:"
+        )
         print("  " + ", ".join(f"n{n}v{v}" for n, v in damper_censored))
     if span_censored:
         # WHICH side outlasted the other, because that is the finding and the
@@ -1267,14 +1466,21 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         # are too different to difference, which is the same thing as saying the
         # difference is large. Left unnamed it reads as missing data.
         longer = sum(1 for _n, _v, ms, rs in span_censored if ms > rs)
-        side = ("the model outlasted the reference on all of them" if longer == len(span_censored)
-                else "the reference outlasted the model on all of them" if longer == 0
-                else f"the model outlasted the reference on {longer} of them")
-        print(f"\n~ {len(span_censored)} of {len(pairs)} rows had one side stay audible "
-              f"well past the other, so their decay rates cover different parts of the "
-              f"decay; shown, not counted, and {side}:")
-        print("  " + ", ".join(f"n{n}v{v} ({ms:.1f}s vs {rs:.1f}s)"
-                               for n, v, ms, rs in span_censored))
+        side = (
+            "the model outlasted the reference on all of them"
+            if longer == len(span_censored)
+            else "the reference outlasted the model on all of them"
+            if longer == 0
+            else f"the model outlasted the reference on {longer} of them"
+        )
+        print(
+            f"\n~ {len(span_censored)} of {len(pairs)} rows had one side stay audible "
+            f"well past the other, so their decay rates cover different parts of the "
+            f"decay; shown, not counted, and {side}:"
+        )
+        print(
+            "  " + ", ".join(f"n{n}v{v} ({ms:.1f}s vs {rs:.1f}s)" for n, v, ms, rs in span_censored)
+        )
     for note, model_peaks in sorted(peaks.get("m", {}).items()):
         ref_peaks = peaks.get("r", {}).get(note, {})
         shared = sorted(set(model_peaks) & set(ref_peaks))
@@ -1288,32 +1494,39 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     if register:
         deltas["register"] = [d for _, _, d in register]
         print_register_profile(register, register_spread_by_note(profile))
-    summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [],
-                                cfg.get("dimensions_na") or {})
+    summary = select_dimensions(
+        summarize_deltas(deltas), cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
+    )
     spread = reference_spread(profile, list(summary))
     print_summary_table(summary, spread, attempted)
-    print_vanished_dimensions(offered_keys, summary, cfg.get("dimensions") or [],
-                              cfg.get("dimensions_na") or {})
-    print("\n  The signed median is what the voice is doing on average and the absolute one "
-          "is\n  how far any given note is from the reference. They part company exactly where "
-          "a\n  summary is least trustworthy: errors of opposite sign in different registers "
-          "cancel\n  in the first column and do not in the second. `p90` is the 90th "
-          "percentile of\n  that absolute error, and it parts company with both wherever the "
-          "defect is a few\n  notes rather than the register: a minority of bad rows cannot "
-          "move a median.")
-    print("\n  `spread` is how far the REFERENCES sit from each other on the same dimension, "
-          "by\n  the same arithmetic, so `x spread` reads the same in cents, dB, milliseconds "
-          "and\n  percent: 1.0x is as close to them as they are to one another, which is as "
-          "close\n  as this corpus can define. A gate cannot say this — its bounds come from "
-          "what\n  the voice measured the day they were written, so green means "
-          "\"no worse than\n  then\", never \"finished\". The largest ratio is where the "
-          "next round belongs.")
+    print_vanished_dimensions(
+        offered_keys, summary, cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
+    )
+    print(
+        "\n  The signed median is what the voice is doing on average and the absolute one "
+        "is\n  how far any given note is from the reference. They part company exactly where "
+        "a\n  summary is least trustworthy: errors of opposite sign in different registers "
+        "cancel\n  in the first column and do not in the second. `p90` is the 90th "
+        "percentile of\n  that absolute error, and it parts company with both wherever the "
+        "defect is a few\n  notes rather than the register: a minority of bad rows cannot "
+        "move a median."
+    )
+    print(
+        "\n  `spread` is how far the REFERENCES sit from each other on the same dimension, "
+        "by\n  the same arithmetic, so `x spread` reads the same in cents, dB, milliseconds "
+        "and\n  percent: 1.0x is as close to them as they are to one another, which is as "
+        "close\n  as this corpus can define. A gate cannot say this — its bounds come from "
+        "what\n  the voice measured the day they were written, so green means "
+        '"no worse than\n  then", never "finished". The largest ratio is where the '
+        "next round belongs."
+    )
 
     if gate_path:
         return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))
     if write_gate:
-        return write_gate_file(summary, Path(write_gate), timbre, margin,
-                               profile.get("measured_utc", ""), spread)
+        return write_gate_file(
+            summary, Path(write_gate), timbre, margin, profile.get("measured_utc", ""), spread
+        )
     return 0
 
 
@@ -1383,19 +1596,24 @@ def agreement_row(second: dict, r: dict) -> dict:
     """
     tilt_a, tilt_b = band_tilt_db(r.get("bands_db")), band_tilt_db(second.get("bands_db"))
     return {
-        "level": (second["peak_dbfs"] - r["peak_dbfs"]
-                  if r.get("peak_dbfs") is not None else None),
+        "level": (second["peak_dbfs"] - r["peak_dbfs"] if r.get("peak_dbfs") is not None else None),
         "band_tilt": None if tilt_a is None or tilt_b is None else tilt_b - tilt_a,
         "band_shape": band_shape_error_db(second.get("bands_db"), r.get("bands_db")),
-        "centroid_pct": (100.0 * (second["centroid_hz"] / r["centroid_hz"] - 1.0)
-                         if r.get("centroid_hz") else None),
+        "centroid_pct": (
+            100.0 * (second["centroid_hz"] / r["centroid_hz"] - 1.0)
+            if r.get("centroid_hz")
+            else None
+        ),
         "attack": second["attack_ms"] - r["attack_ms"],
         "crest": second["crest_db"] - r["crest_db"],
         "band_decay": _delta(second.get("band_decay_db_s"), r.get("band_decay_db_s")),
         # A capped decay is the analysis window, not the hit, so a ratio taken
         # against one compares a window with an instrument.
-        "ring": (None if second.get("decay_capped") or r.get("decay_capped")
-                 else _ratio_doublings(second.get("decay_ms"), r.get("decay_ms"))),
+        "ring": (
+            None
+            if second.get("decay_capped") or r.get("decay_capped")
+            else _ratio_doublings(second.get("decay_ms"), r.get("decay_ms"))
+        ),
     }
 
 
@@ -1411,8 +1629,9 @@ def _ratio_doublings(a: float | None, b: float | None) -> float | None:
     return float(np.log2(float(a) / float(b)))
 
 
-def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
-          corpus_dir: Path | None = None) -> int:
+def agree(
+    cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int], corpus_dir: Path | None = None
+) -> int:
     """Measure a second reference over the same grid and report where the two agree.
 
     Every bound in `reference/*_gate.json` was decided by hand from one
@@ -1438,8 +1657,11 @@ def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
     program = profile_program(profile, cfg)
     bank = profile_bank(profile, cfg)
     if not is_percussion(cap):
-        print("`agree` measures the percussion metric set; the pitched one has no "
-              "second reference wired to it yet", file=sys.stderr)
+        print(
+            "`agree` measures the percussion metric set; the pitched one has no "
+            "second reference wired to it yet",
+            file=sys.stderr,
+        )
         return 2
 
     ref = {(r["note"], r["velocity"]): r for r in profile["rows"] if r["timbre"] == timbre}
@@ -1454,20 +1676,24 @@ def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
     agreed: dict[str, int] = {k: 0 for k in AGREEMENT_TOLERANCE}
     counted: dict[str, int] = {k: 0 for k in AGREEMENT_TOLERANCE}
     deltas: dict[str, list[float]] = {}
-    window = reference_window(cfg, corpus_dir, timbre,
-                              preroll_s=preroll_s, gate_s=gate_s)
+    window = reference_window(cfg, corpus_dir, timbre, preroll_s=preroll_s, gate_s=gate_s)
     for note, vel in pairs:
         window_s = window(note, vel)
-        smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program, bank=bank,
-                        channel=PERCUSSION_CHANNEL - 1,
-                        end_pad=max(0.0, window_s - preroll_s - gate_s))
+        smf = write_smf(
+            [Note(note, vel, preroll_s, gate_s)],
+            program=program,
+            bank=bank,
+            channel=PERCUSSION_CHANNEL - 1,
+            end_pad=max(0.0, window_s - preroll_s - gate_s),
+        )
         try:
             audio = render_oracle_fluidsynth(smf, window_s, sr)
         except (FileNotFoundError, RuntimeError) as exc:
             print(f"second reference unavailable: {exc}", file=sys.stderr)
             return 2
-        second = measure_hit(audio, sr, note, vel, preroll_s=preroll_s, gate_s=gate_s,
-                             max_band_hz=band_edge)
+        second = measure_hit(
+            audio, sr, note, vel, preroll_s=preroll_s, gate_s=gate_s, max_band_hz=band_edge
+        )
         r = ref[(note, vel)]
         if second.get("peak_dbfs") is None or second["peak_dbfs"] <= SILENT_HIT_DBFS:
             print(f"{note:5d} {vel:4d} | the second reference does not voice this note")
@@ -1492,10 +1718,12 @@ def agree(cfg: dict, profile: dict, *, timbre: str, notes_filter: set[int],
         n = counted[key]
         med = float(np.median(deltas[key])) if deltas.get(key) else float("nan")
         print(f"  {key:14s} {agreed[key]:8d} {n:5d} {med:10.1f} {tol:10.1f}")
-    print("\n  A dimension the two references agree on has a target in it and is worth "
-          "gating.\n  One they do not is a voicing decision: measure it, print it, and do "
-          "not fit to it —\n  the number a single reference gives there is that library's "
-          "opinion, and a fit\n  handed it will follow it as far as it goes.")
+    print(
+        "\n  A dimension the two references agree on has a target in it and is worth "
+        "gating.\n  One they do not is a voicing decision: measure it, print it, and do "
+        "not fit to it —\n  the number a single reference gives there is that library's "
+        "opinion, and a fit\n  handed it will follow it as far as it goes."
+    )
     return 0
 
 
@@ -1528,8 +1756,7 @@ def rig_evidence(cfg: dict, corpus_dir: Path, *, against: list[str], timbre: str
 
     first = skirts[subject_key]
     centres = [f for f in first.centres if 2000.0 <= f <= 16000.0]
-    print(f"\nthird-octave level re 1-2 kHz, dB — {subject_key} against "
-          f"{len(against)} sibling(s)")
+    print(f"\nthird-octave level re 1-2 kHz, dB — {subject_key} against {len(against)} sibling(s)")
     print(f"{'':24}" + "".join(f"{f:8.0f}" for f in centres))
     for name, skirt in skirts.items():
         row = [v for f, v in zip(skirt.centres, skirt.curve) if 2000.0 <= f <= 16000.0]
@@ -1538,28 +1765,38 @@ def rig_evidence(cfg: dict, corpus_dir: Path, *, against: list[str], timbre: str
     print(f"\n{'':24}{'skirt':>12}{'knee':>10}{'note spread':>14}{'vs subject':>12}")
     for name, skirt in skirts.items():
         distance = "" if name == subject_key else f"{curve_distance(first, skirt):12.2f}"
-        print(f"{name[:24]:24}{skirt.slope_db_per_octave:9.1f}/oct{skirt.knee_hz:9.0f}Hz"
-              f"{skirt.slope_spread:13.1f} {distance}")
+        print(
+            f"{name[:24]:24}{skirt.slope_db_per_octave:9.1f}/oct{skirt.knee_hz:9.0f}Hz"
+            f"{skirt.slope_spread:13.1f} {distance}"
+        )
 
     rotary = measure_rotary(subject)
     if rotary.stereo:
-        print(f"\nmodulation {rotary.rate_hz:.2f} Hz at {rotary.depth_db:.2f} dB, "
-              f"inter-channel correlation {rotary.interchannel_correlation:+.3f} "
-              f"(channels {rotary.channel_separation_db:.1f} dB apart)")
-        print("  A rotor turns away from one mic as it faces the other, so it drives the\n"
-              "  correlation negative. In-phase modulation is the instrument beating "
-              "against itself.")
+        print(
+            f"\nmodulation {rotary.rate_hz:.2f} Hz at {rotary.depth_db:.2f} dB, "
+            f"inter-channel correlation {rotary.interchannel_correlation:+.3f} "
+            f"(channels {rotary.channel_separation_db:.1f} dB apart)"
+        )
+        print(
+            "  A rotor turns away from one mic as it faces the other, so it drives the\n"
+            "  correlation negative. In-phase modulation is the instrument beating "
+            "against itself."
+        )
     else:
-        print(f"\nrendered dual mono ({rotary.channel_separation_db:.1f} dB apart): the "
-              f"rotary test has\n  nothing to read here, which is not the same answer as "
-              f"a rotor being absent.")
+        print(
+            f"\nrendered dual mono ({rotary.channel_separation_db:.1f} dB apart): the "
+            f"rotary test has\n  nothing to read here, which is not the same answer as "
+            f"a rotor being absent."
+        )
 
     print(f"\n  `rig` is currently {subject.rig!r}.")
-    print("  This measurement can show a rig present and cannot show one absent: a dull\n"
-          "  instrument recorded flat and a bright one recorded through a cabinet both come\n"
-          "  back dull. `none` needs an A/B the product can supply — its amplifier stage\n"
-          "  switched off, and what that removed measured. Without one the answer stays\n"
-          "  unclassified however clean the spectrum looks.")
+    print(
+        "  This measurement can show a rig present and cannot show one absent: a dull\n"
+        "  instrument recorded flat and a bright one recorded through a cabinet both come\n"
+        "  back dull. `none` needs an A/B the product can supply — its amplifier stage\n"
+        "  switched off, and what that removed measured. Without one the answer stays\n"
+        "  unclassified however clean the spectrum looks."
+    )
     return 0
 
 
@@ -1569,34 +1806,71 @@ def rig_evidence(cfg: dict, corpus_dir: Path, *, against: list[str], timbre: str
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name, help_text in (("measure", "corpus WAVs -> reference profile JSON"),
-                            ("render-grid", ("render the model over the capture's own grid, "
-                                            "as one more timbre of the corpus")),
-                            ("compare", "render the same grid through libsonare and diff it"),
-                            ("agree", ("measure a second, independent reference over the same "
-                                      "grid and report which dimensions the two agree on")),
-                            ("dynamics", "diff the pp->ff swing rather than one velocity at a time"),
-                            ("takes", ("measure the phrase takes, which is where the couplings "
-                                      "between notes live and where a note grid is blind")),
-                            ("status", ("what an instrument has, what it is missing, and what "
-                                       "the next round needs — the entry point of a loop")),
-                            ("rig", ("measure whether this reference was recorded through an "
-                                    "amplifier or a rotary, and say what the answer can be")),
-                            ("room-match", ("what libsonare's own CC91 send and GS tank would "
-                                           "have to be to sit in the reference's room"))):
+    for name, help_text in (
+        ("measure", "corpus WAVs -> reference profile JSON"),
+        (
+            "render-grid",
+            ("render the model over the capture's own grid, as one more timbre of the corpus"),
+        ),
+        ("compare", "render the same grid through libsonare and diff it"),
+        (
+            "agree",
+            (
+                "measure a second, independent reference over the same "
+                "grid and report which dimensions the two agree on"
+            ),
+        ),
+        ("dynamics", "diff the pp->ff swing rather than one velocity at a time"),
+        (
+            "takes",
+            (
+                "measure the phrase takes, which is where the couplings "
+                "between notes live and where a note grid is blind"
+            ),
+        ),
+        (
+            "status",
+            (
+                "what an instrument has, what it is missing, and what "
+                "the next round needs — the entry point of a loop"
+            ),
+        ),
+        (
+            "rig",
+            (
+                "measure whether this reference was recorded through an "
+                "amplifier or a rotary, and say what the answer can be"
+            ),
+        ),
+        (
+            "room-match",
+            (
+                "what libsonare's own CC91 send and GS tank would "
+                "have to be to sit in the reference's room"
+            ),
+        ),
+    ):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--config", default=str(DEFAULT_CONFIG))
-        p.add_argument("--corpus", default="", help="corpus directory (default: the capture output)")
+        p.add_argument(
+            "--corpus", default="", help="corpus directory (default: the capture output)"
+        )
         p.add_argument("--profile", default="", help="profile JSON (default: reference/<id>.json)")
-        p.add_argument("--program", type=int, default=None,
-                       help="GM program the model answers with (default: the one the "
-                            "capture definition names, or the one the profile recorded)")
+        p.add_argument(
+            "--program",
+            type=int,
+            default=None,
+            help="GM program the model answers with (default: the one the "
+            "capture definition names, or the one the profile recorded)",
+        )
     rig_group = sub.choices["rig"]
     rig_group.add_argument(
-        "--against", default="",
+        "--against",
+        default="",
         help="comma-separated capture ids to compare the high-frequency shape against. "
-             "Siblings from the same rack are what turn a dark spectrum into evidence of "
-             "one filter, since they came through the same chain in the same session")
+        "Siblings from the same rack are what turn a dark spectrum into evidence of "
+        "one filter, since they came through the same chain in the same session",
+    )
     rig_group.add_argument("--timbre", default="", help="which captured timbre to measure")
     for name in ("compare", "agree", "dynamics"):
         p = sub.choices[name]
@@ -1604,45 +1878,69 @@ def main() -> int:
         p.add_argument("--notes", default="", help="restrict to these MIDI notes, comma-separated")
     grid_group = sub.choices["render-grid"]
     grid_group.add_argument(
-        "--timbre", default="model",
-        help="name the model's grid takes in the corpus (default: model)")
+        "--timbre",
+        default="model",
+        help="name the model's grid takes in the corpus (default: model)",
+    )
     grid_group.add_argument(
-        "--no-rig", action="store_true", dest="no_rig",
+        "--no-rig",
+        action="store_true",
+        dest="no_rig",
         help="render at the instrument's own boundary whatever the capture answers, "
-             "clearing the amplifier the bank binds after an electric guitar's voice. "
-             "Against the same grid rendered normally, the difference is the rig's own "
-             "transfer function — the only measurement that separates it from the voice")
+        "clearing the amplifier the bank binds after an electric guitar's voice. "
+        "Against the same grid rendered normally, the difference is the rig's own "
+        "transfer function — the only measurement that separates it from the voice",
+    )
     status_group = sub.choices["status"]
-    status_group.add_argument("--all", action="store_true", dest="every",
-                              help="every shipped capture rather than one")
-    status_group.add_argument("--archive", default="", dest="status_archive",
-                              help="phrase-take reference archive (default: the audition one)")
+    status_group.add_argument(
+        "--all", action="store_true", dest="every", help="every shipped capture rather than one"
+    )
+    status_group.add_argument(
+        "--archive",
+        default="",
+        dest="status_archive",
+        help="phrase-take reference archive (default: the audition one)",
+    )
     room_group = sub.choices["room-match"]
-    room_group.add_argument("--take", default="", help="phrase to measure the room on "
-                            "(default: the first the archive holds a reference for)")
-    room_group.add_argument("--archive", default="", help="reference archive (default: the "
-                            "audition one)")
+    room_group.add_argument(
+        "--take",
+        default="",
+        help="phrase to measure the room on (default: the first the archive holds a reference for)",
+    )
+    room_group.add_argument(
+        "--archive", default="", help="reference archive (default: the audition one)"
+    )
     room_group.add_argument("--verbose", action="store_true", help="print every search point")
     takes_group = sub.choices["takes"]
     takes_group.add_argument("--only", default="", help="comma-separated take ids")
     takes_group.add_argument(
-        "--archive", default="",
+        "--archive",
+        default="",
         help="reference renders of the phrases (default: the audition archive). These are "
-             "not in the note corpus, which is one note at a time and so cannot hold a phrase")
+        "not in the note corpus, which is one note at a time and so cannot hold a phrase",
+    )
     gate_group = sub.choices["compare"]
     gate_group.add_argument(
-        "--gate", default="",
+        "--gate",
+        default="",
         help="hold the summary to the bounds in this JSON and exit 1 when one is exceeded. "
-             "Catches the change that improves one dimension by breaking another, which is "
-             "the shape most voice work takes and the one a listening test finds last")
+        "Catches the change that improves one dimension by breaking another, which is "
+        "the shape most voice work takes and the one a listening test finds last",
+    )
     gate_group.add_argument(
-        "--write-gate", default="", dest="write_gate",
+        "--write-gate",
+        default="",
+        dest="write_gate",
         help="record the current summary as bounds at --margin times its values. Do this in "
-             "the same change as the behaviour that justifies the new numbers")
+        "the same change as the behaviour that justifies the new numbers",
+    )
     gate_group.add_argument(
-        "--margin", type=float, default=1.25,
+        "--margin",
+        type=float,
+        default=1.25,
         help="slack in a written bound (default: 1.25x). Loose on purpose — a bound that "
-             "fails on measurement noise gets switched off, and then it catches nothing")
+        "fails on measurement noise gets switched off, and then it catches nothing",
+    )
 
     args = ap.parse_args()
     cfg = load_config(Path(args.config))
@@ -1655,61 +1953,100 @@ def main() -> int:
     if args.cmd == "measure":
         return measure(cfg, corpus_dir, profile_path)
     if args.cmd == "render-grid":
-        return render_grid(cfg, corpus_dir, timbre=args.timbre,
-                           program=int(cfg.get("program", 0)),
-                           bank=int(cfg.get("bank", 0) or 0),
-                           rig=False if args.no_rig else None)
+        return render_grid(
+            cfg,
+            corpus_dir,
+            timbre=args.timbre,
+            program=int(cfg.get("program", 0)),
+            bank=int(cfg.get("bank", 0) or 0),
+            rig=False if args.no_rig else None,
+        )
     if args.cmd == "status":
         from make_audition import DEFAULT_REFERENCE_ARCHIVE
-        return status(cfg,
-                      archive=Path(args.status_archive).expanduser().resolve()
-                      if args.status_archive else DEFAULT_REFERENCE_ARCHIVE,
-                      reference_dir=REFERENCE_DIR, every=bool(args.every))
+
+        return status(
+            cfg,
+            archive=Path(args.status_archive).expanduser().resolve()
+            if args.status_archive
+            else DEFAULT_REFERENCE_ARCHIVE,
+            reference_dir=REFERENCE_DIR,
+            every=bool(args.every),
+        )
     if args.cmd == "rig":
-        return rig_evidence(cfg, corpus_dir, timbre=args.timbre,
-                            against=[n.strip() for n in args.against.split(",") if n.strip()])
+        return rig_evidence(
+            cfg,
+            corpus_dir,
+            timbre=args.timbre,
+            against=[n.strip() for n in args.against.split(",") if n.strip()],
+        )
     if args.cmd == "room-match":
         from make_audition import DEFAULT_REFERENCE_ARCHIVE
-        archive = (Path(args.archive).expanduser().resolve() if args.archive
-                   else DEFAULT_REFERENCE_ARCHIVE)
+
+        archive = (
+            Path(args.archive).expanduser().resolve() if args.archive else DEFAULT_REFERENCE_ARCHIVE
+        )
         program = int(cfg.get("program", 0))
         take_id = args.take
         if not take_id:
             held = archived_take_ids(archive, cfg["id"])
-            ordered = [t.id for t in build_takes(cfg.get("takes") or "", program)
-                       ] if cfg.get("takes") in TAKE_SETS else []
+            ordered = (
+                [t.id for t in build_takes(cfg.get("takes") or "", program)]
+                if cfg.get("takes") in TAKE_SETS
+                else []
+            )
             take_id = next((t for t in ordered if t in held), "")
             if not take_id:
                 print(f"no archived phrase reference for {cfg['id']}", file=sys.stderr)
                 return 2
-        return room_match(cfg, archive=archive, take_id=take_id, program=program,
-                          verbose=bool(args.verbose))
+        return room_match(
+            cfg, archive=archive, take_id=take_id, program=program, verbose=bool(args.verbose)
+        )
     if args.cmd == "takes":
         from make_audition import DEFAULT_REFERENCE_ARCHIVE
-        return takes(cfg,
-                     archive=Path(args.archive).expanduser().resolve() if args.archive
-                     else DEFAULT_REFERENCE_ARCHIVE,
-                     only={t.strip() for t in args.only.split(",") if t.strip()},
-                     program=int(cfg.get("program", 0)),
-                     bank=int(cfg.get("bank", 0) or 0))
+
+        return takes(
+            cfg,
+            archive=Path(args.archive).expanduser().resolve()
+            if args.archive
+            else DEFAULT_REFERENCE_ARCHIVE,
+            only={t.strip() for t in args.only.split(",") if t.strip()},
+            program=int(cfg.get("program", 0)),
+            bank=int(cfg.get("bank", 0) or 0),
+        )
     timbre = args.timbre or cfg["timbres"][0]["id"]
     notes_filter = {int(x) for x in args.notes.split(",") if x.strip()}
     if args.cmd == "dynamics":
-        return dynamics(cfg, profile_path, timbre=timbre, notes_filter=notes_filter,
-                        corpus_dir=corpus_dir)
+        return dynamics(
+            cfg, profile_path, timbre=timbre, notes_filter=notes_filter, corpus_dir=corpus_dir
+        )
     if args.cmd == "agree":
         if not profile_path.exists():
             print(f"no profile at {profile_path} — run `profile.py measure` first")
             return 2
-        return agree(cfg, json.loads(profile_path.read_text()), timbre=timbre,
-                     notes_filter=notes_filter, corpus_dir=corpus_dir)
+        return agree(
+            cfg,
+            json.loads(profile_path.read_text()),
+            timbre=timbre,
+            notes_filter=notes_filter,
+            corpus_dir=corpus_dir,
+        )
     if args.gate and args.write_gate:
-        print("--gate and --write-gate are alternatives: one checks the bounds and the "
-              "other replaces them", file=sys.stderr)
+        print(
+            "--gate and --write-gate are alternatives: one checks the bounds and the "
+            "other replaces them",
+            file=sys.stderr,
+        )
         return 2
-    return compare(cfg, profile_path, timbre=timbre, notes_filter=notes_filter,
-                   gate_path=args.gate, write_gate=args.write_gate, margin=args.margin,
-                   corpus_dir=corpus_dir)
+    return compare(
+        cfg,
+        profile_path,
+        timbre=timbre,
+        notes_filter=notes_filter,
+        gate_path=args.gate,
+        write_gate=args.write_gate,
+        margin=args.margin,
+        corpus_dir=corpus_dir,
+    )
 
 
 if __name__ == "__main__":

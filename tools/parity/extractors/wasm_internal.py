@@ -64,9 +64,7 @@ _EMBIND_FREE_RE = re.compile(r'(?<![.\w])function\(\s*"([A-Za-z_]\w*)"')
 # spans newlines so the chained ``module\n    .analyzeSections(...)`` form is
 # captured (that exact spelling is why a single-line ``module\.X`` regex misses
 # real usages).
-_MODULE_REF_RE = re.compile(
-    r"(?:\bmodule\b|requireModule\(\s*\))\s*\.\s*([A-Za-z_]\w*)"
-)
+_MODULE_REF_RE = re.compile(r"(?:\bmodule\b|requireModule\(\s*\))\s*\.\s*([A-Za-z_]\w*)")
 
 
 class WasmScopeError(RuntimeError):

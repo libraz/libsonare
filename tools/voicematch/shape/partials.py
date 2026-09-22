@@ -40,8 +40,9 @@ PEAK_CLEAR_DB = 20.0
 MISS_LIMIT = 2
 
 
-def fit_inharmonicity(sig: np.ndarray, f0: float, sr: int = 48000,
-                      n_partials: int = 12, window=(0.6, 2.6)) -> float:
+def fit_inharmonicity(
+    sig: np.ndarray, f0: float, sr: int = 48000, n_partials: int = 12, window=(0.6, 2.6)
+) -> float:
     """Least-squares B in f_k = k*f0*sqrt(1 + B*k^2), from the signal's own peaks.
 
     Each partial is located by taking the strongest bin in a window that opens
@@ -62,7 +63,7 @@ def fit_inharmonicity(sig: np.ndarray, f0: float, sr: int = 48000,
     has almost no eighth partial, and stopping there would discard the series
     above it.
     """
-    seg = sig[int(window[0] * sr):int(window[1] * sr)]
+    seg = sig[int(window[0] * sr) : int(window[1] * sr)]
     if len(seg) < 4096:
         return 0.0
     sp = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
@@ -86,7 +87,7 @@ def fit_inharmonicity(sig: np.ndarray, f0: float, sr: int = 48000,
         return 0.0
     ks, fs = np.array(ks, float), np.array(fs)
     y = (fs / (ks * f0)) ** 2 - 1.0
-    return float(np.clip(np.dot(ks ** 2, y) / np.dot(ks ** 2, ks ** 2), 0.0, 0.01))
+    return float(np.clip(np.dot(ks**2, y) / np.dot(ks**2, ks**2), 0.0, 0.01))
 
 
 def partial_hz(f0: float, B: float, k: int) -> float:
@@ -114,8 +115,9 @@ def series(f0: float, B: float, f_max: float = 15500.0, k_max: int = 32):
 RESOLVABLE_PARTIAL = 16
 
 
-def harmonic_rows(hz: np.ndarray, f0: float, B: float, tol_octaves: float = 1.0 / 24.0,
-                  max_partial: int = 128):
+def harmonic_rows(
+    hz: np.ndarray, f0: float, B: float, tol_octaves: float = 1.0 / 24.0, max_partial: int = 128
+):
     """Boolean mask of display rows within a quarter tone of any partial.
 
     `max_partial` bounds the series. The default keeps the whole ladder, which
@@ -146,18 +148,19 @@ def band_envelope(sig: np.ndarray, f: float, bw: float, sr: int = 48000) -> np.n
 
 def level_db(env: np.ndarray, t: float, span: float = 0.2, sr: int = 48000) -> float:
     i = int(t * sr)
-    return 20 * np.log10(max(float(np.mean(env[i:i + int(span * sr)])), 1e-14))
+    return 20 * np.log10(max(float(np.mean(env[i : i + int(span * sr)])), 1e-14))
 
 
-def decay_db_s(env: np.ndarray, t0: float, t1: float, floor_db: float = -300.0,
-               sr: int = 48000) -> float | None:
+def decay_db_s(
+    env: np.ndarray, t0: float, t1: float, floor_db: float = -300.0, sr: int = 48000
+) -> float | None:
     """Straight-line decay rate over a window, or None if it dips under the floor.
 
     Returning None rather than a number is the whole point: a rate fitted
     through a stretch where the partial has fallen into the recording's floor is
     a property of the recording.
     """
-    d = 20 * np.log10(np.maximum(env[int(t0 * sr):int(t1 * sr)], 1e-14))
+    d = 20 * np.log10(np.maximum(env[int(t0 * sr) : int(t1 * sr)], 1e-14))
     if len(d) < 200 or d.min() < floor_db:
         return None
     return float(np.polyfit(np.arange(len(d)) / sr, d, 1)[0])
@@ -166,8 +169,9 @@ def decay_db_s(env: np.ndarray, t0: float, t1: float, floor_db: float = -300.0,
 class Track:
     """One note's partial series, with the reference's local floor attached."""
 
-    def __init__(self, ref: np.ndarray, note: int, sr: int = 48000,
-                 k_max: int = 16, f_max: float = 15500.0):
+    def __init__(
+        self, ref: np.ndarray, note: int, sr: int = 48000, k_max: int = 16, f_max: float = 15500.0
+    ):
         self.sr = sr
         self.note = note
         self.f0 = note_hz(note)
@@ -190,5 +194,4 @@ class Track:
 
     def clear(self, k: int, t: float) -> bool:
         """Whether the reference's partial k still stands over the local floor."""
-        return level_db(self.envelope(self._ref, k), t) > \
-            level_db(self.floor(k), t) + BED_CLEAR_DB
+        return level_db(self.envelope(self._ref, k), t) > level_db(self.floor(k), t) + BED_CLEAR_DB

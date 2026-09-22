@@ -183,8 +183,7 @@ def test_a_render_too_short_for_the_attack_window_contributes_nothing():
     assert rows[-1] is None
 
 
-def _string(sr: int, b: float, n_partials: int = 12, f0: float = 55.0,
-            step_db: float = 3.0):
+def _string(sr: int, b: float, n_partials: int = 12, f0: float = 55.0, step_db: float = 3.0):
     """An A1 whose partials are stretched by stiffness `b`, on a known ladder."""
     t = np.arange(int(3.0 * sr)) / sr
     y = np.zeros_like(t)
@@ -262,11 +261,10 @@ def _band_limited_low_excess(sr: int):
     confined, or the test proves nothing about where the deltas came from.
     """
     t = np.arange(int(1.0 * sr)) / sr
-    tone = sum(10 ** (-2.0 * (k - 1) / 20) * np.sin(2 * np.pi * 110 * k * t)
-               for k in range(1, 25))
-    env = np.where(t < 0.08,
-                   0.5 * (1 - np.cos(np.pi * np.clip(t / 0.008, 0, 1))) * np.exp(-t * 40),
-                   0.0)
+    tone = sum(10 ** (-2.0 * (k - 1) / 20) * np.sin(2 * np.pi * 110 * k * t) for k in range(1, 25))
+    env = np.where(
+        t < 0.08, 0.5 * (1 - np.cos(np.pi * np.clip(t / 0.008, 0, 1))) * np.exp(-t * 40), 0.0
+    )
     return tone, tone + 6.0 * np.sin(2 * np.pi * 40.0 * t) * env
 
 
@@ -281,8 +279,8 @@ def test_a_low_band_defect_does_not_fabricate_deltas_in_the_bands_above_it():
     note = Note(45, 96, 0.0, 1.0)
     a = attack_low_bands(clean, sr, note, 0.0)
     b = attack_low_bands(defective, sr, note, 0.0)
-    assert b[0] - a[0] > 20.0                      # 20-60 Hz: the defect
-    for i in (2, 3, 4):                            # 200 Hz and up: untouched
+    assert b[0] - a[0] > 20.0  # 20-60 Hz: the defect
+    for i in (2, 3, 4):  # 200 Hz and up: untouched
         assert a[i] == pytest.approx(b[i], abs=0.01)
 
 
@@ -312,10 +310,12 @@ def _velocity_probe(sr: int, brightness):
         t = np.arange(int(n.dur * sr)) / sr
         f0 = 440.0 * 2.0 ** ((n.note - 69) / 12.0)
         rise = brightness(n.velocity)
-        s = sum(10 ** ((-3.0 * (k - 1) + rise * (k - 1)) / 20.0)
-                * np.sin(2 * np.pi * f0 * k * t) for k in range(1, 11))
+        s = sum(
+            10 ** ((-3.0 * (k - 1) + rise * (k - 1)) / 20.0) * np.sin(2 * np.pi * f0 * k * t)
+            for k in range(1, 11)
+        )
         at = int(n.start * sr)
-        y[at:at + len(t)] += s * np.exp(-t * 1.5)
+        y[at : at + len(t)] += s * np.exp(-t * 1.5)
     return pattern, y
 
 
@@ -528,7 +528,9 @@ def test_a_long_gate_does_not_put_the_sustain_window_after_the_note():
     sr = 48000
     t = np.arange(int(10.0 * sr)) / sr
     # A treble note that is over well before the old window began.
-    dead = (np.sin(2 * np.pi * 2093.0 * t) + 0.3 * np.sin(2 * np.pi * 4186.0 * t)) * np.exp(-t * 4.0)
+    dead = (np.sin(2 * np.pi * 2093.0 * t) + 0.3 * np.sin(2 * np.pi * 4186.0 * t)) * np.exp(
+        -t * 4.0
+    )
     note = Note(96, 88, 0.0, 8.0)
     got = analyze_note(dead, sr, note, 10.0)
     # h2 is 10 dB under h1 in the signal; measured after the note it would be
@@ -596,8 +598,14 @@ def test_a_stiffness_fit_with_too_few_partials_is_not_counted():
 # --------------------------------------------------------------------------- #
 # Attack peaks and the fixed-resonance attribution
 # --------------------------------------------------------------------------- #
-def _rung_note(sr: int, f0: float, ring_hz: float | None,
-               ring_db: float = -12.0, b: float = 0.0, top_hz: float = 3600.0):
+def _rung_note(
+    sr: int,
+    f0: float,
+    ring_hz: float | None,
+    ring_db: float = -12.0,
+    b: float = 0.0,
+    top_hz: float = 3600.0,
+):
     """A struck string, optionally with a free resonance ringing over its attack.
 
     The ring decays inside the attack window and the partials do not, which is
@@ -647,6 +655,7 @@ def test_a_window_the_render_cannot_fill_reports_no_peaks_rather_than_inventing_
 def test_a_partial_is_on_its_series_and_a_free_ring_is_not():
     """`partial_offset` is the whole basis of telling the two apart."""
     from metrics import MAX_EXTRAPOLATED_PARTIAL, partial_offset
+
     f0 = 261.6
     assert partial_offset(f0 * 10, f0, 0.0) == pytest.approx(0.0, abs=1e-6)
     assert partial_offset(f0 * 10.5, f0, 0.0) == pytest.approx(0.5, abs=1e-6)
@@ -671,6 +680,7 @@ def _between_partials(f0s, near_hz: float) -> float:
     number silently stops being off-partial the moment a note changes.
     """
     from metrics import partial_offset
+
     best, best_off = near_hz, -1.0
     for hz in np.arange(near_hz - 400.0, near_hz + 400.0, 1.0):
         offs = [partial_offset(float(hz), f0, 0.0) for f0 in f0s]
@@ -709,8 +719,9 @@ def test_a_ring_on_only_one_note_is_not_called_fixed():
     """One note cannot tell a resonance from a coincidence in its own spectrum."""
     sr = 48000
     ring = _between_partials([f0 for _, f0 in _RES_NOTES], 9700.0)
-    rows = _resonance_rows(sr, [(_RES_NOTES[0][0], _RES_NOTES[0][1], ring),
-                                (_RES_NOTES[1][0], _RES_NOTES[1][1], None)])
+    rows = _resonance_rows(
+        sr, [(_RES_NOTES[0][0], _RES_NOTES[0][1], ring), (_RES_NOTES[1][0], _RES_NOTES[1][1], None)]
+    )
     assert loss_module.fixed_resonances(rows) == []
 
 
@@ -753,7 +764,7 @@ def test_an_octave_pair_on_a_harmonic_voice_cannot_corroborate_a_ring():
     and there the measure reports nothing rather than guessing.
     """
     sr = 48000
-    ring = 261.63 * 37.5           # exactly midway for C4, a quarter off for C5
+    ring = 261.63 * 37.5  # exactly midway for C4, a quarter off for C5
     rows = _resonance_rows(sr, [(60, 261.63, ring), (72, 523.25, ring)])
     assert all(r["attack_peaks"] for r in rows), "both notes must have found the ring"
     assert loss_module.fixed_resonances(rows) == []

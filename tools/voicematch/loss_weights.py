@@ -34,7 +34,10 @@ TERM_UNITS = {
     # uniform dB of error reads under one unit there and exactly one in `init`.
     "harm": 1.0 * HARM_REACH,
     "init": 1.0 * HARM_REACH,
-    "modes": 1.0, "cents": 1.0, "tnr": 1.0, "mod": 0.5,
+    "modes": 1.0,
+    "cents": 1.0,
+    "tnr": 1.0,
+    "mod": 0.5,
     # Three parts — sustain slope, release, attack — each already divided by
     # roughly the amount of it that is audible, so one unit is one such step on
     # all three. A decibel per second over the probe's two-second hold is two
@@ -42,21 +45,28 @@ TERM_UNITS = {
     "env": 3.0,
     # Twelve cells (two decay bands over six harmonics) and six, each carrying
     # a dB/s already divided by ten, so one unit is one dB/s on every cell.
-    "slope": 0.1 * 12, "tail": 0.1 * 6,
+    "slope": 0.1 * 12,
+    "tail": 0.1 * 6,
     # Thirty cells for the attack's high bands, five bands over six slices, at a
     # dB each. `lf` carries no count on purpose and is the one exception to the
     # rule above: it AVERAGES its bands rather than summing them, so that its
     # harmonic and percussion branches can share one name — see `loss.py`.
-    "hf": 1.0 * 30, "lf": 1.0,
+    "hf": 1.0 * 30,
+    "lf": 1.0,
     "stiff": 1.0,
-    "level": 0.5, "crest": 0.5, "dyn": 0.5,
+    "level": 0.5,
+    "crest": 0.5,
+    "dyn": 0.5,
     # The third-octave profile's twenty-five bands at a dB each, and its eight
     # octave decay rates at a tenth of a doubling each.
-    "mss": 0.01, "band": 1.0 * 25, "bdecay": 0.1 * 8,
+    "mss": 0.01,
+    "band": 1.0 * 25,
+    "bdecay": 0.1 * 8,
     # A decibel of tilt and five per cent of centroid: both are quantities a
     # listener names before anything else about a kit piece, and both are well
     # inside what two takes of the same drum differ by.
-    "tilt": 1.0, "bright": 5.0,
+    "tilt": 1.0,
+    "bright": 5.0,
     # A tenth of a doubling: about a semitone and a half of pitch, 7 % of a
     # decay, or 0.6 dB of level. Below that the relation is inside the
     # reference's own strike-to-strike variation.
@@ -86,8 +96,9 @@ def cli_weights(args) -> dict[str, float]:
     """
     percussive = getattr(args, "percussive", False)
     drum_note = getattr(args, "drum_note", None)
-    weights = default_weights(getattr(args, "program", 0), drum_note=drum_note,
-                              percussive=percussive)
+    weights = default_weights(
+        getattr(args, "program", 0), drum_note=drum_note, percussive=percussive
+    )
     if not getattr(args, "has_analysis_notes", True):
         # A probe with nothing to analyse a note at a time — `scale`,
         # `room-probe`. Only the whole-timeline term can say anything, so the
@@ -139,8 +150,9 @@ def refused_weights(args) -> list[str]:
     defaults are filtered by the same rule on purpose.
     """
     group = set(measured_terms(getattr(args, "percussive", False)))
-    return [t for t in LOSS_TERMS
-            if t not in group and (getattr(args, f"w_{t}", None) or 0.0) > 0.0]
+    return [
+        t for t in LOSS_TERMS if t not in group and (getattr(args, f"w_{t}", None) or 0.0) > 0.0
+    ]
 
 
 #: Which probe-shape flag each class default depends on, and what is missing
@@ -164,8 +176,7 @@ def unmeasurable_terms(args) -> list[tuple[str, str]]:
     also the term's best possible value — so a report that trusts the number
     says the voice matches where nothing was compared.
     """
-    return [(t, why) for t, (flag, why) in DROP_REASONS.items()
-            if not getattr(args, flag, True)]
+    return [(t, why) for t, (flag, why) in DROP_REASONS.items() if not getattr(args, flag, True)]
 
 
 def dropped_weights(args) -> list[tuple[str, str]]:
@@ -178,13 +189,19 @@ def dropped_weights(args) -> list[tuple[str, str]]:
     same time. The two never overlap, since a named weight is refused instead.
     """
     if not getattr(args, "has_analysis_notes", True):
-        return []       # every per-note default went at once; naming them is noise
-    asked = default_weights(getattr(args, "program", 0),
-                            drum_note=getattr(args, "drum_note", None),
-                            percussive=getattr(args, "percussive", False))
-    return [(t, why) for t, (flag, why) in DROP_REASONS.items()
-            if asked.get(t, 0.0) > 0.0 and getattr(args, f"w_{t}", None) is None
-            and not getattr(args, flag, True)]
+        return []  # every per-note default went at once; naming them is noise
+    asked = default_weights(
+        getattr(args, "program", 0),
+        drum_note=getattr(args, "drum_note", None),
+        percussive=getattr(args, "percussive", False),
+    )
+    return [
+        (t, why)
+        for t, (flag, why) in DROP_REASONS.items()
+        if asked.get(t, 0.0) > 0.0
+        and getattr(args, f"w_{t}", None) is None
+        and not getattr(args, flag, True)
+    ]
 
 
 # Which key carries the count of data points each averaged term was measured
@@ -301,18 +318,20 @@ class LossWeights:
             cells = terms.get(f"{name}_cells")
             if cells is None or cells > terms.get(f"{name}_capped", 0.0):
                 continue
-            share = (self.weights[name] * terms.get(name, 0.0) / TERM_UNITS[name]
-                     / (self.reference or 1.0))
+            share = (
+                self.weights[name]
+                * terms.get(name, 0.0)
+                / TERM_UNITS[name]
+                / (self.reference or 1.0)
+            )
             out.append((name, share, cells))
         return sorted(out, key=lambda e: -e[1])
 
     def calibrate(self, terms: dict[str, float]) -> None:
         """Adopt `terms` as the reference point every term is measured against."""
         self.scales = dict(TERM_UNITS)
-        self.baseline_counts = {t: float(terms.get(key, 0.0))
-                                for t, key in TERM_COUNT_KEYS.items()}
-        self.baseline_units = {t: terms.get(t, 0.0) / TERM_UNITS[t]
-                               for t in LOSS_TERMS}
+        self.baseline_counts = {t: float(terms.get(key, 0.0)) for t, key in TERM_COUNT_KEYS.items()}
+        self.baseline_units = {t: terms.get(t, 0.0) / TERM_UNITS[t] for t in LOSS_TERMS}
         # Divide by the reference point's own score rather than by the sum of
         # the weights: the terms no longer start at one unit each, so the weight
         # sum is not what the start actually scores, and a loss whose start is

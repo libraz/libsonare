@@ -51,8 +51,9 @@ def beat_to_seconds(work: dict) -> callable:
     a different number of seconds in each span.
     """
     tpb = float(work.get("ticks_per_beat") or 480)
-    marks = sorted(((t["tick"] / tpb, float(t["bpm"])) for t in work.get("tempos") or []),
-                   key=lambda m: m[0])
+    marks = sorted(
+        ((t["tick"] / tpb, float(t["bpm"])) for t in work.get("tempos") or []), key=lambda m: m[0]
+    )
     if not marks or marks[0][0] > 0:
         marks.insert(0, (0.0, 120.0))
     # Cumulative seconds at the start of each tempo span.
@@ -78,8 +79,13 @@ def beat_to_seconds(work: dict) -> callable:
 def cut(work: dict, *, roles: list[str], first_beat: float, last_beat: float) -> list[dict]:
     """Every note of the named tracks whose onset falls in the beat window."""
     convert = beat_to_seconds(work)
-    kept = [n for t in work["tracks"] if not roles or t["role"] in roles
-            for n in t["notes"] if first_beat <= n["onset"] < last_beat]
+    kept = [
+        n
+        for t in work["tracks"]
+        if not roles or t["role"] in roles
+        for n in t["notes"]
+        if first_beat <= n["onset"] < last_beat
+    ]
     if not kept:
         return []
     # Anchored on the first note rather than on the window, so a passage with an
@@ -94,22 +100,33 @@ def cut(work: dict, *, roles: list[str], first_beat: float, last_beat: float) ->
                 continue
             start = convert(n["onset"]) - zero + LEAD_IN_S
             end = convert(n["onset"] + n["duration"]) - zero + LEAD_IN_S
-            out.append({
-                "pitch": int(n["pitch"]),
-                "velocity": int(n["velocity"]),
-                "start": round(start, 4),
-                "duration": round(max(end - start, 0.02), 4),
-            })
+            out.append(
+                {
+                    "pitch": int(n["pitch"]),
+                    "velocity": int(n["velocity"]),
+                    "start": round(start, 4),
+                    "duration": round(max(end - start, 0.02), 4),
+                }
+            )
     return sorted(out, key=lambda n: (n["start"], n["pitch"]))
 
 
-def build(stem: str, *, ident: str, label: str, note: str, roles: list[str],
-          first_beat: float, last_beat: float) -> dict:
+def build(
+    stem: str,
+    *,
+    ident: str,
+    label: str,
+    note: str,
+    roles: list[str],
+    first_beat: float,
+    last_beat: float,
+) -> dict:
     path = corpus_root() / f"{stem}.json"
     if not path.is_file():
         raise SystemExit(
             f"{path} not found. Set SONARE_BACH_ROOT to the corpus, or leave the "
-            f"committed excerpt alone — rendering one needs nothing.")
+            f"committed excerpt alone — rendering one needs nothing."
+        )
     work = json.loads(path.read_text())
     notes = cut(work, roles=roles, first_beat=first_beat, last_beat=last_beat)
     if not notes:
@@ -117,8 +134,8 @@ def build(stem: str, *, ident: str, label: str, note: str, roles: list[str],
     span = max(n["start"] + n["duration"] for n in notes)
     return {
         "_": "Committed note data, cut from a Bach corpus by extract_excerpt.py. "
-             "Judged by ear; nothing measures it. Velocity is flat across the "
-             "source piece, so this says nothing about velocity response.",
+        "Judged by ear; nothing measures it. Velocity is flat across the "
+        "source piece, so this says nothing about velocity response.",
         "id": ident,
         "label": label,
         "note": note,
@@ -141,39 +158,65 @@ def build(stem: str, *, ident: str, label: str, note: str, roles: list[str],
 #: that an isolated note cannot. A class rather than an instrument, because a
 #: musical take has to exist for every program and only four have a capture.
 CUTS = [
-    {"stem": "BWV846_prelude", "ident": "bwv846-prelude", "roles": ["manual"],
-         "first_beat": 0.0, "last_beat": 16.0,
-         "label": "WTC I — Prelude in C, opening",
-         "note": "broken chords held under each other: the bloom of overlapping "
-              "decays, and whether the next entry has room"},
-    {"stem": "BWV847_fugue", "ident": "bwv847-fugue", "roles": ["manual"],
-         "first_beat": 0.0, "last_beat": 18.0,
-         "label": "WTC I — Fugue in C minor, subject and answer",
-         "note": "two entries of one subject in different registers: whether the "
-              "ring of the first is still audible under the second"},
-    {"stem": "BWV639", "ident": "bwv639-chorale", "roles": ["manual", "pedal"],
-         "first_beat": 0.0, "last_beat": 8.0,
-         "label": "Ich ruf zu dir, BWV 639 — opening",
-         "note": "a sustained line over a moving inner voice and a pedal: register "
-              "balance across three parts that never stop"},
-    {"stem": "BWV996_1", "ident": "bwv996-prelude", "roles": ["v1", "v2"],
-         "first_beat": 0.0, "last_beat": 14.0,
-         "label": "Lute Suite BWV 996 — Praeludium, opening",
-         "note": "a plucked line against a held bass: how long a pluck lasts under "
-              "the next one, and whether the bass survives it"},
-    {"stem": "BWV1007_1", "ident": "bwv1007-prelude", "roles": ["solo_0", "solo_1"],
-         "first_beat": 0.0, "last_beat": 12.0,
-         "label": "Cello Suite No. 1 — Prelude, opening",
-         "note": "one line across a wide compass, mostly stepwise: where a bowed or "
-              "blown voice changes character as it climbs"},
+    {
+        "stem": "BWV846_prelude",
+        "ident": "bwv846-prelude",
+        "roles": ["manual"],
+        "first_beat": 0.0,
+        "last_beat": 16.0,
+        "label": "WTC I — Prelude in C, opening",
+        "note": "broken chords held under each other: the bloom of overlapping "
+        "decays, and whether the next entry has room",
+    },
+    {
+        "stem": "BWV847_fugue",
+        "ident": "bwv847-fugue",
+        "roles": ["manual"],
+        "first_beat": 0.0,
+        "last_beat": 18.0,
+        "label": "WTC I — Fugue in C minor, subject and answer",
+        "note": "two entries of one subject in different registers: whether the "
+        "ring of the first is still audible under the second",
+    },
+    {
+        "stem": "BWV639",
+        "ident": "bwv639-chorale",
+        "roles": ["manual", "pedal"],
+        "first_beat": 0.0,
+        "last_beat": 8.0,
+        "label": "Ich ruf zu dir, BWV 639 — opening",
+        "note": "a sustained line over a moving inner voice and a pedal: register "
+        "balance across three parts that never stop",
+    },
+    {
+        "stem": "BWV996_1",
+        "ident": "bwv996-prelude",
+        "roles": ["v1", "v2"],
+        "first_beat": 0.0,
+        "last_beat": 14.0,
+        "label": "Lute Suite BWV 996 — Praeludium, opening",
+        "note": "a plucked line against a held bass: how long a pluck lasts under "
+        "the next one, and whether the bass survives it",
+    },
+    {
+        "stem": "BWV1007_1",
+        "ident": "bwv1007-prelude",
+        "roles": ["solo_0", "solo_1"],
+        "first_beat": 0.0,
+        "last_beat": 12.0,
+        "label": "Cello Suite No. 1 — Prelude, opening",
+        "note": "one line across a wide compass, mostly stepwise: where a bowed or "
+        "blown voice changes character as it climbs",
+    },
 ]
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--only", default="", help="comma-separated excerpt ids")
-    ap.add_argument("--check", action="store_true",
-                    help="fail if a committed excerpt differs from a fresh cut")
+    ap.add_argument(
+        "--check", action="store_true", help="fail if a committed excerpt differs from a fresh cut"
+    )
     args = ap.parse_args()
 
     wanted = {s.strip() for s in args.only.split(",") if s.strip()}
@@ -190,8 +233,9 @@ def main() -> int:
             continue
         path.write_text(payload)
         got = json.loads(payload)
-        print(f"{path.name:24s} {got['seconds']:5.1f}s  {len(got['notes']):3d} notes  "
-              f"{got['label']}")
+        print(
+            f"{path.name:24s} {got['seconds']:5.1f}s  {len(got['notes']):3d} notes  {got['label']}"
+        )
     if args.check:
         if stale:
             print("excerpts differ from a fresh cut: " + ", ".join(stale))

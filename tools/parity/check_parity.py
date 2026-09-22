@@ -145,9 +145,7 @@ def _audit_allowlist(rep, selected: list[str], path: Path) -> int:
         return 0
     # Why the comparison behind an entry produced nothing, where the run derived
     # one: the reason is what tells a reader whether to delete or to look closer.
-    declined = {
-        (n["category"], n["key"], n["surface"]): n["reason"] for n in rep.not_compared
-    }
+    declined = {(n["category"], n["key"], n["surface"]): n["reason"] for n in rep.not_compared}
     print(
         f"{len(expired)} allowlist entr(ies) no longer suppress a divergence: {path}",
         file=sys.stderr,
@@ -227,9 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     selected = [s.strip() for s in args.surface.split(",") if s.strip()]
     invalid = [s for s in selected if s not in SURFACES]
     if invalid:
-        ap.error(
-            f"unknown surface(s): {', '.join(invalid)} (valid: {', '.join(SURFACES)})"
-        )
+        ap.error(f"unknown surface(s): {', '.join(invalid)} (valid: {', '.join(SURFACES)})")
     if "c" not in selected:
         selected = ["c", *selected]  # C is the canonical reference; always needed.
     # Preserve canonical surface order.

@@ -67,8 +67,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     errors = validate_manifest(value)
     if errors:
         raise ValueError(
-            "manifest schema validation failed:\n"
-            + "\n".join(f"- {error}" for error in errors)
+            "manifest schema validation failed:\n" + "\n".join(f"- {error}" for error in errors)
         )
     return value
 
@@ -111,16 +110,13 @@ def _resolved_python_library(python_executable: str, timeout: float) -> str | No
         return None
     cwd = ROOT / "bindings" / "python"
     environment = os.environ.copy()
-    environment["PYTHONPATH"] = (
-        str(cwd / "src") + os.pathsep + environment.get("PYTHONPATH", "")
-    )
+    environment["PYTHONPATH"] = str(cwd / "src") + os.pathsep + environment.get("PYTHONPATH", "")
     try:
         completed = subprocess.run(
             [
                 python_executable,
                 "-c",
-                ("from libsonare._ffi import resolved_library_path;"
-                "print(resolved_library_path())"),
+                ("from libsonare._ffi import resolved_library_path;print(resolved_library_path())"),
             ],
             cwd=str(cwd),
             env=environment,
@@ -182,9 +178,7 @@ def _uncompiled_source_dirs() -> frozenset[Path]:
     for directory in {path.parent for path in src_root.rglob("*") if path.is_file()}:
         if directory in compiled:
             continue
-        if any(
-            child.suffix in _TRANSLATION_UNIT_SUFFIXES for child in directory.iterdir()
-        ):
+        if any(child.suffix in _TRANSLATION_UNIT_SUFFIXES for child in directory.iterdir()):
             uncompiled.add(directory)
     return frozenset(uncompiled)
 
@@ -286,8 +280,10 @@ def _check_artifact_skew(
     report.append(
         (
             "fail",
-            (f"artifact skew: {straddling.relative_to(ROOT)} changed after {behind} "
-            f"was linked and before {ahead} was -- rebuild both before comparing"),
+            (
+                f"artifact skew: {straddling.relative_to(ROOT)} changed after {behind} "
+                f"was linked and before {ahead} was -- rebuild both before comparing"
+            ),
         )
     )
     return True
@@ -322,9 +318,7 @@ def _run(
             command = [executable, "-m", "libsonare.cli", *argv]
         cwd = ROOT / "bindings" / "python"
         python_src = str(cwd / "src")
-        environment["PYTHONPATH"] = (
-            python_src + os.pathsep + environment.get("PYTHONPATH", "")
-        )
+        environment["PYTHONPATH"] = python_src + os.pathsep + environment.get("PYTHONPATH", "")
     try:
         completed = subprocess.run(
             command,
@@ -394,9 +388,7 @@ def _disabled_features(
     result = _run(surface, executable, ["doctor", "--json"], False, timeout)
     if result["returncode"] != 0 or not result["stdout"].strip():
         detail = result.get("error") or f"exit {result['returncode']}"
-        report.append(
-            ("expected", f"{surface}: doctor --json is not available ({detail})")
-        )
+        report.append(("expected", f"{surface}: doctor --json is not available ({detail})"))
         return frozenset()
     try:
         document = parse_single_json(result["stdout"])
@@ -424,9 +416,7 @@ def _disabled_features(
                 f"{surface}: doctor --json omits build features {', '.join(missing)}",
             )
         )
-    return frozenset(
-        name for name in _FEATURE_NAMES if features.get(name) is False
-    )
+    return frozenset(name for name in _FEATURE_NAMES if features.get(name) is False)
 
 
 def _inventory_checks(
@@ -450,7 +440,9 @@ def _inventory_checks(
     try:
         value = parse_single_json(result["stdout"])
     except ValueError as exc:
-        message = f"inventory.{surface}: --dump-cli-contract did not return one JSON document ({exc})"
+        message = (
+            f"inventory.{surface}: --dump-cli-contract did not return one JSON document ({exc})"
+        )
         report.append(
             (
                 "expected",
@@ -610,9 +602,7 @@ def _run_active_cases(
             )
             if result["returncode"] != case["exit"]:
                 detail = result.get("error") or f"got exit {result['returncode']}"
-                report.append(
-                    ("fail", f"{label}: expected exit {case['exit']}, {detail}")
-                )
+                report.append(("fail", f"{label}: expected exit {case['exit']}, {detail}"))
             expected_stderr = case.get("stderr")
             if expected_stderr is not None and (
                 (expected_stderr == "empty") != (not result["stderr"].strip())
@@ -620,8 +610,10 @@ def _run_active_cases(
                 report.append(
                     (
                         "fail",
-                        (f"{label}: expected {expected_stderr} stderr, "
-                        f"got {result['stderr'][:160]!r}"),
+                        (
+                            f"{label}: expected {expected_stderr} stderr, "
+                            f"got {result['stderr'][:160]!r}"
+                        ),
                     )
                 )
             _check_text_expectations(case, result, label, report)
@@ -637,22 +629,16 @@ def _run_active_cases(
                 # A case printing text still writes its artifact, and the bytes are
                 # the point of declaring one: without this the declaration sits on
                 # the case and nothing reads it.
-                _check_artifact(
-                    case["artifact"], contract, None, normal_paths, label, report
-                )
+                _check_artifact(case["artifact"], contract, None, normal_paths, label, report)
             else:
                 try:
                     parsed = parse_single_json(result["stdout"])
                 except ValueError as exc:
                     report.append(("fail", f"{label}: {exc}"))
                 if parsed is not None and case["payload"] != "none":
-                    _validate_case_payload(
-                        path, case, parsed, contract, surface, label, report
-                    )
+                    _validate_case_payload(path, case, parsed, contract, surface, label, report)
                     payloads[(path, case["id"])] = parsed
-                    _check_artifact(
-                        case["artifact"], contract, parsed, normal_paths, label, report
-                    )
+                    _check_artifact(case["artifact"], contract, parsed, normal_paths, label, report)
             legacy_paths = dict(paths)
             if case["artifact"] != "none":
                 artifact = contract["artifacts"][case["artifact"]]
@@ -670,10 +656,7 @@ def _run_active_cases(
                 timeout,
             )
             if legacy_result["returncode"] != case["legacy_exit"]:
-                detail = (
-                    legacy_result.get("error")
-                    or f"got exit {legacy_result['returncode']}"
-                )
+                detail = legacy_result.get("error") or f"got exit {legacy_result['returncode']}"
                 report.append(
                     (
                         "fail",
@@ -686,8 +669,10 @@ def _run_active_cases(
                 report.append(
                     (
                         "fail",
-                        (f"{label} [legacy]: expected {expected_stderr} stderr, "
-                        f"got {legacy_result['stderr'][:160]!r}"),
+                        (
+                            f"{label} [legacy]: expected {expected_stderr} stderr, "
+                            f"got {legacy_result['stderr'][:160]!r}"
+                        ),
                     )
                 )
             _check_text_expectations(case, legacy_result, f"{label} [legacy]", report)
@@ -743,8 +728,7 @@ def _run_active_cases(
                                 report.append(
                                     (
                                         "fail",
-                                        mismatch
-                                        + " (legacy payload must match normal mode)",
+                                        mismatch + " (legacy payload must match normal mode)",
                                     )
                                 )
                         if case["artifact"] != "none":
@@ -795,8 +779,7 @@ def _check_text_expectations(
                 report.append(
                     (
                         "fail",
-                        (f"{label}: expected {stream} to contain {needle!r}, "
-                        f"got {actual[:160]!r}"),
+                        (f"{label}: expected {stream} to contain {needle!r}, got {actual[:160]!r}"),
                     )
                 )
     for needle in case.get("stdout_excludes") or []:
@@ -804,8 +787,10 @@ def _check_text_expectations(
             report.append(
                 (
                     "fail",
-                    (f"{label}: expected stdout not to contain {needle!r}, "
-                    f"got {result['stdout'][:160]!r}"),
+                    (
+                        f"{label}: expected stdout not to contain {needle!r}, "
+                        f"got {result['stdout'][:160]!r}"
+                    ),
                 )
             )
 
@@ -834,9 +819,7 @@ def _run_parser_cases(
         if gating:
             if result["returncode"] not in _accepted_gated_exits(expected_exit):
                 detail = f"got exit {result['returncode']}"
-                report.append(
-                    ("fail", f"{label}: gated off by {sorted(gating)}, {detail}")
-                )
+                report.append(("fail", f"{label}: gated off by {sorted(gating)}, {detail}"))
             continue
         if result["returncode"] != expected_exit:
             detail = result.get("error") or f"got exit {result['returncode']}"
@@ -895,12 +878,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--native", help="native sonare-cli executable")
     parser.add_argument("--python", help="Python interpreter or sonare console script")
     parser.add_argument("--timeout", type=float, default=30.0)
-    parser.add_argument(
-        "--schema", action="store_true", help="validate the manifest only"
-    )
-    parser.add_argument(
-        "--list", action="store_true", help="validate and list manifest paths"
-    )
+    parser.add_argument("--schema", action="store_true", help="validate the manifest only")
+    parser.add_argument("--list", action="store_true", help="validate and list manifest paths")
     parser.add_argument(
         "--emit-shared-option-snapshot",
         action="store_true",
@@ -917,9 +896,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.schema and args.list:
         print("--schema and --list are mutually exclusive", file=sys.stderr)
         return 2
-    if args.emit_shared_option_snapshot and (
-        args.schema or args.list or args.no_inventory
-    ):
+    if args.emit_shared_option_snapshot and (args.schema or args.list or args.no_inventory):
         print(
             "--emit-shared-option-snapshot cannot be combined with "
             "--schema, --list, or --no-inventory",
@@ -994,12 +971,8 @@ def main(argv: list[str] | None = None) -> int:
     # unconditionally, so a feature-off library changes what its commands DO
     # rather than which ones it lists -- but the active-case half applies to
     # both, because a command whose subsystem is absent cannot run on either.
-    native_disabled = _disabled_features(
-        "native", native_executable, args.timeout, report
-    )
-    python_disabled = _disabled_features(
-        "python", python_executable, args.timeout, report
-    )
+    native_disabled = _disabled_features("native", native_executable, args.timeout, report)
+    python_disabled = _disabled_features("python", python_executable, args.timeout, report)
     for surface, missing in (
         ("native", native_disabled),
         ("python", python_disabled),
@@ -1060,10 +1033,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 if mismatch:
                     report.append(("fail", f"surface comparison: {mismatch}"))
-                if (
-                    path == "project.validate"
-                    and case["id"] == "warning_strict_artifact"
-                ):
+                if path == "project.validate" and case["id"] == "warning_strict_artifact":
                     warning_key = (path, "warning")
                     if warning_key in native_payloads:
                         mismatch = _compare_values(

@@ -42,8 +42,9 @@ DECAY_WINDOW = (0.5, 3.5)
 DECAY_BINS = ((60, 250), (250, 700), (700, 2000), (2000, 5000), (5000, 15500))
 
 
-def tail_residue(spectro, sig, note, bed=None, band=METAL_BAND,
-                 tail=METAL_TAIL, early=METAL_EARLY) -> float:
+def tail_residue(
+    spectro, sig, note, bed=None, band=METAL_BAND, tail=METAL_TAIL, early=METAL_EARLY
+) -> float:
     """Late residue inside a band, relative to the note's own early level, in dB.
 
     The loss has a residue term already and it does not catch this, for three
@@ -61,6 +62,7 @@ def tail_residue(spectro, sig, note, bed=None, band=METAL_BAND,
     decayed: the denominator is how loud the note was, not how loud its floor is.
     """
     from .partials import fit_inharmonicity, harmonic_rows, note_hz
+
     G = spectro(sig)[0]
     if bed is not None:
         G, _ = bed.clean(spectro, G, 0)
@@ -89,12 +91,13 @@ def sustain_colour(track: Track, sig: np.ndarray, t: float = COLOUR_T) -> float 
     mid = [lv[k] for k in range(COLOUR_MID[0], COLOUR_MID[1] + 1) if k in lv]
     if not low or not mid:
         return None
-    return float(10 * np.log10(np.mean(10 ** (np.array(mid) / 10.0)))
-                 - 10 * np.log10(np.mean(10 ** (np.array(low) / 10.0))))
+    return float(
+        10 * np.log10(np.mean(10 ** (np.array(mid) / 10.0)))
+        - 10 * np.log10(np.mean(10 ** (np.array(low) / 10.0)))
+    )
 
 
-def decay_profile(track: Track, sig: np.ndarray, window=DECAY_WINDOW,
-                  guard: bool = True):
+def decay_profile(track: Track, sig: np.ndarray, window=DECAY_WINDOW, guard: bool = True):
     """[(frequency, rate in dB/s)] for every partial usable on the reference.
 
     `guard` withholds a partial whose reference envelope has fallen into the
@@ -132,8 +135,17 @@ def onset_profile(sig: np.ndarray, sr: int = 48000, start: float = 0.1):
 
 
 #: Octave bands for the balance probe, from the bottom of a keyboard upward.
-BALANCE_BANDS = ((30, 60), (60, 125), (125, 250), (250, 500), (500, 1000),
-                 (1000, 2000), (2000, 4000), (4000, 8000), (8000, 16000))
+BALANCE_BANDS = (
+    (30, 60),
+    (60, 125),
+    (125, 250),
+    (250, 500),
+    (500, 1000),
+    (1000, 2000),
+    (2000, 4000),
+    (4000, 8000),
+    (8000, 16000),
+)
 
 
 def band_balance(spectro, sig, window, bands=BALANCE_BANDS):
@@ -150,12 +162,15 @@ def band_balance(spectro, sig, window, bands=BALANCE_BANDS):
     hz = spectro.rows_hz(0)
     col = (10.0 ** (G / 10.0))[:, spectro.columns(0, G.shape[1], *window)].mean(axis=1)
     total = max(float(col.sum()), 1e-30)
-    return {b: 10 * np.log10(max(float(col[(hz >= b[0]) & (hz < b[1])].sum()), 1e-30)
-                             / total) for b in bands}
+    return {
+        b: 10 * np.log10(max(float(col[(hz >= b[0]) & (hz < b[1])].sum()), 1e-30) / total)
+        for b in bands
+    }
 
 
-def partial_census(track: Track, sig: np.ndarray, t: float = 1.0,
-                   floor_db: float = 60.0, k_max: int = 40):
+def partial_census(
+    track: Track, sig: np.ndarray, t: float = 1.0, floor_db: float = 60.0, k_max: int = 40
+):
     """How many of the note's partials are still audible, and how high they go.
 
     Richness is partly just count. A tone carrying eight partials and one
@@ -167,6 +182,7 @@ def partial_census(track: Track, sig: np.ndarray, t: float = 1.0,
     series reaches before it disappears.
     """
     from .partials import partial_hz
+
     lv = {}
     for k in range(1, k_max + 1):
         f = partial_hz(track.f0, track.B, k)

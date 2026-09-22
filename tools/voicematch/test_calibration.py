@@ -42,6 +42,7 @@ def _variant(name: str, overrides: str = "x=1", **extra) -> dict:
 # The shipped file
 # --------------------------------------------------------------------------- #
 
+
 def test_the_shipped_file_loads():
     """A syntax error here is found by a run that has already started rendering."""
     assert isinstance(calibration.load(), dict)
@@ -92,16 +93,24 @@ def test_documentation_keys_are_not_voices():
 # Loading
 # --------------------------------------------------------------------------- #
 
+
 def test_an_absent_file_is_an_empty_one():
     assert calibration.load(Path("/nonexistent/calibrations.json")) == {}
 
 
 def test_a_voice_keeps_its_settings_in_the_order_written(tmp_path):
     """The page shows them in this order, so it is the order that was chosen."""
-    path = _write(tmp_path, {"p040-violin": {"variants": [
-        _variant("b"),
-        _variant("a", "x=2"),
-    ]}})
+    path = _write(
+        tmp_path,
+        {
+            "p040-violin": {
+                "variants": [
+                    _variant("b"),
+                    _variant("a", "x=2"),
+                ]
+            }
+        },
+    )
     assert [v.name for v in calibration.load(path)["p040-violin"]] == ["b", "a"]
 
 
@@ -113,8 +122,7 @@ def test_a_voice_with_no_settings_is_not_in_the_table(tmp_path):
 @pytest.mark.parametrize("name", ["", "model", "has space", "has/slash"])
 def test_a_name_that_cannot_be_a_button_is_refused(tmp_path, name):
     """The name is the button, the file stem and the last segment of the address."""
-    path = _write(tmp_path, {"p040-violin": {"variants": [
-        _variant(name)]}})
+    path = _write(tmp_path, {"p040-violin": {"variants": [_variant(name)]}})
     with pytest.raises(ValueError):
         calibration.load(path)
 
@@ -143,15 +151,16 @@ def test_a_setting_without_a_line_in_both_languages_is_refused(tmp_path, field, 
 def test_a_setting_the_shell_supplied_needs_no_line():
     """`--variant` cannot carry two languages and the person who typed it is the
     person listening, so it falls back to its own name and is not refused."""
-    variant, = calibration.parse_cli(["adhoc=x=1"])
+    (variant,) = calibration.parse_cli(["adhoc=x=1"])
     assert variant.text("ja") == {"title": "adhoc", "desc": ""}
 
 
 def test_a_line_falls_through_to_english_when_the_translation_is_absent():
     """A half-translated page is readable; a blank one is not. The registry is
     held to both languages, and everything else on the page falls through."""
-    variant = calibration.Variant("warm", "x=1", title={"en": "Warmer"},
-                                  desc={"en": "rounder, less edge"})
+    variant = calibration.Variant(
+        "warm", "x=1", title={"en": "Warmer"}, desc={"en": "rounder, less edge"}
+    )
     assert variant.text("ja")["title"] == "Warmer"
     assert variant.text("ja")["desc"] == "rounder, less edge"
 
@@ -159,8 +168,9 @@ def test_a_line_falls_through_to_english_when_the_translation_is_absent():
 def test_the_direct_version_is_marked_in_every_language():
     """A voice with a rig renders each candidate twice, and the two differ only
     in where the signal was taken from — so the button has to say which."""
-    variant = calibration.Variant("warm", "x=1", title={"en": "Warmer", "ja": "暖かく"},
-                                  desc={"en": "e", "ja": "j"})
+    variant = calibration.Variant(
+        "warm", "x=1", title={"en": "Warmer", "ja": "暖かく"}, desc={"en": "e", "ja": "j"}
+    )
     plain = calibration.source_text(variant)
     direct = calibration.source_text(variant, direct=True)
     assert plain["title"] == {"en": "Warmer", "ja": "暖かく"}
@@ -170,10 +180,17 @@ def test_the_direct_version_is_marked_in_every_language():
 
 
 def test_one_voice_naming_a_setting_twice_is_refused(tmp_path):
-    path = _write(tmp_path, {"p040-violin": {"variants": [
-        _variant("warm"),
-        _variant("warm", "x=2"),
-    ]}})
+    path = _write(
+        tmp_path,
+        {
+            "p040-violin": {
+                "variants": [
+                    _variant("warm"),
+                    _variant("warm", "x=2"),
+                ]
+            }
+        },
+    )
     with pytest.raises(ValueError):
         calibration.load(path)
 
@@ -182,12 +199,11 @@ def test_one_voice_naming_a_setting_twice_is_refused(tmp_path):
 # Resolution against a run
 # --------------------------------------------------------------------------- #
 
+
 def test_recorded_settings_come_before_the_runs_own(tmp_path):
-    path = _write(tmp_path, {"p040-violin": {"variants": [
-        _variant("recorded")]}})
+    path = _write(tmp_path, {"p040-violin": {"variants": [_variant("recorded")]}})
     table = calibration.load(path)
-    merged = calibration.for_voice(
-        "p040-violin", table, calibration.parse_cli(["adhoc=y=2"]))
+    merged = calibration.for_voice("p040-violin", table, calibration.parse_cli(["adhoc=y=2"]))
     assert [v.name for v in merged] == ["recorded", "adhoc"]
 
 
@@ -198,8 +214,7 @@ def test_a_voice_with_nothing_recorded_gets_the_runs_own(tmp_path):
 
 def test_a_name_declared_twice_over_is_refused(tmp_path):
     """Whichever won, the note written about it would name the other just as well."""
-    path = _write(tmp_path, {"p040-violin": {"variants": [
-        _variant("warm")]}})
+    path = _write(tmp_path, {"p040-violin": {"variants": [_variant("warm")]}})
     table = calibration.load(path)
     with pytest.raises(ValueError, match="warm"):
         calibration.for_voice("p040-violin", table, calibration.parse_cli(["warm=x=2"]))
@@ -207,10 +222,13 @@ def test_a_name_declared_twice_over_is_refused(tmp_path):
 
 def test_settings_are_per_voice(tmp_path):
     """The whole point: one run, different candidates per voice."""
-    path = _write(tmp_path, {
-        "p040-violin": {"variants": [_variant("bow")]},
-        "p073-flute": {"variants": [_variant("jet", "y=1")]},
-    })
+    path = _write(
+        tmp_path,
+        {
+            "p040-violin": {"variants": [_variant("bow")]},
+            "p073-flute": {"variants": [_variant("jet", "y=1")]},
+        },
+    )
     table = calibration.load(path)
     assert [v.name for v in calibration.for_voice("p040-violin", table, [])] == ["bow"]
     assert [v.name for v in calibration.for_voice("p073-flute", table, [])] == ["jet"]
@@ -220,15 +238,16 @@ def test_settings_are_per_voice(tmp_path):
 # The command line
 # --------------------------------------------------------------------------- #
 
+
 def test_parse_cli_keeps_the_overrides_untouched():
     """The library is the only thing that can say whether a key exists."""
-    variant, = calibration.parse_cli(["a=piano_voice.kX=0.5,piano_voice.kY=2"])
+    (variant,) = calibration.parse_cli(["a=piano_voice.kX=0.5,piano_voice.kY=2"])
     assert variant.overrides == "piano_voice.kX=0.5,piano_voice.kY=2"
 
 
 def test_parse_cli_accepts_an_empty_override_set():
     """A second copy of the baseline is a legitimate thing to want on a page."""
-    variant, = calibration.parse_cli(["control="])
+    (variant,) = calibration.parse_cli(["control="])
     assert variant.overrides == ""
 
 
@@ -241,8 +260,9 @@ def test_parse_cli_refuses_what_cannot_be_a_version(spec):
 def test_the_page_is_never_shown_the_override_string():
     """A question put in the parameter's own vocabulary gets the parameter's own
     answer back, so the knob names stay in this file and off the page."""
-    variant = calibration.Variant("warm", "piano.brightness=0.3",
-                                  "the reference is 5 dB down at h7")
+    variant = calibration.Variant(
+        "warm", "piano.brightness=0.3", "the reference is 5 dB down at h7"
+    )
     assert variant.detail == "the reference is 5 dB down at h7"
     assert "brightness" not in variant.detail
     assert calibration.Variant("bare", "x=1").detail == ""
@@ -251,19 +271,22 @@ def test_the_page_is_never_shown_the_override_string():
     assert calibration.Variant("control", "").detail == "no overrides"
 
 
-@pytest.mark.parametrize(("given", "want"), [
-    ("the felt is flat — fam0.piano.brightness=0.30", "the felt is flat"),
-    ("two moved — a.b=1,c.d=2.5", "two moved"),
-    ("a line with no override string", "a line with no override string"),
-    # A setting with no note had the override string as its whole line, which
-    # is what a rule written around the separator walks straight past.
-    ("violin.bowed_string.bow_force=0.9", ""),
-    ("a.b=1,c.d=2", ""),
-    # A note is prose and prose has dashes in it. Only a tail that parses as
-    # assignments is taken off, so a sentence ending in one survives.
-    ("compared against 2 references — both dark", "compared against 2 references — both dark"),
-    ("", ""),
-])
+@pytest.mark.parametrize(
+    ("given", "want"),
+    [
+        ("the felt is flat — fam0.piano.brightness=0.30", "the felt is flat"),
+        ("two moved — a.b=1,c.d=2.5", "two moved"),
+        ("a line with no override string", "a line with no override string"),
+        # A setting with no note had the override string as its whole line, which
+        # is what a rule written around the separator walks straight past.
+        ("violin.bowed_string.bow_force=0.9", ""),
+        ("a.b=1,c.d=2", ""),
+        # A note is prose and prose has dashes in it. Only a tail that parses as
+        # assignments is taken off, so a sentence ending in one survives.
+        ("compared against 2 references — both dark", "compared against 2 references — both dark"),
+        ("", ""),
+    ],
+)
 def test_an_override_string_is_taken_off_a_page_rendered_before_this(given, want):
     """A hundred and eighty-odd manifests carry `note — a.b=1` in the field the
     banner reads, and re-rendering one to drop it is hours of audio."""

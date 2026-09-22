@@ -70,8 +70,7 @@ def channel_correlation(audio: np.ndarray) -> float | None:
     return float(np.mean(left * right) / denom)
 
 
-def channel_width(audio: np.ndarray | None, lo: int = 0,
-                  hi: int | None = None) -> float | None:
+def channel_width(audio: np.ndarray | None, lo: int = 0, hi: int | None = None) -> float | None:
     """How wide a render's image is over `[lo, hi)`: 0 is mono, 1 is decorrelated.
 
     `channel_correlation` read as a width, which is the direction a comparison
@@ -177,17 +176,23 @@ def _close_gaps(over: np.ndarray, span: int) -> np.ndarray:
     out = over.copy()
     lo, hi = idx[:-1], idx[1:]
     for g in np.flatnonzero((hi - lo > 1) & (hi - lo - 1 < span)):
-        out[lo[g] + 1:hi[g]] = True
+        out[lo[g] + 1 : hi[g]] = True
     return out
 
 
-def sound_onset_s(mono: np.ndarray, sr: int, start: float, limit: float, *,
-                  floor_db: float = ONSET_FLOOR_DB,
-                  search_s: float = ONSET_SEARCH_S,
-                  hop_ms: float = ONSET_HOP_MS,
-                  win_ms: float = ONSET_WIN_MS,
-                  hold_ms: float = ONSET_HOLD_MS,
-                  gap_ms: float = ONSET_GAP_MS) -> float:
+def sound_onset_s(
+    mono: np.ndarray,
+    sr: int,
+    start: float,
+    limit: float,
+    *,
+    floor_db: float = ONSET_FLOOR_DB,
+    search_s: float = ONSET_SEARCH_S,
+    hop_ms: float = ONSET_HOP_MS,
+    win_ms: float = ONSET_WIN_MS,
+    hold_ms: float = ONSET_HOLD_MS,
+    gap_ms: float = ONSET_GAP_MS,
+) -> float:
     """Where the sound begins, in seconds, at or after `start`.
 
     The earliest moment the envelope goes over `floor_db` of the search
@@ -234,7 +239,7 @@ def sound_onset_s(mono: np.ndarray, sr: int, start: float, limit: float, *,
     `onset_ms` — carries it.
     """
     scan_end = int(min(limit, start + search_s) * sr)
-    scan = np.asarray(mono[int(start * sr):min(scan_end, len(mono))], dtype=np.float64)
+    scan = np.asarray(mono[int(start * sr) : min(scan_end, len(mono))], dtype=np.float64)
     if len(scan) < 2:
         return start
     times, env = _rms_envelope(scan, sr, hop_ms=hop_ms, win_ms=win_ms)
@@ -256,7 +261,9 @@ def _spectrum(seg: np.ndarray, sr: int):
     return freqs, mag
 
 
-def _peak_near(freqs: np.ndarray, mag: np.ndarray, center_hz: float, tolerance_cents: float) -> tuple[float, float]:
+def _peak_near(
+    freqs: np.ndarray, mag: np.ndarray, center_hz: float, tolerance_cents: float
+) -> tuple[float, float]:
     """Strongest bin within ±tolerance_cents of center_hz -> (freq, magnitude).
 
     Refines the peak frequency by parabolic interpolation over log-magnitude.
@@ -305,9 +312,7 @@ def a_weight_db(freq_hz: np.ndarray | float) -> np.ndarray | float:
     f = np.asarray(freq_hz, dtype=np.float64)
     f2 = np.maximum(f, 1e-6) ** 2
     num = (12194.0**2) * f2**2
-    den = ((f2 + 20.6**2)
-           * np.sqrt((f2 + 107.7**2) * (f2 + 737.9**2))
-           * (f2 + 12194.0**2))
+    den = (f2 + 20.6**2) * np.sqrt((f2 + 107.7**2) * (f2 + 737.9**2)) * (f2 + 12194.0**2)
     with np.errstate(divide="ignore", invalid="ignore"):
         ra = np.where(den > 0.0, num / den, 0.0)
         out = 20.0 * np.log10(np.maximum(ra, 1e-30)) + 2.00
@@ -329,8 +334,9 @@ AUDIBILITY_MIN_WEIGHT = 0.1
 AUDIBILITY_A_FLOOR_DB = -20.0
 
 
-def audibility_weights(freqs_hz, levels_db, *, a_weight: bool = True,
-                       mask: bool = True) -> np.ndarray:
+def audibility_weights(
+    freqs_hz, levels_db, *, a_weight: bool = True, mask: bool = True
+) -> np.ndarray:
     """Per-partial (or per-band) weights in [AUDIBILITY_MIN_WEIGHT, 1].
 
     `levels_db` are relative levels within one note — the h1-normalised ladder

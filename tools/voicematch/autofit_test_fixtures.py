@@ -36,16 +36,43 @@ def _knob(label: str) -> Knob:
 def _probe_args(**kwargs) -> argparse.Namespace:
     """A Namespace carrying what the probe, the weights and the oracle routes read."""
     base = {
-        "program": 0, "drum_note": None, "pattern": "sustain", "notes": "", "velocities": "",
+        "program": 0,
+        "drum_note": None,
+        "pattern": "sustain",
+        "notes": "",
+        "velocities": "",
         # Every weight is None, exactly as the parser leaves one that was not
         # given, so the instrument's class defaults are what these tests see.
-        "w_harm": None, "w_cents": None, "w_tnr": None, "w_env": None, "w_init": None,
-        "w_slope": None, "w_mss": None, "w_band": None, "w_bdecay": None, "n_harm": 10,
-        "w_tail": None, "w_hf": None, "w_level": None, "w_crest": None, "w_lf": None,
-        "w_stiff": None, "w_dyn": None, "w_modes": None, "w_mod": None, "w_kit": None,
-        "corpus": "", "corpus_timbre": "", "spec": "auto",
-        "oracle_wav": "", "au": "", "au_dry": False, "room": "auto",
-        "validate_notes": "", "validate_velocities": "", "validate_oracle_wav": "",
+        "w_harm": None,
+        "w_cents": None,
+        "w_tnr": None,
+        "w_env": None,
+        "w_init": None,
+        "w_slope": None,
+        "w_mss": None,
+        "w_band": None,
+        "w_bdecay": None,
+        "n_harm": 10,
+        "w_tail": None,
+        "w_hf": None,
+        "w_level": None,
+        "w_crest": None,
+        "w_lf": None,
+        "w_stiff": None,
+        "w_dyn": None,
+        "w_modes": None,
+        "w_mod": None,
+        "w_kit": None,
+        "corpus": "",
+        "corpus_timbre": "",
+        "spec": "auto",
+        "oracle_wav": "",
+        "au": "",
+        "au_dry": False,
+        "room": "auto",
+        "validate_notes": "",
+        "validate_velocities": "",
+        "validate_oracle_wav": "",
     }
     base.update(kwargs)
     return argparse.Namespace(**base)
@@ -57,9 +84,15 @@ def _source_knob(tmp_path: Path, name: str, literal: str) -> tuple[Path, Knob]:
     head, tail = "constexpr float kValue = ", "f;\n"
     path.write_text(head + literal + tail)
     return path, Knob(
-        label=name, lo=0.0, hi=10.0, log=False, start_value=float(literal),
-        file=path, pattern=r"kValue = ([0-9.]+)f",
-        span_start=len(head), span_end=len(head) + len(literal),
+        label=name,
+        lo=0.0,
+        hi=10.0,
+        log=False,
+        start_value=float(literal),
+        file=path,
+        pattern=r"kValue = ([0-9.]+)f",
+        span_start=len(head),
+        span_end=len(head) + len(literal),
     )
 
 
@@ -68,15 +101,34 @@ def _fit_args(**kwargs) -> argparse.Namespace:
     # shares, and a test that writes into it would seed a fit with terms no
     # library ever produced. The tests that DO exercise it point the root
     # somewhere of their own and turn it back on.
-    base = {"raw_loss": False, "workers": 1, "cmake": "cmake", "jobs": 1, "n_harm": 10,
-                "percussive": False, "no_cache": True}
+    base = {
+        "raw_loss": False,
+        "workers": 1,
+        "cmake": "cmake",
+        "jobs": 1,
+        "n_harm": 10,
+        "percussive": False,
+        "no_cache": True,
+    }
     base.update(kwargs)
     return _probe_args(**base)
 
 
-def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
-                  gate_ms=8000, seconds=10.1, preroll_ms=100, dry=True,
-                  channel=1, groups=None, rig=None, room=None, note_map=None) -> Path:
+def _write_corpus(
+    root: Path,
+    *,
+    notes=(60, 72),
+    velocities=(56, 120),
+    gate_ms=8000,
+    seconds=10.1,
+    preroll_ms=100,
+    dry=True,
+    channel=1,
+    groups=None,
+    rig=None,
+    room=None,
+    note_map=None,
+) -> Path:
     """A miniature capture: one short tone per slot, plus the manifest beside it.
 
     `seconds` is a number for a grid captured at one flat tail, or a note-keyed
@@ -100,13 +152,27 @@ def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
             body *= np.exp(-t * 1.5) * (vel / 127.0)
             body[: int(preroll_ms / 1000.0 * sr)] = 0.0
             write_wav(path, np.stack([body, body], axis=1).astype(np.float32), sr)
-            renders.append({"id": rel, "timbre": "t", "note": note, "velocity": vel,
-                            "path": rel, "seconds": secs})
+            renders.append(
+                {
+                    "id": rel,
+                    "timbre": "t",
+                    "note": note,
+                    "velocity": vel,
+                    "path": rel,
+                    "seconds": secs,
+                }
+            )
     header = {
-        "id": "mini", "sample_rate": sr, "gate_ms": gate_ms, "tail": "2s",
-        "preroll_ms": preroll_ms, "dry": dry,
+        "id": "mini",
+        "sample_rate": sr,
+        "gate_ms": gate_ms,
+        "tail": "2s",
+        "preroll_ms": preroll_ms,
+        "dry": dry,
         "timbres": [{"id": "t", "label": "mini timbre", "channel": channel}],
-        "notes": list(notes), "velocities": list(velocities), "renders": renders,
+        "notes": list(notes),
+        "velocities": list(velocities),
+        "renders": renders,
     }
     if groups is not None:
         header["groups"] = groups

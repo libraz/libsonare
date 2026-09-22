@@ -47,7 +47,7 @@ def test_a_swelling_voice_is_not_re_onset_by_a_notch_in_its_own_envelope():
     # takes to reach the floor: the three frames `lead_square` grazes it on
     # span 1.5 ms, and a 2 ms window cannot read 54 dB down on less.
     notch = int(0.6 * SR)
-    body[notch:notch + int(0.0025 * SR)] = 0.0
+    body[notch : notch + int(0.0025 * SR)] = 0.0
 
     got = sound_onset_s(_with_preroll(body), SR, 0.0, 1.5, search_s=1.2)
 
@@ -62,11 +62,13 @@ def test_a_voice_with_a_gap_reports_its_first_sound_and_not_its_loudest():
     returns the head of the loudest chirp — 755 ms past the note-on, and the
     window then misses the first chirp entirely.
     """
-    body = np.concatenate([
-        _tone(0.2, level=0.01),          # first chirp, 40 dB under the second
-        np.zeros(int(0.5 * SR)),         # the gap
-        _tone(0.2, level=1.0),           # the loudest chirp
-    ])
+    body = np.concatenate(
+        [
+            _tone(0.2, level=0.01),  # first chirp, 40 dB under the second
+            np.zeros(int(0.5 * SR)),  # the gap
+            _tone(0.2, level=1.0),  # the loudest chirp
+        ]
+    )
 
     got = sound_onset_s(_with_preroll(body), SR, 0.0, 1.5, search_s=1.2)
 
@@ -88,7 +90,7 @@ def test_a_waveform_trough_is_not_a_gap_in_the_sound():
     pulse = np.zeros(n)
     period = int(SR / 65.0)
     for k in range(0, n, period):
-        pulse[k:k + int(0.001 * SR)] = 0.25
+        pulse[k : k + int(0.001 * SR)] = 0.25
     # A continuous component that starts under the floor and grows over it, so
     # a hold alone finds its first unbroken stretch well inside the note.
     body = pulse + np.sin(2 * np.pi * 300.0 * t) * np.linspace(1e-4, 0.02, n)

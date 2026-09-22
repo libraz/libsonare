@@ -68,9 +68,7 @@ def _report(allow, *facades: Extraction):
     extractions = {"c": _c("normalize", "target_db")}
     for ex in facades:
         extractions[ex.surface] = ex
-    return compare.build_report(
-        extractions, allow, ["c", *[ex.surface for ex in facades]]
-    )
+    return compare.build_report(extractions, allow, ["c", *[ex.surface for ex in facades]])
 
 
 # ---------------------------------------------------------------------------

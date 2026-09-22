@@ -23,9 +23,7 @@ def _block(text: str, pattern: str, label: str, errors: list[str]) -> str:
     return match.group("body")
 
 
-def _require_fields(
-    label: str, body: str, fields: list[str], errors: list[str]
-) -> None:
+def _require_fields(label: str, body: str, fields: list[str], errors: list[str]) -> None:
     for field in fields:
         if re.search(rf"\b{re.escape(field)}\b", body) is None:
             errors.append(f"{label}: missing field {field}")
@@ -166,9 +164,7 @@ def main() -> int:
     config_header = _read("src/streaming/stream_config.h")
     c_impl = _read("src/c_api/features_streaming.cpp")
     if contract["output_format_default"] != 0 or "Float32 = 0" not in config_header:
-        errors.append(
-            "C++ streaming output format default is not the snapshotted Float32=0"
-        )
+        errors.append("C++ streaming output format default is not the snapshotted Float32=0")
     for legacy in contract["legacy_output_formats_rejected"]:
         token = {1: "INT16", 2: "UINT8"}.get(legacy)
         if token is None or f"SONARE_STREAM_OUTPUT_{token} = {legacy}" not in c_header:

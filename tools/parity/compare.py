@@ -213,9 +213,7 @@ _ALIAS_COVERAGE = {
     "realtime_voice_changer_config_default": ("realtime_voice_changer_preset_config",),
     # Standalone preset validator (the facade reorders the name to lead with the
     # verb): validate_realtime_voice_changer_preset_json.
-    "realtime_voice_changer_validate_preset_json": (
-        "validate_realtime_voice_changer_preset_json",
-    ),
+    "realtime_voice_changer_validate_preset_json": ("validate_realtime_voice_changer_preset_json",),
     # Quantized read _ex variants -> the public read_frames_{i16,u8}.
     "stream_analyzer_read_frames_i16_ex": ("read_frames_i16",),
     "stream_analyzer_read_frames_u8_ex": ("read_frames_u8",),
@@ -264,9 +262,7 @@ _ALIAS_COVERAGE = {
     # C entry point reads and writes a config the caller owns, while each facade
     # takes the taste options and returns a finished config. Renaming either to
     # match the other would put a name on it that its own behaviour contradicts.
-    "mastering_repair_dereverb_apply_room_estimate": (
-        "mastering_repair_dereverb_config_for_room",
-    ),
+    "mastering_repair_dereverb_apply_room_estimate": ("mastering_repair_dereverb_config_for_room",),
     # NMF warm-start variant -> the base decompose facade, which exposes the
     # `init` initialiser argument and routes to sonare_decompose_with_init.
     # (Python / WASM expose decompose_with_init by name, matched directly before
@@ -286,9 +282,7 @@ _ALIAS_COVERAGE = {
     # so the facade carries no `_json` in its name. Anchored to the facade
     # members that deliver it, so the credit lapses if one is removed.
     "mastering_assistant_suggest_chain_json": ("mastering_assistant_suggest_chain",),
-    "mastering_assistant_suggest_chain_json_stereo": (
-        "mastering_assistant_suggest_chain_stereo",
-    ),
+    "mastering_assistant_suggest_chain_json_stereo": ("mastering_assistant_suggest_chain_stereo",),
     "mixing_assistant_source_class_names": ("mix_source_class_names",),
     "mixing_assistant_source_class_from_name": ("mix_source_class_from_name",),
     "master_audio_stereo_with_progress": ("master_audio_stereo",),
@@ -722,9 +716,7 @@ def _config_names(sig: FunctionSig, roles: set[str]) -> list[str]:
     return [
         n
         for n in names
-        if n not in roles
-        and n not in _CALLBACK_NAMES
-        and n not in _BUFFER_COMPANION_NAMES
+        if n not in roles and n not in _CALLBACK_NAMES and n not in _BUFFER_COMPANION_NAMES
     ]
 
 
@@ -903,18 +895,12 @@ def _order_verdict(key: str, c_cfg: list[str], s_cfg: list[str]) -> str:
     # Facades exposed in their EXTENDED (``_ex``) form: C base order followed by
     # the known extra-field tail of the _ex variant.
     tail = _EXTENDED_FIELD_TAILS.get(key)
-    if (
-        tail is not None
-        and s_cfg[: len(c_cfg)] == c_cfg
-        and tuple(s_cfg[len(c_cfg) :]) == tail
-    ):
+    if tail is not None and s_cfg[: len(c_cfg)] == c_cfg and tuple(s_cfg[len(c_cfg) :]) == tail:
         return AGREED
     return DIVERGED
 
 
-def _order_drift(
-    c_index, indexed, allow, rep: Report, selected, roles: set[str]
-) -> None:
+def _order_drift(c_index, indexed, allow, rep: Report, selected, roles: set[str]) -> None:
     for key, csig in c_index.items():
         c_cfg = _config_names(csig, roles)
         for s in _FACADE_SURFACES:
@@ -927,10 +913,7 @@ def _order_drift(
                 rep.decline("order", key, s, declined)
                 continue
             verdict = _order_verdict(key, c_cfg, s_cfg)
-            message = (
-                f"config param order/name mismatch vs C for '{key}': "
-                f"C={c_cfg} {s}={s_cfg}"
-            )
+            message = f"config param order/name mismatch vs C for '{key}': C={c_cfg} {s}={s_cfg}"
             if allow.order_ok(key, s, verdict, f"[{s}] {message}") or verdict == AGREED:
                 continue
             rep.findings.append(
@@ -963,9 +946,7 @@ def _input_names(sig: FunctionSig, roles: set[str]) -> list[str]:
     return [nm for nm in names[:n] if nm not in _INPUT_NOISE_NAMES]
 
 
-def _input_naming(
-    c_index, indexed, allow, rep: Report, selected, roles: set[str]
-) -> None:
+def _input_naming(c_index, indexed, allow, rep: Report, selected, roles: set[str]) -> None:
     """Flag when the audio-input params are named inconsistently across surfaces."""
     facades = [s for s in _FACADE_SURFACES if s in indexed]
     keys = set()
@@ -1047,9 +1028,7 @@ def _enum_drift(indexed, allow, rep: Report) -> None:
         for pname in param_names:
             sets: dict[str, tuple[str, ...]] = {}
             for s, sig in sigs.items():
-                match = next(
-                    (p for p in sig.params if p.name == pname and p.enum_values), None
-                )
+                match = next((p for p in sig.params if p.name == pname and p.enum_values), None)
                 if match is not None:
                     sets[s] = match.enum_values
             if len(sets) < 2:
@@ -1131,9 +1110,7 @@ def _core_default_drift(
                     # rather than risk a false positive (the facade-vs-facade
                     # enum-set check already guards enum consistency).
                     facade_canon = canonical_default(p.default)
-                    if facade_canon is not None and re.fullmatch(
-                        r"-?\d+", facade_canon
-                    ):
+                    if facade_canon is not None and re.fullmatch(r"-?\d+", facade_canon):
                         rep.decline(
                             "core_default",
                             f"{key}.{p.name}",
@@ -1199,9 +1176,7 @@ def _wasm_internal_drift(wi: WasmInternal, allow, rep: Report) -> None:
 
     def _emit(name: str, message: str, location: str, informational: bool) -> None:
         if allow.wasm_internal_ok(name, DIVERGED, message):
-            rep.findings.append(
-                Finding("wasm_internal", name, "wasm", "", allowlisted=True)
-            )
+            rep.findings.append(Finding("wasm_internal", name, "wasm", "", allowlisted=True))
             return
         rep.findings.append(
             Finding(
@@ -1234,8 +1209,7 @@ def _wasm_internal_drift(wi: WasmInternal, allow, rep: Report) -> None:
             continue
         _emit(
             name,
-            f"the facade calls module.{name} but it is not declared in the "
-            "SonareModule interface",
+            f"the facade calls module.{name} but it is not declared in the SonareModule interface",
             str(site),
             informational=False,
         )
@@ -1325,8 +1299,7 @@ def _record_verdict(c_rec: RecordShape, shape: RecordShape | None) -> str:
     if any(n not in declared for n in c_rec.core_field_names()):
         return DIVERGED
     if any(
-        f.name not in c_names and f.name not in _FACADE_ONLY_FIELDS
-        for f in shape.core_fields()
+        f.name not in c_names and f.name not in _FACADE_ONLY_FIELDS for f in shape.core_fields()
     ):
         return DIVERGED
     return AGREED
@@ -1354,9 +1327,7 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
       facade exposes is a core-exposure question for an audit, not drift.
     """
     indexed = {
-        s: _index_records(extractions.get(s))
-        for s in ("c", *_RECORD_SURFACES)
-        if s in extractions
+        s: _index_records(extractions.get(s)) for s in ("c", *_RECORD_SURFACES) if s in extractions
     }
     for s in ("c", *_RECORD_SURFACES):
         if s in extractions:
@@ -1378,16 +1349,13 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
                     "record",
                     key,
                     s,
-                    "no facade declares the record, so there is no shape to hold "
-                    "against C",
+                    "no facade declares the record, so there is no shape to hold against C",
                 )
                 continue
             # Whole-record verdict, read before the field-level entries narrow
             # it: this entry suppresses everything they would have caught.
             verdict = _record_verdict(c_rec, shape)
-            if allow.record_ok(
-                key, s, verdict, f"[{s}] record '{c_rec.raw_name}' shape differs"
-            ):
+            if allow.record_ok(key, s, verdict, f"[{s}] record '{c_rec.raw_name}' shape differs"):
                 rep.findings.append(Finding("record", key, s, "", allowlisted=True))
                 continue
             if shape is None:
@@ -1419,11 +1387,7 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
                     allow.record_field_ok(key, n, AGREED)
                     continue
                 div = f"[{s}] {shape.raw_name} declares no '{n}' of {c_rec.raw_name}"
-                (
-                    suppressed
-                    if allow.record_field_ok(key, n, DIVERGED, div)
-                    else missing
-                ).append(n)
+                (suppressed if allow.record_field_ok(key, n, DIVERGED, div) else missing).append(n)
             raw_extra = [
                 f.name
                 for f in shape.core_fields()
@@ -1433,17 +1397,13 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
                 key,
                 s,
                 DIVERGED if raw_extra else AGREED,
-                f"[{s}] {shape.raw_name} declares beyond {c_rec.raw_name}: "
-                f"{sorted(raw_extra)}",
+                f"[{s}] {shape.raw_name} declares beyond {c_rec.raw_name}: {sorted(raw_extra)}",
             )
             for f in shape.core_fields():
                 if f.name in c_names or f.name in _FACADE_ONLY_FIELDS:
                     allow.record_field_ok(key, f.name, AGREED)
                     continue
-                div = (
-                    f"[{s}] {shape.raw_name} declares '{f.name}', absent from "
-                    f"{c_rec.raw_name}"
-                )
+                div = f"[{s}] {shape.raw_name} declares '{f.name}', absent from {c_rec.raw_name}"
                 if extra_allowed or allow.record_field_ok(key, f.name, DIVERGED, div):
                     suppressed.append(f.name)
                 else:
@@ -1475,8 +1435,7 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
                             f"{missing}"
                         ),
                         detail={"missing": missing, "c_fields": c_fields},
-                        location=f"{shape.file}:{shape.line} "
-                        f"(C {c_rec.file}:{c_rec.line})",
+                        location=f"{shape.file}:{shape.line} (C {c_rec.file}:{c_rec.line})",
                     )
                 )
             if extra:
@@ -1491,7 +1450,6 @@ def _record_drift(extractions, allow, rep: Report, selected) -> None:
                             f"'{c_rec.raw_name}': {extra}"
                         ),
                         detail={"extra": extra, "c_fields": c_fields},
-                        location=f"{shape.file}:{shape.line} "
-                        f"(C {c_rec.file}:{c_rec.line})",
+                        location=f"{shape.file}:{shape.line} (C {c_rec.file}:{c_rec.line})",
                     )
                 )

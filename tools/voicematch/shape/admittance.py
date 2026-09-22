@@ -45,8 +45,9 @@ PROMPT = (0.12, 0.5)
 AFTER = (1.2, 3.0)
 
 
-def rates(track: Track, sig: np.ndarray, prompt=PROMPT, after=AFTER,
-          *, keep_unfittable: bool = False):
+def rates(
+    track: Track, sig: np.ndarray, prompt=PROMPT, after=AFTER, *, keep_unfittable: bool = False
+):
     """[(frequency, prompt_db_s, after_db_s)] for every measurable partial.
 
     A partial is measurable when the REFERENCE still stands clear of its own
@@ -75,9 +76,7 @@ def rates(track: Track, sig: np.ndarray, prompt=PROMPT, after=AFTER,
         b = partials.decay_db_s(env, after[0], after[1], floor, track.sr)
         if (a is None or b is None) and not keep_unfittable:
             continue
-        out.append((float(f),
-                    None if a is None else float(a),
-                    None if b is None else float(b)))
+        out.append((float(f), None if a is None else float(a), None if b is None else float(b)))
     return out
 
 
@@ -122,8 +121,16 @@ def collapse(profiles: dict, which: int = 1, edges=None):
             continue
         v = np.asarray(vals)
         q1, q3 = np.percentile(v, [25, 75])
-        rows.append((float(np.sqrt(lo * hi)), float(np.median(v)), float(q3 - q1),
-                     len(notes), len(vals), missing))
+        rows.append(
+            (
+                float(np.sqrt(lo * hi)),
+                float(np.median(v)),
+                float(q3 - q1),
+                len(notes),
+                len(vals),
+                missing,
+            )
+        )
     return rows
 
 
@@ -155,10 +162,14 @@ def report(ref: dict, model: dict, sr: int = 48000, prompt=PROMPT, after=AFTER) 
         # See `rates`: the model keeps the partials it could not sustain, so a
         # band it went quiet in is countable instead of absent.
         mp[key] = rates(tracks[note], model[key], prompt, after, keep_unfittable=True)
-    lines = [f"prompt {prompt}  after {after}",
-             (f"{'band Hz':>9}{'notes':>6}{'pts':>5}"
-             f"{'ref prompt':>12}{'iqr':>7}{'mdl prompt':>12}{'iqr':>7}{'err':>7}"
-             f"{'ref after':>11}{'mdl after':>11}{'err':>7}{'quiet':>7}")]
+    lines = [
+        f"prompt {prompt}  after {after}",
+        (
+            f"{'band Hz':>9}{'notes':>6}{'pts':>5}"
+            f"{'ref prompt':>12}{'iqr':>7}{'mdl prompt':>12}{'iqr':>7}{'err':>7}"
+            f"{'ref after':>11}{'mdl after':>11}{'err':>7}{'quiet':>7}"
+        ),
+    ]
     rc = {round(c): r for c, *r in collapse(rp, 1)}
     mc = {round(c): r for c, *r in collapse(mp, 1)}
     ra = {round(c): r for c, *r in collapse(rp, 2)}
@@ -170,8 +181,9 @@ def report(ref: dict, model: dict, sr: int = 48000, prompt=PROMPT, after=AFTER) 
         m = mc.get(c)
         if m is None:
             unanswered.append(c)
-            lines.append("".join(cells) + f"{'n/a':>12}{'':>7}{'':>7}"
-                                          f"{'':>11}{'':>11}{'':>7}{'all':>7}")
+            lines.append(
+                "".join(cells) + f"{'n/a':>12}{'':>7}{'':>7}{'':>11}{'':>11}{'':>7}{'all':>7}"
+            )
             continue
         cells.append(f"{m[0]:>12.1f}{m[1]:>7.1f}{m[0] - r[0]:>7.1f}")
         if c in ra and c in ma:
@@ -183,11 +195,15 @@ def report(ref: dict, model: dict, sr: int = 48000, prompt=PROMPT, after=AFTER) 
     quiet = sum(1 for prof in mp.values() for p in prof if p[1] is None or p[2] is None)
     total = sum(len(prof) for prof in mp.values())
     lines.append("")
-    lines.append(f"`quiet` is that band's partials the model let fall under the "
-                 f"reference's own floor, `all` its whole width; {quiet} of {total} "
-                 f"partials across the run.")
+    lines.append(
+        f"`quiet` is that band's partials the model let fall under the "
+        f"reference's own floor, `all` its whole width; {quiet} of {total} "
+        f"partials across the run."
+    )
     if unanswered:
-        lines.append(f"{len(unanswered)} bands the reference answered and the model did "
-                     f"not at all: {', '.join(str(c) for c in unanswered)} Hz. A band "
-                     f"missing from this table would have been a band nobody could see.")
+        lines.append(
+            f"{len(unanswered)} bands the reference answered and the model did "
+            f"not at all: {', '.join(str(c) for c in unanswered)} Hz. A band "
+            f"missing from this table would have been a band nobody could see."
+        )
     return "\n".join(lines)

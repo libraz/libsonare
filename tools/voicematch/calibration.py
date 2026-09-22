@@ -132,8 +132,7 @@ def source_text(variant: Variant, *, direct: bool = False) -> dict:
         # In front rather than behind. A voice with a rig renders each candidate
         # twice and the pair sits side by side, so the one word that separates
         # them has to be in the part of the button a narrow column keeps.
-        title = {k: (f"リグなし・{v}" if k == "ja" else f"No rig — {v}")
-                 for k, v in title.items()}
+        title = {k: (f"リグなし・{v}" if k == "ja" else f"No rig — {v}") for k, v in title.items()}
     return {"title": title, "desc": desc}
 
 
@@ -168,7 +167,8 @@ def _lines(raw: object, where: str, field_name: str) -> dict[str, str]:
     if missing:
         raise ValueError(
             f"{where}: {field_name} is missing {', '.join(missing)} — it wants a "
-            f"line per language, {{{', '.join(repr(k) for k in LANGS)}}}")
+            f"line per language, {{{', '.join(repr(k) for k in LANGS)}}}"
+        )
     return out
 
 
@@ -214,13 +214,15 @@ def load(path: Path | None = None) -> dict[str, list[Variant]]:
             if bad:
                 raise ValueError(f"{path.name}: {slug}: {bad}")
             where = f"{path.name}: {slug}: {name}"
-            variants.append(Variant(
-                name=name,
-                overrides=str(item.get("overrides", "")).strip(),
-                note=str(item.get("note", "")).strip(),
-                title=_lines(item.get("title"), where, "title"),
-                desc=_lines(item.get("desc"), where, "desc"),
-            ))
+            variants.append(
+                Variant(
+                    name=name,
+                    overrides=str(item.get("overrides", "")).strip(),
+                    note=str(item.get("note", "")).strip(),
+                    title=_lines(item.get("title"), where, "title"),
+                    desc=_lines(item.get("desc"), where, "desc"),
+                )
+            )
         names = [v.name for v in variants]
         if len(names) != len(set(names)):
             raise ValueError(f"{path.name}: {slug} names a variant twice")
@@ -239,8 +241,7 @@ def unknown_voices(table: dict[str, list[Variant]], slugs: set[str]) -> list[str
     return sorted(slug for slug in table if slug not in slugs)
 
 
-def for_voice(slug: str, table: dict[str, list[Variant]],
-              extra: list[Variant]) -> list[Variant]:
+def for_voice(slug: str, table: dict[str, list[Variant]], extra: list[Variant]) -> list[Variant]:
     """The recorded settings for one voice, then the run's own, in that order.
 
     A name declared in both is refused rather than resolved. The name is the
@@ -254,5 +255,6 @@ def for_voice(slug: str, table: dict[str, list[Variant]],
     if clash:
         raise ValueError(
             f"{slug}: {', '.join(sorted(clash))} is both recorded and passed as "
-            f"--variant; rename one, or drop the flag to use the recorded setting")
+            f"--variant; rename one, or drop the flag to use the recorded setting"
+        )
     return [*recorded, *extra]

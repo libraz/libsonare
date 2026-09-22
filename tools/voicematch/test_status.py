@@ -23,6 +23,7 @@ from toneclass import (
 # The generated file
 # --------------------------------------------------------------------------- #
 
+
 def _shipped() -> list[dict]:
     if not status.OUT_PATH.is_file():
         pytest.skip("tools/voice-status.json not generated in this tree")
@@ -39,8 +40,15 @@ def test_the_shipped_file_covers_the_whole_bank():
 def test_every_row_carries_the_facts_its_stage_was_read_from():
     """A stage with no axes behind it is a number nobody can argue with."""
     for r in _shipped():
-        assert set(r["axes"]) >= {"engine", "patch", "timbres", "profile_rows",
-                                  "gate_state", "coverage", "agreement"}
+        assert set(r["axes"]) >= {
+            "engine",
+            "patch",
+            "timbres",
+            "profile_rows",
+            "gate_state",
+            "coverage",
+            "agreement",
+        }
         assert r["stage_name"] == status.STAGES[round(r["stage"] * 5)]
         assert r["next"]
 
@@ -97,8 +105,7 @@ def test_a_documentation_key_inside_goals_is_not_read_as_a_goal():
     signoff.json, each capture definition — so a note written into this one is
     what a reader would expect to be able to do. Read as a goal it has no
     `stage`, and the only tool that reads the policy died on it."""
-    pol = {"goals": {"_": "which release asks for what",
-                     "1.8.0": {"stage": 0.8, "programs": [0]}}}
+    pol = {"goals": {"_": "which release asks for what", "1.8.0": {"stage": 0.8, "programs": [0]}}}
     rows = [{"program": 0, "bank": 0, "kit": False, "stage": 0.6, "slug": "p000"}]
     assert [g["name"] for g in status.goal_progress(pol, rows)] == ["1.8.0"]
 
@@ -106,8 +113,10 @@ def test_a_documentation_key_inside_goals_is_not_read_as_a_goal():
 def test_a_goal_names_capital_tones_and_kits_and_never_a_variation():
     """A variation is not something a file is owed, and one listed here would
     block the goal on a capture nobody has a source for."""
-    rows = [{"program": 0, "bank": 0, "kit": False, "stage": 0.6, "slug": "capital"},
-            {"program": 0, "bank": 8, "kit": False, "stage": 0.2, "slug": "variation"}]
+    rows = [
+        {"program": 0, "bank": 0, "kit": False, "stage": 0.6, "slug": "capital"},
+        {"program": 0, "bank": 8, "kit": False, "stage": 0.2, "slug": "variation"},
+    ]
     members = status.goal_members({"programs": [0]}, rows)
     assert [r["slug"] for r in members] == ["capital"]
 
@@ -116,10 +125,16 @@ def test_a_goal_names_capital_tones_and_kits_and_never_a_variation():
 # What the policy adds to a next action, and why it is added at print time
 # --------------------------------------------------------------------------- #
 
-def _row(slug, program, bank=0, stage=0.2, nxt="capture an oracle: no reference exists "
-         "for this voice", kit=False):
-    return {"slug": slug, "program": program, "bank": bank, "kit": kit,
-            "stage": stage, "next": nxt}
+
+def _row(
+    slug,
+    program,
+    bank=0,
+    stage=0.2,
+    nxt="capture an oracle: no reference exists for this voice",
+    kit=False,
+):
+    return {"slug": slug, "program": program, "bank": bank, "kit": kit, "stage": stage, "next": nxt}
 
 
 def test_an_approximated_slot_is_terminal_rather_than_uncaptured():
@@ -127,8 +142,14 @@ def test_an_approximated_slot_is_terminal_rather_than_uncaptured():
     mechanism and is deliberately answering with the nearest voice it has. The
     generated answer says `capture an oracle`, which is the one instruction
     that will never be carried out for this slot."""
-    pol = {"approximated": {"p105-banjo": {"answered_by": "p024-nylon-guitar",
-                                           "reason": "no plucked-membrane mechanism"}}}
+    pol = {
+        "approximated": {
+            "p105-banjo": {
+                "answered_by": "p024-nylon-guitar",
+                "reason": "no plucked-membrane mechanism",
+            }
+        }
+    }
     rows = [_row("p105-banjo", 105)]
     got = status.resolved_next(rows[0], pol, rows)
     assert "terminal" in got
@@ -182,8 +203,10 @@ def test_the_variation_queue_is_split_by_what_each_half_needs():
     """A flat queue says neither, and the two are different work."""
     pol = {"variations_follow_capital": True}
     rows = [
-        _row("p000-piano", 0, stage=0.6), _row("p000b008-a", 0, bank=8),
-        _row("p019-organ", 19, stage=0.8), _row("p019b008-b", 19, bank=8),
+        _row("p000-piano", 0, stage=0.6),
+        _row("p000b008-a", 0, bank=8),
+        _row("p019-organ", 19, stage=0.8),
+        _row("p019b008-b", 19, bank=8),
         _row("p019b016-c", 19, bank=16),
     ]
     assert status.variation_split(rows, pol) == (1, 2)
@@ -209,8 +232,11 @@ def test_an_approximated_slot_is_not_counted_among_the_voices_awaiting_an_oracle
     """
     rows = _shipped()
     uncaptured = next(r for r in rows if not r["capture"])
-    pol = {"approximated": {uncaptured["slug"]: {"answered_by": "p000-acoustic-grand-piano",
-                                                 "reason": "planted"}}}
+    pol = {
+        "approximated": {
+            uncaptured["slug"]: {"answered_by": "p000-acoustic-grand-piano", "reason": "planted"}
+        }
+    }
     approximated = [r for r in rows if status.approximation(pol, r["slug"])]
     no_oracle = [r for r in rows if not r["capture"] and r not in approximated]
     assert len(approximated) == 1
@@ -241,6 +267,7 @@ def test_every_declared_approximation_names_a_real_slot_and_a_real_answer():
 # The two hand-written claims, counted
 # --------------------------------------------------------------------------- #
 
+
 def _claim(state):
     return {"state": state, "date": "2026-09-01"}
 
@@ -260,22 +287,32 @@ def test_a_structural_diagnosis_behind_an_unmade_musical_claim_is_counted_apart(
         {"axes": {"structure": None, "music": None}},
     ]
     got = status.signoff_census(rows)
-    assert got == {"structure": 3, "structure_current": 2,
-                   "music": 1, "music_current": 1, "structure_only": 2}
+    assert got == {
+        "structure": 3,
+        "structure_current": 2,
+        "music": 1,
+        "music_current": 1,
+        "structure_only": 2,
+    }
 
 
 def test_an_expired_claim_is_counted_as_recorded_and_not_as_current():
     """Both numbers are printed: a record that expired was still work done."""
-    got = status.signoff_census([{"axes": {"structure": _claim(signoff.UNVERIFIED),
-                                           "music": None}}])
+    got = status.signoff_census(
+        [{"axes": {"structure": _claim(signoff.UNVERIFIED), "music": None}}]
+    )
     assert got["structure"] == 1
     assert got["structure_current"] == 0
 
 
 def test_the_census_counts_nothing_on_a_bank_with_no_claims():
     assert status.signoff_census([{"axes": {}}, {}]) == {
-        "structure": 0, "structure_current": 0, "music": 0, "music_current": 0,
-        "structure_only": 0}
+        "structure": 0,
+        "structure_current": 0,
+        "music": 0,
+        "music_current": 0,
+        "structure_only": 0,
+    }
 
 
 def test_the_shipped_bank_is_counted_from_the_rows_rather_than_from_signoff_json():
@@ -290,13 +327,18 @@ def test_the_shipped_bank_is_counted_from_the_rows_rather_than_from_signoff_json
 # The ladder
 # --------------------------------------------------------------------------- #
 
+
 def _axes(**over) -> dict:
     base = {
-        "engine": "piano", "patch": "fam0", "timbres": 3, "profile_rows": 180,
+        "engine": "piano",
+        "patch": "fam0",
+        "timbres": 3,
+        "profile_rows": 180,
         "gate_state": "current",
         "coverage": {"complete": True, "gaps": []},
         "agreement": {"inside": 8, "total": 11, "outside": {}},
-        "structure": None, "music": None,
+        "structure": None,
+        "music": None,
     }
     base.update(over)
     return base
@@ -364,9 +406,8 @@ def test_a_voice_held_only_by_an_unbounded_reason_is_told_what_holds_it():
 
 
 def test_a_stale_diagnosis_names_what_moved_and_a_kit_has_no_patch_to_name():
-    """"the patch has moved" is a sentence a kit's entry cannot say truthfully."""
-    stale = {"state": "stale", "date": "", "unreachable": [], "accepted": [],
-             "open": []}
+    """ "the patch has moved" is a sentence a kit's entry cannot say truthfully."""
+    stale = {"state": "stale", "date": "", "unreachable": [], "accepted": [], "open": []}
     voice = status.next_action(_axes(structure=stale), 4, [])
     kit = status.next_action(_axes(patch=None, structure=stale), 4, [])
     assert "the patch has moved" in voice
@@ -386,8 +427,10 @@ def test_disagreeing_with_the_reference_spread_does_not_hold_a_voice_back():
     the target, so sitting outside two presets' mutual disagreement is
     information about the target's own wobble, not a verdict on the voice.
     """
-    apart = _axes(agreement={"inside": 1, "total": 3, "outside": {"stretch": 1.8}},
-                  music={"state": signoff.CURRENT})
+    apart = _axes(
+        agreement={"inside": 1, "total": 3, "outside": {"stretch": 1.8}},
+        music={"state": signoff.CURRENT},
+    )
     together = _axes(music={"state": signoff.CURRENT})
     assert status.stage_for(apart) == status.stage_for(together)
 
@@ -422,12 +465,12 @@ def test_an_open_candidate_does_not_demote_a_voice():
 # Agreement
 # --------------------------------------------------------------------------- #
 
+
 def test_an_empty_spread_is_unjudgeable_rather_than_disagreeing():
     """One captured timbre gives no spread. Reporting that as "0 of 8 agree"
     would read as a voice that is wrong everywhere rather than one nothing has
     been able to check."""
-    got = status.gate_agreement(
-        {"reference_spread": {}, "bounds": {"attack": {"median": 40.0}}})
+    got = status.gate_agreement({"reference_spread": {}, "bounds": {"attack": {"median": 40.0}}})
     assert got["total"] == 0
     assert got["unjudgeable"] == ["attack"]
 
@@ -439,20 +482,24 @@ def test_a_spread_of_zero_is_unjudgeable_rather_than_infinitely_outside():
     5 ms envelope hop: the ratio has no denominator, and taking it raised a
     ZeroDivisionError that stopped the whole bank's status from regenerating.
     """
-    got = status.gate_agreement({
-        "reference_spread": {"attack": 0.0, "stereo": 0.229},
-        "bounds": {"attack": {"median": 40.0}, "stereo": {"median": 0.1}},
-    })
+    got = status.gate_agreement(
+        {
+            "reference_spread": {"attack": 0.0, "stereo": 0.229},
+            "bounds": {"attack": {"median": 40.0}, "stereo": {"median": 0.1}},
+        }
+    )
     assert got["unjudgeable"] == ["attack"]
     assert got["total"] == 1
     assert got["inside"] == 1
 
 
 def test_a_bound_inside_the_spread_agrees():
-    got = status.gate_agreement({
-        "reference_spread": {"attack": 25.0, "stereo": 0.229},
-        "bounds": {"attack": {"median": 25.0}, "stereo": {"median": 0.414}},
-    })
+    got = status.gate_agreement(
+        {
+            "reference_spread": {"attack": 25.0, "stereo": 0.229},
+            "bounds": {"attack": {"median": 25.0}, "stereo": {"median": 0.414}},
+        }
+    )
     assert got["inside"] == 1
     assert got["total"] == 2
     assert got["outside"]["stereo"] == pytest.approx(1.81, abs=0.01)
@@ -478,6 +525,7 @@ def test_the_gate_margin_does_not_decide_whether_a_voice_agrees():
 # --------------------------------------------------------------------------- #
 # Canonical dimensions
 # --------------------------------------------------------------------------- #
+
 
 def test_a_sustained_voice_is_not_judged_on_a_free_decay_it_does_not_have():
     canon = canonical_dimensions(19)
@@ -506,6 +554,7 @@ def test_every_class_names_at_least_one_dimension():
 # --------------------------------------------------------------------------- #
 # Excusing a dimension
 # --------------------------------------------------------------------------- #
+
 
 def test_an_exclusion_argued_only_in_prose_reads_as_a_gap():
     """`_dimensions` is a comment. Coverage reads `dimensions_na`, so an
@@ -560,8 +609,10 @@ def test_a_bound_outranks_a_reason_recorded_beside_it():
         program, kit = 0, False
 
     canon = canonical_dimensions(0)
-    gate = {"bounds": {d: {"median": 1.0} for d in canon},
-            "_unbounded": {"balance": "recorded before the bound existed"}}
+    gate = {
+        "bounds": {d: {"median": 1.0} for d in canon},
+        "_unbounded": {"balance": "recorded before the bound existed"},
+    }
     got = status.coverage(V(), [{}], [gate])
     assert got["complete"] and "unbounded" not in got
 
@@ -570,8 +621,11 @@ def test_agreement_folds_a_gate_that_has_no_spread_to_adjudicate_against():
     """A one-timbre capture's gate reports no `outside` key at all rather than
     an empty one, and three of the standard kit's four captures are that."""
 
-    judged = {"reference_spread": {"level": 1.0}, "margin": 1.0,
-              "bounds": {"level": {"median": 4.0}}}
+    judged = {
+        "reference_spread": {"level": 1.0},
+        "margin": 1.0,
+        "bounds": {"level": {"median": 4.0}},
+    }
     spreadless = {"bounds": {"attack": {"median": 1.0}}}
     got = status.merged_agreement([judged, spreadless])
     assert got["outside"] == {"level": 4.0}
@@ -613,6 +667,7 @@ def test_an_excuse_does_not_unseat_a_bound_another_capture_records():
 # The staleness check, which is worth nothing if it cannot go red
 # --------------------------------------------------------------------------- #
 
+
 def test_the_check_fails_on_a_stale_file(tmp_path, monkeypatch, capsys):
     rows = _shipped()
     moved = json.loads(json.dumps(rows))
@@ -621,8 +676,7 @@ def test_the_check_fails_on_a_stale_file(tmp_path, monkeypatch, capsys):
     path.write_text(json.dumps({"voices": moved}, indent=2, ensure_ascii=False) + "\n")
     monkeypatch.setattr(status, "OUT_PATH", path)
     monkeypatch.setattr(status, "build", lambda catalogue: rows)
-    monkeypatch.setattr(status.catalogue_mod, "dump_catalogue",
-                        lambda *a, **k: None)
+    monkeypatch.setattr(status.catalogue_mod, "dump_catalogue", lambda *a, **k: None)
     monkeypatch.setattr(sys, "argv", ["status.py", "--check"])
     assert status.main() == 1
     assert "stale" in capsys.readouterr().out
