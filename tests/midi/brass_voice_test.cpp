@@ -632,11 +632,12 @@ TEST_CASE("bore harmonic ratios against causes that are not the lip", "[.][midi]
 TEST_CASE("brightness against the note, for causes that are not bore propagation",
           "[.][midi][synth][null]") {
   // Not a gate — it reports rather than asserts. An amplitude-dependent
-  // propagation term modulates the whole bore delay, so its effect grows with
-  // the bore length: four times from note 72 to note 48. That margin only means
-  // something against the note slope the engine already has without any
-  // propagation term, and it has one — the cuivre drive is scaled by a
-  // pitch-dependent factor, and the lip valve is a nonlinearity inside the loop.
+  // propagation term modulates the whole bore delay by a fixed FRACTION of the
+  // period, so the modulation in samples grows with the bore length while the
+  // phase index it produces does not: the period cancels, and every note sees
+  // the same index. The note slope below is therefore the engine's own — the
+  // cuivre drive is scaled by a pitch-dependent factor, the output filters sit
+  // at fixed hertz, and the lip valve is a nonlinearity inside the loop.
   // Read at the shipping patch rather than with the shaper switched off, since
   // that is the configuration the term has to improve on.
   const auto hz = [](int note) { return 440.0 * std::pow(2.0, (note - 69) / 12.0); };
@@ -677,8 +678,116 @@ TEST_CASE("brightness against the note, for causes that are not bore propagation
                                   << "the lip valve and the bell");
 
   WARN(
-      "prediction to check once the term exists: the lumped form multiplies the note-48 "
-      "modulation by 4.0 against note 72, so the ratio above is what it has to beat");
+      "the lumped form multiplies the note-48 modulation by 4.0 against note 72 in SAMPLES, "
+      "but the phase index it produces is 2*pi*k*span*p and carries no period term at all, "
+      "so the factor on the index is 1.0 and this ratio is not a propagation statistic");
+
+  // How the same ratio responds across the propagation term's whole range. The
+  // delay modulation is phase modulation, whose individual sideband amplitudes
+  // follow Bessel functions and are NOT monotonic in the index -- but their
+  // power-weighted first moment is (2.21 f0 at an index of 2, 6.98 at 10), so a
+  // centroid that falls is never the Bessel oscillation. Read as the shape of
+  // the curve rather than as an extrapolation from two points.
+  for (float depth : {0.125f, 0.25f, 0.375f, 0.5f, 0.625f, 0.75f, 0.875f, 1.0f}) {
+    NativeSynthPatch p = shipped;
+    p.brass.bore_nonlinearity = depth;
+    std::ostringstream label;
+    label << "bore_nonlinearity " << depth << " ";
+    const double r = note_ratio(label.str().c_str(), p, 64);
+    WARN("   moved from the term-off ratio by " << pct(r, v64) << " %");
+  }
+
+  // The absolute brightening at each note, which the ratio above divides the
+  // common part out of, and how it grows with the played dynamic -- the
+  // literature defines brassiness as the RATE of spectral enrichment with
+  // level, so a term modelling it should widen as the dynamic rises.
+  const auto hc = [&](const NativeSynthPatch& p, uint8_t note, uint8_t vel) {
+    const std::vector<float> tone = render_patch(p, note, vel, 48000);
+    REQUIRE(std::isfinite(tone.back()));
+    return static_cast<double>(spectral_centroid(tone, 14400)) / hz(note);
+  };
+  NativeSynthPatch full = shipped;
+  full.brass.bore_nonlinearity = 1.0f;
+  for (uint8_t vel : {uint8_t{64}, uint8_t{100}, uint8_t{127}}) {
+    const double lo_off = hc(shipped, 48, vel), lo_on = hc(full, 48, vel);
+    const double hi_off = hc(shipped, 72, vel), hi_on = hc(full, 72, vel);
+    WARN("velocity " << static_cast<int>(vel) << "  note 48 brightens " << pct(lo_on, lo_off)
+                     << " %   note 72 brightens " << pct(hi_on, hi_off) << " %   ratio of the two "
+                     << ((lo_on / lo_off - 1.0) / std::max(1e-9, hi_on / hi_off - 1.0)));
+  }
+  // Yardsticks for the same absolute quantity at note 48, with the term off.
+  WARN("note 48 yardsticks with the term off: velocity 64->127 moves it "
+       << pct(hc(shipped, 48, 127), hc(shipped, 48, 64)) << " %, cuivre on->off "
+       << pct(hc(shipped, 48, 64), hc(no_cuivre, 48, 64)) << " %");
+
+  // The term's own response to the played dynamic, with the shaper out of the
+  // way. The loop holds its pressure near one level at every velocity -- the amp
+  // VCA carries the dynamic, not the breath -- so the modulator moves only as
+  // far as the mouth pressure does, which is 7.6 % from velocity 64 to 127.
+  NativeSynthPatch bare_on = no_cuivre;
+  bare_on.brass.bore_nonlinearity = 1.0f;
+  for (uint8_t note : {uint8_t{48}, uint8_t{72}}) {
+    for (uint8_t vel : {uint8_t{32}, uint8_t{64}, uint8_t{100}, uint8_t{127}}) {
+      const double off = hc(no_cuivre, note, vel), on = hc(bare_on, note, vel);
+      WARN("shaper off  note " << static_cast<int>(note) << " velocity " << static_cast<int>(vel)
+                               << "  base " << off << "  increment " << (on - off) << " ("
+                               << pct(on, off) << " %)");
+    }
+    WARN("shaper off  note " << static_cast<int>(note) << "  ff/mp centroid contrast: term off "
+                             << (hc(no_cuivre, note, 127) / hc(no_cuivre, note, 64)) << "  term on "
+                             << (hc(bare_on, note, 127) / hc(bare_on, note, 64)));
+  }
+
+  // Whether the shaper is what masks the term at a loud velocity. With
+  // cuivre_dynamics off the effective brassiness IS the patch field, and the
+  // live shaper's steady state is 0.165 + 0.693*vel01^2 -- so replaying those
+  // three values at one velocity holds the term's own pressure fixed and moves
+  // only the shaper. If the three rows reproduce the three velocities above,
+  // the falloff is the shaper's rather than the loop's.
+  for (float b_eff : {0.3410f, 0.5947f, 0.8580f}) {
+    NativeSynthPatch replay = shipped;
+    replay.brass.cuivre_dynamics = 0.0f;
+    replay.brass.brassiness = b_eff;
+    NativeSynthPatch replay_on = replay;
+    replay_on.brass.bore_nonlinearity = 1.0f;
+    const double off = hc(replay, 48, 64), on = hc(replay_on, 48, 64);
+    WARN("velocity 64 held, shaper replayed at b_eff "
+         << b_eff << "  base " << off << "  increment " << (on - off) << " (" << pct(on, off)
+         << " %)");
+  }
+
+  // The centroid is blind to the sign of the pressure dependence, so read the
+  // slope asymmetry of the raw bore output instead: peaks arriving sooner than
+  // troughs steepen the rising edge, which is a ratio above one.
+  NativeSynthPatch raw = no_cuivre;
+  raw.brass.bell_radiation_hz = 0.0f;
+  raw.cutoff_hz = 20000.0f;
+  raw.body = sonare::midi::synth::BodyType::kNone;
+  raw.body_mix = 0.0f;
+  const auto slope_ratio = [&](const NativeSynthPatch& p) {
+    const std::vector<float> y = render_patch(p, 48, 127, 48000);
+    REQUIRE(std::isfinite(y.back()));
+    double up = 0.0, down = 0.0;
+    for (size_t i = 14401; i < y.size(); ++i) {
+      const double d = static_cast<double>(y[i]) - static_cast<double>(y[i - 1]);
+      up = std::max(up, d);
+      down = std::min(down, d);
+    }
+    return up / std::max(1.0e-12, -down);
+  };
+  const double s_off = slope_ratio(raw);
+  WARN("raw bore slope asymmetry (rise/fall): term off " << s_off << "  repeat " << slope_ratio(raw)
+                                                         << "  (the lip "
+                                                         << "valve's own asymmetry, and its null)");
+  // Swept rather than read at full depth: the first-order direction is the sign
+  // of the propagation, while at full depth the waveform is reshaped enough that
+  // this ratio stops reading an edge and starts reading the sidebands.
+  for (float depth : {0.0625f, 0.125f, 0.25f, 0.5f, 1.0f}) {
+    NativeSynthPatch raw_on = raw;
+    raw_on.brass.bore_nonlinearity = depth;
+    WARN("   depth " << depth << " -> " << slope_ratio(raw_on) << "  (moved "
+                     << pct(slope_ratio(raw_on), s_off) << " %)");
+  }
 }
 
 namespace {
@@ -876,5 +985,65 @@ TEST_CASE("all advanced brass gates compose stably", "[midi][synth][brass]") {
       REQUIRE(peak(tone) < 4.0f);
       REQUIRE(std::isfinite(tone.back()));
     }
+  }
+}
+
+namespace {
+
+/// Spectral centroid over the fundamental. The note carries the raw centroid
+/// with it, so only this normalised form compares across notes.
+double brass_harmonic_centroid(const NativeSynthPatch& p, uint8_t note, uint8_t velocity) {
+  const double hz = 440.0 * std::pow(2.0, (static_cast<int>(note) - 69) / 12.0);
+  const std::vector<float> tone = render_patch(p, note, velocity, 48000);
+  REQUIRE(std::isfinite(tone.back()));
+  return static_cast<double>(spectral_centroid(tone, 14400)) / hz;
+}
+
+}  // namespace
+
+TEST_CASE("bore nonlinearity gate is off by default (bit-identical)", "[midi][synth][brass]") {
+  NativeSynthPatch patch = brass_base_patch();
+  REQUIRE(!(patch.brass.bore_nonlinearity > 0.0f));
+  const std::vector<float> plain = render_patch(patch, 53, 100, 16384);
+  patch.brass.bore_nonlinearity = 0.0f;
+  REQUIRE(render_patch(patch, 53, 100, 16384) == plain);
+}
+
+TEST_CASE("bore nonlinearity brightens a loud note more than a soft one", "[midi][synth][brass]") {
+  // The literature defines brassiness as the RATE at which the spectrum enriches
+  // with the dynamic level, so the term is read as the ff/mp contrast of the
+  // normalised centroid and not as any single note's brightness. The shaper is
+  // switched off here on purpose: it carries a dynamics response of its own
+  // (1.256 on the shipping patch) and masks this term by 3.8x at ff, so the
+  // shipping composite cannot separate the two. The bar is one and a half times
+  // the largest cause that is not this term, in the statistic's own units:
+  // measured on the control arm before the term existed, the contrast is 1.019
+  // at note 48 and a repeat render reproduces it exactly, so everything else in
+  // the engine contributes 0.019 of contrast and the bar is 0.029.
+  NativeSynthPatch off = gm_fallback_patch(0, 56);  // Trumpet, as shipped
+  REQUIRE(off.mode == SynthEngineMode::kBrass);
+  REQUIRE(!(off.brass.bore_nonlinearity > 0.0f));
+  off.brass.brassiness = 0.0f;
+  off.brass.cuivre_dynamics = 0.0f;
+  NativeSynthPatch on = off;
+  on.brass.bore_nonlinearity = 1.0f;
+
+  const double contrast_off =
+      brass_harmonic_centroid(off, 48, 127) / brass_harmonic_centroid(off, 48, 64);
+  const double contrast_on =
+      brass_harmonic_centroid(on, 48, 127) / brass_harmonic_centroid(on, 48, 64);
+  INFO("ff/mp centroid contrast: term off " << contrast_off << "  term on " << contrast_on
+                                            << "  gain " << (contrast_on - contrast_off));
+  REQUIRE(contrast_on - contrast_off >= 0.029);
+
+  // Signed and ordered, because a contrast gain alone cannot tell a term that
+  // follows the dynamic from one that merely moves with it.
+  double previous = 0.0;
+  for (uint8_t velocity : {uint8_t{32}, uint8_t{64}, uint8_t{100}, uint8_t{127}}) {
+    const double lift =
+        brass_harmonic_centroid(on, 48, velocity) / brass_harmonic_centroid(off, 48, velocity);
+    INFO("velocity " << static_cast<int>(velocity) << " lifts the centroid by " << lift);
+    REQUIRE(lift > previous);
+    previous = lift;
   }
 }

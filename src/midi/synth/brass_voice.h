@@ -181,8 +181,10 @@ struct BrassPatchParams {
   /// delay the bore reads is scaled by one plus this fraction of the normalised
   /// bore pressure, and the wavefront steepens as it travels. That is the
   /// mechanism @c brassiness approximates with a static shaper on the way out;
-  /// carrying it in the propagation instead is what lets the brightness follow a
-  /// crescendo inside one note, and a longer bore blare at a lower effort.
+  /// carrying it in the propagation instead is what lets the brightness follow
+  /// the played dynamic and a crescendo inside one note. The delay is scaled by
+  /// a fixed fraction of the period, so the phase index it produces is the same
+  /// at every note — this is a dynamics mechanism, not a register one.
   /// 0 = off -> the delay is constant and the render is bit-identical.
   float bore_nonlinearity = 0.0f;
 
@@ -402,8 +404,8 @@ class BrassVoiceCore {
   // loudness, so the self-limiting mouth pressure cannot; velocity is the played
   // dynamic), with a live CC2 breath swell above the seated level adding on top.
   float cuivre_dynamics_ = 0.0f;
-  float cuivre_vel_ = 0.0f;
-  float cuivre_seat_ = 0.0f;
+  float dyn_vel01_ = 0.0f;
+  float dyn_seat_ = 0.0f;
   // First-order ADAA on the tanh shock front: antialiases the bloomed upper
   // harmonics so they do not fold back in the high register.
   rt::Adaa1<rt::TanhNonlinearity> cuivre_adaa_{};
@@ -441,6 +443,19 @@ class BrassVoiceCore {
   // valve is taken instead (bit-identical). Above 0 the lip is a one-sided valve
   // whose opening clamps to [0,1] and whose flow follows Bernoulli.
   float lip_aperture_ = 0.0f;
+
+  // 4f: amplitude-dependent propagation speed. 0 -> the bore delay is read at
+  // the pitch ratio alone (bit-identical). Above 0 a pressure peak travels
+  // faster than a trough, so the delay shortens where the bore pressure is
+  // high. The loop holds one pressure at every velocity (the amp VCA carries
+  // the dynamic), so the modulator is that pressure times the played dynamic.
+  float bore_nonlinearity_ = 0.0f;
+
+  // CC2 swell above the note-on seat, in breath-band units.
+  float breath_swell() const noexcept;
+  // Velocity plus the swell, clamped to [0,1]: the played dynamic as a fraction
+  // of fortissimo, which is where kBoreSpeedSpan is calibrated.
+  float played_dynamic() const noexcept;
 
   // Lip resonator step: a two-pole (mass-spring) resonator driven by the pressure
   // difference; returns the lip displacement.

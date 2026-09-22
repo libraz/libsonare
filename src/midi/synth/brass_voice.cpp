@@ -47,6 +47,11 @@ SONARE_TUNABLE(kLipCouple, 4.5f);
 // coefficient it replaces, and the level belongs to the radiation makeup, not
 // here — raising this instead drives the loop into period doubling.
 SONARE_TUNABLE(kLipFlowScale, 1.0f);
+// Amplitude-dependent propagation: the fraction the bore delay shortens at full
+// bore_nonlinearity and full normalised bore pressure. Seeded from the physics
+// rather than fitted -- beta = (gamma+1)/2 = 1.2 for air, times a fortissimo
+// bore pressure of about 5% of atmospheric.
+SONARE_TUNABLE(kBoreSpeedSpan, 0.06f);
 // Lip resonator quality factor from lip_damping, held CONSTANT-Q (bandwidth
 // proportional to the note) so the lip stays selective at low notes — a
 // fixed-radius resonator is wider than the fundamental in the tuba range and
@@ -332,8 +337,8 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // shaper sees a ~unit signal and the peak survives the reshaping.
   brassiness_ = std::clamp(params.brassiness, 0.0f, 1.0f);
   cuivre_dynamics_ = std::clamp(params.cuivre_dynamics, 0.0f, 1.0f);
-  cuivre_vel_ = vel01;
-  cuivre_seat_ = level;
+  dyn_vel01_ = vel01;
+  dyn_seat_ = level;
   cuivre_scale_ = peak_est;
   cuivre_inv_scale_ = 1.0f / std::max(0.5f, peak_est);
   const float cuivre_fc = std::clamp(kCuivreDriveRefHz / f0, 1.0f, kCuivreDriveRatioMax);
@@ -379,6 +384,10 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // clamp on a reflection coefficient. Off (0) -> the symmetric path is taken
   // and the render is bit-identical.
   lip_aperture_ = std::clamp(params.lip_aperture, 0.0f, 1.0f);
+
+  // 4f: amplitude-dependent propagation speed. Off (0) -> the bore delay is read
+  // at the pitch ratio alone and the render is bit-identical.
+  bore_nonlinearity_ = std::clamp(params.bore_nonlinearity, 0.0f, 1.0f);
 }
 
 void BrassVoiceCore::tune_lip(float f0) noexcept {
@@ -416,6 +425,16 @@ void BrassVoiceCore::retune(float pitch_ratio) noexcept {
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
   tune_lip(bore_f0_ * ratio);
   lip_ratio_ = ratio;
+}
+
+float BrassVoiceCore::breath_swell() const noexcept {
+  const float live =
+      std::clamp((breath_target_ * breath_.level - kBreathBase) / kBreathSpan, 0.0f, 1.0f);
+  return std::max(0.0f, live - dyn_seat_);
+}
+
+float BrassVoiceCore::played_dynamic() const noexcept {
+  return std::clamp(dyn_vel01_ + breath_swell(), 0.0f, 1.0f);
 }
 
 float BrassVoiceCore::render(float pitch_ratio) noexcept {
@@ -498,7 +517,25 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
 
   // Advance the bore delay line: write the DC-blocked injection, read the delayed
   // pressure returning from the bell.
-  bore_.advance(dc, ratio);
+  //
+  // 4f (gated): amplitude-dependent propagation speed. A pressure peak travels
+  // faster than a trough, so the whole bore delay shortens where the pressure is
+  // high — one combined variable delay standing in for the cascade of per-section
+  // ones. The delay is read as period/ratio, so scaling the ratio up is how a
+  // shorter delay reaches it without a second delay line. The modulator is the
+  // bell's own reflection lowpass rather than the raw bore output: the pressure
+  // wave in the bore is low-frequency dominated, and an unconditioned modulator
+  // spends the interpolator's error on content that is about to be radiated
+  // rather than reflected.
+  float bore_ratio = ratio;
+  if (bore_nonlinearity_ > 0.0f) {
+    // kBoreSpeedSpan is the pressure at fortissimo, but the loop holds one
+    // pressure at every velocity (the amp VCA carries the dynamic), so the speed
+    // law's pressure is the loop's times the played dynamic.
+    const float p_hat = lp_state_ * cuivre_inv_scale_ * played_dynamic();
+    bore_ratio = ratio * std::clamp(1.0f + kBoreSpeedSpan * bore_nonlinearity_ * p_hat, 0.5f, 1.5f);
+  }
+  bore_.advance(dc, bore_ratio);
   ++drive_index_;
 
   float outp = bore_.out;
@@ -521,10 +558,7 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
       // seated breath level adds on top. Squaring it makes the shock form
       // superlinearly with the dynamic, so a soft note stays round and the brassy
       // bloom concentrates near ff.
-      const float live =
-          std::clamp((breath_target_ * breath_.level - kBreathBase) / kBreathSpan, 0.0f, 1.0f);
-      const float dyn =
-          std::clamp(cuivre_vel_ * breath_.level + std::max(0.0f, live - cuivre_seat_), 0.0f, 1.0f);
+      const float dyn = std::clamp(dyn_vel01_ * breath_.level + breath_swell(), 0.0f, 1.0f);
       const float shaped_dyn = dyn * dyn;
       b_eff = std::clamp(brassiness_ * ((1.0f - cuivre_dynamics_) +
                                         cuivre_dynamics_ * kCuivreDynGain * shaped_dyn),
