@@ -47,16 +47,16 @@ The row names a chain stage and the JSON key on it that receives the converted v
 
 - `stage` is the **insert name**, not an index into the chain: `"effects.modulation.chorus"`, `"eq.parametric"`, `"stereo.autoPan"`. A chain holds at most one stage of a given name, which is what makes the name an address.
 - `key` is that insert's parameter key. Dotted keys are allowed where the insert nests them (`"band0.gainDb"`).
-- **The key should also be one the insert publishes as realtime-automatable.** A key the insert reads at construction but offers no realtime descriptor for still works, at the price of rebuilding the whole chain on every wire edit of that byte — which zeroes the delay and reverb tails inside it. Where that is the right answer anyway, it is recorded with its reason in `tests/midi/gs_efx_send_routing_test.cpp`; the two entries there are the rotary's acceleration fields, which shape a glide rather than ride one.
+- **The key should also be one the insert publishes as realtime-automatable.** A key the insert reads at construction but offers no realtime descriptor for still works, at the price of rebuilding the whole chain on every wire edit of that byte — which zeroes the delay and reverb tails inside it. Where that is the right answer anyway, it is recorded with its reason in `tests/midi/gs_efx_send_routing_test.cpp`. The entries there are of two kinds: a length an insert sizes a buffer by in `prepare()` (the reverb's pre-delay, the pitch shifter's window), which a live write would allocate for on the audio thread, and the rotary's acceleration fields, which shape a glide rather than ride one.
 - `keys` (array) replaces `key` where one slot drives several controls. The row is still one row.
 - `class` and `table` name the measured law. The pair spells the same `class.table` string the generated header uses — `"gain"` + `"tone"` is `gain.tone`.
 - `via` (optional) names a fixed wrapper applied after the conversion, from a closed vocabulary rather than free text. Use it only where the wrapper already exists as a named function.
 
-The twelve classes and their tables, which are the whole vocabulary:
+The fourteen classes and their tables, which are the whole vocabulary:
 
 | class | tables |
 |---|---|
-| `ratio` | `percent` |
+| `ratio` | `percent`, `semitone` |
 | `rate` | `narrow`, `wide` |
 | `delay_time` | `pre_delay`, `time1`, `time2`, `time3`, `time4` |
 | `gain` | `tone` |
@@ -68,10 +68,12 @@ The twelve classes and their tables, which are the whole vocabulary:
 | `azimuth` | `placement` |
 | `accel` | `rotor` |
 | `freq` | `eq`, `pre_filter`, `damping` |
+| `post_gain` | `makeup` |
+| `window` | `splice` |
 
 A class outside this list means a law nobody measured. That is not something to invent here — the row becomes `state` with a reason saying so.
 
-**`ratio` is the one class no measured table holds.** It reads a byte between the endpoints of a range printed with a unit, and it is admitted only where those endpoints force the step: `0F–71` against `-98%`–`+98%` is 98 bytes over 196 per cent, exactly 2 a byte, so the linear reading is the only one the page allows rather than a guess at the machine's law. A ratio row carries both endpoint pairs — `printed_values`, its copy of the archive's byte range, and `range`, the unit ends — and `bindings_header.py` refuses the header where the unit span is not a whole multiple of the byte span. The table names the unit the ends are printed in; `percent` reaches the control as the fraction. Nothing makes `ratio` available to the bare `00–7F`: it prints no unit, and its law is measured not to be linear.
+**`ratio` is the one class no measured table holds.** It reads a byte between the endpoints of a range printed with a unit, and it is admitted only where those endpoints force the step: `0F–71` against `-98%`–`+98%` is 98 bytes over 196 per cent, exactly 2 a byte, so the linear reading is the only one the page allows rather than a guess at the machine's law. A ratio row carries both endpoint pairs — `printed_values`, its copy of the archive's byte range, and `range`, the unit ends — and `bindings_header.py` refuses the header where the unit span is not a whole multiple of the byte span. The table names the unit the ends are printed in; `percent` reaches the control as the fraction and `semitone` as it stands. Nothing makes `ratio` available to the bare `00–7F`: it prints no unit, and its law is measured not to be linear.
 
 ### `state` — the quantity is known, nothing receives it
 

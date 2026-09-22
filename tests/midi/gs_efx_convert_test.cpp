@@ -35,10 +35,12 @@ using sonare::midi::synth::gs_efx_freq_hz;
 using sonare::midi::synth::gs_efx_gain_db;
 using sonare::midi::synth::gs_efx_level_mul;
 using sonare::midi::synth::gs_efx_pan;
+using sonare::midi::synth::gs_efx_post_gain_db;
 using sonare::midi::synth::gs_efx_rate_hz;
 using sonare::midi::synth::gs_efx_ratio;
 using sonare::midi::synth::gs_efx_wave;
 using sonare::midi::synth::gs_efx_width_q;
+using sonare::midi::synth::gs_efx_window_ms;
 using sonare::midi::synth::GsEfxWave;
 using sonare::midi::synth::GsFreqColumn;
 using sonare::midi::synth::GsRateRange;
@@ -628,6 +630,62 @@ TEST_CASE("gs_efx_ratio reads a slot only where the printed ends force one step"
 
   WARN("comparisons: " << tally.count());
   REQUIRE(tally.count() >= 24);
+}
+
+TEST_CASE("post gain and the splice window reproduce the archive's readings", "[gs-efx-convert]") {
+  Tally tally;
+
+  // Post gain: each set's level at settings 1-3 against its own setting 0, so
+  // the stage in front of the byte cancels. Floor: the spread the claim reads
+  // over its nine steps.
+  constexpr double kPostGainFloorDb = 0.09;
+  struct PostGainSet {
+    std::array<double, 4> heard_db;
+    const char* source;
+  };
+  const PostGainSet kPostGainSets[] = {
+      {{-45.29, -39.27, -33.24, -27.3}, "01 30 / 40 03 05, the compressor"},
+      {{-51.63, -45.61, -39.59, -33.64}, "01 31 / 40 03 06, threshold at the top"},
+      {{-80.55, -74.52, -68.5, -62.54}, "01 31 / 40 03 06, threshold at nought"},
+  };
+  for (const auto& set : kPostGainSets) {
+    for (uint8_t setting = 1; setting < 4; ++setting) {
+      tally.near(gs_efx_post_gain_db(setting) - gs_efx_post_gain_db(0),
+                 set.heard_db[setting] - set.heard_db[0], kPostGainFloorDb,
+                 "post gain, setting " + std::to_string(setting) + " (" + set.source + ")");
+    }
+  }
+  tally.same(gs_efx_post_gain_db(0) == 0.0f, "post gain: setting 0 adds nothing");
+  tally.same(gs_efx_post_gain_db(4) == gs_efx_post_gain_db(0),
+             "post gain: past the four printed settings, the first");
+
+  // Window: both shifters of 01 60 read at the octave. Floor: the worst the two
+  // shifters disagree by, four point six parts in ten thousand.
+  constexpr double kWindowFloorRelative = 4.6e-4;
+  const std::array<double, 5> kFirstShifterMs = {31.9977, 42.6545, 63.9853, 85.2988, 127.9926};
+  const std::array<double, 5> kSecondShifterMs = {31.9988, 42.6585, 63.9734, 85.3046, 128.0516};
+  for (uint8_t state = 0; state < 5; ++state) {
+    for (const auto* reading : {&kFirstShifterMs, &kSecondShifterMs}) {
+      const double ms = (*reading)[state];
+      tally.near(gs_efx_window_ms(state), ms, ms * kWindowFloorRelative,
+                 "window, state " + std::to_string(state) + " (01 60 / 40 03 0B)");
+    }
+  }
+
+  // 01 61 reads a distance a constant multiple of the window, so its five means
+  // are held to the ratio the windows stand in. Floor: four takes of one state.
+  constexpr double kFeedbackShifterRepeatsMs = 0.0209;
+  const std::array<double, 5> kFeedbackShifterMs = {28.505, 38.0, 57.0, 75.995, 114.026};
+  for (uint8_t state = 1; state < 5; ++state) {
+    const double predicted = kFeedbackShifterMs[0] * gs_efx_window_ms(state) / gs_efx_window_ms(0);
+    tally.near(predicted, kFeedbackShifterMs[state], kFeedbackShifterRepeatsMs,
+               "window ratio, state " + std::to_string(state) + " (01 61 / 40 03 07)");
+  }
+  tally.same(gs_efx_window_ms(5) == gs_efx_window_ms(0),
+             "window: past the five printed states, the first");
+
+  WARN("comparisons: " << tally.count());
+  REQUIRE(tally.count() >= 25);
 }
 
 TEST_CASE("gs_efx_enum_index returns the first state past the printed list", "[gs-efx-convert]") {

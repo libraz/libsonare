@@ -29,14 +29,14 @@
   },
   "reach": {
     "printed": 770,
-    "measured": 85,
-    "reached": 85,
+    "measured": 89,
+    "reached": 89,
     "translatable": null,
     "translated": null,
     "what_the_first_two_are": "Printed is every (type, slot) the unit's own records carry a printed value for, counted by tools/gs/coverage.py's enumeration -- the denominator the block's coverage is read against. Measured is how many of them these tables give a conversion to; reached is the same count under the name the schema opened with.",
     "why_two_are_null": "Translatable asks whether the insert a slot maps to has a control of the same physical unit, and translated asks whether the GS layer emits the key. Neither is a property of the archive, so neither is derived here.",
     "by_source": {
-      "measured": 73,
+      "measured": 77,
       "assigned": 6,
       "unit_overrides_assigned": 6
     }
@@ -52,7 +52,9 @@
     "pan": 3,
     "balance": 3,
     "azimuth": 2,
-    "accel": 2
+    "accel": 2,
+    "post_gain": 2,
+    "window": 2
   },
   "reach_by_table": {
     "rate.narrow": 3,
@@ -72,7 +74,9 @@
     "pan.output": 3,
     "balance.effect": 3,
     "azimuth.placement": 2,
-    "accel.rotor": 2
+    "accel.rotor": 2,
+    "post_gain.makeup": 2,
+    "window.splice": 2
   },
   "defaults": {
     "types": 65,
@@ -3906,6 +3910,202 @@
       },
       "rests_on": "0122-an-acceleration-byte-is-four-bits-and-a-multiplier.json"
     },
+    "post_gain": {
+      "read_by": "the byte, whole",
+      "tables": {
+        "makeup": {
+          "printed_ends": [
+            "0",
+            "+18"
+          ],
+          "columns": [
+            "00/01/02/03"
+          ],
+          "kind": "rule",
+          "rule": "setting * 6 decibels, after the stage the slot is printed beside",
+          "settings": 4,
+          "db_per_step": 6.0,
+          "settings_past_the_table_return": 0,
+          "what_that_rests_on": "Nothing read past the fourth setting. Entry 0 is what the measured small tables return there, and the reader keeps that one convention.",
+          "steps_read": [
+            {
+              "record": "01-30-05-the-post-gain-byte-of-the-compressor.json",
+              "type": "01 30",
+              "address": "40 03 05",
+              "from_setting": 0,
+              "step_db": 6.02,
+              "off_the_law_db": 0.02
+            },
+            {
+              "record": "01-30-05-the-post-gain-byte-of-the-compressor.json",
+              "type": "01 30",
+              "address": "40 03 05",
+              "from_setting": 1,
+              "step_db": 6.03,
+              "off_the_law_db": 0.03
+            },
+            {
+              "record": "01-30-05-the-post-gain-byte-of-the-compressor.json",
+              "type": "01 30",
+              "address": "40 03 05",
+              "from_setting": 2,
+              "step_db": 5.94,
+              "off_the_law_db": -0.06
+            },
+            {
+              "record": "01-31-06-the-post-gain-byte-with-the-threshold-byte-at-the-top.json",
+              "type": "01 31",
+              "address": "40 03 06",
+              "from_setting": 0,
+              "step_db": 6.02,
+              "off_the_law_db": 0.02
+            },
+            {
+              "record": "01-31-06-the-post-gain-byte-with-the-threshold-byte-at-the-top.json",
+              "type": "01 31",
+              "address": "40 03 06",
+              "from_setting": 1,
+              "step_db": 6.02,
+              "off_the_law_db": 0.02
+            },
+            {
+              "record": "01-31-06-the-post-gain-byte-with-the-threshold-byte-at-the-top.json",
+              "type": "01 31",
+              "address": "40 03 06",
+              "from_setting": 2,
+              "step_db": 5.95,
+              "off_the_law_db": -0.05
+            },
+            {
+              "record": "01-31-06-the-post-gain-byte-with-the-threshold-byte-at-nought.json",
+              "type": "01 31",
+              "address": "40 03 06",
+              "from_setting": 0,
+              "step_db": 6.03,
+              "off_the_law_db": 0.03
+            },
+            {
+              "record": "01-31-06-the-post-gain-byte-with-the-threshold-byte-at-nought.json",
+              "type": "01 31",
+              "address": "40 03 06",
+              "from_setting": 1,
+              "step_db": 6.02,
+              "off_the_law_db": 0.02
+            },
+            {
+              "record": "01-31-06-the-post-gain-byte-with-the-threshold-byte-at-nought.json",
+              "type": "01 31",
+              "address": "40 03 06",
+              "from_setting": 2,
+              "step_db": 5.96,
+              "off_the_law_db": -0.04
+            }
+          ],
+          "worst_step_off_the_law_db": 0.06,
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 2,
+          "source": "measured"
+        }
+      },
+      "rests_on": "post-gain-four-fixed-steps-of-six-decibels.json"
+    },
+    "window": {
+      "read_by": "the byte, whole",
+      "tables": {
+        "splice": {
+          "printed_ends": [
+            "1",
+            "5"
+          ],
+          "columns": [
+            "00–04"
+          ],
+          "kind": "entries",
+          "entries": [
+            {
+              "setting": 0,
+              "ms": 32.0,
+              "steps_of_the_clock": 1024.0,
+              "read_ms": 31.9977,
+              "read_off_the_law_ms": -0.0023,
+              "what_placed_it": "the law, and a whole-step count the claim read",
+              "unit_specific": false,
+              "approximate": false,
+              "source": "measured"
+            },
+            {
+              "setting": 1,
+              "ms": 42.666667,
+              "steps_of_the_clock": 1365.3333,
+              "read_ms": 42.6545,
+              "read_off_the_law_ms": -0.0122,
+              "what_placed_it": "the law; the reading cannot tell it from the nearest whole count",
+              "unit_specific": false,
+              "approximate": false,
+              "source": "measured"
+            },
+            {
+              "setting": 2,
+              "ms": 64.0,
+              "steps_of_the_clock": 2048.0,
+              "read_ms": 63.9853,
+              "read_off_the_law_ms": -0.0147,
+              "what_placed_it": "the law, and a whole-step count the claim read",
+              "unit_specific": false,
+              "approximate": false,
+              "source": "measured"
+            },
+            {
+              "setting": 3,
+              "ms": 85.333333,
+              "steps_of_the_clock": 2730.6667,
+              "read_ms": 85.2988,
+              "read_off_the_law_ms": -0.0345,
+              "what_placed_it": "the law; the reading cannot tell it from the nearest whole count",
+              "unit_specific": false,
+              "approximate": false,
+              "source": "measured"
+            },
+            {
+              "setting": 4,
+              "ms": 128.0,
+              "steps_of_the_clock": 4096.0,
+              "read_ms": 127.9926,
+              "read_off_the_law_ms": -0.0074,
+              "what_placed_it": "the law, and a whole-step count the claim read",
+              "unit_specific": false,
+              "approximate": false,
+              "source": "measured"
+            }
+          ],
+          "settings_past_the_table_return": 0,
+          "what_that_rests_on": "Nothing read past the fifth setting. Entry 0 is what the measured small tables return there, and the reader keeps that one convention.",
+          "what_the_window_is": "The distance the read-out drifts between splices, which is also how far apart the two read-outs are stored.",
+          "corroborated_by": [
+            {
+              "file": "0161-a-feedback-shifters-mode-byte-picks-the-same-five-lengths.json",
+              "types": [
+                "01 61"
+              ],
+              "means_ms": [
+                28.505,
+                38.0,
+                57.0,
+                75.995,
+                114.026
+              ],
+              "repeats_bound_ms": 0.0209
+            }
+          ],
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 2,
+          "source": "measured"
+        }
+      },
+      "rests_on": "0160-a-pitch-byte-is-read-out-of-a-window-the-mode-byte-picks.json"
+    },
     "freq": {
       "read_by": "the top four bits; eight settings share an entry",
       "tables": {
@@ -4915,12 +5115,40 @@
     },
     {
       "type": "01 30",
+      "address": "40 03 05",
+      "parameter": 2,
+      "conversion_class": "post_gain",
+      "table": "makeup",
+      "printed_values": "00/01/02/03",
+      "rests_on": "post-gain-four-fixed-steps-of-six-decibels.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false,
+      "source": "measured"
+    },
+    {
+      "type": "01 30",
       "address": "40 03 15",
       "parameter": 18,
       "conversion_class": "pan",
       "table": "output",
       "printed_values": "00–7F",
       "rests_on": "pan-one-multiplier-a-side-under-a-term-added-after-it.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false,
+      "source": "measured"
+    },
+    {
+      "type": "01 31",
+      "address": "40 03 06",
+      "parameter": 3,
+      "conversion_class": "post_gain",
+      "table": "makeup",
+      "printed_values": "00/01/02/03",
+      "rests_on": "post-gain-four-fixed-steps-of-six-decibels.json",
       "inference_state": "standing",
       "address_inside_the_inferences_list": true,
       "unit_specific": false,
@@ -5327,6 +5555,34 @@
       "table": "effect",
       "printed_values": "00–7F",
       "rests_on": "balance-two-ramps-that-meet-at-full.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false,
+      "source": "measured"
+    },
+    {
+      "type": "01 60",
+      "address": "40 03 0B",
+      "parameter": 8,
+      "conversion_class": "window",
+      "table": "splice",
+      "printed_values": "00–04",
+      "rests_on": "0160-a-pitch-byte-is-read-out-of-a-window-the-mode-byte-picks.json",
+      "inference_state": "parked",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false,
+      "source": "measured"
+    },
+    {
+      "type": "01 61",
+      "address": "40 03 07",
+      "parameter": 4,
+      "conversion_class": "window",
+      "table": "splice",
+      "printed_values": "00–04",
+      "rests_on": "0161-a-feedback-shifters-mode-byte-picks-the-same-five-lengths.json",
       "inference_state": "standing",
       "address_inside_the_inferences_list": true,
       "unit_specific": false,
@@ -5822,7 +6078,7 @@
       "conversion_class": null,
       "table": null,
       "what": "the rotary speed switch turns over at 63/64 rather than at the printed 7F",
-      "why_it_names_no_class": "A switch, not a conversion: none of the eleven classes carries it, so nothing here computes its corner and the figure is the doc's."
+      "why_it_names_no_class": "A switch, not a conversion: none of the thirteen classes carries it, so nothing here computes its corner and the figure is the doc's."
     },
     {
       "conversion_class": "gain",
@@ -5921,7 +6177,22 @@
       ]
     }
   ],
-  "entries_resting_on_a_parked_inference": [],
+  "entries_resting_on_a_parked_inference": [
+    {
+      "type": "01 60",
+      "address": "40 03 0B",
+      "parameter": 8,
+      "conversion_class": "window",
+      "table": "splice",
+      "printed_values": "00–04",
+      "rests_on": "0160-a-pitch-byte-is-read-out-of-a-window-the-mode-byte-picks.json",
+      "inference_state": "parked",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false,
+      "source": "measured"
+    }
+  ],
   "derivation_checks": {
     "delay_ladders_against_the_records": [
       {
@@ -6719,6 +6990,25 @@
         "file": "0122-an-acceleration-byte-is-four-bits-and-a-multiplier.json",
         "state": "standing",
         "rounds": 2
+      },
+      {
+        "conversion_class": "post_gain",
+        "file": "post-gain-four-fixed-steps-of-six-decibels.json",
+        "state": "standing",
+        "rounds": 1
+      },
+      {
+        "conversion_class": "window",
+        "file": "0160-a-pitch-byte-is-read-out-of-a-window-the-mode-byte-picks.json",
+        "state": "parked",
+        "rounds": 5
+      },
+      {
+        "conversion_class": "window",
+        "file": "0161-a-feedback-shifters-mode-byte-picks-the-same-five-lengths.json",
+        "state": "standing",
+        "rounds": 2,
+        "widens_reach_only": true
       }
     ]
   },

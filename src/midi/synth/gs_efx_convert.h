@@ -82,6 +82,14 @@ float gs_efx_accel_tau_s(uint8_t value) noexcept;
 /// measurement: the loop's step rate over the divisor, against it times it.
 float gs_efx_accel_undershoot_hz(uint8_t value) noexcept;
 
+/// POST GAIN byte -> dB, in fixed steps. Settings past the fourth return the
+/// first, the convention the measured small tables set.
+float gs_efx_post_gain_db(uint8_t value) noexcept;
+
+/// SHIFT MODE byte -> the splice window in milliseconds: how far the read-out
+/// drifts between splices. Settings past the fifth return the first.
+float gs_efx_window_ms(uint8_t value) noexcept;
+
 /// A byte read through the printed endpoints of a slot no table was measured
 /// for. Nothing here is fitted: the two endpoints admit exactly one step or
 /// none, and where they admit none this returns false and writes nothing,

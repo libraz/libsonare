@@ -65,13 +65,17 @@ inline constexpr int kGsEfxReachAzimuth = 2;
 inline constexpr uint8_t kGsEfxClassAzimuth = 9;
 inline constexpr int kGsEfxReachAccel = 2;
 inline constexpr uint8_t kGsEfxClassAccel = 10;
+inline constexpr int kGsEfxReachPostGain = 2;
+inline constexpr uint8_t kGsEfxClassPostGain = 11;
+inline constexpr int kGsEfxReachWindow = 2;
+inline constexpr uint8_t kGsEfxClassWindow = 12;
 
 // The two numbers the block's coverage is read as: every (type, slot) the unit
 // prints a value for, and how many of those these tables give a conversion to.
 // Held apart because the numerator alone reads as an amount understood, which
 // it is not, and because one number cannot say which of the two moved.
 inline constexpr int kGsEfxPrinted = 770;
-inline constexpr int kGsEfxMeasured = 85;
+inline constexpr int kGsEfxMeasured = 89;
 
 // The same count per table. A class holds more than one -- two rate ranges, five
 // delay ladders, three frequency columns -- so a table that stops being fed leaves
@@ -96,6 +100,8 @@ inline constexpr int kGsEfxTableUsePanOutput = 3;
 inline constexpr int kGsEfxTableUseBalanceEffect = 3;
 inline constexpr int kGsEfxTableUseAzimuthPlacement = 2;
 inline constexpr int kGsEfxTableUseAccelRotor = 2;
+inline constexpr int kGsEfxTableUsePostGainMakeup = 2;
+inline constexpr int kGsEfxTableUseWindowSplice = 2;
 
 /// Rate, printed 0.05 - 6.40.
 inline constexpr std::array<GsEfxBreakpoint, 2> kGsEfxRateNarrow = {{
@@ -341,8 +347,21 @@ inline constexpr std::array<float, 16> kGsEfxAccelDivisor = {{
     168.41f,
 }};
 
+// Post gain: fixed steps after the stage it is printed beside. Past the table, entry 0.
+inline constexpr uint8_t kGsEfxPostGainSettings = 4;
+inline constexpr float kGsEfxPostGainDbPerStep = 6.0f;
+
+/// Splice window: how far the read-out drifts between splices. Past the table, entry 0.
+inline constexpr std::array<float, 5> kGsEfxWindowMs = {{
+    32.0f,
+    42.6667f,
+    64.0f,
+    85.3333f,
+    128.0f,
+}};
+
 /// Every (type, slot) pair the archive gives a conversion to.
-inline constexpr std::array<GsEfxSlotConversion, 85> kGsEfxSlotConversions = {{
+inline constexpr std::array<GsEfxSlotConversion, 89> kGsEfxSlotConversions = {{
     {0x0100, 1, 3, 0},   // gain.tone
     {0x0100, 3, 3, 0},   // gain.tone
     {0x0100, 4, 2, 0},   // freq.eq
@@ -364,7 +383,9 @@ inline constexpr std::array<GsEfxSlotConversion, 85> kGsEfxSlotConversions = {{
     {0x0125, 1, 0, 1},   // rate.wide
     {0x0126, 0, 6, 0},   // wave.modulator
     {0x0126, 1, 0, 1},   // rate.wide
+    {0x0130, 2, 11, 0},  // post_gain.makeup
     {0x0130, 18, 7, 0},  // pan.output
+    {0x0131, 3, 11, 0},  // post_gain.makeup
     {0x0140, 0, 1, 0},   // delay_time.pre_delay
     {0x0140, 19, 4, 0},  // level.output
     {0x0142, 1, 2, 1},   // freq.pre_filter
@@ -394,6 +415,8 @@ inline constexpr std::array<GsEfxSlotConversion, 85> kGsEfxSlotConversions = {{
     {0x0157, 1, 1, 3},   // delay_time.time3
     {0x0157, 2, 1, 3},   // delay_time.time3
     {0x0157, 15, 8, 0},  // balance.effect
+    {0x0160, 8, 12, 0},  // window.splice
+    {0x0161, 4, 12, 0},  // window.splice
     {0x0170, 0, 9, 0},   // azimuth.placement
     {0x0170, 1, 0, 1},   // rate.wide
     {0x0171, 0, 9, 0},   // azimuth.placement

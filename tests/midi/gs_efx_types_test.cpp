@@ -29,7 +29,7 @@
 ///
 /// **Parameter combinations.** The sweep below has five axes: the EFX type (65
 /// numbers, the 64 plus the alias), the parameter slot (20), the conversion
-/// class (12), the byte value (the boundaries 0, 1, 63, 64, 65, 126, 127), and
+/// class (14), the byte value (the boundaries 0, 1, 63, 64, 65, 126, 127), and
 /// which table of the class applies (2 rate ranges, 5 delay ladders, 3 frequency
 /// columns, 2 ratio units). Past the three-parameter threshold, so the set is a model rather
 /// than a hand-picked list. The constraint that decides the model: the class and
@@ -301,7 +301,7 @@ struct ConversionName {
   const char* name;
 };
 
-constexpr std::array<ConversionName, 20> kConversionNames = {{
+constexpr std::array<ConversionName, 22> kConversionNames = {{
     {s::kGsEfxClassRate, 0, "rate.narrow"},
     {s::kGsEfxClassRate, 1, "rate.wide"},
     {s::kGsEfxClassDelayTime, 0, "delay_time.pre_delay"},
@@ -320,6 +320,8 @@ constexpr std::array<ConversionName, 20> kConversionNames = {{
     {s::kGsEfxClassBalance, 0, "balance.effect"},
     {s::kGsEfxClassAzimuth, 0, "azimuth.placement"},
     {s::kGsEfxClassAccel, 0, "accel.rotor"},
+    {s::kGsEfxClassPostGain, 0, "post_gain.makeup"},
+    {s::kGsEfxClassWindow, 0, "window.splice"},
     {s::kGsEfxClassRatio, 0, "ratio.percent"},
     {s::kGsEfxClassRatio, 1, "ratio.semitone"},
 }};
@@ -363,8 +365,8 @@ std::vector<EqSlots> gain_slots_by_type() {
 /// nobody has adjudicated yet mostly become states as they are looked at, so a
 /// ceiling would go red on the lane finishing its own work; what a downgrade of
 /// a translation would have to get past is the translated floor.
-constexpr int kGsEfxTranslatedFloor = 290;
-constexpr int kGsEfxAdjudicatedFloor = 765;
+constexpr int kGsEfxTranslatedFloor = 293;
+constexpr int kGsEfxAdjudicatedFloor = 770;
 
 std::string conversion_name(uint8_t conversion_class, uint8_t table) {
   for (const ConversionName& row : kConversionNames) {
@@ -1209,6 +1211,12 @@ bool law_reads(const s::GsEfxBinding& row, uint8_t byte, const std::string& key,
       out = hertz ? s::gs_efx_accel_undershoot_hz(byte) : s::gs_efx_accel_tau_s(byte);
       return true;
     }
+    case s::kGsEfxClassPostGain:
+      out = s::gs_efx_post_gain_db(byte);
+      return true;
+    case s::kGsEfxClassWindow:
+      out = s::gs_efx_window_ms(byte);
+      return true;
     case s::kGsEfxClassRatio: {
       if (row.range >= s::kGsEfxBindingRanges.size()) return false;
       const s::GsEfxBindingRange& ends = s::kGsEfxBindingRanges[row.range];

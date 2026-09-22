@@ -8,6 +8,7 @@
 {"type": "05 00", "slot": 6, "class": "gain", "table": "tone", "stage": "eq.parametric", "key": "band2.gainDb"},
 {"type": "05 00", "slot": 7, "class": "ratio", "table": "semitone", "printed_values": "28–4C", "range": [-24, 12], "stage": "effects.modulation.pitchShifter", "key": "semitones", "named_by": "the parameter list"},
 {"type": "05 00", "slot": 8, "state": "the pitch-shifter insert takes one pitch, which the coarse byte sets in whole semitones", "named_by": "the parameter list"},
+{"type": "05 00", "slot": 9, "state": "no reading measured this type's shift mode; the five splice windows were read on the two pitch-shifter types, and a claim does not reach a type it never measured", "named_by": "the parameter list"},
 {"type": "05 00", "slot": 10, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
 {"type": "05 00", "slot": 11, "state": "a printed column with no measured table behind it"},
 {"type": "05 00", "slot": 12, "class": "rate", "table": "narrow", "stage": "effects.modulation.phaser", "key": "rateHz"},

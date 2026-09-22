@@ -809,6 +809,12 @@ bool write_bound(ParamsJson& out, const char* key, const GsEfxBinding& row, uint
       out.number(key, hertz ? gs_efx_accel_undershoot_hz(byte) : gs_efx_accel_tau_s(byte));
       return true;
     }
+    case kGsEfxClassPostGain:
+      out.number(key, gs_efx_post_gain_db(byte));
+      return true;
+    case kGsEfxClassWindow:
+      out.number(key, gs_efx_window_ms(byte));
+      return true;
     case kGsEfxClassRatio: {
       if (row.range >= kGsEfxBindingRanges.size()) return false;
       const GsEfxBindingRange& ends = kGsEfxBindingRanges[row.range];

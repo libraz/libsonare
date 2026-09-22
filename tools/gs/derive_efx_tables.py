@@ -5,7 +5,7 @@ where the two disagree the machine decides. The EFX parameter block is where tha
 bites hardest: a Rate, a Time, a Freq or a Level byte is not the quantity it is
 printed as, and libsonare has been running most of those bytes into an insert's
 compile-time default. This reads an archive of what one individual SC-8850
-answered and writes down, once, what each byte is worth -- the eleven shared
+answered and writes down, once, what each byte is worth -- the thirteen shared
 conversions, and which (type, slot) pairs the archive gives one to.
 
 **Nothing here decides anything.** A slot the archive does not reach is left
@@ -83,7 +83,7 @@ UNIT_CLOCK_HZ = 32000
 # names rather than copied from anywhere.
 THIRD_OCTAVE_DECADE = (100, 125, 160, 200, 250, 315, 400, 500, 630, 800)
 
-# The eleven conversion classes, in the order they are reported and emitted.
+# The thirteen conversion classes, in the order they are reported and emitted.
 # Written out rather than taken from the table below, so that a class dropped
 # from the table is a missing key here and not a shorter report.
 CLASS_ORDER = (
@@ -98,6 +98,8 @@ CLASS_ORDER = (
     "balance",
     "azimuth",
     "accel",
+    "post_gain",
+    "window",
 )
 
 # What picks each class, and what bounds it.
@@ -193,6 +195,21 @@ CLASSES = {
         "columns": {"*14": "rotor"},
         "scoped_by_address": False,
         "quantity": "divisor",
+    },
+    "post_gain": {
+        "inference": "post-gain-four-fixed-steps-of-six-decibels",
+        "columns": {"00/01/02/03": "makeup"},
+        "scoped_by_address": True,
+        "quantity": "dB",
+    },
+    # The law is read on one type; `reach_also_by` names claims that measured a
+    # further type answering to the same table, which widens reach and not the law.
+    "window": {
+        "inference": "0160-a-pitch-byte-is-read-out-of-a-window-the-mode-byte-picks",
+        "reach_also_by": ("0161-a-feedback-shifters-mode-byte-picks-the-same-five-lengths",),
+        "columns": {"00–04": "splice"},
+        "scoped_by_address": True,
+        "quantity": "ms",
     },
 }
 
@@ -419,7 +436,7 @@ def disagreements(classes: dict) -> list[dict]:
     cannot part company without something going red. A figure this derivation
     computes is read off the table the run built rather than restated -- the
     third-octave entry is measured here, and only the rotary switch, which
-    belongs to none of the eleven classes, is carried on the doc's word.
+    belongs to none of the thirteen classes, is carried on the doc's word.
     """
     third = classes["freq"]["tables"]["eq"]["entries"][2]
     gain = classes["gain"]["tables"]["tone"]
@@ -441,7 +458,7 @@ def disagreements(classes: dict) -> list[dict]:
             "table": None,
             "what": ("the rotary speed switch turns over at 63/64 rather than at the printed 7F"),
             "why_it_names_no_class": (
-                "A switch, not a conversion: none of the eleven classes carries it, so nothing "
+                "A switch, not a conversion: none of the thirteen classes carries it, so nothing "
                 "here computes its corner and the figure is the doc's."
             ),
         },
@@ -689,43 +706,56 @@ def build_map(candidates: list[dict], scopes: dict) -> tuple[list[dict], list[di
     the frequency claim's address list does not name it -- so dropping them would
     lose reach, and keeping them quietly would lose the one place a reader can see
     that the claim was widened by this derivation rather than by its author.
+
+    A class's `reach_also_by` claims are walked beside its own, and each row names
+    the claim that reached it. Two claims reaching one slot is refused: which of
+    them a row rests on would then be the order they were listed in.
     """
     reached: list[dict] = []
     outside: list[dict] = []
     for name in CLASS_ORDER:
         spec = CLASSES[name]
-        scope = scopes[name]
-        for slot in candidates:
-            table = spec["columns"].get(slot["printed_values"])
-            if table is None or slot["type"] not in scope["types"]:
-                continue
-            in_about = slot["address"] in scope["addresses"]
-            if spec["scoped_by_address"] and not in_about:
-                continue
-            reached.append(
-                {
-                    "type": slot["type"],
-                    "address": slot["address"],
-                    "parameter": slot["parameter"],
-                    "conversion_class": name,
-                    "table": table,
-                    "printed_values": slot["printed_values"],
-                    "rests_on": scope["file"],
-                    "inference_state": scope["state"],
-                    "address_inside_the_inferences_list": in_about,
-                }
-            )
-            if not in_about:
-                outside.append(
+        for scope in [scopes[name], *scopes[name]["also"]]:
+            for slot in candidates:
+                table = spec["columns"].get(slot["printed_values"])
+                if table is None or slot["type"] not in scope["types"]:
+                    continue
+                in_about = slot["address"] in scope["addresses"]
+                if spec["scoped_by_address"] and not in_about:
+                    continue
+                reached.append(
                     {
                         "type": slot["type"],
                         "address": slot["address"],
+                        "parameter": slot["parameter"],
                         "conversion_class": name,
+                        "table": table,
                         "printed_values": slot["printed_values"],
                         "rests_on": scope["file"],
-                        "the_inference_names": scope["addresses"],
+                        "inference_state": scope["state"],
+                        "address_inside_the_inferences_list": in_about,
                     }
                 )
+                if not in_about:
+                    outside.append(
+                        {
+                            "type": slot["type"],
+                            "address": slot["address"],
+                            "conversion_class": name,
+                            "printed_values": slot["printed_values"],
+                            "rests_on": scope["file"],
+                            "the_inference_names": scope["addresses"],
+                        }
+                    )
+    seen: set[tuple[str, str]] = set()
+    for row in reached:
+        key = (row["type"], row["address"])
+        if key in seen:
+            sys.exit(
+                f"{row['type']} {row['address']} is reached twice, the second time by "
+                f"{row['rests_on']} for {row['conversion_class']}. A slot follows one law."
+            )
+        seen.add(key)
     return reached, outside
 
 
@@ -1310,6 +1340,166 @@ def accel_tables(scope: dict) -> dict:
     }
 
 
+# The four settings a post gain prints, and the step between them. The claim
+# reads nine steps averaging 5.999 dB over a spread of 0.09 as one law.
+POST_GAIN_SETTINGS = 4
+POST_GAIN_DB_PER_STEP = 6.0
+
+
+def post_gain_tables(root: Path, scope: dict) -> dict:
+    """Four fixed steps of six decibels, and every step the claim's records read.
+
+    The steps are reported rather than gated, as the rate tables are: the claim
+    already says the third step runs a few hundredths short on every set, and a
+    gate tight enough to see that would refuse the law its own author stands by.
+    What is refused is a run that read no step at all.
+    """
+    steps = []
+    for measurement in scope["data"]["rests_on"]["measurements"]:
+        name = measurement["file"]
+        if "/efx-orders/" not in name:
+            continue
+        record = load(root / name)
+        heard = {r["value"]: r["heard_db"] for r in record["readings"] if "heard_db" in r}
+        for setting in range(1, POST_GAIN_SETTINGS):
+            if setting in heard and setting - 1 in heard:
+                step = heard[setting] - heard[setting - 1]
+                steps.append(
+                    {
+                        "record": Path(name).name,
+                        "type": record["type"],
+                        "address": record["address"],
+                        "from_setting": setting - 1,
+                        "step_db": round(step, 4),
+                        "off_the_law_db": round(step - POST_GAIN_DB_PER_STEP, 4),
+                    }
+                )
+    if not steps:
+        sys.exit(
+            "No efx-orders record of a post gain was read, so its law was checked against nothing."
+        )
+    worst = max(abs(s["off_the_law_db"]) for s in steps)
+    return {
+        "read_by": "the byte, whole",
+        "tables": {
+            "makeup": {
+                "printed_ends": ["0", "+18"],
+                "columns": ["00/01/02/03"],
+                "kind": "rule",
+                "rule": "setting * 6 decibels, after the stage the slot is printed beside",
+                "settings": POST_GAIN_SETTINGS,
+                "db_per_step": POST_GAIN_DB_PER_STEP,
+                "settings_past_the_table_return": 0,
+                "what_that_rests_on": (
+                    "Nothing read past the fourth setting. Entry 0 is what the measured small "
+                    "tables return there, and the reader keeps that one convention."
+                ),
+                "steps_read": steps,
+                "worst_step_off_the_law_db": round(worst, 4),
+                "unit_specific": False,
+                "approximate": False,
+            }
+        },
+        "rests_on": scope["file"],
+    }
+
+
+# The five windows stand as 3 : 4 : 6 : 8 : 12, and the shortest is 1024 steps
+# of the unit clock -- a count the claim reads off the stored distance itself.
+WINDOW_RATIO = (3, 4, 6, 8, 12)
+WINDOW_SHORTEST_STEPS = 1024
+
+
+def window_tables(scope: dict) -> dict:
+    """Five splice windows, the law checked against both claims that read it.
+
+    The claim the law rests on publishes every window in milliseconds and the
+    three whole-step counts it could read; a count disagreeing with the law is
+    fatal. The claim widening reach to a second type reads the same ratio at a
+    constant multiple, and a state departing from it by more than that claim's own
+    repeats is fatal too -- that is the refutation it wrote for itself.
+    """
+    data = scope["data"]
+    law_steps = [WINDOW_SHORTEST_STEPS * part / WINDOW_RATIO[0] for part in WINDOW_RATIO]
+    read_ms = data["the_round_that_read_the_output_against_itself"]["what_the_reading_returned"][
+        "window_ms"
+    ]
+    whole = data["the_round_that_asked_at_two_more_windows"]["the_figures"][
+        "the_window_at_each_state_in_steps_of_32000_hz"
+    ]
+    for state, count in whole.items():
+        if count != law_steps[int(state)]:
+            sys.exit(
+                f"window: state {state} is {count} steps of the clock in {scope['file']} where the "
+                f"law says {law_steps[int(state)]}. Refusing to ship a law the archive contradicts."
+            )
+
+    corroborated = []
+    for other in scope["also"]:
+        figures = other["data"]["the_round_that_took_each_state_four_times"]["the_figures"]
+        shifted = figures["at_two_semitones_up"]
+        bound = shifted["how_far_apart_four_takes_of_one_state_land_ms"]
+        means = shifted["means_ms"]
+        for state, mean in enumerate(means):
+            predicted = means[0] * WINDOW_RATIO[state] / WINDOW_RATIO[0]
+            if abs(mean - predicted) > bound:
+                sys.exit(
+                    f"window: state {state} of {other['file']} reads {mean} ms where the ratio "
+                    f"puts it at {round(predicted, 4)}, further than its own repeats of {bound} ms."
+                )
+        corroborated.append(
+            {
+                "file": other["file"],
+                "types": other["types"],
+                "means_ms": means,
+                "repeats_bound_ms": bound,
+            }
+        )
+
+    entries = []
+    for state, steps in enumerate(law_steps):
+        ms = steps * 1000.0 / UNIT_CLOCK_HZ
+        read = read_ms[str(state)]
+        entries.append(
+            entry(
+                setting=state,
+                ms=round(ms, 6),
+                steps_of_the_clock=round(steps, 4),
+                read_ms=read,
+                read_off_the_law_ms=round(read - ms, 4),
+                what_placed_it=(
+                    "the law, and a whole-step count the claim read"
+                    if str(state) in whole
+                    else "the law; the reading cannot tell it from the nearest whole count"
+                ),
+            )
+        )
+    return {
+        "read_by": "the byte, whole",
+        "tables": {
+            "splice": {
+                "printed_ends": ["1", "5"],
+                "columns": ["00–04"],
+                "kind": "entries",
+                "entries": entries,
+                "settings_past_the_table_return": 0,
+                "what_that_rests_on": (
+                    "Nothing read past the fifth setting. Entry 0 is what the measured small "
+                    "tables return there, and the reader keeps that one convention."
+                ),
+                "what_the_window_is": (
+                    "The distance the read-out drifts between splices, which is also how far "
+                    "apart the two read-outs are stored."
+                ),
+                "corroborated_by": corroborated,
+                "unit_specific": False,
+                "approximate": False,
+            }
+        },
+        "rests_on": scope["file"],
+    }
+
+
 def check_delay_ladders(
     root: Path, scope: dict, reached: list[dict], candidates: list[dict]
 ) -> tuple[list[dict], list[dict]]:
@@ -1630,6 +1820,9 @@ def derive(root: Path, unit: str) -> dict:
     for name in CLASS_ORDER:
         scope = about(inferences, CLASSES[name]["inference"])
         scope["path"] = inferences / scope["file"]
+        scope["also"] = [
+            about(inferences, other) for other in CLASSES[name].get("reach_also_by", ())
+        ]
         scopes[name] = scope
 
     candidates = slot_candidates(power_on)
@@ -1647,6 +1840,8 @@ def derive(root: Path, unit: str) -> dict:
         "balance": balance_tables(scopes["balance"]),
         "azimuth": azimuth_tables(scopes["azimuth"]),
         "accel": accel_tables(scopes["accel"]),
+        "post_gain": post_gain_tables(root, scopes["post_gain"]),
+        "window": window_tables(scopes["window"]),
     }
     classes["freq"], freq_notes = freq_tables(scopes["freq"], candidates)
     notes.extend(freq_notes)
@@ -1723,11 +1918,13 @@ def derive(root: Path, unit: str) -> dict:
         "the_inference_each_class_rests_on": [
             {
                 "conversion_class": name,
-                "file": scopes[name]["file"],
-                "state": scopes[name]["state"],
-                "rounds": scopes[name]["rounds"],
+                "file": scope["file"],
+                "state": scope["state"],
+                "rounds": scope["rounds"],
+                **({"widens_reach_only": True} if scope is not scopes[name] else {}),
             }
             for name in CLASS_ORDER
+            for scope in [scopes[name], *scopes[name]["also"]]
         ],
     }
 
@@ -1748,6 +1945,11 @@ def derive(root: Path, unit: str) -> dict:
         for name in ("delay_time", "rate")
         for measurement in scopes[name]["data"]["rests_on"]["measurements"]
         if f"/efx-{'time' if name == 'delay_time' else 'rate'}/" in measurement["file"]
+    ]
+    inputs += [
+        root / measurement["file"]
+        for measurement in scopes["post_gain"]["data"]["rests_on"]["measurements"]
+        if "/efx-orders/" in measurement["file"]
     ]
     # The printed enumeration reads every unit's parameter records rather than
     # this one's stage index, so whatever it adds joins the list too.
@@ -1853,7 +2055,7 @@ def emit_header(tables: dict, path: Path) -> None:
     """Render the committed JSON into the header the C++ side includes.
 
     The reach counts are named constants and not an array, because the test that
-    reads them enumerates the eleven classes by hand: a header that offered the
+    reads them enumerates the thirteen classes by hand: a header that offered the
     list would let a derivation that dropped a class pass by not counting it.
     """
     classes = tables["classes"]
@@ -2035,6 +2237,19 @@ def emit_header(tables: dict, path: Path) -> None:
     w(f"inline constexpr int kGsEfxAccelShift = {accel['to_seconds']['shift']};")
     w("inline constexpr std::array<float, 16> kGsEfxAccelDivisor = {{")
     w("    " + " ".join(f"{cpp_float(e['divisor'])}," for e in accel["entries"]))
+    w("}};")
+    w("")
+
+    post_gain = classes["post_gain"]["tables"]["makeup"]
+    w("// Post gain: fixed steps after the stage it is printed beside. Past the table, entry 0.")
+    w(f"inline constexpr uint8_t kGsEfxPostGainSettings = {post_gain['settings']};")
+    w(f"inline constexpr float kGsEfxPostGainDbPerStep = {cpp_float(post_gain['db_per_step'])};")
+    w("")
+
+    window = classes["window"]["tables"]["splice"]
+    w("/// Splice window: how far the read-out drifts between splices. Past the table, entry 0.")
+    w(f"inline constexpr std::array<float, {len(window['entries'])}> kGsEfxWindowMs = {{{{")
+    w("    " + " ".join(f"{cpp_float(e['ms'])}," for e in window["entries"]))
     w("}};")
     w("")
 

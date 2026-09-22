@@ -154,6 +154,16 @@ float gs_efx_accel_undershoot_hz(uint8_t value) noexcept {
   return static_cast<float>(accel_step_hz() / kGsEfxAccelDivisor[top_four_bits(value)]);
 }
 
+float gs_efx_post_gain_db(uint8_t value) noexcept {
+  return static_cast<float>(gs_efx_enum_index(value, kGsEfxPostGainSettings)) *
+         kGsEfxPostGainDbPerStep;
+}
+
+float gs_efx_window_ms(uint8_t value) noexcept {
+  return kGsEfxWindowMs[static_cast<std::size_t>(
+      gs_efx_enum_index(value, static_cast<int>(kGsEfxWindowMs.size())))];
+}
+
 bool gs_efx_ratio(uint8_t value, int lo_byte, int hi_byte, int lo_unit, int hi_unit,
                   float* out) noexcept {
   if (out == nullptr || hi_byte <= lo_byte) return false;
