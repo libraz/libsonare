@@ -22,12 +22,13 @@
 /// linearly with drive and nothing downstream of it is a limiter. The bell loss
 /// gain is < 1 on both.
 ///
-/// The bell is two filters, not one: it reflects the long wavelengths back down
-/// the bore (the loop lowpass @c brightness sets) and radiates the short ones
-/// (the complementary highpass @c bell_radiation_hz sets), and only the second
-/// is what a listener hears. Emitting the bore pressure instead makes the
-/// centroid track the note, where a reference brass holds a formant the note
-/// moves under. Formant colour on top of that is the shared BodyResonator.
+/// The bell is two filters on one corner: it reflects the long wavelengths back
+/// down the bore and radiates the short ones, and only the second is what a
+/// listener hears. @c bell_cutoff_hz names that corner in hertz and both halves
+/// derive from it, so they cannot be set apart; @c brightness offsets it by
+/// octaves. Emitting the bore pressure instead makes the centroid track the
+/// note, where a reference brass holds a formant the note moves under. Formant
+/// colour on top of that is the shared BodyResonator.
 ///
 /// RT contract: attach()/start()/render() are allocation-free. Determinism:
 /// breath turbulence and onset chiff come from the counter-based
