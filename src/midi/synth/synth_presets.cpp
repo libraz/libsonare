@@ -336,7 +336,8 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
 
     auto brass = [&](const char* name, bool conical, float lip_tension, float lip_damping,
                      float brightness, float damping, float attack_ms, float release_ms,
-                     float breath, float bell_mix, float gain, const BellGroup& bell) {
+                     float breath, float bell_mix, float gain, const BellGroup& bell,
+                     float mute = 0.0f) {
       SynthPreset& v = t[i++];
       v.name = name;
       NativeSynthPatch patch{};
@@ -362,6 +363,9 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.brass.brassiness = bell.brassiness;
       patch.brass.cuivre_dynamics = bell.cuivre_dynamics;
       patch.brass.bore_nonlinearity = bell.bore_nonlinearity;
+      // A mute is an object over the bell's mouth, so it is a per-row property
+      // rather than part of the bell group a row inherits from its twin.
+      patch.brass.mute = mute;
       patch.brass.dynamic_lip = 0.25f;
       // The trumpet-family bells carry the body resonator on top; large-bore and
       // mellow brass radiate through the flare alone.
@@ -380,8 +384,10 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     brass("tuba", true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.74f, kTubaBell);
     brass("french-horn", true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.70f,
           kFrenchHornBell);
-    brass("muted-trumpet", false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.66f,
-          kMutedTrumpetBell);
+    // The mute is modelled, so the bore is voiced open like the trumpet it is:
+    // a darkened brightness standing in for the mute darkens it a second time.
+    brass("muted-trumpet", false, 0.58f, 0.35f, 0.72f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.66f,
+          kMutedTrumpetBell, 0.256358f);
     // These three have no program and no reference, so each takes the class its
     // bell belongs to: cornet and flugelhorn are small B-flat bells, euphonium a
     // large low one. The bore flag cannot stand in — all three are conical.

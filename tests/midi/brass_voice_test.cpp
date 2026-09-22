@@ -344,7 +344,14 @@ TEST_CASE("catalog brass radiates through a bell, like the fallback voices",
     REQUIRE(got.brass.cuivre_dynamics == want.brass.cuivre_dynamics);
     REQUIRE(got.brass.bore_nonlinearity == want.brass.bore_nonlinearity);
     REQUIRE(got.brass.dynamic_lip == want.brass.dynamic_lip);
+    // The mute sits over the bell rather than inside it, but it drifts the same
+    // way: a catalogue entry standing the mute up out of a darkened brightness
+    // while its twin models it reads as a voicing choice and is not one.
+    REQUIRE(got.brass.mute == want.brass.mute);
   }
+  // Every row but one has no mute, so the equality above would hold over eight
+  // pairs of zeros. One twin has to carry one for it to be asserting anything.
+  REQUIRE(gm_fallback_patch(0, 59).brass.mute > 0.0f);
 }
 
 TEST_CASE("the fallback brass voices radiate from the coupled bell alone", "[midi][synth][brass]") {
