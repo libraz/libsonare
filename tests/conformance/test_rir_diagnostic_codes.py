@@ -105,8 +105,10 @@ class RirDiagnosticCodes(unittest.TestCase):
         self.assertEqual(
             findings,
             [
-                "UNEXPECTED acoustic.invalid_rir_config [node]: "
-                "an error code named in a warning-only doc"
+                (
+                    "UNEXPECTED acoustic.invalid_rir_config [node]: "
+                    "an error code named in a warning-only doc"
+                )
             ],
         )
 
