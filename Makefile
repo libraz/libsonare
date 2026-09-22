@@ -295,6 +295,17 @@ print(f"sample-rate coefficient rule: clean ({scanned} files scanned)")
 endef
 export GS_EFX_SR_COEFFICIENT_LINT_PY
 
+# The insertion-effect chain skeleton holds a few fixed quantities the archive
+# never measured -- shelf corners, a mix ratio, a carrier rate -- and a binding
+# row may not carry a constant at all (tools/gs/efx-bindings/SCHEMA.md). What is
+# pinned is the count rather than the names: the rule being defended is that the
+# measured table stays the place a new quantity lands, so a seventh is a law
+# hand-written into the skeleton. Moving one the other way (into efx-tables.json,
+# where its provenance becomes checkable) fails this too, on purpose -- the pin
+# comes down in the same commit that earns it.
+GS_EFX_SKELETON_CONSTANTS := 6
+GS_EFX_SKELETON_CONSTANT_RE := constexpr float k[A-Za-z]*(Hz|DryWet|ChainHz) =
+
 lint:
 	cd bindings/wasm && yarn lint
 	cd bindings/node && yarn lint
@@ -332,6 +343,19 @@ lint:
 		echo "would come from the same derivation that built the table it is meant to check"; \
 		exit 1; \
 	fi
+	@found=$$(grep -cE '$(GS_EFX_SKELETON_CONSTANT_RE)' src/midi/synth/gs_layer.cpp); \
+	if [ "$$found" != "$(GS_EFX_SKELETON_CONSTANTS)" ]; then \
+		echo "gs_layer.cpp holds $$found hand-placed EFX constants, pinned at $(GS_EFX_SKELETON_CONSTANTS):" >&2; \
+		grep -nE '$(GS_EFX_SKELETON_CONSTANT_RE)' src/midi/synth/gs_layer.cpp >&2 || true; \
+		echo "  a new one is a measured law written into the skeleton by hand; one fewer means the" >&2; \
+		echo "  pin moves in the same commit. Neither is decided here." >&2; \
+		exit 1; \
+	fi; \
+	echo "gs_layer.cpp hand-placed EFX constants: $$found (pinned)"
+# Both headers are rendered from committed inputs alone, so a clone can re-run
+# them and a drifted one is a static fact rather than something a build reports.
+	$(MAKE) gs-efx-bindings-check
+	$(MAKE) gs-efx-join-check
 
 format-check:
 	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 clang-format --dry-run --Werror
