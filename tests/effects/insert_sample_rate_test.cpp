@@ -28,6 +28,8 @@
 /// - lofi, first aperture null in Hz: the hold rate itself.
 /// - pitch shifter, beat period in seconds: the window over |ratio - 1|.
 /// - rotary, acceleration time constant in seconds: the time constant itself.
+/// - parametric EQ, a shelf's half-gain point and a peak's centre in Hz: the
+///   corner itself, which the section's design places exactly at every rate.
 ///
 /// Reach is an output: the case reports how many comparisons it made, because
 /// a run that compared nothing looks exactly like a run that passed.
@@ -49,6 +51,7 @@
 #include "effects/modulation/phaser.h"
 #include "effects/modulation/pitch_shifter.h"
 #include "effects/modulation/rotary.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
@@ -128,6 +131,9 @@ constexpr double kNullTolerance = 0.01;
 constexpr double kBeatTolerance = 0.01;
 constexpr double kGlideTolerance = 0.03;
 constexpr double kPreFilterTolerance = 0.03;
+// The EQ positions are exact in the design at both rates, so this only has to
+// clear the float coefficients; it still sits under both measured defects.
+constexpr double kEqTolerance = 0.01;
 
 // --- spectra ----------------------------------------------------------------
 
@@ -615,6 +621,89 @@ double glide_tau_s(float tau_s, double sample_rate) {
   return 0.0;
 }
 
+// --- parametric EQ ----------------------------------------------------------
+
+// Band-type selectors, in the order the insert's params decode them.
+constexpr int kEqPeak = 0;
+constexpr int kEqLowShelf = 1;
+constexpr int kEqHighShelf = 2;
+
+// The output stage's tone pair and one peaking section. Built from the same
+// JSON keys the GS layer writes, so the reading covers the path it drives.
+struct EqProbe {
+  const char* what;
+  int type;
+  float corner_hz;
+};
+constexpr EqProbe kEqProbes[] = {
+    {"low shelf", kEqLowShelf, 161.0f},
+    {"high shelf", kEqHighShelf, 6987.0f},
+    {"peak", kEqPeak, 1585.0f},
+};
+constexpr double kEqGainDb = 12.0;
+
+std::vector<float> eq_impulse(const EqProbe& probe, double sample_rate) {
+  std::ostringstream json;
+  json << "{\"band0.type\":" << probe.type << ",\"band0.frequencyHz\":" << probe.corner_hz
+       << ",\"band0.gainDb\":" << kEqGainDb << "}";
+  auto eq = sonare::mastering::api::make_insert("eq.parametric", json.str());
+  REQUIRE(eq != nullptr);
+  eq->prepare(sample_rate, kFftLength);
+  std::vector<float> response = sonare::test::generate_impulse(kFftLength);
+  sonare::test::process(*eq, response);
+  return response;
+}
+
+/// The response's gain at one frequency, summed directly rather than read off a
+/// bin, so a position is not quantised to the transform's grid.
+double response_db(const std::vector<float>& response, double hz, double sample_rate) {
+  std::complex<double> sum = 0.0;
+  const double w = kTwoPiD * hz / sample_rate;
+  for (std::size_t n = 0; n < response.size(); ++n) {
+    sum += static_cast<double>(response[n]) * std::polar(1.0, -w * static_cast<double>(n));
+  }
+  return 20.0 * std::log10(std::abs(sum) + 1e-30);
+}
+
+/// Where a shelf's gain crosses half its full cut or boost, bisected in log
+/// frequency over three octaves either side of the corner. Zero where the
+/// response does not straddle that level, which is also a band never applied.
+double half_gain_hz(const std::vector<float>& response, float corner_hz, double sample_rate) {
+  double lo = static_cast<double>(corner_hz) / 8.0;
+  double hi = std::min(static_cast<double>(corner_hz) * 8.0, sample_rate * 0.49);
+  const double half = kEqGainDb / 2.0;
+  const double at_lo = response_db(response, lo, sample_rate) - half;
+  if (at_lo * (response_db(response, hi, sample_rate) - half) >= 0.0) return 0.0;
+  for (int i = 0; i < 60; ++i) {
+    const double mid = std::sqrt(lo * hi);
+    if ((response_db(response, mid, sample_rate) - half) * at_lo > 0.0) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return std::sqrt(lo * hi);
+}
+
+/// Where a peaking section's gain is highest, by golden section in log
+/// frequency over an octave either side of the corner.
+double peak_centre_hz(const std::vector<float>& response, float corner_hz, double sample_rate) {
+  const double golden = (std::sqrt(5.0) - 1.0) / 2.0;
+  double lo = std::log(static_cast<double>(corner_hz) / 2.0);
+  double hi = std::log(static_cast<double>(corner_hz) * 2.0);
+  for (int i = 0; i < 80; ++i) {
+    const double a = hi - golden * (hi - lo);
+    const double b = lo + golden * (hi - lo);
+    if (response_db(response, std::exp(a), sample_rate) >
+        response_db(response, std::exp(b), sample_rate)) {
+      hi = b;
+    } else {
+      lo = a;
+    }
+  }
+  return std::exp((lo + hi) / 2.0);
+}
+
 std::string at_rate(double sample_rate) {
   return " at " + std::to_string(static_cast<int>(sample_rate)) + " Hz";
 }
@@ -835,6 +924,31 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
     tally.same(immediate != glided, "the glide reaches the audio, not only the rotor's rate");
   }
 
+  // --- parametric EQ: shelf half-gain points and a peak's centre, in hertz --
+  for (const EqProbe& probe : kEqProbes) {
+    const std::string asked = std::string(probe.what) + ", asked for " +
+                              std::to_string(static_cast<int>(probe.corner_hz)) + " Hz";
+    const bool shelf = probe.type != kEqPeak;
+    double measured[2] = {0.0, 0.0};
+    for (std::size_t r = 0; r < 2; ++r) {
+      const double rate = rates[r];
+      const std::vector<float> response = eq_impulse(probe, rate);
+      measured[r] = shelf ? half_gain_hz(response, probe.corner_hz, rate)
+                          : peak_centre_hz(response, probe.corner_hz, rate);
+      tally.at_least(measured[r], 1.0, "the EQ " + asked + at_rate(rate) + ", is readable at all");
+      if (!shelf) {
+        tally.within(response_db(response, measured[r], rate), kEqGainDb, kEqTolerance,
+                     "the EQ " + asked + at_rate(rate) + ", reaches its gain at the centre");
+      }
+      // Against what was asked for, per rate; the cross-rate check below is the
+      // other half of the pair and neither one covers the other.
+      tally.within(measured[r], static_cast<double>(probe.corner_hz), kEqTolerance,
+                   "the EQ " + asked + at_rate(rate) + ", against the corner asked for");
+    }
+    tally.within(measured[0], measured[1], kEqTolerance,
+                 "the EQ " + asked + ", lands on one frequency at both rates");
+  }
+
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 60);
+  REQUIRE(tally.count() >= 77);
 }
