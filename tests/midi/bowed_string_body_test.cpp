@@ -106,7 +106,8 @@ TEST_CASE("bowed string corpus scale halves the bank's peak position",
 }
 
 TEST_CASE("bowed string corpus fields at default reproduce the control hashes",
-          "[midi][synth][bowed][body]") {
+          "[.][midi][synth][bowed][body][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   // Same deterministic excitation as the probe control case, reproduced here so
   // this [body]-tagged test verifies the identity on its own rather than
   // depending on [probe] having run first.

@@ -11,8 +11,8 @@
 ///
 /// The control hashes at the foot are taken from the unmodified engine and are
 /// the only thing that can say a later change is identity at its default field
-/// values. They are float-arithmetic goldens like the synth manifests, so they
-/// are read in the same build configuration they were recorded in (Debug).
+/// values. They are float-arithmetic goldens like the synth manifests: the libm
+/// underneath decides them, so they are `[.][golden]` and run via make test-golden.
 
 #include "midi/bowed_string_probe.h"
 
@@ -122,6 +122,15 @@ std::vector<float> pure_tone(double f0, int samples) {
 /// The shipped violin patch's bowed-string section.
 const BowedStringPatchParams& violin_params() {
   return sonare::midi::synth::gm_fallback_patch(0, 40).bowed_string;
+}
+
+/// The violin patch with polarization and sympathetic coupling off, so the core's
+/// output is the bridge wave alone.
+BowedStringPatchParams gates_off_violin_params() {
+  BowedStringPatchParams params = violin_params();
+  params.polarization = 0.0f;
+  params.sympathetic = 0.0f;
+  return params;
 }
 
 /// Bridge loop coefficients the engine derives from @p p at @p sr. Mirrors
@@ -264,11 +273,8 @@ TEST_CASE("bowed probe measures the bridge force the output stands in for",
 
   // The engine, on the shipped violin patch with the two radiation gates off so
   // render() is output_scale_ * bridge_out_ and the incoming wave is readable.
-  BowedStringPatchParams params = violin_params();
-  params.polarization = 0.0f;
-  params.sympathetic = 0.0f;
+  const BowedStringPatchParams params = gates_off_violin_params();
   const std::vector<float> v_plus = render_core(params, 48000);
-  CHECK(fnv1a_quantized(v_plus) == 0x8b1705ace0f25090ull);
   const StringLoopFilter solved = patch_bridge_filter(params, kControlNote, kSr);
   const double violin_g = static_cast<double>(solved.g);
   const double violin_a = 1.0 - static_cast<double>(solved.a);
@@ -291,7 +297,6 @@ TEST_CASE("bowed probe reaches the engine's own output", "[midi][synth][bowed][p
   // on. The numbers are reported rather than asserted — what is asserted is that
   // a stick-slip model slips at all and that the scan ran.
   const std::vector<float> render = render_core(violin_params(), 48000);
-  CHECK(fnv1a_quantized(render) == 0x82f13b6cd00c9540ull);
   const double f0 = static_cast<double>(sonare::midi::synth::note_to_hz(kControlNote));
 
   const sonare::test::bowed::SlipRate rate = slips_per_period(render, f0, kSr);
@@ -310,7 +315,8 @@ TEST_CASE("bowed probe reaches the engine's own output", "[midi][synth][bowed][p
   REQUIRE(tilt.bands >= 2);
 }
 
-TEST_CASE("bowed string control hashes", "[midi][synth][bowed][probe]") {
+TEST_CASE("bowed string control hashes", "[.][midi][synth][bowed][probe][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
   // (a) The bowed-string core alone on the shipped violin patch. The patch
   // values are asserted beside the hash so a moved patch value is told apart
   // from a moved engine when this goes red.
@@ -331,6 +337,8 @@ TEST_CASE("bowed string control hashes", "[midi][synth][bowed][probe]") {
 
   const std::vector<float> core = render_core(v, 48000);
   CHECK(fnv1a_quantized(core) == 0x82f13b6cd00c9540ull);
+  // The same core with both radiation gates off, as the bridge-force probe reads it.
+  CHECK(fnv1a_quantized(render_core(gates_off_violin_params(), 48000)) == 0x8b1705ace0f25090ull);
 
   // (b) The body resonator on both of its entry points, driven by the same
   // deterministic excitation. The percussion-shell configuration is written out
