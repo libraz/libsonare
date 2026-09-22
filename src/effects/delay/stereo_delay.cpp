@@ -16,6 +16,12 @@ namespace {
 
 constexpr float kDelaySmoothingTimeSeconds = 0.010f;
 constexpr float kMaxDelayMs = 4000.0f;
+/// Loop gain magnitude ceiling, either sign; the flanger's loop stops at the same.
+constexpr float kMaxFeedback = 0.95f;
+
+float clamp_feedback(float feedback) noexcept {
+  return std::clamp(feedback, -kMaxFeedback, kMaxFeedback);
+}
 
 float config_delay_samples(float delay_ms, double sample_rate) noexcept {
   return std::clamp(delay_ms, 0.0f, kMaxDelayMs) * 0.001f * static_cast<float>(sample_rate);
@@ -24,7 +30,7 @@ float config_delay_samples(float delay_ms, double sample_rate) noexcept {
 StereoDelayConfig sanitize_config(StereoDelayConfig config) noexcept {
   config.delay_time_l_ms = std::clamp(config.delay_time_l_ms, 0.0f, kMaxDelayMs);
   config.delay_time_r_ms = std::clamp(config.delay_time_r_ms, 0.0f, kMaxDelayMs);
-  config.feedback = std::clamp(config.feedback, 0.0f, 0.95f);
+  config.feedback = clamp_feedback(config.feedback);
   config.ping_pong = std::clamp(config.ping_pong, 0.0f, 1.0f);
   config.dry_wet = std::clamp(config.dry_wet, 0.0f, 1.0f);
   // std::clamp leaves NaN intact and an infinite corner has no pole, so both
@@ -66,7 +72,7 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
   }
   rt::ScopedNoDenormals no_denormals;
   const float target_wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
-  const float target_feedback = std::clamp(config_.feedback, 0.0f, 0.95f);
+  const float target_feedback = clamp_feedback(config_.feedback);
   const float target_ping_pong = std::clamp(config_.ping_pong, 0.0f, 1.0f);
   const std::array<float, 2> target_delay_samples{
       config_delay_samples(config_.delay_time_l_ms, sample_rate_),
@@ -137,7 +143,7 @@ void StereoDelay::discard_non_finite() noexcept {
   }
   // A smoother rests at its target, not at zero: zero would mute the mix and
   // drop the feedback for a smoothing time nobody asked for.
-  discarded |= discard_if_non_finite(smoothed_feedback_, std::clamp(config_.feedback, 0.0f, 0.95f));
+  discarded |= discard_if_non_finite(smoothed_feedback_, clamp_feedback(config_.feedback));
   discarded |= discard_if_non_finite(smoothed_dry_wet_, std::clamp(config_.dry_wet, 0.0f, 1.0f));
   discarded |=
       discard_if_non_finite(smoothed_ping_pong_, std::clamp(config_.ping_pong, 0.0f, 1.0f));
@@ -152,7 +158,8 @@ int StereoDelay::tail_samples() const noexcept {
   const float delay_ms = std::max(config_.delay_time_l_ms, config_.delay_time_r_ms);
   const float delay_samples =
       std::clamp(delay_ms, 0.0f, kMaxDelayMs) * 0.001f * static_cast<float>(sample_rate_);
-  const float fb = std::clamp(config_.feedback, 0.0f, 0.95f);
+  // An inverted loop loses the same amount per pass as an upright one.
+  const float fb = std::fabs(clamp_feedback(config_.feedback));
   double passes = 1.0;
   if (fb > 0.0f) {
     passes = std::max(1.0, std::log(1000.0) / -std::log(static_cast<double>(fb)));
@@ -174,7 +181,7 @@ void StereoDelay::reset() {
   feedback_state_ = {0.0f, 0.0f};
   damping_state_ = {0.0f, 0.0f};
   feedback_non_finite_ = false;
-  smoothed_feedback_ = std::clamp(config_.feedback, 0.0f, 0.95f);
+  smoothed_feedback_ = clamp_feedback(config_.feedback);
   smoothed_dry_wet_ = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   smoothed_ping_pong_ = std::clamp(config_.ping_pong, 0.0f, 1.0f);
 }
@@ -198,7 +205,7 @@ bool StereoDelay::set_parameter(unsigned int param_id, float value) {
       config_.delay_time_r_ms = std::clamp(value, 0.0f, kMaxDelayMs);
       return true;
     case 2:
-      config_.feedback = std::clamp(value, 0.0f, 0.95f);
+      config_.feedback = clamp_feedback(value);
       return true;
     case 3:
       // process() clamps ping_pong to [0, 1] and smooths it; store the raw

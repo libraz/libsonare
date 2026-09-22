@@ -2,6 +2,10 @@
 
 /// @file stereo_delay.h
 /// @brief Zero-latency stereo feedback delay.
+///
+/// `feedback` carries its sign into the loop, as the flanger's does: a negative
+/// gain inverts every pass, so the echoes alternate in polarity and the comb the
+/// loop leaves has its teeth halfway between the ones a positive gain puts there.
 
 #include <array>
 #include <vector>
@@ -38,7 +42,7 @@ class StereoDelay : public rt::ProcessorBase {
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = delay_time_l_ms
   //   1 = delay_time_r_ms
-  //   2 = feedback (clamped to [0, 0.95], smoothed in process())
+  //   2 = feedback (clamped to [-0.95, 0.95], the sign carried; smoothed in process())
   //   3 = ping_pong (clamped to [0, 1], smoothed in process())
   //   4 = dry_wet (clamped to [0, 1], smoothed in process())
   //   5 = damping_hz (corner in Hz, <= 0 bypasses; rebuilds one coefficient)
