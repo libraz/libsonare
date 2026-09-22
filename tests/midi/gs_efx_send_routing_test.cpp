@@ -357,7 +357,11 @@ struct Unautomated {
 
 /// Both entries are the rotary's acceleration fields, and both are the glide's
 /// shape rather than anything a running rotor rides.
-constexpr std::array<Unautomated, 2> kUnautomated = {{
+constexpr std::array<Unautomated, 3> kUnautomated = {{
+    {"effects.reverb.dattorro", "preDelayMs",
+     "the pre-delay line is sized by it in prepare(), so a live write would allocate on the audio "
+     "thread; an edit of the byte rebuilds the reverb, which is the cost the insert already "
+     "charges any caller for this key"},
     {"effects.modulation.rotary", "undershootHz",
      "one byte writes this with accelTauS and decelTauS, and a time constant read mid-glide has "
      "no defined arrival, so publishing this half alone would apply the byte partly in place and "
@@ -442,6 +446,6 @@ TEST_CASE("every EFX binding drives a control its insert can automate", "[midi][
   // A floor rather than an equality: the lane adjudicating the remaining
   // parameters adds controls, and a ceiling would go red on it finishing.
   WARN("distinct (insert, control) pairs checked: " << checked);
-  REQUIRE(checked >= 34);
+  REQUIRE(checked >= 36);
 }
 #endif  // SONARE_WITH_FX && SONARE_WITH_MASTERING

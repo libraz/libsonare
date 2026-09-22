@@ -67,6 +67,9 @@ MARKER_RE = re.compile(r"^\*(\d+)$")
 RANGE_RE = re.compile(r"^[0-9A-F]{2}–[0-9A-F]{2}$")
 WHOLE_BYTE = "00–7F"
 
+# Where a row's identification of its slot came from, when it was not the archive.
+NAMED_BY = ("the parameter list",)
+
 # Which conversion-class family each *N marker belongs to, read off the
 # columns table in derive_efx_tables.py's CLASSES. *11 (LPF) and *12
 # (Manual) have no measured table and so no established family -- a row
@@ -237,6 +240,8 @@ def tally(rows: list[dict], printed: dict[str, dict[int, str]]) -> dict:
             sys.exit(f"{row_label(row)}: names a (type, slot) with no printed value")
         # A row's copy of the spelling is what a generator reads without the
         # archive, so it is held to the archive here.
+        if "named_by" in row and row["named_by"] not in NAMED_BY:
+            sys.exit(f"{row_label(row)}: named_by {row['named_by']!r} is not one of {NAMED_BY}")
         if "printed_values" in row and row["printed_values"] != values:
             sys.exit(
                 f"{row_label(row)}: printed_values {row['printed_values']!r} is not the "

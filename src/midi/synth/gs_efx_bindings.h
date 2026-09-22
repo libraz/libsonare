@@ -43,144 +43,154 @@ struct GsEfxBindingRange {
 inline constexpr uint8_t kGsEfxClassRatio = 11;
 inline constexpr uint8_t kGsEfxBindingNoRange = 0xFF;
 
-inline constexpr std::array<GsEfxBindingRange, 1> kGsEfxBindingRanges = {{
+inline constexpr std::array<GsEfxBindingRange, 2> kGsEfxBindingRanges = {{
     {0x0F, 0x71, -98, 98},
+    {0x28, 0x4C, -24, 12},
 }};
 
 // The insert names and control names the rows below point at, each spelled
 // once. A name is an index so the table stays a plain array of integers.
-inline constexpr std::array<std::string_view, 11> kGsEfxBindingStages = {{
+inline constexpr std::array<std::string_view, 13> kGsEfxBindingStages = {{
     "effects.delay.stereo",
     "effects.modulation.chorus",
     "effects.modulation.ensemble",
     "effects.modulation.flanger",
     "effects.modulation.phaser",
+    "effects.modulation.pitchShifter",
     "effects.modulation.ringModulator",
     "effects.modulation.rotary",
+    "effects.reverb.dattorro",
     "eq.graphic",
     "eq.parametric",
     "stereo.autoPan",
     "utility.gain",
 }};
 
-inline constexpr std::array<std::string_view, 27> kGsEfxBindingKeys = {{
-    "band0.gainDb", "band1.frequencyHz", "band1.gainDb",  "band1.q",           "band11GainDb",
-    "band14GainDb", "band17GainDb",      "band18GainDb",  "band2.frequencyHz", "band2.gainDb",
-    "band2.q",      "band20GainDb",      "band22GainDb",  "band23GainDb",      "band26GainDb",
-    "band3.gainDb", "carrierHz",         "centerDelayMs", "dampingHz",         "delayTimeLMs",
-    "delayTimeRMs", "drumUndershootHz",  "feedback",      "levelDb",           "preFilterHz",
-    "rateHz",       "undershootHz",
+inline constexpr std::array<std::string_view, 29> kGsEfxBindingKeys = {{
+    "band0.gainDb",      "band1.frequencyHz", "band1.gainDb", "band1.q",
+    "band11GainDb",      "band14GainDb",      "band17GainDb", "band18GainDb",
+    "band2.frequencyHz", "band2.gainDb",      "band2.q",      "band20GainDb",
+    "band22GainDb",      "band23GainDb",      "band26GainDb", "band3.gainDb",
+    "carrierHz",         "centerDelayMs",     "dampingHz",    "delayTimeLMs",
+    "delayTimeRMs",      "drumUndershootHz",  "feedback",     "levelDb",
+    "preDelayMs",        "preFilterHz",       "rateHz",       "semitones",
+    "undershootHz",
 }};
 
 // Sorted by (type, slot, key), so one unit's rows are contiguous.
-inline constexpr std::array<GsEfxBinding, 231> kGsEfxBindings = {{
-    {0x0100, 1, 3, 0, 8, 0, kGsEfxBindingNoRange},     // gain.tone -> eq.parametric.band0.gainDb
-    {0x0100, 3, 3, 0, 8, 15, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band3.gainDb
-    {0x0100, 4, 2, 0, 8, 1, kGsEfxBindingNoRange},     // freq.eq -> eq.parametric.band1.frequencyHz
-    {0x0100, 5, 5, 0, 8, 3, kGsEfxBindingNoRange},     // width.section -> eq.parametric.band1.q
-    {0x0100, 6, 3, 0, 8, 2, kGsEfxBindingNoRange},     // gain.tone -> eq.parametric.band1.gainDb
-    {0x0100, 7, 2, 0, 8, 8, kGsEfxBindingNoRange},     // freq.eq -> eq.parametric.band2.frequencyHz
-    {0x0100, 8, 5, 0, 8, 10, kGsEfxBindingNoRange},    // width.section -> eq.parametric.band2.q
-    {0x0100, 9, 3, 0, 8, 9, kGsEfxBindingNoRange},     // gain.tone -> eq.parametric.band2.gainDb
-    {0x0100, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0101, 0, 3, 0, 7, 4, kGsEfxBindingNoRange},     // gain.tone -> eq.graphic.band11GainDb
-    {0x0101, 1, 3, 0, 7, 5, kGsEfxBindingNoRange},     // gain.tone -> eq.graphic.band14GainDb
-    {0x0101, 2, 3, 0, 7, 6, kGsEfxBindingNoRange},     // gain.tone -> eq.graphic.band17GainDb
-    {0x0101, 3, 3, 0, 7, 7, kGsEfxBindingNoRange},     // gain.tone -> eq.graphic.band18GainDb
-    {0x0101, 4, 3, 0, 7, 11, kGsEfxBindingNoRange},    // gain.tone -> eq.graphic.band20GainDb
-    {0x0101, 5, 3, 0, 7, 12, kGsEfxBindingNoRange},    // gain.tone -> eq.graphic.band22GainDb
-    {0x0101, 6, 3, 0, 7, 13, kGsEfxBindingNoRange},    // gain.tone -> eq.graphic.band23GainDb
-    {0x0101, 7, 3, 0, 7, 14, kGsEfxBindingNoRange},    // gain.tone -> eq.graphic.band26GainDb
-    {0x0101, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0102, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0102, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0102, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0110, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0110, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0110, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0111, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0111, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0111, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0120, 1, 0, 1, 4, 25,
+inline constexpr std::array<GsEfxBinding, 301> kGsEfxBindings = {{
+    {0x0100, 1, 3, 0, 10, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0100, 3, 3, 0, 10, 15, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band3.gainDb
+    {0x0100, 4, 2, 0, 10, 1, kGsEfxBindingNoRange},    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0100, 5, 5, 0, 10, 3, kGsEfxBindingNoRange},    // width.section -> eq.parametric.band1.q
+    {0x0100, 6, 3, 0, 10, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0100, 7, 2, 0, 10, 8, kGsEfxBindingNoRange},    // freq.eq -> eq.parametric.band2.frequencyHz
+    {0x0100, 8, 5, 0, 10, 10, kGsEfxBindingNoRange},   // width.section -> eq.parametric.band2.q
+    {0x0100, 9, 3, 0, 10, 9, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band2.gainDb
+    {0x0100, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0101, 0, 3, 0, 9, 4, kGsEfxBindingNoRange},     // gain.tone -> eq.graphic.band11GainDb
+    {0x0101, 1, 3, 0, 9, 5, kGsEfxBindingNoRange},     // gain.tone -> eq.graphic.band14GainDb
+    {0x0101, 2, 3, 0, 9, 6, kGsEfxBindingNoRange},     // gain.tone -> eq.graphic.band17GainDb
+    {0x0101, 3, 3, 0, 9, 7, kGsEfxBindingNoRange},     // gain.tone -> eq.graphic.band18GainDb
+    {0x0101, 4, 3, 0, 9, 11, kGsEfxBindingNoRange},    // gain.tone -> eq.graphic.band20GainDb
+    {0x0101, 5, 3, 0, 9, 12, kGsEfxBindingNoRange},    // gain.tone -> eq.graphic.band22GainDb
+    {0x0101, 6, 3, 0, 9, 13, kGsEfxBindingNoRange},    // gain.tone -> eq.graphic.band23GainDb
+    {0x0101, 7, 3, 0, 9, 14, kGsEfxBindingNoRange},    // gain.tone -> eq.graphic.band26GainDb
+    {0x0101, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0102, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0102, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0102, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0110, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0110, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0110, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0111, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0111, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0111, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0120, 1, 0, 1, 4, 26,
      kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.phaser.rateHz
-    {0x0120, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0120, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0120, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0121, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0121, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0121, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0122, 2, 10, 0, 6, 21,
+    {0x0120, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0120, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0120, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0121, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0121, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0121, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0122, 2, 10, 0, 7, 21,
      kGsEfxBindingNoRange},  // accel.rotor -> effects.modulation.rotary.drumUndershootHz
-    {0x0122, 6, 10, 0, 6, 26,
+    {0x0122, 6, 10, 0, 7, 28,
      kGsEfxBindingNoRange},  // accel.rotor -> effects.modulation.rotary.undershootHz
-    {0x0122, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0122, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0122, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0123, 1, 2, 1, 3, 24,
+    {0x0122, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0122, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0122, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0123, 1, 2, 1, 3, 25,
      kGsEfxBindingNoRange},  // freq.pre_filter -> effects.modulation.flanger.preFilterHz
     {0x0123, 2, 1, 0, 3, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
-    {0x0123, 3, 0, 1, 3, 25,
+    {0x0123, 3, 0, 1, 3, 26,
      kGsEfxBindingNoRange},        // rate.wide -> effects.modulation.flanger.rateHz
     {0x0123, 5, 11, 0, 3, 22, 0},  // ratio.percent -> effects.modulation.flanger.feedback
-    {0x0123, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0123, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0123, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0123, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0123, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0123, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0124, 0, 1, 0, 3, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
-    {0x0124, 1, 0, 1, 3, 25,
-     kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.flanger.rateHz
-    {0x0124, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0124, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0124, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0125, 1, 0, 1, 5, 16,
+    {0x0124, 1, 0, 1, 3, 26,
+     kGsEfxBindingNoRange},        // rate.wide -> effects.modulation.flanger.rateHz
+    {0x0124, 3, 11, 0, 3, 22, 0},  // ratio.percent -> effects.modulation.flanger.feedback
+    {0x0124, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0124, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0124, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0125, 1, 0, 1, 6, 16,
      kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.ringModulator.carrierHz
-    {0x0125, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0125, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0125, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0126, 1, 0, 1, 9, 25, kGsEfxBindingNoRange},    // rate.wide -> stereo.autoPan.rateHz
-    {0x0126, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0126, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0126, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0130, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0130, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0130, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0131, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0131, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0131, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0125, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0125, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0125, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0126, 1, 0, 1, 11, 26, kGsEfxBindingNoRange},   // rate.wide -> stereo.autoPan.rateHz
+    {0x0126, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0126, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0126, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0130, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0130, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0130, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0131, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0131, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0131, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0140, 0, 1, 0, 2, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.ensemble.centerDelayMs
-    {0x0140, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0140, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0140, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0140, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0140, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0140, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0141, 0, 1, 0, 1, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
-    {0x0141, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0141, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0141, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0142, 1, 2, 1, 1, 24,
+    {0x0141, 1, 0, 1, 1, 26,
+     kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.chorus.rateHz
+    {0x0141, 4, 0, 1, 6, 16,
+     kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.ringModulator.carrierHz
+    {0x0141, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0141, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0141, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0142, 1, 2, 1, 1, 25,
      kGsEfxBindingNoRange},  // freq.pre_filter -> effects.modulation.chorus.preFilterHz
     {0x0142, 2, 1, 0, 1, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
-    {0x0142, 3, 0, 1, 1, 25,
+    {0x0142, 3, 0, 1, 1, 26,
      kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.chorus.rateHz
-    {0x0142, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0142, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0142, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0142, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0142, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0142, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0143, 0, 1, 0, 1, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
-    {0x0143, 1, 0, 1, 1, 25,
+    {0x0143, 1, 0, 1, 1, 26,
      kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.chorus.rateHz
-    {0x0143, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0143, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0143, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0143, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0143, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0143, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0144, 0, 1, 0, 1, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
-    {0x0144, 1, 0, 1, 1, 25,
+    {0x0144, 1, 0, 1, 1, 26,
      kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.chorus.rateHz
-    {0x0144, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0144, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0144, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0144, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0144, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0144, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0150, 0, 1, 3, 0, 19,
      kGsEfxBindingNoRange},  // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x0150, 1, 1, 3, 0, 20,
@@ -188,178 +198,286 @@ inline constexpr std::array<GsEfxBinding, 231> kGsEfxBindings = {{
     {0x0150, 2, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
     {0x0150, 7, 2, 2, 0, 18,
      kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
-    {0x0150, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0150, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0150, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0150, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0150, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0150, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0151, 0, 1, 3, 0, 19,
      kGsEfxBindingNoRange},  // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x0151, 1, 1, 3, 0, 20,
-     kGsEfxBindingNoRange},  // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
-    {0x0151, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0151, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0151, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+     kGsEfxBindingNoRange},        // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0151, 2, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
+    {0x0151, 7, 2, 2, 0, 18,
+     kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0151, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0151, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0151, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0152, 0, 1, 1, 0, 19,
      kGsEfxBindingNoRange},  // delay_time.time1 -> effects.delay.stereo.delayTimeLMs
     {0x0152, 1, 1, 1, 0, 20,
-     kGsEfxBindingNoRange},  // delay_time.time1 -> effects.delay.stereo.delayTimeRMs
-    {0x0152, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0152, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0152, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+     kGsEfxBindingNoRange},        // delay_time.time1 -> effects.delay.stereo.delayTimeRMs
+    {0x0152, 3, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
+    {0x0152, 7, 2, 2, 0, 18,
+     kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0152, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0152, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0152, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0153, 0, 1, 1, 0, 19,
      kGsEfxBindingNoRange},  // delay_time.time1 -> effects.delay.stereo.delayTimeLMs
     {0x0153, 1, 1, 1, 0, 20,
-     kGsEfxBindingNoRange},  // delay_time.time1 -> effects.delay.stereo.delayTimeRMs
-    {0x0153, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0153, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0153, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+     kGsEfxBindingNoRange},        // delay_time.time1 -> effects.delay.stereo.delayTimeRMs
+    {0x0153, 8, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
+    {0x0153, 9, 2, 2, 0, 18,
+     kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0153, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0153, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0153, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0154, 0, 1, 2, 0, 19,
      kGsEfxBindingNoRange},  // delay_time.time2 -> effects.delay.stereo.delayTimeLMs
-    {0x0154, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0154, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0154, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0155, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0155, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0155, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0156, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0156, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0156, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0154, 0, 1, 2, 0, 20,
+     kGsEfxBindingNoRange},        // delay_time.time2 -> effects.delay.stereo.delayTimeRMs
+    {0x0154, 2, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
+    {0x0154, 3, 2, 2, 0, 18,
+     kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0154, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0154, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0154, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0155, 1, 1, 0, 8, 24,
+     kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.reverb.dattorro.preDelayMs
+    {0x0155, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0155, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0155, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0156, 1, 1, 0, 8, 24,
+     kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.reverb.dattorro.preDelayMs
+    {0x0156, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0156, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0156, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0157, 0, 1, 3, 0, 19,
      kGsEfxBindingNoRange},  // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
     {0x0157, 1, 1, 3, 0, 20,
-     kGsEfxBindingNoRange},  // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
-    {0x0157, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0157, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0157, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0160, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0160, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0160, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0161, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0161, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0161, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0172, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0172, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0172, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0173, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0173, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0173, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0200, 6, 0, 1, 1, 25,
+     kGsEfxBindingNoRange},        // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0157, 3, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
+    {0x0157, 7, 2, 2, 0, 18,
+     kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0157, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0157, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0157, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0160, 0, 11, 1, 5, 27, 1},  // ratio.semitone -> effects.modulation.pitchShifter.semitones
+    {0x0160, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0160, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0160, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0161, 0, 11, 1, 5, 27, 1},  // ratio.semitone -> effects.modulation.pitchShifter.semitones
+    {0x0161, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0161, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0161, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0172, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0172, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0172, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0173, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0173, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0173, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0200, 5, 1, 0, 1, 17,
+     kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0200, 6, 0, 1, 1, 26,
      kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.chorus.rateHz
-    {0x0200, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0200, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0200, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0200, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0200, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0200, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0201, 5, 1, 0, 3, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
-    {0x0201, 6, 0, 1, 3, 25,
+    {0x0201, 6, 0, 1, 3, 26,
      kGsEfxBindingNoRange},        // rate.wide -> effects.modulation.flanger.rateHz
     {0x0201, 8, 11, 0, 3, 22, 0},  // ratio.percent -> effects.modulation.flanger.feedback
-    {0x0201, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0201, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0201, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0202, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0202, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0202, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0203, 6, 0, 1, 1, 25,
+    {0x0201, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0201, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0201, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0202, 5, 1, 3, 0, 19,
+     kGsEfxBindingNoRange},  // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x0202, 5, 1, 3, 0, 20,
+     kGsEfxBindingNoRange},        // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0202, 6, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
+    {0x0202, 7, 2, 2, 0, 18,
+     kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0202, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0202, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0202, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0203, 5, 1, 0, 1, 17,
+     kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0203, 6, 0, 1, 1, 26,
      kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.chorus.rateHz
-    {0x0203, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0203, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0203, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0203, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0203, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0203, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0204, 5, 1, 0, 3, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
-    {0x0204, 6, 0, 1, 3, 25,
+    {0x0204, 6, 0, 1, 3, 26,
      kGsEfxBindingNoRange},        // rate.wide -> effects.modulation.flanger.rateHz
     {0x0204, 8, 11, 0, 3, 22, 0},  // ratio.percent -> effects.modulation.flanger.feedback
-    {0x0204, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0204, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0204, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0205, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0205, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0205, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0206, 6, 0, 1, 1, 25,
+    {0x0204, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0204, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0204, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0205, 5, 1, 3, 0, 19,
+     kGsEfxBindingNoRange},  // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x0205, 5, 1, 3, 0, 20,
+     kGsEfxBindingNoRange},        // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0205, 6, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
+    {0x0205, 7, 2, 2, 0, 18,
+     kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0205, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0205, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0205, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0206, 5, 1, 0, 1, 17,
+     kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0206, 6, 0, 1, 1, 26,
      kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.chorus.rateHz
-    {0x0206, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0206, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0206, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0206, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0206, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0206, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0207, 5, 1, 0, 3, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
-    {0x0207, 6, 0, 1, 3, 25,
+    {0x0207, 6, 0, 1, 3, 26,
      kGsEfxBindingNoRange},        // rate.wide -> effects.modulation.flanger.rateHz
     {0x0207, 8, 11, 0, 3, 22, 0},  // ratio.percent -> effects.modulation.flanger.feedback
-    {0x0207, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0207, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0207, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0207, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0207, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0207, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0208, 5, 1, 3, 0, 19,
      kGsEfxBindingNoRange},  // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
-    {0x0208, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0208, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0208, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0208, 5, 1, 3, 0, 20,
+     kGsEfxBindingNoRange},        // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0208, 6, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
+    {0x0208, 7, 2, 2, 0, 18,
+     kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0208, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0208, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0208, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x0209, 0, 1, 0, 1, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
-    {0x0209, 1, 0, 1, 1, 25,
+    {0x0209, 1, 0, 1, 1, 26,
      kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.chorus.rateHz
     {0x0209, 5, 1, 3, 0, 19,
      kGsEfxBindingNoRange},  // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
-    {0x0209, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x0209, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0209, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0209, 5, 1, 3, 0, 20,
+     kGsEfxBindingNoRange},        // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
+    {0x0209, 6, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
+    {0x0209, 7, 2, 2, 0, 18,
+     kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
+    {0x0209, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x0209, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0209, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x020A, 0, 1, 0, 3, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
-    {0x020A, 1, 0, 1, 3, 25,
+    {0x020A, 1, 0, 1, 3, 26,
      kGsEfxBindingNoRange},        // rate.wide -> effects.modulation.flanger.rateHz
     {0x020A, 3, 11, 0, 3, 22, 0},  // ratio.percent -> effects.modulation.flanger.feedback
     {0x020A, 5, 1, 3, 0, 19,
-     kGsEfxBindingNoRange},        // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+     kGsEfxBindingNoRange},  // delay_time.time3 -> effects.delay.stereo.delayTimeLMs
+    {0x020A, 5, 1, 3, 0, 20,
+     kGsEfxBindingNoRange},        // delay_time.time3 -> effects.delay.stereo.delayTimeRMs
     {0x020A, 6, 11, 0, 0, 22, 0},  // ratio.percent -> effects.delay.stereo.feedback
     {0x020A, 7, 2, 2, 0, 18,
      kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
-    {0x020A, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x020A, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x020A, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x020A, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x020A, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x020A, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
     {0x020B, 0, 1, 0, 1, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x020B, 1, 0, 1, 1, 26,
+     kGsEfxBindingNoRange},  // rate.wide -> effects.modulation.chorus.rateHz
     {0x020B, 5, 1, 0, 3, 17,
      kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.flanger.centerDelayMs
+    {0x020B, 6, 0, 1, 3, 26,
+     kGsEfxBindingNoRange},        // rate.wide -> effects.modulation.flanger.rateHz
     {0x020B, 8, 11, 0, 3, 22, 0},  // ratio.percent -> effects.modulation.flanger.feedback
-    {0x020B, 16, 3, 0, 8, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
-    {0x020B, 17, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x020B, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x020C, 4, 5, 0, 8, 3, kGsEfxBindingNoRange},     // width.section -> eq.parametric.band1.q
-    {0x020C, 5, 3, 0, 8, 2, kGsEfxBindingNoRange},     // gain.tone -> eq.parametric.band1.gainDb
-    {0x020C, 9, 10, 0, 6, 21,
+    {0x020B, 16, 3, 0, 10, 0, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band0.gainDb
+    {0x020B, 17, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x020B, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x020C, 2, 3, 0, 10, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
+    {0x020C, 3, 2, 0, 10, 1, kGsEfxBindingNoRange},    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x020C, 4, 5, 0, 10, 3, kGsEfxBindingNoRange},    // width.section -> eq.parametric.band1.q
+    {0x020C, 5, 3, 0, 10, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
+    {0x020C, 6, 3, 0, 10, 9, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band2.gainDb
+    {0x020C, 9, 10, 0, 7, 21,
      kGsEfxBindingNoRange},  // accel.rotor -> effects.modulation.rotary.drumUndershootHz
-    {0x020C, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0400, 12, 0, 0, 1, 25,
+    {0x020C, 13, 10, 0, 7, 28,
+     kGsEfxBindingNoRange},  // accel.rotor -> effects.modulation.rotary.undershootHz
+    {0x020C, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0400, 12, 0, 0, 1, 26,
      kGsEfxBindingNoRange},  // rate.narrow -> effects.modulation.chorus.rateHz
     {0x0400, 16, 1, 4, 0, 19,
      kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
-    {0x0400, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0401, 9, 3, 0, 8, 0, kGsEfxBindingNoRange},     // gain.tone -> eq.parametric.band0.gainDb
-    {0x0401, 10, 2, 0, 8, 1, kGsEfxBindingNoRange},    // freq.eq -> eq.parametric.band1.frequencyHz
-    {0x0401, 11, 5, 0, 8, 3, kGsEfxBindingNoRange},    // width.section -> eq.parametric.band1.q
-    {0x0401, 12, 3, 0, 8, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
-    {0x0401, 13, 3, 0, 8, 9, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band2.gainDb
-    {0x0401, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0402, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0403, 4, 3, 0, 8, 0, kGsEfxBindingNoRange},     // gain.tone -> eq.parametric.band0.gainDb
-    {0x0403, 5, 2, 0, 8, 1, kGsEfxBindingNoRange},     // freq.eq -> eq.parametric.band1.frequencyHz
-    {0x0403, 6, 5, 0, 8, 3, kGsEfxBindingNoRange},     // width.section -> eq.parametric.band1.q
-    {0x0403, 7, 3, 0, 8, 2, kGsEfxBindingNoRange},     // gain.tone -> eq.parametric.band1.gainDb
-    {0x0403, 8, 3, 0, 8, 9, kGsEfxBindingNoRange},     // gain.tone -> eq.parametric.band2.gainDb
-    {0x0403, 10, 0, 0, 1, 25,
+    {0x0400, 16, 1, 4, 0, 20,
+     kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
+    {0x0400, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0401, 9, 3, 0, 10, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0401, 10, 2, 0, 10, 1, kGsEfxBindingNoRange},   // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0401, 11, 5, 0, 10, 3, kGsEfxBindingNoRange},   // width.section -> eq.parametric.band1.q
+    {0x0401, 12, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0401, 13, 3, 0, 10, 9, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band2.gainDb
+    {0x0401, 15, 0, 0, 1, 26,
      kGsEfxBindingNoRange},  // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0401, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0402, 12, 0, 0, 1, 26,
+     kGsEfxBindingNoRange},  // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0402, 16, 1, 4, 0, 19,
+     kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
+    {0x0402, 16, 1, 4, 0, 20,
+     kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
+    {0x0402, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0403, 4, 3, 0, 10, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0403, 5, 2, 0, 10, 1, kGsEfxBindingNoRange},    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0403, 6, 5, 0, 10, 3, kGsEfxBindingNoRange},    // width.section -> eq.parametric.band1.q
+    {0x0403, 7, 3, 0, 10, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0403, 8, 3, 0, 10, 9, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band2.gainDb
+    {0x0403, 10, 0, 0, 1, 26,
+     kGsEfxBindingNoRange},  // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0403, 14, 1, 4, 0, 19,
+     kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
+    {0x0403, 14, 1, 4, 0, 20,
+     kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
     {0x0403, 16, 2, 2, 0, 18,
      kGsEfxBindingNoRange},  // freq.damping -> effects.delay.stereo.dampingHz
-    {0x0403, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0404, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0405, 10, 2, 0, 8, 1, kGsEfxBindingNoRange},    // freq.eq -> eq.parametric.band1.frequencyHz
-    {0x0405, 11, 5, 0, 8, 3, kGsEfxBindingNoRange},    // width.section -> eq.parametric.band1.q
-    {0x0405, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0406, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
-    {0x0500, 3, 2, 0, 8, 1, kGsEfxBindingNoRange},     // freq.eq -> eq.parametric.band1.frequencyHz
-    {0x0500, 4, 5, 0, 8, 3, kGsEfxBindingNoRange},     // width.section -> eq.parametric.band1.q
-    {0x0500, 6, 3, 0, 8, 9, kGsEfxBindingNoRange},     // gain.tone -> eq.parametric.band2.gainDb
-    {0x0500, 12, 0, 0, 4, 25,
+    {0x0403, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0404, 6, 3, 0, 10, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0404, 7, 2, 0, 10, 1, kGsEfxBindingNoRange},    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0404, 8, 5, 0, 10, 3, kGsEfxBindingNoRange},    // width.section -> eq.parametric.band1.q
+    {0x0404, 9, 3, 0, 10, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0404, 10, 3, 0, 10, 9, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band2.gainDb
+    {0x0404, 12, 0, 0, 1, 26,
+     kGsEfxBindingNoRange},  // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0404, 16, 1, 4, 0, 19,
+     kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
+    {0x0404, 16, 1, 4, 0, 20,
+     kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
+    {0x0404, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0405, 9, 3, 0, 10, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0405, 10, 2, 0, 10, 1, kGsEfxBindingNoRange},   // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0405, 11, 5, 0, 10, 3, kGsEfxBindingNoRange},   // width.section -> eq.parametric.band1.q
+    {0x0405, 12, 3, 0, 10, 2, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band1.gainDb
+    {0x0405, 13, 3, 0, 10, 9, kGsEfxBindingNoRange},   // gain.tone -> eq.parametric.band2.gainDb
+    {0x0405, 15, 0, 0, 1, 26,
+     kGsEfxBindingNoRange},  // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0405, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0406, 3, 0, 0, 4, 26,
      kGsEfxBindingNoRange},  // rate.narrow -> effects.modulation.phaser.rateHz
-    {0x0500, 19, 4, 0, 10, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0406, 9, 1, 0, 1, 17,
+     kGsEfxBindingNoRange},  // delay_time.pre_delay -> effects.modulation.chorus.centerDelayMs
+    {0x0406, 10, 0, 0, 1, 26,
+     kGsEfxBindingNoRange},  // rate.narrow -> effects.modulation.chorus.rateHz
+    {0x0406, 16, 0, 0, 11, 26, kGsEfxBindingNoRange},  // rate.narrow -> stereo.autoPan.rateHz
+    {0x0406, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
+    {0x0500, 2, 3, 0, 10, 0, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band0.gainDb
+    {0x0500, 3, 2, 0, 10, 1, kGsEfxBindingNoRange},    // freq.eq -> eq.parametric.band1.frequencyHz
+    {0x0500, 4, 5, 0, 10, 3, kGsEfxBindingNoRange},    // width.section -> eq.parametric.band1.q
+    {0x0500, 5, 3, 0, 10, 2, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band1.gainDb
+    {0x0500, 6, 3, 0, 10, 9, kGsEfxBindingNoRange},    // gain.tone -> eq.parametric.band2.gainDb
+    {0x0500, 7, 11, 1, 5, 27, 1},  // ratio.semitone -> effects.modulation.pitchShifter.semitones
+    {0x0500, 12, 0, 0, 4, 26,
+     kGsEfxBindingNoRange},  // rate.narrow -> effects.modulation.phaser.rateHz
+    {0x0500, 16, 1, 4, 0, 19,
+     kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeLMs
+    {0x0500, 16, 1, 4, 0, 20,
+     kGsEfxBindingNoRange},  // delay_time.time4 -> effects.delay.stereo.delayTimeRMs
+    {0x0500, 19, 4, 0, 12, 23, kGsEfxBindingNoRange},  // level.output -> utility.gain.levelDb
 }};
 
 }  // namespace sonare::midi::synth

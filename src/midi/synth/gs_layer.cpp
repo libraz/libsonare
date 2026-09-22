@@ -587,10 +587,6 @@ std::string gs_stereo_eq_json(const GsEfx& efx) {
 /// minimum is 1 - 2*wet: 0.35 is a ~10 dB depth with a unity peak.
 constexpr float kGsTremoloDryWet = 0.35f;
 
-/// The rate the Tremolo Chorus's modulator runs at. Its own rate byte carries
-/// no conversion, unlike the standalone type's.
-constexpr float kGsTremoloChainHz = 5.0f;
-
 /// Tremolo as sinusoidal amplitude modulation: dry*x + wet*x*sin = x*(dry +
 /// wet*sin), so the ring modulator realises the type exactly.
 std::string gs_tremolo_json(float carrier_hz) {
@@ -671,8 +667,11 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
       out.number("drumUndershootHz", gs_efx_accel_undershoot_hz(efx_byte(efx, 2)));
       return out.str();
     }
-    case 0x0123: {  // Stereo Flanger: the sweep's LFO rate.
+    case 0x0123: {
+      // Stereo Flanger. Its pre-filter was read to be the Stereo Chorus's section,
+      // so the shape byte is taken over the same three measured states.
       ParamsJson out;
+      if (efx_byte(efx, 0) <= 2) out.integer("preFilterMode", efx_byte(efx, 0));
       out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 3), GsRateRange::kWide));
       return out.str();
     }
@@ -813,12 +812,13 @@ bool write_bound(ParamsJson& out, const char* key, const GsEfxBinding& row, uint
     case kGsEfxClassRatio: {
       if (row.range >= kGsEfxBindingRanges.size()) return false;
       const GsEfxBindingRange& ends = kGsEfxBindingRanges[row.range];
-      float percent = 0.0f;
-      if (!gs_efx_ratio(byte, ends.lo_byte, ends.hi_byte, ends.lo_unit, ends.hi_unit, &percent)) {
+      float units = 0.0f;
+      if (!gs_efx_ratio(byte, ends.lo_byte, ends.hi_byte, ends.lo_unit, ends.hi_unit, &units)) {
         return false;
       }
-      // The one table is printed in percent; the controls take the fraction.
-      out.number(key, percent / 100.0f);
+      // Table 0 is printed in percent and the controls take the fraction;
+      // table 1 is printed in semitones, which is what they take.
+      out.number(key, row.table == 0 ? units / 100.0f : units);
       return true;
     }
     default:
@@ -975,12 +975,13 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
   const auto rm = [] { return GsEfxStage{"effects.modulation.ringModulator", "{}"}; };
   const auto ps = [] { return GsEfxStage{"effects.modulation.pitchShifter", "{}"}; };
   const auto eq3 = [] { return GsEfxStage{"eq.parametric", "{}"}; };
-  const auto trem = [] {
-    return GsEfxStage{"effects.modulation.ringModulator", gs_tremolo_json(kGsTremoloChainHz)};
+  const auto trem = [&efx](int slot) {
+    return GsEfxStage{"effects.modulation.ringModulator",
+                      gs_tremolo_json(gs_efx_rate_hz(efx_byte(efx, slot), GsRateRange::kWide))};
   };
   switch (efx.type) {
     case 0x0141:  // Tremolo Chorus: the chorus with its output amplitude-modulated.
-      return {cf(), trem()};
+      return {cf(), trem(4)};
     // Series-2 composites (SC-88Pro MSB 02): two stock effects in signal order.
     case 0x0200:  // OD -> Chorus
       return {od(false), cf_rate(6, GsRateRange::kWide)};

@@ -29,9 +29,9 @@
 ///
 /// **Parameter combinations.** The sweep below has five axes: the EFX type (65
 /// numbers, the 64 plus the alias), the parameter slot (20), the conversion
-/// class (11), the byte value (the boundaries 0, 1, 63, 64, 65, 126, 127), and
+/// class (12), the byte value (the boundaries 0, 1, 63, 64, 65, 126, 127), and
 /// which table of the class applies (2 rate ranges, 5 delay ladders, 3 frequency
-/// columns). Past the three-parameter threshold, so the set is a model rather
+/// columns, 2 ratio units). Past the three-parameter threshold, so the set is a model rather
 /// than a hand-picked list. The constraint that decides the model: the class and
 /// the table are FUNCTIONS of (type, slot) — the generated header assigns them —
 /// so they are not free axes, and a set generated as if they were would carry
@@ -301,7 +301,7 @@ struct ConversionName {
   const char* name;
 };
 
-constexpr std::array<ConversionName, 19> kConversionNames = {{
+constexpr std::array<ConversionName, 20> kConversionNames = {{
     {s::kGsEfxClassRate, 0, "rate.narrow"},
     {s::kGsEfxClassRate, 1, "rate.wide"},
     {s::kGsEfxClassDelayTime, 0, "delay_time.pre_delay"},
@@ -321,6 +321,7 @@ constexpr std::array<ConversionName, 19> kConversionNames = {{
     {s::kGsEfxClassAzimuth, 0, "azimuth.placement"},
     {s::kGsEfxClassAccel, 0, "accel.rotor"},
     {s::kGsEfxClassRatio, 0, "ratio.percent"},
+    {s::kGsEfxClassRatio, 1, "ratio.semitone"},
 }};
 
 /// The EQ block's gain slots for one type, taken from the header rather than
@@ -362,8 +363,8 @@ std::vector<EqSlots> gain_slots_by_type() {
 /// nobody has adjudicated yet mostly become states as they are looked at, so a
 /// ceiling would go red on the lane finishing its own work; what a downgrade of
 /// a translation would have to get past is the translated floor.
-constexpr int kGsEfxTranslatedFloor = 231;
-constexpr int kGsEfxAdjudicatedFloor = 598;
+constexpr int kGsEfxTranslatedFloor = 290;
+constexpr int kGsEfxAdjudicatedFloor = 765;
 
 std::string conversion_name(uint8_t conversion_class, uint8_t table) {
   for (const ConversionName& row : kConversionNames) {
@@ -1211,12 +1212,11 @@ bool law_reads(const s::GsEfxBinding& row, uint8_t byte, const std::string& key,
     case s::kGsEfxClassRatio: {
       if (row.range >= s::kGsEfxBindingRanges.size()) return false;
       const s::GsEfxBindingRange& ends = s::kGsEfxBindingRanges[row.range];
-      float percent = 0.0f;
-      if (!s::gs_efx_ratio(byte, ends.lo_byte, ends.hi_byte, ends.lo_unit, ends.hi_unit,
-                           &percent)) {
+      float units = 0.0f;
+      if (!s::gs_efx_ratio(byte, ends.lo_byte, ends.hi_byte, ends.lo_unit, ends.hi_unit, &units)) {
         return false;
       }
-      out = static_cast<double>(percent) / 100.0;
+      out = row.table == 0 ? static_cast<double>(units) / 100.0 : static_cast<double>(units);
       return true;
     }
     default:

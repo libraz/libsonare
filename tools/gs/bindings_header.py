@@ -38,7 +38,7 @@ GENERATED_BY = "tools/gs/bindings_header.py"
 
 # Laws no measured table holds, numbered after the classes gs_efx_tables.h
 # numbers. A table names the printed unit the endpoints are spelled in.
-BINDING_LAWS = {"ratio": ("percent",)}
+BINDING_LAWS = {"ratio": ("percent", "semitone")}
 
 # The spelling of a printed byte range, as the archive's printed_values has it.
 BYTE_RANGE_RE = re.compile(r"^([0-9A-F]{2})–([0-9A-F]{2})$")

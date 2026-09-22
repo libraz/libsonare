@@ -296,15 +296,15 @@ endef
 export GS_EFX_SR_COEFFICIENT_LINT_PY
 
 # The insertion-effect chain skeleton holds a few fixed quantities the archive
-# never measured -- shelf corners, a mix ratio, a carrier rate -- and a binding
-# row may not carry a constant at all (tools/gs/efx-bindings/SCHEMA.md). What is
-# pinned is the count rather than the names: the rule being defended is that the
-# measured table stays the place a new quantity lands, so a seventh is a law
+# never measured -- shelf corners and a mix ratio -- and a binding row may not
+# carry a constant at all (tools/gs/efx-bindings/SCHEMA.md). What is pinned is
+# the count rather than the names: the rule being defended is that the measured
+# table stays the place a new quantity lands, so a sixth is a law
 # hand-written into the skeleton. Moving one the other way (into efx-tables.json,
 # where its provenance becomes checkable) fails this too, on purpose -- the pin
 # comes down in the same commit that earns it.
-GS_EFX_SKELETON_CONSTANTS := 6
-GS_EFX_SKELETON_CONSTANT_RE := constexpr float k[A-Za-z]*(Hz|DryWet|ChainHz) =
+GS_EFX_SKELETON_CONSTANTS := 5
+GS_EFX_SKELETON_CONSTANT_RE := constexpr float k[A-Za-z]*(Hz|Db|DryWet) =
 
 # The insertion-effect coverage tally is described in three documents, each for
 # a different reader, and a tally described three ways drifts three ways. So the
