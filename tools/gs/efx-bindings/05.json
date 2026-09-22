@@ -1,0 +1,13 @@
+[
+{"type": "05 00", "slot": 0, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
+{"type": "05 00", "slot": 1, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
+{"type": "05 00", "slot": 10, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
+{"type": "05 00", "slot": 11, "state": "a printed column with no measured table behind it"},
+{"type": "05 00", "slot": 12, "class": "rate", "table": "narrow", "stage": "effects.modulation.phaser", "key": "rateHz"},
+{"type": "05 00", "slot": 13, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
+{"type": "05 00", "slot": 14, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
+{"type": "05 00", "slot": 15, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
+{"type": "05 00", "slot": 17, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
+{"type": "05 00", "slot": 18, "state": "a bare 00-7F with no unit printed beside it, so no conversion may be guessed"},
+{"type": "05 00", "slot": 19, "class": "level", "table": "output", "stage": "utility.gain", "key": "levelDb"}
+]

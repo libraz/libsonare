@@ -75,8 +75,10 @@ The byte's meaning is understood but no insert in this tree has a control of tha
 
 **A `state` reason is checked mechanically, so write it as a claim about an insert.** A reason of the form "the *X* insert has no *Y*" is verified against that insert's actual parameter list; if the control turns out to exist, the row fails rather than sitting there wrong. Reasons of the other two kinds are fixed wordings, because they describe a class of row rather than one insert:
 
-- a bare `00–7F` with no unit printed beside it — the machine's own law for such a slot is measured to differ from the linear reading, so no conversion may be guessed;
-- a printed column with no measured table behind it (`*9`, `*11`, `*12`).
+- `"a bare 00-7F with no unit printed beside it, so no conversion may be guessed"` — the machine's own law for such a slot is measured to differ from the linear reading;
+- `"a printed column with no measured table behind it"` — `*11` and `*12`. `*9` is not one of these; it is measured, as `freq.pre_filter`.
+
+Both are copied verbatim, because what makes them checkable is that they are a closed set rather than a description.
 
 ### `unmapped` — the type realises no chain
 
