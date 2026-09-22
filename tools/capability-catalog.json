@@ -1141,6 +1141,16 @@
           "rtSafe": true,
           "type": "number",
           "unit": null
+        },
+        {
+          "default": 0,
+          "id": 5,
+          "max": null,
+          "min": null,
+          "name": "dampingHz",
+          "rtSafe": true,
+          "type": "number",
+          "unit": "Hz"
         }
       ],
       "realtimeCost": "low",
@@ -1257,6 +1267,16 @@
           "rtSafe": true,
           "type": "number",
           "unit": null
+        },
+        {
+          "default": 0,
+          "id": 4,
+          "max": null,
+          "min": null,
+          "name": "preFilterHz",
+          "rtSafe": true,
+          "type": "number",
+          "unit": "Hz"
         }
       ],
       "realtimeCost": "low",
@@ -1403,6 +1423,16 @@
           "rtSafe": true,
           "type": "number",
           "unit": null
+        },
+        {
+          "default": 0,
+          "id": 5,
+          "max": null,
+          "min": null,
+          "name": "preFilterHz",
+          "rtSafe": true,
+          "type": "number",
+          "unit": "Hz"
         }
       ],
       "realtimeCost": "low",
@@ -1453,6 +1483,16 @@
           "max": null,
           "min": null,
           "name": "dryWet",
+          "rtSafe": true,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "default": 0,
+          "id": 4,
+          "max": null,
+          "min": null,
+          "name": "feedback",
           "rtSafe": true,
           "type": "number",
           "unit": null
@@ -1575,6 +1615,16 @@
           "rtSafe": true,
           "type": "number",
           "unit": null
+        },
+        {
+          "default": 4.44,
+          "id": 4,
+          "max": null,
+          "min": null,
+          "name": "drumRateHz",
+          "rtSafe": true,
+          "type": "number",
+          "unit": "Hz"
         }
       ],
       "realtimeCost": "low",
@@ -11751,6 +11801,16 @@
           "rtSafe": true,
           "type": "number",
           "unit": null
+        },
+        {
+          "default": 0,
+          "id": 2,
+          "max": null,
+          "min": 0,
+          "name": "holdHz",
+          "rtSafe": true,
+          "type": "number",
+          "unit": "Hz"
         }
       ],
       "realtimeCost": "low",
