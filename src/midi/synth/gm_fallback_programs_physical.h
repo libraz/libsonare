@@ -448,15 +448,12 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
     p.gain = gain;
     return p;
   };
-  // Bell radiation, and the voice lowpass that goes with it: the highpass lifts
-  // the whole band above the flare cutoff, so the top of the range needs closing
-  // in by roughly the same amount to keep the model's tone-to-noise where it was.
-  // The four values are fitted against their references; the cutoffs order as a
-  // bell's flare does, the horn widest and the trumpet narrowest.
+  // The bell corner and the voice lowpass that goes with it: what the flare
+  // radiates is what it did not reflect, so the top of the range closes in by
+  // roughly what the corner lifts. Fitted; the corners order as the bells do.
   o.trumpet = brass(false, 0.55f, 0.30f, 0.75f, 0.28f, 12.0f, 80.0f, 0.88f, 0.50f, 0.90f);
   o.trumpet.brass.lip_aperture = 0.9f;
   o.trumpet.cutoff_hz = 2400.0f;
-  o.trumpet.brass.bell_radiation_hz = 1900.0f;
   o.trumpet.brass.brassiness = 0.5019f;
   o.trumpet.brass.cuivre_dynamics = 0.715476f;
   o.trumpet.lfo_rate_hz = 5.5f;
@@ -472,7 +469,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.trombone = brass(false, 0.48f, 0.45f, 0.85f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.92f);
   o.trombone.brass.lip_aperture = 0.151585f;
   o.trombone.cutoff_hz = 978.041f;
-  o.trombone.brass.bell_radiation_hz = 1346.68f;
   o.trombone.brass.brassiness = 0.998735f;
   o.trombone.brass.cuivre_dynamics = 0.390501f;
   o.trombone.lfo_rate_hz = 2.47118f;
@@ -497,10 +493,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.trombone.gain = 0.826041f;
   o.tuba = brass(true, 0.42f, 0.70f, 0.38f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.92f);
   o.tuba.brass.lip_aperture = 0.726019f;
-  // The tuba and the muted trumpet have no reference; their flare cutoffs follow
-  // the bore, below the trombone's and level with the trumpet's respectively.
   o.tuba.cutoff_hz = 1200.0f;
-  o.tuba.brass.bell_radiation_hz = 500.0f;
   o.tuba.brass.brassiness = 0.286475f;
   o.tuba.brass.cuivre_dynamics = 0.232962f;
   o.tuba.lfo_to_pitch_cents = 1.5f;
@@ -519,7 +512,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.muted_trumpet = brass(false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.60f);
   o.muted_trumpet.brass.lip_aperture = 0.9f;
   o.muted_trumpet.cutoff_hz = 526.781f;
-  o.muted_trumpet.brass.bell_radiation_hz = 692.571f;
   o.muted_trumpet.brass.brassiness = 0.226005f;
   o.muted_trumpet.brass.cuivre_dynamics = 0.771946f;
   o.muted_trumpet.brass.mute = 0.256358f;
@@ -546,7 +538,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.french_horn = brass(true, 0.50f, 0.55f, 0.48f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.88f);
   o.french_horn.brass.lip_aperture = 0.725162f;
   o.french_horn.cutoff_hz = 1600.0f;
-  o.french_horn.brass.bell_radiation_hz = 700.0f;
   o.french_horn.brass.brassiness = 0.339631f;
   o.french_horn.brass.cuivre_dynamics = 0.586918f;
   o.french_horn.lfo_to_pitch_cents = 1.5f;
@@ -567,7 +558,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.brass_section.brass.lip_aperture = 0.832174f;
   o.brass_section.amp_env.attack_ms = 67.2627f;
   o.brass_section.cutoff_hz = 824.427f;
-  o.brass_section.brass.bell_radiation_hz = 5447.92f;
   o.brass_section.brass.brassiness = 0.529368f;
   o.brass_section.brass.cuivre_dynamics = 0.998511f;
   o.brass_section.brass.chiff = 0.203084f;

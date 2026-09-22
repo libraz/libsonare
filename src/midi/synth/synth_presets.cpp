@@ -311,12 +311,32 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   // cornet / flugelhorn / euphonium) are darker and rounder. lip_damping is the
   // buzz character (a tight, high-Q lip is bright and brassy; a loose lip is
   // mellow), brightness is the bell openness, and the breath contour handles the
-  // speech so the amp envelope just holds. (The bright, blaring "cuivré" edge is
-  // a later off-by-default enhancement; these presets are the round linear tone.)
+  // speech so the amp envelope just holds.
   {
+    // The bell and the lip valve come as a group from the fallback voice named
+    // beside each row: the flare corner, the voice lowpass behind it, the
+    // valve's rest aperture and the steepening depth were fitted together, so
+    // taking one of them alone lands on neither voice. The voicing stays ours.
+    struct BellGroup {
+      float voice_cutoff_hz;
+      float bell_cutoff_hz;
+      float lip_aperture;
+      float brassiness;
+      float cuivre_dynamics;
+      float bore_nonlinearity;
+    };
+    constexpr BellGroup kTrumpetBell{2400.0f, 2326.85f, 0.9f, 0.5019f, 0.715476f, 0.705098f};
+    constexpr BellGroup kTromboneBell{978.041f,  1499.65f,  0.151585f,
+                                      0.998735f, 0.390501f, 0.497671f};
+    constexpr BellGroup kTubaBell{1200.0f, 427.454f, 0.726019f, 0.286475f, 0.232962f, 0.0288505f};
+    constexpr BellGroup kMutedTrumpetBell{526.781f,  772.341f,  0.9f,
+                                          0.226005f, 0.771946f, 0.475425f};
+    constexpr BellGroup kFrenchHornBell{1600.0f,   821.625f,  0.725162f,
+                                        0.339631f, 0.586918f, 0.0348697f};
+
     auto brass = [&](const char* name, bool conical, float lip_tension, float lip_damping,
                      float brightness, float damping, float attack_ms, float release_ms,
-                     float breath, float bell_mix, float gain) {
+                     float breath, float bell_mix, float gain, const BellGroup& bell) {
       SynthPreset& v = t[i++];
       v.name = name;
       NativeSynthPatch patch{};
@@ -324,7 +344,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.amp_env.attack_ms = 12.0f;
       patch.amp_env.sustain = 1.0f;
       patch.amp_env.release_ms = release_ms;
-      patch.cutoff_hz = 20000.0f;
+      patch.cutoff_hz = bell.voice_cutoff_hz;
       patch.brass.conical = conical;
       patch.brass.lip_tension = lip_tension;
       patch.brass.lip_damping = lip_damping;
@@ -334,8 +354,17 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.brass.release_ms = release_ms;
       patch.brass.breath_pressure = breath;
       patch.brass.vel_to_breath = 0.5f;
-      // The bright small-bore bells (trumpet family) get the radiation formant;
-      // large-bore / mellow brass stays on the round linear tone.
+      // What the bell keeps and what it radiates are one corner: without it the
+      // core emits the bore pressure, whose centroid tracks the note instead of
+      // standing where the instrument's formant does.
+      patch.brass.bell_cutoff_hz = bell.bell_cutoff_hz;
+      patch.brass.lip_aperture = bell.lip_aperture;
+      patch.brass.brassiness = bell.brassiness;
+      patch.brass.cuivre_dynamics = bell.cuivre_dynamics;
+      patch.brass.bore_nonlinearity = bell.bore_nonlinearity;
+      patch.brass.dynamic_lip = 0.25f;
+      // The trumpet-family bells carry the body resonator on top; large-bore and
+      // mellow brass radiate through the flare alone.
       if (bell_mix > 0.0f) {
         patch.body = BodyType::kBrassBell;
         patch.body_mix = bell_mix;
@@ -344,14 +373,24 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       v.config = from_patch(clamp_synth_patch(patch));
     };
     //     name             cone  tens   damp   bright damp   atk    rel     breath bell  gain
-    brass("trumpet", false, 0.55f, 0.30f, 0.72f, 0.28f, 18.0f, 80.0f, 0.85f, 0.50f, 0.70f);
-    brass("trombone", false, 0.48f, 0.45f, 0.55f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.72f);
-    brass("tuba", true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.74f);
-    brass("french-horn", true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.70f);
-    brass("muted-trumpet", false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.66f);
-    brass("cornet", true, 0.52f, 0.45f, 0.55f, 0.30f, 20.0f, 85.0f, 0.84f, 0.40f, 0.70f);
-    brass("flugelhorn", true, 0.48f, 0.62f, 0.40f, 0.34f, 24.0f, 95.0f, 0.84f, 0.0f, 0.70f);
-    brass("euphonium", true, 0.45f, 0.60f, 0.40f, 0.36f, 30.0f, 110.0f, 0.86f, 0.0f, 0.72f);
+    brass("trumpet", false, 0.55f, 0.30f, 0.72f, 0.28f, 18.0f, 80.0f, 0.85f, 0.50f, 0.70f,
+          kTrumpetBell);
+    brass("trombone", false, 0.48f, 0.45f, 0.55f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.72f,
+          kTromboneBell);
+    brass("tuba", true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.74f, kTubaBell);
+    brass("french-horn", true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.70f,
+          kFrenchHornBell);
+    brass("muted-trumpet", false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.66f,
+          kMutedTrumpetBell);
+    // These three have no program and no reference, so each takes the class its
+    // bell belongs to: cornet and flugelhorn are small B-flat bells, euphonium a
+    // large low one. The bore flag cannot stand in — all three are conical.
+    brass("cornet", true, 0.52f, 0.45f, 0.55f, 0.30f, 20.0f, 85.0f, 0.84f, 0.40f, 0.70f,
+          kTrumpetBell);
+    brass("flugelhorn", true, 0.48f, 0.62f, 0.40f, 0.34f, 24.0f, 95.0f, 0.84f, 0.0f, 0.70f,
+          kTrumpetBell);
+    brass("euphonium", true, 0.45f, 0.60f, 0.40f, 0.36f, 30.0f, 110.0f, 0.86f, 0.0f, 0.72f,
+          kTubaBell);
   }
 
   // --- air-jet flute (edge-tone waveguide) ---

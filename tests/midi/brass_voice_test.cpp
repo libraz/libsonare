@@ -309,6 +309,63 @@ TEST_CASE("brass presets speak and stay bounded", "[midi][synth][brass]") {
   }
 }
 
+TEST_CASE("catalog brass radiates through a bell, like the fallback voices",
+          "[midi][synth][brass]") {
+  // The catalogue and the fallback table are two address spaces over one set of
+  // voices, so a catalogue entry left on the bore pressure while its fallback
+  // twin radiates is a defect in the entry rather than a voicing choice. Read as
+  // equality against the named twin rather than as "some value is set": the way
+  // this went wrong was a re-fit moving the fallback and nothing pulling the
+  // catalogue after it, which a presence check cannot see. The last three have
+  // no program of their own and take the class their bell belongs to.
+  struct Row {
+    const char* preset;
+    uint8_t program;
+  };
+  for (const Row row : {Row{"trumpet", 56},
+                        {"trombone", 57},
+                        {"tuba", 58},
+                        {"muted-trumpet", 59},
+                        {"french-horn", 60},
+                        {"cornet", 56},
+                        {"flugelhorn", 56},
+                        {"euphonium", 58}}) {
+    const sonare::midi::synth::SynthPreset* preset =
+        sonare::midi::synth::find_synth_preset(row.preset);
+    REQUIRE(preset != nullptr);
+    const NativeSynthPatch& got = preset->config.patch;
+    const NativeSynthPatch want = gm_fallback_patch(0, row.program);
+    INFO(row.preset << " against GM program " << static_cast<int>(row.program));
+    REQUIRE(want.brass.bell_cutoff_hz > 0.0f);  // the twin this row is read against
+    REQUIRE(got.brass.bell_cutoff_hz == want.brass.bell_cutoff_hz);
+    REQUIRE(got.cutoff_hz == want.cutoff_hz);  // fitted with the corner, not after it
+    REQUIRE(got.brass.lip_aperture == want.brass.lip_aperture);
+    REQUIRE(got.brass.brassiness == want.brass.brassiness);
+    REQUIRE(got.brass.cuivre_dynamics == want.brass.cuivre_dynamics);
+    REQUIRE(got.brass.bore_nonlinearity == want.brass.bore_nonlinearity);
+    REQUIRE(got.brass.dynamic_lip == want.brass.dynamic_lip);
+  }
+}
+
+TEST_CASE("the fallback brass voices radiate from the coupled bell alone", "[midi][synth][brass]") {
+  // Two bell models share the engine and they are alternatives rather than a
+  // pair: the standalone radiation highpass is consulted only where the coupled
+  // corner is zero. Every voice here sets the corner, so the highpass is
+  // unreachable for all of them — asserted by feeding it a value and reading the
+  // render rather than by reading the branch, since the branch is what a later
+  // edit would change. A voice that loses its corner fails here instead of
+  // silently falling back to a filter nobody is maintaining.
+  for (uint8_t program = 56; program <= 61; ++program) {
+    const NativeSynthPatch shipped = gm_fallback_patch(0, program);
+    INFO("program " << static_cast<int>(program));
+    REQUIRE(shipped.mode == SynthEngineMode::kBrass);
+    REQUIRE(shipped.brass.bell_cutoff_hz > 0.0f);
+    NativeSynthPatch probe = shipped;
+    probe.brass.bell_radiation_hz = 4000.0f;
+    REQUIRE(render_patch(shipped, 53, 100, 24000) == render_patch(probe, 53, 100, 24000));
+  }
+}
+
 TEST_CASE("brass is stable under a rapid breath sweep", "[midi][synth][brass]") {
   NativeSynthConfig cfg;
   cfg.patch = brass_base_patch();
