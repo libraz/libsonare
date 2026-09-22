@@ -5,7 +5,7 @@
        build-bank-shared bank-versions bank-versions-check \
        surface-coverage surface-coverage-check \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
-       gs-efx-archive-set gs-efx-tables gs-efx-tables-check \
+       gs-efx-archive-set gs-efx-tables gs-efx-tables-check gs-efx-coverage \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
@@ -649,23 +649,35 @@ gs-efx-tables: gs-efx-archive-set
 	python3 tools/gs/derive_efx_tables.py --archive $(GS_EFX_ARCHIVE) \
 	    --out tools/gs/efx-tables.json --header src/midi/synth/gs_efx_tables.h
 
-# Regenerates into /tmp and diffs against the committed pair. A revision
-# mismatch is reported on its own line before the diff runs: "the archive
-# moved on" and "the script changed" both show up as a diff, and folding the
-# two into one report sends whoever reads it to the wrong place.
+# Regenerates into a scratch directory and diffs against the committed pair.
+# The scratch directory is a fresh mktemp -d rather than a fixed /tmp path,
+# because two sessions running this target at once would otherwise clobber
+# each other's output. A revision mismatch is reported on its own line
+# before the diff runs: "the archive moved on" and "the script changed" both
+# show up as a diff, and folding the two into one report sends whoever reads
+# it to the wrong place.
 gs-efx-tables-check: gs-efx-archive-set
-	@mkdir -p /tmp
+	@scratch=$$(mktemp -d) || exit 1; \
+	trap 'rm -rf "$$scratch"' EXIT; \
+	set -e; \
 	python3 tools/gs/derive_efx_tables.py --archive $(GS_EFX_ARCHIVE) \
-	    --out /tmp/gs_efx_tables_check.json --header /tmp/gs_efx_tables_check.h
-	@committed=$$(python3 -c "import json; print(json.load(open('tools/gs/efx-tables.json'))['archive_revision'])"); \
-	regenerated=$$(python3 -c "import json; print(json.load(open('/tmp/gs_efx_tables_check.json'))['archive_revision'])"); \
+	    --out "$$scratch/gs_efx_tables_check.json" --header "$$scratch/gs_efx_tables_check.h"; \
+	committed=$$(python3 -c "import json; print(json.load(open('tools/gs/efx-tables.json'))['archive_revision'])"); \
+	regenerated=$$(python3 -c "import json; print(json.load(open('$$scratch/gs_efx_tables_check.json'))['archive_revision'])"); \
 	if [ "$$committed" != "$$regenerated" ]; then \
 	    echo "archive_revision differs: committed $$committed, regenerated from \$$GS_EFX_ARCHIVE $$regenerated"; \
 	    echo "  (this is the archive moving on, not necessarily the derivation changing --"; \
 	    echo "  the diff below says whether the tables themselves moved too)"; \
-	fi
-	diff -u tools/gs/efx-tables.json /tmp/gs_efx_tables_check.json
-	diff -u src/midi/synth/gs_efx_tables.h /tmp/gs_efx_tables_check.h
+	fi; \
+	diff -u tools/gs/efx-tables.json "$$scratch/gs_efx_tables_check.json"; \
+	diff -u src/midi/synth/gs_efx_tables.h "$$scratch/gs_efx_tables_check.h"
+
+# The GS EFX coverage equation: how many of the 770 printed (type, slot)
+# parameters are translated, documented as a state, unmapped, unreadable or
+# built by hand, and how many nobody has adjudicated yet. See
+# tools/gs/coverage.py.
+gs-efx-coverage: gs-efx-archive-set
+	python3 tools/gs/coverage.py --archive $(GS_EFX_ARCHIVE)
 
 # Shared public-input schema plus public streaming field/flag/default snapshot.
 # Also gates request-object coverage: every one-shot facade export keeps a
