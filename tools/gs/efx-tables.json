@@ -2,7 +2,7 @@
   "generated_by": "tools/gs/derive_efx_tables.py",
   "unit_id": "roland-sc8850-01",
   "model": "SC-8850",
-  "archive_revision": "47bd72cfb3ddd5a074dc9f5433e517525626555e",
+  "archive_revision": "0860b74681d4e6f4f0f8ab2fe84d0abf69e9edb0",
   "archive_revision_source": "git rev-parse HEAD",
   "archive_inputs_dirty": false,
   "what_this_is": "The byte-to-physical-quantity conversions the GS insertion-effect parameter block uses, and which (type, slot) pairs an archive of what one individual unit answered gives one to. Committed so that a clone reads them without the archive.",
@@ -6228,7 +6228,7 @@
         "conversion_class": "width",
         "file": "width-the-byte-halves-the-printed-table.json",
         "state": "standing",
-        "rounds": 1
+        "rounds": 2
       },
       {
         "conversion_class": "wave",
