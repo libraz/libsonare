@@ -14,12 +14,18 @@
 /// without a row fails by name); every stage name is one insert_factory can
 /// actually build, which is what separates a mapping that looks complete from
 /// one that produces sound; two types realising the identical chain are listed
-/// as such with the reason they are indistinguishable; every byte the
-/// measurement archive gives a conversion to is either translated onto a control
-/// that exists or counted as STATE with the reason no control does; and the set
-/// of bytes that move a chain at all is exactly that translated set plus a
-/// listed set of reads nothing measured. The last is the one that can see a
-/// WRONG slot, which a sweep of the byte a case names never can.
+/// as such with the reason they are indistinguishable; every adjudicated byte
+/// does what the binding files say it does; and the set of bytes that move a
+/// chain at all is exactly the bound set plus the set the skeleton owns. The
+/// last is the one that can see a WRONG slot, which a sweep of the byte a case
+/// names never can.
+///
+/// The adjudication is read from gs_efx_join.h, rendered from the binding files
+/// rather than written here. A byte reaches a control, or it is inert and the
+/// row says why, or the skeleton converts it under a law of its own; and the
+/// three are separated by measurement rather than by the word chosen for them,
+/// which is what a hand-written table of the same rows could not do about
+/// itself.
 ///
 /// **Parameter combinations.** The sweep below has five axes: the EFX type (65
 /// numbers, the 64 plus the alias), the parameter slot (20), the conversion
@@ -30,9 +36,9 @@
 /// the table are FUNCTIONS of (type, slot) — the generated header assigns them —
 /// so they are not free axes, and a set generated as if they were would carry
 /// cells no wire state can reach. What is left free is (type, slot) x byte, and
-/// that product is small enough to run whole: the 85 (type, slot) pairs the
-/// header names, each over all 128 byte values, which contains every realisable
-/// pair of the five axes rather than a covering subset of them. The shape-only
+/// that product is small enough to run whole: every (type, slot) a binding file
+/// assigns to a control, each over all 128 byte values, which contains every
+/// realisable pair of the five axes rather than a covering subset. The shape-only
 /// case below takes the seven boundary values across all 65 types x 20 slots for
 /// the same reason.
 
@@ -49,6 +55,7 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "midi/gs_efx_join.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/gs_efx_convert.h"
@@ -285,151 +292,6 @@ std::string hex4(uint16_t type) {
   return out;
 }
 
-/// Where a conversion's physical quantity lands on the insert the type maps to.
-/// Written by hand: the generated header names the (type, slot) pairs and their
-/// conversion classes, param_field_tables.h and the insert factory name the
-/// controls, and nothing in the tree joins the two. A pair is TRANSLATABLE when
-/// the chain its type realises carries a control of the same physical unit, and
-/// counted as STATE when it does not -- an engine that does not read a byte owes
-/// it STATE rather than AUDIBLE (docs/gs.md). A STATE row carries the reason.
-struct EfxJoin {
-  uint16_t type;
-  uint8_t slot;
-  const char* conversion;    ///< class.table, as gs_efx_tables.h spells it.
-  const char* stage;         ///< The chain stage the control lives on.
-  const char* key;           ///< Its JSON key. Null where no control exists.
-  const char* state_reason;  ///< Why none does. Null where one does.
-};
-
-constexpr const char* kPhaser = "effects.modulation.phaser";
-constexpr const char* kFlanger = "effects.modulation.flanger";
-constexpr const char* kChorus = "effects.modulation.chorus";
-constexpr const char* kRingMod = "effects.modulation.ringModulator";
-constexpr const char* kAutoPan = "stereo.autoPan";
-constexpr const char* kEnsemble = "effects.modulation.ensemble";
-constexpr const char* kDelay = "effects.delay.stereo";
-constexpr const char* kEq = "eq.parametric";
-constexpr const char* kRotary = "effects.modulation.rotary";
-constexpr const char* kGain = "utility.gain";
-
-/// One row per entry of kGsEfxSlotConversions, in the header's own order.
-constexpr std::array<EfxJoin, 85> kJoin = {{
-    {0x0100, 1, "gain.tone", kEq, "band0.gainDb", nullptr},
-    {0x0100, 3, "gain.tone", kEq, "band3.gainDb", nullptr},
-    {0x0100, 4, "freq.eq", kEq, "band1.frequencyHz", nullptr},
-    {0x0100, 5, "width.section", kEq, "band1.q", nullptr},
-    {0x0100, 6, "gain.tone", kEq, "band1.gainDb", nullptr},
-    {0x0100, 7, "freq.eq", kEq, "band2.frequencyHz", nullptr},
-    {0x0100, 8, "width.section", kEq, "band2.q", nullptr},
-    {0x0100, 9, "gain.tone", kEq, "band2.gainDb", nullptr},
-    {0x0100, 19, "level.output", kGain, "levelDb", nullptr},
-    {0x0101, 18, "pan.output", nullptr, nullptr,
-     "a pan places a signal where stereo.stereoBalance moves an image "
-     "already there, and the measured pair is the raw constant-power curve, "
-     "which that insert normalises to centre unity three decibels above"},
-    {0x0103, 18, "pan.output", nullptr, nullptr,
-     "a vowel formant filter has no insert, so the type realises no chain at all"},
-    {0x0111, 19, "level.output", kGain, "levelDb", nullptr},
-    {0x0120, 1, "rate.wide", kPhaser, "rateHz", nullptr},
-    {0x0121, 4, "rate.wide", nullptr, nullptr,
-     "the auto-wah insert follows an envelope and carries no LFO rate"},
-    {0x0122, 2, "accel.rotor", kRotary, "drumUndershootHz", nullptr},
-    {0x0122, 6, "accel.rotor", kRotary, "undershootHz", nullptr},
-    {0x0123, 3, "rate.wide", kFlanger, "rateHz", nullptr},
-    {0x0125, 0, "wave.modulator", nullptr, nullptr,
-     "the ring modulator's carrier is a sine and takes no shape selector"},
-    {0x0125, 1, "rate.wide", kRingMod, "carrierHz", nullptr},
-    {0x0126, 0, "wave.modulator", nullptr, nullptr,
-     "the auto-pan insert's LFO takes no shape selector"},
-    {0x0126, 1, "rate.wide", kAutoPan, "rateHz", nullptr},
-    {0x0130, 18, "pan.output", nullptr, nullptr,
-     "a pan places a signal where stereo.stereoBalance moves an image "
-     "already there, and the measured pair is the raw constant-power curve, "
-     "which that insert normalises to centre unity three decibels above"},
-    {0x0140, 0, "delay_time.pre_delay", kEnsemble, "centerDelayMs", nullptr},
-    {0x0140, 19, "level.output", kGain, "levelDb", nullptr},
-    {0x0142, 1, "freq.pre_filter", kChorus, "preFilterHz", nullptr},
-    {0x0142, 3, "rate.wide", kChorus, "rateHz", nullptr},
-    {0x0142, 16, "gain.tone", kEq, "band0.gainDb", nullptr},
-    {0x0142, 17, "gain.tone", kEq, "band1.gainDb", nullptr},
-    {0x0143, 1, "rate.wide", kChorus, "rateHz", nullptr},
-    {0x0144, 1, "rate.wide", kChorus, "rateHz", nullptr},
-    {0x0150, 0, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
-    {0x0150, 1, "delay_time.time3", kDelay, "delayTimeRMs", nullptr},
-    {0x0150, 7, "freq.damping", kDelay, "dampingHz", nullptr},
-    {0x0150, 15, "balance.effect", nullptr, nullptr,
-     "the insert's mix is a crossfade, dry = 1 - wet; the measured law is two independent "
-     "gains that meet at full in the middle of the byte, which the record calls the opposite "
-     "sign to a crossfade"},
-    {0x0150, 16, "gain.tone", kEq, "band0.gainDb", nullptr},
-    {0x0150, 17, "gain.tone", kEq, "band1.gainDb", nullptr},
-    {0x0151, 0, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
-    {0x0151, 1, "delay_time.time3", kDelay, "delayTimeRMs", nullptr},
-    {0x0151, 4, "rate.wide", nullptr, nullptr, "the stereo-delay insert carries no modulation LFO"},
-    {0x0152, 0, "delay_time.time1", kDelay, "delayTimeLMs", nullptr},
-    {0x0152, 1, "delay_time.time1", kDelay, "delayTimeRMs", nullptr},
-    {0x0152, 2, "delay_time.time1", nullptr, nullptr,
-     "the stereo-delay insert has two taps and this is a third"},
-    {0x0153, 0, "delay_time.time1", kDelay, "delayTimeLMs", nullptr},
-    {0x0153, 1, "delay_time.time1", kDelay, "delayTimeRMs", nullptr},
-    {0x0153, 2, "delay_time.time1", nullptr, nullptr,
-     "the stereo-delay insert has two taps and this is a third"},
-    {0x0153, 3, "delay_time.time1", nullptr, nullptr,
-     "the stereo-delay insert has two taps and this is a fourth"},
-    {0x0154, 15, "balance.effect", nullptr, nullptr,
-     "the insert's mix is a crossfade, dry = 1 - wet; the measured law is two independent "
-     "gains that meet at full in the middle of the byte, which the record calls the opposite "
-     "sign to a crossfade"},
-    {0x0157, 0, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
-    {0x0157, 1, "delay_time.time3", kDelay, "delayTimeRMs", nullptr},
-    {0x0157, 2, "delay_time.time3", nullptr, nullptr,
-     "the stereo-delay insert has two taps and this is a third"},
-    {0x0157, 15, "balance.effect", nullptr, nullptr,
-     "the insert's mix is a crossfade, dry = 1 - wet; the measured law is two independent "
-     "gains that meet at full in the middle of the byte, which the record calls the opposite "
-     "sign to a crossfade"},
-    {0x0170, 0, "azimuth.placement", nullptr, nullptr,
-     "a binaural panner has no insert, so the type realises no chain at all"},
-    {0x0170, 1, "rate.wide", nullptr, nullptr,
-     "a binaural panner has no insert, so the type realises no chain at all"},
-    {0x0171, 0, "azimuth.placement", nullptr, nullptr,
-     "a binaural panner has no insert, so the type realises no chain at all"},
-    {0x0200, 6, "rate.wide", kChorus, "rateHz", nullptr},
-    {0x0201, 6, "rate.wide", kFlanger, "rateHz", nullptr},
-    {0x0203, 6, "rate.wide", kChorus, "rateHz", nullptr},
-    {0x0204, 6, "rate.wide", kFlanger, "rateHz", nullptr},
-    {0x0206, 6, "rate.wide", kChorus, "rateHz", nullptr},
-    {0x0207, 6, "rate.wide", kFlanger, "rateHz", nullptr},
-    {0x0208, 5, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
-    {0x0209, 0, "delay_time.pre_delay", kChorus, "centerDelayMs", nullptr},
-    {0x0209, 5, "delay_time.time3", kDelay, "delayTimeLMs", nullptr},
-    {0x020A, 1, "rate.wide", kFlanger, "rateHz", nullptr},
-    {0x0400, 12, "rate.narrow", kChorus, "rateHz", nullptr},
-    {0x0400, 16, "delay_time.time4", kDelay, "delayTimeLMs", nullptr},
-    {0x0401, 9, "gain.tone", kEq, "band0.gainDb", nullptr},
-    {0x0401, 10, "freq.eq", kEq, "band1.frequencyHz", nullptr},
-    {0x0401, 11, "width.section", kEq, "band1.q", nullptr},
-    {0x0401, 12, "gain.tone", kEq, "band1.gainDb", nullptr},
-    {0x0401, 13, "gain.tone", kEq, "band2.gainDb", nullptr},
-    {0x0403, 4, "gain.tone", kEq, "band0.gainDb", nullptr},
-    {0x0403, 5, "freq.eq", kEq, "band1.frequencyHz", nullptr},
-    {0x0403, 6, "width.section", kEq, "band1.q", nullptr},
-    {0x0403, 7, "gain.tone", kEq, "band1.gainDb", nullptr},
-    {0x0403, 8, "gain.tone", kEq, "band2.gainDb", nullptr},
-    {0x0403, 10, "rate.narrow", kChorus, "rateHz", nullptr},
-    {0x0403, 16, "freq.damping", kDelay, "dampingHz", nullptr},
-    {0x0406, 15, "wave.modulator", nullptr, nullptr,
-     "the auto-pan insert's LFO takes no shape selector"},
-    {0x0500, 12, "rate.narrow", kPhaser, "rateHz", nullptr},
-    {0x1100, 0, "delay_time.pre_delay", nullptr, nullptr,
-     "a parallel-2 type realises no chain at all"},
-    {0x1100, 5, "delay_time.time3", nullptr, nullptr, "a parallel-2 type realises no chain at all"},
-    {0x1101, 0, "delay_time.pre_delay", nullptr, nullptr,
-     "a parallel-2 type realises no chain at all"},
-    {0x1101, 5, "delay_time.time3", nullptr, nullptr, "a parallel-2 type realises no chain at all"},
-    {0x1105, 6, "rate.wide", nullptr, nullptr, "a parallel-2 type realises no chain at all"},
-}};
-
 /// The conversion class and table numbers spelled out, so a header that moves a
 /// pair to a different class fails here rather than being joined to a control of
 /// a unit it no longer carries.
@@ -458,35 +320,6 @@ constexpr std::array<ConversionName, 18> kConversionNames = {{
     {s::kGsEfxClassBalance, 0, "balance.effect"},
     {s::kGsEfxClassAzimuth, 0, "azimuth.placement"},
     {s::kGsEfxClassAccel, 0, "accel.rotor"},
-}};
-
-/// A (type, slot) the translation reads although the archive gives it no
-/// conversion. Every one is a reviewed exception with its reason: the list is
-/// what separates "reads a byte nothing measured" from "reads the wrong byte",
-/// and the sweep below fails on a read that is on neither list.
-struct UnmeasuredRead {
-  uint16_t type;
-  uint8_t slot;
-  const char* reason;
-};
-
-constexpr std::array<UnmeasuredRead, 8> kUnmeasuredReads = {{
-    {0x0110, 0,
-     "Drive, measured as a gain in front of one fixed curve but with no byte-to-dB "
-     "conversion derived; the amp-sim drive knob takes the fraction"},
-    {0x0110, 19,
-     "output level; the level reading is unit-scoped at this address and names three "
-     "types, of which this is not one"},
-    {0x0111, 0, "Drive, as for the overdrive above"},
-    {0x0142, 0,
-     "the pre-filter's shape selector, measured as an enumeration rather than a "
-     "conversion, so the derivation gives it no class"},
-    {0x0160, 0, "Coarse Pitch, a 64-centred semitone offset the archive does not reach"},
-    {0x0160, 15,
-     "Effect Balance; the measured two-ramp law names three delay types and not "
-     "this one, so what stands here is the older linear reading"},
-    {0x0161, 0, "Coarse Pitch, as for the 2-voice shifter above"},
-    {0x0161, 15, "Effect Balance, as for the 2-voice shifter above"},
 }};
 
 /// The EQ block's gain slots for one type, taken from the header rather than
@@ -519,13 +352,17 @@ std::vector<EqSlots> gain_slots_by_type() {
   return out;
 }
 
-/// The floor the translated count may not fall below, and the ceiling the
-/// untranslated count may not rise above. Both hand-written from the run that
-/// first measured them, and hand-written on purpose: the population comes from
-/// the generated header, so a derivation that dropped a class would shrink it
-/// and a one-sided ratchet would go green on the loss.
-constexpr int kGsEfxTranslatedFloor = 56;
-constexpr int kGsEfxStateCeiling = 29;
+/// The floors the measured counts may not fall below, hand-written from the run
+/// that first measured them and hand-written on purpose: every other number in
+/// the case below is rendered from the binding files, so a file that lost rows
+/// would shrink both the claim and the check together and read as clean.
+///
+/// There is deliberately no ceiling on the documented-state count. Parameters
+/// nobody has adjudicated yet mostly become states as they are looked at, so a
+/// ceiling would go red on the lane finishing its own work; what a downgrade of
+/// a translation would have to get past is the translated floor.
+constexpr int kGsEfxTranslatedFloor = 223;
+constexpr int kGsEfxAdjudicatedFloor = 590;
 
 std::string conversion_name(uint8_t conversion_class, uint8_t table) {
   for (const ConversionName& row : kConversionNames) {
@@ -661,23 +498,65 @@ TEST_CASE("every translated EFX parameter key is one its insert reads",
           "[midi][sf2][gs][efxtypes]") {
   // A key the processor does not read is silently ignored, so a translation
   // aimed at a misspelled key is a no-op that no audible test would catch.
-  for (const EfxType& row : all_rows()) {
-    if (row.bypass_reason != nullptr) continue;
-    GsEfx efx = make_efx(row.type);
-    efx.params.fill(100);  // every parameter written, so every translation fires
-    DYNAMIC_SECTION(hex4(row.type) << " " << row.name) {
-      for (const GsEfxStage& stage : gs_efx_insert_chain(efx)) {
-        std::vector<std::string> unknown;
-        auto processor =
-            sonare::mastering::api::make_insert(stage.name, stage.params_json, &unknown);
-        REQUIRE(processor != nullptr);
-        std::string joined;
-        for (const std::string& key : unknown) joined += key + " ";
-        INFO("stage " << stage.name << " ignored: " << joined);
-        REQUIRE(unknown.empty());
+  //
+  // Swept over the boundary bytes rather than taken at one filling: a key a
+  // translation only emits for part of the byte's range -- a mode selector
+  // written below a threshold, say -- is absent from a single reading and so
+  // never checked at all. Filling every slot with the same value keeps that
+  // cheap, since what is under test is the key's spelling and not its value.
+  for (uint8_t value : kValues) {
+    for (const EfxType& row : all_rows()) {
+      if (row.bypass_reason != nullptr) continue;
+      GsEfx efx = make_efx(row.type);
+      efx.params.fill(value);  // every parameter written, so every translation fires
+      DYNAMIC_SECTION(hex4(row.type) << " " << row.name << " at " << static_cast<int>(value)) {
+        for (const GsEfxStage& stage : gs_efx_insert_chain(efx)) {
+          std::vector<std::string> unknown;
+          auto processor =
+              sonare::mastering::api::make_insert(stage.name, stage.params_json, &unknown);
+          REQUIRE(processor != nullptr);
+          std::string joined;
+          for (const std::string& key : unknown) joined += key + " ";
+          INFO("stage " << stage.name << " ignored: " << joined);
+          REQUIRE(unknown.empty());
+        }
       }
     }
   }
+}
+
+TEST_CASE("a documented state's missing control is one its insert really lacks",
+          "[midi][sf2][gs][efxtypes]") {
+  // A state row says the byte reaches nothing, and most of them say why in
+  // prose nothing reads. Where the reason is that the insert has no such
+  // control, the row names it, and the claim is checked against the insert
+  // rather than believed: the failure it exists for is an insert growing the
+  // control years later and the parameter staying unbound because the note
+  // explaining why went stale in a file nobody rereads.
+  //
+  // A row whose missing control has no established spelling anywhere carries
+  // prose alone, deliberately -- a claim naming a key no insert would ever use
+  // is one that can never go red.
+  Tally tally;
+  for (const s::GsEfxJoinRow& row : s::kGsEfxJoin) {
+    if (row.absent_stage == s::kGsEfxJoinNoName) continue;
+    const std::string stage(s::kGsEfxJoinStages[row.absent_stage]);
+    const std::string key(s::kGsEfxJoinKeys[row.absent_key]);
+    const std::string label = hex4(row.type) + " slot " + std::to_string(row.slot);
+
+    int named = 0;
+    for (const GsEfxStage& entry : gs_efx_insert_chain(make_efx(row.type))) {
+      if (entry.name == stage) ++named;
+    }
+    tally.same(named == 1, label + " names " + stage + ", which its chain does not carry once");
+
+    const std::vector<std::string> reads = sonare::mastering::api::insert_param_names(stage);
+    tally.same(std::find(reads.begin(), reads.end(), key) == reads.end(),
+               label + " is a documented state because " + stage + " has no " + key + ", and " +
+                   stage + " reads one now");
+  }
+  WARN("comparisons: " << tally.count());
+  REQUIRE(tally.count() >= 12);
 }
 
 #endif  // SONARE_WITH_FX && SONARE_WITH_MASTERING
@@ -996,100 +875,215 @@ TEST_CASE("an EFX type set over the wire reads back the same chain", "[midi][sf2
   }
 }
 
-TEST_CASE("every reached EFX byte is translated or counted as STATE", "[midi][sf2][gs][efxtypes]") {
+namespace {
+
+/// The five forms named, so a failure says which classification was claimed
+/// rather than which integer stands in the generated row.
+std::string form_name(uint8_t form) {
+  switch (form) {
+    case s::kGsEfxJoinAssigned:
+      return "assigned";
+    case s::kGsEfxJoinState:
+      return "a documented state";
+    case s::kGsEfxJoinUnmapped:
+      return "unmapped";
+    case s::kGsEfxJoinBuilder:
+      return "the skeleton's own";
+    case s::kGsEfxJoinUnreadable:
+      return "unreadable";
+    default:
+      return "an unknown form";
+  }
+}
+
+}  // namespace
+
+TEST_CASE("every adjudicated EFX byte does what its binding file says",
+          "[midi][sf2][gs][efxtypes]") {
   Tally tally;
 
-  // The join table and the generated header have to name the same pairs in the
-  // same order. A header row with no join row is a byte nobody classified; a
-  // join row with no header row excuses nothing and would keep the arithmetic
-  // looking whole after the derivation stopped producing the pair.
-  REQUIRE(kJoin.size() == s::kGsEfxSlotConversions.size());
-  for (size_t i = 0; i < kJoin.size(); ++i) {
-    const EfxJoin& row = kJoin[i];
-    const s::GsEfxSlotConversion& entry = s::kGsEfxSlotConversions[i];
-    const std::string label = hex4(row.type) + " slot " + std::to_string(row.slot);
-    tally.same(row.type == entry.type && row.slot == entry.parameter,
-               label + " is not the header's entry at this position");
-    tally.same(conversion_name(entry.conversion_class, entry.table) == row.conversion,
-               label + " has moved to another conversion class or table");
-    tally.same((row.key == nullptr) != (row.state_reason == nullptr),
-               label + " is neither translated onto a control nor given a reason none exists");
+  // The binding table the chain walks and the join table read here are two
+  // renderings of the same files by two generators, and nothing else compares
+  // them. A pair in one and not the other is a row that reaches a control
+  // nobody adjudicated, or an adjudication that reaches nothing.
+  std::map<std::pair<uint16_t, int>, std::vector<const s::GsEfxBinding*>> bound;
+  for (const s::GsEfxBinding& row : s::kGsEfxBindings) {
+    bound[{row.type, static_cast<int>(row.slot)}].push_back(&row);
   }
 
-  int translatable = 0;
-  int translated = 0;
-  int state = 0;
+  // What the archive measured a law for, so a row that assigns a law to a pair
+  // the archive already read can be required to assign the one it read.
+  std::map<std::pair<uint16_t, int>, const s::GsEfxSlotConversion*> measured;
+  for (const s::GsEfxSlotConversion& entry : s::kGsEfxSlotConversions) {
+    measured[{entry.type, static_cast<int>(entry.parameter)}] = &entry;
+  }
+
+  std::map<uint8_t, int> rows_by_form;
   std::map<uint16_t, int> state_by_type;
-  for (const EfxJoin& row : kJoin) {
-    const std::string label =
-        hex4(row.type) + " slot " + std::to_string(row.slot) + " (" + row.conversion + ")";
+  int declared_keys = 0;
+  int translated = 0;
+  int against_measured = 0;
+
+  for (const s::GsEfxJoinRow& row : s::kGsEfxJoin) {
+    ++rows_by_form[row.form];
+    const std::string label = hex4(row.type) + " slot " + std::to_string(row.slot);
+    const std::pair<uint16_t, int> address = {row.type, static_cast<int>(row.slot)};
     const auto chain = gs_efx_insert_chain(make_efx(row.type));
 
-    if (row.key == nullptr) {
-      ++state;
-      ++state_by_type[row.type];
-      // A STATE row is not a note: the byte has to be inert. Were it reaching a
-      // control after all, the row would be stale and the count wrong in the
-      // direction that flatters it.
+    if (row.form != s::kGsEfxJoinAssigned) {
+      tally.same(bound.count(address) == 0,
+                 label + " is counted as " + form_name(row.form) +
+                     " and yet the binding table drives a control from it");
+
       std::set<std::string> shapes;
       for (uint8_t value : kValues) {
         GsEfx efx = make_efx(row.type);
         efx.params[row.slot] = value;
         shapes.insert(signature(gs_efx_insert_chain(efx)));
       }
-      tally.same(shapes.size() == 1, label + " is counted as STATE and yet moves its chain");
+
+      // The skeleton's own rows are the one unassigned form whose byte moves:
+      // the chain builder reads it and writes a control under a law of its own,
+      // where the archive measured none for a binding row to name. One that
+      // moved nothing would be a note about code that has gone away.
+      if (row.form == s::kGsEfxJoinBuilder) {
+        tally.same(shapes.size() > 1,
+                   label + " is counted as the skeleton's own and moves nothing");
+        continue;
+      }
+
+      // Not a note: the byte has to be inert. Were it reaching a control after
+      // all, the row would be stale and the count wrong in the direction that
+      // flatters it.
+      tally.same(shapes.size() == 1,
+                 label + " is counted as " + form_name(row.form) + " and yet moves its chain");
+
+      // Inertness alone cannot separate the four unassigned forms, and without
+      // that separation everything could be filed as whichever one is cheapest
+      // to defend. What separates them is the chain: a type counted as unmapped
+      // realises nothing at all, where a documented state is a byte one that
+      // does play does not read.
+      if (row.form == s::kGsEfxJoinUnmapped) {
+        tally.same(chain.empty(), label + " is counted as unmapped and its type realises a chain");
+      } else if (row.form == s::kGsEfxJoinState) {
+        ++state_by_type[row.type];
+        tally.same(!chain.empty(),
+                   label + " is counted as a documented state and its type realises no chain");
+      }
       continue;
     }
 
-    ++translatable;
-    // The stage has to be in the chain exactly once, or reading a key off "the"
-    // stage of that name is reading whichever one came first.
-    int named = 0;
-    for (const GsEfxStage& stage : chain) {
-      if (stage.name == row.stage) ++named;
-    }
-    tally.same(named == 1, label + " does not name exactly one stage of the chain");
+    const auto found = bound.find(address);
+    tally.same(found != bound.end(),
+               label + " is assigned and the binding table drives no control from it");
+    if (found == bound.end()) continue;
 
-    // Translated is MEASURED: sweep the byte over its whole domain and require
-    // the emitted value to be there every time and to move. A key written at a
-    // constant is a key the wire cannot reach, and it reads exactly like a
-    // translation to anything that greps for the key.
-    std::set<double> emitted;
-    bool always_present = true;
-    for (int value = 0; value <= 127; ++value) {
-      GsEfx efx = make_efx(row.type);
-      efx.params[row.slot] = static_cast<uint8_t>(value);
-      double number = 0.0;
-      if (!json_number(stage_params(gs_efx_insert_chain(efx), row.stage), row.key, number)) {
-        always_present = false;
-        break;
+    for (const s::GsEfxBinding* binding : found->second) {
+      ++declared_keys;
+      const std::string stage(s::kGsEfxBindingStages[binding->stage]);
+      const std::string key(s::kGsEfxBindingKeys[binding->key]);
+      const std::string what = label + " (" + stage + "." + key + ")";
+
+      // The stage has to be in the chain exactly once, or reading a key off
+      // "the" stage of that name is reading whichever one came first.
+      int named = 0;
+      for (const GsEfxStage& entry : chain) {
+        if (entry.name == stage) ++named;
       }
-      emitted.insert(number);
+      tally.same(named == 1, what + " does not name exactly one stage of the chain");
+
+      // Translated is MEASURED: sweep the byte over its whole domain and
+      // require the emitted value to be there every time and to move. A key
+      // written at a constant is a key the wire cannot reach, and it reads
+      // exactly like a translation to anything that greps for the key.
+      std::set<double> emitted;
+      bool always_present = true;
+      for (int value = 0; value <= 127; ++value) {
+        GsEfx efx = make_efx(row.type);
+        efx.params[row.slot] = static_cast<uint8_t>(value);
+        double number = 0.0;
+        if (!json_number(stage_params(gs_efx_insert_chain(efx), stage), key, number)) {
+          always_present = false;
+          break;
+        }
+        emitted.insert(number);
+      }
+      tally.same(always_present, what + " does not emit its key at every byte value");
+      tally.same(emitted.size() >= 2,
+                 what + " emits its key at a constant, which is not a translation");
+      if (always_present && emitted.size() >= 2) ++translated;
+
+      // Where the archive read this pair itself, the law the row assigns has to
+      // be the law the archive read. A row is free to name a law for a pair
+      // nothing measured -- that is most of them -- but not to name a different
+      // one for a pair that was measured. Rotary Multi is filed under the other
+      // of its two type numbers in the archive, so both are looked up.
+      auto reading = measured.find(address);
+      if (reading == measured.end()) {
+        reading = measured.find({s::gs_efx_alias_type(row.type), static_cast<int>(row.slot)});
+      }
+      if (reading == measured.end()) continue;
+      ++against_measured;
+      tally.same(reading->second->conversion_class == binding->conversion_class &&
+                     reading->second->table == binding->table,
+                 what + " assigns " + conversion_name(binding->conversion_class, binding->table) +
+                     " where the archive measured " +
+                     conversion_name(reading->second->conversion_class, reading->second->table));
     }
-    tally.same(always_present, label + " does not emit " + row.key + " at every byte value");
-    tally.same(emitted.size() >= 2,
-               label + " emits " + row.key + " at a constant, which is not a translation");
-    if (always_present && emitted.size() >= 2) ++translated;
   }
 
-  // Success condition 1. The first is the one that says the wiring is complete;
-  // the two after it are the ratchet, pinned from both sides because the
-  // population is generated and a one-sided ratchet goes green when it shrinks.
-  tally.same(translatable - translated == 0, "a translatable byte is not translated");
+  // The counts the files declare against the counts this run reached. Rendered
+  // and measured are separate readings: a generator that dropped rows would
+  // otherwise shrink both at once and report as a smaller clean run.
+  tally.same(rows_by_form[s::kGsEfxJoinAssigned] == s::kGsEfxJoinAssignedRows,
+             "the rendered assigned rows are not the count the header declares");
+  tally.same(rows_by_form[s::kGsEfxJoinState] == s::kGsEfxJoinStateRows,
+             "the rendered documented-state rows are not the count the header declares");
+  tally.same(rows_by_form[s::kGsEfxJoinUnmapped] == s::kGsEfxJoinUnmappedRows,
+             "the rendered unmapped rows are not the count the header declares");
+  tally.same(declared_keys == s::kGsEfxJoinDeclaredKeys,
+             "the binding table drives a different number of controls than the files declare");
+  tally.same(static_cast<int>(s::kGsEfxBindings.size()) == s::kGsEfxJoinDeclaredKeys,
+             "the two generators read a different number of controls out of the same files");
+
+  tally.same(rows_by_form[s::kGsEfxJoinBuilder] == s::kGsEfxJoinBuilderRows,
+             "the rendered skeleton-owned rows are not the count the header declares");
+
+  // Nothing is filed as unreadable today. The form stays in the vocabulary
+  // because retiring one is how a row with nowhere to go ends up filed as
+  // something it is not; what is asserted is that it is not in use.
+  tally.same(s::kGsEfxJoinUnreadableRows == 0, "a parameter is filed as unreadable");
+
+  // Every pair the archive measured a law for is adjudicated. This is the one
+  // direction the binding files cannot state about themselves: they enumerate
+  // what someone looked at, not what there was to look at.
+  for (const s::GsEfxSlotConversion& entry : s::kGsEfxSlotConversions) {
+    const std::pair<uint16_t, int> address = {entry.type, static_cast<int>(entry.parameter)};
+    const bool adjudicated =
+        std::any_of(s::kGsEfxJoin.begin(), s::kGsEfxJoin.end(), [&](const s::GsEfxJoinRow& row) {
+          return (row.type == address.first || s::gs_efx_alias_type(row.type) == address.first) &&
+                 row.slot == address.second;
+        });
+    tally.same(adjudicated, hex4(entry.type) + " slot " + std::to_string(entry.parameter) +
+                                " has a measured law and no binding file looked at it");
+  }
+
+  tally.same(translated == declared_keys, "a declared control is not reached by its byte");
   tally.same(translated >= kGsEfxTranslatedFloor, "the translated count fell below its floor");
-  tally.same(state <= kGsEfxStateCeiling, "the untranslated count rose above its ceiling");
-  tally.same(translatable + state == s::kGsEfxReached,
-             "translatable and STATE do not account for every reached pair");
+  tally.same(static_cast<int>(s::kGsEfxJoin.size()) >= kGsEfxAdjudicatedFloor,
+             "the adjudicated count fell below its floor");
 
   std::string breakdown;
   for (const auto& entry : state_by_type) {
     breakdown += hex4(entry.first) + ":" + std::to_string(entry.second) + " ";
   }
-  WARN("reached: " << s::kGsEfxReached << "  translatable: " << translatable
-                   << "  translated: " << translated << "  STATE: " << state);
-  WARN("STATE by type: " << breakdown);
+  WARN("adjudicated: " << s::kGsEfxJoin.size() << "  translated: " << translated
+                       << "  state: " << rows_by_form[s::kGsEfxJoinState]
+                       << "  unmapped: " << rows_by_form[s::kGsEfxJoinUnmapped]
+                       << "  laws checked against the archive: " << against_measured);
+  WARN("state by type: " << breakdown);
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 300);
+  REQUIRE(tally.count() >= 900);
 }
 
 TEST_CASE("the translation reads exactly the bytes the archive named",
@@ -1106,14 +1100,11 @@ TEST_CASE("the translation reads exactly the bytes the archive named",
   // check of this shape could have been written; the defaults pour is what made
   // the two separable.
   Tally tally;
+  // Every read the binding files account for. A slot the archive measured no
+  // table for still moves the chain where a binding row gives it one of the
+  // measured laws -- the shared output stage is most of them -- so the binding
+  // table rather than the archive's own reach is what this is drawn from.
   std::set<std::pair<uint16_t, int>> named;
-  for (const EfxJoin& row : kJoin) {
-    if (row.key != nullptr) named.insert({row.type, row.slot});
-  }
-  // The binding table names the rest: a slot the archive measured no table for
-  // still moves the chain where a binding row gives it one of the measured laws
-  // (the shared output stage is most of them). Without this the sweep would
-  // report every adjudicated slot as an unexplained read.
   for (const s::GsEfxBinding& row : s::kGsEfxBindings) {
     named.insert({row.type, row.slot});
     // Rotary Multi answers to two type numbers and the binding files carry one
@@ -1121,9 +1112,13 @@ TEST_CASE("the translation reads exactly the bytes the archive named",
     // set of reads.
     named.insert({s::gs_efx_alias_type(row.type), row.slot});
   }
+  // The reads the chain skeleton owns: a byte it converts under a law of its
+  // own, the archive having measured none for a binding row to name. Each is a
+  // reviewed row with its reason, and together with the named set they are what
+  // separates "reads a byte nothing measured" from "reads the wrong byte".
   std::set<std::pair<uint16_t, int>> excepted;
-  for (const UnmeasuredRead& row : kUnmeasuredReads) {
-    excepted.insert({row.type, row.slot});
+  for (const s::GsEfxJoinRow& row : s::kGsEfxJoin) {
+    if (row.form == s::kGsEfxJoinBuilder) excepted.insert({row.type, row.slot});
   }
 
   std::set<std::pair<uint16_t, int>> moved;
@@ -1152,14 +1147,13 @@ TEST_CASE("the translation reads exactly the bytes the archive named",
     tally.same(moved.count(pair) == 1, hex4(pair.first) + " slot " + std::to_string(pair.second) +
                                            " is counted as translated and moves nothing");
   }
-  for (const UnmeasuredRead& row : kUnmeasuredReads) {
-    tally.same(moved.count({row.type, row.slot}) == 1,
-               hex4(row.type) + " slot " + std::to_string(row.slot) +
-                   " is excused as an unmeasured read and is not read at all");
+  for (const auto& pair : excepted) {
+    tally.same(moved.count(pair) == 1, hex4(pair.first) + " slot " + std::to_string(pair.second) +
+                                           " is excused as the skeleton's own and is not read");
   }
 
-  WARN("slots that move a chain: " << moved.size() << "  named by the archive: " << named.size()
-                                   << "  listed exceptions: " << kUnmeasuredReads.size());
+  WARN("slots that move a chain: " << moved.size() << "  bound to a control: " << named.size()
+                                   << "  owned by the skeleton: " << excepted.size());
   WARN("comparisons: " << tally.count());
   REQUIRE(tally.count() >= 120);
 }
