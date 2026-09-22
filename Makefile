@@ -6,7 +6,7 @@
        surface-coverage surface-coverage-check \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
        gs-efx-archive-set gs-efx-tables gs-efx-tables-check gs-efx-coverage \
-       gs-efx-bindings gs-efx-bindings-check \
+       gs-efx-bindings gs-efx-bindings-check gs-efx-join gs-efx-join-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
@@ -682,6 +682,15 @@ gs-efx-bindings:
 
 gs-efx-bindings-check:
 	python3 tools/gs/bindings_header.py --check
+
+# The same rows as gs-efx-bindings, but all five forms rather than the
+# assigned ones alone: what the tests need in order to tell a documented
+# state from an unmapped type, which a table of reached controls cannot say.
+gs-efx-join:
+	python3 tools/gs/join_header.py
+
+gs-efx-join-check:
+	python3 tools/gs/join_header.py --check
 
 # The GS EFX coverage equation: how many of the 770 printed (type, slot)
 # parameters are translated, documented as a state, unmapped, unreadable or

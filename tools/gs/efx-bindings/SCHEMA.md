@@ -86,7 +86,9 @@ Nothing in this tree plays the effect at all, so no slot of it can land anywhere
 
 ### `builder` — the skeleton owns it
 
-The value is consumed while the chain is assembled rather than being written to a key: a band count, a mode selector that decides which stages exist. Constants of this kind belong to the skeleton, not to a row — see below.
+The chain skeleton decides what the byte does, so no row here can. Two shapes reach this form. The value may be consumed while the chain is assembled rather than written to a key — a band count, a mode selector deciding which stages exist. Or the skeleton may read it and write a control under **a law of its own that the archive never measured**: a drive knob taking the byte as a fraction, a coarse pitch read as a 64-centred semitone offset. The second shape cannot be `assigned`, because an assigned row names a measured `class`/`table` and there is none; and it is not `state`, because the byte is emphatically not inert.
+
+The reason string says what the skeleton does with the byte. That claim is checked: a `builder` byte has to move the chain, and no binding row may drive a control from it. A row whose byte moved nothing would be a note about code that has gone away.
 
 ### `unreadable` — the printed column cannot be parsed
 
@@ -96,6 +98,7 @@ The printed values are not a form any rule here can read (comma-separated fracti
 
 - **`range`: `[lo, hi]`** — the two endpoints of a slot whose printed values carry a unit (`0F–71` and its siblings). This is the one place a number is taken from the printed page, and it is a field of its own precisely so the exposure stays countable: two numbers per row, on about fifty rows. An endpoint is the parameter's domain, which is a fact about the machine rather than a conversion table. Nothing else printed may be copied.
 - **`printed_mark`: `"+"` or `"#"`** — the mark the parameter list puts beside a slot. Nobody reads these yet; carrying them means that when their meaning is settled there is a place it already lives, rather than a sweep of every file.
+- **`absent`: `{"stage": …, "key": …}`** — on a `state` row only. Where the reason is that the insert has no such control, this names the control, and the claim is checked against the insert rather than believed: the failure it exists for is an insert growing the control later and the parameter staying unbound because the note explaining why went stale. Optional on purpose — a row whose missing control has no established spelling anywhere carries prose alone, since a claim naming a key no insert would ever use is one that can never go red.
 - **`note`** — free text for a reader. Never load-bearing; nothing parses it.
 
 ## What a row may not contain
@@ -113,4 +116,5 @@ The printed values are not a form any rule here can read (comma-separated fracti
 - The equation `translated + state + unmapped + unreadable + builder == printed` must hold over all 770 printed rows, so a row nobody adjudicated is visible as a shortfall rather than as silence.
 - `class`/`table` must not contradict the row's CC0 `printed_values`.
 - Every `(stage, key)` must be a key the named insert actually accepts; a key nothing reads is silently ignored at runtime, which is the failure this check exists for.
-- A `state` reason naming an insert is verified against that insert's parameter list.
+- A `state` row carrying `absent` is verified against that insert's parameter list.
+- **The form itself is measured, not taken on the row's word.** `tests/midi/gs_efx_join.h` renders every row for the tests, and the chain decides which form is true: an assigned byte emits its key at every value and moves it, a `state` or `unmapped` byte is inert, a `builder` byte moves, and an `unmapped` type realises no chain at all where a `state` one does. Without that the coverage equation would hold just as well with every row filed as whichever form is cheapest to defend.
