@@ -869,7 +869,8 @@ export type MasteringProcessorCategory =
   | 'repair'
   | 'saturation'
   | 'spectral'
-  | 'stereo';
+  | 'stereo'
+  | 'utility';
 
 /** One mastering processor's role in the catalog. */
 export interface MasteringProcessorCatalogEntry {

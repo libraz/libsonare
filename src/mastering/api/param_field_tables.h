@@ -485,6 +485,10 @@ inline double field_as_double(Enum value) {
   X("balance", balance)                 \
   X("constantPower", constant_power)
 
+// --- Utility ---
+
+#define SONARE_FIELDS_GAIN(X) X("levelDb", level_db)
+
 // --- Maximizer ---
 
 #define SONARE_FIELDS_MAXIMIZER(X) \

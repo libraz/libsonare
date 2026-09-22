@@ -78,6 +78,7 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
+#include "mastering/utility/gain.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -1136,6 +1137,16 @@ inline stereo::StereoBalanceConfig stereo_balance_config(const ParamMap& params)
 }
 
 // ---------------------------------------------------------------------------
+// Utility
+// ---------------------------------------------------------------------------
+
+inline utility::GainConfig gain_config(const ParamMap& params) {
+  utility::GainConfig config;
+  SONARE_FIELDS_GAIN(SONARE_READ_FIELD)
+  return config;
+}
+
+// ---------------------------------------------------------------------------
 // Maximizer
 // ---------------------------------------------------------------------------
 
@@ -1210,6 +1221,8 @@ SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_IMAGER, stereo::ImagerConfig, 0);
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_MONO_MAKER, stereo::MonoMakerConfig, 0);
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_PHASE_ALIGN, stereo::PhaseAlignConfig, 0);
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_STEREO_BALANCE, stereo::StereoBalanceConfig, 0);
+
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_GAIN, utility::GainConfig, 0);
 
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_MAXIMIZER, maximizer::MaximizerConfig, 0);
 SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_TRUE_PEAK_LIMITER, maximizer::TruePeakLimiterConfig, 0);

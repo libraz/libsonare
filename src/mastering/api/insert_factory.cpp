@@ -69,6 +69,7 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
+#include "mastering/utility/gain.h"
 #include "util/base64.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -503,6 +504,13 @@ std::unique_ptr<Processor> build_stereo(const std::string& name, const ParamMap&
   }
   if (name == "stereo.stereoBalance") {
     return make<stereo::StereoBalance>(detail::stereo_balance_config(params));
+  }
+  return nullptr;
+}
+
+std::unique_ptr<Processor> build_utility(const std::string& name, const ParamMap& params) {
+  if (name == "utility.gain") {
+    return make<utility::Gain>(detail::gain_config(params));
   }
   return nullptr;
 }
@@ -968,6 +976,7 @@ std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap&
   if (auto p = build_saturation(name, params, json_root)) return p;
   if (auto p = build_spectral(name, params)) return p;
   if (auto p = build_stereo(name, params)) return p;
+  if (auto p = build_utility(name, params)) return p;
   if (auto p = build_maximizer(name, params)) return p;
   if (auto p = build_multiband(name, params)) return p;
 #ifdef SONARE_HAVE_FX
@@ -1091,6 +1100,7 @@ std::vector<std::string> insert_factory_names() {
       "stereo.monoMaker",
       "stereo.phaseAlign",
       "stereo.stereoBalance",
+      "utility.gain",
       "maximizer.maximizer",
       "maximizer.truePeakLimiter",
       "maximizer.softKneeMax",

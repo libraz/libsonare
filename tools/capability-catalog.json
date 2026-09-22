@@ -12781,6 +12781,29 @@
       "realtimeInsertable": true,
       "stereoOnly": true,
       "tailSamples": 0
+    },
+    {
+      "category": "utility",
+      "channelPolicy": "multichannel",
+      "id": "utility.gain",
+      "kind": "realtime",
+      "latencySamples": 0,
+      "params": [
+        {
+          "default": 0,
+          "id": 0,
+          "max": null,
+          "min": null,
+          "name": "levelDb",
+          "rtSafe": true,
+          "type": "number",
+          "unit": "dB"
+        }
+      ],
+      "realtimeCost": "low",
+      "realtimeInsertable": true,
+      "stereoOnly": false,
+      "tailSamples": 0
     }
   ],
   "version": "1.8.0"

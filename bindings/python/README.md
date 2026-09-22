@@ -9,7 +9,7 @@
 loudness), master and mix to broadcast loudness, and render MIDI through built-in
 instruments — a fast C++ core with NumPy as its only dependency.
 
-Mastering ships 88 named DSP processors implemented against published references
+Mastering ships 89 named DSP processors implemented against published references
 (ITU-R BS.1770-4 true-peak limiting, Linkwitz-Riley crossovers, Vicanek matched-Z
 biquads, ADAA-antialiased saturation); analysis defaults match librosa where the
 two overlap (validated against generated librosa reference values in CI).
@@ -186,7 +186,7 @@ Every area below has runnable examples and the full API in the
 is preferred when doing more than one computation on the same signal.
 
 - **Analysis** — BPM, key (+ candidates), chords, downbeats, sections, melody, tuning; pitch (YIN / pYIN), timbre, and the full spectral feature set (STFT, mel, MFCC, chroma, CQT/VQT, spectral contrast); metering (`metering_*`, `waveform_peaks`). → [Python API](https://libsonare.libraz.net/docs/python-api)
-- **Mastering** — 88 named DSP processors, the configurable `mastering_chain`, 25 named presets via `master_audio`, dynamics / repair specialist functions, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mastering** — 89 named DSP processors, the configurable `mastering_chain`, 25 named presets via `master_audio`, dynamics / repair specialist functions, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mix_stereo` and the block-based `Mixer` with scene presets. → [Mixing](https://libsonare.libraz.net/docs/mixing)
 - **Mixing assistant** — `suggest_mix_scene` analyzes a set of tracks and suggests a mixer scene with a written explanation; it suggests only, and applying the scene is a separate step. → [Mixing assistant](#mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)

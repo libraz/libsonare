@@ -255,7 +255,8 @@ export type MasteringProcessorCategory =
   | 'repair'
   | 'saturation'
   | 'spectral'
-  | 'stereo';
+  | 'stereo'
+  | 'utility';
 
 /** One processor's realtime/offline/pair classification in the catalog. */
 export interface MasteringProcessorCatalogEntry {

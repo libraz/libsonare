@@ -86,6 +86,7 @@
 #include "mastering/stereo/mono_maker.h"
 #include "mastering/stereo/phase_align.h"
 #include "mastering/stereo/stereo_balance.h"
+#include "mastering/utility/gain.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -748,6 +749,9 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
                                narrow_substitutions(dither_non_finite + bit_depth_non_finite));
       return out;
     });
+  } else if (name == "utility.gain") {
+    utility::Gain p(detail::gain_config(params));
+    run_processor(p, channels, sample_rate, outcome);
   } else {
     return false;
   }

@@ -180,6 +180,7 @@ export const SOLO_PROCESSORS = [
   'stereo.monoMaker',
   'stereo.phaseAlign',
   'stereo.stereoBalance',
+  'utility.gain',
 ] as const;
 
 export type SoloProcessor = (typeof SOLO_PROCESSORS)[number];

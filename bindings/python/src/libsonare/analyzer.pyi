@@ -229,6 +229,7 @@ SoloProcessor: TypeAlias = Literal[
     "stereo.monoMaker",
     "stereo.phaseAlign",
     "stereo.stereoBalance",
+    "utility.gain",
 ]
 # END GENERATED SoloProcessor
 PairProcessor: TypeAlias = Literal[

@@ -79,6 +79,7 @@ std::vector<std::string> processor_names() {
       "stereo.monoMaker",
       "stereo.phaseAlign",
       "stereo.stereoBalance",
+      "utility.gain",
   };
   // Creative streaming effects are not configured offline: apply_named_processor
   // dispatches every "effects." id by building the realtime insert and running
@@ -239,6 +240,7 @@ const char* catalog_category(const std::string& id) {
   if (id.rfind("effects.", 0) == 0) return "effects";
   if (id.rfind("spectral.", 0) == 0) return "spectral";
   if (id.rfind("final.", 0) == 0) return "final";
+  if (id.rfind("utility.", 0) == 0) return "utility";
   return "other";
 }
 

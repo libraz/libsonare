@@ -479,6 +479,7 @@ if(BUILD_MASTERING)
     mastering/stereo/mono_maker.cpp
     mastering/stereo/phase_align.cpp
     mastering/stereo/stereo_balance.cpp
+    mastering/utility/gain.cpp
     mastering/eq/api_style.cpp
     mastering/eq/band_pass.cpp
     # band_strings.cpp is in the always-compiled core list; see the note there.

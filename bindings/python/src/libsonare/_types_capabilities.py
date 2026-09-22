@@ -88,6 +88,7 @@ MasteringProcessorCategory = Literal[
     "saturation",
     "spectral",
     "stereo",
+    "utility",
 ]
 
 
