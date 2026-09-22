@@ -194,6 +194,7 @@ rebuild: clean build
 # two binding scripts own their own so `yarn lint:fix` is safe to run directly.
 # `format-check` covers the same files and only reads; point CI and any caller
 # that does not own the worktree at that instead.
+RUFF_FORMAT_PATHS = 'bindings/python/src/*.py' 'bindings/python/src/*.pyi' 'bindings/python/tests/*.py' 'tools/*.py' 'tools/*.pyi'
 LS_EXISTING = python3 -c 'import os, sys; paths = [p for p in sys.stdin.buffer.read().split(b"\0") if p and os.path.exists(os.fsdecode(p))]; sys.stdout.buffer.write(b"\0".join(paths) + (b"\0" if paths else b""))'
 
 format:
@@ -201,7 +202,7 @@ format:
 	cd bindings/wasm && yarn lint:fix
 	cd bindings/node && yarn lint:fix
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
-	git ls-files -z -- 'bindings/python/src/*.py' 'bindings/python/src/*.pyi' 'bindings/python/tests/*.py' | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format
+	git ls-files -z -- $(RUFF_FORMAT_PATHS) | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format
 	git ls-files -z -- '*.py' '*.pyi' '*pyproject.toml' | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix
 	$(MAKE) lint
 
@@ -214,8 +215,8 @@ format:
 # `tests/` — and a list of them is a hand-maintained index that a new tree drops
 # out of silently. This target only reads, so it takes `.`; the auto-fix side
 # derives the same population from `git ls-files` because it writes. `ruff
-# format` deliberately stays on the binding: it would restyle 110 files
-# elsewhere, whose line breaks are hand-set.
+# format` covers the binding and `tools/` (`RUFF_FORMAT_PATHS`, shared with
+# `format-check`); the remaining trees keep hand-set line breaks.
 #
 # The sample-rate rule, stated in src/midi/synth/docs/gs.md and CONTRIBUTING.md: a
 # quantity measured at the machine's 32 kHz internal clock must be stored in
@@ -398,6 +399,7 @@ lint:
 format-check:
 	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 clang-format --dry-run --Werror
 	$(MAKE) lint
+	git ls-files -z -- $(RUFF_FORMAT_PATHS) | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format --check
 
 # Binding targets
 build-shared:

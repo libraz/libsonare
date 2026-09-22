@@ -1,0 +1,4 @@
+# The width the binding's `[tool.ruff]` sets, for every tree without its own
+# config; without this `ruff format` falls back to 88 there. Only the width is
+# shared: the binding's lint selection is not applied outside it.
+line-length = 100
