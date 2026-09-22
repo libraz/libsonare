@@ -690,14 +690,16 @@ TEST_CASE("EFX parameter translations move their insert control monotonically",
     for (int value = 1; value <= 127; ++value) {
       efx.params[0] = static_cast<uint8_t>(value);
       double semitones = 0.0;
-      REQUIRE(json_number(gs_efx_insert_params(efx), "semitones", semitones));
+      REQUIRE(json_number(stage_params(gs_efx_insert_chain(efx), "effects.modulation.pitchShifter"),
+                          "semitones", semitones));
       INFO("PARAMETER 1 = " << value);
       REQUIRE(semitones >= previous);
       previous = semitones;
     }
     efx.params[0] = 64;
     double centre = 1.0;
-    REQUIRE(json_number(gs_efx_insert_params(efx), "semitones", centre));
+    REQUIRE(json_number(stage_params(gs_efx_insert_chain(efx), "effects.modulation.pitchShifter"),
+                        "semitones", centre));
     REQUIRE(centre == 0.0);
   }
 
@@ -785,10 +787,8 @@ TEST_CASE("Tremolo realises as amplitude modulation, not as a ring modulator",
   REQUIRE(wet < 0.5);
 
   // Tremolo Chorus is the chorus with that same modulation on its output, so
-  // the two cannot drift apart into different DEPTHS. Their rates do part
-  // company and that is the wire speaking: the standalone type's rate byte
-  // carries a conversion and the chain's does not, so the chain keeps a voicing
-  // where the standalone type reads a setting.
+  // the two cannot drift apart into different DEPTHS. Their rates may part
+  // company, and that is the wire speaking: each type reads its own rate byte.
   const auto tremolo_chorus = gs_efx_insert_chain(make_efx(0x0141));
   // The effect's own stages come first and the unit's output stage follows, so
   // the two modulation blocks are the head of the chain rather than all of it.
@@ -1168,11 +1168,10 @@ namespace {
 /// the generated table rather than from the chain builder.
 ///
 /// This is a second reader on purpose. The chain builder writes a control only
-/// where the hand-written translation for the type has not already written it,
-/// so a binding row naming a different law from the branch beside it would be
-/// silently outranked -- the control would carry the branch's value and the
-/// table would be a claim nothing tested. Both sides are read here and required
-/// to agree, which is also what makes the branches safe to retire.
+/// where the skeleton has not already written it, so a skeleton key colliding
+/// with a binding row would silently outrank the row -- the control would carry
+/// the skeleton's value and the table would be a claim nothing tested. Reading
+/// each row's law independently is what sees that.
 bool law_reads(const s::GsEfxBinding& row, uint8_t byte, const std::string& key, double& out) {
   using s::GsFreqColumn;
   using s::GsRateRange;

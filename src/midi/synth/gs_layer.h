@@ -502,22 +502,14 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
 /// parser, ABI or bindings.
 std::string_view gs_efx_insert_name(uint16_t type) noexcept;
 
-/// JSON param object (for `insert_factory` / make_insert) translating the raw
-/// GS EFX parameters of @p efx into the mapped insert's parameters. The
-/// Overdrive/Distortion families translate EFX PARAMETER 2 as the drive amount
-/// and PARAMETER 20 as the output level (the SC-88Pro OD/Dist parameter map;
-/// PARAMETER 1 is the OD/Dist selector, redundant with the EFX type). The basic
-/// OD/Dist has no tone/EQ parameters — the tone comes from the amp voicing. The
-/// pitch-shifter families (2-voice / feedback) translate EFX PARAMETER 1 as the
-/// coarse semitone shift and PARAMETER 16 as the dry/effect balance. Tremolo
-/// returns a fixed rate/depth voicing rather than a translation. Every other
-/// type (mapped or not) returns "{}" so the insert plays its own defaults.
-///
-/// A type is translated only where the parameter's position in the block is
-/// confirmed. The manual's Effect list names all 20 parameters of every type,
-/// but it is not transcribed in this repository, so for the remaining types the
-/// block STRUCTURE is honoured and the parameter voicing is a stated default —
-/// never a guessed position.
+/// The skeleton's own JSON params for a single-effect type's insert (for
+/// `insert_factory` / make_insert): band shapes and fixed corners, mode
+/// selectors, and the bytes the skeleton reads under a law of its own (the
+/// Overdrive/Distortion drive, the pitch shifter's balance, the rotary's glide
+/// time). Every byte a measured law reaches is written by the binding table
+/// instead, which gs_efx_insert_chain applies, so this object alone is not the
+/// type's realised parameters. A type with nothing of the skeleton's returns
+/// "{}".
 std::string gs_efx_insert_params(const GsEfx& efx);
 
 /// One stage of a realised EFX chain: an `insert_factory` processor name and
@@ -535,9 +527,8 @@ struct GsEfxStage {
 /// type is unmapped (bypass + log). Stages whose factory build returns null
 /// (e.g. an FX-suite stage in a no-FX build) are skipped at realise time, so a
 /// partial chain still runs. The block STRUCTURE of the composite types is
-/// faithful to the hardware; per-block parameter voicing is translated where
-/// the parameter positions are confirmed (the EQ Low/Hi Gain) and left at the
-/// insert defaults otherwise.
+/// faithful to the hardware; each bound byte reaches the stage its binding row
+/// names, and a control no row reaches keeps the insert's default.
 ///
 /// The chain is a SERIES: the realiser runs the stages in order. The GS
 /// parallel-2 types (0x1100–0x1108) split the signal into two effects and sum

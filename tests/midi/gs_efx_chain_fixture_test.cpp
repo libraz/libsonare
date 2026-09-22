@@ -3,8 +3,8 @@
 ///
 /// gs_efx_insert_chain answers two questions at once: which stages a type
 /// realises, and what each stage is configured with. Restructuring the second
-/// half -- moving a parameter's translation from a hand-written branch onto a
-/// table -- is meant to leave the first half untouched, and nothing else in the
+/// half -- moving which of the skeleton and the binding table writes a key --
+/// is meant to leave the first half untouched, and nothing else in the
 /// suite can see the difference: the type case checks that a chain exists and
 /// the join case checks one key at a time, so a stage silently gaining or
 /// losing a parameter passes both.

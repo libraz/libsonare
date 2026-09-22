@@ -550,35 +550,27 @@ constexpr int kEqBandPeak = 0;
 constexpr int kEqBandLowShelf = 1;
 constexpr int kEqBandHighShelf = 2;
 
-/// Writes one shelf band: a fixed corner, the gain byte read through the
-/// measured window.
-void append_shelf(ParamsJson& out, int band, int type, float corner_hz, uint8_t gain_byte) {
+/// Writes one shelf band's shape: its type and its fixed corner. The gain is a
+/// bound byte and the binding table writes it.
+void append_shelf(ParamsJson& out, int band, int type, float corner_hz) {
   const std::string prefix = "band" + std::to_string(band) + ".";
   out.integer((prefix + "type").c_str(), type);
   out.number((prefix + "frequencyHz").c_str(), corner_hz);
-  out.number((prefix + "gainDb").c_str(), gs_efx_gain_db(gain_byte));
 }
 
-/// Writes one peaking band: centre, width and gain, each from its own byte.
-void append_peak(ParamsJson& out, int band, uint8_t freq_byte, uint8_t width_byte,
-                 uint8_t gain_byte) {
-  const std::string prefix = "band" + std::to_string(band) + ".";
-  out.integer((prefix + "type").c_str(), kEqBandPeak);
-  out.number((prefix + "frequencyHz").c_str(), gs_efx_freq_hz(freq_byte, GsFreqColumn::kColumn0));
-  out.number((prefix + "q").c_str(), gs_efx_width_q(width_byte));
-  out.number((prefix + "gainDb").c_str(), gs_efx_gain_db(gain_byte));
+/// Writes one peaking band's type. Centre, width and gain are bound bytes.
+void append_peak(ParamsJson& out, int band) {
+  out.integer(("band" + std::to_string(band) + ".type").c_str(), kEqBandPeak);
 }
 
-/// Stereo-EQ (0x0100): a low shelf, two peaking sections sharing one law, a
-/// high shelf. The output-gain byte has no control on eq.parametric and stays
-/// untranslated. Slot order is the archive's: the two shelves come first, each
-/// as a corner selector followed by its gain, then the two peaking triples.
-std::string gs_stereo_eq_json(const GsEfx& efx) {
+/// Stereo-EQ (0x0100): a low shelf, two peaking sections, a high shelf. Only
+/// the band shapes are the skeleton's; every byte the four bands read is bound.
+std::string gs_stereo_eq_json() {
   ParamsJson out;
-  append_shelf(out, 0, kEqBandLowShelf, kGsEqLowShelfHz, efx_byte(efx, 1));
-  append_peak(out, 1, efx_byte(efx, 4), efx_byte(efx, 5), efx_byte(efx, 6));
-  append_peak(out, 2, efx_byte(efx, 7), efx_byte(efx, 8), efx_byte(efx, 9));
-  append_shelf(out, 3, kEqBandHighShelf, kGsEqHighShelfHz, efx_byte(efx, 3));
+  append_shelf(out, 0, kEqBandLowShelf, kGsEqLowShelfHz);
+  append_peak(out, 1);
+  append_peak(out, 2);
+  append_shelf(out, 3, kEqBandHighShelf, kGsEqHighShelfHz);
   return out.str();
 }
 
@@ -588,10 +580,10 @@ std::string gs_stereo_eq_json(const GsEfx& efx) {
 constexpr float kGsTremoloDryWet = 0.35f;
 
 /// Tremolo as sinusoidal amplitude modulation: dry*x + wet*x*sin = x*(dry +
-/// wet*sin), so the ring modulator realises the type exactly.
-std::string gs_tremolo_json(float carrier_hz) {
+/// wet*sin), so the ring modulator realises the type exactly. The carrier is
+/// the modulator's rate byte, which is bound.
+std::string gs_tremolo_json() {
   ParamsJson out;
-  out.number("carrierHz", carrier_hz);
   out.number("dryWet", kGsTremoloDryWet);
   return out.str();
 }
@@ -609,36 +601,27 @@ std::string gs_drive_json(const GsEfx& efx, int amp_model, float drive_floor, fl
   return out.str();
 }
 
-/// Pitch-shifter parameter translation (SC-88Pro 2-voice / feedback pitch
-/// shifter). Coarse Pitch is EFX PARAMETER 1 — a 64-centred semitone offset over
-/// -24..+12 st. Effect Balance (PARAMETER 16) maps the direct/effect mix to
-/// dry/wet; no measurement reaches this type's balance byte, so that mapping is
-/// the older linear reading rather than the measured two-ramp law. Neither byte
-/// reads 0 as "unset": selecting the type loads its own defaults, so a zero here
-/// is a zero the file asked for.
+/// Pitch-shifter mix (SC-88Pro 2-voice / feedback pitch shifter). Effect Balance
+/// (PARAMETER 16) maps the direct/effect mix to dry/wet; no measurement reaches
+/// this type's balance byte, so that mapping is the older linear reading rather
+/// than the measured two-ramp law. The byte does not read 0 as "unset":
+/// selecting the type loads its own defaults, so a zero here is a zero the file
+/// asked for. Coarse Pitch is bound.
 std::string gs_pitch_shift_json(const GsEfx& efx) {
-  const int coarse = efx_byte(efx, 0);
   ParamsJson out;
-  out.number("semitones", std::clamp(static_cast<float>(coarse - 64), -24.0f, 12.0f));
   out.number("dryWet", static_cast<float>(efx_byte(efx, 15)) / 127.0f);
-  return out.str();
-}
-
-/// A stereo-delay stage whose two taps come from two time bytes of one ladder.
-std::string gs_delay_pair_json(const GsEfx& efx, int left_slot, int right_slot,
-                               GsTimeLadder ladder) {
-  ParamsJson out;
-  out.number("delayTimeLMs", gs_efx_delay_ms(efx_byte(efx, left_slot), ladder));
-  out.number("delayTimeRMs", gs_efx_delay_ms(efx_byte(efx, right_slot), ladder));
   return out.str();
 }
 
 }  // namespace
 
 std::string gs_efx_insert_params(const GsEfx& efx) {
+  // Every byte an archive law reaches is written by the binding table; what is
+  // left here is the skeleton's own: shapes, modes, and the bytes it reads
+  // under a law of its own.
   switch (efx.type) {
     case 0x0100:  // Stereo-EQ -> four bands of the parametric EQ.
-      return gs_stereo_eq_json(efx);
+      return gs_stereo_eq_json();
     case 0x0110:
       // Overdrive -> the amp model on its classic-crunch voicing (ampModel 0).
       // A light setting already breaks up (0.25 floor), the top reaches full
@@ -648,84 +631,32 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
       // Distortion -> the amp model on its high-gain voicing (ampModel 2), which
       // saturates earlier and harder; a higher drive floor than the overdrive.
       return gs_drive_json(efx, 2, 0.45f, 0.55f);
-    case 0x0120: {  // Phaser: the sweep's LFO rate.
-      ParamsJson out;
-      out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 1), GsRateRange::kWide));
-      return out.str();
-    }
     case 0x0122: {
-      // Rotary. Each rotor's acceleration byte gives how far short of its target
-      // that rotor settles on the way up; the glide's own time constant is one
-      // control for the pair, so it follows the horn's byte. The archive times
-      // no rotor — the divisor is read from where a rotor stopped — so the
-      // constant follows from the loop the acceleration claim names.
+      // Rotary. The glide's time constant is one control for the pair, so it
+      // follows the horn's acceleration byte. The archive times no rotor — the
+      // divisor is read from where a rotor stopped — so the constant follows
+      // from the loop the acceleration claim names.
       const uint8_t horn = efx_byte(efx, 6);
       ParamsJson out;
       out.number("accelTauS", gs_efx_accel_tau_s(horn));
       out.number("decelTauS", gs_efx_accel_tau_s(horn));
-      out.number("undershootHz", gs_efx_accel_undershoot_hz(horn));
-      out.number("drumUndershootHz", gs_efx_accel_undershoot_hz(efx_byte(efx, 2)));
       return out.str();
     }
-    case 0x0123: {
-      // Stereo Flanger. Its pre-filter was read to be the Stereo Chorus's section,
-      // so the shape byte is taken over the same three measured states.
-      ParamsJson out;
-      if (efx_byte(efx, 0) <= 2) out.integer("preFilterMode", efx_byte(efx, 0));
-      out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 3), GsRateRange::kWide));
-      return out.str();
-    }
-    case 0x0125:  // Tremolo: the modulator's rate byte drives the carrier.
-      return gs_tremolo_json(gs_efx_rate_hz(efx_byte(efx, 1), GsRateRange::kWide));
-    case 0x0126: {  // Auto Pan: the sweep's LFO rate.
-      ParamsJson out;
-      out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 1), GsRateRange::kWide));
-      return out.str();
-    }
-    case 0x0140: {
-      // Hexa Chorus -> the ensemble, whose nominal delay is the block's own
-      // pre-delay. Its output-level byte has no control on the ensemble.
-      ParamsJson out;
-      out.number("centerDelayMs", gs_efx_delay_ms(efx_byte(efx, 0), GsTimeLadder::kLadder0));
-      return out.str();
-    }
+    case 0x0123:  // Stereo Flanger: its pre-filter was read to be the chorus's section.
     case 0x0142: {
       // Stereo Chorus. The section in front of the delay is one pole whose shape
-      // the type byte picks and whose corner the byte beside it selects. Three
-      // of the byte's states were measured — 0 flat, 1 low pass, 2 high pass —
-      // and PreFilterMode is declared in that order. A fourth state exists and
-      // was not asked, so it writes no key and the section stays out of the path
-      // rather than taking whichever shape a cast would land on.
+      // the type byte picks. Three of the byte's states were measured — 0 flat,
+      // 1 low pass, 2 high pass — and PreFilterMode is declared in that order. A
+      // fourth state exists and was not asked, so it writes no key and the
+      // section stays out of the path rather than taking whichever shape a cast
+      // would land on.
       ParamsJson out;
       if (efx_byte(efx, 0) <= 2) out.integer("preFilterMode", efx_byte(efx, 0));
-      out.number("preFilterHz", gs_efx_freq_hz(efx_byte(efx, 1), GsFreqColumn::kColumn1));
-      out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 3), GsRateRange::kWide));
       return out.str();
     }
-    case 0x0143:    // Space-D
-    case 0x0144: {  // 3D Chorus
-      ParamsJson out;
-      out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, 1), GsRateRange::kWide));
-      return out.str();
-    }
-    case 0x0150: {
-      // Stereo Delay. Damping is a one-pole inside the feedback loop; the
-      // column's sixteenth entry is the printed bypass and comes back as 0 Hz,
-      // which is the insert's own bypass.
-      ParamsJson out;
-      out.number("delayTimeLMs", gs_efx_delay_ms(efx_byte(efx, 0), GsTimeLadder::kLadder3));
-      out.number("delayTimeRMs", gs_efx_delay_ms(efx_byte(efx, 1), GsTimeLadder::kLadder3));
-      out.number("dampingHz", gs_efx_freq_hz(efx_byte(efx, 7), GsFreqColumn::kColumn2));
-      return out.str();
-    }
-    case 0x0151:  // Modulation Delay: the two taps; its LFO has no control here.
-      return gs_delay_pair_json(efx, 0, 1, GsTimeLadder::kLadder3);
-    case 0x0157:  // 3D Delay: the first two taps; the third has no control.
-      return gs_delay_pair_json(efx, 0, 1, GsTimeLadder::kLadder3);
-    case 0x0152:  // 3 Tap Delay: taps beyond the second have no control.
-    case 0x0153:  // 4 Tap Delay, likewise.
-      return gs_delay_pair_json(efx, 0, 1, GsTimeLadder::kLadder1);
-    case 0x0160:  // 2-voice Pitch Shifter -> Coarse Pitch + Balance translated.
+    case 0x0125:  // Tremolo -> the ring modulator at its fixed depth.
+      return gs_tremolo_json();
+    case 0x0160:  // 2-voice Pitch Shifter
     case 0x0161:  // Feedback Pitch Shifter (feedback approximated as a plain shift).
       return gs_pitch_shift_json(efx);
     default:
@@ -866,11 +797,9 @@ void merge_key(std::string& params, const std::string& addition) {
 /// Writes every control the binding table gives this type, into the stage the
 /// row names -- appending the stage where the effect chain has none.
 ///
-/// A key the skeleton's own translation already wrote is left alone. The two
-/// must agree (gs_efx_types_test.cpp checks that they do on every row), so the
-/// precedence decides nothing today; it is here so the table can be filled in
-/// ahead of the hand-written translations being retired, without a byte being
-/// applied twice on the way.
+/// The skeleton writes shapes, modes and the bytes it reads under a law of its
+/// own, never a bound control, so no row finds its key already written; the
+/// check keeps a collision from rendering one key twice.
 ///
 /// This is also what realises the unit's output stage. The tone pair, the pan
 /// and the output level sit at the same slots for every type rather than inside
@@ -911,60 +840,26 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
   // matching insert (Wah / Auto-Wah realised by the wah / auto-wah inserts).
   //
   // A composite's parameter block is laid out per type, not per block, so a slot
-  // number carries no meaning until the type says which block owns it: the
-  // guitar multis' EQ sits at different slots in each of them and nowhere near
-  // the slots the single-effect types put their own EQ at. Only the slots the
-  // archive gives a conversion to are read, and they are passed in at the call
-  // site below so the type and its layout stay in one place.
+  // number carries no meaning until the type says which block owns it. That
+  // layout is the binding table's: each row names its stage, so the blocks
+  // here carry only what the skeleton owns.
   const auto comp = [] { return GsEfxStage{"dynamics.compressor", "{}"}; };
   const auto od = [](bool bass) {
     return GsEfxStage{"saturation.ampSim", bass ? "{\"ampModel\":0,\"drive\":0.6,\"cabModel\":1}"
                                                 : "{\"ampModel\":0,\"drive\":0.6}"};
   };
   // The guitar multis' tone stack: a low shelf, one peaking section, a high
-  // shelf. Untranslated where the archive reaches none of the type's own slots.
-  const auto eq = [&efx](int low_gain, int mid_freq, int mid_width, int mid_gain, int high_gain) {
+  // shelf. The bands' shapes only; their bytes are bound where the archive
+  // reaches them.
+  const auto eq = [] {
     ParamsJson out;
-    append_shelf(out, 0, kEqBandLowShelf, kGsEqLowShelfHz, efx_byte(efx, low_gain));
-    append_peak(out, 1, efx_byte(efx, mid_freq), efx_byte(efx, mid_width), efx_byte(efx, mid_gain));
-    append_shelf(out, 2, kEqBandHighShelf, kGsEqHighShelfHz, efx_byte(efx, high_gain));
+    append_shelf(out, 0, kEqBandLowShelf, kGsEqLowShelfHz);
+    append_peak(out, 1);
+    append_shelf(out, 2, kEqBandHighShelf, kGsEqHighShelfHz);
     return GsEfxStage{"eq.parametric", out.str()};
   };
   const auto cf = [] { return GsEfxStage{"effects.modulation.chorus", "{}"}; };
-  // A chorus or flanger block whose LFO rate byte the archive reaches.
-  const auto cf_rate = [&efx](int slot, GsRateRange range) {
-    ParamsJson out;
-    out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, slot), range));
-    return GsEfxStage{"effects.modulation.chorus", out.str()};
-  };
-  const auto fl_rate = [&efx](int slot, GsRateRange range) {
-    ParamsJson out;
-    out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, slot), range));
-    return GsEfxStage{"effects.modulation.flanger", out.str()};
-  };
-  // A chorus block whose pre-delay byte the archive reaches: the nominal delay
-  // the modulation swings around.
-  const auto cf_pre_delay = [&efx](int slot) {
-    ParamsJson out;
-    out.number("centerDelayMs", gs_efx_delay_ms(efx_byte(efx, slot), GsTimeLadder::kLadder0));
-    return GsEfxStage{"effects.modulation.chorus", out.str()};
-  };
   const auto delay = [] { return GsEfxStage{"effects.delay.stereo", "{}"}; };
-  // A delay block carrying one printed delay time, which drives both taps, and
-  // optionally the damping corner. A negative slot is one the archive does not
-  // reach, and nothing is written for it.
-  const auto delay_block = [&efx](int time_slot, GsTimeLadder ladder, int damping_slot) {
-    ParamsJson out;
-    if (time_slot >= 0) {
-      const float ms = gs_efx_delay_ms(efx_byte(efx, time_slot), ladder);
-      out.number("delayTimeLMs", ms);
-      out.number("delayTimeRMs", ms);
-    }
-    if (damping_slot >= 0) {
-      out.number("dampingHz", gs_efx_freq_hz(efx_byte(efx, damping_slot), GsFreqColumn::kColumn2));
-    }
-    return GsEfxStage{"effects.delay.stereo", out.str()};
-  };
   const auto wah = [] { return GsEfxStage{"effects.modulation.wah", "{}"}; };
   const auto autowah = [] { return GsEfxStage{"effects.modulation.autoWah", "{}"}; };
   const auto ds = [] { return GsEfxStage{"saturation.ampSim", "{\"ampModel\":2,\"drive\":0.7}"}; };
@@ -972,45 +867,39 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
   const auto fl = [] { return GsEfxStage{"effects.modulation.flanger", "{}"}; };
   const auto rot = [] { return GsEfxStage{"effects.modulation.rotary", "{}"}; };
   const auto ph = [] { return GsEfxStage{"effects.modulation.phaser", "{}"}; };
-  const auto ph_rate = [&efx](int slot, GsRateRange range) {
-    ParamsJson out;
-    out.number("rateHz", gs_efx_rate_hz(efx_byte(efx, slot), range));
-    return GsEfxStage{"effects.modulation.phaser", out.str()};
-  };
   const auto pan = [] { return GsEfxStage{"stereo.autoPan", "{}"}; };
   const auto rm = [] { return GsEfxStage{"effects.modulation.ringModulator", "{}"}; };
   const auto ps = [] { return GsEfxStage{"effects.modulation.pitchShifter", "{}"}; };
   const auto eq3 = [] { return GsEfxStage{"eq.parametric", "{}"}; };
-  const auto trem = [&efx](int slot) {
-    return GsEfxStage{"effects.modulation.ringModulator",
-                      gs_tremolo_json(gs_efx_rate_hz(efx_byte(efx, slot), GsRateRange::kWide))};
+  const auto trem = [] {
+    return GsEfxStage{"effects.modulation.ringModulator", gs_tremolo_json()};
   };
   switch (efx.type) {
     case 0x0141:  // Tremolo Chorus: the chorus with its output amplitude-modulated.
-      return {cf(), trem(4)};
+      return {cf(), trem()};
     // Series-2 composites (SC-88Pro MSB 02): two stock effects in signal order.
     case 0x0200:  // OD -> Chorus
-      return {od(false), cf_rate(6, GsRateRange::kWide)};
+      return {od(false), cf()};
     case 0x0201:  // OD -> Flanger
-      return {od(false), fl_rate(6, GsRateRange::kWide)};
+      return {od(false), fl()};
     case 0x0202:  // OD -> Delay
       return {od(false), delay()};
     case 0x0203:  // DS -> Chorus
-      return {ds(), cf_rate(6, GsRateRange::kWide)};
+      return {ds(), cf()};
     case 0x0204:  // DS -> Flanger
-      return {ds(), fl_rate(6, GsRateRange::kWide)};
+      return {ds(), fl()};
     case 0x0205:  // DS -> Delay
       return {ds(), delay()};
     case 0x0206:  // EH -> Chorus
-      return {eh(), cf_rate(6, GsRateRange::kWide)};
+      return {eh(), cf()};
     case 0x0207:  // EH -> Flanger
-      return {eh(), fl_rate(6, GsRateRange::kWide)};
+      return {eh(), fl()};
     case 0x0208:  // EH -> Delay
-      return {eh(), delay_block(5, GsTimeLadder::kLadder3, -1)};
+      return {eh(), delay()};
     case 0x0209:  // Cho -> Delay
-      return {cf_pre_delay(0), delay_block(5, GsTimeLadder::kLadder3, -1)};
+      return {cf(), delay()};
     case 0x020A:  // FL -> Delay
-      return {fl_rate(1, GsRateRange::kWide), delay()};
+      return {fl(), delay()};
     case 0x020B:  // Cho -> Flanger
       return {cf(), fl()};
     // Rotary Multi: OD -> 3-band EQ -> Rotary. The manual prints two type numbers
@@ -1019,15 +908,13 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
     case 0x0300:
       return {od(false), eq3(), rot()};
     case 0x0400:  // GTR Multi 1: Cmp-OD-CF-Dly
-      return {comp(), od(false), cf_rate(12, GsRateRange::kNarrow),
-              delay_block(16, GsTimeLadder::kLadder4, -1)};
+      return {comp(), od(false), cf(), delay()};
     case 0x0401:  // GTR Multi 2: Cmp-OD-EQ-CF
-      return {comp(), od(false), eq(9, 10, 11, 12, 13), cf()};
+      return {comp(), od(false), eq(), cf()};
     case 0x0402:  // GTR Multi 3: Wah-OD-CF-Dly
       return {wah(), od(false), cf(), delay()};
     case 0x0403:  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD block)
-      return {comp(), eq(4, 5, 6, 7, 8), cf_rate(10, GsRateRange::kNarrow),
-              delay_block(-1, GsTimeLadder::kLadder0, 16)};
+      return {comp(), eq(), cf(), delay()};
     case 0x0404:  // Clean GTR Multi 2: AW-EQ-CF-Dly (Auto-Wah at the front)
       return {autowah(), eq3(), cf(), delay()};
     case 0x0405:  // Bass Multi: Cmp-OD-EQ-CF (the OD block on the bass cab)
@@ -1036,7 +923,7 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
       return {eh(), ph(), cf(), pan()};
     case 0x0500:  // Keyboard Multi: Ring Mod -> EQ -> Pitch Shifter -> Phaser -> Delay.
                   // The only GS type that binds the ring-modulator insert.
-      return {rm(), eq3(), ps(), ph_rate(12, GsRateRange::kNarrow), delay()};
+      return {rm(), eq3(), ps(), ph(), delay()};
     default: {
       // Single-effect types: a one-stage chain from the name/param mapping.
       // The parallel-2 types (MSB 11) fall through here to the empty chain and
