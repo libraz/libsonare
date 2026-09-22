@@ -2,9 +2,7 @@
 
 `tools/gs/efx-tables.json` is a generated, committed artifact; this test reads
 the file itself rather than the derivation script, because it is checking what
-the derivation produced, not how. It is deliberately RED today: the file has
-no `source` field, on either `map` entries or the table cells they fold, and
-no `disagreement` list.
+the derivation produced, not how.
 
 What would make this vacuous: a check that only asks whether `source` is
 *present* would pass the day the derivation stamps `"measured"` on all 85
@@ -12,11 +10,9 @@ What would make this vacuous: a check that only asks whether `source` is
 `MapEntrySourceTest` also requires `measured` and `unit_overrides_assigned`
 to each be used at least once, so a stamped-uniform file still fails. The
 third value, `assigned`, is checked in its own test method
-(`test_assigned_is_used`) rather than folded into that one: it can only
-appear once the hand-authored `tools/gs/efx-bindings/*.json` files exist and
-are read, which lands several steps after `source` itself does, so that
-method is expected to stay red on its own for a while -- see its docstring
-for what makes it go green. The `disagreement` count is checked against a
+(`test_assigned_is_used`) rather than folded into that one: the other two
+both rest on a reading, so it is the one that can collapse to zero while
+they stay populated. The `disagreement` count is checked against a
 list mechanically extracted from `src/midi/synth/docs/gs.md:20` (five items,
 comma-separated, following "this page says to do:") rather than a value
 copied by hand, so a future edit to that sentence changes what this file
@@ -132,9 +128,7 @@ class EfxTablesShapeTest(unittest.TestCase):
         cls.tables = _load_tables()
 
     def test_the_map_key_is_present(self) -> None:
-        self.assertIn(
-            "map", self.tables, "the derivation no longer emits a top-level 'map' list"
-        )
+        self.assertIn("map", self.tables, "the derivation no longer emits a top-level 'map' list")
         self.assertIsInstance(self.tables["map"], list)
         self.assertTrue(self.tables["map"], "the derivation emits an empty 'map' list")
 
@@ -176,12 +170,12 @@ class MapEntrySourceTest(unittest.TestCase):
         return counts
 
     def test_measured_and_unit_overrides_assigned_are_both_used(self) -> None:
-        """The two buckets the derivation alone can populate.
+        """The two buckets that rest on a reading.
 
-        Goes green as soon as the derivation starts emitting `source` on the
-        readings and unit overrides it already has; it does not need the
-        hand-authored binding files, which is why `assigned` is checked
-        separately below rather than folded in here.
+        Held apart from `assigned` because the ways the split can collapse
+        are not the same: these two are distinguished by whether the reading
+        agreed with the law, so a change that stopped telling them apart
+        leaves both populated, while `assigned` simply empties.
         """
         counts = self._source_counts()
         for value in ("measured", "unit_overrides_assigned"):
@@ -194,15 +188,17 @@ class MapEntrySourceTest(unittest.TestCase):
                 )
 
     def test_assigned_is_used(self) -> None:
-        """The bucket that only a hand-authored binding file can populate.
+        """The bucket standing for a law carried on the series alone.
 
-        This one is expected to stay red until `tools/gs/efx-bindings/*.json`
-        exist and the derivation reads them -- a `source` field on the
-        readings and unit overrides alone can never produce an `assigned`
-        entry, since that value names a row resolved through a binding file
-        rather than through a measurement. A failure here that also shows
-        `measured` and `unit_overrides_assigned` passing is the expected
-        state of an unfinished lane, not a broken check.
+        Kept a method of its own because it is the bucket most easily lost:
+        `measured` and `unit_overrides_assigned` both rest on a reading, so a
+        change that stopped distinguishing them would still leave two
+        populated buckets, while `assigned` names the entries no reading
+        placed at all and collapses to zero without anything else moving.
+
+        `source` is the provenance of the conversion law, not of a binding,
+        so this does not wait on `tools/gs/efx-bindings/*.json` -- it goes
+        green with the other two, as soon as the derivation emits `source`.
         """
         counts = self._source_counts()
         self.assertGreater(
@@ -222,9 +218,7 @@ class CellSourceTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.tables = _load_tables()
         cls.units = _provenance_units(cls.tables)
-        assert cls.units, (
-            "fixture precondition: at least one provenance unit must be found"
-        )
+        assert cls.units, "fixture precondition: at least one provenance unit must be found"
 
     def test_every_unit_carries_a_source(self) -> None:
         for path, obj in self.units:
@@ -244,9 +238,7 @@ class CellSourceTest(unittest.TestCase):
                     f"{label} names ({conversion_class}, {table}), which no provenance "
                     f"unit matches",
                 )
-                any_unit_specific = any(
-                    obj.get("unit_specific") is True for obj in contributing
-                )
+                any_unit_specific = any(obj.get("unit_specific") is True for obj in contributing)
                 source = entry.get("source")
                 self.assertIsNotNone(
                     source,
@@ -334,11 +326,9 @@ class DisagreementListTest(unittest.TestCase):
 
     def test_the_markers_are_literally_drawn_from_the_extracted_items(self) -> None:
         self.assertEqual(len(self.MARKERS), len(self.gs_md_items))
-        for marker, item in zip(self.MARKERS, self.gs_md_items):
+        for marker, item in zip(self.MARKERS, self.gs_md_items, strict=True):
             with self.subTest(marker=marker):
-                self.assertIn(
-                    marker, item, f"{marker!r} is not in the extracted item {item!r}"
-                )
+                self.assertIn(marker, item, f"{marker!r} is not in the extracted item {item!r}")
 
     def test_the_disagreement_list_is_present(self) -> None:
         self.assertIn(
@@ -361,7 +351,7 @@ class DisagreementListTest(unittest.TestCase):
             f"({self.gs_md_items}), efx-tables.json names {len(disagreements)}",
         )
         haystack = " ".join(str(item) for item in disagreements)
-        for marker, item in zip(self.MARKERS, self.gs_md_items):
+        for marker, item in zip(self.MARKERS, self.gs_md_items, strict=True):
             with self.subTest(disagreement=item):
                 self.assertIn(
                     marker,
