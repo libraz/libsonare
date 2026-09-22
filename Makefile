@@ -6,6 +6,7 @@
        surface-coverage surface-coverage-check \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
        gs-efx-archive-set gs-efx-tables gs-efx-tables-check gs-efx-coverage \
+       gs-efx-bindings gs-efx-bindings-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix accuracy-report voice-gate voice-status voice-status-all \
        voice-readiness voice-status-refresh voice-status-check spec-check \
@@ -671,6 +672,16 @@ gs-efx-tables-check: gs-efx-archive-set
 	fi; \
 	diff -u tools/gs/efx-tables.json "$$scratch/gs_efx_tables_check.json"; \
 	diff -u src/midi/synth/gs_efx_tables.h "$$scratch/gs_efx_tables_check.h"
+
+# The binding table the insert chain walks, rendered from the hand-written
+# tools/gs/efx-bindings/*.json. Both inputs are committed, so this one needs no
+# archive and a clone can regenerate it -- which is why it is a script of its
+# own rather than another output of derive_efx_tables.py.
+gs-efx-bindings:
+	python3 tools/gs/bindings_header.py
+
+gs-efx-bindings-check:
+	python3 tools/gs/bindings_header.py --check
 
 # The GS EFX coverage equation: how many of the 770 printed (type, slot)
 # parameters are translated, documented as a state, unmapped, unreadable or
