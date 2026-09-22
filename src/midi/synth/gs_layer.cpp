@@ -810,6 +810,17 @@ bool write_bound(ParamsJson& out, const char* key, const GsEfxBinding& row, uint
       out.number(key, hertz ? gs_efx_accel_undershoot_hz(byte) : gs_efx_accel_tau_s(byte));
       return true;
     }
+    case kGsEfxClassRatio: {
+      if (row.range >= kGsEfxBindingRanges.size()) return false;
+      const GsEfxBindingRange& ends = kGsEfxBindingRanges[row.range];
+      float percent = 0.0f;
+      if (!gs_efx_ratio(byte, ends.lo_byte, ends.hi_byte, ends.lo_unit, ends.hi_unit, &percent)) {
+        return false;
+      }
+      // The one table is printed in percent; the controls take the fraction.
+      out.number(key, percent / 100.0f);
+      return true;
+    }
     default:
       return false;
   }

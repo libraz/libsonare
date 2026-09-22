@@ -442,6 +442,6 @@ TEST_CASE("every EFX binding drives a control its insert can automate", "[midi][
   // A floor rather than an equality: the lane adjudicating the remaining
   // parameters adds controls, and a ceiling would go red on it finishing.
   WARN("distinct (insert, control) pairs checked: " << checked);
-  REQUIRE(checked >= 32);
+  REQUIRE(checked >= 34);
 }
 #endif  // SONARE_WITH_FX && SONARE_WITH_MASTERING

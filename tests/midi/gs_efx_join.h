@@ -99,7 +99,7 @@ inline constexpr std::array<std::string_view, 27> kGsEfxJoinReasons = {{
 }};
 
 // Sorted by (type, slot), so one unit's rows are contiguous.
-inline constexpr std::array<GsEfxJoinRow, 590> kGsEfxJoin = {{
+inline constexpr std::array<GsEfxJoinRow, 598> kGsEfxJoin = {{
     {0x0100, 1, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0100, 3, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0100, 4, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
@@ -173,6 +173,7 @@ inline constexpr std::array<GsEfxJoinRow, 590> kGsEfxJoin = {{
     {0x0123, 2, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0123, 3, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0123, 4, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
+    {0x0123, 5, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0123, 15, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
     {0x0123, 16, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0123, 17, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
@@ -249,6 +250,7 @@ inline constexpr std::array<GsEfxJoinRow, 590> kGsEfxJoin = {{
     {0x0144, 19, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0150, 0, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0150, 1, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
+    {0x0150, 2, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0150, 7, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0150, 15, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 13},
     {0x0150, 16, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
@@ -368,6 +370,7 @@ inline constexpr std::array<GsEfxJoinRow, 590> kGsEfxJoin = {{
     {0x0201, 5, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0201, 6, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0201, 7, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
+    {0x0201, 8, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0201, 9, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
     {0x0201, 16, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0201, 17, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
@@ -391,6 +394,7 @@ inline constexpr std::array<GsEfxJoinRow, 590> kGsEfxJoin = {{
     {0x0204, 5, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0204, 6, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0204, 7, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
+    {0x0204, 8, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0204, 9, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
     {0x0204, 16, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0204, 17, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
@@ -414,6 +418,7 @@ inline constexpr std::array<GsEfxJoinRow, 590> kGsEfxJoin = {{
     {0x0207, 5, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0207, 6, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0207, 7, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
+    {0x0207, 8, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0207, 9, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
     {0x0207, 16, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x0207, 17, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
@@ -437,8 +442,10 @@ inline constexpr std::array<GsEfxJoinRow, 590> kGsEfxJoin = {{
     {0x020A, 0, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x020A, 1, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x020A, 2, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
+    {0x020A, 3, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x020A, 4, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
     {0x020A, 5, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
+    {0x020A, 6, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x020A, 7, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x020A, 9, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
     {0x020A, 16, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
@@ -449,6 +456,7 @@ inline constexpr std::array<GsEfxJoinRow, 590> kGsEfxJoin = {{
     {0x020B, 4, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
     {0x020B, 5, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x020B, 7, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
+    {0x020B, 8, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x020B, 9, kGsEfxJoinState, kGsEfxJoinNoName, kGsEfxJoinNoName, 0},
     {0x020B, 16, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
     {0x020B, 17, kGsEfxJoinAssigned, kGsEfxJoinNoName, kGsEfxJoinNoName, kGsEfxJoinNoReason},
@@ -695,7 +703,7 @@ inline constexpr std::array<GsEfxJoinRow, 590> kGsEfxJoin = {{
 // The counts the files declare. A test measures its own and requires these,
 // so a rendering that dropped rows reads as a disagreement rather than as a
 // smaller clean run.
-inline constexpr int kGsEfxJoinAssignedRows = 223;
+inline constexpr int kGsEfxJoinAssignedRows = 231;
 inline constexpr int kGsEfxJoinStateRows = 203;
 inline constexpr int kGsEfxJoinUnmappedRows = 157;
 inline constexpr int kGsEfxJoinBuilderRows = 7;
@@ -703,6 +711,6 @@ inline constexpr int kGsEfxJoinUnreadableRows = 0;
 
 /// Controls the assigned rows declare, which is one per key and so larger
 /// than the assigned row count as soon as a row names several.
-inline constexpr int kGsEfxJoinDeclaredKeys = 223;
+inline constexpr int kGsEfxJoinDeclaredKeys = 231;
 
 }  // namespace sonare::midi::synth

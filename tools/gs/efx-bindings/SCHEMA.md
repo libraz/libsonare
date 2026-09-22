@@ -52,10 +52,11 @@ The row names a chain stage and the JSON key on it that receives the converted v
 - `class` and `table` name the measured law. The pair spells the same `class.table` string the generated header uses — `"gain"` + `"tone"` is `gain.tone`.
 - `via` (optional) names a fixed wrapper applied after the conversion, from a closed vocabulary rather than free text. Use it only where the wrapper already exists as a named function.
 
-The eleven classes and their tables, which are the whole vocabulary:
+The twelve classes and their tables, which are the whole vocabulary:
 
 | class | tables |
 |---|---|
+| `ratio` | `percent` |
 | `rate` | `narrow`, `wide` |
 | `delay_time` | `pre_delay`, `time1`, `time2`, `time3`, `time4` |
 | `gain` | `tone` |
@@ -69,6 +70,8 @@ The eleven classes and their tables, which are the whole vocabulary:
 | `freq` | `eq`, `pre_filter`, `damping` |
 
 A class outside this list means a law nobody measured. That is not something to invent here — the row becomes `state` with a reason saying so.
+
+**`ratio` is the one class no measured table holds.** It reads a byte between the endpoints of a range printed with a unit, and it is admitted only where those endpoints force the step: `0F–71` against `-98%`–`+98%` is 98 bytes over 196 per cent, exactly 2 a byte, so the linear reading is the only one the page allows rather than a guess at the machine's law. A ratio row carries both endpoint pairs — `printed_values`, its copy of the archive's byte range, and `range`, the unit ends — and `bindings_header.py` refuses the header where the unit span is not a whole multiple of the byte span. The table names the unit the ends are printed in; `percent` reaches the control as the fraction. Nothing makes `ratio` available to the bare `00–7F`: it prints no unit, and its law is measured not to be linear.
 
 ### `state` — the quantity is known, nothing receives it
 
@@ -97,7 +100,8 @@ The printed values are not a form any rule here can read (comma-separated fracti
 
 ## Optional fields
 
-- **`range`: `[lo, hi]`** — the two endpoints of a slot whose printed values carry a unit (`0F–71` and its siblings). This is the one place a number is taken from the printed page, and it is a field of its own precisely so the exposure stays countable: two numbers per row, on about fifty rows. An endpoint is the parameter's domain, which is a fact about the machine rather than a conversion table. Nothing else printed may be copied.
+- **`range`: `[lo, hi]`** — the two unit endpoints of a slot whose printed values carry a unit (`0F–71` and its siblings), read by the `ratio` class and by nothing else; a row carrying it under any other class is refused. This is the one place a number is taken from the printed page, and it is a field of its own precisely so the exposure stays countable: two numbers per row, on at most the fifty-one rows printed as a unit range. An endpoint is the parameter's domain, which is a fact about the machine rather than a conversion table. Nothing else printed may be copied.
+- **`printed_values`** — the row's copy of the archive's spelling for the slot, required on a `ratio` row so the header can be rendered without the archive. `make gs-efx-coverage` holds it equal to the archive's own.
 - **`printed_mark`: `"+"` or `"#"`** — the mark the parameter list puts beside a slot. Nobody reads these yet; carrying them means that when their meaning is settled there is a place it already lives, rather than a sweep of every file.
 - **`absent`: `{"stage": …, "key": …}`** — on a `state` row only. Where the reason is that the insert has no such control, this names the control, and the claim is checked against the insert rather than believed: the failure it exists for is an insert growing the control later and the parameter staying unbound because the note explaining why went stale. Optional on purpose — a row whose missing control has no established spelling anywhere carries prose alone, since a claim naming a key no insert would ever use is one that can never go red.
 - **`note`** — free text for a reader. Never load-bearing; nothing parses it.
@@ -115,7 +119,7 @@ The printed values are not a form any rule here can read (comma-separated fracti
 ## How a row is checked
 
 - The equation `translated + state + unmapped + unreadable + builder == printed` must hold over all 770 printed rows, so a row nobody adjudicated is visible as a shortfall rather than as silence.
-- `class`/`table` must not contradict the row's CC0 `printed_values`.
+- `class`/`table` must not contradict the row's CC0 `printed_values`, and a row's own `printed_values` must be the CC0 one.
 - Every `(stage, key)` must be a key the named insert actually accepts, and one it publishes as realtime-automatable. The two failures are different: a key nothing reads is ignored in silence, while a key read without a realtime descriptor costs a chain rebuild per edit. `tests/midi/gs_efx_send_routing_test.cpp` asks the factory for both lists — the second half carries an excused list, the first does not, because no row has a reason to name a key its insert never reads.
 - A `state` row carrying `absent` is verified against that insert's parameter list.
 - **The form itself is measured, not taken on the row's word.** `tests/midi/gs_efx_join.h` renders every row for the tests, and the chain decides which form is true: an assigned byte emits its key at every value and moves it, a `state` or `unmapped` byte is inert, a `builder` byte moves, and an `unmapped` type realises no chain at all where a `state` one does. Without that the coverage equation would hold just as well with every row filed as whichever form is cheapest to defend.

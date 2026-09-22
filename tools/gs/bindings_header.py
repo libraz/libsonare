@@ -12,6 +12,11 @@ their tables in, which is the same order ``gs_efx_tables.h`` numbers them
 in. The measurement archive is NOT needed: a clone can regenerate this
 header, which is why it does not live in ``derive_efx_tables.py``.
 
+One law is the binding layer's rather than the archive's: ``ratio``, a byte
+read between the printed endpoints a row carries in ``range``. It is admitted
+only where those endpoints force a whole step per byte, and the header is
+refused otherwise, because a rounded step is a conversion nobody measured.
+
 Usage::
 
     bindings_header.py [--bindings tools/gs/efx-bindings]
@@ -24,11 +29,21 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 GENERATED_BY = "tools/gs/bindings_header.py"
+
+# Laws no measured table holds, numbered after the classes gs_efx_tables.h
+# numbers. A table names the printed unit the endpoints are spelled in.
+BINDING_LAWS = {"ratio": ("percent",)}
+
+# The spelling of a printed byte range, as the archive's printed_values has it.
+BYTE_RANGE_RE = re.compile(r"^([0-9A-F]{2})–([0-9A-F]{2})$")
+
+NO_RANGE = 0xFF
 
 
 def class_order(derive_path: Path) -> tuple[str, ...]:
@@ -74,8 +89,34 @@ def keys_of(row: dict) -> list[str]:
     return [str(row["key"])]
 
 
+def printed_range(row: dict, where: str) -> tuple[int, int, int, int]:
+    """A ratio row's byte endpoints and unit endpoints, refused unless they force a step.
+
+    The byte endpoints are the row's own copy of the archive's printed_values,
+    which ``coverage.py`` holds to the archive; the unit endpoints are ``range``.
+    """
+    match = BYTE_RANGE_RE.match(str(row.get("printed_values", "")))
+    if match is None:
+        sys.exit(f'{where}: a ratio row needs "printed_values" spelled as a byte range')
+    lo_byte, hi_byte = (int(end, 16) for end in match.groups())
+    ends = row.get("range")
+    if not (isinstance(ends, list) and len(ends) == 2 and all(isinstance(e, int) for e in ends)):
+        sys.exit(f'{where}: a ratio row needs "range" as two integer endpoints')
+    lo_unit, hi_unit = ends
+    steps = hi_byte - lo_byte
+    if steps <= 0 or (hi_unit - lo_unit) % steps != 0:
+        sys.exit(
+            f"{where}: {lo_unit}..{hi_unit} over bytes {lo_byte}..{hi_byte} is not a whole "
+            "step per byte, so the endpoints do not decide the conversion"
+        )
+    return lo_byte, hi_byte, lo_unit, hi_unit
+
+
 def collect(rows: list[dict], classes: dict, order: tuple[str, ...]) -> list[dict]:
     """One emitted entry per (type, slot, key) a binding row translates."""
+    laws = {name: list(body["tables"]) for name, body in classes.items()}
+    laws.update({name: list(tables) for name, tables in BINDING_LAWS.items()})
+    numbering = list(order) + list(BINDING_LAWS)
     out: list[dict] = []
     for row in rows:
         if "stage" not in row:
@@ -83,20 +124,27 @@ def collect(rows: list[dict], classes: dict, order: tuple[str, ...]) -> list[dic
         where = f"{row['_file']}[{row['_index']}]"
         gs_class = row.get("class")
         table = row.get("table")
-        if gs_class not in order:
+        if gs_class not in numbering:
             sys.exit(f"{where}: class {gs_class!r} is not one the tables declare")
-        tables = list(classes[gs_class]["tables"])
+        tables = laws[gs_class]
         if table not in tables:
             sys.exit(f"{where}: {gs_class!r} has no table {table!r}")
+        if gs_class in BINDING_LAWS:
+            ends = printed_range(row, where)
+        elif "range" in row:
+            sys.exit(f'{where}: "range" is read by the ratio law only')
+        else:
+            ends = None
         for key in keys_of(row):
             out.append(
                 {
                     "type": parsed_type(row["type"]),
                     "slot": int(row["slot"]),
-                    "conversion_class": order.index(gs_class),
+                    "conversion_class": numbering.index(gs_class),
                     "table": tables.index(table),
                     "stage": str(row["stage"]),
                     "key": key,
+                    "range": ends,
                     "label": f"{gs_class}.{table}",
                 }
             )
@@ -118,9 +166,16 @@ def collect(rows: list[dict], classes: dict, order: tuple[str, ...]) -> list[dic
     return out
 
 
-def render(entries: list[dict]) -> str:
+def camel(name: str) -> str:
+    return "".join(part.capitalize() for part in name.split("_"))
+
+
+def render(entries: list[dict], order: tuple[str, ...]) -> str:
     stages = sorted({entry["stage"] for entry in entries})
     keys = sorted({entry["key"] for entry in entries})
+    ranges = sorted({entry["range"] for entry in entries if entry["range"] is not None})
+    if len(stages) >= 0xFF or len(keys) >= 0xFF or len(ranges) >= NO_RANGE:
+        sys.exit("the name tables outgrew their index width")
     out: list[str] = []
     w = out.append
 
@@ -151,7 +206,29 @@ def render(entries: list[dict]) -> str:
     w("  uint8_t table;             ///< Which table of that class.")
     w("  uint8_t stage;             ///< Index into kGsEfxBindingStages.")
     w("  uint8_t key;               ///< Index into kGsEfxBindingKeys.")
+    w("  uint8_t range;  ///< Index into kGsEfxBindingRanges, or kGsEfxBindingNoRange.")
     w("};")
+    w("")
+    w("/// The printed endpoints a ratio row is read between: the byte range the")
+    w("/// archive records and the unit range beside it. The generator refuses a pair")
+    w("/// that does not put a whole unit step on every byte.")
+    w("struct GsEfxBindingRange {")
+    w("  uint8_t lo_byte;")
+    w("  uint8_t hi_byte;")
+    w("  int16_t lo_unit;")
+    w("  int16_t hi_unit;")
+    w("};")
+    w("")
+    for index, name in enumerate(BINDING_LAWS, start=len(order)):
+        w("/// A law no measured table holds, numbered after the kGsEfxClass* values")
+        w("/// gs_efx_tables.h emits; the row carries its own endpoints.")
+        w(f"inline constexpr uint8_t kGsEfxClass{camel(name)} = {index};")
+    w(f"inline constexpr uint8_t kGsEfxBindingNoRange = 0x{NO_RANGE:02X};")
+    w("")
+    w(f"inline constexpr std::array<GsEfxBindingRange, {len(ranges)}> kGsEfxBindingRanges = {{{{")
+    for lo_byte, hi_byte, lo_unit, hi_unit in ranges:
+        w(f"    {{0x{lo_byte:02X}, 0x{hi_byte:02X}, {lo_unit}, {hi_unit}}},")
+    w("}};")
     w("")
     w("// The insert names and control names the rows below point at, each spelled")
     w("// once. A name is an index so the table stays a plain array of integers.")
@@ -169,10 +246,15 @@ def render(entries: list[dict]) -> str:
     w(f"inline constexpr std::array<GsEfxBinding, {len(entries)}> kGsEfxBindings = {{{{")
     stage_index = {name: i for i, name in enumerate(stages)}
     key_index = {name: i for i, name in enumerate(keys)}
+    range_index = {ends: i for i, ends in enumerate(ranges)}
     for entry in entries:
+        spelled_range = (
+            "kGsEfxBindingNoRange" if entry["range"] is None else str(range_index[entry["range"]])
+        )
         w(
             f"    {{0x{entry['type']:04X}, {entry['slot']}, {entry['conversion_class']}, "
-            f"{entry['table']}, {stage_index[entry['stage']]}, {key_index[entry['key']]}}},"
+            f"{entry['table']}, {stage_index[entry['stage']]}, {key_index[entry['key']]}, "
+            f"{spelled_range}}},"
             f"  // {entry['label']} -> {entry['stage']}.{entry['key']}"
         )
     w("}};")
@@ -225,7 +307,7 @@ def main() -> int:
     entries = collect(load_rows(args.bindings), classes, order)
     if not entries:
         sys.exit("no binding row carries a stage; the header would bind nothing")
-    rendered = laid_out(render(entries), args.header)
+    rendered = laid_out(render(entries, order), args.header)
 
     if args.check:
         try:

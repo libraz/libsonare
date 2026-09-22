@@ -301,7 +301,7 @@ struct ConversionName {
   const char* name;
 };
 
-constexpr std::array<ConversionName, 18> kConversionNames = {{
+constexpr std::array<ConversionName, 19> kConversionNames = {{
     {s::kGsEfxClassRate, 0, "rate.narrow"},
     {s::kGsEfxClassRate, 1, "rate.wide"},
     {s::kGsEfxClassDelayTime, 0, "delay_time.pre_delay"},
@@ -320,6 +320,7 @@ constexpr std::array<ConversionName, 18> kConversionNames = {{
     {s::kGsEfxClassBalance, 0, "balance.effect"},
     {s::kGsEfxClassAzimuth, 0, "azimuth.placement"},
     {s::kGsEfxClassAccel, 0, "accel.rotor"},
+    {s::kGsEfxClassRatio, 0, "ratio.percent"},
 }};
 
 /// The EQ block's gain slots for one type, taken from the header rather than
@@ -361,8 +362,8 @@ std::vector<EqSlots> gain_slots_by_type() {
 /// nobody has adjudicated yet mostly become states as they are looked at, so a
 /// ceiling would go red on the lane finishing its own work; what a downgrade of
 /// a translation would have to get past is the translated floor.
-constexpr int kGsEfxTranslatedFloor = 223;
-constexpr int kGsEfxAdjudicatedFloor = 590;
+constexpr int kGsEfxTranslatedFloor = 231;
+constexpr int kGsEfxAdjudicatedFloor = 598;
 
 std::string conversion_name(uint8_t conversion_class, uint8_t table) {
   for (const ConversionName& row : kConversionNames) {
@@ -1205,6 +1206,17 @@ bool law_reads(const s::GsEfxBinding& row, uint8_t byte, const std::string& key,
     case s::kGsEfxClassAccel: {
       const bool hertz = key.size() > 2 && key.compare(key.size() - 2, 2, "Hz") == 0;
       out = hertz ? s::gs_efx_accel_undershoot_hz(byte) : s::gs_efx_accel_tau_s(byte);
+      return true;
+    }
+    case s::kGsEfxClassRatio: {
+      if (row.range >= s::kGsEfxBindingRanges.size()) return false;
+      const s::GsEfxBindingRange& ends = s::kGsEfxBindingRanges[row.range];
+      float percent = 0.0f;
+      if (!s::gs_efx_ratio(byte, ends.lo_byte, ends.hi_byte, ends.lo_unit, ends.hi_unit,
+                           &percent)) {
+        return false;
+      }
+      out = static_cast<double>(percent) / 100.0;
       return true;
     }
     default:

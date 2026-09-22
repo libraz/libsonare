@@ -64,6 +64,8 @@ TERM_ORDER = ("translated", "state", "unmapped", "unreadable", "builder")
 
 TYPE_RE = re.compile(r"^[0-9A-Fa-f]{2} [0-9A-Fa-f]{2}$")
 MARKER_RE = re.compile(r"^\*(\d+)$")
+RANGE_RE = re.compile(r"^[0-9A-F]{2}–[0-9A-F]{2}$")
+WHOLE_BYTE = "00–7F"
 
 # Which conversion-class family each *N marker belongs to, read off the
 # columns table in derive_efx_tables.py's CLASSES. *11 (LPF) and *12
@@ -176,10 +178,11 @@ def row_label(row: dict) -> str:
 def check_class_against_printed(row: dict, values: str) -> None:
     """Success condition 5, as far as it decides mechanically today.
 
-    Two shapes are checked: a *N marker whose class disagrees with the
-    marker's own family, and an explicit small enumeration carrying a
-    continuous class. Anything else -- a range, a marker with no known
-    family -- is left alone rather than given an invented rule.
+    Three shapes are checked: a *N marker whose class disagrees with the
+    marker's own family, an explicit small enumeration carrying a continuous
+    class, and a ratio row on anything but a range printed with a unit.
+    Anything else -- a marker with no known family, say -- is left alone
+    rather than given an invented rule.
     """
     gs_class = row.get("class")
     if not gs_class:
@@ -197,6 +200,13 @@ def check_class_against_printed(row: dict, values: str) -> None:
         sys.exit(
             f"{row_label(row)}: class {gs_class!r} is continuous but printed_values "
             f"{values!r} is an explicit small enumeration"
+        )
+    # The ratio law reads a byte between the endpoints of a range printed with a
+    # unit. The whole byte carries none, and its measured law is not linear.
+    if gs_class == "ratio" and (not RANGE_RE.match(values) or values == WHOLE_BYTE):
+        sys.exit(
+            f"{row_label(row)}: class 'ratio' needs a byte range printed with a unit, "
+            f"and printed_values is {values!r}"
         )
 
 
@@ -225,6 +235,13 @@ def tally(rows: list[dict], printed: dict[str, dict[int, str]]) -> dict:
         values = slots.get(slot) if slots else None
         if values is None:
             sys.exit(f"{row_label(row)}: names a (type, slot) with no printed value")
+        # A row's copy of the spelling is what a generator reads without the
+        # archive, so it is held to the archive here.
+        if "printed_values" in row and row["printed_values"] != values:
+            sys.exit(
+                f"{row_label(row)}: printed_values {row['printed_values']!r} is not the "
+                f"archive's {values!r}"
+            )
 
         key = (gs_type, slot)
         if key in claimed:
