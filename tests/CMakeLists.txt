@@ -548,6 +548,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_part_params_test.cpp
     midi/gs_part_edit_banks_test.cpp
     midi/gs_efx_types_test.cpp
+    midi/gs_efx_chain_fixture_test.cpp
     midi/gs_system_effects_test.cpp
     midi/gs_cc_rpn_test.cpp
     midi/drum_exclusive_group_test.cpp
