@@ -47,6 +47,7 @@ The row names a chain stage and the JSON key on it that receives the converted v
 
 - `stage` is the **insert name**, not an index into the chain: `"effects.modulation.chorus"`, `"eq.parametric"`, `"stereo.autoPan"`. A chain holds at most one stage of a given name, which is what makes the name an address.
 - `key` is that insert's parameter key. Dotted keys are allowed where the insert nests them (`"band0.gainDb"`).
+- **The key should also be one the insert publishes as realtime-automatable.** A key the insert reads at construction but offers no realtime descriptor for still works, at the price of rebuilding the whole chain on every wire edit of that byte — which zeroes the delay and reverb tails inside it. Where that is the right answer anyway, it is recorded with its reason in `tests/midi/gs_efx_send_routing_test.cpp`; the two entries there are the rotary's acceleration fields, which shape a glide rather than ride one.
 - `keys` (array) replaces `key` where one slot drives several controls. The row is still one row.
 - `class` and `table` name the measured law. The pair spells the same `class.table` string the generated header uses — `"gain"` + `"tone"` is `gain.tone`.
 - `via` (optional) names a fixed wrapper applied after the conversion, from a closed vocabulary rather than free text. Use it only where the wrapper already exists as a named function.
@@ -115,6 +116,6 @@ The printed values are not a form any rule here can read (comma-separated fracti
 
 - The equation `translated + state + unmapped + unreadable + builder == printed` must hold over all 770 printed rows, so a row nobody adjudicated is visible as a shortfall rather than as silence.
 - `class`/`table` must not contradict the row's CC0 `printed_values`.
-- Every `(stage, key)` must be a key the named insert actually accepts; a key nothing reads is silently ignored at runtime, which is the failure this check exists for.
+- Every `(stage, key)` must be a key the named insert actually accepts, and one it publishes as realtime-automatable. The two failures are different: a key nothing reads is ignored in silence, while a key read without a realtime descriptor costs a chain rebuild per edit. `tests/midi/gs_efx_send_routing_test.cpp` asks the factory for both lists — the second half carries an excused list, the first does not, because no row has a reason to name a key its insert never reads.
 - A `state` row carrying `absent` is verified against that insert's parameter list.
 - **The form itself is measured, not taken on the row's word.** `tests/midi/gs_efx_join.h` renders every row for the tests, and the chain decides which form is true: an assigned byte emits its key at every value and moves it, a `state` or `unmapped` byte is inert, a `builder` byte moves, and an `unmapped` type realises no chain at all where a `state` one does. Without that the coverage equation would hold just as well with every row filed as whichever form is cheapest to defend.

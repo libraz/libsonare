@@ -9,15 +9,20 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
 #include "midi/midi_event.h"
 #include "midi/synth/gs_address_table.h"
+#include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
@@ -25,6 +30,7 @@
 #include "rt/processor_base.h"
 #include "support/midi_render.h"
 #include "support/sf2_builder.h"
+#include "util/json.h"
 
 namespace {
 
@@ -331,3 +337,111 @@ TEST_CASE("the measured EFX translations reach automatable insert parameters",
     REQUIRE(result.second == 0);
   }
 }
+
+#if defined(SONARE_WITH_FX) && defined(SONARE_WITH_MASTERING)
+namespace {
+
+namespace json = sonare::util::json;
+namespace s = sonare::midi::synth;
+
+/// A control a binding row drives that its insert does not publish as
+/// realtime-automatable, with the reason it does not.
+///
+/// An entry excusing nothing fails, so a descriptor added later retires its
+/// entry rather than leaving a note that has stopped being true.
+struct Unautomated {
+  std::string_view stage;
+  std::string_view key;
+  std::string_view reason;
+};
+
+/// Both entries are the rotary's acceleration fields, and both are the glide's
+/// shape rather than anything a running rotor rides.
+constexpr std::array<Unautomated, 2> kUnautomated = {{
+    {"effects.modulation.rotary", "undershootHz",
+     "one byte writes this with accelTauS and decelTauS, and a time constant read mid-glide has "
+     "no defined arrival, so publishing this half alone would apply the byte partly in place and "
+     "partly by rebuild"},
+    {"effects.modulation.rotary", "drumUndershootHz",
+     "its byte drives nothing else, so it could be ridden; the drum rotor publishes what the horn "
+     "rotor publishes, and one rotor automating a field the other cannot is a difference in the "
+     "insert rather than in the machine"},
+}};
+
+}  // namespace
+
+TEST_CASE("every EFX binding drives a control its insert can automate", "[midi][sf2][gsefx]") {
+  // The failure this is the net for: a field added to an insert for a measured
+  // conversion, wired into a binding row, and never given a realtime
+  // descriptor. The edit is not lost -- a parameter write that finds no id
+  // falls back to rebuilding the chain -- but every edit then zeroes the delay
+  // and reverb tails the in-place path exists to preserve.
+  //
+  // The case above measures that against a stand-in insert whose descriptors
+  // the case itself supplies, so it cannot answer for the inserts the bindings
+  // actually name. This one asks the factory.
+  std::map<std::string, std::set<std::string>> automatable;
+  std::map<std::string, std::set<std::string>> accepted;
+  for (std::string_view stage : s::kGsEfxBindingStages) {
+    const std::string name(stage);
+    const json::Value parsed =
+        json::parse_strict(sonare::mastering::api::insert_param_info_json(name));
+    INFO("insert " << name);
+    REQUIRE(parsed.is_array());
+    std::set<std::string> ids;
+    for (const json::Value& parameter : parsed.as_array()) {
+      const json::Value* id = parameter.find("name");
+      REQUIRE(id != nullptr);
+      ids.insert(id->as_string());
+    }
+    // An insert name the factory does not know and one whose build feature is
+    // off both answer with an empty array, which would excuse every key on it.
+    REQUIRE_FALSE(ids.empty());
+    automatable.emplace(name, std::move(ids));
+
+    const std::vector<std::string> keys = sonare::mastering::api::insert_param_names(name);
+    REQUIRE_FALSE(keys.empty());  // same two ways of answering nothing
+    accepted.emplace(name, std::set<std::string>(keys.begin(), keys.end()));
+  }
+
+  std::set<std::pair<std::string, std::string>> seen;
+  std::set<std::size_t> used;
+  int checked = 0;
+  for (const s::GsEfxBinding& row : s::kGsEfxBindings) {
+    const std::string stage(s::kGsEfxBindingStages[row.stage]);
+    const std::string key(s::kGsEfxBindingKeys[row.key]);
+    if (!seen.emplace(stage, key).second) continue;  // one verdict per control
+    ++checked;
+
+    // A key the insert does not read is dropped in silence at construction, so
+    // there is no excused list for this half: the byte reaches nothing at all
+    // rather than reaching something that cannot be ridden.
+    {
+      INFO(stage << "." << key << " is driven by a binding row and is not a key that insert reads");
+      CHECK(accepted[stage].count(key) != 0);
+    }
+
+    if (automatable[stage].count(key) != 0) continue;
+    std::size_t excused = kUnautomated.size();
+    for (std::size_t i = 0; i < kUnautomated.size(); ++i) {
+      if (kUnautomated[i].stage == stage && kUnautomated[i].key == key) excused = i;
+    }
+    INFO(stage << "." << key << " is driven by a binding row, is not automatable, and is not"
+               << " listed as one that may not be");
+    CHECK(excused != kUnautomated.size());
+    if (excused != kUnautomated.size()) used.insert(excused);
+  }
+
+  for (std::size_t i = 0; i < kUnautomated.size(); ++i) {
+    INFO(kUnautomated[i].stage << "." << kUnautomated[i].key
+                               << " is listed as one that may not be automated, and no binding row"
+                               << " drives it: " << kUnautomated[i].reason);
+    CHECK(used.count(i) != 0);
+  }
+
+  // A floor rather than an equality: the lane adjudicating the remaining
+  // parameters adds controls, and a ceiling would go red on it finishing.
+  WARN("distinct (insert, control) pairs checked: " << checked);
+  REQUIRE(checked >= 32);
+}
+#endif  // SONARE_WITH_FX && SONARE_WITH_MASTERING
