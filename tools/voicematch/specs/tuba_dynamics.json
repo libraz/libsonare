@@ -1,0 +1,47 @@
+{
+  "_": "Hand-authored, restricted to the brass.* engine block plus the program's output gain. Deliberately narrower than the program-scoped set (which also carries amp_env/filter_env/cutoff_hz/lfo): a wide fit can cover a loop or valve residual with a static filter and read as improved while being physically wronger (docs/objective.md). Run with --program-only, which is also what keeps the engine-shared flow scale out -- that constant is not a patch field, so fitting it once per voice would have six voices overwrite one value with no sibling able to notice.\n\nTHE KNOBS ARE SPLIT ACROSS TWO SPECS BECAUSE NO MELODIC PROBE SPANS BOTH AXES. `sustain` sounds several pitches at one velocity and refuses a second one outright; `velocity` sounds one pitch at four. So the dynamics loss term is dropped on the first and the note axis is absent from the second, and a knob fitted on the probe that cannot see it still moves -- for the wrong reason. Measured on trumpet: fitting the propagation term on `sustain` drove it to 0.944 and pulled the dynamic shaper DOWN from 0.7 to 0.401 while pushing the static one to 0.973, because on a single-velocity probe a dynamics control is pure cost and a propagation term reads as a brightness knob. Loss fell 1.0 -> 0.673 all the same, which is what makes it dangerous.\n\ngain is in BOTH halves and is not optional. Every other metric is level-normalised, so a candidate can buy a better spectrum by quietening the voice; measured on trumpet, a six-knob timbre fit took the whole-grid level 5.8 dB down and nothing charged for it, because the fence defaults to 6 dB. Nothing inside brass.* can pay that back: the engine holds one loop pressure at every velocity (the amp VCA carries the dynamic), so driving breath_pressure to its ceiling moves the loop's target by 0.06 and left the same 5.8 dB in place. gain is the last multiplier in the amplitude chain, after the drive and the filter, so it cannot hide a spectral residual -- its only effect on the objective is to pay the fence. RUN BOTH HALVES WITH --max-level-drift-db 0.5, which holds the voice at the level the previous round left it at rather than aiming it at the reference; the model's standing offset against the reference is a separate calibration.\n\nTHIS SPEC IS THE `velocity` HALF: run it with --pattern velocity, after the timbre half, with the timbre knobs left at whatever that run wrote back.\n\nbrassiness, cuivre_dynamics and bore_nonlinearity are fitted TOGETHER and none may be frozen. The shock shaper and the propagation term model the same physics -- the shaper is the output-side approximation of it -- so fitting either alone double-counts. The shaper also measurably masks the propagation term at high velocity (3.8x at ff), which is why only a probe carrying the dynamics axis can divide the work between them. bore_nonlinearity starts at its band midpoint so the first coordinate pass can reach both ends; the others start where they currently sit.\n\nbreath_pressure and vel_to_breath are both here because this is the only probe on which they are separable -- they set the intercept and the slope of one line, and a single velocity fixes only the point on it.\n\nExcluded and why: conical is a boolean and a continuous search over it is meaningless; mute and half_valve are performance controls, so fitting them would change which instrument this is; bell_radiation_hz is the other half of the mutually exclusive pair above and is dead whenever bell_cutoff_hz is positive; dynamic_lip is gated advanced physics outside this round's scope.",
+  "knobs": [
+    {
+      "tunable": "tuba.brass.bore_nonlinearity",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.5
+    },
+    {
+      "tunable": "tuba.brass.brassiness",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.25
+    },
+    {
+      "tunable": "tuba.brass.breath_pressure",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.88
+    },
+    {
+      "tunable": "tuba.brass.cuivre_dynamics",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.5
+    },
+    {
+      "tunable": "tuba.brass.vel_to_breath",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.5
+    },
+    {
+      "tunable": "tuba.gain",
+      "min": 0.3,
+      "max": 3.0,
+      "scale": "log",
+      "start": 0.92
+    }
+  ]
+}

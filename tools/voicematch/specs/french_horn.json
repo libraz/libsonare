@@ -1,0 +1,61 @@
+{
+  "_": "Hand-authored, restricted to the brass.* engine block plus the program's output gain. Deliberately narrower than the program-scoped set (which also carries amp_env/filter_env/cutoff_hz/lfo): a wide fit can cover a loop or valve residual with a static filter and read as improved while being physically wronger (docs/objective.md). Run with --program-only, which is also what keeps the engine-shared flow scale out -- that constant is not a patch field, so fitting it once per voice would have six voices overwrite one value with no sibling able to notice.\n\nTHE KNOBS ARE SPLIT ACROSS TWO SPECS BECAUSE NO MELODIC PROBE SPANS BOTH AXES. `sustain` sounds several pitches at one velocity and refuses a second one outright; `velocity` sounds one pitch at four. So the dynamics loss term is dropped on the first and the note axis is absent from the second, and a knob fitted on the probe that cannot see it still moves -- for the wrong reason. Measured on trumpet: fitting the propagation term on `sustain` drove it to 0.944 and pulled the dynamic shaper DOWN from 0.7 to 0.401 while pushing the static one to 0.973, because on a single-velocity probe a dynamics control is pure cost and a propagation term reads as a brightness knob. Loss fell 1.0 -> 0.673 all the same, which is what makes it dangerous.\n\ngain is in BOTH halves and is not optional. Every other metric is level-normalised, so a candidate can buy a better spectrum by quietening the voice; measured on trumpet, a six-knob timbre fit took the whole-grid level 5.8 dB down and nothing charged for it, because the fence defaults to 6 dB. Nothing inside brass.* can pay that back: the engine holds one loop pressure at every velocity (the amp VCA carries the dynamic), so driving breath_pressure to its ceiling moves the loop's target by 0.06 and left the same 5.8 dB in place. gain is the last multiplier in the amplitude chain, after the drive and the filter, so it cannot hide a spectral residual -- its only effect on the objective is to pay the fence. RUN BOTH HALVES WITH --max-level-drift-db 0.5, which holds the voice at the level the previous round left it at rather than aiming it at the reference; the model's standing offset against the reference is a separate calibration.\n\nTHIS SPEC IS THE `sustain` HALF: the air column, the valve's timbre and the bell. Run it first and hold its result while the dynamics half runs.\n\nbreath_pressure is here rather than only in the dynamics half because it is the static component of the loop's drive and `sustain` determines it. It stays in the other half too: breath_target = (1 - vel_to_breath) * breath_pressure + vel_to_breath * vel01, so at one velocity the two collapse into a single degree of freedom and only a velocity probe can separate them. The timbre result is the dynamics half's start point, not a frozen value.\n\nlip_aperture's range is the measured stability band, not the clamp's 0..1: below the minimum the valve stops being a timbre control and becomes a level control, and the upper end is one step under where the loop starts period-doubling. Its h2/h1 response has a notch near half the maximum opening and is NOT monotonic, so the coordinate search -- whose first-pass bracket is centred on the start value -- cannot cross it. Fit this voice TWICE, from start 0.15 and from start 0.70, and keep the better. The second start is derived from this file rather than stored beside it: a sibling spec differing in one number is a file that goes stale silently.\n\nbell_cutoff_hz is bounded away from zero on purpose. Zero selects the older standalone radiation highpass instead of the reflection/radiation complementary pair, and the two are mutually exclusive in the render, so a fit allowed to reach zero would leave one of the two bell knobs doing nothing and the choice of bell model to the optimiser. The band spans a real flare corner at the bottom to the corner the engine behaved like before the pair existed at the top; the start is this voice's old radiation corner, which is the best-informed seed available. It belongs here rather than in the dynamics half because it is a fixed-hertz corner, so its effect differs per note and a single-pitch probe under-determines it.\n\nExcluded and why: conical is a boolean and a continuous search over it is meaningless; mute and half_valve are performance controls, so fitting them would change which instrument this is; bell_radiation_hz is the other half of the mutually exclusive pair above and is dead whenever bell_cutoff_hz is positive; dynamic_lip is gated advanced physics outside this round's scope.",
+  "knobs": [
+    {
+      "tunable": "french_horn.brass.bell_cutoff_hz",
+      "min": 300.0,
+      "max": 13000.0,
+      "scale": "log",
+      "start": 700.0
+    },
+    {
+      "tunable": "french_horn.brass.breath_pressure",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.82
+    },
+    {
+      "tunable": "french_horn.brass.brightness",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.48
+    },
+    {
+      "tunable": "french_horn.brass.damping",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.34
+    },
+    {
+      "tunable": "french_horn.brass.lip_aperture",
+      "min": 0.05,
+      "max": 0.9,
+      "scale": "linear",
+      "start": 0.15
+    },
+    {
+      "tunable": "french_horn.brass.lip_damping",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.55
+    },
+    {
+      "tunable": "french_horn.brass.lip_tension",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear",
+      "start": 0.5
+    },
+    {
+      "tunable": "french_horn.gain",
+      "min": 0.3,
+      "max": 3.0,
+      "scale": "log",
+      "start": 0.88
+    }
+  ]
+}
