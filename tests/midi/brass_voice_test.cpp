@@ -491,7 +491,12 @@ TEST_CASE("the lip valve opens and shuts", "[midi][synth][brass]") {
   NativeSynthPatch patch = gm_fallback_patch(0, 56);  // Trumpet
   REQUIRE(patch.mode == SynthEngineMode::kBrass);
   patch.brass.brassiness = 0.0f;
+  // Both bell corners, because they are alternatives rather than a pair: the
+  // standalone radiation highpass is only consulted when the complementary
+  // reflection/radiation cutoff is zero, so zeroing one of them alone leaves
+  // the other filtering the very ratio this case reads.
   patch.brass.bell_radiation_hz = 0.0f;
+  patch.brass.bell_cutoff_hz = 0.0f;
   patch.cutoff_hz = 20000.0f;
 
   // Steady portion only: 0.3 s to 0.8 s, averaged over four Hann frames so one
@@ -551,9 +556,14 @@ TEST_CASE("bore harmonic ratios against causes that are not the lip", "[.][midi]
   NativeSynthPatch base = gm_fallback_patch(0, 56);  // Trumpet
   REQUIRE(base.mode == SynthEngineMode::kBrass);
   const float gm_brassiness = base.brass.brassiness;
-  const float gm_bell_hz = base.brass.bell_radiation_hz;
+  // The corner this voice actually uses. The standalone radiation highpass is
+  // consulted only when the complementary reflection/radiation cutoff is zero,
+  // and this voice sets the cutoff, so reading the highpass would report a
+  // field the render never looks at and leave the bell in both arms.
+  const float gm_bell_hz = base.brass.bell_cutoff_hz;
   base.brass.brassiness = 0.0f;
   base.brass.bell_radiation_hz = 0.0f;
+  base.brass.bell_cutoff_hz = 0.0f;
   base.cutoff_hz = 20000.0f;
 
   // Per-frame ratios over the same 0.3-0.8 s steady window the gated case reads.
@@ -613,16 +623,16 @@ TEST_CASE("bore harmonic ratios against causes that are not the lip", "[.][midi]
   shaped.brass.brassiness = gm_brassiness;
   report("brassiness at its GM value      ", shaped, 60, 100);
   NativeSynthPatch radiated = base;
-  radiated.brass.bell_radiation_hz = gm_bell_hz;
-  WARN("bell_radiation_hz GM value " << gm_bell_hz << " Hz, brassiness GM value " << gm_brassiness);
-  report("bell_radiation_hz at its GM value", radiated, 60, 100);
+  radiated.brass.bell_cutoff_hz = gm_bell_hz;
+  WARN("bell_cutoff_hz GM value " << gm_bell_hz << " Hz, brassiness GM value " << gm_brassiness);
+  report("bell_cutoff_hz at its GM value   ", radiated, 60, 100);
 
   // The two corners a real flare and a bore with no flare would give. Whether
   // these already separate decides whether a radiation test needs the lip valve
   // in front of it to be able to fail.
   for (float corner : {1000.0f, 13000.0f}) {
     NativeSynthPatch p = base;
-    p.brass.bell_radiation_hz = corner;
+    p.brass.bell_cutoff_hz = corner;
     report(
         corner < 2000.0f ? "bell corner 1 kHz               " : "bell corner 13 kHz              ",
         p, 60, 100);
@@ -641,10 +651,12 @@ TEST_CASE("brightness against the note, for causes that are not bore propagation
   // Read at the shipping patch rather than with the shaper switched off, since
   // that is the configuration the term has to improve on.
   const auto hz = [](int note) { return 440.0 * std::pow(2.0, (note - 69) / 12.0); };
-  NativeSynthPatch shipped = gm_fallback_patch(0, 56);  // Trumpet, as shipped
+  NativeSynthPatch shipped = gm_fallback_patch(0, 56);  // Trumpet
   REQUIRE(shipped.mode == SynthEngineMode::kBrass);
-  REQUIRE(!(shipped.brass.bore_nonlinearity > 0.0f));  // every reading here is the control arm
-  REQUIRE(shipped.brass.cuivre_dynamics > 0.0f);       // the shaper tracks the live envelope
+  // The control arm zeroes the term rather than reading a patch that happens to
+  // have it off: this voice now ships with it on.
+  shipped.brass.bore_nonlinearity = 0.0f;
+  REQUIRE(shipped.brass.cuivre_dynamics > 0.0f);  // the shaper tracks the live envelope
 
   // Centroid over the fundamental: the note carries the raw centroid with it
   // almost exactly (48/60/72 measured at 178.9 / 351.4 / 698.1 Hz), so only the
@@ -761,6 +773,7 @@ TEST_CASE("brightness against the note, for causes that are not bore propagation
   // troughs steepen the rising edge, which is a ratio above one.
   NativeSynthPatch raw = no_cuivre;
   raw.brass.bell_radiation_hz = 0.0f;
+  raw.brass.bell_cutoff_hz = 0.0f;
   raw.cutoff_hz = 20000.0f;
   raw.body = sonare::midi::synth::BodyType::kNone;
   raw.body_mix = 0.0f;
@@ -1020,9 +1033,12 @@ TEST_CASE("bore nonlinearity brightens a loud note more than a soft one", "[midi
   // measured on the control arm before the term existed, the contrast is 1.019
   // at note 48 and a repeat render reproduces it exactly, so everything else in
   // the engine contributes 0.019 of contrast and the bar is 0.029.
-  NativeSynthPatch off = gm_fallback_patch(0, 56);  // Trumpet, as shipped
+  NativeSynthPatch off = gm_fallback_patch(0, 56);  // Trumpet
   REQUIRE(off.mode == SynthEngineMode::kBrass);
-  REQUIRE(!(off.brass.bore_nonlinearity > 0.0f));
+  // The control arm zeroes the term rather than reading a patch that happens to
+  // have it off: this voice now ships with it on, so the shipped value is the
+  // treatment here and not the control.
+  off.brass.bore_nonlinearity = 0.0f;
   off.brass.brassiness = 0.0f;
   off.brass.cuivre_dynamics = 0.0f;
   NativeSynthPatch on = off;

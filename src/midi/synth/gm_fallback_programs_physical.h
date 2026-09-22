@@ -454,51 +454,74 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // The four values are fitted against their references; the cutoffs order as a
   // bell's flare does, the horn widest and the trumpet narrowest.
   o.trumpet = brass(false, 0.55f, 0.30f, 0.75f, 0.28f, 12.0f, 80.0f, 0.88f, 0.50f, 0.90f);
+  o.trumpet.brass.lip_aperture = 0.9f;
   o.trumpet.cutoff_hz = 2400.0f;
   o.trumpet.brass.bell_radiation_hz = 1900.0f;
-  o.trumpet.brass.brassiness = 0.55f;
-  o.trumpet.brass.cuivre_dynamics = 0.7f;
+  o.trumpet.brass.brassiness = 0.5019f;
+  o.trumpet.brass.cuivre_dynamics = 0.715476f;
   o.trumpet.lfo_rate_hz = 5.5f;
   o.trumpet.lfo_to_pitch_cents = 4.0f;
+  o.trumpet.brass.bell_cutoff_hz = 2326.85f;
+  o.trumpet.brass.breath_pressure = 0.888189f;
+  o.trumpet.brass.brightness = 0.693792f;
+  o.trumpet.brass.damping = 0.0102614f;
+  o.trumpet.brass.lip_damping = 0.797516f;
+  o.trumpet.brass.lip_tension = 0.478307f;
+  o.trumpet.gain = 0.959244f;
+  o.trumpet.brass.bore_nonlinearity = 0.705098f;
   o.trombone = brass(false, 0.48f, 0.45f, 0.85f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.92f);
+  o.trombone.brass.lip_aperture = 0.151585f;
   o.trombone.cutoff_hz = 978.041f;
   o.trombone.brass.bell_radiation_hz = 1346.68f;
-  o.trombone.brass.brassiness = 0.950735f;
-  o.trombone.brass.cuivre_dynamics = 0.442127f;
+  o.trombone.brass.brassiness = 0.998735f;
+  o.trombone.brass.cuivre_dynamics = 0.390501f;
   o.trombone.lfo_rate_hz = 2.47118f;
   o.trombone.lfo_to_pitch_cents = 0.597068f;
   o.trombone.amp_env.attack_ms = 26.5016f;
   o.trombone.amp_env.release_ms = 99.453f;
   o.trombone.amp_env.sustain = 0.743293f;
   o.trombone.brass.attack_ms = 5.5069f;
-  o.trombone.brass.breath_pressure = 0.735302f;
+  o.trombone.brass.breath_pressure = 0.993783f;
   o.trombone.brass.brightness = 0.245804f;
   o.trombone.brass.chiff = 0.287488f;
   o.trombone.brass.chiff_ms = 7.27184f;
-  o.trombone.brass.damping = 0.99069f;
+  o.trombone.brass.damping = 0.495809f;
   o.trombone.brass.lip_damping = 1.0f;
-  o.trombone.brass.lip_tension = 0.900029f;
+  o.trombone.brass.lip_tension = 0.452265f;
   o.trombone.brass.release_ms = 31.8924f;
-  o.trombone.brass.vel_to_breath = 0.656219f;
+  o.trombone.brass.vel_to_breath = 0.200621f;
   o.trombone.drift_rate_hz = 0.506794f;
   o.trombone.resonance_q = 1.30183f;
+  o.trombone.brass.bell_cutoff_hz = 1499.65f;
+  o.trombone.brass.bore_nonlinearity = 0.497671f;
+  o.trombone.gain = 0.826041f;
   o.tuba = brass(true, 0.42f, 0.70f, 0.38f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.92f);
+  o.tuba.brass.lip_aperture = 0.726019f;
   // The tuba and the muted trumpet have no reference; their flare cutoffs follow
   // the bore, below the trombone's and level with the trumpet's respectively.
   o.tuba.cutoff_hz = 1200.0f;
   o.tuba.brass.bell_radiation_hz = 500.0f;
-  o.tuba.brass.brassiness = 0.25f;
-  o.tuba.brass.cuivre_dynamics = 0.5f;
+  o.tuba.brass.brassiness = 0.286475f;
+  o.tuba.brass.cuivre_dynamics = 0.232962f;
   o.tuba.lfo_to_pitch_cents = 1.5f;
+  o.tuba.brass.bell_cutoff_hz = 427.454f;
+  o.tuba.brass.breath_pressure = 0.965449f;
+  o.tuba.brass.brightness = 0.378016f;
+  o.tuba.brass.damping = 0.0316865f;
+  o.tuba.brass.lip_damping = 0.997516f;
+  o.tuba.gain = 0.845118f;
+  o.tuba.brass.bore_nonlinearity = 0.0288505f;
+  o.tuba.brass.vel_to_breath = 0.0344419f;
   // The muted trumpet plays through the real mute model instead of the old
   // dimmed-brightness fake.
   // The mute already attenuates, so this voice needs less of the radiation
   // make-up than the rest of the family — 2.7 dB of it comes back out here.
   o.muted_trumpet = brass(false, 0.58f, 0.35f, 0.62f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.60f);
+  o.muted_trumpet.brass.lip_aperture = 0.9f;
   o.muted_trumpet.cutoff_hz = 526.781f;
   o.muted_trumpet.brass.bell_radiation_hz = 692.571f;
-  o.muted_trumpet.brass.brassiness = 0.242353f;
-  o.muted_trumpet.brass.cuivre_dynamics = 0.747426f;
+  o.muted_trumpet.brass.brassiness = 0.226005f;
+  o.muted_trumpet.brass.cuivre_dynamics = 0.771946f;
   o.muted_trumpet.brass.mute = 0.256358f;
   o.muted_trumpet.lfo_rate_hz = 0.459626f;
   o.muted_trumpet.lfo_to_pitch_cents = 0.156186f;
@@ -507,31 +530,45 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.muted_trumpet.amp_env.release_ms = 52.7576f;
   o.muted_trumpet.amp_env.sustain = 0.790166f;
   o.muted_trumpet.brass.attack_ms = 7.69449f;
-  o.muted_trumpet.brass.breath_pressure = 0.231571f;
+  o.muted_trumpet.brass.breath_pressure = 0.317932f;
   o.muted_trumpet.brass.chiff = 0.0574322f;
   o.muted_trumpet.brass.chiff_ms = 37.0073f;
-  o.muted_trumpet.brass.damping = 0.563597f;
-  o.muted_trumpet.brass.lip_damping = 0.926993f;
-  o.muted_trumpet.brass.lip_tension = 0.798806f;
+  o.muted_trumpet.brass.damping = 0.210738f;
+  o.muted_trumpet.brass.lip_damping = 0.99822f;
+  o.muted_trumpet.brass.lip_tension = 0.488486f;
   o.muted_trumpet.brass.release_ms = 12.0762f;
   o.muted_trumpet.brass.vel_to_breath = 0.198345f;
   o.muted_trumpet.resonance_q = 1.11169f;
+  o.muted_trumpet.brass.bell_cutoff_hz = 772.341f;
+  o.muted_trumpet.brass.brightness = 0.698601f;
+  o.muted_trumpet.gain = 0.631158f;
+  o.muted_trumpet.brass.bore_nonlinearity = 0.475425f;
   o.french_horn = brass(true, 0.50f, 0.55f, 0.48f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.88f);
+  o.french_horn.brass.lip_aperture = 0.725162f;
   o.french_horn.cutoff_hz = 1600.0f;
   o.french_horn.brass.bell_radiation_hz = 700.0f;
-  o.french_horn.brass.brassiness = 0.3f;
-  o.french_horn.brass.cuivre_dynamics = 0.6f;
+  o.french_horn.brass.brassiness = 0.339631f;
+  o.french_horn.brass.cuivre_dynamics = 0.586918f;
   o.french_horn.lfo_to_pitch_cents = 1.5f;
+  o.french_horn.brass.bell_cutoff_hz = 821.625f;
+  o.french_horn.brass.breath_pressure = 0.700256f;
+  o.french_horn.brass.brightness = 0.478629f;
+  o.french_horn.brass.damping = 0.414475f;
+  o.french_horn.brass.lip_damping = 0.687124f;
+  o.french_horn.brass.lip_tension = 0.575462f;
+  o.french_horn.gain = 0.828165f;
+  o.french_horn.brass.bore_nonlinearity = 0.0348697f;
 
   // Brass Section (GM 61): the lip reed in section, on the same argument as the
   // string ensemble — the spread is what makes it a section. A section tongues
   // together far less precisely than a soloist, so the speech is slower and
   // softer-edged while the summed blare stays.
   o.brass_section = brass(false, 0.50f, 0.42f, 0.72f, 0.32f, 45.0f, 130.0f, 0.85f, 0.35f, 0.85f);
+  o.brass_section.brass.lip_aperture = 0.832174f;
   o.brass_section.amp_env.attack_ms = 67.2627f;
   o.brass_section.cutoff_hz = 824.427f;
   o.brass_section.brass.bell_radiation_hz = 5447.92f;
-  o.brass_section.brass.brassiness = 0.59236f;
+  o.brass_section.brass.brassiness = 0.529368f;
   o.brass_section.brass.cuivre_dynamics = 0.998511f;
   o.brass_section.brass.chiff = 0.203084f;
   o.brass_section.drift_cents = 1.54191f;
@@ -542,16 +579,19 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.brass_section.amp_env.release_ms = 38.0346f;
   o.brass_section.amp_env.sustain = 0.714046f;
   o.brass_section.brass.attack_ms = 15.993f;
-  o.brass_section.brass.breath_pressure = 0.847405f;
-  o.brass_section.brass.brightness = 0.945981f;
+  o.brass_section.brass.breath_pressure = 0.994694f;
+  o.brass_section.brass.brightness = 0.743112f;
   o.brass_section.brass.chiff_ms = 5.41661f;
-  o.brass_section.brass.damping = 0.288396f;
-  o.brass_section.brass.lip_damping = 0.803849f;
-  o.brass_section.brass.lip_tension = 0.944813f;
+  o.brass_section.brass.damping = 0.0888475f;
+  o.brass_section.brass.lip_damping = 0.805357f;
+  o.brass_section.brass.lip_tension = 0.575462f;
   o.brass_section.brass.release_ms = 118.929f;
-  o.brass_section.brass.vel_to_breath = 0.169958f;
+  o.brass_section.brass.vel_to_breath = 0.00310562f;
   o.brass_section.drift_rate_hz = 2.87174f;
   o.brass_section.resonance_q = 0.506819f;
+  o.brass_section.brass.bell_cutoff_hz = 6034.69f;
+  o.brass_section.gain = 0.911033f;
+  o.brass_section.brass.bore_nonlinearity = 0.991283f;
 
   // Air-jet flute (GM 72-79): one edge-tone waveguide voiced across the
   // open-pipe flutes and their breathier relatives — mirrors the flute presets.
