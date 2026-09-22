@@ -215,7 +215,7 @@ Every area below has runnable examples and the full API in the
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
 - **Room acoustics** — blind RT60 / EDT, impulse-response clarity metrics, RIR synthesis, room estimation and morphing. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
 - **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render / capture), `StreamingMasteringChain`, `RealtimeVoiceChanger`. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)
-- **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (16 synthesis engines, incl. physically-modeled piano / harpsichord / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [API](https://libsonare.libraz.net/docs/native-bindings)
+- **Instruments & synthesis** — built-in oscillator synth, patch-driven NativeSynth (17 synthesis engines, incl. physically-modeled piano / harpsichord / strings / winds — being tuned over time), and a GS-compatible SoundFont (SF2) player. → [API](https://libsonare.libraz.net/docs/native-bindings)
 - **Headless DAW** — `Project` arrangement model: audio / MIDI tracks and clips, undo/redo, clip warp, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`. → [API](https://libsonare.libraz.net/docs/native-bindings)
 - **Conversions** — Hz / mel / MIDI / note, frames / time, resample.
 

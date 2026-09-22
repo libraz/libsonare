@@ -68,9 +68,10 @@ the browser to see what libsonare can power.
 - **Room acoustics** — synthesize a room impulse response from shoebox geometry,
   blindly estimate an equivalent room from a recording, or morph a recording's
   reverberation toward a target room. Dependency-free and deterministic.
-- **Built-in instruments** — a patch-driven NativeSynth with 16 synthesis engines
+- **Built-in instruments** — a patch-driven NativeSynth with 17 synthesis engines
   (subtractive, FM, additive, Karplus-Strong, and modal resonators, plus physically-modeled piano, harpsichord, bowed strings, reeds,
-  brass, flute, pipe organ, plucked strings, voice, free reed, and percussion), a
+  brass, flute, pipe organ, plucked strings, voice, free reed, and percussion, and
+  a sample player for PCM you supply), a
   mod matrix, and named presets,
   backed by a data-free GM/GS fallback covering all 128 programs, the GS rhythm
   sets and the variation tones it voices apart, so MIDI never renders silent.
