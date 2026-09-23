@@ -1575,4 +1575,12 @@ describe('GS voicing queries', () => {
     expect(synthGsVariationIsVoicedApart(0, -1)).toBeNull();
     expect(synthGsVariationIsVoicedApart(0, 128)).toBeNull();
   });
+
+  it('refuses a GS query argument that is not a number', () => {
+    const notANumber = '8' as unknown as number;
+    expect(() => synthGsDrumKitName(notANumber)).toThrow(TypeError);
+    expect(() => synthGsDrumKitIsVoicedApart(notANumber)).toThrow(TypeError);
+    expect(() => synthGsVariationIsVoicedApart(notANumber, 0)).toThrow(TypeError);
+    expect(() => synthGsVariationIsVoicedApart(0, notANumber)).toThrow(TypeError);
+  });
 });

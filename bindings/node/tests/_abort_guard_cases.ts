@@ -1578,4 +1578,39 @@ export const CASES: AbortGuardCase[] = [
       },
     ],
   },
+  {
+    name: 'addon.synthGsDrumKitName',
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'program', call: () => addon.synthGsDrumKitName('8') },
+      { argument: 'omitted program', call: () => addon.synthGsDrumKitName() },
+    ],
+  },
+  {
+    name: 'addon.synthGsDrumKitIsVoicedApart',
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'program', call: () => addon.synthGsDrumKitIsVoicedApart('8') },
+      {
+        argument: 'program past the signed range',
+        call: () => addon.synthGsDrumKitIsVoicedApart(2 ** 32 + 8),
+        error: RangeError,
+      },
+    ],
+  },
+  {
+    name: 'addon.synthGsVariationIsVoicedApart',
+    missingRequired: [],
+    // 2^32 + 8 is the wrap that matters: ToInt32 lands it on bank 8, a voiced
+    // variation, so it would answer for a bank the caller never named.
+    rejectsArgument: [
+      { argument: 'bank', call: () => addon.synthGsVariationIsVoicedApart('8', 0) },
+      { argument: 'program', call: () => addon.synthGsVariationIsVoicedApart(8, '0') },
+      {
+        argument: 'bank past the signed range',
+        call: () => addon.synthGsVariationIsVoicedApart(2 ** 32 + 8, 0),
+        error: RangeError,
+      },
+    ],
+  },
 ];

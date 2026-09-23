@@ -438,7 +438,9 @@ Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
 Napi::Value SynthGsDrumKitName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return NullableString(env, sonare_synth_gs_drum_kit_name(info[0].As<Napi::Number>()));
+  int program = 0;
+  if (!sonare_node::RequiredIntArg(env, info, 0, "program", &program)) return env.Undefined();
+  return NullableString(env, sonare_synth_gs_drum_kit_name(program));
   SONARE_NODE_CATCH(env)
 }
 
@@ -446,8 +448,9 @@ Napi::Value SynthGsDrumKitName(const Napi::CallbackInfo& info) {
 Napi::Value SynthGsDrumKitIsVoicedApart(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return Napi::Number::New(env,
-                           sonare_synth_gs_drum_kit_is_voiced_apart(info[0].As<Napi::Number>()));
+  int program = 0;
+  if (!sonare_node::RequiredIntArg(env, info, 0, "program", &program)) return env.Undefined();
+  return Napi::Number::New(env, sonare_synth_gs_drum_kit_is_voiced_apart(program));
   SONARE_NODE_CATCH(env)
 }
 
@@ -455,8 +458,13 @@ Napi::Value SynthGsDrumKitIsVoicedApart(const Napi::CallbackInfo& info) {
 Napi::Value SynthGsVariationIsVoicedApart(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return Napi::Number::New(env, sonare_synth_gs_variation_is_voiced_apart(
-                                    info[0].As<Napi::Number>(), info[1].As<Napi::Number>()));
+  int bank = 0;
+  int program = 0;
+  if (!sonare_node::RequiredIntArg(env, info, 0, "bank", &bank) ||
+      !sonare_node::RequiredIntArg(env, info, 1, "program", &program)) {
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, sonare_synth_gs_variation_is_voiced_apart(bank, program));
   SONARE_NODE_CATCH(env)
 }
 
