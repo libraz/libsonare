@@ -2377,6 +2377,11 @@ export interface SonareModule {
   // Both return JSON the facade parses; the raw module has no object shape here.
   masteringInsertParamInfo: (name: string) => string;
   masteringProcessorCatalog: () => string;
+  masteringInsertTiming: (
+    name: string,
+    paramsJson: string,
+    sampleRate: number,
+  ) => { latencySamples: number; tailSamples: number };
   masteringProcess: (
     processorName: string,
     samples: Float32Array,

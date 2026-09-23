@@ -50,20 +50,42 @@ export interface SonareCapabilities {
   hardwareConcurrency: number;
 }
 
+/** One named value an enum- or closed-integer-typed insert param accepts. */
+export interface MasteringInsertParamChoice {
+  /** Display/identification name (lowerCamelCase); never accepted as input. */
+  name: string;
+  /** The numeric wire value construction reads for this choice. */
+  value: number;
+}
+
 /**
- * One parameter descriptor in the cross-surface capability catalog.
+ * One parameter descriptor in the cross-surface capability catalog, covering
+ * every key a processor's construction reads. Entries come in two runs: first
+ * the processor's realtime automation targets in id order (`id` non-null),
+ * then, sorted by name, every other construction key with `id` null and
+ * `rtSafe` false.
+ *
+ * `type` is `"enum"` when `choices` names every declared enumerator
+ * construction accepts (sent as the number in its `choices` entry), or
+ * `"string"` / `"array"` for a construction-only key (an embedded impulse
+ * response, a per-band list) that reports null for `min`, `max`, `default`
+ * and `choices`.
  *
  * `default` is the value the processor uses when the key is absent, read from
- * the config struct's own field initializer; it is null only for a param id
- * with no construction key.
+ * the config struct's own field initializer, an enum as its number; it is
+ * null for a param id with no construction key, a `"string"` / `"array"` key,
+ * or a construction key with no fallback.
  *
  * `min` and `max` are the range construction ACCEPTS, measured by handing
  * candidate values to the same code path a caller would use. They are a hard
  * constraint, not a recommended UI range — a value outside them is an error,
  * while an unvalidated control (most gains) reports null on both, meaning
- * "this catalog states no limit" rather than "unknown". Three properties to
- * plan for: a bound is measured with every other parameter at its default, so
- * two parameters that constrain each other each report the other's default; a
+ * "this catalog states no limit" rather than "unknown". Non-null only when
+ * `choices` is null: `choices` non-null names the closed accepted set instead
+ * (every declared enumerator, or a `"number"` key whose accepted integers
+ * have holes), and then both bounds are null. Three properties to plan for: a
+ * bound is measured with every other parameter at its default, so two
+ * parameters that constrain each other each report the other's default; a
  * sample-rate-derived bound reflects the un-prepared processor and rises once
  * the insert is prepared at a higher rate; and an exclusive bound is reported
  * as its limit value, so a control requiring `> 0` reports `min` 0 and still
@@ -71,13 +93,14 @@ export interface SonareCapabilities {
  */
 export interface CapabilityCatalogParameter {
   name: string;
-  id: number;
+  id: number | null;
   rtSafe: boolean;
-  type: 'boolean' | 'number';
+  type: 'boolean' | 'number' | 'enum' | 'string' | 'array';
   min: number | null;
   max: number | null;
   default: boolean | number | null;
   unit: string | null;
+  choices: MasteringInsertParamChoice[] | null;
 }
 
 /** One named mastering processor and its host-facing capabilities. */

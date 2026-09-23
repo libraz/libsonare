@@ -39,11 +39,29 @@ val js_mastering_insert_param_names(std::string name) {
   return out;
 }
 
-// Realtime-automatable parameter descriptors for an insert processor, as a JSON
-// array string [{"name","id","rtSafe"}, ...]. The TS facade parses it; "[]" for
-// an unknown name or a processor with no automatable parameters.
+// Parameter descriptors for every key an insert processor's construction
+// reads, as a JSON array string [{"name","id","rtSafe","type","min","max",
+// "default","unit","choices"}, ...]. The TS facade parses it; "[]" for an
+// unknown name. Entries come in two runs: realtime automation targets (integer
+// "id") in id order, then every other construction key sorted by name with
+// "id" null and "rtSafe" false. See sonare_mastering_insert_param_info (the C
+// ABI oracle for this JSON's semantics) for the full field contract.
 std::string js_mastering_insert_param_info(std::string name) {
   return mastering::api::insert_param_info_json(name);
+}
+
+// Latency and tail an insert reports once built from `json_params` and
+// prepared at `sample_rate`, as {latencySamples, tailSamples}
+// (mastering::api::insert_timing). Throws for an unknown `name`, a key the
+// insert does not read, or a value its construction or prepare refuses; see
+// sonare_mastering_insert_timing for the exact error text.
+val js_mastering_insert_timing(std::string name, std::string json_params, double sample_rate) {
+  const mastering::api::InsertTiming timing =
+      mastering::api::insert_timing(name, json_params, sample_rate);
+  val out = val::object();
+  out.set("latencySamples", timing.latency_samples);
+  out.set("tailSamples", timing.tail_samples);
+  return out;
 }
 
 // Machine-readable classification catalog for every named processor id, as a JSON
@@ -538,6 +556,7 @@ void registerMasteringApiBindings() {
   function("masteringInsertNames", &js_mastering_insert_names);
   function("masteringInsertParamNames", &js_mastering_insert_param_names);
   function("masteringInsertParamInfo", &js_mastering_insert_param_info);
+  function("masteringInsertTiming", &js_mastering_insert_timing);
   function("masteringProcessorCatalog", &js_mastering_processor_catalog);
   function("capabilityCatalog", &js_capability_catalog);
   function("masteringPairProcessorNames", &js_mastering_pair_processor_names);

@@ -1085,10 +1085,12 @@ export class RealtimeEngine {
 
   /**
    * Changes one track-strip insert parameter in realtime, addressed by the
-   * processor's JSON-key parameter name (see {@link masteringInsertParamInfo}).
-   * Applied at the next block head via the engine command queue; safe during
-   * playback. Throws if the track, insert, or name is unknown, the param is not
-   * realtime-safe, or the command queue is full.
+   * processor's JSON-key parameter name — one of the entries
+   * {@link masteringInsertParamInfo} reports with a non-null `id`; a
+   * construction-only entry (`id` null) takes effect only when the insert is
+   * built. Applied at the next block head via the engine command queue; safe
+   * during playback. Throws if the track, insert, or name is unknown, the
+   * param is not realtime-safe, or the command queue is full.
    */
   setTrackStripInsertParamByName(
     trackId: number,
