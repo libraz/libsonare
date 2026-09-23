@@ -205,8 +205,15 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
     // amp-env and filter-env are excluded: the two envelopes are identical under
     // this patch's defaults, so they render the same and would read as a failure
     // to distinguish rather than as the degeneracy they are.
-    const rendered = [0, 3, 4, 5, 8].map(fromSource);
+    const rendered = [3, 4, 5, 8].map(fromSource);
     expect(new Set(rendered).size).toBe(rendered.length);
+  });
+
+  it('refuses none on either end, by ordinal and by name', () => {
+    for (const none of [0, 'none']) {
+      expect(() => fromSource(none)).toThrow(/none/);
+      expect(() => toDestination(none)).toThrow(/none/);
+    }
   });
 
   it('renders each ordinal bit-identically to the name for the same member', () => {
@@ -227,7 +234,8 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
       'expression-cc',
       'pitch-bend',
     ];
-    for (let ordinal = 0; ordinal < sources.length; ordinal++) {
+    // Ordinal 0 is none, which is refused rather than rendered.
+    for (let ordinal = 1; ordinal < sources.length; ordinal++) {
       expect(fromSource(ordinal), `source ordinal ${ordinal}`).toBe(fromSource(sources[ordinal]));
     }
     const destinations = [
@@ -245,7 +253,7 @@ describe('a synth patch mod routing refuses an ordinal outside its enum', () => 
       'excitation-brightness',
       'spectrum-morph',
     ];
-    for (let ordinal = 0; ordinal < destinations.length; ordinal++) {
+    for (let ordinal = 1; ordinal < destinations.length; ordinal++) {
       expect(toDestination(ordinal), `destination ordinal ${ordinal}`).toBe(
         toDestination(destinations[ordinal]),
       );
