@@ -165,6 +165,32 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::MasteringInsertTiming(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[0].IsString() || !info[1].IsString() || !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (name: string, params: string, sampleRate: number)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  const std::string name = info[0].As<Napi::String>().Utf8Value();
+  const std::string params = info[1].As<Napi::String>().Utf8Value();
+  const int sample_rate = node_narrow_int(env, info[2], "sampleRate");
+  int latency_samples = 0;
+  int tail_samples = 0;
+  const SonareError err = sonare_mastering_insert_timing(name.c_str(), params.c_str(), sample_rate,
+                                                         &latency_samples, &tail_samples);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("latencySamples", Napi::Number::New(env, latency_samples));
+  out.Set("tailSamples", Napi::Number::New(env, tail_samples));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringProcessorCatalog(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

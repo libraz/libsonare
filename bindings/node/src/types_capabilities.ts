@@ -48,34 +48,54 @@ export interface Capabilities {
   hardwareConcurrency: number;
 }
 
+/** One named value of an enum parameter, or of a whole-number parameter whose accepted set has holes. */
+export interface MasteringInsertParamChoice {
+  name: string;
+  value: number;
+}
+
 /**
  * One parameter descriptor in the cross-surface capability catalog.
  *
- * `default` is the value the processor uses when the key is absent, read from
- * the config struct's own field initializer; it is null only for a param id
- * with no construction key.
+ * Entries come in two runs: automation targets (`id` the integer used by
+ * realtime automation, sorted by id), then construction-only keys (`id` null,
+ * `rtSafe` false, sorted by name).
  *
- * `min` and `max` are the range construction ACCEPTS, measured by handing
- * candidate values to the same code path a caller would use. They are a hard
- * constraint, not a recommended UI range — a value outside them is an error,
- * while an unvalidated control (most gains) reports null on both, meaning
- * "this catalog states no limit" rather than "unknown". Three properties to
- * plan for: a bound is measured with every other parameter at its default, so
- * two parameters that constrain each other each report the other's default; a
- * sample-rate-derived bound reflects the un-prepared processor and rises once
- * the insert is prepared at a higher rate; and an exclusive bound is reported
- * as its limit value, so a control requiring `> 0` reports `min` 0 and still
- * rejects 0.
+ * `type` is the C++ type the processor's config builder reads the key as. An
+ * `"enum"` value is sent as the number in its `choices` entry. A `"string"` or
+ * `"array"` key (an embedded impulse response, a per-band list) is
+ * construction-only and reports null for `default`, `min`, `max` and
+ * `choices`.
+ *
+ * `default` is the value the processor uses when the key is absent, read from
+ * the config struct's own field initializer; it is null for an automation
+ * target with no construction key and for a key construction reads with no
+ * fallback.
+ *
+ * `choices` is null unless the accepted values are a closed set, listed in
+ * value order; when it is non-null, it is the only accepted set and `min` /
+ * `max` are both null. Otherwise `min` and `max` are the range construction
+ * ACCEPTS, measured by handing candidate values to the same code path a
+ * caller would use. They are a hard constraint, not a recommended UI range —
+ * a value outside them is an error, while an unvalidated control (most gains)
+ * reports null on both, meaning "this catalog states no limit" rather than
+ * "unknown". Three properties to plan for: a bound is measured with every
+ * other parameter at its default, so two parameters that constrain each other
+ * each report the other's default; a sample-rate-derived bound reflects the
+ * un-prepared processor and rises once the insert is prepared at a higher
+ * rate; and an exclusive bound is reported as its limit value, so a control
+ * requiring `> 0` reports `min` 0 and still rejects 0.
  */
 export interface CapabilityCatalogParameter {
   name: string;
-  id: number;
+  id: number | null;
   rtSafe: boolean;
-  type: 'boolean' | 'number';
+  type: 'boolean' | 'number' | 'enum' | 'string' | 'array';
   min: number | null;
   max: number | null;
   default: boolean | number | null;
   unit: string | null;
+  choices: MasteringInsertParamChoice[] | null;
 }
 
 /** One named mastering processor and its host-facing capabilities. */

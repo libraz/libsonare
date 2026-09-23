@@ -138,6 +138,7 @@ export type {
   MasteringChainResult,
   MasteringChainSection,
   MasteringChainStereoResult,
+  MasteringInsertParamChoice,
   MasteringLoudnessSummary,
   MasteringOptions,
   MasteringPreset,

@@ -5,6 +5,7 @@ import type {
   MasteringChainConfig,
   MasteringChainResult,
   MasteringChainStereoResult,
+  MasteringInsertParamChoice,
   MasteringOptions,
   MasteringPreset,
   MasteringResult,
@@ -16,7 +17,7 @@ import type {
   StereoAnalysis,
   StreamingPlatform,
 } from './types.js';
-import { assertSampleRate } from './validation.js';
+import { assertFiniteScalar, assertSampleRate } from './validation.js';
 
 export type NormalizeMode = 'peak' | 'rms';
 
@@ -794,48 +795,115 @@ export function masteringInsertParamNames(name: string): string[] {
   return addon.masteringInsertParamNames(name);
 }
 
-/** One realtime-automatable parameter of an insert processor. */
+/** Every key an insert processor's construction reads, plus every realtime automation target. */
 export interface MasteringInsertParamInfo {
   /** JSON-key parameter name, as used in scene insert params. */
   name: string;
-  /** Integer param id for realtime automation lanes / MIDI-CC binding. */
-  id: number;
-  /** Whether the param can be changed live from the audio thread. */
+  /**
+   * Integer param id for realtime automation lanes / MIDI-CC binding, or null
+   * for a construction-only key (one that is not a realtime automation
+   * target).
+   */
+  id: number | null;
+  /** Whether the param can be changed live from the audio thread. Always false when `id` is null. */
   rtSafe: boolean;
-  /** The C++ type the processor's config builder reads the key as. */
-  type: 'boolean' | 'number';
+  /**
+   * The C++ type the processor's config builder reads the key as. An
+   * `"enum"` value is sent as the number in its {@link choices} entry. A
+   * `"string"` or `"array"` key (an embedded impulse response, a per-band
+   * list) is construction-only and reports null for `default`, `min`, `max`
+   * and `choices`.
+   */
+  type: 'boolean' | 'number' | 'enum' | 'string' | 'array';
   /**
    * Smallest value construction accepts, or null when the catalog states no
-   * limit. Measured, so it is a hard constraint rather than a UI range; see
-   * {@link CapabilityCatalogParameter} for what a measured bound does and does
-   * not promise.
+   * limit or when {@link choices} is non-null. Measured, so it is a hard
+   * constraint rather than a UI range; see {@link CapabilityCatalogParameter}
+   * for what a measured bound does and does not promise.
    */
   min: number | null;
-  /** Largest value construction accepts, or null when the catalog states no limit. */
+  /** Largest value construction accepts, or null when the catalog states no limit or when {@link choices} is non-null. */
   max: number | null;
   /**
    * Value the processor uses when the key is absent — the config struct's own
-   * field initializer. Null only for a param id with no construction key.
+   * field initializer, an enum as its number. Null for an automation target
+   * with no construction key, and for a key construction reads with no
+   * fallback.
    */
   default: boolean | number | null;
   /** Physical unit, or null when the parameter is unitless. */
   unit: string | null;
+  /**
+   * The accepted values, in value order, when they form a closed set: every
+   * declared value of an enum that construction accepts, or the accepted
+   * integers of a whole-number parameter whose accepted set has holes. Null
+   * otherwise. Non-null means it is the only accepted set — `min` and `max`
+   * are then both null.
+   */
+  choices: MasteringInsertParamChoice[] | null;
 }
 
 /**
- * Returns the realtime-automatable parameter descriptors for an insert / FX
- * processor: each entry maps a JSON-key parameter name to the integer id used by
- * realtime automation and reports whether it is realtime-safe. Unlike
- * {@link masteringInsertParamNames} (every construction key), this lists only the
- * realtime-controllable subset — the keys accepted by
- * {@link RealtimeEngine.setTrackStripInsertParamByName}. Returns an empty array
- * for an unknown name or a processor with no automatable parameters.
+ * Returns every key an insert / FX processor's construction reads, plus every
+ * realtime automation target. Entries come in two runs: first the processor's
+ * realtime automation targets in id order (`id` the integer used by
+ * {@link RealtimeEngine.setTrackStripInsertParamByName}, `rtSafe` whether it
+ * can be changed live); then, sorted by name, the keys construction reads
+ * that are not automation targets (`id` null, `rtSafe` false — they take
+ * effect only when the insert is built). The names are the same set
+ * {@link masteringInsertParamNames} returns, plus any automation target
+ * construction does not read. Returns an empty array for an unknown name.
  *
  * @param name - Insert processor name (see {@link masteringInsertNames}).
  */
 export function masteringInsertParamInfo(name: string): MasteringInsertParamInfo[] {
   const json = addon.masteringInsertParamInfo(name);
   return JSON.parse(json) as MasteringInsertParamInfo[];
+}
+
+/** Latency and tail of one insert built from given params and prepared at a given sample rate. */
+export interface MasteringInsertTiming {
+  /** Latency in samples at the queried sample rate. */
+  latencySamples: number;
+  /** Tail in samples at the queried sample rate. */
+  tailSamples: number;
+}
+
+/**
+ * Returns the latency and tail of one insert built from `params` and prepared
+ * at `sampleRate` — what a host needs for delay compensation of a slot whose
+ * configuration changes the processor's delay (an oversampled saturation
+ * path, a linear-phase crossover, a lookahead). The insert is built exactly
+ * as a scene or strip would build it and asked after `prepare`, so the answer
+ * is the one that instance will report. {@link capabilityCatalog}'s
+ * `latencySamples` and `tailSamples` are this query at default parameters and
+ * 48 kHz.
+ *
+ * A key the insert does not read is refused rather than ignored, because an
+ * ignored key would answer for a configuration the caller did not ask for.
+ *
+ * @param name - Insert processor name (see {@link masteringInsertNames}).
+ * @param params - Flat parameter values, keyed as in
+ *   {@link masteringInsertParamInfo}. Each value must be a finite number or a
+ *   boolean.
+ * @param sampleRate - Rate the insert is prepared at.
+ */
+export function masteringInsertTiming(
+  name: string,
+  params: Record<string, number | boolean>,
+  sampleRate: number,
+): MasteringInsertTiming {
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === 'boolean') {
+      continue;
+    }
+    assertFiniteScalar('masteringInsertTiming', value, key);
+  }
+  return addon.masteringInsertTiming(
+    name,
+    JSON.stringify(params),
+    sampleRate,
+  ) as MasteringInsertTiming;
 }
 
 /**
@@ -911,7 +979,7 @@ export interface MasteringProcessorCatalogEntry {
   /** Grouping for a processor picker; see {@link MasteringProcessorCategory}. */
   category: MasteringProcessorCategory;
   /**
-   * The processor's automatable parameters, the same list
+   * The processor's parameter descriptors, the same list
    * {@link masteringInsertParamInfo} returns. Empty for entries that are not
    * realtime-insertable.
    */
