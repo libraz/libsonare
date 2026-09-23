@@ -23,7 +23,7 @@ bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param
   switch (param_id) {
     case kFaderDb:
       if (!std::isfinite(value)) return false;
-      lane.fader_gain.set_target(db_to_linear(std::clamp(value, kFloorDb, 24.0f)));
+      lane.fader_gain.set_target(db_to_linear(std::clamp(value, kFloorDb, kMaxGainDb)));
       return true;
     case kPan:
       if (!std::isfinite(value)) return false;
@@ -373,13 +373,13 @@ bool TrackMixerRuntime::set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept
   if (!std::isfinite(gain_db)) return false;
   BusState* state = bus_state_for(bus_id);
   if (!state) return false;
-  state->gain.set_target(db_to_linear(std::clamp(gain_db, kFloorDb, 24.0f)));
+  state->gain.set_target(db_to_linear(std::clamp(gain_db, kFloorDb, kMaxGainDb)));
   return true;
 }
 
 bool TrackMixerRuntime::set_bus_gain_db_by_index(size_t bus_index, float gain_db) noexcept {
   if (!std::isfinite(gain_db) || bus_index >= bus_configs_.size()) return false;
-  bus_states_[bus_index].gain.set_target(db_to_linear(std::clamp(gain_db, kFloorDb, 24.0f)));
+  bus_states_[bus_index].gain.set_target(db_to_linear(std::clamp(gain_db, kFloorDb, kMaxGainDb)));
   return true;
 }
 

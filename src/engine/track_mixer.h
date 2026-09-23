@@ -88,6 +88,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // buffers stay stereo (kMaxLaneChannels); the master mix and surround group
   // buses can be wider when a lane is surround-panned into them.
   static constexpr int kMaxBusChannels = 8;
+  // Ceiling of every dB gain the mixer accepts (lane fader, bus fader, send
+  // level); the floor is constants::kFloorDb. parameterInfo reports it too.
+  static constexpr float kMaxGainDb = 24.0f;
 
   enum ParamId : unsigned int {
     kFaderDb = 1,

@@ -520,7 +520,7 @@ bool TrackMixerRuntime::lane_config_valid(
     for (size_t send_index = 0; send_index < lanes[i].sends.size(); ++send_index) {
       const TrackLaneConfig::Send& send = lanes[i].sends[send_index];
       if (send.bus_id == 0 || !std::isfinite(send.level_db) || send.level_db < kFloorDb ||
-          send.level_db > 24.0f || bus_state_for(send.bus_id) == nullptr) {
+          send.level_db > kMaxGainDb || bus_state_for(send.bus_id) == nullptr) {
         return false;
       }
       for (size_t other = send_index + 1; other < lanes[i].sends.size(); ++other) {
@@ -538,7 +538,7 @@ bool TrackMixerRuntime::bus_config_valid(const std::vector<TrackBusConfig>& buse
   if (buses.size() > kMaxBusLanes) return false;
   for (size_t i = 0; i < buses.size(); ++i) {
     if (buses[i].bus_id == 0 || !std::isfinite(buses[i].gain_db) || buses[i].gain_db < kFloorDb ||
-        buses[i].gain_db > 24.0f) {
+        buses[i].gain_db > kMaxGainDb) {
       return false;
     }
     for (size_t j = i + 1; j < buses.size(); ++j) {

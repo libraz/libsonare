@@ -509,7 +509,7 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
       } else {
         // TrackMixerRuntime::set_lane_parameter / set_bus_gain_db_by_index.
         out->min_value = kFloorDb;
-        out->max_value = 24.0f;
+        out->max_value = TrackMixerRuntime::kMaxGainDb;
       }
       out->default_value = 0.0f;
       break;
