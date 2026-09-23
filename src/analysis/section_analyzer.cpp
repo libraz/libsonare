@@ -89,6 +89,14 @@ void add_fallback_section(std::vector<Section>& sections, float audio_duration) 
   sections.push_back(section);
 }
 
+/// @brief Wraps caller-supplied times as boundaries of equal strength.
+std::vector<Boundary> uniform_boundaries(const std::vector<float>& times) {
+  std::vector<Boundary> out;
+  out.reserve(times.size());
+  for (float t : times) out.push_back(Boundary{t, 0, 1.0f});
+  return out;
+}
+
 }  // namespace
 
 std::string Section::type_string() const { return section_type_to_string(type); }
@@ -150,6 +158,7 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const SectionConfig& config
 SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries,
                                  const SectionConfig& config)
     : boundaries_(boundaries),
+      boundary_strengths_(boundaries.size(), 1.0f),
       audio_(section_analysis_audio(audio)),
       config_(config),
       sr_(audio_.sample_rate()),
@@ -165,8 +174,11 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& b
 
 SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries,
                                  const Spectrogram& spec, const SectionConfig& config)
-    : boundaries_(boundaries),
-      audio_(section_analysis_audio(audio)),
+    : SectionAnalyzer(audio, uniform_boundaries(boundaries), spec, config) {}
+
+SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<Boundary>& boundaries,
+                                 const Spectrogram& spec, const SectionConfig& config)
+    : audio_(section_analysis_audio(audio)),
       config_(config),
       sr_(audio_.sample_rate()),
       hop_length_(config.hop_length) {
@@ -178,6 +190,7 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& b
   // rather than mapping section spans onto frames of a different hop duration.
   validate_reused_geometry(spec, section_chroma_config(config_).to_stft_config(),
                            audio_.sample_rate(), audio_.size());
+  set_boundaries(boundaries);
 
   energy_curve_ = rms_energy(audio_, config_.n_fft, config_.hop_length);
   build_sections(spec);
@@ -193,10 +206,13 @@ void SectionAnalyzer::analyze() {
   boundary_config.hop_length = config_.hop_length;
   boundary_config.threshold = config_.boundary_threshold;
   boundary_config.kernel_size = config_.kernel_size;
-  boundary_config.peak_distance = config_.min_section_sec;
+  // Peak spacing only thins candidates; the section floor is enforced by
+  // merge_short_sections, which can weigh boundary strength.
+  boundary_config.peak_distance =
+      std::min(std::max(0.0f, config_.min_section_sec), BoundaryConfig{}.peak_distance);
 
   BoundaryDetector detector(audio_, boundary_config);
-  boundaries_ = detector.boundary_times();
+  set_boundaries(detector.boundaries());
 
   // One STFT for the whole pass: the merge and the descriptors both read it.
   build_sections(Spectrogram::compute(audio_, section_chroma_config(config_).to_stft_config()));
@@ -226,32 +242,92 @@ void SectionAnalyzer::build_sections(const Spectrogram& spec) {
     sections_.push_back(section);
   }
 
-  merge_short_sections();
-  merge_indistinct_sections(spec);
+  // Strength of the boundary opening each section, kept parallel to sections_
+  // through both merges. Entry 0 opens the track and is never dissolved.
+  std::vector<float> open_strength(sections_.size(), 0.0f);
+  for (size_t i = 1; i < sections_.size(); ++i) {
+    open_strength[i] = i - 1 < boundary_strengths_.size() ? boundary_strengths_[i - 1] : 1.0f;
+  }
+
+  // Indistinct neighbours are judged on the detector's own segments: a span the
+  // floor has already grown averages over more material, and its mean chroma
+  // flattens toward any other long span's.
+  merge_indistinct_sections(spec, open_strength);
+  merge_short_sections(open_strength);
   add_fallback_section(sections_, audio_duration);
 
   // Classify sections
   classify_sections(spec);
 }
 
-void SectionAnalyzer::merge_short_sections() {
+void SectionAnalyzer::set_boundaries(const std::vector<Boundary>& boundaries) {
+  boundaries_.clear();
+  boundary_strengths_.clear();
+  boundaries_.reserve(boundaries.size());
+  boundary_strengths_.reserve(boundaries.size());
+  for (const Boundary& b : boundaries) {
+    boundaries_.push_back(b.time);
+    boundary_strengths_.push_back(b.strength);
+  }
+}
+
+void SectionAnalyzer::merge_short_sections(std::vector<float>& strength) {
   const float minimum = std::max(0.0f, config_.min_section_sec);
-  if (minimum <= 0.0f) return;
-  size_t index = 0;
-  while (sections_.size() > 1 && index < sections_.size()) {
-    if (sections_[index].duration() >= minimum) {
-      ++index;
-      continue;
+  const size_t n = sections_.size();
+  if (minimum <= 0.0f || n < 2) return;
+
+  // Keep the boundary subset with the largest total strength (then the most
+  // boundaries) whose sections all reach the floor. Cut k opens section k; cut n
+  // is the track end. A boundary whose two resulting sections both reach the
+  // floor only adds strength, so it always survives.
+  struct Score {
+    double strength = 0.0;
+    size_t count = 0;
+    bool feasible = false;
+    bool operator<(const Score& o) const {
+      return strength < o.strength || (strength == o.strength && count < o.count);
     }
-    if (index == 0) {
-      sections_[1].start = sections_[0].start;
-      sections_.erase(sections_.begin());
-    } else {
-      sections_[index - 1].end = sections_[index].end;
-      sections_.erase(sections_.begin() + static_cast<std::ptrdiff_t>(index));
-      --index;
+  };
+  const auto cut_time = [&](size_t k) { return k < n ? sections_[k].start : sections_.back().end; };
+  std::vector<Score> best(n + 1);
+  std::vector<size_t> previous(n + 1, 0);
+  best[0].feasible = true;
+  for (size_t j = 1; j <= n; ++j) {
+    for (size_t i = 0; i < j; ++i) {
+      if (!best[i].feasible || cut_time(j) - cut_time(i) < minimum) continue;
+      Score candidate = best[i];
+      if (j < n) {
+        candidate.strength += static_cast<double>(strength[j]);
+        ++candidate.count;
+      }
+      if (!best[j].feasible || best[j] < candidate) {
+        best[j] = candidate;
+        best[j].feasible = true;
+        previous[j] = i;
+      }
     }
   }
+  // Shorter than the floor as a whole: one whole-track section.
+  std::vector<size_t> kept;
+  if (best[n].feasible) {
+    for (size_t k = previous[n]; k > 0; k = previous[k]) kept.push_back(k);
+  }
+  std::reverse(kept.begin(), kept.end());
+  if (kept.size() + 1 == n) return;
+
+  std::vector<Section> merged;
+  std::vector<float> merged_strength;
+  size_t open = 0;
+  for (size_t idx = 0; idx <= kept.size(); ++idx) {
+    const size_t close = idx < kept.size() ? kept[idx] : n;
+    Section section = sections_[open];
+    section.end = sections_[close - 1].end;
+    merged.push_back(section);
+    merged_strength.push_back(strength[open]);
+    open = close;
+  }
+  sections_ = std::move(merged);
+  strength = std::move(merged_strength);
   for (Section& section : sections_) {
     section.energy_level = compute_section_energy(section.start, section.end);
   }
@@ -283,7 +359,8 @@ std::vector<std::array<float, 12>> SectionAnalyzer::section_mean_chromas(
   return chromas;
 }
 
-void SectionAnalyzer::merge_indistinct_sections(const Spectrogram& spec) {
+void SectionAnalyzer::merge_indistinct_sections(const Spectrogram& spec,
+                                                std::vector<float>& strength) {
   if (sections_.size() < 2) return;
 
   // Chroma only, not the full descriptor set: the comparison needs the harmonic
@@ -298,8 +375,10 @@ void SectionAnalyzer::merge_indistinct_sections(const Spectrogram& spec) {
   if (chromas.size() != sections_.size()) return;
 
   std::vector<Section> merged;
+  std::vector<float> merged_strength;
   merged.reserve(sections_.size());
   merged.push_back(sections_.front());
+  merged_strength.push_back(strength.front());
   size_t previous_index = 0;
   for (size_t i = 1; i < sections_.size(); ++i) {
     float similarity = 0.0f;
@@ -311,11 +390,13 @@ void SectionAnalyzer::merge_indistinct_sections(const Spectrogram& spec) {
       continue;
     }
     merged.push_back(sections_[i]);
+    merged_strength.push_back(strength[i]);
     previous_index = i;
   }
 
   if (merged.size() == sections_.size()) return;
   sections_ = std::move(merged);
+  strength = std::move(merged_strength);
   for (Section& section : sections_) {
     section.energy_level = compute_section_energy(section.start, section.end);
   }

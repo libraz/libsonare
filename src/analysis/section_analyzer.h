@@ -34,8 +34,10 @@ struct Section {
 struct SectionConfig {
   int n_fft = 2048;      ///< FFT size
   int hop_length = 512;  ///< Hop length
-  /// Minimum section duration in seconds. Shorter sections are merged into
-  /// their neighbour; only a lone whole-track section may fall below it.
+  /// Minimum section duration in seconds. Of the detected boundaries, the
+  /// subset with the largest total novelty strength whose sections all reach
+  /// this floor is kept, so a boundary between two sections at or above it is
+  /// never removed; only a lone whole-track section may fall below it.
   float min_section_sec = 4.0f;
   float boundary_threshold = 0.3f;  ///< Boundary detection threshold
   int kernel_size = 64;             ///< Checkerboard kernel size
@@ -95,6 +97,13 @@ class SectionAnalyzer {
   SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries, const Spectrogram& spec,
                   const SectionConfig& config = SectionConfig());
 
+  /// @brief Constructs section analyzer from detected boundaries and STFT.
+  /// @details As the time-only overload, but each boundary's novelty strength
+  /// decides which boundary the minimum-length merge dissolves first. The
+  /// time-only overloads treat every boundary as equally strong.
+  SectionAnalyzer(const Audio& audio, const std::vector<Boundary>& boundaries,
+                  const Spectrogram& spec, const SectionConfig& config = SectionConfig());
+
   /// @brief Returns detected sections.
   const std::vector<Section>& sections() const { return sections_; }
 
@@ -135,7 +144,14 @@ class SectionAnalyzer {
   ///        of them cannot drift in what they do with a segmentation.
   void build_sections(const Spectrogram& spec);
 
-  void merge_short_sections();
+  /// @brief Stores boundary times and their strengths side by side.
+  void set_boundaries(const std::vector<Boundary>& boundaries);
+
+  /// @brief Enforces @ref SectionConfig::min_section_sec, keeping the
+  ///        strongest boundary subset whose sections all reach it.
+  /// @param strength Strength of the boundary opening each section, parallel
+  ///        to @ref sections_ and kept so.
+  void merge_short_sections(std::vector<float>& strength);
 
   /// @brief Merges adjacent sections whose chroma content is indistinguishable.
   /// @details A novelty peak inside one continuous stretch of music splits it
@@ -144,7 +160,8 @@ class SectionAnalyzer {
   /// never changed. Collapsing them first means the labeller sees the structure
   /// the audio has rather than the structure the peak picker found.
   /// @param spec The analyzer's STFT, shared with @ref build_descriptors.
-  void merge_indistinct_sections(const Spectrogram& spec);
+  /// @param strength Opening-boundary strength per section, kept parallel.
+  void merge_indistinct_sections(const Spectrogram& spec, std::vector<float>& strength);
 
   /// @brief L2-normalized mean chroma of each current section.
   /// @details The harmonic half of @ref build_descriptors, computed on its own
@@ -176,6 +193,8 @@ class SectionAnalyzer {
   std::vector<SectionDescriptor> descriptors_;
   std::vector<float> energy_curve_;
   std::vector<float> boundaries_;
+  /// @brief Novelty strength of each entry of @ref boundaries_.
+  std::vector<float> boundary_strengths_;
   Audio audio_;
   SectionConfig config_;
   int sr_;

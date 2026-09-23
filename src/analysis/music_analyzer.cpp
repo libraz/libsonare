@@ -276,7 +276,7 @@ SectionAnalyzer& MusicAnalyzer::section_analyzer() {
     // the cached spectrogram is that signal's, so the descriptors read the STFT
     // this analyzer already holds instead of an identical recompute.
     section_analyzer_ = std::make_unique<SectionAnalyzer>(
-        analysis_audio_, boundary_detector().boundary_times(), spectrogram(), section_config);
+        analysis_audio_, boundary_detector().boundaries(), spectrogram(), section_config);
   });
   return *section_analyzer_;
 }

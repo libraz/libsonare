@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
@@ -356,12 +357,13 @@ TEST_CASE("SectionAnalyzer config options", "[section_analyzer]") {
 
   // The point of the case is that the options reach the analysis, so assert the
   // outcome they change rather than that some sections came back. A permissive
-  // minimum keeps all five detected sections; the default 4 s minimum is longer
-  // than the first detected span, which merges into its neighbour and cascades.
-  // Asserting only non-emptiness passed even when the fixture collapsed to a
-  // single whole-track span, which is the failure this pins.
+  // minimum keeps all five detected sections. The detected spans sit just
+  // either side of 4 s, so the default 4 s floor drops the boundaries that close
+  // the short ones and keeps the rest: three sections. Asserting only
+  // non-emptiness passed even when the fixture collapsed to a single whole-track
+  // span, which is the failure this pins.
   REQUIRE(analyzer.count() == 5);
-  REQUIRE(SectionAnalyzer(audio, SectionConfig{}).count() == 2);
+  REQUIRE(SectionAnalyzer(audio, SectionConfig{}).count() == 3);
 }
 
 TEST_CASE("SectionAnalyzer short audio", "[section_analyzer]") {
@@ -624,4 +626,179 @@ TEST_CASE("the self-similarity matrix is the one the labeller used", "[analysis]
 
   // Reading it twice must not depend on having read it once: the descriptors are state now.
   REQUIRE(analyzer.section_self_similarity() == similarity);
+}
+
+namespace {
+
+/// @brief Consecutive single-partial tones, one per span, at pitch classes far
+///        enough apart that no two neighbours read as indistinct chroma.
+Audio create_tone_spans(const std::vector<std::pair<float, float>>& spans, int sr = 22050) {
+  const float duration = spans.back().first;
+  std::vector<float> samples(static_cast<size_t>(static_cast<float>(sr) * duration));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    float frequency = spans.back().second;
+    for (const auto& span : spans) {
+      if (t < span.first) {
+        frequency = span.second;
+        break;
+      }
+    }
+    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * frequency * t);
+  }
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Section boundaries of @p analyzer, i.e. every section start but the first.
+std::vector<float> section_starts(const SectionAnalyzer& analyzer) {
+  std::vector<float> starts;
+  for (size_t i = 1; i < analyzer.sections().size(); ++i) {
+    starts.push_back(analyzer.sections()[i].start);
+  }
+  return starts;
+}
+
+}  // namespace
+
+TEST_CASE("the section floor keeps the stronger boundary next to a short section",
+          "[section_analyzer]") {
+  // 0-5 s C4, 5-6 s E4, 6-12 s G#4. The 1 s span must go, and which of its two
+  // boundaries goes with it is decided by novelty strength, not by position.
+  const Audio audio = create_tone_spans({{5.0f, 261.63f}, {6.0f, 329.63f}, {12.0f, 415.30f}});
+  SectionConfig config;
+  config.min_section_sec = 4.0f;
+  const Spectrogram spec = Spectrogram::compute(audio, section_stft_config(config));
+
+  const auto boundary = [](float time, float strength) { return Boundary{time, 0, strength}; };
+  {
+    const SectionAnalyzer analyzer(audio, {boundary(5.0f, 0.9f), boundary(6.0f, 0.2f)}, spec,
+                                   config);
+    REQUIRE(section_starts(analyzer) == std::vector<float>{5.0f});
+  }
+  {
+    const SectionAnalyzer analyzer(audio, {boundary(5.0f, 0.2f), boundary(6.0f, 0.9f)}, spec,
+                                   config);
+    REQUIRE(section_starts(analyzer) == std::vector<float>{6.0f});
+  }
+}
+
+TEST_CASE("the section floor keeps boundaries between sections longer than it",
+          "[section_analyzer]") {
+  // Spans of 10, 1, 3 and 16 s under a 4 s floor, all boundaries equally strong.
+  // Dropping only 11 s joins the two short spans into one 4 s section; absorbing
+  // the short spans leftward would also remove the boundary at 10 s.
+  const Audio audio =
+      create_tone_spans({{10.0f, 261.63f}, {11.0f, 329.63f}, {14.0f, 415.30f}, {30.0f, 293.66f}});
+  SectionConfig config;
+  config.min_section_sec = 4.0f;
+
+  const SectionAnalyzer analyzer(audio, std::vector<float>{10.0f, 11.0f, 14.0f}, config);
+  REQUIRE(section_starts(analyzer) == std::vector<float>{10.0f, 14.0f});
+}
+
+namespace {
+
+/// @brief Adds a decaying note whose partials fall as 1 / n^tilt.
+void add_note(std::vector<float>& out, int sr, double start, double length, int midi,
+              double amplitude, int partials, double tilt) {
+  const double f0 = 440.0 * std::pow(2.0, (midi - 69) / 12.0);
+  const size_t first = static_cast<size_t>(start * sr);
+  const size_t count = static_cast<size_t>(length * sr);
+  for (size_t i = 0; i < count && first + i < out.size(); ++i) {
+    const double t = static_cast<double>(i) / sr;
+    const double envelope = std::min(1.0, t / 0.01) * std::exp(-1.5 * t);
+    double value = 0.0;
+    for (int n = 1; n <= partials && f0 * n < 0.45 * sr; ++n) {
+      value += std::sin(2.0 * sonare::constants::kPiD * f0 * n * t) / std::pow(n, tilt);
+    }
+    out[first + i] += static_cast<float>(amplitude * envelope * value);
+  }
+}
+
+/// @brief Intro, verse, chorus, verse, chorus, outro at 0 / 4 / 4+L / ... / 4+4L s.
+/// @details Every interior change moves timbre, register, density and chord set
+///          at once: a low two-note bass figure; a mellow mid-register C Am F G
+///          on the half note; a bright high-register Ab Eb Bb F on the eighth
+///          with an octave doubling and noise hats.
+Audio create_arrangement(double verse_seconds, int sr = 22050) {
+  const double s = verse_seconds;
+  const std::array<double, 7> edges{0.0,         4.0,         4.0 + s,    4.0 + 2 * s,
+                                    4.0 + 3 * s, 4.0 + 4 * s, 9.0 + 4 * s};
+  const std::array<int, 6> kind{0, 1, 2, 1, 2, 0};
+  const int verse[4][3] = {{48, 52, 55}, {45, 48, 52}, {41, 45, 48}, {43, 47, 50}};
+  const int chorus[4][3] = {{68, 72, 75}, {63, 67, 70}, {70, 74, 77}, {65, 69, 72}};
+  std::vector<float> out(static_cast<size_t>(edges[6] * sr), 0.0f);
+  uint32_t seed = 12345u;
+  for (size_t k = 0; k < kind.size(); ++k) {
+    int bar = 0;
+    for (double b = edges[k]; b < edges[k + 1] - 1e-6; b += 2.0, ++bar) {
+      const double end = std::min(b + 2.0, edges[k + 1]);
+      if (kind[k] == 0) {
+        add_note(out, sr, b, std::min(1.0, end - b), 36, 0.10, 4, 2.0);
+        if (b + 1.0 < end) add_note(out, sr, b + 1.0, end - b - 1.0, 43, 0.10, 4, 2.0);
+      } else if (kind[k] == 1) {
+        for (double q = b; q < end - 1e-6; q += 1.0) {
+          for (int n : verse[bar % 4])
+            add_note(out, sr, q, std::min(1.0, end - q), n, 0.08, 6, 2.0);
+        }
+      } else {
+        for (double q = b; q < end - 1e-6; q += 0.5) {
+          for (int n : chorus[bar % 4])
+            add_note(out, sr, q, std::min(0.5, end - q), n, 0.07, 16, 1.0);
+          add_note(out, sr, q, std::min(0.5, end - q), chorus[bar % 4][0] + 12, 0.07, 16, 1.0);
+        }
+        for (double h = b; h < end - 1e-6; h += 0.25) {
+          const size_t first = static_cast<size_t>(h * sr);
+          float previous = 0.0f;
+          for (size_t i = 0; i < static_cast<size_t>(0.05 * sr) && first + i < out.size(); ++i) {
+            seed = seed * 1664525u + 1013904223u;
+            const float white = static_cast<float>(seed >> 8) / 16777216.0f * 2.0f - 1.0f;
+            const double t = static_cast<double>(i) / sr;
+            out[first + i] += static_cast<float>(0.25 * std::exp(-60.0 * t) * (white - previous));
+            previous = white;
+          }
+        }
+      }
+    }
+  }
+  return Audio::from_vector(std::move(out), sr);
+}
+
+/// @brief True when some entry of @p times lies within @p tolerance of @p target.
+bool has_time_near(const std::vector<float>& times, float target, float tolerance) {
+  return std::any_of(times.begin(), times.end(),
+                     [&](float t) { return std::fabs(t - target) <= tolerance; });
+}
+
+}  // namespace
+
+TEST_CASE("a section floor below the section length keeps the arrangement's boundaries",
+          "[section_analyzer][.][slow]") {
+  constexpr float kTolerance = 0.25f;
+  SECTION("the detector finds every interior arrangement change") {
+    BoundaryConfig config;
+    config.peak_distance = 4.0f;
+    const std::vector<float> times = detect_boundaries(create_arrangement(8.0), config);
+    INFO("boundaries: " << ::Catch::Detail::stringify(times));
+    for (float change : {12.0f, 20.0f, 28.0f, 36.0f})
+      REQUIRE(has_time_near(times, change, kTolerance));
+  }
+  SECTION("10 s sections under the default 4 s floor") {
+    // A weak in-chorus novelty peak 4 s into each chorus leaves a short span
+    // there; the floor must dissolve that weak peak, not the section change.
+    SectionConfig config;
+    config.min_section_sec = 4.0f;
+    const std::vector<float> starts =
+        section_starts(SectionAnalyzer(create_arrangement(10.0), config));
+    INFO("section starts: " << ::Catch::Detail::stringify(starts));
+    for (float change : {14.0f, 24.0f, 34.0f}) REQUIRE(has_time_near(starts, change, kTolerance));
+  }
+  SECTION("8 s sections under a 6 s floor") {
+    SectionConfig config;
+    config.min_section_sec = 6.0f;
+    const std::vector<float> starts =
+        section_starts(SectionAnalyzer(create_arrangement(8.0), config));
+    INFO("section starts: " << ::Catch::Detail::stringify(starts));
+    for (float change : {12.0f, 20.0f, 28.0f}) REQUIRE(has_time_near(starts, change, kTolerance));
+  }
 }
