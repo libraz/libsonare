@@ -792,13 +792,19 @@ class NativeSynth final : public MidiInstrument {
   std::array<float, 2> dc_y1_{};
   float dc_r_ = 0.999f;
   float bus_drive_gain_ = 0.0f;
-  /// Shared-bus residual (mix minus dry) attributed to source targets by dry
-  /// energy. prepare() has no block-length argument, so the residual is
-  /// staged in a fixed chunk and flushed every kResidualChunk samples and at
-  /// block end (process_impl).
-  SourceResidualSplitter residual_splitter_;
+  /// Shared-bus residual (mix minus dry), split per component so each lands on
+  /// the sources that produced it. prepare() has no block-length argument, so
+  /// each is staged in a fixed chunk and flushed every kResidualChunk samples
+  /// and at block end (process_impl).
+  SourceResidualSplitter residual_splitter_;         // remainder: swell, bus drive, DC block
+  SourceResidualSplitter piano_residual_splitter_;   // piano body + sympathetic
+  SourceResidualSplitter guitar_residual_splitter_;  // guitar/KS sound halo
   std::array<float, kResidualChunk> residual_l_{};
   std::array<float, kResidualChunk> residual_r_{};
+  std::array<float, kResidualChunk> piano_residual_l_{};
+  std::array<float, kResidualChunk> piano_residual_r_{};
+  std::array<float, kResidualChunk> guitar_residual_l_{};
+  std::array<float, kResidualChunk> guitar_residual_r_{};
   int residual_pos_ = 0;
   VoicePool<NativeSynthVoice> pool_;
   /// Host sample bank for the kSample engine. The raw pointer is what the audio

@@ -566,11 +566,25 @@ class Sf2Player final : public MidiInstrument {
   float dc_r_ = 0.0f;
   std::array<float, 2> dc_x1_{};
   std::array<float, 2> dc_y1_{};
-  /// Shared-bus residual (mix minus dry) attributed to source targets by dry
-  /// energy, one chunk (kChunkFrames) at a time -- render_chunk already runs
-  /// the 16-part bus graph in that cadence, so no separate staging buffer is
-  /// needed here.
+  /// Shared-bus residual, split per component so each lands on the sources
+  /// that produced it, one chunk (kChunkFrames) at a time:
+  ///  - part_bus_splitters_[part]: a bussed part's whole post-insert bus
+  ///    output (when it feeds no unit), weighted by that part's voices.
+  ///  - unit_splitters_[unit]: an insertion unit's post-chain output, weighted
+  ///    by every voice routed into it.
+  ///  - send_residual_splitter_: the reverb/chorus/delay return, weighted by
+  ///    each voice's send energy (a routed voice's through its unit's send).
+  ///  - body_residual_splitters_[part]: a non-bussed part's board or halo
+  ///    return, weighted by that part's voices.
+  ///  - residual_splitter_: the remainder (master EQ, DC block), weighted by
+  ///    every voice's dry energy.
   SourceResidualSplitter residual_splitter_;
+  std::array<SourceResidualSplitter, 16> part_bus_splitters_;
+  std::array<SourceResidualSplitter, kGsEfxUnitCount> unit_splitters_;
+  SourceResidualSplitter send_residual_splitter_;
+  std::array<SourceResidualSplitter, 16> body_residual_splitters_;
+  /// Per-part staging for body_residual_splitters_, 16 x (L, R) x kChunkFrames.
+  std::vector<float> body_residual_;
 
   /// Renders one chunk (n <= kChunkFrames) of the 16-part bus graph into the
   /// internal mix scratch. In source-track mode, attributable dry voice audio

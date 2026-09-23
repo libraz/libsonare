@@ -103,6 +103,20 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
   residual_splitter_.reset();
+  for (SourceResidualSplitter& s : part_bus_splitters_) {
+    s.configure(sample_rate_, kResidualTauSeconds);
+    s.reset();
+  }
+  for (SourceResidualSplitter& s : unit_splitters_) {
+    s.configure(sample_rate_, kResidualTauSeconds);
+    s.reset();
+  }
+  send_residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
+  send_residual_splitter_.reset();
+  for (SourceResidualSplitter& s : body_residual_splitters_) {
+    s.configure(sample_rate_, kResidualTauSeconds);
+    s.reset();
+  }
   pool_.prepare(config_.polyphony);
   fallback_pool_.prepare(config_.synth_fallback ? config_.polyphony : 1);
   // Plucked GM fallback programs are Karplus-Strong voices: give every
@@ -181,6 +195,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   dc_x1_ = {};
   dc_y1_ = {};
   part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
+  body_residual_.assign(16 * 2 * static_cast<size_t>(kChunkFrames), 0.0f);
   // One bus per insertion unit, so parts sharing a unit sum into it and it runs
   // once (docs/gs.md). Allocated with the part bus and on the same condition: a
   // unit is realisable exactly where an insert factory is.
@@ -214,6 +229,10 @@ void Sf2Player::reset() {
   dc_x1_ = {};
   dc_y1_ = {};
   residual_splitter_.reset();
+  for (SourceResidualSplitter& s : part_bus_splitters_) s.reset();
+  for (SourceResidualSplitter& s : unit_splitters_) s.reset();
+  send_residual_splitter_.reset();
+  for (SourceResidualSplitter& s : body_residual_splitters_) s.reset();
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
   // Republish a fresh realised-EFX snapshot: rebuilding the inserts gives them
   // clean DSP state (the discontinuity's equivalent of resetting them), and the

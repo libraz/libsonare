@@ -79,6 +79,22 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   float out_gain_l = 1.0f;
   float out_gain_r = 1.0f;
   output_gains(&out_gain_l, &out_gain_r);
+  // Splits one destination-scoped component across the lanes that produced it.
+  // It joins attributed_l/r pre-gain, since the remainder below is taken
+  // pre-gain, and reaches the lanes through the output gain like dry audio.
+  float scaled_l[kChunkFrames];
+  float scaled_r[kChunkFrames];
+  const auto flush_component = [&](SourceResidualSplitter& splitter, const float* l,
+                                   const float* r) noexcept {
+    for (int i = 0; i < n; ++i) {
+      attributed_l[i] += l[i];
+      attributed_r[i] += r[i];
+      scaled_l[i] = l[i] * out_gain_l;
+      scaled_r[i] = r[i] * out_gain_r;
+    }
+    splitter.flush(source_outputs, source_output_count, n, scaled_l, scaled_r, output_offset,
+                   add_output);
+  };
   // Read the realised-EFX routing for this block from the snapshot the control
   // thread published (adopted in process() via acquire()). A null snapshot (none
   // published yet) or an all-dry one routes everything straight to the dry mix.
@@ -86,6 +102,14 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   static constexpr std::array<bool, 16> kNoBus{};
   const std::array<bool, 16>& part_bussed = efx != nullptr ? efx->part_bussed : kNoBus;
   const bool any_bussed = efx != nullptr && efx->any_bussed;
+  // The insertion unit a bussed part merges into, or -1 when its own
+  // post-insert bus reaches the mix directly; picks the splitter a bussed
+  // voice's weight feeds.
+  const auto unit_for = [&](int part) noexcept -> int {
+    if (efx == nullptr) return -1;
+    const uint8_t u = efx->part_unit[static_cast<size_t>(part)];
+    return u == Sf2RealizedEfx::kNoUnit ? -1 : static_cast<int>(u);
+  };
   if (any_bussed && !part_bus_.empty()) {
     std::memset(part_bus_.data(), 0, sizeof(float) * part_bus_.size());
   }
@@ -132,6 +156,19 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     cho_r = effects_->chorus_in(1);
     dly_l = effects_->delay_in(0);
     dly_r = effects_->delay_in(1);
+  }
+  // Per-unit POST-effect send coefficients (GS 40 3u 17/18/19), read up front so
+  // a routed voice's share of the effect return is weighted in the voice loop.
+  std::array<float, kGsEfxUnitCount> unit_send_reverb{};
+  std::array<float, kGsEfxUnitCount> unit_send_chorus{};
+  std::array<float, kGsEfxUnitCount> unit_send_delay{};
+  if (rev_l != nullptr) {
+    for (size_t u = 0; u < kGsEfxUnitCount; ++u) {
+      const GsEfx& unit_efx = efx_[u];
+      unit_send_reverb[u] = kCcSendDepth * static_cast<float>(unit_efx.send_reverb) / 127.0f;
+      unit_send_chorus[u] = kCcSendDepth * static_cast<float>(unit_efx.send_chorus) / 127.0f;
+      unit_send_delay[u] = kCcSendDepth * static_cast<float>(unit_efx.send_delay) / 127.0f;
+    }
   }
 #endif
 
@@ -188,6 +225,18 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
         bus[i] += l;
         bus[kChunkFrames + i] += r;
+        if (source_render) {
+          // The remainder follows every voice; the bus or unit output only the
+          // voices feeding it.
+          residual_splitter_.accumulate(v.source_track_id, l * out_gain_l, r * out_gain_r);
+          const int unit = unit_for(part);
+          if (unit >= 0) {
+            unit_splitters_[static_cast<size_t>(unit)].accumulate(v.source_track_id, l * out_gain_l,
+                                                                  r * out_gain_r);
+          } else {
+            part_bus_splitters_[part].accumulate(v.source_track_id, l * out_gain_l, r * out_gain_r);
+          }
+        }
       } else {
         mix_l_[static_cast<size_t>(i)] += l;
         mix_r_[static_cast<size_t>(i)] += r;
@@ -214,17 +263,32 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         if (rs > 0.0f) {
           rev_l[i] += l * rs;
           rev_r[i] += r * rs;
+          if (source_render) send_residual_splitter_.accumulate(v.source_track_id, l * rs, r * rs);
         }
         const float cs =
             std::min(1.0f, v.params.chorus_send + mod.chorus_send) * v.params.chorus_send_scale;
         if (cs > 0.0f) {
           cho_l[i] += l * cs;
           cho_r[i] += r * cs;
+          if (source_render) send_residual_splitter_.accumulate(v.source_track_id, l * cs, r * cs);
         }
         const float ds = mod.delay_send * v.params.delay_send_scale;
         if (ds > 0.0f) {
           dly_l[i] += l * ds;
           dly_r[i] += r * ds;
+          if (source_render) send_residual_splitter_.accumulate(v.source_track_id, l * ds, r * ds);
+        }
+      } else if (rev_l != nullptr && source_render) {
+        // Routed: the send leaves the unit post-effect, weighted by this
+        // voice's dry signal times the unit's send amount.
+        const int unit = unit_for(part);
+        if (unit >= 0) {
+          const float rs = unit_send_reverb[static_cast<size_t>(unit)];
+          const float cs = unit_send_chorus[static_cast<size_t>(unit)];
+          const float ds = unit_send_delay[static_cast<size_t>(unit)];
+          if (rs > 0.0f) send_residual_splitter_.accumulate(v.source_track_id, l * rs, r * rs);
+          if (cs > 0.0f) send_residual_splitter_.accumulate(v.source_track_id, l * cs, r * cs);
+          if (ds > 0.0f) send_residual_splitter_.accumulate(v.source_track_id, l * ds, r * ds);
         }
       }
 #endif
@@ -248,7 +312,14 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       discarded |= resolve_non_finite(SampleDestination::kRecursiveState, s);
       float l = s * v.gain_left;
       float r = s * v.gain_right;
-      if (body_active[part]) body_dry[part] += 0.5f * (l + r);
+      if (body_active[part]) {
+        body_dry[part] += 0.5f * (l + r);
+        // A bussed part's body return rides its bus and that bus's weight.
+        if (source_render && !part_bussed[part]) {
+          body_residual_splitters_[part].accumulate(v.source_track_id, l * out_gain_l,
+                                                    r * out_gain_r);
+        }
+      }
       // Piano radiates mostly through the board (the body block below); only
       // the direct share of the raw string waveform stays in the voice path.
       if (fallback_body_[part].kind == FallbackBodyKind::kPiano) {
@@ -259,6 +330,16 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
         bus[i] += l;
         bus[kChunkFrames + i] += r;
+        if (source_render) {
+          residual_splitter_.accumulate(v.source_track_id, l * out_gain_l, r * out_gain_r);
+          const int unit = unit_for(part);
+          if (unit >= 0) {
+            unit_splitters_[static_cast<size_t>(unit)].accumulate(v.source_track_id, l * out_gain_l,
+                                                                  r * out_gain_r);
+          } else {
+            part_bus_splitters_[part].accumulate(v.source_track_id, l * out_gain_l, r * out_gain_r);
+          }
+        }
       } else {
         mix_l_[static_cast<size_t>(i)] += l;
         mix_r_[static_cast<size_t>(i)] += r;
@@ -283,16 +364,29 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         if (rs > 0.0f) {
           rev_l[i] += l * rs;
           rev_r[i] += r * rs;
+          if (source_render) send_residual_splitter_.accumulate(v.source_track_id, l * rs, r * rs);
         }
         const float cs = mod.fallback_chorus_send * v.drum_chorus_scale;
         if (cs > 0.0f) {
           cho_l[i] += l * cs;
           cho_r[i] += r * cs;
+          if (source_render) send_residual_splitter_.accumulate(v.source_track_id, l * cs, r * cs);
         }
         const float ds = mod.delay_send * v.drum_delay_scale;
         if (ds > 0.0f) {
           dly_l[i] += l * ds;
           dly_r[i] += r * ds;
+          if (source_render) send_residual_splitter_.accumulate(v.source_track_id, l * ds, r * ds);
+        }
+      } else if (rev_l != nullptr && source_render) {
+        const int unit = unit_for(part);
+        if (unit >= 0) {
+          const float rs = unit_send_reverb[static_cast<size_t>(unit)];
+          const float cs = unit_send_chorus[static_cast<size_t>(unit)];
+          const float ds = unit_send_delay[static_cast<size_t>(unit)];
+          if (rs > 0.0f) send_residual_splitter_.accumulate(v.source_track_id, l * rs, r * rs);
+          if (cs > 0.0f) send_residual_splitter_.accumulate(v.source_track_id, l * cs, r * cs);
+          if (ds > 0.0f) send_residual_splitter_.accumulate(v.source_track_id, l * ds, r * ds);
         }
       }
 #endif
@@ -323,6 +417,11 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
           add = fallback_reso_[static_cast<size_t>(part)].process(
               dry, channels_[static_cast<size_t>(part)].sustain);
         }
+        if (source_render && !part_bussed[part]) {
+          float* staged = body_residual_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
+          staged[i] = add + side;
+          staged[kChunkFrames + i] = add - side;
+        }
         if (add == 0.0f && side == 0.0f) continue;
         if (part_bussed[part]) {
           float* bus = part_bus_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
@@ -351,6 +450,14 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         }
 #endif
       }
+    }
+  }
+  if (source_render && any_body) {
+    // A non-bussed part's board/halo return follows that part's own voices.
+    for (int part = 0; part < 16; ++part) {
+      if (!body_active[part] || part_bussed[static_cast<size_t>(part)]) continue;
+      const float* staged = body_residual_.data() + static_cast<size_t>(part) * 2 * kChunkFrames;
+      flush_component(body_residual_splitters_[part], staged, staged + kChunkFrames);
     }
   }
 
@@ -407,6 +514,8 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
           eq_byp_r[i] += bus_r[i];
         }
       }
+      // A bussed voice got no dry share, so the whole bus output is split.
+      if (source_render) flush_component(part_bus_splitters_[part], bus_l, bus_r);
     }
   }
 
@@ -471,11 +580,28 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
           eq_byp_r[i] += unit_r[i];
         }
       }
+      if (source_render) flush_component(unit_splitters_[unit], unit_l, unit_r);
     }
   }
 
 #if defined(SONARE_MIDI_WITH_FX)
-  if (effects_ != nullptr) effects_->render_returns(mix_l_.data(), mix_r_.data(), n);
+  if (effects_ != nullptr) {
+    if (source_render) {
+      float pre_l[kChunkFrames];
+      float pre_r[kChunkFrames];
+      std::memcpy(pre_l, mix_l_.data(), sizeof(float) * static_cast<size_t>(n));
+      std::memcpy(pre_r, mix_r_.data(), sizeof(float) * static_cast<size_t>(n));
+      effects_->render_returns(mix_l_.data(), mix_r_.data(), n);
+      // The effect return, weighted by each voice's send energy.
+      for (int i = 0; i < n; ++i) {
+        pre_l[i] = mix_l_[static_cast<size_t>(i)] - pre_l[i];
+        pre_r[i] = mix_r_[static_cast<size_t>(i)] - pre_r[i];
+      }
+      flush_component(send_residual_splitter_, pre_l, pre_r);
+    } else {
+      effects_->render_returns(mix_l_.data(), mix_r_.data(), n);
+    }
+  }
 #endif
   // Scrub the summed bus before the DC blocker: the part inserts are
   // host-injected processors and the effect returns are their own IIR state, so
@@ -527,13 +653,11 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     }
   }
   if (source_render) {
-    // Part inserts, body resonators and system effect returns are
-    // destination-scoped; their residual is split across source targets by
-    // dry energy (SourceResidualSplitter) rather than dumped on target zero.
-    // With one live source the split adds it unmultiplied, so that source's
-    // target is bit-identical to a slot-0-only render; with several it is
-    // exact only up to the split's floating-point rounding. attributed_l/r
-    // are done carrying the dry sum, so the residual overwrites them in place.
+    // The remainder (master EQ, DC block): whatever the dry audio and the
+    // components above did not claim, split by every voice's dry energy. With
+    // one live source each split adds its share unmultiplied, so that source's
+    // target is bit-identical to a slot-0-only render; with several it is exact
+    // only up to floating-point rounding.
     for (int i = 0; i < n; ++i) {
       attributed_l[i] = (mix_l_[static_cast<size_t>(i)] - attributed_l[i]) * out_gain_l;
       attributed_r[i] = (mix_r_[static_cast<size_t>(i)] - attributed_r[i]) * out_gain_r;

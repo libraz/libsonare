@@ -1350,14 +1350,14 @@ TEST_CASE(
     {
       AllocationGuard guard;
       REQUIRE(laned.process_source_tracks(laned_outputs, std::size(laned_outputs), 2, kSamples));
-      REQUIRE(guard.count() == 0);  // S1(d)
+      REQUIRE(guard.count() == 0);
     }
 
     REQUIRE(peak(solo_l) > 0.0f);  // non-vacuity: there is something to match
     for (size_t i = 0; i < static_cast<size_t>(kSamples); ++i) {
-      REQUIRE(lane_l[i] == solo_l[i]);  // S1(b): lane target == slot-0-only slot 0
+      REQUIRE(lane_l[i] == solo_l[i]);
       REQUIRE(lane_r[i] == solo_r[i]);
-      REQUIRE(fallback_l[i] == 0.0f);  // S1(b): slot 0 carries nothing
+      REQUIRE(fallback_l[i] == 0.0f);
       REQUIRE(fallback_r[i] == 0.0f);
     }
   };
@@ -1416,7 +1416,7 @@ TEST_CASE(
         20.0 * std::log10(static_cast<double>(rms_unmuted) /
                           std::max(static_cast<double>(rms_muted), 1e-12));
     INFO("lane-mute attenuation (dB): " << attenuation_db);
-    REQUIRE(attenuation_db >= 90.0);  // S1(a)
+    REQUIRE(attenuation_db >= 90.0);
   };
 
   SECTION("NativeSynth") {
@@ -1459,7 +1459,7 @@ TEST_CASE("NativeSynth and Sf2Player source-track residual sums to process() wit
       max_diff = std::max(max_diff, std::fabs(fallback_r[i] + lane_r[i] - ref.right[i]));
     }
     INFO("max_diff/block_peak: " << (max_diff / block_peak));
-    REQUIRE(max_diff <= 1.0e-6f * block_peak);  // S1(c)
+    REQUIRE(max_diff <= 1.0e-6f * block_peak);
   };
 
   SECTION("NativeSynth") {
@@ -1494,7 +1494,7 @@ TEST_CASE(
   // residual that is most of the loudness, and muting one lane afterward
   // cannot hand its foregone half back to the other. A plain (non-piano,
   // non-GM) patch keeps the shared residual to what config_.dc_block alone
-  // produces -- small next to the dry signal -- which is the regime S2's
+  // produces -- small next to the dry signal -- which is the regime this
   // correlation claim is about; setup() picks the equivalent program for
   // Sf2Player's fallback voices (leaving program 0's piano body out of it).
   // Under the engines' default retrigger (SynthRetrigger::kFree), a voice's
@@ -1539,7 +1539,7 @@ TEST_CASE(
       max_diff = std::max(max_diff, std::fabs(sum_r - ref.right[i]));
     }
     INFO("max_diff/block_peak: " << (max_diff / block_peak));
-    REQUIRE(max_diff <= 1.0e-5f * block_peak);  // S2 sum-vs-process()
+    REQUIRE(max_diff <= 1.0e-5f * block_peak);
 
     setup(b_only);
     b_only.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 67, 100)));
@@ -1556,7 +1556,7 @@ TEST_CASE(
     const float correlation =
         pearson_correlation(muted_mix.data(), b_only_mix.data(), muted_mix.size());
     INFO("muted-lane-A vs B-only correlation: " << correlation);
-    REQUIRE(correlation >= 0.99f);  // S2 isolation
+    REQUIRE(correlation >= 0.99f);
   };
 
   SECTION("NativeSynth") {
@@ -1584,25 +1584,31 @@ TEST_CASE(
 }
 
 #if defined(SONARE_MIDI_WITH_FX)
-TEST_CASE("Sf2Player source-track residual: reverb leakage on a send-0 lane (measured, not gated)",
+TEST_CASE("Sf2Player source-track residual: reverb leakage on a send-0 lane stays under -40 dB",
           "[midi][synth]") {
-  // Two parts, one with its reverb send forced to 0 (CC91=0): report how much
-  // of the other part's reverb tail rides the shared bus-wide residual onto
-  // the send-0 part's own lane, relative to that lane's own dry level. This
-  // test measures rather than gates on it.
+  // The effect return is split by send energy, so a part sending nothing to
+  // reverb (CC91=0) carries none of the other part's tail on its lane.
+  // dc_block is off: the DC blocker's share is split by total dry energy and
+  // measures about -36 dB on its own, which is not what this case gates.
   constexpr int kSamples = 4800;
   constexpr uint32_t kTrackWet = 1;
   constexpr uint32_t kTrackDry = 2;
 
-  Sf2Player two_parts = make_fallback_player();
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.dc_block = false;
+  Sf2Player two_parts(cfg);
+  two_parts.prepare(kOutRate, 256);
   two_parts.on_event(
       0, event(sonare::midi::make_midi1_control_change(0, 1, 91, 0)));  // part 2: send 0
   MidiEvent wet = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
   wet.source_track_id = kTrackWet;
   MidiEvent dry = event(sonare::midi::make_midi1_note_on(0, 1, 67, 100));
   dry.source_track_id = kTrackDry;
-  two_parts.on_event(0, wet);
+  // Dry note first: a voice's retrigger jitter seed follows its allocation
+  // index, so it must match the solo render's or the seed reads as leakage.
   two_parts.on_event(0, dry);
+  two_parts.on_event(0, wet);
 
   std::vector<float> fallback_l(static_cast<size_t>(kSamples), 0.0f);
   std::vector<float> fallback_r(static_cast<size_t>(kSamples), 0.0f);
@@ -1620,7 +1626,8 @@ TEST_CASE("Sf2Player source-track residual: reverb leakage on a send-0 lane (mea
   // Solo render of the send-0 part alone: nothing else ever sounds, so its
   // lane carries only its own dry contribution (plus a negligible non-reverb
   // residual share).
-  Sf2Player solo_dry = make_fallback_player();
+  Sf2Player solo_dry(cfg);
+  solo_dry.prepare(kOutRate, 256);
   solo_dry.on_event(0, event(sonare::midi::make_midi1_control_change(0, 1, 91, 0)));
   solo_dry.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 67, 100)));
   const StereoRender solo = render(solo_dry, kSamples);
@@ -1635,10 +1642,203 @@ TEST_CASE("Sf2Player source-track residual: reverb leakage on a send-0 lane (mea
   const float leakage_level = std::max(rms(diff_l), rms(diff_r));
   const double leakage_db =
       20.0 * std::log10(static_cast<double>(leakage_level) / static_cast<double>(dry_level));
-  WARN("SF2 send-0 lane reverb leakage relative to its own dry (dB): " << leakage_db);
+  INFO("SF2 send-0 lane reverb leakage relative to its own dry (dB): " << leakage_db);
   REQUIRE(dry_level > 1.0e-6f);  // non-vacuity: there is a dry reference to compare against
+  REQUIRE(leakage_db <= -40.0);
+}
+
+TEST_CASE(
+    "Sf2Player source-track residual: a bussed insert part's lane attenuates its own "
+    "contribution by 90 dB",
+    "[midi][synth]") {
+  // Part 0 carries a drive insert (bussed); part 1 stays plain. Muting part
+  // 0's lane has to remove its whole post-insert bus output, leaving a
+  // part-1-only render. dc_block and both reverb sends are off: those shares
+  // are only approximately separable between two simultaneous sources, and
+  // this case gates the bussed part's own output, which is exact.
+  constexpr int kSamples = 2400;
+  constexpr uint32_t kTrackA = 3;
+  constexpr uint32_t kTrackB = 4;
+  const float lane_gain_muted = db_to_linear(-96.0f);
+
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.part_inserts[0].type = sonare::midi::synth::Sf2InsertType::kDrive;
+  cfg.part_inserts[0].amount = 0.7f;
+  cfg.dc_block = false;
+
+  Sf2Player two_source(cfg);
+  two_source.prepare(kOutRate, 256);
+#if defined(SONARE_MIDI_WITH_FX)
+  two_source.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 91, 0)));
+  two_source.on_event(0, event(sonare::midi::make_midi1_control_change(0, 1, 91, 0)));
+#endif
+  MidiEvent a = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  a.source_track_id = kTrackA;
+  MidiEvent b = event(sonare::midi::make_midi1_note_on(0, 1, 67, 100));
+  b.source_track_id = kTrackB;
+  // b first: matches the allocation order (and so the retrigger jitter seed)
+  // of the b_only render below, the same reason the two-source residual case
+  // above sends B before A.
+  two_source.on_event(0, b);
+  two_source.on_event(0, a);
+
+  std::vector<float> fallback_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> fallback_r(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> a_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> a_r(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> b_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> b_r(static_cast<size_t>(kSamples), 0.0f);
+  float* fallback_target[] = {fallback_l.data(), fallback_r.data()};
+  float* a_target[] = {a_l.data(), a_r.data()};
+  float* b_target[] = {b_l.data(), b_r.data()};
+  const MidiInstrumentSourceOutput outputs[] = {
+      {0, fallback_target}, {kTrackA, a_target}, {kTrackB, b_target}};
+  REQUIRE(two_source.process_source_tracks(outputs, std::size(outputs), 2, kSamples));
+
+  Sf2Player b_only(cfg);
+  b_only.prepare(kOutRate, 256);
+#if defined(SONARE_MIDI_WITH_FX)
+  b_only.on_event(0, event(sonare::midi::make_midi1_control_change(0, 1, 91, 0)));
+#endif
+  b_only.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 67, 100)));
+  const StereoRender b_render = render(b_only, kSamples);
+
+  // Both diffs cancel part B's own render against the B-only baseline, so
+  // what remains is exactly what part A (dry plus its whole bussed insert
+  // output) is responsible for, at full level and at -96 dB.
+  std::vector<float> unmuted_diff(static_cast<size_t>(kSamples));
+  std::vector<float> muted_diff(static_cast<size_t>(kSamples));
+  for (size_t i = 0; i < static_cast<size_t>(kSamples); ++i) {
+    const float unmuted_l = fallback_l[i] + a_l[i] + b_l[i];
+    const float muted_l = fallback_l[i] + a_l[i] * lane_gain_muted + b_l[i];
+    unmuted_diff[i] = unmuted_l - b_render.left[i];
+    muted_diff[i] = muted_l - b_render.left[i];
+  }
+  const float unmuted_level = rms(unmuted_diff);
+  const float muted_level = std::max(rms(muted_diff), 1e-12f);
+  REQUIRE(unmuted_level > 1.0e-4f);  // non-vacuity: A actually contributes something
+  const double attenuation_db =
+      20.0 * std::log10(static_cast<double>(unmuted_level) / static_cast<double>(muted_level));
+  INFO("bussed insert part-A lane-mute attenuation vs B-only baseline (dB): " << attenuation_db);
+  REQUIRE(attenuation_db >= 90.0);
+}
+
+TEST_CASE("Sf2Player source-track lanes sum to the plain render at a non-unity output gain",
+          "[midi][synth]") {
+  // Every residual component (bussed insert, piano board, reverb return,
+  // remainder) has to leave the player through the same output gain as the
+  // dry voices, or the lanes stop summing to what process() renders.
+  constexpr int kSamples = 1200;
+  constexpr uint32_t kTrackA = 7;
+  constexpr uint32_t kTrackB = 8;
+  Sf2PlayerConfig cfg;
+  cfg.gain = 0.5f;
+  cfg.part_inserts[0].type = sonare::midi::synth::Sf2InsertType::kDrive;
+  cfg.part_inserts[0].amount = 0.7f;
+
+  Sf2Player reference(cfg);
+  reference.prepare(kOutRate, 256);
+  reference.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 67, 100)));
+  reference.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  const StereoRender ref = render(reference, kSamples);
+  const float block_peak = std::max(peak(ref.left), peak(ref.right));
+  REQUIRE(block_peak > 0.0f);
+
+  Sf2Player laned(cfg);
+  laned.prepare(kOutRate, 256);
+  MidiEvent b = event(sonare::midi::make_midi1_note_on(0, 1, 67, 100));
+  b.source_track_id = kTrackB;
+  MidiEvent a = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  a.source_track_id = kTrackA;
+  laned.on_event(0, b);
+  laned.on_event(0, a);
+  std::vector<float> fallback_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> fallback_r(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> a_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> a_r(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> b_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> b_r(static_cast<size_t>(kSamples), 0.0f);
+  float* fallback_target[] = {fallback_l.data(), fallback_r.data()};
+  float* a_target[] = {a_l.data(), a_r.data()};
+  float* b_target[] = {b_l.data(), b_r.data()};
+  const MidiInstrumentSourceOutput outputs[] = {
+      {0, fallback_target}, {kTrackA, a_target}, {kTrackB, b_target}};
+  REQUIRE(laned.process_source_tracks(outputs, std::size(outputs), 2, kSamples));
+
+  float max_diff = 0.0f;
+  for (size_t i = 0; i < static_cast<size_t>(kSamples); ++i) {
+    max_diff = std::max(max_diff, std::fabs(fallback_l[i] + a_l[i] + b_l[i] - ref.left[i]));
+    max_diff = std::max(max_diff, std::fabs(fallback_r[i] + a_r[i] + b_r[i] - ref.right[i]));
+  }
+  INFO("max_diff/block_peak: " << (max_diff / block_peak));
+  REQUIRE(max_diff <= 1.0e-5f * block_peak);
 }
 #endif
+
+TEST_CASE(
+    "NativeSynth source-track residual: muting the piano lane leaves the saw lane's own render",
+    "[midi][synth]") {
+  // Piano on lane A drives the shared soundboard/sympathetic bank; a saw on
+  // lane B drives none of it. Muting A has to remove the body's contribution along with the
+  // dry piano, leaving a render that correlates with a saw-only render.
+  constexpr int kSamples = 2400;
+  constexpr uint32_t kTrackPiano = 5;
+  constexpr uint32_t kTrackSaw = 6;
+  const float lane_gain_muted = db_to_linear(-96.0f);
+
+  // GM mode so program 0 (piano, the default) and a sawtooth lead can sound
+  // together on one instrument -- a fixed single-patch config plays every
+  // channel through the same engine, which could not tell the two apart.
+  NativeSynthConfig cfg;
+  cfg.use_gm_programs = true;
+
+  NativeSynth two_source(cfg);
+  two_source.prepare(kOutRate, 256);
+  two_source.on_event(
+      0, event(sonare::midi::make_midi1_program_change(0, 1, 81)));  // Lead 2 (sawtooth)
+  MidiEvent piano = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  piano.source_track_id = kTrackPiano;
+  MidiEvent saw = event(sonare::midi::make_midi1_note_on(0, 1, 67, 100));
+  saw.source_track_id = kTrackSaw;
+  // saw first: matches the allocation order (and so the retrigger jitter
+  // seed -- a bare oscillator's start phase) of the saw-only render below,
+  // the same reason the two-source residual cases above order their notes.
+  two_source.on_event(0, saw);
+  two_source.on_event(0, piano);
+
+  std::vector<float> fallback_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> fallback_r(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> piano_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> piano_r(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> saw_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> saw_r(static_cast<size_t>(kSamples), 0.0f);
+  float* fallback_target[] = {fallback_l.data(), fallback_r.data()};
+  float* piano_target[] = {piano_l.data(), piano_r.data()};
+  float* saw_target[] = {saw_l.data(), saw_r.data()};
+  const MidiInstrumentSourceOutput outputs[] = {
+      {0, fallback_target}, {kTrackPiano, piano_target}, {kTrackSaw, saw_target}};
+  REQUIRE(two_source.process_source_tracks(outputs, std::size(outputs), 2, kSamples));
+
+  NativeSynth saw_only(cfg);
+  saw_only.prepare(kOutRate, 256);
+  saw_only.on_event(0, event(sonare::midi::make_midi1_program_change(0, 1, 81)));
+  saw_only.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 67, 100)));
+  const StereoRender saw_render = render(saw_only, kSamples);
+
+  std::vector<float> muted_mix(static_cast<size_t>(kSamples) * 2);
+  std::vector<float> saw_only_mix(static_cast<size_t>(kSamples) * 2);
+  for (size_t i = 0; i < static_cast<size_t>(kSamples); ++i) {
+    muted_mix[2 * i] = fallback_l[i] + piano_l[i] * lane_gain_muted + saw_l[i];
+    muted_mix[2 * i + 1] = fallback_r[i] + piano_r[i] * lane_gain_muted + saw_r[i];
+    saw_only_mix[2 * i] = saw_render.left[i];
+    saw_only_mix[2 * i + 1] = saw_render.right[i];
+  }
+  const float correlation =
+      pearson_correlation(muted_mix.data(), saw_only_mix.data(), muted_mix.size());
+  INFO("muted-piano-lane vs saw-only correlation: " << correlation);
+  REQUIRE(correlation >= 0.99f);
+}
 
 namespace {
 

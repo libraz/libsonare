@@ -44,6 +44,10 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
   residual_splitter_.reset();
+  piano_residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
+  piano_residual_splitter_.reset();
+  guitar_residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
+  guitar_residual_splitter_.reset();
   residual_pos_ = 0;
   pool_.prepare(config_.polyphony);
   // One entry per voice bounds the notes one channel can be sounding, and this
@@ -226,6 +230,8 @@ void NativeSynth::reset() {
   dc_x1_ = {};
   dc_y1_ = {};
   residual_splitter_.reset();
+  piano_residual_splitter_.reset();
+  guitar_residual_splitter_.reset();
   residual_pos_ = 0;
   resonance_.reset();
   soundboard_.reset();
@@ -1062,10 +1068,19 @@ void NativeSynth::process_impl(float* const* channels,
         }
       }
       if (source_render) {
-        add_output(target_for(v.source_track_id), i, voice_l * config_.gain,
-                   voice_r * config_.gain);
-        residual_splitter_.accumulate(v.source_track_id, voice_l * config_.gain,
-                                      voice_r * config_.gain);
+        const float src_l = voice_l * config_.gain;
+        const float src_r = voice_r * config_.gain;
+        add_output(target_for(v.source_track_id), i, src_l, src_r);
+        // The remainder follows every source; the piano body and guitar halo
+        // only the voices that drive them.
+        residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
+        if (piano_body_active_ && v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano) {
+          piano_residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
+        }
+        if (guitar_halo_active_ && v.patch != nullptr &&
+            v.patch->mode == SynthEngineMode::kKarplusStrong && v.patch->ks.sympathetic) {
+          guitar_residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
+        }
       }
     }
     mix_l *= config_.gain;
@@ -1088,6 +1103,11 @@ void NativeSynth::process_impl(float* const* channels,
     // centre; the board does not, because its two radiation paths differ. Runs
     // independently of the halo below them, since GM can voice a piano and a
     // guitar together.
+    // What the piano body and the guitar halo add beyond their dry voices.
+    float piano_res_l = 0.0f;
+    float piano_res_r = 0.0f;
+    float guitar_res_l = 0.0f;
+    float guitar_res_r = 0.0f;
     if (piano_body_active_) {
       // Radiation split: the board returns the phase-diffused complement of
       // the direct share (plus the modal colour), so most of the note reaches
@@ -1098,8 +1118,12 @@ void NativeSynth::process_impl(float* const* channels,
       // the same signal on both legs. Zero at a zero board width.
       const float side = soundboard_.last_side();
       const float symp = resonance_.process(soundboard_.last_diffused(), damper_open);
-      mix_l += kPianoDirectGain * piano_l + body + side + symp;
-      mix_r += kPianoDirectGain * piano_r + body - side + symp;
+      const float piano_out_l = kPianoDirectGain * piano_l + body + side + symp;
+      const float piano_out_r = kPianoDirectGain * piano_r + body - side + symp;
+      piano_res_l = piano_out_l - piano_l;
+      piano_res_r = piano_out_r - piano_r;
+      mix_l += piano_out_l;
+      mix_r += piano_out_r;
     }
     if (guitar_halo_active_) {
       // Plucked-string sound halo: the open strings ring behind the note,
@@ -1111,6 +1135,8 @@ void NativeSynth::process_impl(float* const* channels,
       // halo renders bit-identically.
       const float dry_mono = 0.5f * (guitar_l + guitar_r);
       const float symp = guitar_halo_.process(dry_mono, damper_open);
+      guitar_res_l = symp;
+      guitar_res_r = symp;
       mix_l += symp;
       mix_r += symp;
     }
@@ -1140,21 +1166,30 @@ void NativeSynth::process_impl(float* const* channels,
       mix_r = r;
     }
     if (source_render) {
-      // Shared bodies, bus drive and DC filtering are destination-scoped DSP;
-      // their residual (mix minus dry) is split across source targets by dry
-      // energy (SourceResidualSplitter) instead of being dumped on the
-      // default target. With one live source the split adds the residual
-      // unmultiplied, so that source's target is bit-identical to a
-      // slot-0-only render; with several it is exact only up to the split's
-      // floating-point rounding. Staged in a fixed chunk (prepare() has no
-      // block-length argument) and flushed every kResidualChunk samples and
-      // once more at block end below.
-      residual_l_[static_cast<size_t>(residual_pos_)] = mix_l - dry_l;
-      residual_r_[static_cast<size_t>(residual_pos_)] = mix_r - dry_r;
+      // Shared bodies, bus drive and DC filtering are destination-scoped; their
+      // residual (mix minus dry) is split in three components, each across the
+      // sources that produced it. With one live source each split adds its
+      // share unmultiplied, so that source's target is bit-identical to a
+      // slot-0-only render; with several it is exact only up to floating-point
+      // rounding. Staged in fixed chunks (prepare() has no block-length
+      // argument), flushed every kResidualChunk samples and at block end.
+      const size_t pos = static_cast<size_t>(residual_pos_);
+      piano_residual_l_[pos] = piano_res_l;
+      piano_residual_r_[pos] = piano_res_r;
+      guitar_residual_l_[pos] = guitar_res_l;
+      guitar_residual_r_[pos] = guitar_res_r;
+      residual_l_[pos] = (mix_l - dry_l) - piano_res_l - guitar_res_l;
+      residual_r_[pos] = (mix_r - dry_r) - piano_res_r - guitar_res_r;
       if (++residual_pos_ == kResidualChunk) {
+        const int offset = i - kResidualChunk + 1;
         residual_splitter_.flush(source_outputs, source_output_count, residual_pos_,
-                                 residual_l_.data(), residual_r_.data(), i - kResidualChunk + 1,
-                                 add_output);
+                                 residual_l_.data(), residual_r_.data(), offset, add_output);
+        piano_residual_splitter_.flush(source_outputs, source_output_count, residual_pos_,
+                                       piano_residual_l_.data(), piano_residual_r_.data(), offset,
+                                       add_output);
+        guitar_residual_splitter_.flush(source_outputs, source_output_count, residual_pos_,
+                                        guitar_residual_l_.data(), guitar_residual_r_.data(),
+                                        offset, add_output);
         residual_pos_ = 0;
       }
     } else if (left != nullptr) {
@@ -1170,8 +1205,15 @@ void NativeSynth::process_impl(float* const* channels,
     }
   }
   if (source_render && residual_pos_ > 0) {
+    const int offset = num_samples - residual_pos_;
     residual_splitter_.flush(source_outputs, source_output_count, residual_pos_, residual_l_.data(),
-                             residual_r_.data(), num_samples - residual_pos_, add_output);
+                             residual_r_.data(), offset, add_output);
+    piano_residual_splitter_.flush(source_outputs, source_output_count, residual_pos_,
+                                   piano_residual_l_.data(), piano_residual_r_.data(), offset,
+                                   add_output);
+    guitar_residual_splitter_.flush(source_outputs, source_output_count, residual_pos_,
+                                    guitar_residual_l_.data(), guitar_residual_r_.data(), offset,
+                                    add_output);
     residual_pos_ = 0;
   }
   if (discarded) note_non_finite_discard();
