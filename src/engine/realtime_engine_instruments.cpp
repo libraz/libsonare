@@ -131,6 +131,19 @@ bool RealtimeEngine::route_instrument_parameter(uint32_t target_id, float value)
                                          instrument_param_param(target_id), value);
 }
 
+bool RealtimeEngine::describe_instrument_reserved_parameter(
+    uint32_t target_id, automation::ParameterDescription* out) const {
+  if (out == nullptr) return false;
+  const uint32_t slot = instrument_param_slot(target_id);
+  // Acquire pairs with the release store in resolve_instrument_automation_id.
+  const size_t count = instrument_auto_destination_count_.load(std::memory_order_acquire);
+  if (slot >= count) return false;
+  const midi::MidiInstrument* instrument =
+      instrument_rack_.get(instrument_auto_destinations_[slot]);
+  if (instrument == nullptr) return false;
+  return instrument->describe_parameter(instrument_param_param(target_id), out);
+}
+
 #if !defined(SONARE_WITH_MIXING)
 // Without the mixing library the reserved-id router serves only the instrument
 // namespace. The mixing build defines the full router (mixer fader/pan, strip
@@ -143,6 +156,15 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
 bool RealtimeEngine::route_engine_parameter_thunk(void* context, uint32_t param_id,
                                                   float value) noexcept {
   return static_cast<RealtimeEngine*>(context)->route_engine_parameter(param_id, value);
+}
+
+// Mirrors route_engine_parameter's gate split: without the mixing library the
+// reserved-id descriptor serves only the instrument namespace, and the mixing
+// build's full descriptor (realtime_engine_mixing.cpp) delegates here for it.
+bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
+                                                 automation::ParameterDescription* out) const {
+  if (!is_instrument_param_id(id)) return false;
+  return describe_instrument_reserved_parameter(id, out);
 }
 #endif
 

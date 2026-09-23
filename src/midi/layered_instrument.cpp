@@ -261,4 +261,16 @@ bool LayeredInstrument::apply_parameter(unsigned int param_id, float value) noex
   return layers_[index].instrument->apply_parameter(child, value);
 }
 
+bool LayeredInstrument::describe_parameter(unsigned int param_id,
+                                           automation::ParameterDescription* out) const {
+  if (out == nullptr) return false;
+  const size_t index = param_id / static_cast<unsigned int>(kLayerParamStride);
+  if (index >= layers_.size()) return false;
+  const unsigned int child = param_id % static_cast<unsigned int>(kLayerParamStride);
+  if (!layers_[index].instrument->describe_parameter(child, out)) return false;
+  // Same "<layer index>.<child key>" address parameter_id_for_key resolves.
+  out->name = std::to_string(index) + "." + out->name;
+  return true;
+}
+
 }  // namespace sonare::midi

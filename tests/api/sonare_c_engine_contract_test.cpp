@@ -2,6 +2,7 @@
 /// @brief Engine C ABI contract: version, capabilities, feature-flag
 ///        reporting, malformed JSON and the per-thread last-error channel.
 
+#include "mastering/api/insert_factory.h"
 #include "sonare_c_engine_test_helpers.h"
 
 TEST_CASE("sonare_error_message", "[c_api]") {
@@ -423,3 +424,157 @@ TEST_CASE("sonare_last_error_message is per-thread across concurrent failures", 
   CHECK(file_thread_observed == file_message);
   CHECK(format_thread_observed == format_message);
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("sonare_engine_parameter_info describes a hosted instrument's reserved parameter",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  SonareSynthPatch patch{};
+  patch.struct_version = 1;
+  REQUIRE(sonare_engine_set_synth_instrument(engine, 1, &patch) == SONARE_OK);
+
+  uint32_t id = 0;
+  REQUIRE(sonare_engine_resolve_instrument_automation_id(engine, 1, "cutoffHz", &id) == SONARE_OK);
+
+  SonareParameterInfo info{};
+  REQUIRE(sonare_engine_parameter_info(engine, id, &info) == SONARE_OK);
+  CHECK(std::strcmp(info.name, "cutoffHz") == 0);
+  CHECK(std::strcmp(info.unit, "Hz") == 0);
+  CHECK(info.min_value == 10.0f);
+  CHECK(info.max_value == 22000.0f);
+  CHECK(info.default_value == 12000.0f);  // NativeSynthPatch{}.cutoff_hz
+  CHECK(info.rt_safe == 1);
+
+  // A slot no resolve call has ever minted stays unresolvable.
+  const uint32_t unassigned = 0xC0000000u | (31u << 16u);
+  REQUIRE(sonare_engine_parameter_info(engine, unassigned, &info) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+#endif  // defined(SONARE_WITH_ARRANGEMENT)
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_engine_parameter_info describes a compressor insert on every strip kind",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  // Embedded-object params (the writer's own form, scene_json.cpp) rather than
+  // the legacy escaped-string form, so the compressor's quotes need no escaping.
+  constexpr const char* kEq = R"({"slot":"pre","processor":"eq.parametric","params":{}})";
+  constexpr const char* kCompressorPre =
+      R"({"slot":"pre","processor":"dynamics.compressor",)"
+      R"("params":{"thresholdDb":-18,"ratio":2,"attackMs":10,"releaseMs":100,"kneeDb":0}})";
+  constexpr const char* kCompressorPost =
+      R"({"slot":"post","processor":"dynamics.compressor",)"
+      R"("params":{"thresholdDb":-18,"ratio":2,"attackMs":10,"releaseMs":100,"kneeDb":0}})";
+  // A leading pre-fader EQ puts the compressor at insert index 1 on the
+  // track/master strips, so the id decode is exercised on a non-zero index
+  // and not just the degenerate single-insert case.
+  const std::string track_json = std::string(R"({"version":1,"strips":[{"id":"s","inserts":[)") +
+                                 kEq + "," + kCompressorPost +
+                                 R"(]}],"buses":[],"connections":[]})";
+  const std::string master_json =
+      std::string(R"({"version":1,"strips":[{"id":"master","inserts":[)") + kEq + "," +
+      kCompressorPost + R"(]}],"buses":[],"connections":[]})";
+  // sonare_engine_set_bus_strip_json reads scene.buses[0], not scene.strips[0].
+  const std::string bus_json =
+      std::string(R"({"version":1,"strips":[],"buses":[{"id":"1","inserts":[)") + kCompressorPre +
+      R"(]}],"connections":[]})";
+
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, track_json.c_str()) == SONARE_OK);
+
+  SonareEngineBus buses[] = {{1, 0.0f, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, bus_json.c_str()) == SONARE_OK);
+
+  REQUIRE(sonare_engine_set_master_strip_json(engine, master_json.c_str()) == SONARE_OK);
+
+  uint32_t track_id = 0;
+  uint32_t bus_id = 0;
+  uint32_t master_id = 0;
+  REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 1, "thresholdDb",
+                                                           &track_id) == SONARE_OK);
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, "thresholdDb", &bus_id) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 1, "thresholdDb", &master_id) ==
+          SONARE_OK);
+
+  // Ground truth for the entry the three ids above must all agree with,
+  // read directly off the catalog rather than through parameter_info.
+  const auto catalog = sonare::util::json::parse(
+      sonare::mastering::api::insert_param_info_json("dynamics.compressor"));
+  const sonare::util::json::Value* threshold = nullptr;
+  for (const auto& entry : catalog.as_array()) {
+    if (entry["name"].as_string() == "thresholdDb") {
+      threshold = &entry;
+      break;
+    }
+  }
+  REQUIRE(threshold != nullptr);
+  const std::string expected_unit =
+      (*threshold)["unit"].is_null() ? std::string() : (*threshold)["unit"].as_string();
+  const float expected_min = (*threshold)["min"].is_null() ? -std::numeric_limits<float>::infinity()
+                                                           : (*threshold)["min"].as_float();
+  const float expected_max = (*threshold)["max"].is_null() ? std::numeric_limits<float>::infinity()
+                                                           : (*threshold)["max"].as_float();
+  const float expected_default =
+      (*threshold)["default"].is_null() ? 0.0f : (*threshold)["default"].as_float();
+
+  for (uint32_t id : {track_id, bus_id, master_id}) {
+    SonareParameterInfo info{};
+    REQUIRE(sonare_engine_parameter_info(engine, id, &info) == SONARE_OK);
+    CHECK(std::strcmp(info.name, "thresholdDb") == 0);
+    CHECK(std::strcmp(info.unit, expected_unit.c_str()) == 0);
+    CHECK(info.min_value == expected_min);
+    CHECK(info.max_value == expected_max);
+    CHECK(info.default_value == expected_default);
+  }
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_parameter_info describes the lane fader and master width targets",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+
+  SonareParameterInfo fader{};
+  REQUIRE(sonare_engine_parameter_info(
+              engine, engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb),
+              &fader) == SONARE_OK);
+  CHECK(std::strcmp(fader.name, "faderDb") == 0);
+  CHECK(std::strcmp(fader.unit, "dB") == 0);
+  CHECK(fader.min_value == sonare::constants::kFloorDb);
+  CHECK(fader.max_value == 24.0f);
+  CHECK(fader.default_value == 0.0f);
+
+  SonareParameterInfo width{};
+  REQUIRE(sonare_engine_parameter_info(
+              engine, engine_master_param_target(sonare::engine::MixingRuntime::kWidth), &width) ==
+          SONARE_OK);
+  CHECK(std::strcmp(width.name, "width") == 0);
+  CHECK(width.min_value == 0.0f);
+  CHECK(width.max_value == 2.0f);
+  CHECK(width.default_value == 1.0f);
+
+  // Lane 0's insert id (strip selector 0, insert 0, param 0) is unassigned:
+  // sonare_engine_set_track_strip_json was never called for it.
+  SonareParameterInfo missing{};
+  REQUIRE(sonare_engine_parameter_info(engine, 0xE0000000u, &missing) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+#endif  // defined(SONARE_WITH_MIXING)

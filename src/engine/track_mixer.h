@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "engine/clip_player.h"
@@ -25,6 +26,15 @@ class MeterTelemetryTap;
 class ScopeTelemetryTap;
 
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec);
+
+/// The registered processor name at @p insert_index in @p spec's combined
+/// insert order (PreFader entries in spec order, then PostFader entries in
+/// spec order) -- the same order ChannelStrip::insert_parameter_id_for_key
+/// addresses. nullptr when out of range. Shared by TrackMixerRuntime's lane
+/// insert resolution and RealtimeEngine's master-strip one, since both read a
+/// retained mixing::api::Strip.
+const std::string* strip_insert_processor_name_at(const mixing::api::Strip& spec,
+                                                  unsigned int insert_index) noexcept;
 
 /// Per-lane cue tap. This state belongs to TrackMixerRuntime rather than the
 /// legacy raw-strip MonitorRuntime, so lane reorder/persistence follows the
@@ -156,6 +166,18 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Allocation free; mirrors apply_lane_insert_parameter for the bus chain.
   bool apply_bus_insert_parameter(size_t bus_index, unsigned int insert_index,
                                   unsigned int param_id, float value) noexcept;
+  // CONTROL thread: the registered processor name at (lane, insert), read from
+  // the retained strip spec rather than a live processor -- for parameterInfo,
+  // which needs a name to look up in the insert catalog rather than a param id
+  // to apply. False for an unbound lane, an out-of-range insert index, or a
+  // strip with no retained spec (externally bound via bind_track_strip, or
+  // automation-seeded with no inserts).
+  bool track_insert_processor_name(size_t lane_index, unsigned int insert_index,
+                                   std::string* out_name) const noexcept;
+  // Mirrors track_insert_processor_name for a bus, addressed by the positional
+  // bus index route_engine_parameter already decodes from the strip selector.
+  bool bus_insert_processor_name(size_t bus_index, unsigned int insert_index,
+                                 std::string* out_name) const noexcept;
 
   // Sets the smoothed target of a lane / bus insert parameter from a reserved
   // automation lane. The matching per-(strip, insert, param) one-pole smoother is
@@ -343,6 +365,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     std::atomic<float> polarity_left{1.0f};
     std::atomic<float> polarity_right{1.0f};
     std::unique_ptr<mixing::FxBus> bus;
+    // Last spec applied via set_bus_strip(). Retained for parameterInfo's
+    // insert-name resolution (see bus_insert_processor_name); default (no
+    // inserts) until the first set_bus_strip() call.
+    mixing::api::Bus spec;
   };
 
   // Control-thread mirror of one lane strip binding, keyed by track id. Covers

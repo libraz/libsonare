@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -15,11 +16,20 @@
 #include "engine/instrument_automation_id.h"
 #include "engine/realtime_engine.h"
 #include "midi/instrument.h"
+#include "midi/layered_instrument.h"
 #include "midi/midi_event.h"
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
 #include "rt/command.h"
 #include "support/midi_render.h"
+
+#if defined(SONARE_WITH_MIXING)
+#include "engine/track_mixer.h"
+#include "mastering/api/insert_factory.h"
+#include "mixing/channel_strip.h"
+#include "util/constants.h"
+#include "util/json.h"
+#endif
 
 using sonare::engine::instrument_param_param;
 using sonare::engine::instrument_param_slot;
@@ -388,3 +398,223 @@ TEST_CASE("An instrument swap retires the previous instrument's automation slots
 
   engine.set_midi_instrument(4, nullptr);
 }
+
+TEST_CASE("parameterInfo describes a NativeSynth's continuous parameter", "[engine][automation]") {
+  using sonare::midi::synth::NativeSynth;
+
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 256);
+  NativeSynth synth;
+  REQUIRE(engine.set_midi_instrument(1, &synth));
+
+  const int64_t id = engine.resolve_instrument_automation_id(1, "cutoffHz");
+  REQUIRE(id >= 0);
+
+  sonare::automation::ParameterDescription info{};
+  REQUIRE(engine.describe_reserved_parameter(static_cast<uint32_t>(id), &info));
+  REQUIRE(info.name == "cutoffHz");
+  REQUIRE(info.unit == "Hz");
+  REQUIRE(info.min_value == 10.0f);
+  REQUIRE(info.max_value == 22000.0f);
+  REQUIRE(info.default_value == 12000.0f);  // NativeSynthPatch{}.cutoff_hz
+  REQUIRE(info.rt_safe);
+
+  // A slot no resolve call has ever minted stays unresolvable -- same
+  // contract as route_instrument_parameter for the same slot.
+  const uint32_t unassigned = make_instrument_param_id(/*slot=*/31, /*param=*/0);
+  sonare::automation::ParameterDescription missing{};
+  REQUIRE_FALSE(engine.describe_reserved_parameter(unassigned, &missing));
+
+  engine.set_midi_instrument(1, nullptr);
+}
+
+TEST_CASE("parameterInfo prefixes a LayeredInstrument child's name with its layer index",
+          "[engine][automation]") {
+  using sonare::midi::InstrumentLayerSpec;
+  using sonare::midi::LayeredInstrument;
+  using sonare::midi::synth::NativeSynth;
+
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 256);
+
+  auto layered = std::make_unique<LayeredInstrument>();
+  REQUIRE(layered->add_layer(std::make_unique<NativeSynth>(), InstrumentLayerSpec{}));
+  REQUIRE(engine.set_midi_instrument(2, layered.get()));
+
+  const int64_t id = engine.resolve_instrument_automation_id(2, "0.cutoffHz");
+  REQUIRE(id >= 0);
+
+  sonare::automation::ParameterDescription info{};
+  REQUIRE(engine.describe_reserved_parameter(static_cast<uint32_t>(id), &info));
+  REQUIRE(info.name == "0.cutoffHz");
+  REQUIRE(info.unit == "Hz");
+  REQUIRE(info.min_value == 10.0f);
+  REQUIRE(info.max_value == 22000.0f);
+  REQUIRE(info.default_value == 12000.0f);
+
+  engine.set_midi_instrument(2, nullptr);
+}
+
+#if defined(SONARE_WITH_MIXING)
+
+namespace {
+constexpr uint32_t engine_lane_param_target(uint32_t lane_index, uint32_t param_kind) {
+  return 0x4D580000u | (lane_index << 8u) | param_kind;
+}
+constexpr uint32_t engine_master_param_target(uint32_t param_kind) {
+  return 0x4D580000u | (0xFFu << 8u) | param_kind;
+}
+}  // namespace
+
+TEST_CASE("parameterInfo describes a compressor insert on a track, bus and master strip",
+          "[engine][automation]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 256);
+
+  sonare::mixing::api::Insert eq{sonare::mixing::api::InsertSlot::PreFader, "eq.parametric", "{}"};
+  sonare::mixing::api::Insert compressor{
+      sonare::mixing::api::InsertSlot::PostFader, "dynamics.compressor",
+      R"({"thresholdDb":-18,"ratio":2,"attackMs":10,"releaseMs":100,"kneeDb":0})"};
+
+  // A leading pre-fader insert puts the compressor at index 1 on the
+  // track/master strips, exercising the PreFader-then-PostFader index count
+  // rather than only the degenerate single-insert case.
+  REQUIRE(engine.set_track_lanes({{10}}));
+  sonare::mixing::api::Strip track_spec;
+  track_spec.inserts.push_back(eq);
+  track_spec.inserts.push_back(compressor);
+  REQUIRE(engine.set_track_strip(10, track_spec));
+
+  REQUIRE(engine.set_track_buses({{1, 0.0f, sonare::ChannelLayout::Stereo}}));
+  sonare::mixing::api::Bus bus_spec;
+  bus_spec.id = "1";
+  bus_spec.inserts.push_back(compressor);
+  REQUIRE(engine.set_bus_strip(1, bus_spec));
+
+  sonare::mixing::api::Strip master_spec;
+  master_spec.inserts.push_back(eq);
+  master_spec.inserts.push_back(compressor);
+  REQUIRE(engine.set_master_strip(master_spec));
+
+  const int64_t track_id = engine.resolve_track_insert_automation_id(10, 1, "thresholdDb");
+  const int64_t bus_id = engine.resolve_bus_insert_automation_id(1, 0, "thresholdDb");
+  const int64_t master_id = engine.resolve_master_insert_automation_id(1, "thresholdDb");
+  REQUIRE(track_id >= 0);
+  REQUIRE(bus_id >= 0);
+  REQUIRE(master_id >= 0);
+
+  // Ground truth for the entry all three ids must describe identically, read
+  // directly off the insert catalog rather than through describe_reserved_parameter.
+  const auto catalog = sonare::util::json::parse(
+      sonare::mastering::api::insert_param_info_json("dynamics.compressor"));
+  const sonare::util::json::Value* threshold = nullptr;
+  for (const auto& entry : catalog.as_array()) {
+    if (entry["name"].as_string() == "thresholdDb") {
+      threshold = &entry;
+      break;
+    }
+  }
+  REQUIRE(threshold != nullptr);
+  const std::string expected_unit =
+      (*threshold)["unit"].is_null() ? std::string() : (*threshold)["unit"].as_string();
+  const float expected_min = (*threshold)["min"].is_null() ? -std::numeric_limits<float>::infinity()
+                                                           : (*threshold)["min"].as_float();
+  const float expected_max = (*threshold)["max"].is_null() ? std::numeric_limits<float>::infinity()
+                                                           : (*threshold)["max"].as_float();
+  const float expected_default =
+      (*threshold)["default"].is_null() ? 0.0f : (*threshold)["default"].as_float();
+
+  for (int64_t id : {track_id, bus_id, master_id}) {
+    sonare::automation::ParameterDescription info{};
+    REQUIRE(engine.describe_reserved_parameter(static_cast<uint32_t>(id), &info));
+    REQUIRE(info.name == "thresholdDb");
+    REQUIRE(info.unit == expected_unit);
+    REQUIRE(info.min_value == expected_min);
+    REQUIRE(info.max_value == expected_max);
+    REQUIRE(info.default_value == expected_default);
+  }
+}
+
+TEST_CASE("parameterInfo describes the lane fader and master width targets",
+          "[engine][automation]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 256);
+  REQUIRE(engine.set_track_lanes({{10}}));
+
+  sonare::automation::ParameterDescription fader{};
+  const uint32_t fader_id =
+      engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb);
+  REQUIRE(engine.describe_reserved_parameter(fader_id, &fader));
+  REQUIRE(fader.name == "faderDb");
+  REQUIRE(fader.unit == "dB");
+  REQUIRE(fader.min_value == sonare::constants::kFloorDb);
+  REQUIRE(fader.max_value == 24.0f);
+  REQUIRE(fader.default_value == 0.0f);
+
+  sonare::automation::ParameterDescription width{};
+  const uint32_t width_id = engine_master_param_target(sonare::engine::MixingRuntime::kWidth);
+  REQUIRE(engine.describe_reserved_parameter(width_id, &width));
+  REQUIRE(width.name == "width");
+  REQUIRE(width.unit == "");
+  REQUIRE(width.min_value == 0.0f);
+  REQUIRE(width.max_value == 2.0f);
+  REQUIRE(width.default_value == 1.0f);
+
+  // Width is a master-only control, not a track-lane target.
+  sonare::automation::ParameterDescription lane_width{};
+  const uint32_t lane_width_id =
+      engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kWidth);
+  REQUIRE_FALSE(engine.describe_reserved_parameter(lane_width_id, &lane_width));
+}
+
+TEST_CASE("parameterInfo cannot resolve an insert on an externally bound strip",
+          "[engine][automation]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 256);
+  REQUIRE(engine.set_track_lanes({{10}}));
+
+  sonare::mixing::ChannelStrip strip;
+  strip.add_pre_insert(
+      sonare::mastering::api::make_insert(
+          "dynamics.compressor",
+          R"({"thresholdDb":-18,"ratio":2,"attackMs":10,"releaseMs":100,"kneeDb":0})", nullptr),
+      false);
+  REQUIRE(engine.bind_track_strip(10, &strip));
+
+  const int64_t id = engine.resolve_track_insert_automation_id(10, 0, "thresholdDb");
+  REQUIRE(id >= 0);
+
+  // The strip is live and resolves a param id fine, but it carries no
+  // retained spec (bind_track_strip bypasses set_track_strip), so its name
+  // and range cannot be read back.
+  sonare::automation::ParameterDescription info{};
+  REQUIRE_FALSE(engine.describe_reserved_parameter(static_cast<uint32_t>(id), &info));
+
+  engine.bind_track_strip(10, nullptr);
+}
+
+TEST_CASE("parameterInfo stops describing master inserts once another strip is bound",
+          "[engine][automation]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 256);
+  sonare::mixing::api::Strip master_spec;
+  master_spec.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PostFader, "dynamics.compressor",
+       R"({"thresholdDb":-18,"ratio":2,"attackMs":10,"releaseMs":100,"kneeDb":0})"});
+  REQUIRE(engine.set_master_strip(master_spec));
+  const int64_t id = engine.resolve_master_insert_automation_id(0, "thresholdDb");
+  REQUIRE(id >= 0);
+  sonare::automation::ParameterDescription info{};
+  REQUIRE(engine.describe_reserved_parameter(static_cast<uint32_t>(id), &info));
+
+  // The replacement strip has an equalizer at index 0; the retained spec
+  // describes the owned strip, not this one.
+  sonare::mixing::ChannelStrip external;
+  external.add_post_insert(sonare::mastering::api::make_insert("eq.parametric", "{}", nullptr),
+                           false);
+  REQUIRE(engine.bind_mixing_strip(&external));
+  REQUIRE_FALSE(engine.describe_reserved_parameter(static_cast<uint32_t>(id), &info));
+  engine.bind_mixing_strip(nullptr);
+}
+
+#endif  // defined(SONARE_WITH_MIXING)

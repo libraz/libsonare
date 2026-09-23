@@ -50,6 +50,22 @@ std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing:
   return strip;
 }
 
+const std::string* strip_insert_processor_name_at(const mixing::api::Strip& spec,
+                                                  unsigned int insert_index) noexcept {
+  unsigned int index = 0;
+  for (const auto& insert : spec.inserts) {
+    if (insert.slot != mixing::api::InsertSlot::PreFader) continue;
+    if (index == insert_index) return &insert.processor_name;
+    ++index;
+  }
+  for (const auto& insert : spec.inserts) {
+    if (insert.slot != mixing::api::InsertSlot::PostFader) continue;
+    if (index == insert_index) return &insert.processor_name;
+    ++index;
+  }
+  return nullptr;
+}
+
 namespace {
 
 // True when two strip specs carry the same insert chain (count + each slot,
@@ -139,6 +155,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       state.polarity_left.store(1.0f, std::memory_order_relaxed);
       state.polarity_right.store(1.0f, std::memory_order_relaxed);
       state.bus.reset();
+      state.spec = mixing::api::Bus{};
     }
   }
   // Control-side snapshot: this is a control-thread structural change, and
@@ -308,6 +325,7 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   state->width.set_width(bus.width);
   state->polarity_left.store(bus.polarity_invert_left ? -1.0f : 1.0f, std::memory_order_relaxed);
   state->polarity_right.store(bus.polarity_invert_right ? -1.0f : 1.0f, std::memory_order_relaxed);
+  state->spec = bus;
   for (InsertAutoSlot& slot : insert_auto_slots_) {
     if (slot.assigned && slot.is_bus && slot.index == bus_index) {
       slot.active = false;
@@ -546,6 +564,38 @@ mixing::ChannelStrip* TrackMixerRuntime::bound_strip_for(uint32_t track_id) cons
     }
   }
   return nullptr;
+}
+
+bool TrackMixerRuntime::track_insert_processor_name(size_t lane_index, unsigned int insert_index,
+                                                    std::string* out_name) const noexcept {
+  if (out_name == nullptr) return false;
+  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
+  if (lanes == nullptr || lane_index >= lanes->size()) return false;
+  const uint32_t track_id = (*lanes)[lane_index].track_id;
+  if (track_id == 0) return false;
+  mixing::ChannelStrip* strip = bound_strip_for(track_id);
+  if (strip == nullptr) return false;
+  for (const OwnedStrip& owned : owned_strips_) {
+    if (owned.track_id != track_id || owned.strip.get() != strip) continue;
+    const std::string* name = strip_insert_processor_name_at(owned.spec, insert_index);
+    if (name == nullptr) return false;
+    *out_name = *name;
+    return true;
+  }
+  // No matching owned entry: the bound strip is externally bound
+  // (bind_track_strip), which carries no retained spec to read a name from.
+  return false;
+}
+
+bool TrackMixerRuntime::bus_insert_processor_name(size_t bus_index, unsigned int insert_index,
+                                                  std::string* out_name) const noexcept {
+  if (out_name == nullptr || bus_index >= bus_states_.size() ||
+      bus_states_[bus_index].bus == nullptr) {
+    return false;
+  }
+  if (insert_index >= bus_states_[bus_index].spec.inserts.size()) return false;
+  *out_name = bus_states_[bus_index].spec.inserts[insert_index].processor_name;
+  return true;
 }
 
 void TrackMixerRuntime::record_track_strip_binding(uint32_t track_id, mixing::ChannelStrip* strip) {

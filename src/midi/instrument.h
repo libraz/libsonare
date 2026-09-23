@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <string>
 
+#include "automation/parameter.h"
 #include "midi/articulation_mode.h"
 #include "midi/controller_profile.h"
 #include "midi/sequencer.h"
@@ -189,6 +190,19 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
   virtual bool apply_parameter(unsigned int param_id, float value) noexcept {
     (void)param_id;
     (void)value;
+    return false;
+  }
+
+  /// CONTROL thread: metadata (name, range, default, unit) for the same id
+  /// space apply_parameter addresses, so a host can describe a reserved
+  /// automation id without reaching into engine-private state. May allocate
+  /// (builds the description's owned strings); never called from the audio
+  /// thread. Returns false for an unknown id. Default: nothing is
+  /// automatable, so nothing to describe.
+  virtual bool describe_parameter(unsigned int param_id,
+                                  automation::ParameterDescription* out) const {
+    (void)param_id;
+    (void)out;
     return false;
   }
 };

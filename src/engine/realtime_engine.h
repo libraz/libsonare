@@ -495,6 +495,18 @@ class RealtimeEngine : private ClipPageRequestSink {
     return instrument_automation_overflow_count_.load();
   }
 #endif
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
+  /// @brief Metadata (name/range/default/unit) for a reserved-namespace
+  ///   automation id -- an instrument parameter, a mixer fader/pan/width
+  ///   target, or a channel-strip insert parameter -- answering exactly the
+  ///   ids route_engine_parameter accepts under this same feature gate.
+  /// @details Control thread; reads static defaults and retained specs rather
+  ///   than live audio-thread state (see NativeSynth::describe_parameter and
+  ///   insert_param_info_json). Returns false for an id no reserved namespace
+  ///   resolves, including an insert id on an externally bound strip (no
+  ///   retained spec to read a name/range from).
+  bool describe_reserved_parameter(uint32_t id, automation::ParameterDescription* out) const;
+#endif
   void set_capture_segment(CaptureSegment segment) noexcept;
   void set_capture_armed(bool armed) noexcept;
   void set_capture_punch(int64_t start_sample, int64_t end_sample, bool enabled) noexcept;
@@ -727,6 +739,11 @@ class RealtimeEngine : private ClipPageRequestSink {
                                        float value) noexcept;
   // Decodes a reserved instrument-param id and forwards it to the slot table.
   bool route_instrument_parameter(uint32_t target_id, float value) noexcept;
+  // Decodes a reserved instrument-param id and forwards it to the destination
+  // instrument's own describe_parameter. Control thread; the read side of
+  // route_instrument_parameter.
+  bool describe_instrument_reserved_parameter(uint32_t target_id,
+                                              automation::ParameterDescription* out) const;
   void advance_instrument_automations(int num_steps) noexcept;
   void settle_instrument_automations() noexcept;
   void clear_instrument_automations() noexcept;
@@ -1052,6 +1069,9 @@ class RealtimeEngine : private ClipPageRequestSink {
 #if defined(SONARE_WITH_MIXING)
   MixingRuntime mixing_runtime_{};
   std::unique_ptr<mixing::ChannelStrip> owned_master_strip_{};
+  // Last spec passed to set_master_strip(), read by describe_reserved_parameter
+  // while owned_master_strip_ is still the bound strip.
+  mixing::api::Strip master_strip_spec_{};
   MonitorRuntime monitor_runtime_{};
   TrackMixerRuntime track_mixer_runtime_{};
   // Automated master-strip insert parameters. The master insert chain is not part

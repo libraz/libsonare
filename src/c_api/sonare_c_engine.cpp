@@ -30,6 +30,21 @@ void fill_c_parameter(const automation::ParameterInfo& info, SonareParameterInfo
   out->default_curve = curve_to_int(info.default_curve);
 }
 
+// A reserved-namespace description carries no id of its own (the id is the
+// query, not a stored field), so it is echoed back from @p id rather than
+// read off @p description.
+void fill_c_parameter_description(uint32_t id, const automation::ParameterDescription& description,
+                                  SonareParameterInfo* out) {
+  out->id = id;
+  copy_text(out->name, sizeof(out->name), description.name.c_str());
+  copy_text(out->unit, sizeof(out->unit), description.unit.c_str());
+  out->min_value = description.min_value;
+  out->max_value = description.max_value;
+  out->default_value = description.default_value;
+  out->rt_safe = description.rt_safe ? 1 : 0;
+  out->default_curve = curve_to_int(description.default_curve);
+}
+
 std::vector<automation::ParameterInfo> parameter_metadata_snapshot(
     const automation::ParameterRegistry& registry) {
   std::vector<automation::ParameterInfo> parameters;
@@ -380,11 +395,18 @@ SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t 
   SONARE_C_API_ENTRY;
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   automation::ParameterInfo info{};
-  if (!engine->parameters.parameter_info(id, &info)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (engine->parameters.parameter_info(id, &info)) {
+    fill_c_parameter(info, out);
+    return SONARE_OK;
   }
-  fill_c_parameter(info, out);
-  return SONARE_OK;
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
+  automation::ParameterDescription description{};
+  if (engine->engine.describe_reserved_parameter(id, &description)) {
+    fill_c_parameter_description(id, description, out);
+    return SONARE_OK;
+  }
+#endif
+  return SONARE_ERROR_INVALID_PARAMETER;
 }
 
 SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint32_t param_id,

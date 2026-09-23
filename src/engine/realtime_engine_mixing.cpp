@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -9,11 +10,18 @@
 #include "engine/instrument_automation_id.h"
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
+#include "engine/track_mixer.h"
+#include "mastering/api/insert_factory.h"
 #include "rt/command.h"
+#include "util/constants.h"
+#include "util/json.h"
 
 namespace sonare::engine {
 
 #if defined(SONARE_WITH_MIXING)
+
+using sonare::constants::kFloorDb;
+
 namespace {
 
 constexpr uint32_t kEngineParamLaneMaster = 0xFFu;
@@ -26,6 +34,52 @@ constexpr uint32_t kEngineParamLaneBusBase = 0xFEu;
 // method every surface calls, rather than in one binding's wrapper -- the WASM
 // bindings call these methods directly and never see the C ABI's copy of it.
 bool insert_param_value_acceptable(float value) noexcept { return std::isfinite(value); }
+
+// Reads @p processor_name's catalog entry for @p param_id out of
+// insert_param_info_json (the same JSON the capability catalog and the C ABI's
+// insert-param-info entry point read), and fills @p out from it. A null
+// min/max/unit in the catalog is an unmeasured bound, not a zero one, so it
+// maps to +/-infinity / empty string rather than being read as 0.
+bool describe_insert_param_from_catalog(const std::string& processor_name, unsigned int param_id,
+                                        automation::ParameterDescription* out) {
+  util::json::Value parsed;
+  try {
+    parsed = util::json::parse(mastering::api::insert_param_info_json(processor_name));
+  } catch (const util::json::JsonError&) {
+    return false;
+  }
+  if (!parsed.is_array()) return false;
+  for (const util::json::Value& entry : parsed.as_array()) {
+    const util::json::Value* id_field = entry.find("id");
+    if (id_field == nullptr || !id_field->is_number()) continue;
+    if (static_cast<unsigned int>(id_field->as_int()) != param_id) continue;
+    const util::json::Value* name_field = entry.find("name");
+    out->name = name_field != nullptr && name_field->is_string() ? name_field->as_string() : "";
+    const util::json::Value* min_field = entry.find("min");
+    out->min_value = min_field != nullptr && min_field->is_number()
+                         ? min_field->as_float()
+                         : -std::numeric_limits<float>::infinity();
+    const util::json::Value* max_field = entry.find("max");
+    out->max_value = max_field != nullptr && max_field->is_number()
+                         ? max_field->as_float()
+                         : std::numeric_limits<float>::infinity();
+    const util::json::Value* default_field = entry.find("default");
+    if (default_field != nullptr && default_field->is_number()) {
+      out->default_value = default_field->as_float();
+    } else if (default_field != nullptr && default_field->is_bool()) {
+      out->default_value = default_field->as_bool() ? 1.0f : 0.0f;
+    } else {
+      out->default_value = 0.0f;
+    }
+    const util::json::Value* unit_field = entry.find("unit");
+    out->unit = unit_field != nullptr && unit_field->is_string() ? unit_field->as_string() : "";
+    const util::json::Value* rt_safe_field = entry.find("rtSafe");
+    out->rt_safe = rt_safe_field != nullptr && rt_safe_field->is_bool() && rt_safe_field->as_bool();
+    out->default_curve = automation::CurveType::Linear;
+    return true;
+  }
+  return false;
+}
 
 }  // namespace
 
@@ -65,6 +119,7 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   // memory. The caller must quiesce process() around this call.
   clear_master_insert_automations();
   owned_master_strip_ = std::move(strip);
+  master_strip_spec_ = strip_spec;
   const bool bound = bind_mixing_strip(owned_master_strip_.get());
   if (bound) {
     set_mixing_enabled(true);
@@ -389,6 +444,97 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
 bool RealtimeEngine::route_engine_parameter_thunk(void* context, uint32_t param_id,
                                                   float value) noexcept {
   return static_cast<RealtimeEngine*>(context)->route_engine_parameter(param_id, value);
+}
+
+bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
+                                                 automation::ParameterDescription* out) const {
+  if (out == nullptr || !parameter_target_reserved(id)) return false;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (is_instrument_param_id(id)) {
+    return describe_instrument_reserved_parameter(id, out);
+  }
+#endif
+  if (is_insert_param_id(id)) {
+    const uint32_t strip = insert_param_strip(id);
+    const unsigned int insert_index = static_cast<unsigned int>(insert_param_index(id));
+    const unsigned int param_id = static_cast<unsigned int>(insert_param_param(id));
+    std::string processor_name;
+    if (strip == kInsertStripMaster) {
+      // The retained spec describes the owned strip only; a strip bound since
+      // through bind_mixing_strip has none.
+      if (owned_master_strip_ == nullptr || mixing_runtime_.strip() != owned_master_strip_.get()) {
+        return false;
+      }
+      const std::string* name = strip_insert_processor_name_at(master_strip_spec_, insert_index);
+      if (name == nullptr) return false;
+      processor_name = *name;
+    } else if (strip <= kInsertStripBusBase &&
+               strip > kInsertStripBusBase - TrackMixerRuntime::kMaxBusLanes) {
+      const size_t bus_index = kInsertStripBusBase - strip;
+      if (!track_mixer_runtime_.bus_insert_processor_name(bus_index, insert_index,
+                                                          &processor_name)) {
+        return false;
+      }
+    } else {
+      if (!track_mixer_runtime_.track_insert_processor_name(static_cast<size_t>(strip),
+                                                            insert_index, &processor_name)) {
+        return false;
+      }
+    }
+    return describe_insert_param_from_catalog(processor_name, param_id, out);
+  }
+  const uint32_t lane = (id & kEngineParamLaneMask) >> kEngineParamLaneShift;
+  const uint32_t kind = id & kEngineParamKindMask;
+  const bool is_master = lane == kEngineParamLaneMaster;
+  const bool is_bus = !is_master && lane <= kEngineParamLaneBusBase &&
+                      lane > kEngineParamLaneBusBase - TrackMixerRuntime::kMaxBusLanes;
+  // Mirrors route_engine_parameter's own per-scope kind restriction: a bus
+  // owns only its fader, a track lane owns fader and pan, and width is a
+  // master-only control (see the comment there).
+  if (is_bus) {
+    if (kind != TrackMixerRuntime::kFaderDb) return false;
+  } else if (!is_master) {
+    if (kind != TrackMixerRuntime::kFaderDb && kind != TrackMixerRuntime::kPan) return false;
+  }
+  switch (kind) {
+    case TrackMixerRuntime::kFaderDb:
+      out->name = "faderDb";
+      out->unit = "dB";
+      if (is_master) {
+        // GainProcessor::set_gain_db (reached by MixingRuntime::set_parameter)
+        // only rejects a non-finite value; unlike the lane/bus fader setters
+        // it applies no numeric clamp.
+        out->min_value = -std::numeric_limits<float>::infinity();
+        out->max_value = std::numeric_limits<float>::infinity();
+      } else {
+        // TrackMixerRuntime::set_lane_parameter / set_bus_gain_db_by_index.
+        out->min_value = kFloorDb;
+        out->max_value = 24.0f;
+      }
+      out->default_value = 0.0f;
+      break;
+    case TrackMixerRuntime::kPan:
+      // PannerProcessor::set_pan's clamp_pan.
+      out->name = "pan";
+      out->unit = "";
+      out->min_value = -1.0f;
+      out->max_value = 1.0f;
+      out->default_value = 0.0f;
+      break;
+    case TrackMixerRuntime::kWidth:
+      // StereoWidthProcessor::set_width's clamp_width.
+      out->name = "width";
+      out->unit = "";
+      out->min_value = 0.0f;
+      out->max_value = 2.0f;
+      out->default_value = 1.0f;
+      break;
+    default:
+      return false;
+  }
+  out->rt_safe = true;
+  out->default_curve = automation::CurveType::Linear;
+  return true;
 }
 
 bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_index,

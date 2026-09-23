@@ -163,6 +163,21 @@ SonareError sonare_engine_clear_parameters(SonareRealtimeEngine* engine);
 SonareError sonare_engine_parameter_count(SonareRealtimeEngine* engine, size_t* out_count);
 SonareError sonare_engine_parameter_info_by_index(SonareRealtimeEngine* engine, size_t index,
                                                   SonareParameterInfo* out);
+/// @brief Reads metadata for @p id: a host-registered parameter (see
+///   sonare_engine_add_parameter), or, when none matches, one of the engine's
+///   reserved automation ids -- a hosted-instrument parameter, a mixer
+///   fader/pan/width target, or a channel-strip insert parameter -- the same
+///   ids setAutomationLane / setParameter accept in that namespace.
+/// @details Reserved-id metadata is read from compiled-in defaults and the
+///   insert catalog on the control thread, not from live audio-thread state:
+///   an instrument's default is its unloaded patch, not whatever preset is
+///   currently sounding. @c SONARE_ERROR_INVALID_PARAMETER for an id neither
+///   table resolves, including an insert id on a strip bound externally
+///   (bindTrackStrip / bindMixingStrip) rather than through
+///   setTrackStrip / setMasterStrip, which carries no retained spec to
+///   describe. @ref sonare_engine_parameter_count and
+///   @ref sonare_engine_parameter_info_by_index enumerate host-registered
+///   parameters only; reserved ids are answered here but never enumerated.
 SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t id,
                                          SonareParameterInfo* out);
 /// @brief Replaces the automation lane driving @p param_id (control thread).

@@ -561,6 +561,8 @@ class NativeSynth final : public MidiInstrument {
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
   int parameter_id_for_key(const std::string& key) const noexcept override;
   bool apply_parameter(unsigned int param_id, float value) noexcept override;
+  bool describe_parameter(unsigned int param_id,
+                          automation::ParameterDescription* out) const override;
 
   /// CONTROL thread: the bank the kSample engine reads; nullptr leaves that
   /// engine silent. Sounding voices keep the bank they started on, so swap it

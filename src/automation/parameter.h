@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "util/automation_curve.h"
@@ -31,6 +32,21 @@ struct ParameterInfo {
   // does NOT clamp applied values to this range — apply()/set_parameter() pass
   // the lane/host value straight to the processor (each processor clamps its own
   // parameters as needed). Callers must not assume the engine enforces [min,max].
+  float min_value = 0.0f;
+  float max_value = 1.0f;
+  float default_value = 0.0f;
+  bool rt_safe = true;
+  CurveType default_curve = CurveType::Linear;
+};
+
+/// @brief Owning counterpart of ParameterInfo, for a control-thread describe
+///        call whose name/unit is synthesized rather than a stored `const
+///        char*` -- a composed layer name ("0.cutoffHz"), or a string read out
+///        of an insert's JSON catalog entry. May allocate; never used on the
+///        audio thread.
+struct ParameterDescription {
+  std::string name;
+  std::string unit;
   float min_value = 0.0f;
   float max_value = 1.0f;
   float default_value = 0.0f;
