@@ -2163,6 +2163,31 @@ describe('RealtimeEngine native binding', () => {
     }
   });
 
+  it('sets and reads the warp voice capacity, rejecting out-of-domain values', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      expect(engine.warpVoiceCapacity()).toBe(8);
+
+      engine.setWarpVoiceCapacity(12);
+      expect(engine.warpVoiceCapacity()).toBe(12);
+
+      engine.setWarpVoiceCapacity(0);
+      expect(engine.warpVoiceCapacity()).toBe(0);
+
+      // Rejected values leave the previously accepted capacity (0) in place.
+      expect(() => engine.setWarpVoiceCapacity(65)).toThrow();
+      expect(engine.warpVoiceCapacity()).toBe(0);
+
+      expect(() => engine.setWarpVoiceCapacity(-1)).toThrow();
+      expect(engine.warpVoiceCapacity()).toBe(0);
+
+      expect(() => engine.setWarpVoiceCapacity(1.5)).toThrow();
+      expect(engine.warpVoiceCapacity()).toBe(0);
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('forwards MIDI clock/transport to the external queue', () => {
     const engine = new RealtimeEngine(48000, 24000);
     engine.setTempo(120);

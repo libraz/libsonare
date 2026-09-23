@@ -320,6 +320,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::ClipPageRequestOverflowCount>(
               "clipPageRequestOverflowCount"),
           InstanceMethod<&RealtimeEngineWrap::WarpStretchOverflowCount>("warpStretchOverflowCount"),
+          InstanceMethod<&RealtimeEngineWrap::SetWarpVoiceCapacity>("setWarpVoiceCapacity"),
+          InstanceMethod<&RealtimeEngineWrap::WarpVoiceCapacity>("warpVoiceCapacity"),
           InstanceMethod<&RealtimeEngineWrap::DrainExternalMidi>("drainExternalMidi"),
           InstanceMethod<&RealtimeEngineWrap::GetTransportState>("getTransportState"),
           InstanceMethod<&RealtimeEngineWrap::Destroy>("destroy"),
@@ -1633,6 +1635,28 @@ Napi::Value RealtimeEngineWrap::WarpStretchOverflowCount(const Napi::CallbackInf
   ThrowIfError(env, sonare_engine_warp_stretch_overflow_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetWarpVoiceCapacity(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  // node_arg_uint32 rejects a non-integer or a negative value (both fall
+  // outside its [0, uint32 max] narrowing domain) with a RangeError; the core
+  // rejects anything past SONARE_ENGINE_MAX_WARP_VOICES (64) via ThrowIfError.
+  const uint32_t voices = node_arg_uint32(info, 0, 0);
+  ThrowIfError(env, sonare_engine_set_warp_voice_capacity(engine_, voices));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::WarpVoiceCapacity(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t voices = 0;
+  ThrowIfError(env, sonare_engine_warp_voice_capacity(engine_, &voices));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(voices));
   SONARE_NODE_CATCH(env)
 }
 

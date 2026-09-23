@@ -155,6 +155,8 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value ExternalMidiDroppedCount(const Napi::CallbackInfo& info);
   Napi::Value ClipPageRequestOverflowCount(const Napi::CallbackInfo& info);
   Napi::Value WarpStretchOverflowCount(const Napi::CallbackInfo& info);
+  Napi::Value SetWarpVoiceCapacity(const Napi::CallbackInfo& info);
+  Napi::Value WarpVoiceCapacity(const Napi::CallbackInfo& info);
   Napi::Value DrainExternalMidi(const Napi::CallbackInfo& info);
   Napi::Value GetTransportState(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);

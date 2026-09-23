@@ -195,6 +195,15 @@ export class RealtimeEngine {
     return this.native.parameterInfo(id);
   }
 
+  /**
+   * Replaces the automation lane driving `paramId`. An empty `points` array
+   * leaves the target undriven rather than snapping it to 0 or a default:
+   * once adopted, the target reverts to the last value explicitly sent
+   * through {@link setParameter} / {@link setParameterSmoothed}, or is left
+   * unchanged if no such value was ever sent for `paramId`. This holds
+   * regardless of whether the manual value or the lane clear reaches the
+   * audio thread first.
+   */
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
     this.native.setAutomationLane(paramId, points.map(engineAutomationPointValue));
   }
@@ -769,12 +778,21 @@ export class RealtimeEngine {
    * @param paramId - Target parameter id
    * @param value - New value
    * @param renderFrame - Render-frame time to apply, or `-1` for immediate
+   *
+   * This value also becomes `paramId`'s base value: if an automation lane
+   * later starts (and stops) driving `paramId`, the target reverts to this
+   * value once that lane empties — see {@link setAutomationLane}.
    */
   setParameter(paramId: number, value: number, renderFrame = -1): void {
     this.native.setParameter(paramId, value, renderFrame);
   }
 
-  /** Push a live parameter value to the engine using a smoothed ramp. */
+  /**
+   * Push a live parameter value to the engine using a smoothed ramp. The
+   * ramp's target (not its in-flight position) becomes `paramId`'s base
+   * value, with the same restore-on-lane-release behavior as
+   * {@link setParameter}.
+   */
   setParameterSmoothed(paramId: number, value: number, renderFrame = -1): void {
     this.native.setParameterSmoothed(paramId, value, renderFrame);
   }
@@ -1322,6 +1340,24 @@ export class RealtimeEngine {
   /** Cumulative warp-stretch requests dropped because the native queue was full. */
   warpStretchOverflowCount(): number {
     return this.native.warpStretchOverflowCount();
+  }
+
+  /**
+   * Sets the number of concurrent time-stretch voices. `voices` must be an
+   * integer in `[0, 64]`; a non-integer, negative, or larger value throws and
+   * leaves the capacity unchanged. Default is 8. Capacity 0 disables
+   * time-stretch, so every warped clip plays resampled instead and none of
+   * that counts toward {@link warpStretchOverflowCount}. A change applied
+   * while the engine is running restarts the splice state of any clip
+   * stretching through a voice at that moment. Control-thread only.
+   */
+  setWarpVoiceCapacity(voices: number): void {
+    this.native.setWarpVoiceCapacity(voices);
+  }
+
+  /** Reads the current time-stretch voice capacity (default 8). */
+  warpVoiceCapacity(): number {
+    return this.native.warpVoiceCapacity();
   }
 
   /**
