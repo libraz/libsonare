@@ -990,6 +990,23 @@ TEST_CASE("sonare_mastering named-processor rejects out-of-range repair modes",
   sonare_free_mastering_result(&out);
 }
 
+TEST_CASE("sonare_mastering named-processor refuses an undeclared enum value",
+          "[c_api][mastering]") {
+  // The detector selector has three modes; a fourth used to reach the
+  // compressor as an unnamed enum value.
+  std::vector<float> samples(2048, 0.1f);
+  SonareMasteringResult out{};
+  SonareMasteringParam undeclared[] = {{"detector", 7.0}};
+  REQUIRE(sonare_mastering_apply_processor("dynamics.compressor", samples.data(), samples.size(),
+                                           44100, undeclared, 1,
+                                           &out) == SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareMasteringParam declared[] = {{"detector", 2.0}};
+  REQUIRE(sonare_mastering_apply_processor("dynamics.compressor", samples.data(), samples.size(),
+                                           44100, declared, 1, &out) == SONARE_OK);
+  sonare_free_mastering_result(&out);
+}
+
 TEST_CASE("sonare_mastering trimSilence measures an all-silent empty result safely",
           "[c_api][mastering][trim_silence][empty]") {
   constexpr int sample_rate = 48000;

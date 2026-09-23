@@ -403,9 +403,12 @@ TEST_CASE("every EFX binding drives a control its insert can automate", "[midi][
     REQUIRE(parsed.is_array());
     std::set<std::string> ids;
     for (const json::Value& parameter : parsed.as_array()) {
-      const json::Value* id = parameter.find("name");
+      const json::Value* key = parameter.find("name");
+      const json::Value* id = parameter.find("id");
+      REQUIRE(key != nullptr);
       REQUIRE(id != nullptr);
-      ids.insert(id->as_string());
+      // A construction-only key is listed too, with no id to automate it by.
+      if (!id->is_null()) ids.insert(key->as_string());
     }
     // An insert name the factory does not know and one whose build feature is
     // off both answer with an empty array, which would excuse every key on it.

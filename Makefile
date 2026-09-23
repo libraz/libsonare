@@ -296,6 +296,37 @@ print(f"sample-rate coefficient rule: clean ({scanned} files scanned)")
 endef
 export GS_EFX_SR_COEFFICIENT_LINT_PY
 
+# A flat enum parameter is read through `read_enum`, which refuses an undeclared
+# value and publishes the declared ones as the catalog's choices. A bare
+# `static_cast<Enum>(i(...))` does neither, so it is refused here, scoped to the
+# enum namespaces so an integer cast such as a `size_t` count stays legal.
+define MASTERING_ENUM_CAST_LINT_PY
+import pathlib, re, sys
+
+FILES = sorted(p for p in pathlib.Path("src/mastering/api").glob("*") if p.suffix in (".h", ".cpp"))
+CAST_RE = re.compile(
+    r"static_cast<(sonare::)?(mastering::)?(eq|multiband|saturation|dynamics|final|rt|effects)::[^>]*>\(\s*i\(")
+
+violations = []
+for path in FILES:
+    text = path.read_text()
+    for match in CAST_RE.finditer(text):
+        violations.append((path, text.count("\n", 0, match.start()) + 1, match.group(0)))
+
+if not FILES:
+    sys.exit("mastering enum cast rule: found no files under src/mastering/api -- the glob is "
+             "broken, this is not a clean result")
+
+if violations:
+    for path, lineno, code in violations:
+        print(f"{path}:{lineno}: enum parameter cast from i(); read it with read_enum")
+        print(f"    {code}")
+    sys.exit(f"mastering enum cast rule: {len(violations)} violation(s) across {len(FILES)} files scanned")
+
+print(f"mastering enum cast rule: clean ({len(FILES)} files scanned)")
+endef
+export MASTERING_ENUM_CAST_LINT_PY
+
 # The insertion-effect chain skeleton holds one fixed quantity the archive
 # never measured -- a mix ratio -- and a binding row may not carry a constant at
 # all (tools/gs/efx-bindings/SCHEMA.md). What is pinned is the count rather than
@@ -363,6 +394,7 @@ lint:
 		echo "python_catalog_invalid.py unexpectedly passed mypy" >&2; exit 1; \
 	fi
 	python3 -c "$$GS_EFX_SR_COEFFICIENT_LINT_PY"
+	python3 -c "$$MASTERING_ENUM_CAST_LINT_PY"
 # The test-independence rule, stated in CONTRIBUTING.md: the byte-to-physical-unit
 # conversion functions are tested against the archive's raw measured
 # readings, hand-transcribed, never against gs_efx_tables.h -- the table the

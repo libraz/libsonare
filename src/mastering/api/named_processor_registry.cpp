@@ -173,8 +173,6 @@ namespace {
 // reflect this default configuration and are representative rather than exact
 // for a differently configured insert; the host treats them as fallback
 // estimates. Both values come from one prepared instance so they cannot drift.
-constexpr double kCatalogProbeSampleRate = 48000.0;
-constexpr int kCatalogProbeBlockSize = 512;
 
 struct InsertTiming {
   int latency_samples = 0;
@@ -187,7 +185,7 @@ InsertTiming insert_timing(const std::string& id) {
   try {
     std::unique_ptr<sonare::rt::ProcessorBase> processor = make_insert(id, "{}");
     if (processor == nullptr) return {};
-    processor->prepare(kCatalogProbeSampleRate, kCatalogProbeBlockSize);
+    processor->prepare(kInsertProbeSampleRate, kInsertProbeBlockSize);
     return {std::max(0, processor->latency_samples()), std::max(0, processor->tail_samples())};
   } catch (...) {
     return {};
@@ -329,6 +327,9 @@ const std::vector<std::string>& processor_catalog_schema_paths() {
       "[].params[].max",
       "[].params[].default",
       "[].params[].unit",
+      "[].params[].choices",
+      "[].params[].choices[].name",
+      "[].params[].choices[].value",
   };
   return paths;
 }

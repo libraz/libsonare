@@ -22,7 +22,22 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
+#include "effects/modulation/chorus.h"
+#include "effects/modulation/phaser.h"
+#include "mastering/dynamics/compressor.h"
+#include "mastering/eq/cut_filter.h"
+#include "mastering/eq/eq_band.h"
+#include "mastering/eq/linear_phase.h"
+#include "mastering/eq/pultec.h"
+#include "mastering/final/dither.h"
+#include "mastering/multiband/crossover.h"
+#include "mastering/multiband/multiband_saturation.h"
+#include "mastering/saturation/amp_sim.h"
+#include "mastering/saturation/bitcrusher.h"
+#include "mastering/saturation/cab_voicing.h"
+#include "mastering/saturation/waveshaper.h"
 #include "rt/aliasing_control.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -70,28 +85,364 @@ constexpr std::size_t field_count() {
   }
 }
 
-/// @brief Whether an integer-decoded value names a declared enumerator.
-/// @details Default answer for enums that carry no declared value set here; the
-/// flat param API then behaves as it always has and forwards the value to the
-/// processor's own validation.
-template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
-inline bool enum_value_declared(Enum) {
-  return true;
-}
+// ---------------------------------------------------------------------------
+// Enum choice names. One exhaustive switch per enum a flat parameter selects:
+// a newly declared enumerator fails to compile here (-Wswitch) until it is
+// named, and an enum with no table cannot be read as a parameter at all. A name
+// is the enumerator's lowerCamel spelling without its `k` prefix; the wire
+// value is the underlying value.
+// ---------------------------------------------------------------------------
 
-/// @brief Rejects an antialiasing mode outside the declared set.
-/// @details The exhaustive switch is the guard: a newly declared mode fails to
-/// compile here (-Wswitch) until it is listed, so a value can never reach a
-/// processor that would silently fall through to the untreated path.
-inline bool enum_value_declared(sonare::rt::AliasingControl value) {
+constexpr const char* enum_choice_name(sonare::rt::AliasingControl value) {
   switch (value) {
     case sonare::rt::AliasingControl::None:
+      return "none";
     case sonare::rt::AliasingControl::Adaa1:
+      return "adaa1";
     case sonare::rt::AliasingControl::Adaa2:
+      return "adaa2";
     case sonare::rt::AliasingControl::Oversample4x:
-      return true;
+      return "oversample4x";
   }
-  return false;
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::dynamics::DetectorMode value) {
+  switch (value) {
+    case sonare::mastering::dynamics::DetectorMode::Peak:
+      return "peak";
+    case sonare::mastering::dynamics::DetectorMode::Rms:
+      return "rms";
+    case sonare::mastering::dynamics::DetectorMode::LogRms:
+      return "logRms";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::saturation::WaveshaperCurve value) {
+  switch (value) {
+    case sonare::mastering::saturation::WaveshaperCurve::Tanh:
+      return "tanh";
+    case sonare::mastering::saturation::WaveshaperCurve::Arctan:
+      return "arctan";
+    case sonare::mastering::saturation::WaveshaperCurve::Asymmetric:
+      return "asymmetric";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::final::DitherType value) {
+  switch (value) {
+    case sonare::mastering::final::DitherType::None:
+      return "none";
+    case sonare::mastering::final::DitherType::Rpdf:
+      return "rpdf";
+    case sonare::mastering::final::DitherType::Tpdf:
+      return "tpdf";
+    case sonare::mastering::final::DitherType::NoiseShaped:
+      return "noiseShaped";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::saturation::QuantizerMode value) {
+  switch (value) {
+    case sonare::mastering::saturation::QuantizerMode::kFixedDepth:
+      return "fixedDepth";
+    case sonare::mastering::saturation::QuantizerMode::kOff:
+      return "off";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::effects::modulation::PhaserMixMode value) {
+  switch (value) {
+    case sonare::effects::modulation::PhaserMixMode::kCrossfade:
+      return "crossfade";
+    case sonare::effects::modulation::PhaserMixMode::kDrySum:
+      return "drySum";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::effects::modulation::PreFilterMode value) {
+  switch (value) {
+    case sonare::effects::modulation::PreFilterMode::kOff:
+      return "off";
+    case sonare::effects::modulation::PreFilterMode::kLowPass:
+      return "lowPass";
+    case sonare::effects::modulation::PreFilterMode::kHighPass:
+      return "highPass";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::multiband::CrossoverSlope value) {
+  switch (value) {
+    case sonare::mastering::multiband::CrossoverSlope::LR2:
+      return "lr2";
+    case sonare::mastering::multiband::CrossoverSlope::LR4:
+      return "lr4";
+    case sonare::mastering::multiband::CrossoverSlope::LR8:
+      return "lr8";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::multiband::CrossoverMode value) {
+  switch (value) {
+    case sonare::mastering::multiband::CrossoverMode::LinkwitzRiley:
+      return "linkwitzRiley";
+    case sonare::mastering::multiband::CrossoverMode::Butterworth:
+      return "butterworth";
+    case sonare::mastering::multiband::CrossoverMode::Bessel:
+      return "bessel";
+    case sonare::mastering::multiband::CrossoverMode::FirLinearPhase:
+      return "firLinearPhase";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(
+    sonare::mastering::eq::LinearPhaseEqConfig::Resolution value) {
+  switch (value) {
+    case sonare::mastering::eq::LinearPhaseEqConfig::Resolution::Custom:
+      return "custom";
+    case sonare::mastering::eq::LinearPhaseEqConfig::Resolution::Low:
+      return "low";
+    case sonare::mastering::eq::LinearPhaseEqConfig::Resolution::Medium:
+      return "medium";
+    case sonare::mastering::eq::LinearPhaseEqConfig::Resolution::High:
+      return "high";
+    case sonare::mastering::eq::LinearPhaseEqConfig::Resolution::VeryHigh:
+      return "veryHigh";
+    case sonare::mastering::eq::LinearPhaseEqConfig::Resolution::Maximum:
+      return "maximum";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::eq::PultecComponentModel value) {
+  switch (value) {
+    case sonare::mastering::eq::PultecComponentModel::CurveOnly:
+      return "curveOnly";
+    case sonare::mastering::eq::PultecComponentModel::Eqp1aWdf:
+      return "eqp1aWdf";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::eq::CutFilterSlope value) {
+  switch (value) {
+    case sonare::mastering::eq::CutFilterSlope::Db12PerOct:
+      return "db12PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db24PerOct:
+      return "db24PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db6PerOct:
+      return "db6PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db18PerOct:
+      return "db18PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db30PerOct:
+      return "db30PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db36PerOct:
+      return "db36PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db42PerOct:
+      return "db42PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db48PerOct:
+      return "db48PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db54PerOct:
+      return "db54PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db60PerOct:
+      return "db60PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db66PerOct:
+      return "db66PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db72PerOct:
+      return "db72PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db78PerOct:
+      return "db78PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db84PerOct:
+      return "db84PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db90PerOct:
+      return "db90PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Db96PerOct:
+      return "db96PerOct";
+    case sonare::mastering::eq::CutFilterSlope::Brickwall:
+      return "brickwall";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::eq::EqBandType value) {
+  switch (value) {
+    case sonare::mastering::eq::EqBandType::Peak:
+      return "peak";
+    case sonare::mastering::eq::EqBandType::LowShelf:
+      return "lowShelf";
+    case sonare::mastering::eq::EqBandType::HighShelf:
+      return "highShelf";
+    case sonare::mastering::eq::EqBandType::LowPass:
+      return "lowPass";
+    case sonare::mastering::eq::EqBandType::HighPass:
+      return "highPass";
+    case sonare::mastering::eq::EqBandType::BandPass:
+      return "bandPass";
+    case sonare::mastering::eq::EqBandType::Notch:
+      return "notch";
+    case sonare::mastering::eq::EqBandType::TiltShelf:
+      return "tiltShelf";
+    case sonare::mastering::eq::EqBandType::FlatTilt:
+      return "flatTilt";
+    case sonare::mastering::eq::EqBandType::AllPass:
+      return "allPass";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::eq::StereoPlacement value) {
+  switch (value) {
+    case sonare::mastering::eq::StereoPlacement::Stereo:
+      return "stereo";
+    case sonare::mastering::eq::StereoPlacement::Left:
+      return "left";
+    case sonare::mastering::eq::StereoPlacement::Right:
+      return "right";
+    case sonare::mastering::eq::StereoPlacement::Mid:
+      return "mid";
+    case sonare::mastering::eq::StereoPlacement::Side:
+      return "side";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::eq::PhaseMode value) {
+  switch (value) {
+    case sonare::mastering::eq::PhaseMode::Inherit:
+      return "inherit";
+    case sonare::mastering::eq::PhaseMode::ZeroLatency:
+      return "zeroLatency";
+    case sonare::mastering::eq::PhaseMode::NaturalPhase:
+      return "naturalPhase";
+    case sonare::mastering::eq::PhaseMode::LinearPhase:
+      return "linearPhase";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::eq::BiquadCoeffMode value) {
+  switch (value) {
+    case sonare::mastering::eq::BiquadCoeffMode::Rbj:
+      return "rbj";
+    case sonare::mastering::eq::BiquadCoeffMode::Vicanek:
+      return "vicanek";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::multiband::SaturationType value) {
+  switch (value) {
+    case sonare::mastering::multiband::SaturationType::SoftClip:
+      return "softClip";
+    case sonare::mastering::multiband::SaturationType::Tape:
+      return "tape";
+    case sonare::mastering::multiband::SaturationType::Tube:
+      return "tube";
+    case sonare::mastering::multiband::SaturationType::Exciter:
+      return "exciter";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::saturation::CabModel value) {
+  switch (value) {
+    case sonare::mastering::saturation::CabModel::kGuitar4x12:
+      return "guitar4x12";
+    case sonare::mastering::saturation::CabModel::kBass8x10:
+      return "bass8x10";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::saturation::AmpModel value) {
+  switch (value) {
+    case sonare::mastering::saturation::AmpModel::kClassicCrunch:
+      return "classicCrunch";
+    case sonare::mastering::saturation::AmpModel::kFenderClean:
+      return "fenderClean";
+    case sonare::mastering::saturation::AmpModel::kModernHiGain:
+      return "modernHiGain";
+    case sonare::mastering::saturation::AmpModel::kTweed:
+      return "tweed";
+    case sonare::mastering::saturation::AmpModel::kVoxChime:
+      return "voxChime";
+    case sonare::mastering::saturation::AmpModel::kRectifier:
+      return "rectifier";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::saturation::AmpTopology value) {
+  switch (value) {
+    case sonare::mastering::saturation::AmpTopology::kVoiced:
+      return "voiced";
+    case sonare::mastering::saturation::AmpTopology::kCircuit:
+      return "circuit";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::saturation::PowerTube value) {
+  switch (value) {
+    case sonare::mastering::saturation::PowerTube::k6L6:
+      return "6l6";
+    case sonare::mastering::saturation::PowerTube::kEL34:
+      return "el34";
+    case sonare::mastering::saturation::PowerTube::kEL84:
+      return "el84";
+    case sonare::mastering::saturation::PowerTube::k6V6:
+      return "6v6";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::saturation::MicModel value) {
+  switch (value) {
+    case sonare::mastering::saturation::MicModel::kNone:
+      return "none";
+    case sonare::mastering::saturation::MicModel::kDynamic:
+      return "dynamic";
+    case sonare::mastering::saturation::MicModel::kRibbon:
+      return "ribbon";
+    case sonare::mastering::saturation::MicModel::kCondenser:
+      return "condenser";
+  }
+  return nullptr;
+}
+
+/// Highest underlying value scanned for declared enumerators.
+inline constexpr int kEnumOrdinalScanLimit = 63;
+
+/// @brief Whether an integer-decoded value names a declared enumerator.
+template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
+constexpr bool enum_value_declared(Enum value) {
+  return enum_choice_name(value) != nullptr;
+}
+
+/// @brief One selectable value of a closed parameter set, by name and wire value.
+struct EnumChoice {
+  std::string name;
+  int value = 0;
+};
+
+/// @brief Every declared value of @p Enum in wire-value order.
+template <typename Enum>
+std::vector<EnumChoice> enum_choices() {
+  std::vector<EnumChoice> choices;
+  for (int value = 0; value <= kEnumOrdinalScanLimit; ++value) {
+    if (const char* name = enum_choice_name(static_cast<Enum>(value))) {
+      choices.push_back(EnumChoice{name, value});
+    }
+  }
+  return choices;
 }
 
 }  // namespace sonare::mastering::api::detail

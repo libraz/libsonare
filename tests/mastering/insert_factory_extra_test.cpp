@@ -24,7 +24,14 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/eq/cut_filter.h"
 #include "mastering/eq/dynamic_eq.h"
+#include "mastering/eq/equalizer.h"
+#include "mastering/eq/parametric.h"
+#include "mastering/eq/pultec.h"
+#include "mastering/multiband/multiband_compressor.h"
+#include "mastering/multiband/multiband_saturation.h"
+#include "mastering/saturation/amp_sim.h"
 #include "rt/processor_base.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -1197,7 +1204,7 @@ TEST_CASE("processor catalog publishes a boolean parameter as boolean",
   for (const auto& param : params.as_array()) {
     const std::string name = param["name"].as_string();
     const std::string type = param["type"].as_string();
-    REQUIRE((type == "boolean" || type == "number"));
+    REQUIRE((type == "boolean" || type == "number" || type == "enum"));
     if (name == "autoMakeup") {
       saw_auto_makeup = true;
       CHECK(type == "boolean");
@@ -1206,8 +1213,8 @@ TEST_CASE("processor catalog publishes a boolean parameter as boolean",
       saw_a_number = true;
       CHECK(type == "number");
     }
-    // An enum-valued field is still a number: only a C++ bool is a toggle.
-    if (name == "detector") CHECK(type == "number");
+    // An enum-valued field publishes as an enum: only a C++ bool is a toggle.
+    if (name == "detector") CHECK(type == "enum");
   }
   CHECK(saw_auto_makeup);
   CHECK(saw_a_number);
@@ -1547,3 +1554,161 @@ TEST_CASE("make_insert_with_ir admits its params under the same budget",
                     sonare::SonareException);
 }
 #endif  // SONARE_WITH_FX
+
+namespace {
+
+// The insert behind @p name built from @p params, as its concrete type.
+template <typename Processor>
+std::unique_ptr<sonare::rt::ProcessorBase> BuildAs(const std::string& name,
+                                                   const std::string& params,
+                                                   const Processor** out) {
+  auto processor = make_insert(name, params);
+  REQUIRE(processor != nullptr);
+  *out = dynamic_cast<const Processor*>(processor.get());
+  REQUIRE(*out != nullptr);
+  return processor;
+}
+
+std::string OneKey(const std::string& key, int value) {
+  return "{\"" + key + "\":" + std::to_string(value) + "}";
+}
+
+}  // namespace
+
+TEST_CASE("an enum wire value selects the enumerator it always selected",
+          "[mastering][insert_factory]") {
+  namespace eq = sonare::mastering::eq;
+  namespace mb = sonare::mastering::multiband;
+  namespace sat = sonare::mastering::saturation;
+  // The wire numbering the per-enum decoders spelled out case by case.
+  const eq::EqBandType band_types[] = {eq::EqBandType::Peak,      eq::EqBandType::LowShelf,
+                                       eq::EqBandType::HighShelf, eq::EqBandType::LowPass,
+                                       eq::EqBandType::HighPass,  eq::EqBandType::BandPass,
+                                       eq::EqBandType::Notch,     eq::EqBandType::TiltShelf,
+                                       eq::EqBandType::FlatTilt,  eq::EqBandType::AllPass};
+  for (int value = 0; value < 10; ++value) {
+    INFO("band type " << value);
+    const eq::EqualizerProcessor* equalizer = nullptr;
+    const auto held = BuildAs("eq.equalizer", OneKey("band0.type", value), &equalizer);
+    CHECK(equalizer->band(0).type == band_types[value]);
+    // The dynamic EQ refuses the two tilts.
+    if (value == 7 || value == 8) continue;
+    const eq::DynamicEq* dynamic = nullptr;
+    const auto held_dynamic = BuildAs(
+        "eq.dynamic", "{\"band0.frequencyHz\":1000,\"band0.type\":" + std::to_string(value) + "}",
+        &dynamic);
+    CHECK(dynamic->band(0).type == band_types[value]);
+  }
+  const eq::BiquadCoeffMode coeff_modes[] = {eq::BiquadCoeffMode::Rbj,
+                                             eq::BiquadCoeffMode::Vicanek};
+  const eq::StereoPlacement placements[] = {eq::StereoPlacement::Stereo, eq::StereoPlacement::Left,
+                                            eq::StereoPlacement::Right, eq::StereoPlacement::Mid,
+                                            eq::StereoPlacement::Side};
+  const eq::PhaseMode phases[] = {eq::PhaseMode::Inherit, eq::PhaseMode::ZeroLatency,
+                                  eq::PhaseMode::NaturalPhase, eq::PhaseMode::LinearPhase};
+  for (int value = 0; value < 2; ++value) {
+    const eq::ParametricEq* parametric = nullptr;
+    const auto held = BuildAs("eq.parametric", OneKey("band0.coeffMode", value), &parametric);
+    CHECK(parametric->band(0).coeff_mode == coeff_modes[value]);
+  }
+  for (int value = 0; value < 5; ++value) {
+    const eq::ParametricEq* parametric = nullptr;
+    const auto held = BuildAs("eq.parametric", OneKey("band0.placement", value), &parametric);
+    CHECK(parametric->band(0).placement == placements[value]);
+  }
+  for (int value = 0; value < 4; ++value) {
+    INFO("phase " << value);
+    const eq::ParametricEq* parametric = nullptr;
+    const auto held = BuildAs("eq.parametric", OneKey("band0.phase", value), &parametric);
+    CHECK(parametric->band(0).phase == phases[value]);
+    // A global phase mode has nothing to inherit from.
+    if (value == 0) continue;
+    const eq::EqualizerProcessor* equalizer = nullptr;
+    const auto held_equalizer = BuildAs("eq.equalizer", OneKey("phaseMode", value), &equalizer);
+    CHECK(equalizer->phase_mode() == phases[value]);
+  }
+
+  const mb::SaturationType saturation_types[] = {mb::SaturationType::SoftClip,
+                                                 mb::SaturationType::Tape, mb::SaturationType::Tube,
+                                                 mb::SaturationType::Exciter};
+  for (int value = 0; value < 4; ++value) {
+    const mb::MultibandSaturation* saturation = nullptr;
+    const auto held = BuildAs("multiband.saturation", OneKey("band0.type", value), &saturation);
+    CHECK(saturation->config().bands[0].type == saturation_types[value]);
+  }
+  const mb::CrossoverSlope slopes[] = {mb::CrossoverSlope::LR2, mb::CrossoverSlope::LR4,
+                                       mb::CrossoverSlope::LR8};
+  for (int value = 0; value < 3; ++value) {
+    const mb::MultibandCompressor* compressor = nullptr;
+    const auto held = BuildAs("multiband.compressor", OneKey("slope", value), &compressor);
+    CHECK(compressor->config().crossover.slope == slopes[value]);
+  }
+  const eq::PultecEq* pultec = nullptr;
+  const auto held_pultec = BuildAs("eq.pultec", OneKey("componentModel", 1), &pultec);
+  CHECK(pultec->component_model() == eq::PultecComponentModel::Eqp1aWdf);
+  const eq::CutFilter* cut = nullptr;
+  const auto held_cut = BuildAs("eq.cutFilter", OneKey("highPassSlope", 16), &cut);
+  CHECK(cut->high_pass_slope() == eq::CutFilterSlope::Brickwall);
+
+  const sat::AmpModel amp_models[] = {sat::AmpModel::kClassicCrunch, sat::AmpModel::kFenderClean,
+                                      sat::AmpModel::kModernHiGain,  sat::AmpModel::kTweed,
+                                      sat::AmpModel::kVoxChime,      sat::AmpModel::kRectifier};
+  const sat::PowerTube tubes[] = {sat::PowerTube::k6L6, sat::PowerTube::kEL34,
+                                  sat::PowerTube::kEL84, sat::PowerTube::k6V6};
+  const sat::MicModel mics[] = {sat::MicModel::kNone, sat::MicModel::kDynamic,
+                                sat::MicModel::kRibbon, sat::MicModel::kCondenser};
+  for (int value = 0; value < 6; ++value) {
+    const sat::AmpSim* amp = nullptr;
+    const auto held = BuildAs("saturation.ampSim", OneKey("ampModel", value), &amp);
+    CHECK(amp->amp_config().amp_model == amp_models[value]);
+  }
+  for (int value = 0; value < 4; ++value) {
+    const sat::AmpSim* amp = nullptr;
+    const auto held = BuildAs("saturation.ampSim", OneKey("powerTube", value), &amp);
+    CHECK(amp->amp_config().power_tube == tubes[value]);
+    const auto held_mic = BuildAs("saturation.ampSim", OneKey("micModel", value), &amp);
+    CHECK(amp->amp_config().mic_model == mics[value]);
+    const auto held_mic_b = BuildAs("saturation.ampSim", OneKey("micBModel", value), &amp);
+    CHECK(amp->amp_config().mic_b_model == mics[value]);
+  }
+  const sat::AmpSim* amp = nullptr;
+  const auto held_cab = BuildAs("saturation.ampSim", OneKey("cabModel", 1), &amp);
+  CHECK(amp->amp_config().cab_model == sat::CabModel::kBass8x10);
+  const auto held_topology = BuildAs("saturation.ampSim", OneKey("topology", 1), &amp);
+  CHECK(amp->amp_config().topology == sat::AmpTopology::kCircuit);
+}
+
+TEST_CASE("an enum wire value no enumerator is declared for is refused",
+          "[mastering][insert_factory]") {
+  // Each of these once became the first enumerator, or an unnamed value, with
+  // nothing to tell the caller the setting did not exist.
+  const std::pair<const char*, const char*> undeclared[] = {
+      {"eq.parametric", R"({"band0.type":10})"},
+      {"eq.parametric", R"({"band0.coeffMode":2})"},
+      {"eq.parametric", R"({"band0.placement":5})"},
+      {"eq.parametric", R"({"band0.phase":4})"},
+      {"eq.equalizer", R"({"phaseMode":4})"},
+      {"eq.dynamic", R"({"band0.frequencyHz":1000,"band0.type":10})"},
+      {"eq.linearPhase", R"({"resolution":6})"},
+      {"eq.pultec", R"({"componentModel":2})"},
+      {"eq.cutFilter", R"({"highPassSlope":17})"},
+      {"eq.cutFilter", R"({"lowPassSlope":-1})"},
+      {"multiband.compressor", R"({"slope":3})"},
+      {"multiband.compressor", R"({"mode":4})"},
+      {"multiband.saturation", R"({"band0.type":4})"},
+      {"saturation.ampSim", R"({"ampModel":6})"},
+      {"saturation.ampSim", R"({"cabModel":2})"},
+      {"saturation.ampSim", R"({"topology":2})"},
+      {"saturation.ampSim", R"({"powerTube":4})"},
+      {"saturation.ampSim", R"({"micModel":4})"},
+      {"saturation.ampSim", R"({"micBModel":-1})"},
+      {"dynamics.compressor", R"({"detector":3})"},
+      {"saturation.waveshaper", R"({"curve":3})"},
+      {"saturation.bitcrusher", R"({"ditherType":4})"},
+      {"saturation.bitcrusher", R"({"quantizerMode":2})"},
+  };
+  for (const auto& [name, params] : undeclared) {
+    INFO(name << " " << params);
+    CHECK_THROWS_AS(make_insert(name, params), sonare::SonareException);
+  }
+}

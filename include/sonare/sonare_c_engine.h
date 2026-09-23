@@ -263,14 +263,14 @@ SonareError sonare_engine_set_bus_strip_insert_bypassed(SonareRealtimeEngine* en
                                                         int bypassed, int reset_on_bypass);
 /// @brief Realtime change of one track-strip insert parameter, addressed by the
 ///        processor's JSON-key parameter name.
-/// @details @p param_name is a key returned by @ref sonare_mastering_insert_param_info
-///   (which also gives each param's `rtSafe` flag). The name is resolved to the
-///   integer param_id on the control thread and applied at the next block head
-///   via the realtime command queue, so this is safe to call during playback
-///   without rebuilding the strip. @p insert_index addresses the combined pre/post
-///   insert sequence. Returns SONARE_ERROR_INVALID_PARAMETER if the track, insert,
-///   or name is unknown, or the param is not realtime-safe. Returns
-///   SONARE_ERROR_OUT_OF_MEMORY when the command queue is full (temporary
+/// @details @p param_name is the key of an entry @ref sonare_mastering_insert_param_info
+///   returns with a non-null `id` (the entry also gives the param's `rtSafe` flag;
+///   an entry with a null `id` is construction-only and is refused here). The name is resolved to
+///   the integer param_id on the control thread and applied at the next block head via the realtime
+///   command queue, so this is safe to call during playback without rebuilding the strip. @p
+///   insert_index addresses the combined pre/post insert sequence. Returns
+///   SONARE_ERROR_INVALID_PARAMETER if the track, insert, or name is unknown, or the param is not
+///   realtime-safe. Returns SONARE_ERROR_OUT_OF_MEMORY when the command queue is full (temporary
 ///   back-pressure); track/insert/param indices must each fit in 8 bits.
 SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareRealtimeEngine* engine,
                                                                uint32_t track_id,

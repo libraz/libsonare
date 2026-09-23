@@ -302,6 +302,9 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "processors[].params[].max",
       "processors[].params[].default",
       "processors[].params[].unit",
+      "processors[].params[].choices",
+      "processors[].params[].choices[].name",
+      "processors[].params[].choices[].value",
   };
   return paths;
 }

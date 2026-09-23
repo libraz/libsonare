@@ -8,7 +8,9 @@
 // covers every construction key, that it agrees with the config structs, and
 // that the published range really is the range construction enforces.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -16,9 +18,11 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
+#include "mastering/api/processor_params.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/stereo/imager.h"
+#include "rt/processor_base.h"
 #include "support/schema_paths.h"
 #include "util/json.h"
 
@@ -41,6 +45,7 @@ namespace json = sonare::util::json;
 using sonare::mastering::api::insert_factory_names;
 using sonare::mastering::api::insert_param_info_json;
 using sonare::mastering::api::insert_param_names;
+using sonare::mastering::api::insert_probe_params;
 using sonare::mastering::api::make_insert;
 
 json::Array param_info(const std::string& name) {
@@ -65,21 +70,56 @@ const json::Value* find_param(const json::Array& params, const std::string& name
   return nullptr;
 }
 
-// A one-key insert config carrying @p value under @p key, serialized the way a
-// host would. Going through the JSON writer rather than std::to_string keeps a
-// default that needs full float precision from being rounded on its way back in.
-std::string one_param_json(const std::string& key, const json::Value& value) {
+// The config the catalog measures @p key through, carrying @p value, serialized
+// the way a host would. Going through the JSON writer rather than std::to_string
+// keeps a default that needs full float precision from being rounded on its way
+// back in.
+std::string probe_json(const std::string& name, const std::string& key, const json::Value& value) {
   json::Object params;
+  for (const auto& param : insert_probe_params(name, key, 0.0)) {
+    if (param.key != key) params.emplace(param.key, json::Value(param.value));
+  }
   params.emplace(key, value);
   return json::dump(json::Value(std::move(params)));
 }
 
 bool builds_with(const std::string& name, const std::string& key, const json::Value& value) {
   try {
-    return make_insert(name, one_param_json(key, value)) != nullptr;
+    return make_insert(name, probe_json(name, key, value)) != nullptr;
   } catch (...) {
     return false;
   }
+}
+
+// Build, then prepare at the catalog's probe rate: some processors refuse a
+// setting only once they know the rate they run at.
+bool prepares_with(const std::string& name, const std::string& key, double value) {
+  try {
+    const std::unique_ptr<sonare::rt::ProcessorBase> processor =
+        make_insert(name, probe_json(name, key, json::Value(value)));
+    if (processor == nullptr) return false;
+    processor->prepare(sonare::mastering::api::kInsertProbeSampleRate,
+                       sonare::mastering::api::kInsertProbeBlockSize);
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+std::vector<double> choice_values(const json::Value& parameter) {
+  std::vector<double> values;
+  for (const json::Value& choice : field(parameter, "choices").as_array()) {
+    values.push_back(field(choice, "value").as_number());
+  }
+  return values;
+}
+
+std::vector<std::string> choice_names(const json::Value& parameter) {
+  std::vector<std::string> names;
+  for (const json::Value& choice : field(parameter, "choices").as_array()) {
+    names.push_back(field(choice, "name").as_string());
+  }
+  return names;
 }
 
 #ifdef SONARE_WITH_FX
@@ -101,20 +141,207 @@ void require_a_key_per_config_field(const std::string& name, std::size_t unexpos
 
 }  // namespace
 
+TEST_CASE("the parameter info lists every key construction reads", "[mastering][catalog]") {
+  std::vector<std::string> missing;
+  for (const std::string& name : insert_factory_names()) {
+    std::set<std::string> listed;
+    for (const json::Value& parameter : param_info(name)) {
+      listed.insert(field(parameter, "name").as_string());
+    }
+    for (const std::string& key : insert_param_names(name)) {
+      if (listed.count(key) == 0) missing.push_back(name + " " + key);
+    }
+  }
+  INFO(missing.size() << " construction keys missing; first: "
+                      << (missing.empty() ? std::string() : missing.front()));
+  REQUIRE(missing.empty());
+}
+
+TEST_CASE("automation targets come first in id order, then construction-only keys by name",
+          "[mastering][catalog]") {
+  std::size_t construction_only = 0;
+  for (const std::string& name : insert_factory_names()) {
+    INFO(name);
+    const std::unique_ptr<sonare::rt::ProcessorBase> processor = make_insert(name, "{}");
+    REQUIRE(processor != nullptr);
+    const auto descriptors = processor->parameter_descriptors();
+    const json::Array params = param_info(name);
+    REQUIRE(params.size() >= descriptors.size());
+    std::set<std::string> descriptor_keys;
+    for (std::size_t index = 0; index < descriptors.size(); ++index) {
+      INFO("entry " << index);
+      REQUIRE(field(params[index], "name").as_string() == descriptors[index].key);
+      REQUIRE(field(params[index], "id").as_number() == static_cast<double>(descriptors[index].id));
+      descriptor_keys.insert(descriptors[index].key);
+    }
+    std::string previous;
+    for (std::size_t index = descriptors.size(); index < params.size(); ++index) {
+      const std::string key = field(params[index], "name").as_string();
+      INFO("entry " << index << " " << key);
+      REQUIRE(field(params[index], "id").is_null());
+      REQUIRE(field(params[index], "rtSafe").as_bool() == false);
+      REQUIRE(descriptor_keys.count(key) == 0);
+      if (index > descriptors.size()) REQUIRE(previous < key);
+      previous = key;
+      ++construction_only;
+    }
+  }
+  // Every insert listing only its automation targets passes the loop above.
+  REQUIRE(construction_only > 0);
+}
+
+TEST_CASE("choices list exactly the values construction accepts", "[mastering][catalog][.][slow]") {
+  std::size_t with_choices = 0;
+  for (const std::string& name : insert_factory_names()) {
+    for (const json::Value& parameter : param_info(name)) {
+      const std::string key = field(parameter, "name").as_string();
+      const std::string type = field(parameter, "type").as_string();
+      INFO(name << " parameter " << key);
+      if (field(parameter, "choices").is_null()) {
+        REQUIRE(type != "enum");
+        continue;
+      }
+      ++with_choices;
+      REQUIRE(type != "boolean");
+      REQUIRE(field(parameter, "min").is_null());
+      REQUIRE(field(parameter, "max").is_null());
+      const std::vector<double> values = choice_values(parameter);
+      const std::vector<std::string> names = choice_names(parameter);
+      REQUIRE_FALSE(values.empty());
+      REQUIRE(std::is_sorted(values.begin(), values.end()));
+      REQUIRE(std::adjacent_find(values.begin(), values.end()) == values.end());
+      REQUIRE(std::set<std::string>(names.begin(), names.end()).size() == names.size());
+      const json::Value& fallback = field(parameter, "default");
+      if (fallback.is_number()) {
+        REQUIRE(std::find(values.begin(), values.end(), fallback.as_number()) != values.end());
+      }
+      for (const double value : values) {
+        INFO("choice " << value);
+        REQUIRE(prepares_with(name, key, value));
+      }
+      // Every other value up to one past the largest listed must be refused: a
+      // declared value the processor rejects is left out rather than listed.
+      if (type != "enum") continue;
+      for (double value = 0.0; value <= values.back() + 1.0; value += 1.0) {
+        if (std::find(values.begin(), values.end(), value) != values.end()) continue;
+        INFO("unlisted " << value);
+        REQUIRE_FALSE(prepares_with(name, key, value));
+      }
+    }
+  }
+  REQUIRE(with_choices > 0);
+}
+
+TEST_CASE("choices leave out what the processor refuses and name an integer set by value",
+          "[mastering][catalog]") {
+  const json::Array exciter = param_info("saturation.exciter");
+  const json::Value* aliasing = find_param(exciter, "aliasing");
+  REQUIRE(aliasing != nullptr);
+  REQUIRE(field(*aliasing, "type").as_string() == "enum");
+  REQUIRE(choice_names(*aliasing) == std::vector<std::string>{"none", "oversample4x"});
+  REQUIRE(choice_values(*aliasing) == std::vector<double>{0.0, 3.0});
+
+  // A linear-phase EQ has no all-pass response to realize, and says so at prepare;
+  // a build alone accepts it.
+  const json::Array linear_phase = param_info("eq.linearPhase");
+  const json::Value* band_type = find_param(linear_phase, "band0.type");
+  REQUIRE(band_type != nullptr);
+  REQUIRE(field(*band_type, "type").as_string() == "enum");
+  const std::vector<std::string> band_types = choice_names(*band_type);
+  REQUIRE(std::find(band_types.begin(), band_types.end(), "peak") != band_types.end());
+  REQUIRE(std::find(band_types.begin(), band_types.end(), "allPass") == band_types.end());
+  REQUIRE(builds_with("eq.linearPhase", "band0.type", json::Value(9.0)));
+
+  // A whole-number control whose accepted set has holes: [1, 8] would invite a 3.
+  const json::Array tube = param_info("saturation.tube");
+  const json::Value* oversample = find_param(tube, "oversampleFactor");
+  REQUIRE(oversample != nullptr);
+  REQUIRE(field(*oversample, "type").as_string() == "number");
+  REQUIRE(choice_values(*oversample) == std::vector<double>{1.0, 2.0, 4.0, 8.0});
+  REQUIRE(choice_names(*oversample) == std::vector<std::string>{"1", "2", "4", "8"});
+  REQUIRE(field(*oversample, "min").is_null());
+  REQUIRE(field(*oversample, "max").is_null());
+}
+
+namespace {
+
+// Names unique within the enum, and every declared value inside the scan with
+// room to spare, so a value the scan cannot reach is a failure here first.
+template <typename Enum>
+std::vector<std::string> declared_names() {
+  namespace detail = sonare::mastering::api::detail;
+  const std::vector<detail::EnumChoice> choices = detail::enum_choices<Enum>();
+  std::vector<std::string> names;
+  for (const detail::EnumChoice& choice : choices) names.push_back(choice.name);
+  REQUIRE_FALSE(choices.empty());
+  REQUIRE(choices.back().value <= detail::kEnumOrdinalScanLimit - 1);
+  REQUIRE(std::set<std::string>(names.begin(), names.end()).size() == names.size());
+  return names;
+}
+
+}  // namespace
+
+TEST_CASE("every enum a flat parameter selects has unique names within the scan",
+          "[mastering][catalog]") {
+  namespace m = sonare::mastering;
+  (void)declared_names<sonare::rt::AliasingControl>();
+  (void)declared_names<m::dynamics::DetectorMode>();
+  (void)declared_names<m::saturation::WaveshaperCurve>();
+  (void)declared_names<m::final::DitherType>();
+  (void)declared_names<m::saturation::QuantizerMode>();
+  (void)declared_names<sonare::effects::modulation::PhaserMixMode>();
+  (void)declared_names<sonare::effects::modulation::PreFilterMode>();
+  (void)declared_names<m::multiband::CrossoverMode>();
+  (void)declared_names<m::eq::LinearPhaseEqConfig::Resolution>();
+  (void)declared_names<m::eq::PultecComponentModel>();
+  (void)declared_names<m::eq::StereoPlacement>();
+  (void)declared_names<m::eq::PhaseMode>();
+  (void)declared_names<m::eq::BiquadCoeffMode>();
+  (void)declared_names<m::multiband::SaturationType>();
+  (void)declared_names<m::saturation::AmpModel>();
+  (void)declared_names<m::saturation::AmpTopology>();
+  (void)declared_names<m::saturation::MicModel>();
+
+  // The spelling rule on its awkward cases: an acronym, a `k` before a digit or
+  // an acronym, and an interior capital.
+  REQUIRE(declared_names<m::multiband::CrossoverSlope>() ==
+          std::vector<std::string>{"lr2", "lr4", "lr8"});
+  REQUIRE(declared_names<m::saturation::PowerTube>() ==
+          std::vector<std::string>{"6l6", "el34", "el84", "6v6"});
+  REQUIRE(declared_names<m::saturation::CabModel>() ==
+          std::vector<std::string>{"guitar4x12", "bass8x10"});
+  REQUIRE(declared_names<m::eq::CutFilterSlope>().front() == "db12PerOct");
+  REQUIRE(declared_names<m::eq::EqBandType>().back() == "allPass");
+  REQUIRE(declared_names<m::dynamics::DetectorMode>().back() == "logRms");
+}
+
 TEST_CASE("every insert publishes a default for every construction key it automates",
           "[mastering][catalog]") {
   // The per-band EQ surface is the bulk of the flat parameter set and is only
   // read when the caller supplies a band, so it is the part that silently
   // publishes nothing unless the builders declare their bands explicitly.
+  //
+  // A few keys have no fallback, because absence means something else: a
+  // cutoff beyond the default split adds a band, and a reverb's decaySec (or
+  // the plate's preDelayMs) is used only when supplied. A string or an array
+  // rides the JSON side-channel and has no numeric default at all.
+  const std::set<std::string> no_fallback = {"cutoff2Hz", "cutoff3Hz", "cutoff4Hz", "cutoff5Hz",
+                                             "cutoff6Hz", "cutoff7Hz", "decaySec",  "preDelayMs"};
   for (const std::string& name : insert_factory_names()) {
     const std::vector<std::string> construction_keys = insert_param_names(name);
     const std::set<std::string> keys(construction_keys.begin(), construction_keys.end());
     for (const json::Value& parameter : param_info(name)) {
       const std::string key = field(parameter, "name").as_string();
+      const std::string type = field(parameter, "type").as_string();
       // A descriptor id with no construction key of the same name cannot have a
       // construction default, and correctly publishes none.
       if (keys.find(key) == keys.end()) continue;
       INFO(name << " parameter " << key);
+      if (type == "string" || type == "array") {
+        REQUIRE(field(parameter, "default").is_null());
+        continue;
+      }
+      if (no_fallback.count(key) != 0) continue;
       REQUIRE_FALSE(field(parameter, "default").is_null());
     }
   }

@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "mastering/api/named_processor.h"
@@ -436,8 +437,8 @@ std::unique_ptr<Processor> build_saturation(const std::string& name, const Param
     // them: they are read from the JSON side-channel below rather than from the
     // flat map, and a construction option a caller cannot discover may as well
     // not exist. Same reason the acoustic builder probes its band arrays.
-    (void)params.find("preset");
-    (void)params.find("cabIrF32Base64");
+    detail::note_side_channel_key(params, "preset", ParamKind::String);
+    detail::note_side_channel_key(params, "cabIrF32Base64", ParamKind::String);
     saturation::AmpSimConfig base;
     const std::string preset = read_string_key(json_root, "preset");
     if (!preset.empty()) {
@@ -693,6 +694,9 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // reference rate) and multiplies energy by decay^4 per full round trip (decay
     // is applied twice per half). Requiring the amplitude to reach 1e-3 (-60 dB)
     // after T60 seconds gives decay = exp(-ln(1000) * Tloop / (4 * T60)).
+    // Read only when present, so the key has a type and no fallback.
+    params.note_kind("decaySec", ParamKind::Number);
+    params.note_kind("preDelayMs", ParamKind::Number);
     if (params.find("decaySec") != params.end()) {
       constexpr float kTankLoopSeconds = 21589.0f / 29761.0f;  // both halves at ref rate
       const float decay_sec = std::max(0.05f, f(params, "decaySec", 5.0f));
@@ -723,6 +727,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // decay (0..1.5), damping (0..1) and dryWet instead — a host automating the
     // tail at audio rate must target those, not decaySec/hfDamping.
     FdnReverbConfig config;
+    params.note_kind("decaySec", ParamKind::Number);
     if (params.find("decaySec") != params.end()) {
       // decaySec is the approximate RT60 tail length in seconds. The FDN's
       // T60_lf = max(0.01, clamp(decay, 0, 1.5) * 10), so decaySec maps to
@@ -742,6 +747,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     VelvetReverbConfig config;
     config.decay = f(params, "decay", config.decay);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    params.note_kind("decaySec", ParamKind::Number);
     if (params.find("decaySec") != params.end()) {
       // Velvet's effective T60 = reverb_time_s * (0.5 + decay). To make decaySec
       // mean approximately the same RT60 as FDN (decaySec == ~T60), set
@@ -768,8 +774,9 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     //
     // Probed so insert_param_names() publishes it: the base64 IR is read from
     // the JSON side-channel below, not from the flat map.
-    (void)params.find("irF32Base64");
+    detail::note_side_channel_key(params, "irF32Base64", ParamKind::String);
     ConvolutionReverbConfig config;
+    params.note_kind("decaySec", ParamKind::Number);
     if (params.find("decaySec") != params.end()) {
       // Clamp to the synthesizer's ceiling at construction so an out-of-range
       // request like {decaySec:40} resolves to the documented maximum tail
@@ -827,8 +834,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     effects::acoustic::RoomMorphConfig config;
     // Probe the array keys so insert_param_names() publishes all construction
     // options even though the flat ParamMap cannot hold their values.
-    (void)params.find("bandAbsorption");
-    (void)params.find("bandScattering");
+    detail::note_side_channel_key(params, "bandAbsorption", ParamKind::Array);
+    detail::note_side_channel_key(params, "bandScattering", ParamKind::Array);
     config.target = acoustic_room_from_json(params, json_root);
     config.placement.source = {f(params, "sourceX", 1.0f), f(params, "sourceY", 1.0f),
                                f(params, "sourceZ", 1.2f)};
@@ -1137,20 +1144,64 @@ std::vector<std::string> insert_factory_names() {
   };
 }
 
+namespace {
+
+// Every key an empty build read or declared, sorted. A band's keys are read only
+// while the band is active, so an empty build declares them instead.
+std::vector<std::string> construction_keys(const ParamMap& params) {
+  std::unordered_set<std::string> keys(params.probed_keys().begin(), params.probed_keys().end());
+  for (const auto& [key, kind] : params.probed_kinds()) keys.insert(key);
+  std::vector<std::string> names(keys.begin(), keys.end());
+  std::sort(names.begin(), names.end());
+  return names;
+}
+
+}  // namespace
+
 std::vector<std::string> insert_param_names(const std::string& name) {
   // Build the processor against an empty param map: every config builder probes
-  // the keys it reads (falling back to defaults when absent), so the probed set
-  // is exactly the parameter names this processor consumes. The throwaway
-  // processor is discarded immediately.
+  // or declares the keys it reads (falling back to defaults when absent), so
+  // those are exactly the parameter names this processor consumes. The
+  // throwaway processor is discarded immediately.
   ParamMap params;
   auto processor = build_insert(name, params);
   if (processor == nullptr) {
     return {};
   }
-  const auto& probed = params.probed_keys();
-  std::vector<std::string> names(probed.begin(), probed.end());
-  std::sort(names.begin(), names.end());
-  return names;
+  return construction_keys(params);
+}
+
+namespace {
+
+// Defaults an insert's empty build records, memoized because every probe of
+// the catalog's measurement asks for them.
+const std::unordered_map<std::string, detail::ParamDefault>& declared_defaults(
+    const std::string& name) {
+  static thread_local std::unordered_map<std::string,
+                                         std::unordered_map<std::string, detail::ParamDefault>>
+      memo;
+  const auto cached = memo.find(name);
+  if (cached != memo.end()) return cached->second;
+  ParamMap params;
+  (void)build_insert(name, params);
+  return memo.emplace(name, params.probed_defaults()).first->second;
+}
+
+}  // namespace
+
+std::vector<Param> insert_probe_params(const std::string& name, const std::string& key,
+                                       double value) {
+  std::vector<Param> params{Param{key, value}};
+  const std::size_t dot = key.rfind('.');
+  if (dot == std::string::npos) return params;
+  const std::string activation = key.substr(0, dot + 1) + "frequencyHz";
+  if (activation == key) return params;
+  const auto& defaults = declared_defaults(name);
+  const auto fallback = defaults.find(activation);
+  if (fallback != defaults.end() && !fallback->second.ambiguous) {
+    params.push_back(Param{activation, fallback->second.value});
+  }
+  return params;
 }
 
 namespace {
@@ -1206,16 +1257,32 @@ const std::vector<double>& bound_probe_points() {
   return points;
 }
 
+ParamMap probe_map(const std::string& name, const std::string& key, double value) {
+  ParamMap probe = detail::make_map(insert_probe_params(name, key, value));
+  probe.stop_recording_declarations();
+  return probe;
+}
+
 // Whether construction accepts @p value for @p key with every other parameter
 // at its default. An unknown name yields no processor and so accepts nothing,
 // which keeps a caller from measuring bounds against a processor that does not
 // exist in this build configuration.
 bool insert_accepts(const std::string& name, const std::string& key, double value) {
   try {
-    ParamMap probe;
-    probe.stop_recording_declarations();
-    probe[key] = value;
-    return build_insert(name, probe) != nullptr;
+    return build_insert(name, probe_map(name, key, value)) != nullptr;
+  } catch (...) {
+    return false;
+  }
+}
+
+// insert_accepts, then prepared: a processor may refuse a selection only once
+// it knows its rate (a linear-phase EQ has no all-pass response to realize).
+bool insert_accepts_prepared(const std::string& name, const std::string& key, double value) {
+  try {
+    auto processor = build_insert(name, probe_map(name, key, value));
+    if (processor == nullptr) return false;
+    processor->prepare(kInsertProbeSampleRate, kInsertProbeBlockSize);
+    return true;
   } catch (...) {
     return false;
   }
@@ -1316,6 +1383,51 @@ MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
   return bounds;
 }
 
+// The declared values of an enum key that construction accepts.
+std::vector<detail::EnumChoice> measure_enum_choices(
+    const std::string& name, const std::string& key,
+    const std::vector<detail::EnumChoice>& declared) {
+  std::vector<detail::EnumChoice> accepted;
+  for (const detail::EnumChoice& choice : declared) {
+    if (insert_accepts_prepared(name, key, static_cast<double>(choice.value))) {
+      accepted.push_back(choice);
+    }
+  }
+  return accepted;
+}
+
+// Integers scanned above a whole-number key's measured minimum. Bisection stops
+// at the first hole of a set such as {1, 2, 4, 8}, so the scan does not start
+// from the measured maximum.
+constexpr long long kIntegerChoiceScanWidth = 64;
+
+// The accepted integers of @p key when they are a closed set with holes. An
+// interval is left to the bounds; a set with holes still open at the top of the
+// scan keeps its minimum only, since bisecting it for a maximum lands in a hole.
+bool measure_integer_choices(const std::string& name, const std::string& key, double min,
+                             std::vector<detail::EnumChoice>* out, bool* open_with_holes) {
+  const long long first = std::llround(min);
+  std::vector<long long> accepted;
+  bool top_accepted = false;
+  for (long long value = first; value <= first + kIntegerChoiceScanWidth; ++value) {
+    top_accepted = insert_accepts(name, key, static_cast<double>(value));
+    if (top_accepted) accepted.push_back(value);
+  }
+  if (accepted.empty()) return false;
+  const bool contiguous =
+      accepted.back() - accepted.front() + 1 == static_cast<long long>(accepted.size());
+  if (contiguous) return false;
+  if (top_accepted) {
+    *open_with_holes = true;
+    return false;
+  }
+  out->clear();
+  for (const long long value : accepted) {
+    out->push_back(detail::EnumChoice{std::to_string(value), static_cast<int>(value)});
+  }
+  return true;
+}
+
 // Renders a catalog number as JSON text. The precision is the shortest that
 // round-trips through `float` — the storage nearly every mastering config field
 // uses — widened so a value with an integer part never comes out in exponent
@@ -1359,69 +1471,131 @@ std::string catalog_unit(const std::string& name, const std::string& key) {
   return "null";
 }
 
-std::string build_insert_param_info_json(const std::string& name) {
-  // Build a throwaway processor (like insert_param_names) and read its published
-  // JSON-key -> param_id descriptor table. rtSafe is derived per id so hosts can
-  // tell which params accept realtime changes from the audio thread.
-  ParamMap params;
-  auto processor = build_insert(name, params);
-  // The same build recorded, per key, the C++ type the config builder read it
-  // as (ParamMap::note_kind, driven by the `b()` / `i()` accessors and by the
-  // declared type of the SONARE_FIELDS_* destination field) and the fallback it
-  // used for the key (ParamMap::note_default, which against this empty map is
-  // the config struct's own field initializer). Reporting from those instead of
-  // from the key's spelling is what keeps `type` honest — a boolean config field
-  // whose key does not end in "Enabled", CompressorConfig::auto_makeup being the
-  // standing example, was published as a number by the old suffix test — and is
-  // what lets `default` be published at all without a second hand-written table.
+const char* catalog_type(ParamKind kind, bool is_enum) {
+  switch (kind) {
+    case ParamKind::Boolean:
+      return "boolean";
+    case ParamKind::String:
+      return "string";
+    case ParamKind::Array:
+      return "array";
+    case ParamKind::Integer:
+    case ParamKind::Number:
+      break;
+  }
+  return is_enum ? "enum" : "number";
+}
+
+// Appends one entry. @p id_json is the automation id, or "null" for a key only
+// construction reads.
+void append_param_entry(std::string& out, const std::string& name, const std::string& key,
+                        const std::string& id_json, bool rt_safe, const ParamMap& params) {
   const auto& kinds = params.probed_kinds();
   const auto& defaults = params.probed_defaults();
   const auto& probed = params.probed_keys();
-  std::string out = "[";
-  if (processor != nullptr) {
-    const auto descriptors = processor->parameter_descriptors();
-    for (size_t index = 0; index < descriptors.size(); ++index) {
-      const std::string& key = descriptors[index].key;
+  const auto& enum_choices = params.probed_choices();
+
+  // A descriptor key the builder never probed has no declared field to read a
+  // type from; those are numeric automation targets, which is also the
+  // catalog's neutral value.
+  const auto kind = kinds.find(key);
+  const ParamKind param_kind = kind != kinds.end() ? kind->second : ParamKind::Number;
+  const bool measurable = param_kind == ParamKind::Integer || param_kind == ParamKind::Number;
+  // A declared band key is read once its band is active, which the probe arranges.
+  const bool construction_reads_key = probed.find(key) != probed.end() || kind != kinds.end();
+  const auto declared = enum_choices.find(key);
+  const bool is_enum = declared != enum_choices.end();
+
+  bool has_choices = false;
+  std::vector<detail::EnumChoice> choices;
+  MeasuredBounds bounds;
+  if (construction_reads_key && measurable) {
+    if (is_enum) {
+      choices = measure_enum_choices(name, key, declared->second);
+      has_choices = true;
+    } else {
+      bounds = measure_bounds(name, key, param_kind == ParamKind::Integer);
+      if (param_kind == ParamKind::Integer && bounds.has_min) {
+        bool open_with_holes = false;
+        has_choices = measure_integer_choices(name, key, bounds.min, &choices, &open_with_holes);
+        if (open_with_holes) bounds.has_max = false;
+      }
+    }
+  }
+  if (has_choices) bounds = MeasuredBounds{};
+
+  out += "{\"name\":\"";
+  out += key;
+  out += "\",\"id\":";
+  out += id_json;
+  out += ",\"rtSafe\":";
+  out += rt_safe ? "true" : "false";
+  out += ",\"type\":\"";
+  out += catalog_type(param_kind, is_enum);
+  out += "\",\"min\":";
+  out += bounds.has_min ? format_catalog_number(bounds.min) : "null";
+  out += ",\"max\":";
+  out += bounds.has_max ? format_catalog_number(bounds.max) : "null";
+
+  out += ",\"default\":";
+  const auto fallback = defaults.find(key);
+  if (!measurable && param_kind != ParamKind::Boolean) {
+    out += "null";
+  } else if (fallback == defaults.end() || fallback->second.ambiguous) {
+    out += "null";
+  } else if (param_kind == ParamKind::Boolean) {
+    out += fallback->second.value != 0.0 ? "true" : "false";
+  } else {
+    out += format_catalog_number(fallback->second.value);
+  }
+
+  out += ",\"unit\":";
+  out += catalog_unit(name, key);
+
+  out += ",\"choices\":";
+  if (!has_choices) {
+    out += "null";
+  } else {
+    out += '[';
+    for (size_t index = 0; index < choices.size(); ++index) {
       if (index > 0) out += ',';
       out += "{\"name\":\"";
-      out += key;
-      out += "\",\"id\":";
-      out += std::to_string(descriptors[index].id);
-      out += ",\"rtSafe\":";
-      out += processor->parameter_is_realtime_safe(descriptors[index].id) ? "true" : "false";
-      out += ",\"type\":\"";
-      // A descriptor key the builder never probed has no declared field to read
-      // a type from; those are numeric automation targets, which is also the
-      // catalog's neutral value.
-      const auto kind = kinds.find(key);
-      const ParamKind param_kind = kind != kinds.end() ? kind->second : ParamKind::Number;
-      out += param_kind == ParamKind::Boolean ? "boolean" : "number";
-      out += "\",";
-
-      const bool construction_reads_key = probed.find(key) != probed.end();
-      const MeasuredBounds bounds =
-          construction_reads_key && param_kind != ParamKind::Boolean
-              ? measure_bounds(name, key, param_kind == ParamKind::Integer)
-              : MeasuredBounds{};
-      out += "\"min\":";
-      out += bounds.has_min ? format_catalog_number(bounds.min) : "null";
-      out += ",\"max\":";
-      out += bounds.has_max ? format_catalog_number(bounds.max) : "null";
-
-      out += ",\"default\":";
-      const auto fallback = defaults.find(key);
-      if (fallback == defaults.end() || fallback->second.ambiguous) {
-        out += "null";
-      } else if (param_kind == ParamKind::Boolean) {
-        out += fallback->second.value != 0.0 ? "true" : "false";
-      } else {
-        out += format_catalog_number(fallback->second.value);
-      }
-
-      out += ",\"unit\":";
-      out += catalog_unit(name, key);
+      out += choices[index].name;
+      out += "\",\"value\":";
+      out += std::to_string(choices[index].value);
       out += '}';
     }
+    out += ']';
+  }
+  out += '}';
+}
+
+std::string build_insert_param_info_json(const std::string& name) {
+  // Build a throwaway processor (like insert_param_names). Its descriptor table
+  // gives the automation targets; the same build recorded every key the config
+  // builder read, the C++ type it read it as (ParamMap::note_kind, driven by the
+  // accessors and the declared type of the SONARE_FIELDS_* destination field),
+  // its fallback (ParamMap::note_default, which against this empty map is the
+  // config struct's own field initializer) and, for an enum, its declared
+  // values. Reporting from those instead of from the key's spelling is what
+  // keeps `type` honest.
+  ParamMap params;
+  auto processor = build_insert(name, params);
+  if (processor == nullptr) return "[]";
+  std::string out = "[";
+  const auto descriptors = processor->parameter_descriptors();
+  std::unordered_set<std::string> descriptor_keys;
+  for (const auto& descriptor : descriptors) {
+    if (out.size() > 1) out += ',';
+    append_param_entry(out, name, descriptor.key, std::to_string(descriptor.id),
+                       processor->parameter_is_realtime_safe(descriptor.id), params);
+    descriptor_keys.insert(descriptor.key);
+  }
+  // Then the keys only construction reads, which take effect when the insert is built.
+  for (const std::string& key : construction_keys(params)) {
+    if (descriptor_keys.find(key) != descriptor_keys.end()) continue;
+    if (out.size() > 1) out += ',';
+    append_param_entry(out, name, key, "null", false, params);
   }
   out += ']';
   return out;
@@ -1443,7 +1617,17 @@ std::string insert_param_info_json(const std::string& name) {
 
 const std::vector<std::string>& insert_param_info_schema_paths() {
   static const std::vector<std::string> paths = {
-      "[].name", "[].id", "[].rtSafe", "[].type", "[].min", "[].max", "[].default", "[].unit",
+      "[].name",
+      "[].id",
+      "[].rtSafe",
+      "[].type",
+      "[].min",
+      "[].max",
+      "[].default",
+      "[].unit",
+      "[].choices",
+      "[].choices[].name",
+      "[].choices[].value",
   };
   return paths;
 }

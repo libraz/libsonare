@@ -62,6 +62,35 @@ def optional_number(value: Any) -> bool:
     return value is None or (isinstance(value, (int, float)) and not isinstance(value, bool))
 
 
+def validate_choices(parameter: dict[str, Any], path: str) -> None:
+    """A closed accepted set: named values in ascending order, and then no range."""
+    choices = parameter["choices"]
+    if choices is None:
+        if parameter["type"] == "enum":
+            raise ValueError(f"{path} is an enum and must publish its choices")
+        return
+    if parameter["type"] == "boolean":
+        raise ValueError(f"{path} is boolean and must publish no choices")
+    if not isinstance(choices, list) or not choices:
+        raise ValueError(f"{path}.choices must be a non-empty array or null")
+    values: list[float] = []
+    for choice_index, choice_value in enumerate(choices):
+        choice_path = f"{path}.choices[{choice_index}]"
+        choice = require_object(choice_value, choice_path)
+        require_keys(choice, choice_path, {"name", "value"})
+        if not isinstance(choice["name"], str) or not choice["name"]:
+            raise ValueError(f"{choice_path}.name must be a non-empty string")
+        if choice["value"] is None or not optional_number(choice["value"]):
+            raise ValueError(f"{choice_path}.value must be a number")
+        values.append(choice["value"])
+    if values != sorted(set(values)):
+        raise ValueError(f"{path}.choices must be in strictly ascending value order")
+    if len({choice["name"] for choice in choices}) != len(choices):
+        raise ValueError(f"{path}.choices must carry unique names")
+    if parameter["min"] is not None or parameter["max"] is not None:
+        raise ValueError(f"{path} publishes choices and must publish no bounds")
+
+
 def validate_parameter(parameter: dict[str, Any], path: str) -> None:
     """Guard the host-facing shape of one parameter descriptor.
 
@@ -71,8 +100,23 @@ def validate_parameter(parameter: dict[str, Any], path: str) -> None:
     What can only be checked here is that the JSON says what the `.pyi` / `.d.ts`
     mirrors promise a host it says.
     """
-    if parameter["type"] not in {"number", "boolean"}:
-        raise ValueError(f"{path}.type must be number or boolean")
+    if parameter["type"] not in {"number", "boolean", "enum", "string", "array"}:
+        raise ValueError(f"{path}.type must be number, boolean, enum, string or array")
+    identifier = parameter["id"]
+    if identifier is not None and (
+        not isinstance(identifier, int) or isinstance(identifier, bool) or identifier < 0
+    ):
+        raise ValueError(f"{path}.id must be a non-negative integer or null")
+    if identifier is None and parameter["rtSafe"] is not False:
+        raise ValueError(f"{path} has no id and so cannot be rtSafe")
+    validate_choices(parameter, path)
+    if parameter["type"] in {"string", "array"}:
+        # Carried on the JSON side-channel: nothing numeric to publish.
+        for field in ("min", "max", "default", "choices"):
+            if parameter[field] is not None:
+                raise ValueError(f"{path} is a {parameter['type']} and must publish no {field}")
+        if parameter["id"] is not None:
+            raise ValueError(f"{path} is a {parameter['type']} and cannot be automated")
     for bound in ("min", "max"):
         if not optional_number(parameter[bound]):
             raise ValueError(f"{path}.{bound} must be a number or null")
@@ -148,7 +192,7 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
             require_keys(
                 parameter,
                 path,
-                {"name", "id", "rtSafe", "type", "min", "max", "default", "unit"},
+                {"name", "id", "rtSafe", "type", "min", "max", "default", "unit", "choices"},
             )
             validate_parameter(parameter, path)
     presets = require_object(root["presets"], "catalog.presets")

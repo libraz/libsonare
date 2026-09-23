@@ -434,36 +434,61 @@ const char* sonare_mastering_insert_names(void);
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_names(const char* name);
 
-/// @brief Realtime-automatable parameter descriptors for an insert processor.
+/// @brief Parameter descriptors for an insert processor: every key its
+///        construction reads, plus every realtime automation target.
 /// @return A JSON array string
-///   `[{"name","id","rtSafe","type","min","max","default","unit"}, ...]`
-///   (UTF-8). Each entry maps a processor JSON-key parameter name to the integer
-///   `id` used by @ref sonare_engine_set_track_strip_insert_param_by_name (and
-///   the master variant), with `rtSafe` reporting whether the param can be
-///   changed live from the audio thread. Returns `"[]"` for an unknown @p name
-///   or a processor with no automatable parameters. Unlike @ref
-///   sonare_mastering_insert_param_names (every construction key), this lists
-///   only the realtime-controllable subset. The returned pointer is a
+///   `[{"name","id","rtSafe","type","min","max","default","unit","choices"}, ...]`
+///   (UTF-8). Returns `"[]"` for an unknown @p name. The returned pointer is a
 ///   thread-local valid only until the next API call on the same thread; the
 ///   caller must NOT free it.
-/// @details `type` is `"number"` or `"boolean"`, taken from the C++ type the
-///   processor's config builder reads the key as. `default` is the value the
-///   processor uses when the key is absent — the config struct's own field
-///   initializer — and is JSON null only for a parameter whose id has no
-///   construction key at all.
+/// @details Entries come in two runs. The first lists the processor's realtime
+///   automation targets in id order: `id` is the integer used by @ref
+///   sonare_engine_set_track_strip_insert_param_by_name (and the master variant),
+///   and `rtSafe` says whether the param can be changed live from the audio
+///   thread. The second lists, sorted by name, the keys construction reads that
+///   are not automation targets: their `id` is null and `rtSafe` false, so they
+///   take effect only when the insert is built. The names are the same set @ref
+///   sonare_mastering_insert_param_names returns, plus any automation target
+///   construction does not read.
 ///
-///   `min` and `max` are the range construction ACCEPTS, measured by handing
-///   candidate values to the same code path a caller would use. They are a hard
-///   constraint, not a recommended UI range: a value outside them is an error,
-///   while an unvalidated control (most gains) reports null on both, meaning
-///   "this catalog states no limit" rather than "unknown". Three properties a
+///   `type` is `"number"`, `"boolean"`, `"enum"`, `"string"` or `"array"`, taken
+///   from the C++ type the processor's config builder reads the key as. An
+///   `"enum"` value is sent as the number in its `choices` entry. A `"string"`
+///   or `"array"` key (an embedded impulse response, a per-band list) is
+///   construction-only and reports null for `default`, `min`, `max` and
+///   `choices`. `default` is the value the processor
+///   uses when the key is absent — the config struct's own field initializer,
+///   an enum as its number — and is JSON null for an automation target with no
+///   construction key and for a key construction reads with no fallback (a
+///   crossover cutoff beyond the default split count, or a decay time a reverb
+///   reads only when it is supplied).
+///
+///   `choices` is null unless the accepted values are a closed set, and then
+///   lists them as `[{"name","value"}]` in value order: every declared value of
+///   an enum that construction accepts, or the accepted integers of a whole-
+///   number parameter whose accepted set has holes (named by their decimal
+///   text). Only the listed values build, and `min` and `max` are then null.
+///
+///   Otherwise `min` and `max` are the range construction ACCEPTS, measured by
+///   handing candidate values to the same code path a caller would use. They
+///   are a hard constraint, not a recommended UI range: a value outside them is
+///   an error, while an unvalidated control (most gains) reports null on both,
+///   meaning "this catalog states no limit" rather than "unknown". Properties a
 ///   host should plan for:
-///     - a bound is measured with every OTHER parameter at its default, so two
-///       parameters that constrain each other each report the other's default;
+///     - bounds and choices are measured with every OTHER parameter at its
+///       default, so two parameters that constrain each other each report the
+///       other's default (`saturation.waveshaper` refuses `aliasing` adaa1 once
+///       `curve` is asymmetric);
 ///     - a sample-rate-derived bound reflects the un-prepared processor and
 ///       rises once the insert is prepared at a higher rate;
 ///     - an exclusive bound is reported as its limit value, so a control
-///       requiring `> 0` reports `min` 0 and still rejects 0.
+///       requiring `> 0` reports `min` 0 and still rejects 0;
+///     - a whole-number parameter whose accepted values have holes and run
+///       past the measured window (a kernel size that must be odd) reports its
+///       `min` and a null `max`, and not every value above `min` builds;
+///     - a band-splitting processor is described at its default band count, so
+///       the keys of a band that only exists once more crossover cutoffs are
+///       supplied are not listed.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_info(const char* name);
 

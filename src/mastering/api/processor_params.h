@@ -88,14 +88,16 @@ namespace sonare::mastering::api::detail {
 /// @details Derived from the accessor and the destination field's declared
 ///          type, never from the key's spelling: `b()` and a `bool` config
 ///          field mean @c Boolean, `i()` and an integral/enum field mean
-///          @c Integer, every other accessor means @c Number.
+///          @c Integer, every other accessor means @c Number. @c String and
+///          @c Array mark a key read from the JSON side-channel rather than
+///          from the flat map (@ref note_side_channel_key).
 ///
-/// The catalog publishes only two of the three — @c Integer reports as
-/// `"number"`, because the flat param surface carries every value as a
-/// `double` and a host may send `2.0` for an integral field. The distinction is
-/// kept internally because it is what lets a measured bound be reported as the
-/// integer it actually is instead of as the midpoint between two integers.
-enum class ParamKind : std::uint8_t { Boolean, Integer, Number };
+/// @c Integer reports as `"number"` (or `"enum"` for a named enum), because the
+/// flat param surface carries every value as a `double` and a host may send
+/// `2.0` for an integral field. The distinction is kept internally because it
+/// is what lets a measured bound be reported as the integer it actually is
+/// instead of as the midpoint between two integers.
+enum class ParamKind : std::uint8_t { Boolean, Integer, Number, String, Array };
 
 /// @brief The fallback a config builder used for a key it probed.
 /// @details A builder run against an empty map falls back to the config field's
@@ -169,6 +171,17 @@ class ParamMap {
   /// @brief Design default of every key probed while building, keyed by name.
   const std::unordered_map<std::string, ParamDefault>& probed_defaults() const { return defaults_; }
 
+  /// @brief Records the declared values of the enum a builder read @p key as.
+  /// @details The first record wins: a later one comes from the same enum type.
+  void note_choices(const std::string& key, std::vector<EnumChoice> choices) const {
+    choices_.emplace(key, std::move(choices));
+  }
+
+  /// @brief Declared enum values of every enum-typed key probed while building.
+  const std::unordered_map<std::string, std::vector<EnumChoice>>& probed_choices() const {
+    return choices_;
+  }
+
   /// @brief Turns off the declaration-only work the catalog needs.
   /// @details A bounds probe builds the same processor thousands of times and
   ///          asks one question of each build — did construction throw. It has
@@ -188,6 +201,7 @@ class ParamMap {
   ///          exactly as they were.
   void adopt_declarations(const ParamMap& other) const {
     for (const auto& [key, kind] : other.kinds_) note_kind(key, kind);
+    for (const auto& [key, choices] : other.choices_) note_choices(key, choices);
     for (const auto& [key, fallback] : other.defaults_) {
       if (!fallback.ambiguous) note_default(key, fallback.value);
     }
@@ -214,6 +228,7 @@ class ParamMap {
   mutable std::unordered_set<std::string> probed_;
   mutable std::unordered_map<std::string, ParamKind> kinds_;
   mutable std::unordered_map<std::string, ParamDefault> defaults_;
+  mutable std::unordered_map<std::string, std::vector<EnumChoice>> choices_;
   bool records_declarations_ = true;
 };
 
@@ -252,6 +267,33 @@ inline bool b(const ParamMap& params, const char* key, bool default_value) {
   return it == params.end() ? default_value : it->second != 0.0;
 }
 
+/// @brief Reads a flat enum selector, refusing a value no enumerator declares.
+template <typename Enum>
+inline Enum read_enum(const ParamMap& params, const char* key, Enum fallback) {
+  params.note_kind(key, ParamKind::Integer);
+  params.note_default(key, field_as_double(fallback));
+  if (params.records_declarations()) params.note_choices(key, enum_choices<Enum>());
+  auto it = params.find(key);
+  if (it == params.end()) return fallback;
+  int converted = 0;
+  if (!numeric::checked_integral_cast(it->second, &converted)) {
+    reject_integer_param(key, it->second);
+  }
+  const Enum candidate = static_cast<Enum>(converted);
+  if (!enum_value_declared(candidate)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(key) + " is not a declared value");
+  }
+  return candidate;
+}
+
+/// @brief Declares a key a builder reads from the JSON side-channel, whose
+///        value (a string or an array) the flat map cannot hold.
+inline void note_side_channel_key(const ParamMap& params, const char* key, ParamKind kind) {
+  params.note_kind(key, kind);
+  (void)params.find(key);
+}
+
 /// @brief Parameter kind implied by a config member's declared type.
 /// @details The single place the field-type -> @ref ParamKind mapping lives, so
 /// no consumer of the SONARE_FIELDS_* tables has to keep a list of which keys
@@ -282,82 +324,29 @@ inline void read_field(const ParamMap& params, const char* key, T& dst) {
   // Read before the overlay: `dst` still holds the config struct's own field
   // initializer here, which is exactly the default this key falls back to.
   params.note_default(key, field_as_double(dst));
+  if constexpr (std::is_enum_v<T>) {
+    if (params.records_declarations()) params.note_choices(key, enum_choices<T>());
+  }
   auto it = params.find(key);
   if (it != params.end()) assign_field(dst, it->second);
 }
 
 inline std::vector<float> cutoffs(const ParamMap& params) {
+  const multiband::CrossoverConfig defaults;
   std::vector<float> values;
   for (int index = 0; index < 8; ++index) {
     const std::string key = "cutoff" + std::to_string(index) + "Hz";
+    params.note_kind(key, ParamKind::Number);
+    // A cutoff beyond the default split has no fallback to publish.
+    if (static_cast<size_t>(index) < defaults.cutoffs_hz.size()) {
+      params.note_default(key, static_cast<double>(defaults.cutoffs_hz[index]));
+    }
     auto it = params.find(key);
     if (it != params.end()) {
       values.push_back(static_cast<float>(it->second));
     }
   }
   return values;
-}
-
-inline eq::EqBandType eq_band_type(int value) {
-  switch (value) {
-    case 1:
-      return eq::EqBandType::LowShelf;
-    case 2:
-      return eq::EqBandType::HighShelf;
-    case 3:
-      return eq::EqBandType::LowPass;
-    case 4:
-      return eq::EqBandType::HighPass;
-    case 5:
-      return eq::EqBandType::BandPass;
-    case 6:
-      return eq::EqBandType::Notch;
-    case 7:
-      return eq::EqBandType::TiltShelf;
-    case 8:
-      return eq::EqBandType::FlatTilt;
-    case 9:
-      return eq::EqBandType::AllPass;
-    default:
-      return eq::EqBandType::Peak;
-  }
-}
-
-inline eq::StereoPlacement stereo_placement(int value) {
-  switch (value) {
-    case 1:
-      return eq::StereoPlacement::Left;
-    case 2:
-      return eq::StereoPlacement::Right;
-    case 3:
-      return eq::StereoPlacement::Mid;
-    case 4:
-      return eq::StereoPlacement::Side;
-    default:
-      return eq::StereoPlacement::Stereo;
-  }
-}
-
-inline eq::PhaseMode phase_mode(int value) {
-  switch (value) {
-    case 1:
-      return eq::PhaseMode::ZeroLatency;
-    case 2:
-      return eq::PhaseMode::NaturalPhase;
-    case 3:
-      return eq::PhaseMode::LinearPhase;
-    default:
-      return eq::PhaseMode::Inherit;
-  }
-}
-
-inline eq::BiquadCoeffMode coeff_mode(int value) {
-  switch (value) {
-    case 1:
-      return eq::BiquadCoeffMode::Vicanek;
-    default:
-      return eq::BiquadCoeffMode::Rbj;
-  }
 }
 
 inline bool has_eq_band_params(const ParamMap& params, const std::string& prefix) {
@@ -395,15 +384,15 @@ inline bool has_eq_band_params(const ParamMap& params, const std::string& prefix
 
 inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
   eq::EqBand band;
-  band.type = eq_band_type(i(params, (prefix + "type").c_str(), 0));
-  band.coeff_mode = coeff_mode(i(params, (prefix + "coeffMode").c_str(), 0));
+  band.type = read_enum(params, (prefix + "type").c_str(), band.type);
+  band.coeff_mode = read_enum(params, (prefix + "coeffMode").c_str(), band.coeff_mode);
   band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
   band.gain_db = f(params, (prefix + "gainDb").c_str(), band.gain_db);
   band.q = f(params, (prefix + "q").c_str(), band.q);
   band.enabled = b(params, (prefix + "enabled").c_str(), true);
   band.slope_db_oct = i(params, (prefix + "slopeDbOct").c_str(), band.slope_db_oct);
-  band.placement = stereo_placement(i(params, (prefix + "placement").c_str(), 0));
-  band.phase = phase_mode(i(params, (prefix + "phase").c_str(), 0));
+  band.placement = read_enum(params, (prefix + "placement").c_str(), band.placement);
+  band.phase = read_enum(params, (prefix + "phase").c_str(), band.phase);
   band.soloed = b(params, (prefix + "soloed").c_str(), band.soloed);
   band.bypassed = b(params, (prefix + "bypassed").c_str(), band.bypassed);
   band.proportional_q = b(params, (prefix + "proportionalQ").c_str(), band.proportional_q);
@@ -448,7 +437,7 @@ inline void declare_eq_band_params(const ParamMap& params, const std::string& pr
 /// set; the only difference is how the prefix is built.
 inline eq::DynamicEqBand dynamic_eq_band(const ParamMap& params, const std::string& prefix) {
   eq::DynamicEqBand band;
-  band.type = eq_band_type(i(params, (prefix + "type").c_str(), 0));
+  band.type = read_enum(params, (prefix + "type").c_str(), band.type);
   band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
   band.static_gain_db = f(params, (prefix + "staticGainDb").c_str(), band.static_gain_db);
   band.q = f(params, (prefix + "q").c_str(), band.q);
@@ -494,8 +483,7 @@ inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMa
   processor.set_gain_scale(f(params, "gainScale", processor.gain_scale()));
   processor.set_output_gain_db(f(params, "outputGainDb", processor.output_gain_db()));
   processor.set_output_pan(f(params, "outputPan", processor.output_pan()));
-  processor.set_phase_mode(
-      phase_mode(i(params, "phaseMode", static_cast<int>(processor.phase_mode()))));
+  processor.set_phase_mode(read_enum(params, "phaseMode", processor.phase_mode()));
   for (size_t index = 0; index < eq::EqualizerProcessor::kMaxBands; ++index) {
     const std::string band_prefix = prefix + std::to_string(index) + ".";
     declare_eq_band_params(params, band_prefix);
@@ -528,8 +516,8 @@ inline multiband::CrossoverConfig crossover_config(const ParamMap& params) {
   if (!values.empty()) {
     config.cutoffs_hz = values;
   }
-  config.slope = static_cast<multiband::CrossoverSlope>(i(params, "slope", 1));
-  config.mode = static_cast<multiband::CrossoverMode>(i(params, "mode", 0));
+  config.slope = read_enum(params, "slope", config.slope);
+  config.mode = read_enum(params, "mode", config.mode);
   config.fir_kernel_size = i(params, "firKernelSize", config.fir_kernel_size);
   return config;
 }
@@ -597,23 +585,6 @@ inline void populate_limiter_bands(multiband::MultibandLimiterConfig& config,
   }
 }
 
-// Decode a per-band saturation algorithm. Unlike the EQ enum decoders above,
-// an unrecognized value is rejected instead of falling back to the first
-// enumerator: the band would otherwise run a different algorithm than the caller
-// asked for with no way to notice. The exhaustive switch makes a newly declared
-// algorithm a compile error here (-Wswitch) until it is listed.
-inline multiband::SaturationType saturation_type(int value) {
-  const auto type = static_cast<multiband::SaturationType>(value);
-  switch (type) {
-    case multiband::SaturationType::SoftClip:
-    case multiband::SaturationType::Tape:
-    case multiband::SaturationType::Tube:
-    case multiband::SaturationType::Exciter:
-      return type;
-  }
-  throw SonareException(ErrorCode::InvalidParameter, "invalid multiband saturation type");
-}
-
 // Overlay per-band fields (band{i}.driveDb / .mix / .outputGainDb / .type /
 // .enabled). `type` selects the algorithm the band delegates to and `enabled`
 // bypasses the band, so both must be read here or every band runs the default
@@ -627,7 +598,7 @@ inline void populate_saturation_bands(multiband::MultibandSaturationConfig& conf
     band.drive_db = f(params, (prefix + "driveDb").c_str(), band.drive_db);
     band.mix = f(params, (prefix + "mix").c_str(), band.mix);
     band.output_gain_db = f(params, (prefix + "outputGainDb").c_str(), band.output_gain_db);
-    band.type = saturation_type(i(params, (prefix + "type").c_str(), static_cast<int>(band.type)));
+    band.type = read_enum(params, (prefix + "type").c_str(), band.type);
     band.enabled = b(params, (prefix + "enabled").c_str(), band.enabled);
   }
 }
@@ -774,7 +745,7 @@ inline void configure_minimum_phase(eq::MinimumPhaseEq& p, const ParamMap& param
 
 inline eq::LinearPhaseEqConfig linear_phase_config(const ParamMap& params) {
   eq::LinearPhaseEqConfig config;
-  config.resolution = static_cast<eq::LinearPhaseEqConfig::Resolution>(i(params, "resolution", 0));
+  config.resolution = read_enum(params, "resolution", config.resolution);
   config.fft_size = i(params, "fftSize", config.fft_size);
   config.kernel_size = i(params, "kernelSize", config.kernel_size);
   config.use_partitioned_convolution =
@@ -819,18 +790,18 @@ inline void configure_pultec(eq::PultecEq& p, const ParamMap& params) {
                    f(params, "highBandwidth", 0.5f));
   p.set_high_attenuation(f(params, "highAttenuationFrequencyHz", 10000.0f),
                          f(params, "highAttenuation", 0.0f));
-  p.set_component_model(static_cast<eq::PultecComponentModel>(i(params, "componentModel", 0)));
+  p.set_component_model(read_enum(params, "componentModel", eq::PultecComponentModel::CurveOnly));
   p.set_output_drive(f(params, "outputDrive", 0.0f));
 }
 
 inline void configure_cut_filter(eq::CutFilter& p, const ParamMap& params) {
   p.set_high_pass(f(params, "highPassFrequencyHz", 20.0f),
                   f(params, "highPassQ", constants::kButterworthQ),
-                  static_cast<eq::CutFilterSlope>(i(params, "highPassSlope", 0)),
+                  read_enum(params, "highPassSlope", eq::CutFilterSlope::Db12PerOct),
                   b(params, "highPassEnabled", false));
   p.set_low_pass(f(params, "lowPassFrequencyHz", 20000.0f),
                  f(params, "lowPassQ", constants::kButterworthQ),
-                 static_cast<eq::CutFilterSlope>(i(params, "lowPassSlope", 0)),
+                 read_enum(params, "lowPassSlope", eq::CutFilterSlope::Db12PerOct),
                  b(params, "lowPassEnabled", false));
 }
 
@@ -947,57 +918,6 @@ inline saturation::MultibandExciterConfig multiband_exciter_config(const ParamMa
   return config;
 }
 
-inline saturation::CabModel cab_model(int value) {
-  return value == 1 ? saturation::CabModel::kBass8x10 : saturation::CabModel::kGuitar4x12;
-}
-
-inline saturation::AmpModel amp_model(int value) {
-  switch (value) {
-    case 1:
-      return saturation::AmpModel::kFenderClean;
-    case 2:
-      return saturation::AmpModel::kModernHiGain;
-    case 3:
-      return saturation::AmpModel::kTweed;
-    case 4:
-      return saturation::AmpModel::kVoxChime;
-    case 5:
-      return saturation::AmpModel::kRectifier;
-    default:
-      return saturation::AmpModel::kClassicCrunch;
-  }
-}
-
-inline saturation::AmpTopology amp_topology(int value) {
-  return value == 1 ? saturation::AmpTopology::kCircuit : saturation::AmpTopology::kVoiced;
-}
-
-inline saturation::PowerTube power_tube(int value) {
-  switch (value) {
-    case 1:
-      return saturation::PowerTube::kEL34;
-    case 2:
-      return saturation::PowerTube::kEL84;
-    case 3:
-      return saturation::PowerTube::k6V6;
-    default:
-      return saturation::PowerTube::k6L6;
-  }
-}
-
-inline saturation::MicModel mic_model(int value) {
-  switch (value) {
-    case 1:
-      return saturation::MicModel::kDynamic;
-    case 2:
-      return saturation::MicModel::kRibbon;
-    case 3:
-      return saturation::MicModel::kCondenser;
-    default:
-      return saturation::MicModel::kNone;
-  }
-}
-
 /// Applies the synthesized-cabinet keys to a constructed amp. Shared so the
 /// offline path and the insert factory cannot diverge on which of them a caller
 /// can reach: a supplied base64 capture stays on the JSON side-channel, which
@@ -1040,29 +960,29 @@ inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params,
   config.treble_db = f(params, "trebleDb", config.treble_db);
   config.presence_db = f(params, "presenceDb", config.presence_db);
   config.cab = b(params, "cab", config.cab);
-  config.cab_model = cab_model(i(params, "cabModel", static_cast<int>(config.cab_model)));
-  config.amp_model = amp_model(i(params, "ampModel", static_cast<int>(config.amp_model)));
+  config.cab_model = read_enum(params, "cabModel", config.cab_model);
+  config.amp_model = read_enum(params, "ampModel", config.amp_model);
   config.input_db = f(params, "inputDb", config.input_db);
   config.level_db = f(params, "levelDb", config.level_db);
   config.power = f(params, "power", config.power);
   config.sag = f(params, "sag", config.sag);
   config.transformer = f(params, "transformer", config.transformer);
   config.nfb = f(params, "nfb", config.nfb);
-  config.mic_model = mic_model(i(params, "micModel", static_cast<int>(config.mic_model)));
+  config.mic_model = read_enum(params, "micModel", config.mic_model);
   config.mic_axis = f(params, "micAxis", config.mic_axis);
   config.mic_distance_cm = f(params, "micDistanceCm", config.mic_distance_cm);
   config.mic_blend = f(params, "micBlend", config.mic_blend);
-  config.mic_b_model = mic_model(i(params, "micBModel", static_cast<int>(config.mic_b_model)));
+  config.mic_b_model = read_enum(params, "micBModel", config.mic_b_model);
   config.mic_b_axis = f(params, "micBAxis", config.mic_b_axis);
   config.mic_b_distance_cm = f(params, "micBDistanceCm", config.mic_b_distance_cm);
   config.mic_b_invert = b(params, "micBInvert", config.mic_b_invert);
   config.cone = f(params, "cone", config.cone);
   config.doppler = f(params, "doppler", config.doppler);
-  config.topology = amp_topology(i(params, "topology", static_cast<int>(config.topology)));
+  config.topology = read_enum(params, "topology", config.topology);
   config.preamp_stages = i(params, "preampStages", config.preamp_stages);
   config.bias_shift = f(params, "biasShift", config.bias_shift);
   config.crossover = f(params, "crossover", config.crossover);
-  config.power_tube = power_tube(i(params, "powerTube", static_cast<int>(config.power_tube)));
+  config.power_tube = read_enum(params, "powerTube", config.power_tube);
   return config;
 }
 

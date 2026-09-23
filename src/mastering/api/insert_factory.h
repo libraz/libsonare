@@ -88,19 +88,30 @@ std::vector<std::string> insert_factory_names();
 ///         feature, e.g. FX).
 std::vector<std::string> insert_param_names(const std::string& name);
 
-/// @brief Realtime-automatable parameter descriptors for an insert processor.
+/// @brief Parameter descriptors for an insert processor.
 /// @param name Processor name (see make_insert()).
-/// @return A JSON array string mapping each realtime-automatable parameter's
-///         JSON key to the integer param_id accepted by the engine's realtime
-///         insert-parameter setter, alongside its declared type, measured
-///         bounds, default and unit. See insert_param_info_schema_paths() for
-///         the exact field set; every entry carries every field, with `null`
-///         where a value could not be measured. Returns `[]` for an unknown
-///         @p name or a processor that exposes no automatable parameters.
-///         Unlike insert_param_names (which lists every construction key), this
-///         lists only the keys reachable via set_parameter, i.e. the
-///         realtime-controllable subset.
+/// @return A JSON array string: first each realtime-automatable parameter, in
+///         descriptor order, with the integer param_id accepted by the engine's
+///         realtime insert-parameter setter; then, sorted by name, every other
+///         key construction reads, with a null id. Each carries its declared
+///         type, measured bounds or choices, default and unit. See
+///         insert_param_info_schema_paths() for the exact field set; every
+///         entry carries every field, with `null` where a value could not be
+///         measured. Returns `[]` for an unknown @p name.
 std::string insert_param_info_json(const std::string& name);
+
+/// Rate and block size an insert is prepared at when the catalog measures it.
+inline constexpr double kInsertProbeSampleRate = 48000.0;
+inline constexpr int kInsertProbeBlockSize = 512;
+
+/// @brief The configuration that measures @p key of insert @p name at @p value.
+/// @details `{key: value}`, plus the key that switches on the band @p key
+///          belongs to: for `<prefix><field>`, `<prefix>frequencyHz` at its
+///          default when the insert reads it and it is not @p key itself. A band
+///          field is read only while its band is active, so without it the value
+///          would never reach the processor.
+std::vector<Param> insert_probe_params(const std::string& name, const std::string& key,
+                                       double value);
 
 /// @brief Canonical field paths for one entry of the parameter info array.
 /// @details The array is the root, so each path begins with the `[]` element
