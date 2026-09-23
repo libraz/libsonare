@@ -1,7 +1,7 @@
 [
-{"type": "01 00", "slot": 0, "state": "the corner byte has two measured states that no table carries, so the shelf keeps the skeleton's corner", "named_by": "the parameter list"},
+{"type": "01 00", "slot": 0, "class": "corner", "table": "low", "stage": "eq.parametric", "key": "band0.frequencyHz"},
 {"type": "01 00", "slot": 1, "class": "gain", "table": "tone", "stage": "eq.parametric", "key": "band0.gainDb"},
-{"type": "01 00", "slot": 2, "state": "the corner byte has two measured states that no table carries, so the shelf keeps the skeleton's corner", "named_by": "the parameter list"},
+{"type": "01 00", "slot": 2, "class": "corner", "table": "high", "stage": "eq.parametric", "key": "band3.frequencyHz"},
 {"type": "01 00", "slot": 3, "class": "gain", "table": "tone", "stage": "eq.parametric", "key": "band3.gainDb"},
 {"type": "01 00", "slot": 4, "class": "freq", "table": "eq", "stage": "eq.parametric", "key": "band1.frequencyHz"},
 {"type": "01 00", "slot": 5, "class": "width", "table": "section", "stage": "eq.parametric", "key": "band1.q"},

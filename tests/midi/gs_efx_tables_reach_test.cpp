@@ -10,7 +10,7 @@
 /// most: a class that stopped being fed produces exactly what a class that was
 /// never wired produces, and both look like a clean run.
 ///
-/// **The thirteen classes and the twenty tables are written out by hand here.**
+/// **The fourteen classes and the twenty-two tables are written out by hand here.**
 /// Iterating a list the generator wrote would pass by not looking -- a
 /// derivation that dropped a class drops its count with it -- so the header
 /// exposes each as a named constant and the enumeration below is the only place
@@ -45,8 +45,8 @@ struct ClassReach {
   int reach;
 };
 
-/// The thirteen. Written out rather than read from the header's own list.
-constexpr std::array<ClassReach, 13> kClasses = {{
+/// The fourteen. Written out rather than read from the header's own list.
+constexpr std::array<ClassReach, 14> kClasses = {{
     {"rate", s::kGsEfxClassRate, s::kGsEfxReachRate},
     {"delay_time", s::kGsEfxClassDelayTime, s::kGsEfxReachDelayTime},
     {"freq", s::kGsEfxClassFreq, s::kGsEfxReachFreq},
@@ -60,6 +60,7 @@ constexpr std::array<ClassReach, 13> kClasses = {{
     {"accel", s::kGsEfxClassAccel, s::kGsEfxReachAccel},
     {"post_gain", s::kGsEfxClassPostGain, s::kGsEfxReachPostGain},
     {"window", s::kGsEfxClassWindow, s::kGsEfxReachWindow},
+    {"corner", s::kGsEfxClassCorner, s::kGsEfxReachCorner},
 }};
 
 /// One table of one class, named and counted by hand. `expected` is the count
@@ -73,8 +74,8 @@ struct TableReach {
   bool must_be_zero;
 };
 
-/// The twenty, in the header's own declaration order.
-constexpr std::array<TableReach, 20> kTables = {{
+/// The twenty-two, in the header's own declaration order.
+constexpr std::array<TableReach, 22> kTables = {{
     {"rate.narrow", s::kGsEfxClassRate, 0, s::kGsEfxTableUseRateNarrow, false},
     {"rate.wide", s::kGsEfxClassRate, 1, s::kGsEfxTableUseRateWide, false},
     {"delay_time.pre_delay", s::kGsEfxClassDelayTime, 0, s::kGsEfxTableUseDelayTimePreDelay, false},
@@ -95,6 +96,8 @@ constexpr std::array<TableReach, 20> kTables = {{
     {"accel.rotor", s::kGsEfxClassAccel, 0, s::kGsEfxTableUseAccelRotor, false},
     {"post_gain.makeup", s::kGsEfxClassPostGain, 0, s::kGsEfxTableUsePostGainMakeup, false},
     {"window.splice", s::kGsEfxClassWindow, 0, s::kGsEfxTableUseWindowSplice, false},
+    {"corner.low", s::kGsEfxClassCorner, 0, s::kGsEfxTableUseCornerLow, false},
+    {"corner.high", s::kGsEfxClassCorner, 1, s::kGsEfxTableUseCornerHigh, false},
 }};
 
 int count_class(uint8_t conversion_class) {
@@ -143,7 +146,7 @@ TEST_CASE("every conversion class reaches at least one (type, slot) pair", "[gs-
     class_total += row.reach;
   }
   tally.same(class_total == s::kGsEfxMeasured,
-             "the thirteen class counts do not add up to the header's measured count");
+             "the fourteen class counts do not add up to the header's measured count");
   tally.same(static_cast<int>(kGsEfxSlotConversions.size()) == s::kGsEfxMeasured,
              "the conversion list is not as long as the header's measured count");
 
@@ -160,7 +163,7 @@ TEST_CASE("every conversion class reaches at least one (type, slot) pair", "[gs-
     table_total += row.expected;
   }
   tally.same(table_total == s::kGsEfxMeasured,
-             "the twenty table counts do not add up to the header's measured count");
+             "the twenty-two table counts do not add up to the header's measured count");
 
   // The block these counts are a part of. Measured alone reads as an amount
   // understood; against printed it reads as what it is, a fraction, and a

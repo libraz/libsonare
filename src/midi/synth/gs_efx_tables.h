@@ -69,13 +69,15 @@ inline constexpr int kGsEfxReachPostGain = 2;
 inline constexpr uint8_t kGsEfxClassPostGain = 11;
 inline constexpr int kGsEfxReachWindow = 2;
 inline constexpr uint8_t kGsEfxClassWindow = 12;
+inline constexpr int kGsEfxReachCorner = 2;
+inline constexpr uint8_t kGsEfxClassCorner = 13;
 
 // The two numbers the block's coverage is read as: every (type, slot) the unit
 // prints a value for, and how many of those these tables give a conversion to.
 // Held apart because the numerator alone reads as an amount understood, which
 // it is not, and because one number cannot say which of the two moved.
 inline constexpr int kGsEfxPrinted = 770;
-inline constexpr int kGsEfxMeasured = 89;
+inline constexpr int kGsEfxMeasured = 91;
 
 // The same count per table. A class holds more than one -- two rate ranges, five
 // delay ladders, three frequency columns -- so a table that stops being fed leaves
@@ -102,6 +104,8 @@ inline constexpr int kGsEfxTableUseAzimuthPlacement = 2;
 inline constexpr int kGsEfxTableUseAccelRotor = 2;
 inline constexpr int kGsEfxTableUsePostGainMakeup = 2;
 inline constexpr int kGsEfxTableUseWindowSplice = 2;
+inline constexpr int kGsEfxTableUseCornerLow = 1;
+inline constexpr int kGsEfxTableUseCornerHigh = 1;
 
 /// Rate, printed 0.05 - 6.40.
 inline constexpr std::array<GsEfxBreakpoint, 2> kGsEfxRateNarrow = {{
@@ -360,9 +364,22 @@ inline constexpr std::array<float, 5> kGsEfxWindowMs = {{
     128.0f,
 }};
 
+/// Equaliser corner: byte 0 selects the first state, every other byte the second.
+inline constexpr std::array<float, 2> kGsEfxCornerLow = {{118.0f, 217.1f}};
+inline constexpr std::array<float, 2> kGsEfxCornerHigh = {{6727.2f, 10960.9f}};
+
+// Shelf pairs no byte selects a corner for: the tone pair after every effect, and
+// the pair a combination type's equaliser prints gains and no corner for.
+inline constexpr float kGsEfxOutputToneLowHz = 160.597f;
+inline constexpr float kGsEfxOutputToneHighHz = 6986.98f;
+inline constexpr float kGsEfxCombinationEqLowHz = 113.3f;
+inline constexpr float kGsEfxCombinationEqHighHz = 7855.0f;
+
 /// Every (type, slot) pair the archive gives a conversion to.
-inline constexpr std::array<GsEfxSlotConversion, 89> kGsEfxSlotConversions = {{
+inline constexpr std::array<GsEfxSlotConversion, 91> kGsEfxSlotConversions = {{
+    {0x0100, 0, 13, 0},  // corner.low
     {0x0100, 1, 3, 0},   // gain.tone
+    {0x0100, 2, 13, 1},  // corner.high
     {0x0100, 3, 3, 0},   // gain.tone
     {0x0100, 4, 2, 0},   // freq.eq
     {0x0100, 5, 5, 0},   // width.section

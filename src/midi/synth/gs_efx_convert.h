@@ -30,6 +30,9 @@ enum class GsTimeLadder { kLadder0, kLadder1, kLadder2, kLadder3, kLadder4 };
 /// archive record selects.
 enum class GsFreqColumn { kColumn0, kColumn1, kColumn2 };
 
+/// Which of the equaliser's two shelves a corner byte sets.
+enum class GsShelfSide { kLow, kHigh };
+
 /// The five EFX modulation waveforms the archive's `wave` table enumerates.
 enum class GsEfxWave { kSine, kTriangle, kSquare, kSawUp, kSawDown };
 
@@ -89,6 +92,11 @@ float gs_efx_post_gain_db(uint8_t value) noexcept;
 /// SHIFT MODE byte -> the splice window in milliseconds: how far the read-out
 /// drifts between splices. Settings past the fifth return the first.
 float gs_efx_window_ms(uint8_t value) noexcept;
+
+/// CORNER byte -> a shelf's corner in Hz, at its half-gain point. Byte 0 selects
+/// one state and every other byte the other; which printed label names which
+/// state is not measurable, so the byte is read and the label is not.
+float gs_efx_corner_hz(uint8_t value, GsShelfSide side) noexcept;
 
 /// A byte read through the printed endpoints of a slot no table was measured
 /// for. Nothing here is fitted: the two endpoints admit exactly one step or

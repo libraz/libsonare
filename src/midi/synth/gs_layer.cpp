@@ -539,38 +539,32 @@ float gs_efx_level_db(uint8_t value) noexcept {
   return std::max(-24.0f, 20.0f * std::log10(gs_efx_level_mul(value)));
 }
 
-/// The corners the EQ blocks put their shelves on. The byte that selects a
-/// shelf corner has two states and the archive does not read which frequency
-/// either names, so these are this tree's choice and not a measurement.
-constexpr float kGsEqLowShelfHz = 100.0f;
-constexpr float kGsEqHighShelfHz = 8000.0f;
-
 /// eq.parametric band-type selectors, in the order processor_params.h decodes.
 constexpr int kEqBandPeak = 0;
 constexpr int kEqBandLowShelf = 1;
 constexpr int kEqBandHighShelf = 2;
 
-/// Writes one shelf band's shape: its type and its fixed corner. The gain is a
-/// bound byte and the binding table writes it.
-void append_shelf(ParamsJson& out, int band, int type, float corner_hz) {
-  const std::string prefix = "band" + std::to_string(band) + ".";
-  out.integer((prefix + "type").c_str(), type);
-  out.number((prefix + "frequencyHz").c_str(), corner_hz);
+/// Writes one band's type. What the band reads -- corner, centre, width, gain --
+/// is a bound byte or a fixed corner the caller writes beside it.
+void append_band(ParamsJson& out, int band, int type) {
+  out.integer(("band" + std::to_string(band) + ".type").c_str(), type);
 }
 
-/// Writes one peaking band's type. Centre, width and gain are bound bytes.
-void append_peak(ParamsJson& out, int band) {
-  out.integer(("band" + std::to_string(band) + ".type").c_str(), kEqBandPeak);
+/// Writes one shelf on a corner no byte selects. The gain is a bound byte.
+void append_fixed_shelf(ParamsJson& out, int band, int type, float corner_hz) {
+  append_band(out, band, type);
+  out.number(("band" + std::to_string(band) + ".frequencyHz").c_str(), corner_hz);
 }
 
 /// Stereo-EQ (0x0100): a low shelf, two peaking sections, a high shelf. Only
-/// the band shapes are the skeleton's; every byte the four bands read is bound.
+/// the band shapes are the skeleton's; every byte the four bands read is bound,
+/// the two corner bytes included.
 std::string gs_stereo_eq_json() {
   ParamsJson out;
-  append_shelf(out, 0, kEqBandLowShelf, kGsEqLowShelfHz);
-  append_peak(out, 1);
-  append_peak(out, 2);
-  append_shelf(out, 3, kEqBandHighShelf, kGsEqHighShelfHz);
+  append_band(out, 0, kEqBandLowShelf);
+  append_band(out, 1, kEqBandPeak);
+  append_band(out, 2, kEqBandPeak);
+  append_band(out, 3, kEqBandHighShelf);
   return out.str();
 }
 
@@ -655,12 +649,6 @@ std::string gs_efx_insert_params(const GsEfx& efx) {
 
 namespace {
 
-/// The corners the shared output tone pair sits on. Neither slot carries a
-/// corner byte, so these are the archive's point estimates for the one fixed
-/// shelf pair it found behind six unrelated types, not this tree's choice.
-constexpr float kGsOutputLowShelfHz = 161.0f;
-constexpr float kGsOutputHighShelfHz = 6987.0f;
-
 /// The binding rows for one type. kGsEfxBindings is sorted by (type, slot, key),
 /// so a type's rows are one contiguous run.
 struct BindingRun {
@@ -735,6 +723,10 @@ bool write_bound(ParamsJson& out, const char* key, const GsEfxBinding& row, uint
     case kGsEfxClassWindow:
       out.number(key, gs_efx_window_ms(byte));
       return true;
+    case kGsEfxClassCorner:
+      out.number(key,
+                 gs_efx_corner_hz(byte, row.table == 1 ? GsShelfSide::kHigh : GsShelfSide::kLow));
+      return true;
     case kGsEfxClassRatio: {
       if (row.range >= kGsEfxBindingRanges.size()) return false;
       const GsEfxBindingRange& ends = kGsEfxBindingRanges[row.range];
@@ -758,10 +750,8 @@ void write_output_stage_constants(ParamsJson& out, std::string_view stage) {
   if (stage != "eq.parametric") return;
   // The module applies one tone pair after the effect, whatever the effect is:
   // two first-order shelves on fixed corners, each taking one gain byte.
-  out.integer("band0.type", kEqBandLowShelf);
-  out.number("band0.frequencyHz", kGsOutputLowShelfHz);
-  out.integer("band1.type", kEqBandHighShelf);
-  out.number("band1.frequencyHz", kGsOutputHighShelfHz);
+  append_fixed_shelf(out, 0, kEqBandLowShelf, kGsEfxOutputToneLowHz);
+  append_fixed_shelf(out, 1, kEqBandHighShelf, kGsEfxOutputToneHighHz);
 }
 
 /// Whether a params object already carries @p key. Keys are plain identifiers
@@ -837,14 +827,14 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
     return GsEfxStage{"saturation.ampSim", bass ? "{\"ampModel\":0,\"drive\":0.6,\"cabModel\":1}"
                                                 : "{\"ampModel\":0,\"drive\":0.6}"};
   };
-  // The guitar multis' tone stack: a low shelf, one peaking section, a high
-  // shelf. The bands' shapes only; their bytes are bound where the archive
-  // reaches them.
+  // Every combination type's equaliser: a low shelf, one peaking section, a
+  // high shelf. It prints two gains and no corner, so the shelves sit on the
+  // pair the archive measured on one such type; every byte the bands read is bound.
   const auto eq = [] {
     ParamsJson out;
-    append_shelf(out, 0, kEqBandLowShelf, kGsEqLowShelfHz);
-    append_peak(out, 1);
-    append_shelf(out, 2, kEqBandHighShelf, kGsEqHighShelfHz);
+    append_fixed_shelf(out, 0, kEqBandLowShelf, kGsEfxCombinationEqLowHz);
+    append_band(out, 1, kEqBandPeak);
+    append_fixed_shelf(out, 2, kEqBandHighShelf, kGsEfxCombinationEqHighHz);
     return GsEfxStage{"eq.parametric", out.str()};
   };
   const auto cf = [] { return GsEfxStage{"effects.modulation.chorus", "{}"}; };
@@ -859,7 +849,6 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
   const auto pan = [] { return GsEfxStage{"stereo.autoPan", "{}"}; };
   const auto rm = [] { return GsEfxStage{"effects.modulation.ringModulator", "{}"}; };
   const auto ps = [] { return GsEfxStage{"effects.modulation.pitchShifter", "{}"}; };
-  const auto eq3 = [] { return GsEfxStage{"eq.parametric", "{}"}; };
   const auto trem = [] {
     return GsEfxStage{"effects.modulation.ringModulator", gs_tremolo_json()};
   };
@@ -895,7 +884,7 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
     // for it (chapter-4 body 03 00 vs appendix table 02 0C); accept both.
     case 0x020C:
     case 0x0300:
-      return {od(false), eq3(), rot()};
+      return {od(false), eq(), rot()};
     case 0x0400:  // GTR Multi 1: Cmp-OD-CF-Dly
       return {comp(), od(false), cf(), delay()};
     case 0x0401:  // GTR Multi 2: Cmp-OD-EQ-CF
@@ -905,14 +894,14 @@ std::vector<GsEfxStage> gs_efx_effect_chain(const GsEfx& efx) {
     case 0x0403:  // Clean GTR Multi 1: Cmp-EQ-CF-Dly (no OD block)
       return {comp(), eq(), cf(), delay()};
     case 0x0404:  // Clean GTR Multi 2: AW-EQ-CF-Dly (Auto-Wah at the front)
-      return {autowah(), eq3(), cf(), delay()};
+      return {autowah(), eq(), cf(), delay()};
     case 0x0405:  // Bass Multi: Cmp-OD-EQ-CF (the OD block on the bass cab)
-      return {comp(), od(true), eq3(), cf()};
+      return {comp(), od(true), eq(), cf()};
     case 0x0406:  // Rhodes Multi: Enhancer -> Phaser -> Chorus -> Tremolo/Pan
       return {eh(), ph(), cf(), pan()};
     case 0x0500:  // Keyboard Multi: Ring Mod -> EQ -> Pitch Shifter -> Phaser -> Delay.
                   // The only GS type that binds the ring-modulator insert.
-      return {rm(), eq3(), ps(), ph(), delay()};
+      return {rm(), eq(), ps(), ph(), delay()};
     default: {
       // Single-effect types: a one-stage chain from the name/param mapping.
       // The parallel-2 types (MSB 11) fall through here to the empty chain and

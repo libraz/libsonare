@@ -52,7 +52,7 @@ The row names a chain stage and the JSON key on it that receives the converted v
 - `class` and `table` name the measured law. The pair spells the same `class.table` string the generated header uses — `"gain"` + `"tone"` is `gain.tone`.
 - `via` (optional) names a fixed wrapper applied after the conversion, from a closed vocabulary rather than free text. Use it only where the wrapper already exists as a named function.
 
-The fourteen classes and their tables, which are the whole vocabulary:
+The fifteen classes and their tables, which are the whole vocabulary:
 
 | class | tables |
 |---|---|
@@ -70,6 +70,7 @@ The fourteen classes and their tables, which are the whole vocabulary:
 | `freq` | `eq`, `pre_filter`, `damping` |
 | `post_gain` | `makeup` |
 | `window` | `splice` |
+| `corner` | `low`, `high` |
 
 A class outside this list means a law nobody measured. That is not something to invent here — the row becomes `state` with a reason saying so.
 

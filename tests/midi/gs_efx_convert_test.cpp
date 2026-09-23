@@ -20,6 +20,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -29,6 +30,7 @@ using sonare::midi::synth::gs_efx_accel_tau_s;
 using sonare::midi::synth::gs_efx_accel_undershoot_hz;
 using sonare::midi::synth::gs_efx_azimuth_deg;
 using sonare::midi::synth::gs_efx_balance;
+using sonare::midi::synth::gs_efx_corner_hz;
 using sonare::midi::synth::gs_efx_delay_ms;
 using sonare::midi::synth::gs_efx_enum_index;
 using sonare::midi::synth::gs_efx_freq_hz;
@@ -44,6 +46,7 @@ using sonare::midi::synth::gs_efx_window_ms;
 using sonare::midi::synth::GsEfxWave;
 using sonare::midi::synth::GsFreqColumn;
 using sonare::midi::synth::GsRateRange;
+using sonare::midi::synth::GsShelfSide;
 using sonare::midi::synth::GsTimeLadder;
 
 // Measurement floors, each taken from the archive record or claim named beside it.
@@ -686,6 +689,44 @@ TEST_CASE("post gain and the splice window reproduce the archive's readings", "[
 
   WARN("comparisons: " << tally.count());
   REQUIRE(tally.count() >= 25);
+}
+
+TEST_CASE("an equaliser corner byte reproduces the archive's half-gain points",
+          "[gs-efx-convert]") {
+  Tally tally;
+
+  // 01 00, each corner byte read at ten settings: the half-gain point of the
+  // shelf's deviation at full boost. Floor: one band of the twelfth-octave set
+  // the points are read on, which is also why settings 1-127 alternate.
+  constexpr double kCornerFloorOctaves = 1.0 / 12.0;
+  const std::array<uint8_t, 10> kSettings = {0, 1, 2, 3, 4, 32, 64, 96, 126, 127};
+  const std::array<double, 10> kLowHz = {118.0, 222.7, 222.7, 210.2, 222.7,
+                                         222.7, 210.2, 222.7, 210.2, 210.2};
+  const std::array<double, 10> kHighHz = {6727.2,  11313.7, 11313.7, 10678.7, 10678.7,
+                                          10678.7, 11313.7, 11313.7, 10678.7, 10678.7};
+  for (std::size_t i = 0; i < kSettings.size(); ++i) {
+    const uint8_t setting = kSettings[i];
+    tally.near(std::log2(gs_efx_corner_hz(setting, GsShelfSide::kLow) / kLowHz[i]), 0.0,
+               kCornerFloorOctaves,
+               "low corner, setting " + std::to_string(setting) + " (40 03 03)");
+    tally.near(std::log2(gs_efx_corner_hz(setting, GsShelfSide::kHigh) / kHighHz[i]), 0.0,
+               kCornerFloorOctaves,
+               "high corner, setting " + std::to_string(setting) + " (40 03 05)");
+  }
+
+  // Two states split between byte 0 and every other byte, with nothing between.
+  for (const GsShelfSide side : {GsShelfSide::kLow, GsShelfSide::kHigh}) {
+    const float first = gs_efx_corner_hz(0, side);
+    const float second = gs_efx_corner_hz(1, side);
+    tally.same(second > first * 1.5f, "corner: the second state sits well above the first");
+    for (int value = 2; value < 128; ++value) {
+      tally.same(gs_efx_corner_hz(static_cast<uint8_t>(value), side) == second,
+                 "corner: byte " + std::to_string(value) + " is the second state");
+    }
+  }
+
+  WARN("comparisons: " << tally.count());
+  REQUIRE(tally.count() >= 272);
 }
 
 TEST_CASE("gs_efx_enum_index returns the first state past the printed list", "[gs-efx-convert]") {

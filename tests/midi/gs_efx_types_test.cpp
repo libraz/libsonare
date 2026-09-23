@@ -301,7 +301,7 @@ struct ConversionName {
   const char* name;
 };
 
-constexpr std::array<ConversionName, 22> kConversionNames = {{
+constexpr std::array<ConversionName, 24> kConversionNames = {{
     {s::kGsEfxClassRate, 0, "rate.narrow"},
     {s::kGsEfxClassRate, 1, "rate.wide"},
     {s::kGsEfxClassDelayTime, 0, "delay_time.pre_delay"},
@@ -322,6 +322,8 @@ constexpr std::array<ConversionName, 22> kConversionNames = {{
     {s::kGsEfxClassAccel, 0, "accel.rotor"},
     {s::kGsEfxClassPostGain, 0, "post_gain.makeup"},
     {s::kGsEfxClassWindow, 0, "window.splice"},
+    {s::kGsEfxClassCorner, 0, "corner.low"},
+    {s::kGsEfxClassCorner, 1, "corner.high"},
     {s::kGsEfxClassRatio, 0, "ratio.percent"},
     {s::kGsEfxClassRatio, 1, "ratio.semitone"},
 }};
@@ -365,7 +367,7 @@ std::vector<EqSlots> gain_slots_by_type() {
 /// nobody has adjudicated yet mostly become states as they are looked at, so a
 /// ceiling would go red on the lane finishing its own work; what a downgrade of
 /// a translation would have to get past is the translated floor.
-constexpr int kGsEfxTranslatedFloor = 293;
+constexpr int kGsEfxTranslatedFloor = 295;
 constexpr int kGsEfxAdjudicatedFloor = 770;
 
 std::string conversion_name(uint8_t conversion_class, uint8_t table) {
@@ -1215,6 +1217,10 @@ bool law_reads(const s::GsEfxBinding& row, uint8_t byte, const std::string& key,
       return true;
     case s::kGsEfxClassWindow:
       out = s::gs_efx_window_ms(byte);
+      return true;
+    case s::kGsEfxClassCorner:
+      out =
+          s::gs_efx_corner_hz(byte, row.table == 1 ? s::GsShelfSide::kHigh : s::GsShelfSide::kLow);
       return true;
     case s::kGsEfxClassRatio: {
       if (row.range >= s::kGsEfxBindingRanges.size()) return false;

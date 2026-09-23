@@ -29,14 +29,14 @@
   },
   "reach": {
     "printed": 770,
-    "measured": 89,
-    "reached": 89,
+    "measured": 91,
+    "reached": 91,
     "translatable": null,
     "translated": null,
     "what_the_first_two_are": "Printed is every (type, slot) the unit's own records carry a printed value for, counted by tools/gs/coverage.py's enumeration -- the denominator the block's coverage is read against. Measured is how many of them these tables give a conversion to; reached is the same count under the name the schema opened with.",
     "why_two_are_null": "Translatable asks whether the insert a slot maps to has a control of the same physical unit, and translated asks whether the GS layer emits the key. Neither is a property of the archive, so neither is derived here.",
     "by_source": {
-      "measured": 77,
+      "measured": 79,
       "assigned": 6,
       "unit_overrides_assigned": 6
     }
@@ -54,7 +54,8 @@
     "azimuth": 2,
     "accel": 2,
     "post_gain": 2,
-    "window": 2
+    "window": 2,
+    "corner": 2
   },
   "reach_by_table": {
     "rate.narrow": 3,
@@ -76,7 +77,9 @@
     "azimuth.placement": 2,
     "accel.rotor": 2,
     "post_gain.makeup": 2,
-    "window.splice": 2
+    "window.splice": 2,
+    "corner.low": 1,
+    "corner.high": 1
   },
   "defaults": {
     "types": 65,
@@ -4106,6 +4109,77 @@
       },
       "rests_on": "0160-a-pitch-byte-is-read-out-of-a-window-the-mode-byte-picks.json"
     },
+    "corner": {
+      "read_by": "byte 0 against every other byte",
+      "tables": {
+        "low": {
+          "columns": [
+            "00/01"
+          ],
+          "address": "40 03 03",
+          "kind": "states",
+          "order": 1,
+          "entries": [
+            {
+              "settings": "00",
+              "hz": 118.0,
+              "unit_specific": false,
+              "approximate": false,
+              "source": "measured"
+            },
+            {
+              "settings": "01–7F",
+              "hz": 217.1,
+              "unit_specific": false,
+              "approximate": false,
+              "source": "measured"
+            }
+          ],
+          "what_the_hz_is": "The half-gain point of the shelf's deviation, which is where a first-order shelf's corner is defined.",
+          "what_the_labels_are_not": "Which of the page's two figures names which state is not measurable, so the byte's states are carried and the figures are not.",
+          "what_the_model_says_of_it": "Two states and the boundary is between 0 and 1: one value of the byte selects one corner and the other 127 select the other. The figure is the half point of the deviation, which is where this model's corner parameter is defined.",
+          "from": "data/units/roland-sc8850-01/efx-bands/01-00-03-where-the-eq-hinges-in-twelfths.json",
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 1,
+          "source": "measured"
+        },
+        "high": {
+          "columns": [
+            "00/01"
+          ],
+          "address": "40 03 05",
+          "kind": "states",
+          "order": 1,
+          "entries": [
+            {
+              "settings": "00",
+              "hz": 6727.2,
+              "unit_specific": false,
+              "approximate": false,
+              "source": "measured"
+            },
+            {
+              "settings": "01–7F",
+              "hz": 10960.9,
+              "unit_specific": false,
+              "approximate": false,
+              "source": "measured"
+            }
+          ],
+          "what_the_hz_is": "The half-gain point of the shelf's deviation, which is where a first-order shelf's corner is defined.",
+          "what_the_labels_are_not": "Which of the page's two figures names which state is not measurable, so the byte's states are carried and the figures are not.",
+          "what_the_model_says_of_it": "Two states, as the low corner. Both figures are lower bounds: the deviation was still climbing where the band set ended, so the half point they are read from is the half of a peak the bands did not reach.",
+          "from": "data/units/roland-sc8850-01/efx-bands/01-00-05-where-the-eq-hinges-in-twelfths.json",
+          "unit_specific": false,
+          "approximate": false,
+          "entries_using_it": 1,
+          "source": "measured"
+        }
+      },
+      "rests_on": "0100-a-chain-of-four-sections-and-an-output-gain.json",
+      "model": "inferences/models/0100-first-order-shelves-peaking-tables-and-the-odd-entry.json"
+    },
     "freq": {
       "read_by": "the top four bits; eight settings share an entry",
       "tables": {
@@ -4818,7 +4892,92 @@
       "rests_on": "freq-the-byte-indexes-a-third-octave-table.json"
     }
   },
+  "fixed_corners": {
+    "output_tone": {
+      "rests_on": "tone-a-pair-of-fixed-first-order-shelves.json",
+      "state": "standing",
+      "model": "inferences/models/tone-a-fixed-shelf-pair-order-1.json",
+      "measured_on_types": [
+        "01 02",
+        "01 20",
+        "01 25",
+        "01 42",
+        "01 50",
+        "02 06"
+      ],
+      "addresses": [
+        "40 03 13",
+        "40 03 14"
+      ],
+      "low": {
+        "hz": 160.5969,
+        "order": 1,
+        "every_corner_that_fits_hz": [
+          112.2,
+          160.6
+        ],
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      "high": {
+        "hz": 6986.9793,
+        "order": 1,
+        "every_corner_that_fits_hz": [
+          6871.6,
+          7240.3
+        ],
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      "what_it_is": "The tone pair the module applies after the effect, whatever the effect is. Each corner is a point inside a band that fits every record, and the model's.",
+      "unit_specific": false,
+      "approximate": false,
+      "source": "measured"
+    },
+    "combination_eq": {
+      "rests_on": "section-gain-a-shelf-stores-the-cut.json",
+      "state": "standing",
+      "measured_on_types": [
+        "04 01"
+      ],
+      "low": {
+        "hz": 113.3,
+        "order": 1,
+        "octaves_from_the_equalisers_first_state": 0.0586,
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      "high": {
+        "hz": 7855.0,
+        "order": 1,
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      "what_it_is": "The shelves of a combination type's equaliser, which prints two gains and no corner. The low one is the standalone equaliser's at its first state.",
+      "unit_specific": false,
+      "approximate": false,
+      "source": "measured"
+    }
+  },
   "map": [
+    {
+      "type": "01 00",
+      "address": "40 03 03",
+      "parameter": 0,
+      "conversion_class": "corner",
+      "table": "low",
+      "printed_values": "00/01",
+      "rests_on": "0100-a-chain-of-four-sections-and-an-output-gain.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false,
+      "source": "measured"
+    },
     {
       "type": "01 00",
       "address": "40 03 04",
@@ -4827,6 +4986,20 @@
       "table": "tone",
       "printed_values": "34–4C",
       "rests_on": "gain-the-byte-is-a-decibel-a-step.json",
+      "inference_state": "standing",
+      "address_inside_the_inferences_list": true,
+      "unit_specific": false,
+      "approximate": false,
+      "source": "measured"
+    },
+    {
+      "type": "01 00",
+      "address": "40 03 05",
+      "parameter": 2,
+      "conversion_class": "corner",
+      "table": "high",
+      "printed_values": "00/01",
+      "rests_on": "0100-a-chain-of-four-sections-and-an-output-gain.json",
       "inference_state": "standing",
       "address_inside_the_inferences_list": true,
       "unit_specific": false,
@@ -6078,7 +6251,7 @@
       "conversion_class": null,
       "table": null,
       "what": "the rotary speed switch turns over at 63/64 rather than at the printed 7F",
-      "why_it_names_no_class": "A switch, not a conversion: none of the thirteen classes carries it, so nothing here computes its corner and the figure is the doc's."
+      "why_it_names_no_class": "A switch, not a conversion: none of the fourteen classes carries it, so nothing here computes its corner and the figure is the doc's."
     },
     {
       "conversion_class": "gain",
@@ -7009,6 +7182,12 @@
         "state": "standing",
         "rounds": 2,
         "widens_reach_only": true
+      },
+      {
+        "conversion_class": "corner",
+        "file": "0100-a-chain-of-four-sections-and-an-output-gain.json",
+        "state": "standing",
+        "rounds": 3
       }
     ]
   },

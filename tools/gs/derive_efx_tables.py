@@ -5,7 +5,7 @@ where the two disagree the machine decides. The EFX parameter block is where tha
 bites hardest: a Rate, a Time, a Freq or a Level byte is not the quantity it is
 printed as, and libsonare has been running most of those bytes into an insert's
 compile-time default. This reads an archive of what one individual SC-8850
-answered and writes down, once, what each byte is worth -- the thirteen shared
+answered and writes down, once, what each byte is worth -- the fourteen shared
 conversions, and which (type, slot) pairs the archive gives one to.
 
 **Nothing here decides anything.** A slot the archive does not reach is left
@@ -83,7 +83,7 @@ UNIT_CLOCK_HZ = 32000
 # names rather than copied from anywhere.
 THIRD_OCTAVE_DECADE = (100, 125, 160, 200, 250, 315, 400, 500, 630, 800)
 
-# The thirteen conversion classes, in the order they are reported and emitted.
+# The fourteen conversion classes, in the order they are reported and emitted.
 # Written out rather than taken from the table below, so that a class dropped
 # from the table is a missing key here and not a shorter report.
 CLASS_ORDER = (
@@ -100,6 +100,7 @@ CLASS_ORDER = (
     "accel",
     "post_gain",
     "window",
+    "corner",
 )
 
 # What picks each class, and what bounds it.
@@ -109,6 +110,9 @@ CLASS_ORDER = (
 # table. An explicit range does not, in general: `00-7F` is the whole byte and is
 # printed against three hundred and twenty-one parameters that have nothing to do
 # with each other.
+#
+# A spelling may also map to `{address: table}`, where one spelling names two
+# tables and only the address says which -- the equaliser's two corner bytes.
 #
 # `scoped_by_address` is that distinction made mechanical. Where the printed
 # spelling picks the table, the inference's own address list is informational and
@@ -210,6 +214,14 @@ CLASSES = {
         "columns": {"00–04": "splice"},
         "scoped_by_address": True,
         "quantity": "ms",
+    },
+    # `00/01` is every on/off switch's spelling too, so the address is part of the
+    # selector, and it is what separates the low corner's table from the high one's.
+    "corner": {
+        "inference": "0100-a-chain-of-four-sections-and-an-output-gain",
+        "columns": {"00/01": {"40 03 03": "low", "40 03 05": "high"}},
+        "scoped_by_address": True,
+        "quantity": "Hz",
     },
 }
 
@@ -436,7 +448,7 @@ def disagreements(classes: dict) -> list[dict]:
     cannot part company without something going red. A figure this derivation
     computes is read off the table the run built rather than restated -- the
     third-octave entry is measured here, and only the rotary switch, which
-    belongs to none of the thirteen classes, is carried on the doc's word.
+    belongs to none of the fourteen classes, is carried on the doc's word.
     """
     third = classes["freq"]["tables"]["eq"]["entries"][2]
     gain = classes["gain"]["tables"]["tone"]
@@ -458,7 +470,7 @@ def disagreements(classes: dict) -> list[dict]:
             "table": None,
             "what": ("the rotary speed switch turns over at 63/64 rather than at the printed 7F"),
             "why_it_names_no_class": (
-                "A switch, not a conversion: none of the thirteen classes carries it, so nothing "
+                "A switch, not a conversion: none of the fourteen classes carries it, so nothing "
                 "here computes its corner and the figure is the doc's."
             ),
         },
@@ -718,6 +730,8 @@ def build_map(candidates: list[dict], scopes: dict) -> tuple[list[dict], list[di
         for scope in [scopes[name], *scopes[name]["also"]]:
             for slot in candidates:
                 table = spec["columns"].get(slot["printed_values"])
+                if isinstance(table, dict):
+                    table = table.get(slot["address"])
                 if table is None or slot["type"] not in scope["types"]:
                     continue
                 in_about = slot["address"] in scope["addresses"]
@@ -1500,6 +1514,162 @@ def window_tables(scope: dict) -> dict:
     }
 
 
+def model_of(root: Path, scope: dict) -> tuple[dict, str]:
+    """The model file a claim names as the one that reproduces it, and its path."""
+    name = scope["data"].get("reproduces", {}).get("model")
+    if not name:
+        sys.exit(f"{scope['file']} names no model that reproduces it, so it carries no figures")
+    return load(root / name), name
+
+
+def shelves_of(model: dict, where: str) -> dict[str, dict]:
+    """The low and the high shelf of a model's chain, refused unless there is one of each."""
+    shelves = [section for section in model["chain"] if section.get("kind") == "shelf"]
+    by_side = {section["side"]: section for section in shelves}
+    if len(shelves) != 2 or set(by_side) != {"low", "high"}:
+        sys.exit(f"{where} does not carry exactly one low shelf and one high shelf")
+    return by_side
+
+
+def corner_tables(root: Path, scope: dict) -> dict:
+    """The equaliser's two corner bytes, two states each, off the model its claim names.
+
+    The page prints two figures per byte and the claim says in as many words that
+    which label goes with which state is not measurable, so what is carried is the
+    byte's two states and not the page's two figures. A model whose corner is not
+    split between byte 0 and every other byte, or whose byte is not the address the
+    class selects on, is refused rather than read.
+    """
+    model, name = model_of(root, scope)
+    shelves = shelves_of(model, name)
+    tables = {}
+    for address, side in CLASSES["corner"]["columns"]["00/01"].items():
+        corner = shelves[side]["corner_hz"]
+        if corner.get("byte") != address:
+            sys.exit(
+                f"{name}: the {side} shelf's corner is on {corner.get('byte')!r}, not the "
+                f"{address} the corner class selects on."
+            )
+        states = corner.get("map", {})
+        if states.get("kind") != "states" or set(states.get("values", {})) != {"0", "*"}:
+            sys.exit(
+                f"{name}: the {side} corner is not two states split between byte 0 and the rest."
+            )
+        tables[side] = {
+            "columns": ["00/01"],
+            "address": address,
+            "kind": "states",
+            "order": shelves[side]["order"],
+            "entries": [
+                entry(settings="00", hz=states["values"]["0"]),
+                entry(settings="01–7F", hz=states["values"]["*"]),
+            ],
+            "what_the_hz_is": (
+                "The half-gain point of the shelf's deviation, which is where a first-order "
+                "shelf's corner is defined."
+            ),
+            "what_the_labels_are_not": (
+                "Which of the page's two figures names which state is not measurable, so the "
+                "byte's states are carried and the figures are not."
+            ),
+            "what_the_model_says_of_it": states.get("why"),
+            "from": states.get("from"),
+            "unit_specific": False,
+            "approximate": False,
+        }
+    return {
+        "read_by": "byte 0 against every other byte",
+        "tables": tables,
+        "rests_on": scope["file"],
+        "model": name,
+    }
+
+
+# Two shelf pairs no byte selects a corner for, each read off the claim that
+# measured it. Which types a pair is put on is the skeleton's, not this file's.
+OUTPUT_TONE_INFERENCE = "tone-a-pair-of-fixed-first-order-shelves"
+COMBINATION_EQ_INFERENCE = "section-gain-a-shelf-stores-the-cut"
+
+# A combination type's low shelf is read as the standalone equaliser's at its
+# first state. The claim puts the two under one band of the twelfth-octave set.
+COMBINATION_LOW_AGAINST_THE_FIRST_STATE_OCTAVES = 1.0 / 12.0
+
+
+def fixed_corner_pairs(root: Path, inferences: Path, corner: dict) -> tuple[dict, list[str]]:
+    """The output tone pair and the combination types' pair, and the models read.
+
+    The output pair's corners are the points its model carries, each checked to
+    sit inside the band the claim publishes as every corner that fits. The
+    combination pair is the claim's own scan; its low corner is checked against
+    the standalone equaliser's first state, which is what the claim reads it as.
+    """
+    tone = about(inferences, OUTPUT_TONE_INFERENCE)
+    tone_model, tone_name = model_of(root, tone)
+    shelves = shelves_of(tone_model, tone_name)
+    fits = tone["data"]["how_well_the_corner_is_determined"]["shared_by_every_record_hz"]
+    output = {}
+    for side in ("low", "high"):
+        hz = shelves[side]["corner_hz"].get("fixed")
+        if hz is None:
+            sys.exit(f"{tone_name}: the {side} shelf carries no fixed corner")
+        low, high = fits[side]
+        # The band is published to a tenth of a hertz and the point to full precision.
+        if not low - 0.05 <= hz <= high + 0.05:
+            sys.exit(
+                f"{tone_name}: the {side} corner {hz} Hz is outside the {low}-{high} Hz its "
+                f"claim publishes as every corner that fits."
+            )
+        output[side] = entry(
+            hz=round(hz, 4), order=shelves[side]["order"], every_corner_that_fits_hz=[low, high]
+        )
+
+    combination = about(inferences, COMBINATION_EQ_INFERENCE)
+    read = combination["data"]["read_on_another_types_pair_of_shelves"]
+    hinge = read["where_the_shelves_hinge"]
+    first_state = corner["tables"]["low"]["entries"][0]["hz"]
+    apart = octaves(hinge["the_low_shelf_hz"], first_state)
+    if apart > COMBINATION_LOW_AGAINST_THE_FIRST_STATE_OCTAVES:
+        sys.exit(
+            f"{combination['file']}: the combination low shelf at {hinge['the_low_shelf_hz']} Hz "
+            f"is {apart:.3f} octaves from the equaliser's first state, which the claim reads it as."
+        )
+    pair = {
+        "output_tone": {
+            "rests_on": tone["file"],
+            "state": tone["state"],
+            "model": tone_name,
+            "measured_on_types": tone["types"],
+            "addresses": tone["addresses"],
+            "low": output["low"],
+            "high": output["high"],
+            "what_it_is": (
+                "The tone pair the module applies after the effect, whatever the effect is. "
+                "Each corner is a point inside a band that fits every record, and the model's."
+            ),
+            "unit_specific": False,
+            "approximate": False,
+        },
+        "combination_eq": {
+            "rests_on": combination["file"],
+            "state": combination["state"],
+            "measured_on_types": combination["data"]["inference"]["about"]["checked_on_types"],
+            "low": entry(
+                hz=hinge["the_low_shelf_hz"],
+                order=corner["tables"]["low"]["order"],
+                octaves_from_the_equalisers_first_state=round(apart, 4),
+            ),
+            "high": entry(hz=hinge["the_high_shelf_hz"], order=read["the_high_shelf"]["order"]),
+            "what_it_is": (
+                "The shelves of a combination type's equaliser, which prints two gains and no "
+                "corner. The low one is the standalone equaliser's at its first state."
+            ),
+            "unit_specific": False,
+            "approximate": False,
+        },
+    }
+    return pair, [tone_name]
+
+
 def check_delay_ladders(
     root: Path, scope: dict, reached: list[dict], candidates: list[dict]
 ) -> tuple[list[dict], list[dict]]:
@@ -1727,7 +1897,9 @@ def idle_tables(classes: dict, reach_by_table: dict, candidates: list[dict], sco
         name, table_name = key.split(".", 1)
         scope = scopes[name]
         wanted = {
-            column for column, table in CLASSES[name]["columns"].items() if table == table_name
+            column
+            for column, table in CLASSES[name]["columns"].items()
+            if table == table_name or (isinstance(table, dict) and table_name in table.values())
         }
         let_go = [
             {
@@ -1842,7 +2014,9 @@ def derive(root: Path, unit: str) -> dict:
         "accel": accel_tables(scopes["accel"]),
         "post_gain": post_gain_tables(root, scopes["post_gain"]),
         "window": window_tables(scopes["window"]),
+        "corner": corner_tables(root, scopes["corner"]),
     }
+    fixed_corners, fixed_models = fixed_corner_pairs(root, inferences, classes["corner"])
     classes["freq"], freq_notes = freq_tables(scopes["freq"], candidates)
     notes.extend(freq_notes)
 
@@ -1940,6 +2114,7 @@ def derive(root: Path, unit: str) -> dict:
     inputs += [record["_path"] for record in power_on + other]
     inputs += sorted(inferences.glob("*.json"))
     inputs += sorted((root / "inferences" / "models").glob("pan-*.json"))
+    inputs += [root / classes["corner"]["model"], *(root / name for name in fixed_models)]
     inputs += [
         root / measurement["file"]
         for name in ("delay_time", "rate")
@@ -2025,6 +2200,7 @@ def derive(root: Path, unit: str) -> dict:
             },
         },
         "classes": classes,
+        "fixed_corners": fixed_corners,
         "map": sorted(reached, key=lambda r: (r["type"], r["address"])),
         "disagreement": disagreements(classes),
         "records_outside_their_inferences_addresses": outside,
@@ -2034,6 +2210,7 @@ def derive(root: Path, unit: str) -> dict:
     }
 
     stamp_sources(tables["classes"], "classes")
+    stamp_sources(tables["fixed_corners"], "fixed_corners")
     # A `map` row's flags are the fold its table already made, so it is stamped
     # as a fold rather than let through the walker, which would read a row with
     # no flag-carrying children as one entry and refuse the two accel slots.
@@ -2055,7 +2232,7 @@ def emit_header(tables: dict, path: Path) -> None:
     """Render the committed JSON into the header the C++ side includes.
 
     The reach counts are named constants and not an array, because the test that
-    reads them enumerates the thirteen classes by hand: a header that offered the
+    reads them enumerates the fourteen classes by hand: a header that offered the
     list would let a derivation that dropped a class pass by not counting it.
     """
     classes = tables["classes"]
@@ -2251,6 +2428,21 @@ def emit_header(tables: dict, path: Path) -> None:
     w(f"inline constexpr std::array<float, {len(window['entries'])}> kGsEfxWindowMs = {{{{")
     w("    " + " ".join(f"{cpp_float(e['ms'])}," for e in window["entries"]))
     w("}};")
+    w("")
+
+    corner = classes["corner"]["tables"]
+    w("/// Equaliser corner: byte 0 selects the first state, every other byte the second.")
+    for side in ("low", "high"):
+        states = ", ".join(cpp_float(e["hz"]) for e in corner[side]["entries"])
+        w(f"inline constexpr std::array<float, 2> kGsEfxCorner{camel(side)} = {{{{{states}}}}};")
+    w("")
+    w("// Shelf pairs no byte selects a corner for: the tone pair after every effect, and")
+    w("// the pair a combination type's equaliser prints gains and no corner for.")
+    for name, pair in tables["fixed_corners"].items():
+        for side in ("low", "high"):
+            w(
+                f"inline constexpr float kGsEfx{camel(name)}{camel(side)}Hz = {cpp_float(pair[side]['hz'])};"
+            )
     w("")
 
     slots = tables["map"]

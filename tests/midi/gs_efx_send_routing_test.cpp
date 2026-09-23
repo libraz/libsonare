@@ -456,6 +456,6 @@ TEST_CASE("every EFX binding drives a control its insert can automate", "[midi][
   // A floor rather than an equality: binding one more control is not a
   // regression, and a ceiling would read it as one.
   WARN("distinct (insert, control) pairs checked: " << checked);
-  REQUIRE(checked >= 40);
+  REQUIRE(checked >= 42);
 }
 #endif  // SONARE_WITH_FX && SONARE_WITH_MASTERING

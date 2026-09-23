@@ -164,6 +164,11 @@ float gs_efx_window_ms(uint8_t value) noexcept {
       gs_efx_enum_index(value, static_cast<int>(kGsEfxWindowMs.size())))];
 }
 
+float gs_efx_corner_hz(uint8_t value, GsShelfSide side) noexcept {
+  const auto& states = side == GsShelfSide::kLow ? kGsEfxCornerLow : kGsEfxCornerHigh;
+  return states[value == 0 ? 0 : 1];
+}
+
 bool gs_efx_ratio(uint8_t value, int lo_byte, int hi_byte, int lo_unit, int hi_unit,
                   float* out) noexcept {
   if (out == nullptr || hi_byte <= lo_byte) return false;
