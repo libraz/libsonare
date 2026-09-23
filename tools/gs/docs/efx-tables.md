@@ -106,7 +106,7 @@ Carried in `efx-tables.json` itself, under `what_this_cannot_see`, so a reader o
 
 ## Corners no byte selects
 
-`fixed_corners` holds two shelf pairs whose corners the page prints no byte for, so no (type, slot) reaches them and they are not a class. Each is read off the claim that measured it and carries the same flags and `source` as a table entry; the header renders them as `kGsEfxOutputTone*Hz` and `kGsEfxCombinationEq*Hz`.
+`fixed_corners` holds two shelf pairs whose corners the page prints no byte for, so no (type, slot) reaches them and they are not a class. Each is read off the claim that measured it and carries the same flags and `source` as a table entry; the header renders them as `kGsEfxOutputTone*Hz` and `kGsEfxCombinationEq*Hz`. Every shelf here and in the `corner` class is one pole and one zero, and the header carries that once as `kGsEfxShelfOrder`: a derivation meeting two orders stops rather than picking one.
 
 - **`output_tone`** — the pair the unit applies after the effect, whatever the effect is. Measured on six unrelated types; each corner is a point inside the band its claim publishes as every corner that fits, and the point is the claim's model's rather than a choice made here.
 - **`combination_eq`** — the shelves of a combination type's equaliser, which prints two gains and no corner. Measured on one type; its low corner is the standalone equaliser's at its first state.

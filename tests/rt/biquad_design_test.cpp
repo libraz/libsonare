@@ -165,3 +165,35 @@ TEST_CASE("rbj_peak falls back to passthrough when the gain overflows its taps",
     REQUIRE(std::isfinite(coeffs.a2));
   }
 }
+
+TEST_CASE("first-order shelves put half their gain on the corner", "[rt][biquad]") {
+  constexpr double kRate = 48000.0;
+  const auto db = [](const sonare::rt::BiquadCoeffs& c, double hz) {
+    const auto w = static_cast<float>(2.0 * sonare::constants::kPiD * hz / kRate);
+    return 20.0 * std::log10(static_cast<double>(sonare::rt::biquad_magnitude(c, w)));
+  };
+  for (const double corner : {161.0, 1000.0, 6987.0}) {
+    const auto w0 = static_cast<float>(2.0 * sonare::constants::kPiD * corner / kRate);
+    for (const float gain_db : {12.0f, -12.0f, 3.0f}) {
+      const auto low = sonare::rt::first_order_low_shelf(w0, gain_db);
+      const auto high = sonare::rt::first_order_high_shelf(w0, gain_db);
+      INFO("corner " << corner << " Hz, gain " << gain_db << " dB");
+      REQUIRE(low.b2 == 0.0f);
+      REQUIRE(low.a2 == 0.0f);
+      REQUIRE(high.b2 == 0.0f);
+      REQUIRE(high.a2 == 0.0f);
+      REQUIRE_THAT(db(low, corner), WithinAbs(gain_db / 2.0, 1.0e-2));
+      REQUIRE_THAT(db(high, corner), WithinAbs(gain_db / 2.0, 1.0e-2));
+      REQUIRE_THAT(db(low, 0.0), WithinAbs(gain_db, 1.0e-3));
+      REQUIRE_THAT(db(low, kRate / 2.0), WithinAbs(0.0, 1.0e-3));
+      REQUIRE_THAT(db(high, 0.0), WithinAbs(0.0, 1.0e-3));
+      REQUIRE_THAT(db(high, kRate / 2.0), WithinAbs(gain_db, 1.0e-3));
+    }
+    // A cut is its boost turned over, so the two cancel at every frequency.
+    const auto boost = sonare::rt::first_order_low_shelf(w0, 12.0f);
+    const auto cut = sonare::rt::first_order_low_shelf(w0, -12.0f);
+    for (const double hz : {corner / 4.0, corner, corner * 4.0}) {
+      REQUIRE_THAT(db(boost, hz) + db(cut, hz), WithinAbs(0.0, 1.0e-2));
+    }
+  }
+}

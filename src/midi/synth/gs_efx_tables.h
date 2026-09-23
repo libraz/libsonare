@@ -364,6 +364,9 @@ inline constexpr std::array<float, 5> kGsEfxWindowMs = {{
     128.0f,
 }};
 
+/// Every shelf the tables carry is of this order: one pole and one zero a section.
+inline constexpr int kGsEfxShelfOrder = 1;
+
 /// Equaliser corner: byte 0 selects the first state, every other byte the second.
 inline constexpr std::array<float, 2> kGsEfxCornerLow = {{118.0f, 217.1f}};
 inline constexpr std::array<float, 2> kGsEfxCornerHigh = {{6727.2f, 10960.9f}};

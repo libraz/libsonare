@@ -628,24 +628,29 @@ constexpr int kEqPeak = 0;
 constexpr int kEqLowShelf = 1;
 constexpr int kEqHighShelf = 2;
 
-// The output stage's tone pair and one peaking section. Built from the same
-// JSON keys the GS layer writes, so the reading covers the path it drives.
+// The output stage's tone pair at both shelf orders and one peaking section.
+// Built from the same JSON keys the GS layer writes, so the reading covers the
+// path it drives; the first-order pair is the one it writes.
 struct EqProbe {
   const char* what;
   int type;
   float corner_hz;
+  int slope_db_oct;
 };
 constexpr EqProbe kEqProbes[] = {
-    {"low shelf", kEqLowShelf, 161.0f},
-    {"high shelf", kEqHighShelf, 6987.0f},
-    {"peak", kEqPeak, 1585.0f},
+    {"first-order low shelf", kEqLowShelf, 161.0f, 6},
+    {"first-order high shelf", kEqHighShelf, 6987.0f, 6},
+    {"second-order low shelf", kEqLowShelf, 161.0f, 12},
+    {"second-order high shelf", kEqHighShelf, 6987.0f, 12},
+    {"peak", kEqPeak, 1585.0f, 12},
 };
 constexpr double kEqGainDb = 12.0;
 
 std::vector<float> eq_impulse(const EqProbe& probe, double sample_rate) {
   std::ostringstream json;
   json << "{\"band0.type\":" << probe.type << ",\"band0.frequencyHz\":" << probe.corner_hz
-       << ",\"band0.gainDb\":" << kEqGainDb << "}";
+       << ",\"band0.gainDb\":" << kEqGainDb << ",\"band0.slopeDbOct\":" << probe.slope_db_oct
+       << "}";
   auto eq = sonare::mastering::api::make_insert("eq.parametric", json.str());
   REQUIRE(eq != nullptr);
   eq->prepare(sample_rate, kFftLength);
@@ -950,5 +955,5 @@ TEST_CASE("each insert's named physical quantity is the one asked for, at 44100 
   }
 
   WARN("comparisons: " << tally.count());
-  REQUIRE(tally.count() >= 77);
+  REQUIRE(tally.count() >= 87);
 }

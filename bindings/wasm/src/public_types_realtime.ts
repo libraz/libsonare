@@ -68,6 +68,11 @@ export interface EqBand {
   q?: number;
   enabled?: boolean;
   coeffMode?: EqCoeffMode;
+  /**
+   * Slope in dB/octave. 6 selects a first-order section on a pass or shelf
+   * band; a first-order shelf's frequency is its half-gain point and its `q`
+   * is unused.
+   */
   slopeDbOct?: number;
   placement?: EqStereoPlacement;
   /**

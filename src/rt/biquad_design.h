@@ -70,6 +70,16 @@ BiquadCoeffs first_order_lowpass(float w0);
 /// @param w0 Normalized angular cutoff (2*pi*fc/fs).
 BiquadCoeffs first_order_highpass(float w0);
 
+/// @brief First-order (6 dB/oct) low shelf via bilinear transform.
+/// @param w0 Normalized angular corner (2*pi*fc/fs), the half-gain point.
+/// @param gain_db Gain below the corner; above it the shelf is unity.
+BiquadCoeffs first_order_low_shelf(float w0, float gain_db);
+
+/// @brief First-order (6 dB/oct) high shelf via bilinear transform.
+/// @param w0 Normalized angular corner (2*pi*fc/fs), the half-gain point.
+/// @param gain_db Gain above the corner; below it the shelf is unity.
+BiquadCoeffs first_order_high_shelf(float w0, float gain_db);
+
 /// @brief Evaluate |H(e^jw)| for normalized biquad coefficients.
 float biquad_magnitude(const BiquadCoeffs& coeffs, float omega);
 

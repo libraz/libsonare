@@ -550,9 +550,16 @@ void append_band(ParamsJson& out, int band, int type) {
   out.integer(("band" + std::to_string(band) + ".type").c_str(), type);
 }
 
+/// Writes one shelf's type and order. Its corner and gain are bound bytes.
+void append_shelf(ParamsJson& out, int band, int type) {
+  append_band(out, band, type);
+  // The insert's slope is 6 dB/oct a pole, which is how it selects the order.
+  out.integer(("band" + std::to_string(band) + ".slopeDbOct").c_str(), 6 * kGsEfxShelfOrder);
+}
+
 /// Writes one shelf on a corner no byte selects. The gain is a bound byte.
 void append_fixed_shelf(ParamsJson& out, int band, int type, float corner_hz) {
-  append_band(out, band, type);
+  append_shelf(out, band, type);
   out.number(("band" + std::to_string(band) + ".frequencyHz").c_str(), corner_hz);
 }
 
@@ -561,10 +568,10 @@ void append_fixed_shelf(ParamsJson& out, int band, int type, float corner_hz) {
 /// the two corner bytes included.
 std::string gs_stereo_eq_json() {
   ParamsJson out;
-  append_band(out, 0, kEqBandLowShelf);
+  append_shelf(out, 0, kEqBandLowShelf);
   append_band(out, 1, kEqBandPeak);
   append_band(out, 2, kEqBandPeak);
-  append_band(out, 3, kEqBandHighShelf);
+  append_shelf(out, 3, kEqBandHighShelf);
   return out.str();
 }
 

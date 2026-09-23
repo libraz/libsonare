@@ -2431,6 +2431,15 @@ def emit_header(tables: dict, path: Path) -> None:
     w("")
 
     corner = classes["corner"]["tables"]
+    orders = {corner[side]["order"] for side in ("low", "high")}
+    orders |= {
+        pair[side]["order"] for pair in tables["fixed_corners"].values() for side in ("low", "high")
+    }
+    if len(orders) != 1:
+        sys.exit(f"the shelves these tables carry are of orders {sorted(orders)}, not one order")
+    w("/// Every shelf the tables carry is of this order: one pole and one zero a section.")
+    w(f"inline constexpr int kGsEfxShelfOrder = {orders.pop()};")
+    w("")
     w("/// Equaliser corner: byte 0 selects the first state, every other byte the second.")
     for side in ("low", "high"):
         states = ", ".join(cpp_float(e["hz"]) for e in corner[side]["entries"])

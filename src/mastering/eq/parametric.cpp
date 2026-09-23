@@ -212,6 +212,12 @@ BiquadCoefficients design_eq_biquad(const EqBand& band, double sample_rate) {
     if (band.type == EqBandType::HighPass) {
       return from_common(sonare::rt::first_order_highpass(w0f));
     }
+    if (band.type == EqBandType::LowShelf) {
+      return from_common(sonare::rt::first_order_low_shelf(w0f, band.gain_db));
+    }
+    if (band.type == EqBandType::HighShelf) {
+      return from_common(sonare::rt::first_order_high_shelf(w0f, band.gain_db));
+    }
   }
 
   if (band.coeff_mode == BiquadCoeffMode::Vicanek) {

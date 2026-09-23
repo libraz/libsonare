@@ -140,6 +140,21 @@ BiquadCoeffs first_order_highpass(float w0) {
   return {b0, -b0, 0.0f, static_cast<float>((k - 1.0) * inv), 0.0f};
 }
 
+// The pole and the zero sit a factor of the root of the gain either side of the
+// corner, which puts half the gain in decibels exactly on it.
+BiquadCoeffs first_order_low_shelf(float w0, float gain_db) {
+  const double k = std::tan(static_cast<double>(w0) * 0.5);
+  const double root = std::pow(10.0, static_cast<double>(gain_db) / 40.0);
+  return normalize(1.0 + root * k, root * k - 1.0, 0.0, 1.0 + k / root, k / root - 1.0, 0.0);
+}
+
+BiquadCoeffs first_order_high_shelf(float w0, float gain_db) {
+  const double k = std::tan(static_cast<double>(w0) * 0.5);
+  const double root = std::pow(10.0, static_cast<double>(gain_db) / 40.0);
+  const double gain = root * root;
+  return normalize(gain + root * k, root * k - gain, 0.0, 1.0 + root * k, root * k - 1.0, 0.0);
+}
+
 BiquadCoeffs rbj_bandpass(float w0, float q) {
   const double q_value = checked_q(q);
   const double cos_w0 = std::cos(w0);

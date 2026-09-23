@@ -89,6 +89,8 @@ struct EqBand {
   bool enabled = false;
   BiquadCoeffMode coeff_mode = BiquadCoeffMode::Rbj;
 
+  // 6 selects a first-order section for pass and shelf bands, whose shelf
+  // corner is its half-gain point and whose q is then unused.
   int slope_db_oct = 12;
   StereoPlacement placement = StereoPlacement::Stereo;
   PhaseMode phase = PhaseMode::Inherit;
