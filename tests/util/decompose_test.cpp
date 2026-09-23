@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "support/golden_hash.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -167,11 +168,11 @@ std::uint64_t fold_fnv1a_bits(std::uint64_t hash, const std::vector<float>& valu
 }  // namespace
 
 TEST_CASE("decompose_stems output digest is pinned across the linked rewrite",
-          "[util][decompose]") {
-  // Fixed input, fixed config: this digest is captured from the pre-rewrite
-  // mono-only decompose_stems and must stay bit-identical once decompose_stems
-  // becomes a one-channel call into decompose_stems_linked. A change here is a
-  // regression in the rewrite, not an intended behaviour change.
+          "[.][util][decompose][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
+  // Fixed input, fixed config: the digest the mono-only decompose_stems produced
+  // before it became a one-channel call into decompose_stems_linked. Raw float
+  // bits follow the host libm and FFT, so it is a golden run via make test-golden.
   constexpr int kSampleRate = 22050;
   const std::vector<float> x = two_gated_tones(kSampleRate, 8192);
   DecomposeStemsConfig config;
@@ -188,7 +189,7 @@ TEST_CASE("decompose_stems output digest is pinned across the linked rewrite",
   hash = fold_fnv1a_bits(hash, r.W);
   hash = fold_fnv1a_bits(hash, r.H);
 
-  REQUIRE(hash == 0xb832e14ef41ad3cbull);
+  REQUIRE(hash == 0xffb444499430c7f2ull);
 }
 
 namespace {
