@@ -59,16 +59,33 @@ void ClipPlayer::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   max_block_size_ = std::max(max_block_size, 1);
   // Every stretcher buffer is sized here so the audio thread never allocates.
-  // The voices are preallocated whether or not the session actually warps, in
-  // exchange for a fixed footprint that does not depend on the clip set.
   stretch_scratch_capacity_ = max_block_size_;
   for (auto& channel : stretch_scratch_) {
     channel.assign(static_cast<size_t>(stretch_scratch_capacity_), 0.0f);
   }
-  for (auto& voice : stretch_voices_) {
-    voice.prepare(max_block_size_, WarpStretchVoice::kMaxChannels);
-  }
+  // Rebuilds the pool at the stored capacity (set_warp_voice_capacity() may
+  // have recorded a non-default value before this prepare(), or the block
+  // size may simply have changed), whether or not the session actually warps.
+  build_warp_voice_pool(max_block_size_);
   stretch_overflow_count_.reset();
+}
+
+void ClipPlayer::set_warp_voice_capacity(uint32_t voices, int max_block) {
+  warp_voice_capacity_ = voices;
+  if (max_block <= 0) return;
+  build_warp_voice_pool(max_block);
+}
+
+void ClipPlayer::build_warp_voice_pool(int max_block) {
+  auto pool = std::make_shared<WarpVoicePool>();
+  pool->capacity = warp_voice_capacity_;
+  if (warp_voice_capacity_ > 0) {
+    pool->voices = std::make_unique<WarpStretchVoice[]>(warp_voice_capacity_);
+    for (uint32_t i = 0; i < warp_voice_capacity_; ++i) {
+      pool->voices[i].prepare(max_block, WarpStretchVoice::kMaxChannels);
+    }
+  }
+  warp_voice_pool_.publish(std::move(pool));
 }
 
 void ClipPlayer::process(float* const* channels, int num_channels, int num_samples) {
@@ -439,11 +456,17 @@ void ClipPlayer::begin_page_miss_block() noexcept {
   external_page_miss_block_ = true;
   page_miss_cache_size_ = 0;
   page_miss_cache_overflowed_ = false;
+  // The one adoption point for a pool set_warp_voice_capacity() published; see
+  // that method's doc for how this interacts with a multi-call block.
+  warp_voice_pool_.acquire();
   // Age the stretcher voices once per block. render() zeroes the counter for
   // every voice it touches, so what is left carries how long a voice has been
   // unused and drives eviction when a new warped clip needs a slot.
-  for (auto& voice : stretch_voices_) {
-    voice.mark_idle();
+  const WarpVoicePool* pool = warp_voice_pool_.current();
+  if (pool) {
+    for (uint32_t i = 0; i < pool->capacity; ++i) {
+      pool->voices[i].mark_idle();
+    }
   }
 }
 
@@ -462,9 +485,15 @@ double ClipPlayer::stretch_map_thunk(void* context, int64_t clip_local_output) n
 }
 
 WarpStretchVoice* ClipPlayer::acquire_stretch_voice(uint32_t clip_id) noexcept {
+  const WarpVoicePool* pool = warp_voice_pool_.current();
+  // Capacity 0 is a deliberate "stretch disabled" choice (every warped clip
+  // resamples instead), and no pool adopted yet is the same absence from the
+  // caller's point of view -- neither counts as an overflow.
+  if (!pool || pool->capacity == 0) return nullptr;
   WarpStretchVoice* free_slot = nullptr;
   WarpStretchVoice* oldest = nullptr;
-  for (auto& voice : stretch_voices_) {
+  for (uint32_t i = 0; i < pool->capacity; ++i) {
+    WarpStretchVoice& voice = pool->voices[i];
     if (voice.active() && voice.clip_id() == clip_id) return &voice;
     if (!voice.active()) {
       if (!free_slot) free_slot = &voice;

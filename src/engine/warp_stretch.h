@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace sonare::engine {
@@ -101,6 +102,18 @@ class WarpStretchVoice {
   int64_t next_output_ = 0;    // clip-local output position of overlap_[*][0]
   int next_frame_offset_ = 0;  // where the next frame lands inside overlap_
   int filled_ = 0;             // valid samples in overlap_
+};
+
+/// @brief A capacity-sized set of stretcher voices, published to the audio
+///        thread as one immutable snapshot.
+/// @details The snapshot itself is `const`, but @c voices[i] is not: the audio
+/// thread is the only thread that ever calls a mutating method on a voice, and
+/// the control thread that publishes and later retires a pool never reaches
+/// into one, so no `mutable` or `const_cast` is needed to let that writer
+/// through a `const WarpVoicePool*`.
+struct WarpVoicePool {
+  uint32_t capacity = 0;
+  std::unique_ptr<WarpStretchVoice[]> voices;
 };
 
 }  // namespace sonare::engine

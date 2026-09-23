@@ -145,6 +145,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// copies into, so it is also the ceiling the C ABI rejects against rather
   /// than a second hand-copied limit.
   static constexpr size_t kMaxSysExPayloadBytes = 512;
+  /// @brief Upper bound @ref set_warp_voice_capacity accepts.
+  static constexpr uint32_t kMaxWarpVoices = 64;
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   class MidiSyncSink {
@@ -274,13 +276,33 @@ class RealtimeEngine : private ClipPageRequestSink {
   }
   /// Cumulative number of blocks in which a time-stretched clip could not claim
   /// a stretcher voice and fell back to resampled (pitch-shifted) playback.
-  /// Reset by prepare(). Only 8 voices exist, so a project with more overlapping
-  /// warped clips degrades silently without this count. Forwarded from the
-  /// player, which owns the counter; the audio thread increments it without
-  /// allocating or blocking.
+  /// Reset by prepare(). Only @ref warp_voice_capacity voices exist, so a
+  /// project with more overlapping warped clips degrades silently without this
+  /// count -- except at capacity 0, a deliberate "stretch disabled" choice that
+  /// never counts as overflow. Forwarded from the player, which owns the
+  /// counter; the audio thread increments it without allocating or blocking.
   uint32_t warp_stretch_overflow_count() const noexcept {
     return clip_player_.warp_stretch_overflow_count();
   }
+  /// @brief Sets the number of concurrent time-stretch voices.
+  /// @details @p voices must be in `[0, 64]` (@ref kMaxWarpVoices); a larger
+  ///   value returns false and leaves the capacity unchanged. The core rejects
+  ///   the bound directly (rather than clamping) so WASM, which calls this
+  ///   without going through the C ABI, refuses the same values Node and
+  ///   Python do via it. Default is 8. Capacity 0 disables time-stretch, so
+  ///   every warped clip plays resampled instead and none of that counts
+  ///   toward @ref warp_stretch_overflow_count. Rebuilds and publishes the
+  ///   voice pool immediately when the engine is already prepared; any clip
+  ///   streaming through a voice at that moment restarts its WSOLA state
+  ///   rather than carrying it over. Control thread only.
+  bool set_warp_voice_capacity(uint32_t voices) noexcept {
+    if (voices > kMaxWarpVoices) return false;
+    clip_player_.set_warp_voice_capacity(voices, max_block_size_);
+    return true;
+  }
+  /// Capacity most recently accepted by @ref set_warp_voice_capacity, or the
+  /// default (8) if never called.
+  uint32_t warp_voice_capacity() const noexcept { return clip_player_.warp_voice_capacity(); }
   /// Timeline frames of clip-page look-ahead. The player reports the pages it is
   /// about to read that are not resident yet, so a streaming host can service
   /// them BEFORE the audio thread reaches them. Without look-ahead a page miss

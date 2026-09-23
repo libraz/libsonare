@@ -1034,6 +1034,112 @@ TEST_CASE("ClipPlayer time-stretch warp falls back to resampling past the voice 
   REQUIRE(energy > 0.0);
 }
 
+namespace {
+
+std::vector<sonare::engine::ClipSchedule> stretched_clips(uint32_t count,
+                                                          const float* const* channels,
+                                                          int64_t source_samples,
+                                                          int64_t output_samples) {
+  std::vector<sonare::engine::ClipSchedule> clips;
+  for (uint32_t id = 1; id <= count; ++id) {
+    clips.push_back(stretched_clip(id, channels, source_samples, output_samples));
+  }
+  return clips;
+}
+
+}  // namespace
+
+TEST_CASE("ClipPlayer set_warp_voice_capacity governs the overflow threshold",
+          "[engine][clip_player]") {
+  constexpr size_t kSourceSamples = 4000;
+  constexpr int kOutputSamples = 4096;
+  const std::vector<float> source = tone(220.0, kSourceSamples);
+  const float* channels[] = {source.data()};
+
+  SECTION("capacity 12 with 12 simultaneous clips never overflows") {
+    sonare::engine::ClipPlayer player;
+    player.prepare(kStretchSampleRate, kOutputSamples);
+    player.set_warp_voice_capacity(12, kOutputSamples);
+    player.set_clips(stretched_clips(12, channels, kSourceSamples, kOutputSamples));
+
+    std::vector<float> out(kOutputSamples, 0.0f);
+    float* out_ptrs[] = {out.data()};
+    player.process_at(out_ptrs, 1, kOutputSamples, 0);
+
+    REQUIRE(player.warp_stretch_overflow_count() == 0);
+  }
+
+  SECTION("capacity 12 with 13 simultaneous clips overflows") {
+    sonare::engine::ClipPlayer player;
+    player.prepare(kStretchSampleRate, kOutputSamples);
+    player.set_warp_voice_capacity(12, kOutputSamples);
+    player.set_clips(stretched_clips(13, channels, kSourceSamples, kOutputSamples));
+
+    std::vector<float> out(kOutputSamples, 0.0f);
+    float* out_ptrs[] = {out.data()};
+    player.process_at(out_ptrs, 1, kOutputSamples, 0);
+
+    REQUIRE(player.warp_stretch_overflow_count() >= 1);
+  }
+}
+
+TEST_CASE("ClipPlayer voice capacity 0 disables stretching without counting overflow",
+          "[engine][clip_player]") {
+  constexpr size_t kSourceSamples = 4000;
+  constexpr int kOutputSamples = 4096;
+  const std::vector<float> source = tone(220.0, kSourceSamples);
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(kStretchSampleRate, kOutputSamples);
+  player.set_warp_voice_capacity(0, kOutputSamples);
+  player.set_clips({stretched_clip(1, channels, kSourceSamples, kOutputSamples)});
+
+  std::vector<float> out(kOutputSamples, 0.0f);
+  float* out_ptrs[] = {out.data()};
+  player.process_at(out_ptrs, 1, kOutputSamples, 0);
+
+  REQUIRE(player.warp_stretch_overflow_count() == 0);
+  // With no stretcher voice available the clip must still play, resampled
+  // (repitched) rather than silent.
+  double energy = 0.0;
+  for (float value : out) energy += static_cast<double>(value) * value;
+  REQUIRE(energy > 0.0);
+}
+
+TEST_CASE("ClipPlayer changing voice capacity between blocks stays audible and finite",
+          "[engine][clip_player]") {
+  constexpr size_t kSourceSamples = 8192;
+  constexpr int kOutputSamples = 4096;
+  const std::vector<float> source = tone(220.0, kSourceSamples);
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(kStretchSampleRate, kOutputSamples);
+  player.set_clips(
+      {stretched_clip(1, channels, static_cast<int64_t>(kSourceSamples), 2 * kOutputSamples)});
+
+  std::vector<float> block1(kOutputSamples, 0.0f);
+  float* block1_ptrs[] = {block1.data()};
+  player.process_at(block1_ptrs, 1, kOutputSamples, 0);
+
+  // Shrinking the pool mid-stream discards the WSOLA state of any voice the
+  // playing clip held; the next block must still render cleanly rather than
+  // going silent or producing non-finite samples.
+  player.set_warp_voice_capacity(2, kOutputSamples);
+
+  std::vector<float> block2(kOutputSamples, 0.0f);
+  float* block2_ptrs[] = {block2.data()};
+  player.process_at(block2_ptrs, 1, kOutputSamples, kOutputSamples);
+
+  double energy = 0.0;
+  for (float value : block2) {
+    REQUIRE(std::isfinite(value));
+    energy += static_cast<double>(value) * value;
+  }
+  REQUIRE(energy > 0.0);
+}
+
 TEST_CASE("ClipPlayer time-stretch warp under an identity map reproduces the source",
           "[engine][clip_player]") {
   constexpr size_t kSamples = 8192;

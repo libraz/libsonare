@@ -251,6 +251,23 @@ class ClipPlayer final : public rt::ProcessorBase {
   /// the control thread for telemetry.
   uint32_t warp_stretch_overflow_count() const noexcept { return stretch_overflow_count_.load(); }
 
+  /// Rebuilds the warp-voice pool at @p voices capacity and publishes it.
+  /// Always records @p voices as the stored capacity, so a later prepare()
+  /// rebuilds at this value even if it runs with a different block size; when
+  /// @p max_block is <= 0 (not yet prepared) the pool itself is left for that
+  /// prepare() to build, since there is no sane block size to size voices at
+  /// yet. The audio thread adopts the newly published pool the next time it
+  /// enters begin_page_miss_block(): a plain process_at() call enters it once,
+  /// but a caller that brackets several process_filtered_at() calls in one
+  /// externally-scoped block (a stems bounce) via begin_page_miss_block() /
+  /// end_page_miss_block() does not adopt again until the next block. A clip
+  /// already streaming through a voice this replaces restarts its WSOLA state
+  /// rather than carrying it over. Control thread only.
+  void set_warp_voice_capacity(uint32_t voices, int max_block);
+  /// Capacity most recently requested via set_warp_voice_capacity(), or the
+  /// default (8) if never called. Control thread only.
+  uint32_t warp_voice_capacity() const noexcept { return warp_voice_capacity_; }
+
  private:
   // Curves come from the clip itself (fade_in_curve / fade_out_curve), so no
   // curve parameter: the legacy single fade_curve field is not consulted here.
@@ -310,11 +327,15 @@ class ClipPlayer final : public rt::ProcessorBase {
     int64_t page_index = -1;
   };
 
-  /// Preallocated stretcher voices. Eight covers the realistic "a few warped
-  /// clips overlap" case; beyond that a clip falls back to resampling rather
-  /// than allocating on the audio thread.
-  static constexpr size_t kMaxWarpedClips = 8;
-  std::array<WarpStretchVoice, kMaxWarpedClips> stretch_voices_{};
+  /// Builds a pool at the current warp_voice_capacity_ sized for @p max_block
+  /// frames and publishes it. Shared by prepare() and set_warp_voice_capacity();
+  /// see the latter's doc for the overall contract.
+  void build_warp_voice_pool(int max_block);
+
+  rt::RtPublisher<WarpVoicePool> warp_voice_pool_;
+  /// Requested voice count; see set_warp_voice_capacity(). Default matches the
+  /// pre-configurable behaviour this replaced.
+  uint32_t warp_voice_capacity_ = 8;
   std::array<std::vector<float>, WarpStretchVoice::kMaxChannels> stretch_scratch_{};
   int stretch_scratch_capacity_ = 0;
   // Bumped on the audio thread by acquire_stretch_voice and read from the

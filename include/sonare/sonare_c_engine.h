@@ -393,12 +393,30 @@ SonareError sonare_engine_clip_page_request_overflow_count(SonareRealtimeEngine*
                                                            uint32_t* out_count);
 /// @brief Number of blocks in which a time-stretched clip fell back to resampling.
 /// @details Advisory telemetry; monotonic within a prepared session and reset by
-///   @ref sonare_engine_prepare. Only a fixed number of stretcher voices exist,
-///   so a project with more overlapping @c kTimeStretch clips than voices plays
-///   some of them pitch-shifted instead. A non-zero count is the only way to
-///   detect that degradation.
+///   @ref sonare_engine_prepare. Only @ref sonare_engine_warp_voice_capacity
+///   stretcher voices exist, so a project with more overlapping @c kTimeStretch
+///   clips than voices plays some of them pitch-shifted instead -- except at
+///   capacity 0, a deliberate "stretch disabled" choice that never counts here.
+///   A non-zero count is the only way to detect that degradation.
 SonareError sonare_engine_warp_stretch_overflow_count(SonareRealtimeEngine* engine,
                                                       uint32_t* out_count);
+/// @brief Largest @p voices @ref sonare_engine_set_warp_voice_capacity accepts.
+#define SONARE_ENGINE_MAX_WARP_VOICES 64u
+/// @brief Sets the number of concurrent time-stretch voices.
+/// @details Voices must be in `[0, 64]` (@ref SONARE_ENGINE_MAX_WARP_VOICES); a
+///   larger value returns @ref SONARE_ERROR_INVALID_PARAMETER and leaves the
+///   capacity unchanged. Default is 8. Capacity 0 disables time-stretch, so
+///   every warped clip plays resampled instead and none of that counts toward
+///   @ref sonare_engine_warp_stretch_overflow_count. A change applied while
+///   @ref sonare_engine_process is running rebuilds the voice pool immediately;
+///   any clip stretching through a voice at that moment restarts its WSOLA
+///   state rather than carrying it over. Control thread only.
+SonareError sonare_engine_set_warp_voice_capacity(SonareRealtimeEngine* engine, uint32_t voices);
+/// @brief Reads the current time-stretch voice capacity.
+/// @details Returns the value most recently accepted by
+///   @ref sonare_engine_set_warp_voice_capacity, or the default (8) if it was
+///   never called. Control thread.
+SonareError sonare_engine_warp_voice_capacity(SonareRealtimeEngine* engine, uint32_t* out_voices);
 /// @brief Sets the clip-page look-ahead window in timeline frames.
 /// @details The clip player reports the pages it is ABOUT TO read that are not
 ///   resident yet, so a streaming host can service them before the audio thread

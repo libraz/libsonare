@@ -73,6 +73,8 @@ static_assert(SONARE_ENGINE_MAX_COMMAND_CAPACITY == engine::RealtimeEngine::kMax
               "SONARE_ENGINE_MAX_COMMAND_CAPACITY drift");
 static_assert(SONARE_ENGINE_MAX_TELEMETRY_CAPACITY == engine::RealtimeEngine::kMaxTelemetryCapacity,
               "SONARE_ENGINE_MAX_TELEMETRY_CAPACITY drift");
+static_assert(SONARE_ENGINE_MAX_WARP_VOICES == engine::RealtimeEngine::kMaxWarpVoices,
+              "SONARE_ENGINE_MAX_WARP_VOICES drift");
 // sonare_engine_push_midi_sysex's doc promises a 1..512 byte payload and the
 // guard spells that ceiling as the engine constant; this pins the prose to it.
 static_assert(engine::RealtimeEngine::kMaxSysExPayloadBytes == 512,

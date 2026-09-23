@@ -83,6 +83,9 @@ CONSTANTS: dict[str, Constant] = {
     "max_telemetry_capacity": Constant(
         "src/engine/realtime_engine.h", "kMaxTelemetryCapacity", scope="RealtimeEngine"
     ),
+    "max_warp_voices": Constant(
+        "src/engine/realtime_engine.h", "kMaxWarpVoices", scope="RealtimeEngine"
+    ),
     "max_bank_sample_points": Constant("src/c_api/sonare_c_sample_bank.cpp", "kMaxBankSamplePoints"),
     "max_keymap_sets": Constant("src/c_api/sonare_c_sample_bank.cpp", "kMaxKeymapSets"),
     "declip_max_lpc_gap": Constant("src/mastering/repair/declip.h", "kDeclipMaxLpcGapSamples"),
@@ -190,6 +193,12 @@ CLAIMS: tuple[Claim, ...] = (
         pattern=r"exceed\s+(?P<max>\d+);\s+a larger value",
         groups={"max": ("max_telemetry_capacity", 0)},
         floor=3,
+    ),
+    Claim(
+        key="warp voice capacity ceiling",
+        pattern=r"[Vv]oices must be in" + _OPEN + r"0" + _MID + r"(?P<max>\d+)" + _CLOSE,
+        groups={"max": ("max_warp_voices", 0)},
+        floor=1,
     ),
     Claim(
         key="sample bank total sample points ceiling",

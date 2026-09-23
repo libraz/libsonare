@@ -294,6 +294,20 @@ SonareError sonare_engine_warp_stretch_overflow_count(SonareRealtimeEngine* engi
   return SONARE_OK;
 }
 
+SonareError sonare_engine_set_warp_voice_capacity(SonareRealtimeEngine* engine, uint32_t voices) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine->engine.set_warp_voice_capacity(voices)) return SONARE_ERROR_INVALID_PARAMETER;
+  return SONARE_OK;
+}
+
+SonareError sonare_engine_warp_voice_capacity(SonareRealtimeEngine* engine, uint32_t* out_voices) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_voices) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_voices = engine->engine.warp_voice_capacity();
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_set_clip_page_prefetch_frames(SonareRealtimeEngine* engine,
                                                         int64_t frames) {
   SONARE_C_API_ENTRY;

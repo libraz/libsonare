@@ -174,6 +174,45 @@ TEST_CASE("sonare_engine_push_midi_sysex enforces the documented payload ceiling
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_set_warp_voice_capacity enforces the documented ceiling",
+          "[c_api][engine]") {
+  // Drive the boundary from the core constant, same reasoning as the SysEx
+  // ceiling test above: a change to the constant that leaves the define or the
+  // header prose behind fails here and at the static_assert in
+  // sonare_c_engine.cpp.
+  constexpr uint32_t ceiling = sonare::engine::RealtimeEngine::kMaxWarpVoices;
+  REQUIRE(ceiling == SONARE_ENGINE_MAX_WARP_VOICES);
+
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  uint32_t voices = 0xDEADBEEF;
+  REQUIRE(sonare_engine_warp_voice_capacity(engine, &voices) == SONARE_OK);
+  REQUIRE(voices == 8);  // documented default
+
+  REQUIRE(sonare_engine_set_warp_voice_capacity(engine, ceiling) == SONARE_OK);
+  REQUIRE(sonare_engine_warp_voice_capacity(engine, &voices) == SONARE_OK);
+  REQUIRE(voices == ceiling);
+
+  // Rejected: state (including the getter's return value) is unchanged.
+  REQUIRE(sonare_engine_set_warp_voice_capacity(engine, ceiling + 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_warp_voice_capacity(engine, &voices) == SONARE_OK);
+  REQUIRE(voices == ceiling);
+
+  REQUIRE(sonare_engine_set_warp_voice_capacity(engine, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_warp_voice_capacity(engine, &voices) == SONARE_OK);
+  REQUIRE(voices == 0);
+
+  REQUIRE(sonare_engine_set_warp_voice_capacity(nullptr, 4) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_warp_voice_capacity(nullptr, &voices) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_warp_voice_capacity(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
           "[c_api][engine][json]") {
   // The shared parser raises one JsonError; the entry points used to map it to
