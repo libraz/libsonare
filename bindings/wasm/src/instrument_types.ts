@@ -418,21 +418,51 @@ export interface ControllerBinding {
 
 /** One {@link SynthPatch} mod-matrix routing (name or C ordinal per field). */
 export interface SynthModRouting {
+  /**
+   * Mod-matrix source. `'none'` is refused: a routing driven by nothing is a
+   * caller mistake, not an empty slot.
+   */
   source: SynthModSource | number;
+  /**
+   * Mod-matrix destination. `'none'` is refused, for the same reason as
+   * `source`.
+   */
   destination: SynthModDestination | number;
   /**
-   * Destination units at full source deflection.
+   * Destination units at full source deflection, summed onto whatever the
+   * patch or a CC already set and then handled per destination:
    *
-   * For the three `excitation-*` destinations and `spectrum-morph` this is an
-   * offset in the engine's own normalized `[0, 1]` axis units — the same scale
-   * the live-control CCs drive — summed onto whatever the patch or a CC set and
-   * clamped by the engine. The `excitation-*` ones reach the physical model's
-   * exciter (bow force and contact point, breath pressure, bore brightness), so
-   * only the continuously-excited engines act on them: `bowed-string`, `brass`,
-   * `reed` and `flute`. An engine whose exciter is finished at note-on has
-   * nothing per sample to reach and ignores them. `spectrum-morph` travels
-   * between the two spectral tables a patch carries — today the drawbar organ's
-   * second registration — and a patch carrying one table declines it.
+   * - `pan-units`: SF2 pan units, clamped to `[-500, 500]` — `1` moves the
+   *   image by about 0.2% of a side.
+   * - `amp-gain` / `filter-env-depth`: multiplicative. Each routing's amount
+   *   composes onto a running multiplier that clamps to `[0, 4]`.
+   *   `filter-env-depth` has nothing to scale while the patch's
+   *   `envToCutoffCents` is `0` — the filter envelope contributes no cents for
+   *   it to multiply.
+   * - `resonance-q`: added to the patch's own Q, then floored at a fixed
+   *   `0.5` (not at that patch's own Q).
+   * - `lfo1-rate-scale`: multiplicative, clamped to `[1/16, 16]`. Audible only
+   *   once something else already reads LFO1's output — vibrato depth, the
+   *   filter's LFO amount, tremolo — since it retunes LFO1 rather than
+   *   sounding on its own; the bare patch's built-in mod-wheel vibrato is the
+   *   usual path.
+   * - The three `excitation-*` destinations and `spectrum-morph`: an offset in
+   *   the engine's own normalized `[0, 1]` axis units, the same scale the
+   *   live-control CCs drive, clamped to `[-1, 1]`. Reach is per engine and not
+   *   uniform across the three: `excitation-force` reaches pipe organ, bowed
+   *   string, reed, brass, flute and free reed; `excitation-position` reaches
+   *   bowed string only; `excitation-brightness` reaches pipe organ, reed,
+   *   brass, flute, free reed and vocal. An engine outside a destination's list
+   *   ignores it — its exciter is finished before the second sample renders, or
+   *   it has none. `spectrum-morph` travels between the two spectral tables an
+   *   additive patch carries; a patch needs an explicit `drawbars_b` distinct
+   *   from `drawbars` to have a second table to travel to, and no catalog
+   *   preset ships one, so the destination is currently unreachable from a
+   *   preset name alone.
+   *
+   * Percussion reaches none of the above: a drum channel's voice runs the
+   * per-note kit patch instead of this one, so the whole mod matrix is
+   * discarded before the voice starts.
    */
   depth: number;
 }
@@ -451,7 +481,10 @@ export interface SynthModRouting {
  *
  * Mode-specific deep parameters (FM operator stacks, modal mode tables,
  * drawbar registrations, kit pieces, piano strings) travel inside the named
- * presets; the patch exposes the wrapper sections every engine shares.
+ * presets; the patch exposes the wrapper sections most engines share. Two
+ * exceptions: `waveform` is read by the subtractive engine only, and on a
+ * percussion channel the whole section below is discarded in favor of the
+ * per-note drum-kit patch — only `gain`, `busDrive` and `polyphony` still act.
  */
 export interface SynthPatch {
   /**
@@ -465,6 +498,7 @@ export interface SynthPatch {
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
   preset?: string;
   engineMode?: SynthEngineMode | number;
+  /** Oscillator waveform. Read by the subtractive engine only; every other engine ignores it. */
   waveform?: SynthOscWaveform | number;
   /** Detuned-stack width [1, 7]. */
   unison?: number;
@@ -484,10 +518,13 @@ export interface SynthPatch {
   hpCutoffHz?: number;
   /**
    * Rate the voice's output is held at, in Hz; 0 disables the stage. The
-   * voice's own converter, ahead of its amplitude envelope: a drum machine runs
-   * one far below the mix rate, and the aliased images that folds down are as
-   * much of its sound as its samples are. Per voice, so a kit can convert the
-   * voices a machine stores and leave its analogue ones alone.
+   * voice's own converter, ahead of its amplitude envelope: the aliased images
+   * it folds down are as much of a sound as its samples are. Per voice, so a
+   * patch layering several voices can convert some and leave others alone.
+   *
+   * Percussion never reads this: a drum channel's voice runs the per-note kit
+   * patch instead of this one, so the field is discarded before the voice
+   * starts.
    */
   sampleHoldHz?: number;
   /**
@@ -499,7 +536,15 @@ export interface SynthPatch {
   resonanceQ?: number;
   /** Cutoff keyboard tracking [0, 1]. */
   keyTrack?: number;
+  /** Filter envelope's cutoff depth, in cents; 0 leaves the envelope's cutoff contribution off. */
   envToCutoffCents?: number;
+  /**
+   * Velocity's cutoff depth, in cents. The rendered term is
+   * `velToCutoffCents * (velocity / 127 - 1)`, so velocity 127 is the anchor
+   * where it is exactly zero: a positive value darkens softer notes, a
+   * negative value brightens them, and both effects grow the further the
+   * velocity sits below 127.
+   */
   velToCutoffCents?: number;
   // --- pitch offset ---
   /**
@@ -508,7 +553,8 @@ export interface SynthPatch {
    * shifts a whole patch without rewriting the part — a detuned layer, a sample
    * set mapped a semitone off, an instrument pitched to a reference other than
    * A440. Carried in the per-sample pitch factor every engine's render already
-   * takes, so it applies the same amount on all of them.
+   * takes, so it applies the same amount on all of them — except percussion,
+   * whose per-note kit patch replaces this whole section and never reads it.
    *
    * Also automatable under this same name through
    * {@link RealtimeEngine.resolveInstrumentAutomationId}; it is one of the names

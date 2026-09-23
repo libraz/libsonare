@@ -448,7 +448,8 @@ typedef enum SONARE_ENUM_BASE {
 #define SONARE_SYNTH_MOD_DESTINATION_COUNT 13
 
 /* One mod-matrix routing. Source/destination mirror the core ordinals
-   directly; a slot with source or destination 0 (none) is disabled. */
+   directly; a slot with source or destination 0 (none) is refused: a routing
+   that reaches nothing is a caller mistake, not an empty slot. */
 typedef struct {
   int source;      /* 0=none 1=ampEnv 2=filterEnv 3=lfo1 4=lfo2 5=velocity
                       6=keyTrack 7=modWheel 8=random 9=breath 10=aftertouch
@@ -462,21 +463,41 @@ typedef struct {
   int destination; /* 0=none 1=pitchCents 2=cutoffCents 3=ampGain 4=panUnits
                       5=resonanceQ 6=vibratoDepthCents 7=filterEnvDepth
                       8=lfo1RateScale 9=excitationForce 10=excitationPosition
-                      11=excitationBrightness 12=spectrumMorph. 7 and 8 modulate
-                      how a stage responds rather than what it emits: 7 scales
-                      the filter envelope's sweep and 8 retunes LFO1 (one sample
-                      late, LFO1 being a source too). 9-12 reach inside the
-                      engine, and their depth is an offset in its own normalized
-                      [0,1] axis units, the same scale the live-control CCs
-                      drive. 9-11 are the physical model's exciter — bow force /
-                      contact point, breath pressure, bore brightness — and only
-                      the continuously-excited engines (bowed string, brass,
-                      reed, flute) act on them; an engine whose exciter is
-                      finished at note-on has nothing per sample to reach and
-                      ignores them. 12 travels between the two spectral tables a
-                      patch carries, which today is the drawbar organ's second
-                      registration; a patch carrying one table declines it. */
-  float depth;     /* destination units at full source deflection */
+                      11=excitationBrightness 12=spectrumMorph. depth's unit and
+                      clamp are per destination: panUnits is SF2 pan units
+                      clamped to [-500,500] (1 unit moves the image about 0.2%
+                      of a side); ampGain and filterEnvDepth are multiplicative,
+                      each routing's amount composing onto a running multiplier
+                      clamped to [0,4] -- filterEnvDepth has nothing to scale
+                      while the patch's env_to_cutoff_cents is 0; resonanceQ
+                      adds onto the patch's own Q and then floors at a fixed
+                      0.5, not at that Q; lfo1RateScale is multiplicative,
+                      clamped to [1/16,16], and retunes LFO1 rather than
+                      sounding on its own, so it is audible only once something
+                      else already reads LFO1's output (vibrato depth, the
+                      filter's LFO amount, tremolo). 9-12 reach inside the
+                      engine at an offset in its own normalized [0,1] axis
+                      units (the same scale the live-control CCs drive), summed
+                      and clamped to [-1,1]. 9-11 are the physical model's
+                      exciter — bow force / contact point, breath pressure,
+                      bore brightness — and reach differs per axis: 9 (force)
+                      reaches pipe organ, bowed string, reed, brass, flute, free
+                      reed; 10 (position) reaches bowed string only; 11
+                      (brightness) reaches pipe organ, reed, brass, flute, free
+                      reed, vocal. An engine outside an axis's list ignores it
+                      — its exciter is finished before the second sample
+                      renders, or it has none. 12 travels between the two
+                      spectral tables an additive patch carries; a patch needs
+                      an explicit drawbars_b distinct from drawbars to have a
+                      second table to travel to, and no catalog preset ships
+                      one, so 12 is currently unreachable from a preset name
+                      alone. Percussion reaches none of the above: a drum
+                      channel's voice runs the per-note kit patch instead of
+                      this one, so the whole mod matrix is discarded before the
+                      voice starts. */
+  float depth;     /* destination units at full source deflection; see
+                      `destination` above for the per-destination unit and
+                      clamp */
 } SonareSynthModRouting;
 
 #define SONARE_SYNTH_PATCH_MOD_ROUTINGS 8
@@ -499,9 +520,12 @@ typedef struct {
 
    Mode-specific deep parameters (FM operator stacks, modal mode tables,
    drawbar registrations, kit pieces, piano strings) travel inside the named
-   presets — struct_version 1 deliberately exposes the wrapper sections every
-   engine shares (oscillator / filter / envelopes / LFO / glide / realism /
-   mod matrix / bus). */
+   presets — struct_version 1 deliberately exposes the wrapper sections most
+   engines share (oscillator / filter / envelopes / LFO / glide / realism /
+   mod matrix / bus). Two exceptions: waveform is read by the subtractive
+   engine only, and on a percussion channel the whole section is discarded in
+   favor of the per-note drum-kit patch — only gain, polyphony and bus_drive
+   still act. */
 typedef struct {
   int struct_version;                        /* 0 or 1 => version 1; 2 => present_fields honoured;
                                                 3 => the sample-engine block at the tail is read too;
@@ -512,9 +536,11 @@ typedef struct {
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
   /* --- oscillator section (subtractive mode) --- */
-  int waveform;       /* SonareSynthOscWaveform; 0 => base preset. NOTE: a distinct
-                         enum from SonareSynthWaveform (sonare_c_project_instruments.h),
-                         whose 0 means sine, not "keep base". Do not mix the two. */
+  int waveform;       /* SonareSynthOscWaveform; 0 => base preset. Read by the
+                         subtractive engine only; every other engine ignores it.
+                         NOTE: a distinct enum from SonareSynthWaveform
+                         (sonare_c_project_instruments.h), whose 0 means sine,
+                         not "keep base". Do not mix the two. */
   int unison;         /* detuned-stack width [1,7]; 0 => base */
   float detune_cents; /* unison spread; 0 => base */
   float drift_cents;  /* per-voice slow pitch drift depth; 0 => base */
@@ -526,8 +552,16 @@ typedef struct {
   float cutoff_hz;           /* 0 => base */
   float resonance_q;         /* 0 => base */
   float key_track;           /* cutoff keyboard tracking [0,1]; 0 => base */
-  float env_to_cutoff_cents; /* filter-envelope depth; 0 => base */
-  float vel_to_cutoff_cents; /* velocity->brightness depth; 0 => base */
+  float env_to_cutoff_cents; /* filter envelope's cutoff depth, in cents; 0 =>
+                                base, and leaves the envelope's cutoff
+                                contribution off */
+  float vel_to_cutoff_cents; /* velocity's cutoff depth, in cents; 0 => base.
+                                Rendered term is
+                                vel_to_cutoff_cents * (velocity/127 - 1), so
+                                velocity 127 is the anchor where it is exactly
+                                zero: positive darkens softer notes, negative
+                                brightens them, both growing with distance
+                                below 127 */
 
   /* --- envelopes (ms / sustain in [0,1]) --- */
   float amp_attack_ms;
@@ -590,17 +624,20 @@ typedef struct {
   /* --- converter (struct_version 5) --- */
   /* The voice's own output stage, ahead of its amplitude envelope: a sample and
      hold followed by a uniform quantizer. Per voice rather than per bus, so a
-     kit can convert the voices a machine stores and leave its analogue ones
-     alone. Each is 0 => base; set the matching present_fields bit to ask for 0
-     as a value and switch that half off. */
+     patch layering several voices can convert some and leave others alone.
+     Percussion never reads this block: a drum channel's voice runs the
+     per-note kit patch instead of this one, so it is discarded before the
+     voice starts. Each is 0 => base; set the matching present_fields bit to
+     ask for 0 as a value and switch that half off. */
   float sample_hold_hz; /* rate the output is held at; below 100 Hz is raised to it */
   float bit_depth;      /* word length the held value is quantized to, [1,24]; fractional is fine */
 
   /* --- pitch offset (struct_version 6) --- */
   /* Constant transposition of the voice's own pitch, in cents, [-4800, 4800].
      Carried in the per-sample pitch factor every engine's render already takes,
-     so it applies the same amount on all of them and a lane moving it reaches a
-     voice that is already sounding.
+     so it applies the same amount on all of them — except percussion, whose
+     per-note kit patch replaces this whole section and never reads it — and a
+     lane moving it reaches a voice that is already sounding.
      0 => base; set SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS in present_fields to
      ask for 0 as a value. Automatable under the same name, which is why it is
      here: every other name @ref sonare_engine_resolve_instrument_automation_id

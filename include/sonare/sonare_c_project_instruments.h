@@ -223,7 +223,7 @@ int sonare_synth_builtin_waveform_from_name(const char* name);
 SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
 
 /// @brief Returns the GS rhythm-set name a rhythm part's @p program selects
-///        ("Standard", "Room", "TR-808", ...), or NULL when the module's own
+///        ("Standard", "Room", "Jazz", ...), or NULL when the module's own
 ///        tone map defines no set at that program.
 /// @details Pointer is owned by libsonare and remains valid for the program
 ///          lifetime; the caller must NOT free it. The answer is the module's

@@ -616,21 +616,43 @@ class SynthModRouting:
     ``"pitch-cents"`` / ``"cutoff-cents"`` / ``"amp-gain"`` / ``"pan-units"`` /
     ``"resonance-q"`` / ``"vibrato-depth-cents"`` / ``"filter-env-depth"`` /
     ``"lfo1-rate-scale"`` / ``"excitation-force"`` / ``"excitation-position"`` /
-    ``"excitation-brightness"`` / ``"spectrum-morph"``). Two of them modulate
-    how a stage responds rather than what it emits: ``"filter-env-depth"``
-    scales how far the filter envelope sweeps, and ``"lfo1-rate-scale"``
-    retunes LFO1 -- one sample late, since LFO1 is also a source. The three
-    ``excitation-*`` axes reach the physical model's exciter (bow force and
-    contact point, breath pressure, bore brightness) and only the
-    continuously-excited engines -- bowed string, brass, reed, flute -- act on
-    them; an engine whose exciter is finished at note-on has nothing per sample
-    to reach and ignores them. ``"spectrum-morph"`` travels between the two
-    spectral tables a patch carries, which today is the drawbar organ's second
-    registration; a patch carrying one table declines it.
-    ``depth`` is in destination units at full source deflection, which for the
-    ``excitation-*`` and ``"spectrum-morph"`` axes is an offset in the engine's
-    own normalized ``[0, 1]`` units -- the same scale the live-control CCs
-    drive.
+    ``"excitation-brightness"`` / ``"spectrum-morph"``). ``"none"`` is refused
+    for either field: a routing driven by or aimed at nothing is a caller
+    mistake, not an empty slot.
+
+    ``depth`` is destination units at full source deflection, summed onto
+    whatever the patch or a CC already set and then handled per destination:
+
+    - ``"pan-units"``: SF2 pan units, clamped to ``[-500, 500]`` -- ``1`` moves
+      the image by about 0.2% of a side.
+    - ``"amp-gain"`` / ``"filter-env-depth"``: multiplicative. Each routing's
+      amount composes onto a running multiplier clamped to ``[0, 4]``.
+      ``"filter-env-depth"`` has nothing to scale while the patch's
+      ``env_to_cutoff_cents`` is ``0``.
+    - ``"resonance-q"``: added to the patch's own Q, then floored at a fixed
+      ``0.5`` (not at that patch's own Q).
+    - ``"lfo1-rate-scale"``: multiplicative, clamped to ``[1/16, 16]``. It
+      retunes LFO1 rather than sounding on its own, so it is audible only once
+      something else already reads LFO1's output (vibrato depth, the filter's
+      LFO amount, tremolo).
+    - The three ``excitation-*`` destinations and ``"spectrum-morph"``: an
+      offset in the engine's own normalized ``[0, 1]`` units -- the same scale
+      the live-control CCs drive -- clamped to ``[-1, 1]``. Reach is per engine
+      and not uniform across the three: ``"excitation-force"`` reaches pipe
+      organ, bowed string, reed, brass, flute and free reed;
+      ``"excitation-position"`` reaches bowed string only;
+      ``"excitation-brightness"`` reaches pipe organ, reed, brass, flute, free
+      reed and vocal. An engine outside a destination's list ignores it -- its
+      exciter is finished before the second sample renders, or it has none.
+      ``"spectrum-morph"`` travels between the two spectral tables an additive
+      patch carries; a patch needs an explicit ``drawbars_b`` distinct from
+      ``drawbars`` to have a second table to travel to, and no catalog preset
+      ships one, so the destination is currently unreachable from a preset name
+      alone.
+
+    Percussion reaches none of the above: a drum channel's voice runs the
+    per-note kit patch instead of this one, so the whole mod matrix is
+    discarded before the voice starts.
     """
 
     source: str | int
@@ -655,7 +677,18 @@ class SynthPatch:
 
     Mode-specific deep parameters (FM operator stacks, modal mode tables,
     drawbar registrations, kit pieces, piano strings) travel inside the named
-    presets; the struct exposes the wrapper sections every engine shares.
+    presets; the struct exposes the wrapper sections most engines share. Two
+    exceptions: ``waveform`` is read by the subtractive engine only, and on a
+    percussion channel the whole section is discarded in favor of the per-note
+    drum-kit patch -- only ``gain``, ``bus_drive`` and ``polyphony`` still act.
+
+    ``env_to_cutoff_cents`` is the filter envelope's cutoff depth, in cents;
+    ``0`` leaves the envelope's cutoff contribution off.
+    ``vel_to_cutoff_cents`` is velocity's cutoff depth, in cents: the rendered
+    term is ``vel_to_cutoff_cents * (velocity / 127 - 1)``, so velocity 127 is
+    the anchor where it is exactly zero -- a positive value darkens softer
+    notes, a negative value brightens them, and both effects grow the further
+    the velocity sits below 127.
 
     The ``sample_*`` fields are read only when the resolved engine is
     ``"sample"``, which is what lets ``sample_set`` keep its natural zero: a
@@ -913,7 +946,7 @@ def synth_preset_names() -> list[str]:
 
 def synth_gs_drum_kit_name(program: int) -> str | None:
     """GS rhythm-set name a rhythm part's ``program`` selects (``"Standard"``,
-    ``"Room"``, ``"TR-808"``, ...), or ``None`` when the module's own tone map
+    ``"Room"``, ``"Jazz"``, ...), or ``None`` when the module's own tone map
     defines no set there.
 
     The answer is the module's own map, which is the newest one and reaches
