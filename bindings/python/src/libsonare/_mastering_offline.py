@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import ctypes
 import json
-from collections.abc import Callable, Sequence
+import math
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
 from ._cancellation import CancellationState, make_cancel_trampoline
@@ -31,6 +32,7 @@ from .types import (
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringInsertParamInfo,
+    MasteringInsertTiming,
     MasteringLoudnessSummary,
     MasteringProcessorCatalogEntry,
     MasteringReport,
@@ -237,6 +239,57 @@ def mastering_insert_param_info(name: str) -> list[MasteringInsertParamInfo]:
         return []
     parsed = json.loads(raw.decode("utf-8"))
     return cast("list[MasteringInsertParamInfo]", parsed)
+
+
+def mastering_insert_timing(
+    name: str, params: Mapping[str, float | bool], sample_rate: int
+) -> MasteringInsertTiming:
+    """Return the latency and tail of one insert built from ``params`` at ``sample_rate``.
+
+    What a host needs for delay compensation of a slot whose configuration
+    changes the processor's delay (an oversampled saturation path, a
+    linear-phase crossover, a lookahead). The insert is built exactly as a
+    scene or strip would build it and asked after ``prepare``, so the answer
+    is the one that instance will report. :func:`capability_catalog`'s
+    ``latencySamples`` and ``tailSamples`` are this query at default
+    parameters and 48 kHz.
+
+    ``params`` is keyed as in :func:`mastering_insert_param_info`; each value
+    must be a bool or a finite number. A key the insert does not read is
+    refused rather than ignored, because an ignored key would answer for a
+    configuration the caller did not ask for.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_insert_timing"):
+        raise RuntimeError("libsonare was built without mastering support")
+    payload: dict[str, float | bool] = {}
+    for key, value in params.items():
+        if isinstance(value, bool):
+            payload[key] = value
+            continue
+        if isinstance(value, int | float):
+            number = float(value)
+            if not math.isfinite(number):
+                raise SonareValueError(f"mastering_insert_timing: {key} must be a finite number")
+            payload[key] = number
+            continue
+        raise SonareValueError(
+            f"mastering_insert_timing: {key} must be a boolean or a finite number"
+        )
+    params_json = json.dumps(payload, allow_nan=False).encode("utf-8")
+    out_latency = ctypes.c_int(0)
+    out_tail = ctypes.c_int(0)
+    rc = lib.sonare_mastering_insert_timing(
+        name.encode("utf-8"),
+        params_json,
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(out_latency),
+        ctypes.byref(out_tail),
+    )
+    _check(rc)
+    return MasteringInsertTiming(
+        latencySamples=int(out_latency.value), tailSamples=int(out_tail.value)
+    )
 
 
 def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:

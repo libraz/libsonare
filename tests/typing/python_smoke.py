@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import assert_type
+from typing import Literal, assert_type
 
 import libsonare
 
@@ -43,7 +43,10 @@ mastered: libsonare.MasteringChainResult = libsonare.master_audio(
     samples, preset_name="aiMusic"
 )
 catalog = libsonare.mastering_processor_catalog()
-param_info = libsonare.mastering_insert_param_info("dynamics.compressor")
+param_info = libsonare.mastering_insert_param_info("saturation.softClipper")
+insert_timing = libsonare.mastering_insert_timing(
+    "saturation.softClipper", {"aliasing": 3.0}, 48000
+)
 project = libsonare.Project()
 project.set_assist_sidecar("python-smoke", b"legacy")
 project.set_assist_sidecar({"moduleId": "python-smoke-descriptor"})
@@ -72,5 +75,10 @@ assert_type(catalog[0]["kind"], libsonare.MasteringProcessorKind)
 assert_type(catalog[0]["channelPolicy"], libsonare.MasteringChannelPolicy)
 assert_type(param_info, list[libsonare.MasteringInsertParamInfo])
 assert_type(param_info[0]["rtSafe"], bool)
+assert_type(param_info[0]["id"], int | None)
+assert_type(param_info[0]["type"], Literal["boolean", "number", "enum", "string", "array"])
+assert_type(param_info[0]["choices"], list[libsonare.MasteringInsertParamChoice] | None)
+assert_type(insert_timing, libsonare.MasteringInsertTiming)
+assert_type(insert_timing["latencySamples"], int)
 assert_type(project.get_assist_sidecar(0), libsonare.AssistSidecar)
 assert_type(assist_sidecars, list[libsonare.AssistSidecar])

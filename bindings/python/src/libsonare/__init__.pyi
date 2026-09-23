@@ -316,6 +316,9 @@ from .analyzer import (
     mastering_insert_param_names as mastering_insert_param_names,
 )
 from .analyzer import (
+    mastering_insert_timing as mastering_insert_timing,
+)
+from .analyzer import (
     mastering_pair_analysis_names as mastering_pair_analysis_names,
 )
 from .analyzer import (
@@ -950,7 +953,9 @@ from .types import (
     MasteringChainStereoResult as MasteringChainStereoResult,
 )
 from .types import MasteringChannelPolicy as MasteringChannelPolicy
+from .types import MasteringInsertParamChoice as MasteringInsertParamChoice
 from .types import MasteringInsertParamInfo as MasteringInsertParamInfo
+from .types import MasteringInsertTiming as MasteringInsertTiming
 from .types import (
     MasteringLoudnessSummary as MasteringLoudnessSummary,
 )

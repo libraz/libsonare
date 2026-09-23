@@ -62,17 +62,35 @@ class Capabilities(TypedDict):
     hardwareConcurrency: int
 
 
-class MasteringInsertParamInfo(TypedDict):
-    """Metadata for one automatable mastering-insert parameter."""
+class MasteringInsertParamChoice(TypedDict):
+    """One accepted value of a closed-set insert parameter.
+
+    ``name`` is a lowerCamel display label (the enumerator's name, or an
+    integer's decimal text for a non-contiguous whole-number parameter);
+    ``value`` is the number construction accepts.
+    """
 
     name: str
-    id: int
+    value: int
+
+
+class MasteringInsertParamInfo(TypedDict):
+    """Metadata for one key an insert processor's construction or automation reads.
+
+    Entries come in two runs: first the processor's realtime automation
+    targets in id order, then -- sorted by name -- the keys construction reads
+    that are not automation targets, with ``id`` null and ``rtSafe`` false.
+    """
+
+    name: str
+    id: int | None
     rtSafe: bool
-    type: Literal["boolean", "number"]
+    type: Literal["boolean", "number", "enum", "string", "array"]
     min: float | None
     max: float | None
     default: float | bool | None
     unit: str | None
+    choices: list[MasteringInsertParamChoice] | None
 
 
 MasteringProcessorCategory = Literal[
@@ -90,6 +108,16 @@ MasteringProcessorCategory = Literal[
     "stereo",
     "utility",
 ]
+
+
+class MasteringInsertTiming(TypedDict):
+    """Latency and tail of one insert built from given params, at a given rate.
+
+    Returned by :func:`mastering_insert_timing`.
+    """
+
+    latencySamples: int
+    tailSamples: int
 
 
 class MasteringProcessorCatalogEntry(TypedDict):

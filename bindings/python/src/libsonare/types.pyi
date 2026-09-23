@@ -67,34 +67,66 @@ class CapabilityCatalogPresets(TypedDict):
     mixingScene: list[str]
     voiceChanger: list[str]
 
-class MasteringInsertParamInfo(TypedDict):
-    """One realtime-automatable parameter of an insert processor.
+class MasteringInsertParamChoice(TypedDict):
+    """One accepted value of a closed-set insert parameter.
 
-    ``default`` is the value the processor uses when the key is absent, read
-    from the config struct's own field initializer; it is ``None`` only for a
-    param id with no construction key.
-
-    ``min`` and ``max`` are the range construction *accepts*, measured by
-    handing candidate values to the same code path a caller would use. They are
-    a hard constraint, not a recommended UI range -- a value outside them is an
-    error, while an unvalidated control (most gains) reports ``None`` on both,
-    meaning "this catalog states no limit" rather than "unknown". Three
-    properties to plan for: a bound is measured with every other parameter at
-    its default, so two parameters that constrain each other each report the
-    other's default; a sample-rate-derived bound reflects the un-prepared
-    processor and rises once the insert is prepared at a higher rate; and an
-    exclusive bound is reported as its limit value, so a control requiring
-    ``> 0`` reports ``min`` 0 and still rejects 0.
+    ``name`` is a lowerCamel display label (the enumerator's name, or an
+    integer's decimal text for a non-contiguous whole-number parameter);
+    ``value`` is the number construction accepts.
     """
 
     name: str
-    id: int
+    value: int
+
+class MasteringInsertParamInfo(TypedDict):
+    """One key an insert processor's construction or automation reads.
+
+    Entries come in two runs: first the processor's realtime automation
+    targets in id order (``id`` the integer used by the set-param-by-name
+    entry points, ``rtSafe`` whether it can be changed live); then, sorted by
+    name, the keys construction reads that are not automation targets --
+    their ``id`` is ``None`` and ``rtSafe`` is ``False``, so they take effect
+    only when the insert is built.
+
+    ``default`` is the value the processor uses when the key is absent, read
+    from the config struct's own field initializer (an enum as its ordinal);
+    it is ``None`` for an automation target with no construction key and for
+    a construction key with no fallback.
+
+    ``choices`` is non-``None`` only when the accepted values are a closed
+    set -- every declared value of an enum, or the accepted integers of a
+    whole-number parameter whose accepted set has holes -- and then lists them
+    in value order; only the listed values build, and ``min`` / ``max`` are
+    then ``None``.
+
+    Otherwise ``min`` and ``max`` are the range construction *accepts*,
+    measured by handing candidate values to the same code path a caller would
+    use. They are a hard constraint, not a recommended UI range -- a value
+    outside them is an error, while an unvalidated control (most gains)
+    reports ``None`` on both, meaning "this catalog states no limit" rather
+    than "unknown". Three properties to plan for: a bound is measured with
+    every other parameter at its default, so two parameters that constrain
+    each other each report the other's default; a sample-rate-derived bound
+    reflects the un-prepared processor and rises once the insert is prepared
+    at a higher rate; and an exclusive bound is reported as its limit value,
+    so a control requiring ``> 0`` reports ``min`` 0 and still rejects 0.
+    """
+
+    name: str
+    id: int | None
     rtSafe: bool
-    type: Literal["boolean", "number"]
+    type: Literal["boolean", "number", "enum", "string", "array"]
     min: float | None
     max: float | None
     default: float | bool | None
     unit: str | None
+    choices: list[MasteringInsertParamChoice] | None
+
+class MasteringInsertTiming(TypedDict):
+    """Latency and tail of one insert built from given params, at a given rate."""
+
+    latencySamples: int
+    tailSamples: int
 
 class MasteringProcessorCatalogEntry(TypedDict):
     id: str

@@ -176,7 +176,13 @@ from ._types_capabilities import (
     MasteringChannelPolicy as MasteringChannelPolicy,
 )
 from ._types_capabilities import (
+    MasteringInsertParamChoice as MasteringInsertParamChoice,
+)
+from ._types_capabilities import (
     MasteringInsertParamInfo as MasteringInsertParamInfo,
+)
+from ._types_capabilities import (
+    MasteringInsertTiming as MasteringInsertTiming,
 )
 from ._types_capabilities import (
     MasteringProcessorCatalogEntry as MasteringProcessorCatalogEntry,
