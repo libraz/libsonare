@@ -39,6 +39,8 @@ void validate_config(const MusicAnalyzerConfig& config) {
                    "MusicAnalyzerConfig: chromaHighpassHz must be finite and non-negative");
   SONARE_CHECK_MSG(config.chroma_hop_multiplier > 0, ErrorCode::InvalidParameter,
                    "MusicAnalyzerConfig: chromaHopMultiplier must be positive");
+  SONARE_CHECK_MSG(is_valid_chroma_tuning(config.tuning), ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: tuning must be finite and in [-0.5, 0.5)");
   // A non-positive beam width disables the HMM beam cut instead of erroring,
   // which turns chord smoothing into an order-of-magnitude slower full search.
   SONARE_CHECK_MSG(config.chord_hmm_beam_width > 0, ErrorCode::InvalidParameter,
@@ -134,6 +136,7 @@ KeyAnalyzer& MusicAnalyzer::key_analyzer() {
   std::call_once(key_analyzer_once_, [this]() {
     KeyConfig key_config;
     key_config.hop_length = config_->hop_length;
+    key_config.tuning = config_->tuning;
     // Build the key analyzer from the analysis audio (not a pre-computed chroma)
     // so the full refinement runs: the auto candidate search, the 60 Hz harmonic
     // high-pass fallback, and the loudness-weighted chroma refinement. Feeding a
@@ -173,6 +176,7 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
     chord_config.use_hmm = config_->use_chord_hmm;
     chord_config.hmm_beam_width = config_->chord_hmm_beam_width;
     chord_config.detect_inversions = config_->detect_chord_inversions;
+    chord_config.tuning = config_->tuning;
     if (config_->use_chord_key_context) {
       const Key key = key_analyzer().key();
       chord_config.use_key_context = true;
@@ -194,6 +198,7 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
       // space: the chord segments are expressed in harmonic-chroma frames and
       // are used directly to slice the bass chromagram.
       bass_config.cqt.hop_length = config_->hop_length * config_->chroma_hop_multiplier;
+      bass_config.cqt.fmin = tune_cqt_fmin(bass_config.cqt.fmin, config_->tuning);
       chord_analyzer_ = std::make_unique<ChordAnalyzer>(
           harmonic, beat_times, bass_chroma(analysis_audio_, bass_config), chord_config);
     } else {
@@ -270,6 +275,7 @@ SectionAnalyzer& MusicAnalyzer::section_analyzer() {
     SectionConfig section_config;
     section_config.n_fft = config_->n_fft;
     section_config.hop_length = config_->hop_length;
+    section_config.tuning = config_->tuning;
     // Run section descriptors on the same analysis-rate signal the boundaries
     // were detected on (analysis_audio_ at kAnalysisSampleRate), not the native
     // input. This keeps the whole music-analysis pipeline on one sample rate, and
@@ -303,7 +309,10 @@ const Spectrogram& MusicAnalyzer::spectrogram() {
 
 const Chroma& MusicAnalyzer::chroma() {
   std::call_once(chroma_once_, [this]() {
-    chroma_ = std::make_unique<Chroma>(Chroma::from_spectrogram(spectrogram(), analysis_sr_));
+    ChromaFilterConfig filter_config;
+    filter_config.tuning = config_->tuning;
+    chroma_ = std::make_unique<Chroma>(
+        Chroma::from_spectrogram(spectrogram(), analysis_sr_, filter_config));
   });
   return *chroma_;
 }
@@ -347,7 +356,8 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
     // Step 3: Compute CQT-based chroma with larger hop for speed
     CqtConfig cqt_config;
     cqt_config.hop_length = chroma_hop;
-    cqt_config.fmin = constants::kC1Hz;
+    // Shifted by the tuning offset so bin % 12 still names the pitch class below.
+    cqt_config.fmin = tune_cqt_fmin(constants::kC1Hz, config_->tuning);
     cqt_config.n_bins = 84;  // 7 octaves * 12 bins
     cqt_config.bins_per_octave = 12;
 
@@ -364,7 +374,7 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
       // Use reduced CQT for bass (lower 4 octaves = 48 bins)
       CqtConfig bass_cqt_config;
       bass_cqt_config.hop_length = chroma_hop;
-      bass_cqt_config.fmin = constants::kC1Hz;
+      bass_cqt_config.fmin = tune_cqt_fmin(constants::kC1Hz, config_->tuning);
       bass_cqt_config.n_bins = 48;  // 4 octaves (bass-focused)
       bass_cqt_config.bins_per_octave = 12;
 
@@ -555,6 +565,13 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
 
   // Refine key using chord progression analysis
   result.key = refine_key_with_chords(chroma_key, result.chords);
+  result.chord_roman_numerals.reserve(result.chords.size());
+  for (const Chord& chord : result.chords) {
+    result.chord_roman_numerals.push_back(
+        chord.quality == ChordQuality::Unknown
+            ? std::string()
+            : ChordAnalyzer::chord_to_roman_numeral(chord, result.key.root, result.key.mode));
+  }
 
   // Sections (55-70%)
   report_progress(0.55f, "sections");

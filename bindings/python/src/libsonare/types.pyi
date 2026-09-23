@@ -970,6 +970,7 @@ class Chord:
     confidence: float
     bass: PitchClass | None
     canonical_name: str
+    roman_numeral: str | None
     def __init__(
         self,
         root: PitchClass,
@@ -979,6 +980,7 @@ class Chord:
         confidence: float,
         bass: PitchClass | None = None,
         canonical_name: str = "",
+        roman_numeral: str | None = None,
     ) -> None: ...
     @property
     def duration(self) -> float: ...

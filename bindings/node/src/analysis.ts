@@ -93,6 +93,8 @@ export interface RoomMorphRequest extends RoomMorphOptions, SamplesRequest {}
 export interface AnalyzeWithProgressRequest extends SamplesRequest {
   onProgress?: AnalysisProgressCallback;
   cancel?: () => boolean;
+  /** Analysis options, with the same fields and defaults {@link analyze} takes. */
+  options?: MusicAnalyzeOptions;
 }
 
 export interface MusicAnalyzeOptions {
@@ -141,6 +143,14 @@ export interface MusicAnalyzeOptions {
    * meter. Default 4.
    */
   meterDenominator?: number;
+  /**
+   * Tuning offset of the recording in fractions of a semitone, the unit
+   * `estimateTuning` returns; must be in `[-0.5, 0.5)`. Every chroma the
+   * analysis builds (key, chords, sections) is shifted by it, so a recording
+   * that is not at A440 reads its key and chords on its own pitch grid.
+   * Default 0 (concert A440).
+   */
+  tuning?: number;
 }
 export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
 
@@ -218,6 +228,11 @@ export function detectBpm(samples: Float32Array | SamplesRequest, sampleRate = 2
   return addon.detectBpm(request.samples, resolvedSampleRate);
 }
 
+/**
+ * Detect the musical key. The chroma is read at concert A440; a tuning offset
+ * is applied through {@link analyze}'s `tuning` option (and to chords through
+ * {@link detectChords}).
+ */
 export function detectKey(request: DetectKeyRequest): Key;
 export function detectKey(
   samples: Float32Array,
@@ -438,20 +453,25 @@ export function analyzeWithProgress(
   samples: Float32Array,
   sampleRate: number | undefined,
   onProgress: AnalysisProgressCallback,
+  options?: MusicAnalyzeOptions,
 ): AnalysisResult;
 export function analyzeWithProgress(
   samples: Float32Array | AnalyzeWithProgressRequest,
   sampleRate?: number,
   onProgress?: AnalysisProgressCallback,
+  options?: MusicAnalyzeOptions,
 ): AnalysisResult {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, onProgress } : samples;
+  const request: AnalyzeWithProgressRequest =
+    samples instanceof Float32Array ? { samples, sampleRate, onProgress, options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('analyzeWithProgress', resolvedSampleRate);
+  // The addon reads options with the same reader analyze uses.
   return addon.analyzeWithProgress(
     request.samples,
     resolvedSampleRate,
     request.onProgress ?? (() => {}),
     request.cancel ?? (() => false),
+    request.options ?? {},
   );
 }
 
@@ -750,6 +770,7 @@ interface ResolvedChordParams {
   keyMode: number;
   detectInversions: boolean;
   chromaMethod: ChordChromaMethod;
+  tuning: number;
 }
 
 function resolveChordOptions(options: ChordDetectionOptions): ResolvedChordParams {
@@ -768,6 +789,7 @@ function resolveChordOptions(options: ChordDetectionOptions): ResolvedChordParam
     keyMode: options.keyMode ?? 0,
     detectInversions: options.detectInversions ?? false,
     chromaMethod: options.chromaMethod ?? 'stft',
+    tuning: options.tuning ?? 0,
   };
 }
 
@@ -860,6 +882,7 @@ export function detectChords(
             keyMode,
             detectInversions,
             chromaMethod,
+            tuning: 0,
           }
         : resolveChordOptions(samples);
   const resolvedSampleRate =
@@ -884,6 +907,7 @@ export function detectChords(
     p.keyMode,
     p.detectInversions,
     chordChromaMethodValue(p.chromaMethod),
+    p.tuning,
   );
 }
 
@@ -958,6 +982,7 @@ export function chordFunctionalAnalysis(
             keyMode,
             detectInversions,
             chromaMethod,
+            tuning: 0,
           }
         : resolveChordOptions(samples);
   const resolvedSampleRate =
@@ -991,6 +1016,7 @@ export function chordFunctionalAnalysis(
     p.useKeyContext,
     p.detectInversions,
     chordChromaMethodValue(p.chromaMethod),
+    p.tuning,
   );
 }
 

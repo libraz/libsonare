@@ -161,6 +161,8 @@ bool uses_auto_audio_candidates(const KeyConfig& config) {
 }
 
 void validate_chroma_config(const Audio& audio, const KeyConfig& config) {
+  SONARE_CHECK_MSG(is_valid_chroma_tuning(config.tuning), ErrorCode::InvalidParameter,
+                   "KeyConfig: tuning must be finite and in [-0.5, 0.5)");
   SONARE_CHECK(config.high_pass_hz >= 0.0f, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.high_pass_hz < static_cast<float>(audio.sample_rate()) * 0.5f,
                ErrorCode::InvalidParameter);
@@ -170,6 +172,7 @@ ChromaConfig chroma_config_for(const KeyConfig& config) {
   ChromaConfig chroma_config;
   chroma_config.n_fft = config.n_fft;
   chroma_config.hop_length = config.hop_length;
+  chroma_config.tuning = config.tuning;
   return chroma_config;
 }
 
@@ -178,7 +181,8 @@ ChromaConfig chroma_config_for(const KeyConfig& config) {
 ///          together decide the analysis signal and its chromagram. A KeyConfig field added
 ///          to either of those belongs here too.
 bool same_chroma_analysis(const KeyConfig& a, const KeyConfig& b) {
-  return a.high_pass_hz == b.high_pass_hz && a.n_fft == b.n_fft && a.hop_length == b.hop_length;
+  return a.high_pass_hz == b.high_pass_hz && a.n_fft == b.n_fft && a.hop_length == b.hop_length &&
+         a.tuning == b.tuning;
 }
 
 /// @brief Returns the analysis input, high-passed when the config asks for it.

@@ -838,6 +838,7 @@ _EXTENDED_FIELD_TAILS = {
         "key_mode",
         "detect_inversions",
         "chroma_method",
+        "tuning",
     ),
     "mel_spectrogram": ("fmin", "fmax", "htk"),
     "mfcc": ("fmin", "fmax", "htk", "lifter"),

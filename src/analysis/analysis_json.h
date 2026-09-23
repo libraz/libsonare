@@ -25,7 +25,8 @@ namespace sonare {
 ///     "timeSignature": {numerator, denominator, confidence},
 ///     "beats": [{time, strength}],
 ///     "beatLocalBpm": [number],
-///     "chords": [{root, bass, quality, start, end, confidence, name}],
+///     "chords": [{root, bass, quality, start, end, confidence, name,
+///                 romanNumeral}],  // romanNumeral is "" for N.C.
 ///     "sections": [{type, start, end, energyLevel, confidence, name}],
 ///     "timbre": {brightness, warmth, density, roughness, complexity},
 ///     "dynamics": {dynamicRangeDb, peakDb, rmsDb, crestFactor,

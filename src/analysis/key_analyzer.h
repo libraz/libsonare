@@ -64,6 +64,9 @@ struct KeyConfig {
   KeyProfileType profile_type = KeyProfileType::KrumhanslSchmuckler;
   std::string genre_hint = "auto";  ///< "auto" | "edm" | "pop" | "classical" | "jazz"
   std::vector<Mode> modes = {Mode::Major, Mode::Minor};  ///< Candidate modes; default compatible
+  /// Recording tuning offset in fractions of a semitone, the estimate_tuning() unit; must be in
+  /// [-0.5, 0.5). 0 is concert A440.
+  float tuning = 0.0f;
 };
 
 /// @brief Key analyzer using chroma correlation.

@@ -104,6 +104,10 @@ struct ChordConfig {
   /// @details Costs one extra bass-band CQT. The constructor also computes one
   /// when @ref detect_inversions is set, and the two share it.
   bool use_bass_chroma = true;
+  /// @brief Recording tuning offset in fractions of a semitone, the estimate_tuning() unit.
+  /// @details Must be in [-0.5, 0.5); 0 is concert A440. Read only by the audio constructor,
+  /// which builds its own chromagrams; a supplied chromagram already carries its tuning.
+  float tuning = 0.0f;
 };
 
 /// @brief Chord analyzer for detecting chords from audio.
@@ -151,6 +155,10 @@ class ChordAnalyzer {
   /// @param key The key for analysis
   /// @return Vector of Roman numeral strings (e.g., "I", "V", "vi", "IV")
   std::vector<std::string> functional_analysis(PitchClass key_root, Mode mode = Mode::Major) const;
+
+  /// @brief Roman numeral of one chord relative to a key (e.g. "V7", "bVII", "vi").
+  /// @return "N.C." for an Unknown chord.
+  static std::string chord_to_roman_numeral(const Chord& chord, PitchClass key_root, Mode mode);
 
   /// @brief Returns chord at a specific time.
   /// @param time Time in seconds
@@ -203,7 +211,6 @@ class ChordAnalyzer {
   ChordHmmConfig hmm_config() const;
   PitchClass estimate_bass_pitch_class(int start_frame, int end_frame,
                                        const ChordTemplate& chord) const;
-  std::string chord_to_roman_numeral(const Chord& chord, PitchClass key_root, Mode mode) const;
 
   std::vector<Chord> chords_;
   std::vector<int> frame_chords_;

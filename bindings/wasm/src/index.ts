@@ -621,6 +621,7 @@ export {
 export type {
   AcousticOptions,
   AcousticResult,
+  AnalysisChord,
   AnalysisResult,
   AnalyzeBpmOptions,
   AnalyzeDynamicsOptions,

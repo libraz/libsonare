@@ -97,6 +97,9 @@ def detect_key(
 ) -> Key:
     """Detect the musical key of audio samples.
 
+    The chroma is read at concert A440; a tuning offset is applied through
+    :func:`analyze` (and to chords through :func:`detect_chords`).
+
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
@@ -491,6 +494,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
                 end=float(c.get("end", 0.0)),
                 confidence=float(c.get("confidence", 0.0)),
                 canonical_name=str(c.get("name", "")),
+                roman_numeral=str(c.get("romanNumeral", "")),
             )
         )
 

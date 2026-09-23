@@ -181,6 +181,7 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
       node_bool_option(object, "computeTempoCurve", options->compute_tempo_curve != 0) ? 1 : 0;
   options->meter_denominator =
       node_int_option(object, "meterDenominator", options->meter_denominator);
+  options->tuning = node_float_option(object, "tuning", options->tuning);
   return ReadMeterCandidateNumerators(object, "meterCandidateNumerators",
                                       options->meter_candidate_numerators,
                                       &options->meter_candidate_numerator_count);

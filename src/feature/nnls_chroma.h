@@ -27,6 +27,9 @@ struct NnlsChromaConfig {
   int max_iter = 100;            ///< NNLS iterations per frame
   float tolerance = 1e-4f;       ///< NNLS KKT tolerance
   bool normalize_frames = true;  ///< L-infinity normalize chroma frames
+  /// Recording tuning offset in fractions of a semitone (estimate_tuning() unit); shifts the
+  /// CQT grid, the harmonic templates and the STFT blend together. 0 is concert A440.
+  float tuning = 0.0f;
 
   /// @brief Blend a plain STFT chroma into the NNLS result for robustness on
   /// sparse/pure-tone content where CQT salience can be ambiguous.

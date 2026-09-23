@@ -473,10 +473,10 @@ void sonare_free_inverse_result(SonareInverseResult* result);
 /// @brief STFT chromagram (librosa.feature.chroma_stft).
 /// @details The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
 ///   librosa.feature.chroma_stft, which estimates tuning from the signal when
-///   none is supplied, this entry point does NOT auto-estimate and exposes no
-///   tuning argument; sharp/flat (non-A440) recordings smear across pitch classes
-///   accordingly. Estimate tuning separately via @ref sonare_estimate_tuning if a
-///   non-A440 reference matters for downstream key/chord detection.
+///   none is supplied, this entry point does NOT auto-estimate and takes no
+///   tuning argument. A tuning offset from @ref sonare_estimate_tuning is applied
+///   through SonareMusicAnalyzeOptions.tuning (analysis) and
+///   SonareChordDetectionOptions.tuning (chord detection).
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, int n_fft,
                           int hop_length, SonareChromaResult* out);
@@ -491,8 +491,9 @@ SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sampl
                                   SonareChromaResult* out);
 /// @brief Constant-Q chromagram (librosa.feature.chroma_cqt).
 /// @details Fixed tuning of 0 (concert A440); no auto-tuning estimation, matching
-///   the other chroma entry points. Use @ref sonare_estimate_tuning separately if
-///   a non-A440 reference matters.
+///   the other chroma entry points. A tuning offset from @ref sonare_estimate_tuning
+///   is applied through SonareMusicAnalyzeOptions.tuning (analysis) and
+///   SonareChordDetectionOptions.tuning (chord detection).
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               int n_chroma, SonareChromaResult* out);

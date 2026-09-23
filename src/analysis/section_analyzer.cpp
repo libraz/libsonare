@@ -61,6 +61,7 @@ ChromaConfig section_chroma_config(const SectionConfig& config) {
   ChromaConfig chroma_config;
   chroma_config.n_fft = config.n_fft;
   chroma_config.hop_length = config.hop_length;
+  chroma_config.tuning = config.tuning;
   return chroma_config;
 }
 

@@ -228,10 +228,12 @@ node = [
   "metering_vectorscope_decimated",
   # Unified-analysis variants folded into the base facade `analyze` (the rich
   # result IS what analyze() returns, serialized via sonare_analyze_json) and
-  # `analyzeWithProgress` (the progress-callback variant). analyze_melody_ex is
+  # `analyzeWithProgress` (the progress-callback variant, which takes the same
+  # analysis options through sonare_analyze_json_ex_with_progress). analyze_melody_ex is
   # folded into analyzeMelody's usePyin/center options.
   "analyze_json",
   "analyze_json_with_progress",
+  "analyze_json_ex_with_progress",
   "analyze_melody_ex",
   # C-ABI-internal length-checked inverse variants: bindings build their own
   # arrays with known lengths and call the base function, so the explicit-length
@@ -353,6 +355,7 @@ wasm = [
   # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
   "analyze_json",
   "analyze_json_with_progress",
+  "analyze_json_ex_with_progress",
   "analyze_melody_ex",
   # --- Internal default-struct seeders (see node note above) ---
   "engine_bounce_options_default",
@@ -449,6 +452,7 @@ python = [
   # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).
   "analyze_json",
   "analyze_json_with_progress",
+  "analyze_json_ex_with_progress",
   "analyze_melody_ex",
   # --- Internal default-struct seeders (see node note above) ---
   # The Python facade calls these inside its constructors/dataclasses to seed

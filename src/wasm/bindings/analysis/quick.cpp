@@ -229,7 +229,14 @@ val analysisResultToVal(const AnalysisResult& result) {
   out.set("beatLocalBpm", numberArrayFromVector(result.beat_local_bpm));
 
   // Chords
-  out.set("chords", chordsToVal(result.chords));
+  // Mirrors analysis_result_to_json: analyze's chords carry a romanNumeral, "" for N.C.
+  val chords = chordsToVal(result.chords);
+  for (size_t i = 0; i < result.chords.size(); ++i) {
+    chords[i].set("romanNumeral", i < result.chord_roman_numerals.size()
+                                      ? result.chord_roman_numerals[i]
+                                      : std::string());
+  }
+  out.set("chords", chords);
 
   // Sections
   val sections = val::array();
@@ -455,7 +462,7 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
                      bool use_triads_only, const val& n_fft_val, const val& hop_length_val,
                      bool use_beat_sync, bool use_hmm, const val& hmm_beam_width_val,
                      bool use_key_context, const val& key_root_val, const val& key_mode_val,
-                     bool detect_inversions, const val& chroma_method_val) {
+                     bool detect_inversions, const val& chroma_method_val, const val& tuning_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
@@ -492,6 +499,7 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
   config.key_mode = static_cast<Mode>(key_mode);
   config.detect_inversions = detect_inversions;
   config.chroma_method = chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+  config.tuning = checkedFloatFromVal(tuning_val, "tuning");
 
   val result = val::object();
   result.set("chords", chordsToVal(detect_chords(audio, config)));
@@ -504,7 +512,8 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
                                  bool use_triads_only, const val& n_fft_val,
                                  const val& hop_length_val, bool use_beat_sync, bool use_hmm,
                                  const val& hmm_beam_width_val, bool use_key_context,
-                                 bool detect_inversions, const val& chroma_method_val) {
+                                 bool detect_inversions, const val& chroma_method_val,
+                                 const val& tuning_val) {
   const int key_root = checkedIntFromVal(key_root_val, "keyRoot");
   const int key_mode = checkedIntFromVal(key_mode_val, "keyMode");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
@@ -540,6 +549,7 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
   config.key_mode = static_cast<Mode>(key_mode);
   config.detect_inversions = detect_inversions;
   config.chroma_method = chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+  config.tuning = checkedFloatFromVal(tuning_val, "tuning");
 
   ChordAnalyzer analyzer(audio, config);
   std::vector<std::string> labels =
@@ -601,12 +611,11 @@ std::vector<int> meterCandidateNumeratorsFromVal(const val& numerators, const ch
   return out;
 }
 
-val js_analyze(val samples, const val& sample_rate_val, val options) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+// The one reader of a MusicAnalyzeOptions object, shared by analyze and
+// analyzeWithProgress. Field rules are enforced by validate_config when
+// MusicAnalyzer is constructed.
+MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   MusicAnalyzerConfig config;
-  // Field semantics (positive BPM range, even nFft, positive beam width, ...)
-  // are enforced by validate_config when MusicAnalyzer is constructed below.
   auto set_number = [&](const char* key, auto& field) {
     setNumberOption(options, key, "analyze", &field);
   };
@@ -632,6 +641,7 @@ val js_analyze(val samples, const val& sample_rate_val, val options) {
   set_number("tempoUpdateIntervalBeats", config.tempo_update_interval_beats);
   set_bool("computeTempoCurve", config.compute_tempo_curve);
   set_number("meterDenominator", config.meter_denominator);
+  set_number("tuning", config.tuning);
   // meterCandidateNumerators is an array, so set_number (a scalar reader) does
   // not apply. An undefined/null value leaves the core default {3, 4, 6} in
   // place.
@@ -640,6 +650,13 @@ val js_analyze(val samples, const val& sample_rate_val, val options) {
     config.meter_candidate_numerators =
         meterCandidateNumeratorsFromVal(meter_numerators, "analyze: meterCandidateNumerators");
   }
+  return config;
+}
+
+val js_analyze(val samples, const val& sample_rate_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  const MusicAnalyzerConfig config = musicAnalyzerConfigFromVal(options);
   MusicAnalyzer analyzer(audio, config);
   AnalysisResult result = analyzer.analyze();
   return analysisResultToVal(result);
@@ -714,6 +731,7 @@ val js_analysis_result_schema_fixture() {
   result.beat_observations.chord_change.push_back(0.2f);
   result.beat_local_bpm.push_back(118.5f);
   result.chords.push_back({PitchClass::C, ChordQuality::Major, 0.0f, 1.0f, 0.8f, PitchClass::C});
+  result.chord_roman_numerals.push_back("I");
   result.sections.push_back({SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});
   result.timbre = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
   result.dynamics = {12.0f, -1.0f, -14.0f, 13.0f, 3.0f, false};
@@ -1152,11 +1170,11 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
 #endif  // SONARE_WITH_ACOUSTIC_SIM
 
 // Analyze with progress callback
-val js_analyze_with_progress(val samples, const val& sample_rate_val, val progress_callback,
-                             val cancel_callback) {
+val js_analyze_with_progress(val samples, const val& sample_rate_val, val options,
+                             val progress_callback, val cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  MusicAnalyzer analyzer(audio);
+  MusicAnalyzer analyzer(audio, musicAnalyzerConfigFromVal(options));
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
     analyzer.set_progress_callback([progress_callback](float progress, const char* stage) {
       progress_callback(progress, std::string(stage ? stage : ""));

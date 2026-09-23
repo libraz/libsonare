@@ -41,6 +41,9 @@ struct SectionConfig {
   float min_section_sec = 4.0f;
   float boundary_threshold = 0.3f;  ///< Boundary detection threshold
   int kernel_size = 64;             ///< Checkerboard kernel size
+  /// Recording tuning offset in fractions of a semitone (estimate_tuning() unit) applied to the
+  /// section chroma; 0 is concert A440.
+  float tuning = 0.0f;
 };
 
 /// @brief Section analyzer producing a heuristic song-structure estimate.

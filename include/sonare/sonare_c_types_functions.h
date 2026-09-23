@@ -85,6 +85,8 @@ SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult*
 
 // Quick detection functions
 SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_rate, float* out_bpm);
+/// @brief Detects the key at concert A440. A tuning offset is applied through
+///   SonareMusicAnalyzeOptions.tuning in @ref sonare_analyze_json_ex.
 SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
                               SonareKey* out_key);
 SonareError sonare_detect_key_with_options(const float* samples, size_t length, int sample_rate,
@@ -244,6 +246,10 @@ typedef struct {
   /* Beat unit reported for the detected meter; a power of two in [1, 32]. The
      estimator still reports 8 on its own when it resolves a compound meter. */
   int meter_denominator;
+  /* Tuning offset of the recording in fractions of a chroma bin, the unit
+     sonare_estimate_tuning returns; 0 is concert A440. Must be in [-0.5, 0.5).
+     Every chroma the analysis builds (key, chords, sections) is shifted by it. */
+  float tuning;
 } SonareMusicAnalyzeOptions;
 
 SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void);
@@ -326,6 +332,17 @@ SonareError sonare_estimate_meter_json(const float* beat_times, const float* bea
 SonareError sonare_analyze_json_with_progress_ex(
     const float* samples, size_t length, int sample_rate, SonareAnalyzeProgressCallback callback,
     void* user_data, char** out_json, SonareCancelCallback cancel_cb, void* cancel_user_data);
+
+/* sonare_analyze_json_ex with per-stage progress and cancellation. Either
+   callback may be null. When cancelled, returns SONARE_ERROR_CANCELLED and
+   leaves *out_json NULL. */
+/// @note Free @p out_json with @ref sonare_free_string.
+/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data is to
+///   @p cancel_cb. No callback or user pointer is retained past this call.
+SonareError sonare_analyze_json_ex_with_progress(
+    const float* samples, size_t length, int sample_rate, const SonareMusicAnalyzeOptions* options,
+    SonareAnalyzeProgressCallback callback, void* user_data, char** out_json,
+    SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 // Memory management
 void sonare_free_floats(float* ptr);

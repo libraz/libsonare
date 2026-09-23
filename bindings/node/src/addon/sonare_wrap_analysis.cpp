@@ -871,6 +871,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   int key_mode = node_arg_int(info, 13, 0);
   bool detect_inversions = node_arg_bool(info, 14, false);
   int chroma_method = node_arg_int(info, 15, 0);
+  float tuning = node_arg_float(info, 16, 0.0f);
 
   SonareChordAnalysisResult analysis{};
   SonareChordDetectionOptions options{};
@@ -888,6 +889,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   options.key_mode = static_cast<SonareMode>(key_mode);
   options.detect_inversions = detect_inversions ? 1 : 0;
   options.chroma_method = chroma_method;
+  options.tuning = tuning;
   SonareError err = sonare_detect_chords_ex(data, length, sample_rate, &options, &analysis);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
@@ -947,6 +949,7 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   bool use_key_context = node_arg_bool(info, 13, false);
   bool detect_inversions = node_arg_bool(info, 14, false);
   int chroma_method = node_arg_int(info, 15, 0);
+  float tuning = node_arg_float(info, 16, 0.0f);
 
   SonareChordDetectionOptions options{};
   options.min_duration = min_duration;
@@ -963,6 +966,7 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   options.key_mode = static_cast<SonareMode>(key_mode);
   options.detect_inversions = detect_inversions ? 1 : 0;
   options.chroma_method = chroma_method;
+  options.tuning = tuning;
 
   SonareStringArray labels{};
   SonareError err = sonare_chord_functional_analysis(data, length, sample_rate, &options,

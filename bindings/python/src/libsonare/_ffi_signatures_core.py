@@ -1050,6 +1050,20 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
         ]
 
+    if hasattr(lib, "sonare_analyze_json_ex_with_progress"):
+        lib.sonare_analyze_json_ex_with_progress.restype = ctypes.c_int32
+        lib.sonare_analyze_json_ex_with_progress.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareMusicAnalyzeOptions),
+            SonareAnalyzeProgressCallback,
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_char_p),
+            SonareCancelCallback,
+            ctypes.c_void_p,
+        ]
+
     # sonare_analyze_melody_ex: melody contour with selectable tracker (YIN/pYIN)
     # and center-padding option.
     if hasattr(lib, "sonare_analyze_melody_ex"):

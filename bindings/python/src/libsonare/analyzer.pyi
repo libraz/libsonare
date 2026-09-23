@@ -313,6 +313,7 @@ def analyze(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
+    tuning: float = 0.0,
 ) -> AnalysisResult: ...
 def analyze_with_progress(
     samples: FloatSamples,
@@ -320,6 +321,26 @@ def analyze_with_progress(
     on_progress: ProgressCallback | None = None,
     *,
     cancel: CancelCallback | None = None,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    bpm_min: float = 60.0,
+    bpm_max: float = 200.0,
+    start_bpm: float = 120.0,
+    use_triads_only: bool = True,
+    use_hpss: bool = True,
+    chroma_highpass_hz: float = 80.0,
+    use_bass_weighted: bool = True,
+    chroma_hop_multiplier: int = 4,
+    use_chord_hmm: bool = False,
+    use_chord_key_context: bool = False,
+    chord_hmm_beam_width: int = 24,
+    detect_chord_inversions: bool = False,
+    adaptive_tempo: bool = False,
+    tempo_update_interval_beats: int = 8,
+    compute_tempo_curve: bool = False,
+    meter_candidate_numerators: Sequence[int] | None = None,
+    meter_denominator: int = 4,
+    tuning: float = 0.0,
 ) -> AnalysisResult: ...
 def estimate_meter(
     beat_times: Sequence[float],
@@ -458,6 +479,7 @@ def detect_chords(
     key_mode: Mode = Mode.MAJOR,
     detect_inversions: bool = False,
     chroma_method: str = "stft",
+    tuning: float = 0.0,
 ) -> ChordAnalysisResult: ...
 def chord_functional_analysis(
     samples: FloatSamples,
@@ -476,6 +498,7 @@ def chord_functional_analysis(
     use_key_context: bool = False,
     detect_inversions: bool = False,
     chroma_method: str = "stft",
+    tuning: float = 0.0,
 ) -> list[str]: ...
 def analyze_sections(
     samples: FloatSamples,

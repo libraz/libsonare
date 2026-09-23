@@ -61,11 +61,15 @@ def detect_chords(
     key_mode: Mode = Mode.MAJOR,
     detect_inversions: bool = False,
     chroma_method: str = "stft",
+    tuning: float = 0.0,
 ) -> ChordAnalysisResult:
     """Detect a continuous chord/N.C. timeline.
 
     ``threshold`` is a final-template correlation cutoff in ``[0, 1]``;
     rejected intervals use quality ``"unknown"`` and ``Chord.name == "N.C."``.
+    ``tuning`` is the recording's tuning offset in fractions of a semitone, the
+    unit :func:`estimate_tuning` returns; it must be in ``[-0.5, 0.5)`` and 0 is
+    concert A440.
     """
     chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
     if chroma_method_value is None:
@@ -90,6 +94,7 @@ def detect_chords(
         key_mode,
         1 if detect_inversions else 0,
         chroma_method_value,
+        tuning,
     )
     rc = lib.sonare_detect_chords_ex(
         c_array,
@@ -162,12 +167,14 @@ def chord_functional_analysis(
     use_key_context: bool = False,
     detect_inversions: bool = False,
     chroma_method: str = "stft",
+    tuning: float = 0.0,
 ) -> list[str]:
     """Label detected chords with Roman numerals relative to a key.
 
     Detects chords with the same algorithm as :func:`detect_chords`, then
     returns one Roman-numeral label (e.g. ``"I"``, ``"IV"``, ``"V"``, ``"vi"``)
-    per detected chord, in chord order.
+    per detected chord, in chord order. ``tuning`` is as for
+    :func:`detect_chords`.
     """
     chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
     if chroma_method_value is None:
@@ -192,6 +199,7 @@ def chord_functional_analysis(
         key_mode,
         1 if detect_inversions else 0,
         chroma_method_value,
+        tuning,
     )
     rc = lib.sonare_chord_functional_analysis(
         c_array,

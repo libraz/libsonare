@@ -73,6 +73,8 @@ export interface DetectKeyRequest extends KeyDetectionOptions, SamplesRequest {}
 export interface AnalyzeWithProgressRequest extends SamplesRequest {
   onProgress?: ProgressCallback;
   cancel?: () => boolean;
+  /** Analysis options, with the same fields and defaults {@link analyze} takes. */
+  options?: MusicAnalyzeOptions;
 }
 
 /** Canonical request form for chord detection. */
@@ -148,6 +150,9 @@ export function detectBpm(
 
 /**
  * Detect musical key from audio samples.
+ *
+ * The chroma is read at concert A440; a tuning offset is applied through
+ * {@link analyze}'s `tuning` option (and to chords through {@link detectChords}).
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
@@ -332,6 +337,7 @@ export function detectChords(
     request.keyMode ?? Mode.Major,
     request.detectInversions ?? false,
     chordChromaMethodValue(request.chromaMethod ?? 'stft'),
+    request.tuning ?? 0,
   );
   return convertChordAnalysisResult(result);
 }
@@ -385,6 +391,7 @@ export function chordFunctionalAnalysis(
     request.useKeyContext ?? false,
     request.detectInversions ?? false,
     chordChromaMethodValue(request.chromaMethod ?? 'stft'),
+    request.tuning ?? 0,
   );
 }
 
@@ -443,6 +450,14 @@ export interface MusicAnalyzeOptions {
    * a compound meter, so this is the unit for everything else.
    */
   meterDenominator?: number;
+  /**
+   * Tuning offset of the recording in fractions of a semitone, the unit
+   * `estimateTuning` returns; must be in `[-0.5, 0.5)`. Every chroma the
+   * analysis builds (key, chords, sections) is shifted by it, so a recording
+   * that is not at A440 reads its key and chords on its own pitch grid.
+   * Default 0 (concert A440).
+   */
+  tuning?: number;
 }
 export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
 
@@ -714,15 +729,17 @@ export function analyzeWithProgress(
   samples: Float32Array,
   sampleRate: number | undefined,
   onProgress: ProgressCallback,
+  options?: MusicAnalyzeOptions,
 ): AnalysisResult;
 export function analyzeWithProgress(
   samples: Float32Array | AnalyzeWithProgressRequest,
   sampleRate = 22050,
   onProgress?: ProgressCallback,
+  options?: MusicAnalyzeOptions,
 ): AnalysisResult {
   const request: AnalyzeWithProgressRequest =
     samples instanceof Float32Array
-      ? { samples, sampleRate, onProgress: onProgress as ProgressCallback }
+      ? { samples, sampleRate, onProgress: onProgress as ProgressCallback, options }
       : samples;
   validateAnalysisInput(
     'analyzeWithProgress',
@@ -730,9 +747,11 @@ export function analyzeWithProgress(
     request.sampleRate ?? 22050,
     request,
   );
+  // The module reads options with the same reader analyze uses.
   const result = requireModule().analyzeWithProgress(
     request.samples,
     request.sampleRate ?? 22050,
+    request.options ?? {},
     request.onProgress ?? (() => {}),
     request.cancel ?? (() => false),
   );

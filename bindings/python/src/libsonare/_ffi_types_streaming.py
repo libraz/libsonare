@@ -134,6 +134,7 @@ class SonareChordDetectionOptions(CStruct):
         ("key_mode", ctypes.c_int32),
         ("detect_inversions", ctypes.c_int),
         ("chroma_method", ctypes.c_int),
+        ("tuning", ctypes.c_float),
     ]
 
 

@@ -4,15 +4,31 @@
 /// @brief Chromagram computation for harmonic analysis.
 
 #include <array>
+#include <cmath>
 #include <vector>
 
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "feature/cqt.h"
 #include "filters/chroma.h"
+#include "util/constants.h"
 #include "util/types.h"
 
 namespace sonare {
+
+/// @brief True when @p tuning is a usable recording tuning offset.
+/// @details The unit is fractions of a semitone, as estimate_tuning() returns; the range is
+///          [-0.5, 0.5), since a larger offset names a different pitch class.
+inline bool is_valid_chroma_tuning(float tuning) {
+  return std::isfinite(tuning) && tuning >= -0.5f && tuning < 0.5f;
+}
+
+/// @brief Shifts a CQT minimum frequency by @p tuning fractions of a semitone.
+/// @details Independent of the CQT's bins_per_octave, unlike ChromaCqtConfig::tuning, so one
+///          estimate_tuning() result moves a 12- and a 36-bin grid by the same interval.
+inline float tune_cqt_fmin(float fmin, float tuning) {
+  return fmin * std::pow(2.0f, tuning / sonare::constants::kSemitonesPerOctave);
+}
 
 /// @brief Configuration for Chromagram computation.
 struct ChromaConfig {

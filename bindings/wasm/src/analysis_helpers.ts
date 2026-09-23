@@ -174,6 +174,7 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
       duration: c.end - c.start,
       confidence: c.confidence,
       name: c.name,
+      romanNumeral: c.romanNumeral,
     })),
     sections: wasm.sections.map((s) => ({
       type: s.type as SectionType,

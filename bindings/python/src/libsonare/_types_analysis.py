@@ -727,6 +727,9 @@ class Chord:
     confidence: float
     bass: PitchClass | None = None
     canonical_name: str = ""
+    #: Roman numeral relative to the analysis key, set on :func:`analyze` chords
+    #: only (``None`` elsewhere); an empty string for a chord that is N.C.
+    roman_numeral: str | None = None
 
     @property
     def duration(self) -> float:

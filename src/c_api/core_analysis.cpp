@@ -357,6 +357,7 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
     config.key_mode = from_c_mode(options->key_mode);
     config.detect_inversions = options->detect_inversions != 0;
     config.chroma_method = options->chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+    config.tuning = options->tuning;
 
     std::vector<Chord> chords = detect_chords(audio, config);
     fill_chord_result(chords, out);
@@ -421,6 +422,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
     config.key_mode = from_c_mode(options->key_mode);
     config.detect_inversions = options->detect_inversions != 0;
     config.chroma_method = options->chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+    config.tuning = options->tuning;
 
     ChordAnalyzer analyzer(audio, config);
     std::vector<std::string> labels =

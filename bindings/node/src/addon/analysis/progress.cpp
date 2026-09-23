@@ -40,7 +40,7 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
 
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
       !info[2].IsFunction() || (info.Length() > 3 && !info[3].IsFunction())) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, onProgress, cancel?)")
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, onProgress, cancel?, options?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -62,6 +62,10 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   const size_t length = typed.ElementLength();
   const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
   Napi::Function js_cb = info[2].As<Napi::Function>();
+  // Absent or non-object options read as the defaults, as analyze reads them.
+  SonareMusicAnalyzeOptions options{};
+  ReadMusicAnalyzeOptions(info.Length() > 4 ? info[4] : env.Undefined(), &options);
+  if (env.IsExceptionPending()) return env.Undefined();
 
   // The C-ABI progress callback cannot hold a Napi reference (it is called
   // synchronously on the same thread, so the stack is still valid).
@@ -92,8 +96,8 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   };
 
   char* json_str = nullptr;
-  SonareError err = sonare_analyze_json_with_progress_ex(data, length, sample_rate, c_progress,
-                                                         &ctx, &json_str, c_cancel, &ctx);
+  SonareError err = sonare_analyze_json_ex_with_progress(
+      data, length, sample_rate, &options, c_progress, &ctx, &json_str, c_cancel, &ctx);
   // The pending-exception check comes first: throwing a SonareError on top of a
   // callback's exception would abort the process under NAPI_DISABLE_CPP_EXCEPTIONS.
   if (env.IsExceptionPending()) {

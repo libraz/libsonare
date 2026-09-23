@@ -146,6 +146,13 @@ export interface AnalysisChord {
   confidence: number;
   /** Human-readable chord name (e.g. `'Cmaj7'`). */
   name: string;
+  /**
+   * Roman numeral of the chord relative to the analysis key
+   * ({@link AnalysisResult.key}), e.g. `'V7'`, `'vi'`, `'bVII'`. The same
+   * spelling `chordFunctionalAnalysis` returns for that chord and key. Empty
+   * for a chord that is N.C.
+   */
+  romanNumeral: string;
 }
 
 /** One song-structure section in {@link AnalysisResult.sections}. */
@@ -930,6 +937,11 @@ export interface ChordDetectionOptions {
   keyMode?: number;
   detectInversions?: boolean;
   chromaMethod?: ChordChromaMethod;
+  /**
+   * Tuning offset of the recording in fractions of a semitone, the unit
+   * `estimateTuning` returns; must be in `[-0.5, 0.5)`. Default 0 (concert A440).
+   */
+  tuning?: number;
 }
 
 export interface HpssResult {

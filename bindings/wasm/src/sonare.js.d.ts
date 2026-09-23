@@ -125,6 +125,10 @@ export interface WasmChordResult {
   name: string;
 }
 
+export interface WasmAnalysisChordResult extends WasmChordResult {
+  romanNumeral: string;
+}
+
 export interface WasmSectionResult {
   type: number;
   start: number;
@@ -185,7 +189,7 @@ export interface WasmAnalysisResult {
   downbeatPhase: number;
   beatObservations: WasmBeatObservationsResult;
   beatLocalBpm: number[];
-  chords: WasmChordResult[];
+  chords: WasmAnalysisChordResult[];
   sections: WasmSectionResult[];
   timbre: WasmTimbreResult;
   dynamics: WasmDynamicsResult;
@@ -1344,18 +1348,18 @@ export interface WasmRealtimeEngine {
     commandCapacity: number,
     telemetryCapacity: number,
   ) => void;
-  setParameter: (paramId: number, value: number, renderFrame: number) => void;
-  setParameterSmoothed: (paramId: number, value: number, renderFrame: number) => void;
+  setParameter: (paramId: number, value: number, renderFrame?: number) => void;
+  setParameterSmoothed: (paramId: number, value: number, renderFrame?: number) => void;
   setParamSmoothingMs: (smoothingMs: number) => void;
-  setSoloMute: (laneIndex: number, solo: boolean, mute: boolean, renderFrame: number) => void;
-  setTrackMonitorMode: (laneIndex: number, mode: number, renderFrame: number) => void;
+  setSoloMute: (laneIndex: number, solo: boolean, mute: boolean, renderFrame?: number) => void;
+  setTrackMonitorMode: (laneIndex: number, mode: number, renderFrame?: number) => void;
   getTransportState: () => WasmEngineTransportState;
-  play: (renderFrame: number) => void;
-  stop: (renderFrame: number) => void;
-  seekSample: (timelineSample: number, renderFrame: number) => void;
+  play: (renderFrame?: number) => void;
+  stop: (renderFrame?: number) => void;
+  seekSample: (timelineSample: number, renderFrame?: number) => void;
   settleParameters: () => void;
   flushControlCommands: () => void;
-  seekPpq: (ppq: number, renderFrame: number) => void;
+  seekPpq: (ppq: number, renderFrame?: number) => void;
   setTempo: (bpm: number) => void;
   setTempoSegments: (segments: WasmEngineTempoSegment[]) => void;
   setTimeSignature: (numerator: number, denominator: number) => void;
@@ -1372,7 +1376,7 @@ export interface WasmRealtimeEngine {
   markerCount: () => number;
   markerByIndex: (index: number) => WasmEngineMarker;
   marker: (id: number) => WasmEngineMarker;
-  seekMarker: (id: number, renderFrame: number) => void;
+  seekMarker: (id: number, renderFrame?: number) => void;
   setLoopFromMarkers: (startMarkerId: number, endMarkerId: number) => void;
   setMetronome: (config: WasmEngineMetronomeConfig) => void;
   metronome: () => Required<WasmEngineMetronomeConfig>;
@@ -1551,7 +1555,7 @@ export interface WasmRealtimeEngine {
     channel: number,
     note: number,
     velocity: number,
-    renderFrame: number,
+    renderFrame?: number,
   ) => void;
   pushMidiNoteOff: (
     destinationId: number,
@@ -1559,7 +1563,7 @@ export interface WasmRealtimeEngine {
     channel: number,
     note: number,
     velocity: number,
-    renderFrame: number,
+    renderFrame?: number,
   ) => void;
   pushMidiCc: (
     destinationId: number,
@@ -1567,21 +1571,21 @@ export interface WasmRealtimeEngine {
     channel: number,
     controller: number,
     value: number,
-    renderFrame: number,
+    renderFrame?: number,
   ) => void;
   pushMidiPitchBend: (
     destinationId: number,
     group: number,
     channel: number,
     bend14: number,
-    renderFrame: number,
+    renderFrame?: number,
   ) => void;
   pushMidiChannelPressure: (
     destinationId: number,
     group: number,
     channel: number,
     pressure: number,
-    renderFrame: number,
+    renderFrame?: number,
   ) => void;
   pushMidiPolyPressure: (
     destinationId: number,
@@ -1589,11 +1593,11 @@ export interface WasmRealtimeEngine {
     channel: number,
     note: number,
     pressure: number,
-    renderFrame: number,
+    renderFrame?: number,
   ) => void;
-  pushMidiUmp: (destinationId: number, word0: number, renderFrame: number) => void;
-  pushMidiSysex: (destinationId: number, data: Uint8Array, renderFrame: number) => void;
-  pushMidiPanic: (renderFrame: number) => void;
+  pushMidiUmp: (destinationId: number, word0: number, renderFrame?: number) => void;
+  pushMidiSysex: (destinationId: number, data: Uint8Array, renderFrame?: number) => void;
+  pushMidiPanic: (renderFrame?: number) => void;
   setMidiDestinationExternal: (destinationId: number, external: boolean) => void;
   setExternalMidiClockEnabled: (enabled: boolean) => void;
   externalMidiDroppedCount: () => number;
@@ -1722,6 +1726,7 @@ export interface SonareModule {
     keyMode: number,
     detectInversions: boolean,
     chromaMethod: number,
+    tuning: number,
   ) => WasmChordAnalysisResult;
   chordFunctionalAnalysis: (
     samples: Float32Array,
@@ -1740,6 +1745,7 @@ export interface SonareModule {
     useKeyContext: boolean,
     detectInversions: boolean,
     chromaMethod: number,
+    tuning: number,
   ) => string[];
   analyze: (samples: Float32Array, sampleRate: number, options: object) => WasmAnalysisResult;
   estimateMeter: (
@@ -1846,6 +1852,7 @@ export interface SonareModule {
   analyzeWithProgress: (
     samples: Float32Array,
     sampleRate: number,
+    options: object,
     progressCallback: ProgressCallback | null,
     cancelCallback: (() => boolean) | null,
   ) => WasmAnalysisResult;

@@ -287,7 +287,8 @@ SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
                                        config.compute_tempo_curve ? 1 : 0,
                                        {},
                                        0,
-                                       config.meter_denominator};
+                                       config.meter_denominator,
+                                       config.tuning};
   const size_t count = std::min(config.meter_candidate_numerators.size(),
                                 static_cast<size_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS));
   for (size_t i = 0; i < count; ++i) {
@@ -297,8 +298,49 @@ SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
   return options;
 }
 
+namespace {
+
+// The one mapping from the flat options struct to the core config. Field rules
+// live in validate_config, which MusicAnalyzer's constructor applies.
+MusicAnalyzerConfig music_analyzer_config_from_options(const SonareMusicAnalyzeOptions& options) {
+  MusicAnalyzerConfig config;
+  config.n_fft = options.n_fft;
+  config.hop_length = options.hop_length;
+  config.bpm_min = options.bpm_min;
+  config.bpm_max = options.bpm_max;
+  config.start_bpm = options.start_bpm;
+  config.use_triads_only = options.use_triads_only != 0;
+  config.use_hpss = options.use_hpss != 0;
+  config.chroma_highpass_hz = options.chroma_highpass_hz;
+  config.use_bass_weighted = options.use_bass_weighted != 0;
+  config.chroma_hop_multiplier = options.chroma_hop_multiplier;
+  config.use_chord_hmm = options.use_chord_hmm != 0;
+  config.use_chord_key_context = options.use_chord_key_context != 0;
+  config.chord_hmm_beam_width = options.chord_hmm_beam_width;
+  config.detect_chord_inversions = options.detect_chord_inversions != 0;
+  config.adaptive_tempo = options.adaptive_tempo != 0;
+  config.tempo_update_interval_beats = options.tempo_update_interval_beats;
+  config.compute_tempo_curve = options.compute_tempo_curve != 0;
+  config.meter_candidate_numerators.assign(
+      options.meter_candidate_numerators,
+      options.meter_candidate_numerators + options.meter_candidate_numerator_count);
+  config.meter_denominator = options.meter_denominator;
+  config.tuning = options.tuning;
+  return config;
+}
+
+}  // namespace
+
 SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
                                    const SonareMusicAnalyzeOptions* options, char** out_json) {
+  return sonare_analyze_json_ex_with_progress(samples, length, sample_rate, options, nullptr,
+                                              nullptr, out_json, nullptr, nullptr);
+}
+
+SonareError sonare_analyze_json_ex_with_progress(
+    const float* samples, size_t length, int sample_rate, const SonareMusicAnalyzeOptions* options,
+    SonareAnalyzeProgressCallback callback, void* user_data, char** out_json,
+    SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
   // Field rules live in validate_config, which MusicAnalyzer's constructor
   // applies below; the exception maps back to SONARE_ERROR_INVALID_PARAMETER, so
@@ -314,31 +356,22 @@ SonareError sonare_analyze_json_ex(const float* samples, size_t length, int samp
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    MusicAnalyzerConfig config;
-    config.n_fft = options->n_fft;
-    config.hop_length = options->hop_length;
-    config.bpm_min = options->bpm_min;
-    config.bpm_max = options->bpm_max;
-    config.start_bpm = options->start_bpm;
-    config.use_triads_only = options->use_triads_only != 0;
-    config.use_hpss = options->use_hpss != 0;
-    config.chroma_highpass_hz = options->chroma_highpass_hz;
-    config.use_bass_weighted = options->use_bass_weighted != 0;
-    config.chroma_hop_multiplier = options->chroma_hop_multiplier;
-    config.use_chord_hmm = options->use_chord_hmm != 0;
-    config.use_chord_key_context = options->use_chord_key_context != 0;
-    config.chord_hmm_beam_width = options->chord_hmm_beam_width;
-    config.detect_chord_inversions = options->detect_chord_inversions != 0;
-    config.adaptive_tempo = options->adaptive_tempo != 0;
-    config.tempo_update_interval_beats = options->tempo_update_interval_beats;
-    config.compute_tempo_curve = options->compute_tempo_curve != 0;
-    config.meter_candidate_numerators.assign(
-        options->meter_candidate_numerators,
-        options->meter_candidate_numerators + options->meter_candidate_numerator_count);
-    config.meter_denominator = options->meter_denominator;
-    MusicAnalyzer analyzer(audio, config);
-    AnalysisResult result = analyzer.analyze();
-    *out_json = copy_string(analysis_result_to_json(result));
+    MusicAnalyzer analyzer(audio, music_analyzer_config_from_options(*options));
+    if (callback != nullptr) {
+      analyzer.set_progress_callback([callback, user_data](float progress, const char* stage) {
+        callback(progress, stage, user_data);
+      });
+    }
+    if (cancel_cb != nullptr) {
+      analyzer.set_cancel_callback(
+          [cancel_cb, cancel_user_data]() { return cancel_cb(cancel_user_data) != 0; });
+      auto result = analyzer.analyze_cancellable();
+      if (!result) return SONARE_ERROR_CANCELLED;
+      *out_json = copy_string(analysis_result_to_json(*result));
+    } else {
+      AnalysisResult result = analyzer.analyze();
+      *out_json = copy_string(analysis_result_to_json(result));
+    }
     return SONARE_OK;
   });
 }
@@ -438,26 +471,7 @@ SonareError sonare_analyze_json_with_progress_ex(
     const float* samples, size_t length, int sample_rate, SonareAnalyzeProgressCallback callback,
     void* user_data, char** out_json, SonareCancelCallback cancel_cb, void* cancel_user_data) {
   SONARE_C_API_ENTRY;
-  if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_json = nullptr;
-
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    MusicAnalyzer analyzer(audio);
-    if (callback != nullptr) {
-      analyzer.set_progress_callback([callback, user_data](float progress, const char* stage) {
-        callback(progress, stage, user_data);
-      });
-    }
-    if (cancel_cb != nullptr) {
-      analyzer.set_cancel_callback(
-          [cancel_cb, cancel_user_data]() { return cancel_cb(cancel_user_data) != 0; });
-      auto result = analyzer.analyze_cancellable();
-      if (!result) return SONARE_ERROR_CANCELLED;
-      *out_json = copy_string(analysis_result_to_json(*result));
-    } else {
-      AnalysisResult result = analyzer.analyze();
-      *out_json = copy_string(analysis_result_to_json(result));
-    }
-    return SONARE_OK;
-  });
+  const SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
+  return sonare_analyze_json_ex_with_progress(samples, length, sample_rate, &options, callback,
+                                              user_data, out_json, cancel_cb, cancel_user_data);
 }

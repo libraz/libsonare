@@ -115,9 +115,9 @@ export interface NnlsChromaRequest extends FeatureSamplesRequest {
  *
  * The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
  * librosa.feature.chroma_stft — which estimates tuning from the signal when none
- * is given — this does NOT auto-estimate and exposes no tuning argument, so
- * sharp/flat (non-A440) recordings smear across pitch classes. Estimate tuning
- * separately via {@link estimateTuning} if a non-A440 reference matters.
+ * is given — this does NOT auto-estimate and takes no tuning argument. A
+ * tuning offset from {@link estimateTuning} is applied through `analyze`'s
+ * `tuning` option (and to chords through `detectChords`).
  */
 export function chroma(request: StftRequest): ChromaResult;
 export function chroma(

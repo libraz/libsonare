@@ -183,6 +183,11 @@ export interface ChordDetectionOptions extends ValidateOptions {
   keyMode?: Mode;
   detectInversions?: boolean;
   chromaMethod?: 'stft' | 'nnls';
+  /**
+   * Tuning offset of the recording in fractions of a semitone, the unit
+   * `estimateTuning` returns; must be in `[-0.5, 0.5)`. Default 0 (concert A440).
+   */
+  tuning?: number;
 }
 
 /** Options for `analyzeBpm`. All fields are optional. */
@@ -316,6 +321,16 @@ export interface Chord {
   duration: number;
   confidence: number;
   name: string;
+}
+
+/** A chord in {@link AnalysisResult.chords}, which carries its function in the key. */
+export interface AnalysisChord extends Chord {
+  /**
+   * Roman numeral of the chord relative to {@link AnalysisResult.key}, e.g.
+   * `'V7'`, `'vi'`, `'bVII'`. The same spelling `chordFunctionalAnalysis`
+   * returns for that chord and key. Empty for a chord that is N.C.
+   */
+  romanNumeral: string;
 }
 
 export interface ChordAnalysisResult {
@@ -650,7 +665,7 @@ export interface AnalysisResult {
    * number out of it is not how to get the global tempo.
    */
   beatLocalBpm: number[];
-  chords: Chord[];
+  chords: AnalysisChord[];
   sections: Section[];
   timbre: Timbre;
   dynamics: Dynamics;

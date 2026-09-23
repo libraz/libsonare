@@ -109,6 +109,8 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
                    std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&
                    config_.threshold <= 1.0f,
                ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(is_valid_chroma_tuning(config_.tuning), ErrorCode::InvalidParameter,
+                   "ChordConfig: tuning must be finite and in [-0.5, 0.5)");
 
   if (config.chroma_method == ChromaMethod::NNLS) {
     NnlsChromaConfig nnls_config;
@@ -124,11 +126,13 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
     nnls_config.n_harmonics = 4;
     nnls_config.max_iter = 25;
     nnls_config.tolerance = 1.0e-3f;
+    nnls_config.tuning = config.tuning;
     chroma_ = nnls_chroma(audio, nnls_config);
   } else {
     ChromaConfig chroma_config;
     chroma_config.n_fft = config.n_fft;
     chroma_config.hop_length = config.hop_length;
+    chroma_config.tuning = config.tuning;
     chroma_ = Chroma::compute(audio, chroma_config);
   }
 
@@ -137,6 +141,7 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
   if (config.detect_inversions || (config.use_bass_chroma && config.bass_root_weight != 0.0f)) {
     BassChromaConfig bass_config;
     bass_config.cqt.hop_length = config.hop_length;
+    bass_config.cqt.fmin = tune_cqt_fmin(bass_config.cqt.fmin, config.tuning);
     bass_chroma_ = bass_chroma(audio, bass_config);
   }
 
@@ -846,7 +851,7 @@ std::string ChordAnalyzer::progression_pattern() const {
 }
 
 std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass key_root,
-                                                  Mode mode) const {
+                                                  Mode mode) {
   if (chord.quality == ChordQuality::Unknown) {
     return "N.C.";
   }

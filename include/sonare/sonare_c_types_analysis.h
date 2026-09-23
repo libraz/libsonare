@@ -350,6 +350,9 @@ typedef struct {
   SonareMode key_mode;
   int detect_inversions;
   int chroma_method;  // 0 = STFT, 1 = NNLS
+  /* Tuning offset of the recording in fractions of a chroma bin, the unit
+     sonare_estimate_tuning returns; 0 is concert A440. Must be in [-0.5, 0.5). */
+  float tuning;
 } SonareChordDetectionOptions;
 
 /* ============================================================================
@@ -444,6 +447,14 @@ typedef enum SONARE_ENUM_BASE {
 } SonareSynthBodyType;
 #define SONARE_SYNTH_BODY_TYPE_COUNT 7
 
+/* What a note-on restarts. 0 keeps the base patch's choice. */
+typedef enum {
+  SONARE_SYNTH_RETRIGGER_BASE = 0,
+  SONARE_SYNTH_RETRIGGER_FREE = 1, /* start phases and per-voice random streams vary per note */
+  SONARE_SYNTH_RETRIGGER_NOTE = 2  /* both are derived from the note number alone */
+} SonareSynthRetrigger;
+#define SONARE_SYNTH_RETRIGGER_COUNT 3
+
 #define SONARE_SYNTH_MOD_SOURCE_COUNT 13
 #define SONARE_SYNTH_MOD_DESTINATION_COUNT 13
 
@@ -531,7 +542,8 @@ typedef struct {
                                                 3 => the sample-engine block at the tail is read too;
                                                 4 => the series highpass at the tail is read too;
                                                 5 => the converter block at the tail is read too;
-                                                6 => the pitch offset at the tail is read too */
+                                                6 => the pitch offset at the tail is read too;
+                                                7 => the retrigger mode at the tail is read too */
   char preset[SONARE_SYNTH_PRESET_NAME_MAX]; /* base preset name; "" = init patch */
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
@@ -552,9 +564,15 @@ typedef struct {
   float cutoff_hz;           /* 0 => base */
   float resonance_q;         /* 0 => base */
   float key_track;           /* cutoff keyboard tracking [0,1]; 0 => base */
-  float env_to_cutoff_cents; /* filter envelope's cutoff depth, in cents; 0 =>
-                                base, and leaves the envelope's cutoff
-                                contribution off */
+  float env_to_cutoff_cents; /* filter envelope's cutoff depth, in cents at
+                                full envelope; 0 => base, and leaves the
+                                envelope's cutoff contribution off. The cutoff
+                                is scaled by 2^(env * cents / 1200), exact
+                                wherever the corner is well below Nyquist.
+                                cutoff_hz is the -3 dB corner only for the SVF
+                                at resonance_q 0.707; the ladders and
+                                Sallen-Key put their resonant peak on it, with
+                                the -3 dB point one to three octaves lower */
   float vel_to_cutoff_cents; /* velocity's cutoff depth, in cents; 0 => base.
                                 Rendered term is
                                 vel_to_cutoff_cents * (velocity/127 - 1), so
@@ -643,13 +661,24 @@ typedef struct {
      here: every other name @ref sonare_engine_resolve_instrument_automation_id
      accepts is a field of this struct. */
   float pitch_offset_cents;
+
+  /* --- note-on retrigger (struct_version 7) --- */
+  /* SonareSynthRetrigger; 0 => base, and every catalog preset is free. Free
+     seeds each voice's oscillator start phases, unison jitter, drift and engine
+     noise from its pool slot and a running note count, so a repeated note
+     generally differs. Note seeds them from the note number alone, so a note
+     played again after its tail has ended renders the same samples. State
+     outside the voice is reset by neither: controllers, the bus DC blocker, a
+     piano's shared soundboard, a plucked string's sympathetic halo, an organ's
+     wind chest, and effect tails. A GM kit's per-note pieces keep their own. */
+  int retrigger;
 } SonareSynthPatch;
 
 /* Newest SonareSynthPatch layout. Named rather than written out at each site,
    because every one of them — the reader's upper bound, the writer's stamp, and
    the tests that pin "one past the newest is refused" — has to move together,
    and a literal in any of them goes stale silently. */
-#define SONARE_SYNTH_PATCH_STRUCT_VERSION 6
+#define SONARE_SYNTH_PATCH_STRUCT_VERSION 7
 
 /* Bit positions for SonareSynthPatch.present_fields. The enum fields are absent
    on purpose: their zero is already the reserved "keep base" value and every
@@ -723,6 +752,8 @@ static_assert(SONARE_SYNTH_FILTER_OUT_HIGHPASS + 1 == SONARE_SYNTH_FILTER_OUTPUT
               "SonareSynthFilterOutput count changed");
 static_assert(SONARE_SYNTH_BODY_VOCAL + 1 == SONARE_SYNTH_BODY_TYPE_COUNT,
               "SonareSynthBodyType count changed");
+static_assert(SONARE_SYNTH_RETRIGGER_NOTE + 1 == SONARE_SYNTH_RETRIGGER_COUNT,
+              "SonareSynthRetrigger count changed");
 
 static_assert(sizeof(SonareSynthModRouting) == 2u * sizeof(int) + sizeof(float),
               "SonareSynthModRouting layout changed");

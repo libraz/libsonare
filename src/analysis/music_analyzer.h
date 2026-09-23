@@ -121,7 +121,10 @@ struct AnalysisResult {
   ///          tempo moves it departs from @ref bpm, and reading a single number
   ///          out of it is not how to get the global tempo.
   std::vector<float> beat_local_bpm;
-  std::vector<Chord> chords;      ///< Chord progression
+  std::vector<Chord> chords;  ///< Chord progression
+  /// @brief Roman numeral of each chord relative to @ref key, parallel to @ref chords.
+  /// @details Empty for a chord that is N.C. (ChordQuality::Unknown).
+  std::vector<std::string> chord_roman_numerals;
   std::vector<Section> sections;  ///< Song sections
   Timbre timbre;                  ///< Overall timbre
   Dynamics dynamics;              ///< Dynamics information
@@ -171,6 +174,10 @@ struct MusicAnalyzerConfig {
   /// @details The estimator still reports 8 on its own when it resolves a
   ///          compound meter, so this is the unit for everything else.
   int meter_denominator = 4;
+  /// @brief Recording tuning offset in fractions of a semitone, the estimate_tuning() unit.
+  /// @details Must be in [-0.5, 0.5); 0 is concert A440. Shifts every chromagram the analysis
+  ///          builds (key, chords, bass cue, boundaries, sections).
+  float tuning = 0.0f;
 };
 
 // The meter candidate and denominator limits live in analysis/meter_analyzer.h

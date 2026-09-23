@@ -28,6 +28,7 @@ import {
   alignTakeToReference,
   analyze,
   analyzePolyphonic,
+  analyzeWithProgress,
   assignNoteTargets,
   decomposeStems,
   detectBoundaries,
@@ -236,6 +237,10 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
 }> = [
   { jsName: 'pcen', invoke: (o) => Array.from(pcen(sine(32), 4, 8, o)) },
   { jsName: 'analyze', invoke: (o) => analyze(sine(8192), SR, o) },
+  {
+    jsName: 'analyzeWithProgress',
+    invoke: (o) => analyzeWithProgress(sine(8192), SR, () => {}, o),
+  },
   {
     // A glide rather than a tone, and two lengths rather than one: a held pair
     // leaves the alignment path unconstrained, so both runs would agree on

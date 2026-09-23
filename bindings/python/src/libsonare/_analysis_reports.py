@@ -69,6 +69,82 @@ def _unsupported_feature_symbol(symbol: str) -> SonareError:
     )
 
 
+def _music_analyze_options(
+    *,
+    n_fft: int,
+    hop_length: int,
+    bpm_min: float,
+    bpm_max: float,
+    start_bpm: float,
+    use_triads_only: bool,
+    use_hpss: bool,
+    chroma_highpass_hz: float,
+    use_bass_weighted: bool,
+    chroma_hop_multiplier: int,
+    use_chord_hmm: bool,
+    use_chord_key_context: bool,
+    chord_hmm_beam_width: int,
+    detect_chord_inversions: bool,
+    adaptive_tempo: bool,
+    tempo_update_interval_beats: int,
+    compute_tempo_curve: bool,
+    meter_candidate_numerators: Sequence[int] | None,
+    meter_denominator: int,
+    tuning: float,
+) -> SonareMusicAnalyzeOptions:
+    """Build the options struct shared by :func:`analyze` and :func:`analyze_with_progress`."""
+    numerators = (
+        tuple(_DEFAULT_METER_CANDIDATE_NUMERATORS)
+        if meter_candidate_numerators is None
+        else tuple(meter_candidate_numerators)
+    )
+    # The flat C array cannot carry an over-long list, so reject it here rather
+    # than truncating it into a set the caller never asked for. Entries are
+    # narrowed on the C int range below so the core sees what the caller passed;
+    # every other rule (non-empty, numerator domain, denominator) is the core's.
+    if len(numerators) > SONARE_MAX_METER_CANDIDATE_NUMERATORS:
+        raise SonareValueError(
+            "analyze: meter_candidate_numerators must hold at most "
+            f"{SONARE_MAX_METER_CANDIDATE_NUMERATORS} entries"
+        )
+    return SonareMusicAnalyzeOptions(
+        n_fft=n_fft,
+        hop_length=hop_length,
+        bpm_min=bpm_min,
+        bpm_max=bpm_max,
+        start_bpm=start_bpm,
+        use_triads_only=int(use_triads_only),
+        use_hpss=int(use_hpss),
+        chroma_highpass_hz=chroma_highpass_hz,
+        use_bass_weighted=int(use_bass_weighted),
+        chroma_hop_multiplier=chroma_hop_multiplier,
+        use_chord_hmm=int(use_chord_hmm),
+        use_chord_key_context=int(use_chord_key_context),
+        chord_hmm_beam_width=chord_hmm_beam_width,
+        detect_chord_inversions=int(detect_chord_inversions),
+        adaptive_tempo=int(adaptive_tempo),
+        tempo_update_interval_beats=tempo_update_interval_beats,
+        compute_tempo_curve=int(compute_tempo_curve),
+        # Both the array and its count must be written: ctypes zeroes
+        # any field left unset, and a zero count reads to the core as
+        # an empty candidate set, which it rejects.
+        meter_candidate_numerators=(ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS)(
+            *[
+                _narrow_int(
+                    value,
+                    f"analyze: meter_candidate_numerators[{i}]",
+                    _C_INT_MIN,
+                    _C_INT_MAX,
+                )
+                for i, value in enumerate(numerators)
+            ]
+        ),
+        meter_candidate_numerator_count=len(numerators),
+        meter_denominator=meter_denominator,
+        tuning=tuning,
+    )
+
+
 @_guard_buffer("samples")
 def analyze(
     samples: Sequence[float] | list[float],
@@ -93,6 +169,7 @@ def analyze(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
+    tuning: float = 0.0,
 ) -> AnalysisResult:
     """Run full audio analysis on samples.
 
@@ -120,6 +197,10 @@ def analyze(
         meter_denominator: Beat unit reported for the detected meter; a power
             of two in ``[1, 32]``. The estimator still reports 8 on its own
             when it resolves a compound meter.
+        tuning: Tuning offset of the recording in fractions of a semitone, the
+            unit :func:`estimate_tuning` returns; must be in ``[-0.5, 0.5)``.
+            Every chroma the analysis builds (key, chords, sections) is shifted
+            by it. 0 is concert A440.
 
     Returns:
         :class:`libsonare.AnalysisResult` with all fields:
@@ -143,7 +224,8 @@ def analyze(
           average of the surrounding beat intervals, so a steady tempo reads
           within about 1% at every beat. Empty unless
           ``compute_tempo_curve`` was set
-        - ``chords`` (``list[Chord]``) — detected chord segments
+        - ``chords`` (``list[Chord]``) — detected chord segments, each with a
+          ``roman_numeral`` relative to ``key`` (empty for N.C.)
         - ``sections`` (``list[Section]``) — detected structural sections
         - ``timbre`` (:class:`AnalysisTimbre`) — spectral character summary
         - ``dynamics`` (:class:`AnalysisDynamics`) — loudness/dynamics summary
@@ -156,62 +238,36 @@ def analyze(
             than the native array can carry.
         RuntimeError: If analysis fails.
     """
-    numerators = (
-        tuple(_DEFAULT_METER_CANDIDATE_NUMERATORS)
-        if meter_candidate_numerators is None
-        else tuple(meter_candidate_numerators)
+    # Built before the library is touched, so an over-long numerator list is
+    # refused whichever entry point runs below.
+    options = _music_analyze_options(
+        n_fft=n_fft,
+        hop_length=hop_length,
+        bpm_min=bpm_min,
+        bpm_max=bpm_max,
+        start_bpm=start_bpm,
+        use_triads_only=use_triads_only,
+        use_hpss=use_hpss,
+        chroma_highpass_hz=chroma_highpass_hz,
+        use_bass_weighted=use_bass_weighted,
+        chroma_hop_multiplier=chroma_hop_multiplier,
+        use_chord_hmm=use_chord_hmm,
+        use_chord_key_context=use_chord_key_context,
+        chord_hmm_beam_width=chord_hmm_beam_width,
+        detect_chord_inversions=detect_chord_inversions,
+        adaptive_tempo=adaptive_tempo,
+        tempo_update_interval_beats=tempo_update_interval_beats,
+        compute_tempo_curve=compute_tempo_curve,
+        meter_candidate_numerators=meter_candidate_numerators,
+        meter_denominator=meter_denominator,
+        tuning=tuning,
     )
-    # The flat C array cannot carry an over-long list, so reject it here rather
-    # than truncating it into a set the caller never asked for. Entries are
-    # narrowed on the C int range below so the core sees what the caller passed;
-    # every other rule (non-empty, numerator domain, denominator) is the core's.
-    if len(numerators) > SONARE_MAX_METER_CANDIDATE_NUMERATORS:
-        raise SonareValueError(
-            "analyze: meter_candidate_numerators must hold at most "
-            f"{SONARE_MAX_METER_CANDIDATE_NUMERATORS} entries"
-        )
-
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
 
     if hasattr(lib, "sonare_analyze_json"):
         out_json = ctypes.c_char_p()
         if hasattr(lib, "sonare_analyze_json_ex"):
-            options = SonareMusicAnalyzeOptions(
-                n_fft=n_fft,
-                hop_length=hop_length,
-                bpm_min=bpm_min,
-                bpm_max=bpm_max,
-                start_bpm=start_bpm,
-                use_triads_only=int(use_triads_only),
-                use_hpss=int(use_hpss),
-                chroma_highpass_hz=chroma_highpass_hz,
-                use_bass_weighted=int(use_bass_weighted),
-                chroma_hop_multiplier=chroma_hop_multiplier,
-                use_chord_hmm=int(use_chord_hmm),
-                use_chord_key_context=int(use_chord_key_context),
-                chord_hmm_beam_width=chord_hmm_beam_width,
-                detect_chord_inversions=int(detect_chord_inversions),
-                adaptive_tempo=int(adaptive_tempo),
-                tempo_update_interval_beats=tempo_update_interval_beats,
-                compute_tempo_curve=int(compute_tempo_curve),
-                # Both the array and its count must be written: ctypes zeroes
-                # any field left unset, and a zero count reads to the core as
-                # an empty candidate set, which it rejects.
-                meter_candidate_numerators=(ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS)(
-                    *[
-                        _narrow_int(
-                            value,
-                            f"analyze: meter_candidate_numerators[{i}]",
-                            _C_INT_MIN,
-                            _C_INT_MAX,
-                        )
-                        for i, value in enumerate(numerators)
-                    ]
-                ),
-                meter_candidate_numerator_count=len(numerators),
-                meter_denominator=meter_denominator,
-            )
             rc = lib.sonare_analyze_json_ex(
                 c_array,
                 _to_c_size_t(length, "length"),
@@ -313,10 +369,31 @@ def analyze_with_progress(
     on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    bpm_min: float = 60.0,
+    bpm_max: float = 200.0,
+    start_bpm: float = 120.0,
+    use_triads_only: bool = True,
+    use_hpss: bool = True,
+    chroma_highpass_hz: float = 80.0,
+    use_bass_weighted: bool = True,
+    chroma_hop_multiplier: int = 4,
+    use_chord_hmm: bool = False,
+    use_chord_key_context: bool = False,
+    chord_hmm_beam_width: int = 24,
+    detect_chord_inversions: bool = False,
+    adaptive_tempo: bool = False,
+    tempo_update_interval_beats: int = 8,
+    compute_tempo_curve: bool = False,
+    meter_candidate_numerators: Sequence[int] | None = None,
+    meter_denominator: int = 4,
+    tuning: float = 0.0,
 ) -> AnalysisResult:
     """Run full audio analysis with optional progress callbacks.
 
-    Calls ``sonare_analyze_json_with_progress_ex``. The ``on_progress`` callable
+    Takes the same analysis keywords as :func:`analyze`, with the same
+    defaults. Calls ``sonare_analyze_json_ex_with_progress``. The ``on_progress`` callable
     is invoked periodically during analysis with a progress fraction ``[0, 1]``
     and a stage name string. Calls the cancellation-capable ABI whenever a
     progress or cancellation callback is supplied; falls back to
@@ -331,6 +408,12 @@ def analyze_with_progress(
             value is ignored. If ``None``, no callback is registered.
         cancel: Optional zero-argument callable polled by the native operation.
             A true return value requests cancellation.
+        n_fft, hop_length, bpm_min, bpm_max, start_bpm, use_triads_only,
+        use_hpss, chroma_highpass_hz, use_bass_weighted, chroma_hop_multiplier,
+        use_chord_hmm, use_chord_key_context, chord_hmm_beam_width,
+        detect_chord_inversions, adaptive_tempo, tempo_update_interval_beats,
+        compute_tempo_curve, meter_candidate_numerators, meter_denominator,
+        tuning: As for :func:`analyze`.
 
     Returns:
         Same rich :class:`libsonare.AnalysisResult` as :func:`analyze`.
@@ -338,50 +421,52 @@ def analyze_with_progress(
     Raises:
         RuntimeError: If analysis fails.
     """
+    options = _music_analyze_options(
+        n_fft=n_fft,
+        hop_length=hop_length,
+        bpm_min=bpm_min,
+        bpm_max=bpm_max,
+        start_bpm=start_bpm,
+        use_triads_only=use_triads_only,
+        use_hpss=use_hpss,
+        chroma_highpass_hz=chroma_highpass_hz,
+        use_bass_weighted=use_bass_weighted,
+        chroma_hop_multiplier=chroma_hop_multiplier,
+        use_chord_hmm=use_chord_hmm,
+        use_chord_key_context=use_chord_key_context,
+        chord_hmm_beam_width=chord_hmm_beam_width,
+        detect_chord_inversions=detect_chord_inversions,
+        adaptive_tempo=adaptive_tempo,
+        tempo_update_interval_beats=tempo_update_interval_beats,
+        compute_tempo_curve=compute_tempo_curve,
+        meter_candidate_numerators=meter_candidate_numerators,
+        meter_denominator=meter_denominator,
+        tuning=tuning,
+    )
     lib = _get_lib()
-    has_progress = hasattr(lib, "sonare_analyze_json_with_progress")
-    has_progress_ex = hasattr(lib, "sonare_analyze_json_with_progress_ex")
-    if not has_progress and not has_progress_ex:
-        if cancel is not None:
-            raise RuntimeError("loaded libsonare does not support analysis cancellation")
-        return analyze(samples, sample_rate=sample_rate)
+    if not hasattr(lib, "sonare_analyze_json_ex_with_progress"):
+        raise _unsupported_feature_symbol("sonare_analyze_json_ex_with_progress")
 
     c_array, length = _to_c_float_array(samples)
     out_json = ctypes.c_char_p()
-    if has_progress_ex and (on_progress is not None or cancel is not None or not has_progress):
-        state = CancellationState(cancel)
-        c_cb = (
-            _make_analyze_progress_trampoline(on_progress, state)
-            if on_progress is not None
-            else SonareAnalyzeProgressCallback(0)
-        )
-        cancel_cb = make_cancel_trampoline(state)
-        rc = lib.sonare_analyze_json_with_progress_ex(
-            c_array,
-            _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
-            c_cb,
-            None,
-            ctypes.byref(out_json),
-            cancel_cb,
-            None,
-        )
-    else:
-        if cancel is not None:
-            raise RuntimeError("loaded libsonare does not support analysis cancellation")
-        c_cb = (
-            _make_analyze_progress_trampoline(on_progress, CancellationState(None))
-            if on_progress is not None
-            else SonareAnalyzeProgressCallback(0)
-        )
-        rc = lib.sonare_analyze_json_with_progress(
-            c_array,
-            _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
-            c_cb,
-            None,
-            ctypes.byref(out_json),
-        )
+    state = CancellationState(cancel)
+    c_cb = (
+        _make_analyze_progress_trampoline(on_progress, state)
+        if on_progress is not None
+        else SonareAnalyzeProgressCallback(0)
+    )
+    cancel_cb = make_cancel_trampoline(state)
+    rc = lib.sonare_analyze_json_ex_with_progress(
+        c_array,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(options),
+        c_cb,
+        None,
+        ctypes.byref(out_json),
+        cancel_cb,
+        None,
+    )
     _check(rc)
     try:
         raw = out_json.value

@@ -94,7 +94,7 @@ std::vector<float> build_nnls_harmonic_template(const std::vector<float>& cqt_fr
   std::vector<float> matrix(static_cast<size_t>(n_bins) * config.n_pitches, 0.0f);
 
   for (int pitch = 0; pitch < config.n_pitches; ++pitch) {
-    const float fundamental = midi_to_hz(config.midi_min + pitch);
+    const float fundamental = tune_cqt_fmin(midi_to_hz(config.midi_min + pitch), config.tuning);
     for (int harmonic = 1; harmonic <= config.n_harmonics; ++harmonic) {
       const float harmonic_freq = fundamental * static_cast<float>(harmonic);
       if (harmonic_freq < cqt_frequencies.front() || harmonic_freq > cqt_frequencies.back()) {
@@ -140,7 +140,9 @@ Chroma nnls_chroma(const Audio& audio, const NnlsChromaConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(config.cqt.bins_per_octave > 0, ErrorCode::InvalidParameter);
 
-  CqtResult cqt_result = cqt(audio, config.cqt);
+  CqtConfig cqt_config = config.cqt;
+  cqt_config.fmin = tune_cqt_fmin(cqt_config.fmin, config.tuning);
+  CqtResult cqt_result = cqt(audio, cqt_config);
   if (cqt_result.empty()) {
     return Chroma();
   }
@@ -181,6 +183,7 @@ Chroma nnls_chroma(const Audio& audio, const NnlsChromaConfig& config) {
   if (config.enable_stft_blend) {
     ChromaConfig stft_config;
     stft_config.n_fft = config.stft_blend_n_fft;
+    stft_config.tuning = config.tuning;
     stft_config.hop_length = config.cqt.hop_length;
     Chroma stft_chroma = Chroma::compute(audio, stft_config);
     if (!stft_chroma.empty()) {

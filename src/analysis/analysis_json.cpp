@@ -74,6 +74,7 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "chords[].end",
       "chords[].confidence",
       "chords[].name",
+      "chords[].romanNumeral",
       "sections",
       "sections[].type",
       "sections[].start",
@@ -207,7 +208,8 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
   {
     Array chords;
     chords.reserve(result.chords.size());
-    for (const auto& chord : result.chords) {
+    for (size_t i = 0; i < result.chords.size(); ++i) {
+      const Chord& chord = result.chords[i];
       Object c;
       c["root"] = Value(static_cast<int>(chord.root));
       c["bass"] = Value(static_cast<int>(chord.bass));
@@ -216,6 +218,8 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
       c["end"] = Value(chord.end);
       c["confidence"] = Value(chord.confidence);
       c["name"] = Value(chord.to_string());
+      c["romanNumeral"] = Value(
+          i < result.chord_roman_numerals.size() ? result.chord_roman_numerals[i] : std::string());
       chords.push_back(Value(std::move(c)));
     }
     root["chords"] = Value(std::move(chords));

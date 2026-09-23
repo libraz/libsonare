@@ -371,9 +371,9 @@ def chroma(
 
     The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
     librosa.feature.chroma_stft -- which estimates tuning from the signal when
-    none is given -- this does NOT auto-estimate and exposes no tuning argument,
-    so sharp/flat (non-A440) recordings smear across pitch classes. Estimate
-    tuning separately via :func:`estimate_tuning` if a non-A440 reference matters.
+    none is given -- this does NOT auto-estimate and takes no tuning argument.
+    A tuning offset from :func:`estimate_tuning` is applied through
+    :func:`analyze` (and to chords through :func:`detect_chords`).
 
     Args:
         samples: Audio samples.

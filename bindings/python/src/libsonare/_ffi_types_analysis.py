@@ -405,6 +405,7 @@ class SonareMusicAnalyzeOptions(CStruct):
         ("meter_candidate_numerators", ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS),
         ("meter_candidate_numerator_count", ctypes.c_int),
         ("meter_denominator", ctypes.c_int),
+        ("tuning", ctypes.c_float),
     ]
 
 
