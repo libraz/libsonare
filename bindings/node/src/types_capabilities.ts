@@ -129,7 +129,7 @@ export interface CapabilityCatalogPresets {
  * alone, so all three numeric fields are null; every other preset carries the
  * loudness target its chain builds toward.
  */
-export interface MasteringPresetInfo {
+export interface CapabilityCatalogMasteringPreset {
   name: string;
   kind: 'mastering' | 'restoration';
   targetLufs: number | null;
@@ -143,5 +143,5 @@ export interface CapabilityCatalog {
   abi: Capabilities['abi'];
   processors: CapabilityCatalogProcessor[];
   presets: CapabilityCatalogPresets;
-  masteringPresets: MasteringPresetInfo[];
+  masteringPresets: CapabilityCatalogMasteringPreset[];
 }

@@ -21,6 +21,11 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 import type {
+  CapabilityCatalog,
+  CapabilityCatalogMasteringPreset,
+  CapabilityCatalogParameter,
+  CapabilityCatalogPresets,
+  CapabilityCatalogProcessor,
   DynamicsAnalysisResult,
   DynamicsProcessorResult,
   DynamicsResult,
@@ -81,5 +86,67 @@ describe('shared public type shapes', () => {
     const asAlias: DynamicsAnalysisResult = dynamicsResult;
     const asCanonical: DynamicsResult = asAlias;
     expect(asCanonical.isCompressed).toBe(false);
+  });
+});
+
+// The catalog's part types are exported from the entry so a host can name them
+// directly; importing them here is what turns a dropped export into a type error.
+const catalogParameter = {
+  name: 'driveDb',
+  id: null,
+  rtSafe: false,
+  type: 'number',
+  min: null,
+  max: null,
+  default: null,
+  unit: null,
+  choices: null,
+} satisfies CapabilityCatalogParameter;
+
+const catalogProcessor = {
+  id: 'saturation.softClipper',
+  kind: 'realtime',
+  realtimeInsertable: true,
+  stereoOnly: false,
+  latencySamples: 0,
+  tailSamples: 0,
+  realtimeCost: null,
+  channelPolicy: 'perChannel',
+  category: 'saturation',
+  params: [catalogParameter],
+} satisfies CapabilityCatalogProcessor;
+
+const catalogPresets = {
+  mastering: [],
+  synth: [],
+  mixingScene: [],
+  voiceChanger: [],
+} satisfies CapabilityCatalogPresets;
+
+const catalogMasteringPreset = {
+  name: 'vinyl',
+  kind: 'restoration',
+  targetLufs: null,
+  truePeakCeilingDb: null,
+  maxLimiterGainReductionDb: null,
+} satisfies CapabilityCatalogMasteringPreset;
+
+const capabilityCatalog = {
+  version: '',
+  abi: null as unknown as CapabilityCatalog['abi'],
+  processors: [catalogProcessor],
+  presets: catalogPresets,
+  masteringPresets: [catalogMasteringPreset],
+} satisfies CapabilityCatalog;
+
+describe('capability catalog type shapes', () => {
+  it.each([
+    ['CapabilityCatalog', capabilityCatalog],
+    ['CapabilityCatalogMasteringPreset', catalogMasteringPreset],
+    ['CapabilityCatalogParameter', catalogParameter],
+    ['CapabilityCatalogPresets', catalogPresets],
+    ['CapabilityCatalogProcessor', catalogProcessor],
+  ] as const)('%s is the shape the shared corpus declares', (name, sample) => {
+    expect(Object.keys(sample).sort()).toEqual([...shapes.types[name]].sort());
   });
 });

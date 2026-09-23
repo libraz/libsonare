@@ -11,7 +11,50 @@
       "peakDb",
       "rmsDb"
     ],
-    "DynamicsProcessorResult": ["latencySamples", "samples"]
+    "DynamicsProcessorResult": ["latencySamples", "samples"],
+    "CapabilityCatalog": [
+      "abi",
+      "masteringPresets",
+      "presets",
+      "processors",
+      "version"
+    ],
+    "CapabilityCatalogMasteringPreset": [
+      "kind",
+      "maxLimiterGainReductionDb",
+      "name",
+      "targetLufs",
+      "truePeakCeilingDb"
+    ],
+    "CapabilityCatalogParameter": [
+      "choices",
+      "default",
+      "id",
+      "max",
+      "min",
+      "name",
+      "rtSafe",
+      "type",
+      "unit"
+    ],
+    "CapabilityCatalogPresets": [
+      "mastering",
+      "mixingScene",
+      "synth",
+      "voiceChanger"
+    ],
+    "CapabilityCatalogProcessor": [
+      "category",
+      "channelPolicy",
+      "id",
+      "kind",
+      "latencySamples",
+      "params",
+      "realtimeCost",
+      "realtimeInsertable",
+      "stereoOnly",
+      "tailSamples"
+    ]
   },
   "aliases": {
     "DynamicsAnalysisResult": "DynamicsResult"
