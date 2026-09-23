@@ -8,8 +8,8 @@
  * only through the CMake `POST_BUILD` copy, so deleting the directory costs a
  * WASM toolchain build. This prunes the one family the declaration emit owns,
  * keyed on the source each file would have been emitted from — `src/<name>.ts`
- * for a compiled module, `src/<name>.js.d.ts` for a module shim, which
- * `copy-module-types.mjs` writes from a declaration input tsc never compiles.
+ * for a compiled module, `src/<name>.js.d.ts` for a module declaration, which
+ * `copy-module-types.mjs` copies from a declaration input tsc never compiles.
  */
 
 import { readdir, rm, stat } from 'node:fs/promises';
@@ -52,7 +52,7 @@ function sourcesFor(relativePath) {
   const isMap = relativePath.endsWith('.map');
   const declaration = isMap ? relativePath.slice(0, -'.map'.length) : relativePath;
   const stem = declaration.slice(0, -'.d.ts'.length);
-  // A shim carries no declaration map, so only a compiled module accounts for one.
+  // A copied module declaration carries no map, so only a compiled module accounts for one.
   return isMap ? [`src/${stem}.ts`] : [`src/${stem}.ts`, `src/${stem}.js.d.ts`];
 }
 
