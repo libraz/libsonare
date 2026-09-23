@@ -90,6 +90,9 @@ METADATA_HELPERS = {
     "masteringInsertNames",
     "masteringInsertParamNames",
     "masteringInsertParamInfo",
+    # Catalog query beside the two above: it answers what a configured insert
+    # would report and processes no audio.
+    "masteringInsertTiming",
     "masteringProcessorCatalog",
     "mixingScenePresetNames",
     "mixingScenePresetJson",

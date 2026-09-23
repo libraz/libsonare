@@ -222,8 +222,40 @@ def scan_surface(paths: list[str], path: Path, root: str) -> tuple[list, list, i
     disagreement would surface as every path being unreachable rather than as a
     wrong reader.
     """
-    walker = scan_json_schema if path.suffix == ".json" else scan
-    return walker(paths, path.read_text(), root)
+    if path.suffix == ".json":
+        return scan_json_schema(paths, path.read_text(), root)
+    return scan(paths, with_imported_declarations(path), root)
+
+
+_RELATIVE_MODULE = re.compile(
+    r"""^(?:import|export)\s+(?:type\s+)?(?:\{[^}]*\}|\*)\s+from\s+['"](\./[^'"]+)['"]""", re.MULTILINE
+)
+
+
+def with_imported_declarations(path: Path, depth: int = 3) -> str:
+    """Return `path`'s text followed by the sibling modules it imports from.
+
+    A nested type such as an array element is often declared once and imported
+    where the root lives, sometimes through a barrel that re-exports it; reading
+    only the root's file would report every path beneath it as unreachable.
+    Relative imports and re-exports are followed up to @p depth modules deep.
+    """
+    parts: list[str] = []
+    seen: set[Path] = set()
+    frontier = [path]
+    for _ in range(depth + 1):
+        following: list[Path] = []
+        for module in frontier:
+            if module in seen or not module.is_file():
+                continue
+            seen.add(module)
+            text = module.read_text()
+            parts.append(text)
+            for spec in _RELATIVE_MODULE.findall(text):
+                stem = spec[2:].removesuffix(".js")
+                following.append(module.parent / f"{stem}.ts")
+        frontier = following
+    return "\n".join(parts)
 
 
 def scan(paths: list[str], text: str, root: str) -> tuple[list, list, int]:

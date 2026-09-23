@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import ClassVar
@@ -126,6 +127,34 @@ class ArraySegments(unittest.TestCase):
         self.assertEqual(unreached, [])
         self.assertEqual(comparisons, 3)
         self.assertEqual(missing, ["[].missing"])
+
+    def test_an_element_type_imported_from_a_sibling_module_is_reached(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "shared.ts").write_text("export interface Entry { name: string; id: number }\n")
+            surface = root / "surface.ts"
+            surface.write_text(
+                "import type { Entry } from './shared.js';\n"
+                "export interface Wrapper { entries: Entry[] }\n"
+            )
+            paths = ["entries[].name", "entries[].id", "entries[].missing"]
+            missing, unreached, comparisons = check.scan_surface(paths, surface, "Wrapper")
+            self.assertEqual(unreached, [])
+            self.assertEqual(comparisons, 3)
+            self.assertEqual(missing, ["entries[].missing"])
+
+    def test_an_element_type_reached_through_a_barrel_is_reached(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "shared.ts").write_text("export interface Entry { name: string }\n")
+            (root / "types.ts").write_text("export * from './shared.js';\n")
+            surface = root / "surface.ts"
+            surface.write_text(
+                "import type { Entry } from './types.js';\n"
+                "export interface Wrapper { entries: Entry[] }\n"
+            )
+            missing, unreached, _ = check.scan_surface(["entries[].name"], surface, "Wrapper")
+            self.assertEqual((missing, unreached), ([], []))
 
     def test_an_opaque_record_field_is_not_counted_as_compared(self):
         """The shape this check was extended to catch: a surface described a
