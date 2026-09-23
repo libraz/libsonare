@@ -6760,7 +6760,7 @@
           "placeholder": "rir_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "3bcada738c953ba2b3ea2cf8453051f651e34678cbed3fc8c133d63dcd143239"
+          "sha256": "1119b8526d67f55d1e58ee5b83b91067ce5009d587ff37cf67b136fb44d06d4a"
         }
       }
     },
@@ -11950,10 +11950,10 @@
       "payloads": {
         "success": {
           "keys": {
-            "volume": "number",
-            "length": "number",
-            "width": "number",
-            "height": "number",
+            "volume": "number|null",
+            "length": "number|null",
+            "width": "number|null",
+            "height": "number|null",
             "drr_db": "number",
             "confidence": "number",
             "rt60_bands": {
