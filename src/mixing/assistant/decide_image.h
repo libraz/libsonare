@@ -13,7 +13,9 @@
 ///          would move a part every time its tone changed. @ref ImageOccupancy is
 ///          therefore secondary: it widens or narrows the spread of a class with
 ///          several members, but never selects a side and never places a lone
-///          track. Crowding changes a placement's magnitude, not its sign.
+///          track. Crowding changes a placement's magnitude, not its sign. The
+///          one spectral rule is a veto on spreading: a track with most of its
+///          energy below the mono crossover is centred whatever its class.
 ///
 /// @details Placement is aesthetic and scales with
 ///          @ref MixAssistantConfig::suggestion_strength, so strength 0 leaves

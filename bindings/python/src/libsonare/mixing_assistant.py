@@ -69,13 +69,17 @@ class MixTrackInput(NamedTuple):
         left: Left channel, or the whole signal for a mono track.
         right: Right channel, or ``None`` for a mono track. Tracks may mix mono
             and stereo freely within one call.
-        name: Optional display name used as a classification hint (a track
-            called ``"kick"`` is more readily read as a kick drum). For a class
-            the classifier can measure it only adjusts confidence and never
-            selects the class on its own. For the four it cannot separate by
-            measurement — ``keys``, ``strings``, ``backing`` and ``fx`` — the
-            name is the only thing that can supply the class at all, and only
-            when the measurement produced no answer.
+        name: Optional display name used as a classification hint. Naming the
+            measured class raises its confidence. Naming another class switches
+            to it when the measurement does not contradict it: a measurable
+            class needs its own feature rule satisfied by the track, and one the
+            classifier cannot measure needs the track not to have been measured
+            as a drum. For the six it cannot separate by measurement —
+            ``keys``, ``strings``, ``lead``, ``vocal``, ``backing`` and ``fx``
+            — the name is the only thing that can supply the class, so an
+            unnamed voice, pad or lead line comes back ``unknown``. A compound
+            name states its last hint word (``"Lead Vox"`` is ``vocal``);
+            hint words joined by anything else state none.
 
     Tracks may differ in length: truncating every track to the shortest would
     delete a part that only enters late in the song.
@@ -407,7 +411,8 @@ def mix_source_class_names() -> list[str]:
 
     Every name returned is a class some shipped entry point can actually put on
     a track: most come from the classifier's measured decision table, and
-    ``keys``, ``strings``, ``backing`` and ``fx`` from a track's ``name``.
+    ``keys``, ``strings``, ``lead``, ``vocal``, ``backing`` and ``fx`` from a
+    track's ``name``.
 
     Raises:
         RuntimeError: If the library was built without the mixing assistant.

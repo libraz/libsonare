@@ -61,10 +61,13 @@ inline constexpr std::array<const char*, kBandCount> kBandNames = {
 ///          returning a low-confidence label.
 ///
 ///          Every entry here is producible. Most come from the decision table;
-///          Keys, Strings, Backing and Fx have no row it could separate them
-///          with and are supplied by the track name instead. A class nothing
-///          can produce would tell a host about a label it will never see, so
-///          the classifier holds that as a compile-time invariant.
+///          Keys, Strings, Lead, Vocal, Backing and Fx have no row it could
+///          separate them with and are supplied by the track name instead. A
+///          class nothing can produce would tell a host about a label it will
+///          never see, so the classifier holds that as a compile-time invariant.
+///
+///          Enum order is the wire order every surface reports, so a new class
+///          is appended rather than inserted.
 enum class SourceClass {
   Unknown = 0,
   Kick,
@@ -81,10 +84,13 @@ enum class SourceClass {
   Backing,
   Percussion,
   Fx,
+  /// @brief A whole drum kit on one track (a stereo kit stem or a groove),
+  ///        as opposed to one close-miked kit piece or hand percussion.
+  DrumKit,
 };
 
 /// @brief Number of entries in @ref SourceClass.
-inline constexpr int kSourceClassCount = 15;
+inline constexpr int kSourceClassCount = 16;
 
 /// @brief camelCase identifier for a source class.
 /// @return A static string; never null.
@@ -105,12 +111,14 @@ struct TrackInput {
   /// @brief Strip id the suggestion is written against. Must be unique.
   std::string id;
   /// @brief Optional human-facing track name.
-  /// @details For a class the classifier's decision table can measure, this is
-  ///          only a *hint* that adjusts confidence; it cannot select one of
-  ///          those on its own. For the four classes the table has no rule for
-  ///          — @ref SourceClass::Keys, @ref SourceClass::Strings, @ref
+  /// @details A hint. It moves a class the measurement chose, and redirects
+  ///          to the class it names when the measurement does not contradict
+  ///          that class; it cannot select a table-measured class whose row the
+  ///          track fails. For the six classes the table has no rule for —
+  ///          @ref SourceClass::Keys, @ref SourceClass::Strings, @ref
+  ///          SourceClass::Lead, @ref SourceClass::Vocal, @ref
   ///          SourceClass::Backing and @ref SourceClass::Fx — it is the only
-  ///          thing that can supply the class at all.
+  ///          thing that can supply the class at all. See @ref classify_source.
   std::string name;
   const float* left = nullptr;
   const float* right = nullptr;

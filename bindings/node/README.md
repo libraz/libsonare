@@ -148,7 +148,11 @@ switched off, or when no track survived exclusion.
   with a confidence in `[0, 1]`, and a track the rules cannot place stays
   `'unknown'`. An unknown track keeps a neutral strip routed straight to master;
   no class-driven EQ, dynamics or placement is suggested for it. A track name is
-  read only as a hint and can never select a class on its own.
+  a hint: it confirms the measured class, or switches to the class it names when
+  the measurement does not contradict that class. It is the only source of
+  `keys`, `strings`, `lead`, `vocal`, `backing` and `fx`, which no measured
+  feature separates, so an unnamed voice, pad or lead line stays unknown. A
+  whole drum kit on one track is `drumKit`.
 - **Degenerate audio is not an error; a malformed call is.** A track that is
   silent, shorter than the minimum measurable duration (0.4 s), or without
   energy in the analysis bands comes back with `usable: false` and an

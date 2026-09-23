@@ -246,9 +246,9 @@ describe('mixing assistant (WASM)', () => {
     });
 
     it('acts on a source class only a track name can supply', () => {
-      // `keys` is one of the four classes no measurement separates from its
-      // neighbours, so the classifier takes it from the track's name and only
-      // when the decision table resolved nothing. Before that path existed the
+      // `keys` is one of the classes no measurement separates from its
+      // neighbours, so the classifier takes it from the track's name unless the
+      // measurement contradicts it. Before that path existed the
       // class was advertised by mixSourceClassNames() and reachable from no
       // entry point, and this track came back unclassified — which every
       // decision stage skips, so it was routed to master and left alone.

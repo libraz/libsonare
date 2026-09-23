@@ -45,20 +45,29 @@ struct SourceClassification {
 /// @details An unusable profile (@ref TrackProfile::usable false) is reported as
 ///          Unknown with zero confidence without being examined.
 ///
-///          For every class the decision table has a row for, @ref
-///          TrackProfile::name is consulted only as a confidence adjustment: a
-///          name agreeing with the measured class raises confidence, a name
-///          naming a different class lowers it. A name cannot select one of
-///          those classes, so a mislabelled track is still classified by what it
-///          sounds like — with less certainty attached.
+///          The first satisfied table row is the measured class. @ref
+///          TrackProfile::name then acts as follows:
+///          - naming the measured class raises its confidence;
+///          - stating another class redirects to it when the evidence does not
+///            contradict it: a class with a row needs that row satisfied by the
+///            track (it then takes that row's confidence plus the agreement
+///            bonus), and a class without a row needs the measurement not to
+///            have confidently placed the track in the other family — a drum
+///            is never renamed keys or a voice, a guitar may be renamed keys;
+///          - otherwise a name naming other classes lowers the measured class's
+///            confidence, and cannot select a class whose row the track fails.
 ///
-///          Four classes — @ref SourceClass::Keys, @ref SourceClass::Strings,
-///          @ref SourceClass::Backing and @ref SourceClass::Fx — have no row,
-///          because no combination of the measured features separates them from
-///          their neighbours without a trained model. Those, and only those, are
-///          supplied by the name, at a fixed modest confidence, and only when
-///          the table produced no answer of its own. That is not the name
-///          overriding a measurement: there is no measurement to override.
+///          The class a name states is its head: a compound such as "Lead Vox"
+///          or "Synth Lead" states its last hint word, while hint words joined
+///          by anything else ("Strings and Keys") state none.
+///
+///          Six classes — @ref SourceClass::Keys, @ref SourceClass::Strings,
+///          @ref SourceClass::Lead, @ref SourceClass::Vocal, @ref
+///          SourceClass::Backing and @ref SourceClass::Fx — have no row, because
+///          no combination of the measured features separates them from their
+///          neighbours without a trained model. An unnamed track is never
+///          reported as one of them; a named one is, at a fixed modest
+///          confidence.
 /// @param profile Profile from @ref analyze_track_profile.
 /// @return The identified class and its confidence.
 SourceClassification classify_source(const TrackProfile& profile);

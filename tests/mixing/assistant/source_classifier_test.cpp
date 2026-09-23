@@ -76,6 +76,17 @@ ProfileSpec lead_spec() {
   return {{{0.0f, 0.0f, 0.08f, 0.32f, 0.42f, 0.18f, 0.0f}}, 0.12f, 9000.0f, 0.70f, 2.0f, 10.0f};
 }
 
+// Plucked mid-register: partly decayed, with pick attack in the presence band.
+ProfileSpec guitar_spec() {
+  return {{{0.0f, 0.05f, 0.25f, 0.45f, 0.20f, 0.05f, 0.0f}}, 0.10f, 5000.0f, 0.32f, 3.0f, 14.0f};
+}
+
+// Short hits between the tom and snare registers, with a little wire noise:
+// inside the tom row and the snare row at once, and first matched by the tom.
+ProfileSpec tom_or_snare_spec() {
+  return {{{0.03f, 0.37f, 0.37f, 0.10f, 0.04f, 0.09f, 0.0f}}, 0.10f, 3000.0f, 0.20f, 2.0f, 14.0f};
+}
+
 ProfileSpec hihat_spec() {
   return {{{0.0f, 0.0f, 0.0f, 0.0f, 0.15f, 0.60f, 0.25f}}, 0.55f, 15000.0f, 0.15f, 8.0f, 14.0f};
 }
@@ -273,14 +284,21 @@ TEST_CASE("hi-hat and cymbal profiles are not taken for each other", "[mixing][a
   require_self_consistent(cymbal);
 }
 
-TEST_CASE("vocal and lead profiles are not taken for each other", "[mixing][assistant]") {
+TEST_CASE("an unnamed sustained part is reported as neither a voice nor a lead",
+          "[mixing][assistant]") {
+  // A voice, a synth pad and a lead line share every measured feature, so the
+  // table has no row for either class and only a name supplies them.
   const auto vocal = assistant::classify_source(make_profile(vocal_spec()));
   const auto lead = assistant::classify_source(make_profile(lead_spec()));
-
-  REQUIRE(vocal.source == SourceClass::Vocal);
-  REQUIRE(lead.source == SourceClass::Lead);
+  REQUIRE(vocal.source == SourceClass::Unknown);
+  REQUIRE(lead.source == SourceClass::Unknown);
   require_self_consistent(vocal);
   require_self_consistent(lead);
+
+  REQUIRE(assistant::classify_source(make_profile(vocal_spec(), "Vox")).source ==
+          SourceClass::Vocal);
+  REQUIRE(assistant::classify_source(make_profile(lead_spec(), "Lead")).source ==
+          SourceClass::Lead);
 }
 
 TEST_CASE("a track matching no rule stays Unknown", "[mixing][assistant]") {
@@ -310,8 +328,8 @@ TEST_CASE("confidence grows with the margin the rule was matched by", "[mixing][
 }
 
 TEST_CASE("an agreeing track name raises confidence", "[mixing][assistant]") {
-  const auto anonymous = assistant::classify_source(make_profile(vocal_spec()));
-  const auto named = assistant::classify_source(make_profile(vocal_spec(), "VOX 01"));
+  const auto anonymous = assistant::classify_source(make_profile(bass_spec()));
+  const auto named = assistant::classify_source(make_profile(bass_spec(), "BASS 01"));
 
   REQUIRE(named.source == anonymous.source);
   REQUIRE(named.confidence > anonymous.confidence);
@@ -319,12 +337,12 @@ TEST_CASE("an agreeing track name raises confidence", "[mixing][assistant]") {
 
 TEST_CASE("a contradicting track name lowers confidence without changing the class",
           "[mixing][assistant]") {
-  const auto anonymous = assistant::classify_source(make_profile(vocal_spec()));
-  const auto misnamed = assistant::classify_source(make_profile(vocal_spec(), "Kick In"));
+  const auto anonymous = assistant::classify_source(make_profile(bass_spec()));
+  const auto misnamed = assistant::classify_source(make_profile(bass_spec(), "Kick In"));
 
-  // The measurement still decides what the track is; the disagreement is
-  // expressed as less certainty, not as a different answer.
-  REQUIRE(misnamed.source == SourceClass::Vocal);
+  // The kick row rejects this track, so the name has no evidence behind it: the
+  // measurement stands, with less certainty attached.
+  REQUIRE(misnamed.source == SourceClass::Bass);
   REQUIRE(misnamed.confidence < anonymous.confidence);
   REQUIRE(misnamed.confidence > 0.0f);
 }
@@ -361,11 +379,56 @@ TEST_CASE("a name supplies the classes the decision table has no row for", "[mix
   }
 }
 
-TEST_CASE("a measured class outranks a name that would supply another", "[mixing][assistant]") {
-  // The name path only fills a gap. A track the table did resolve keeps its
-  // measured answer even when its name also names a table-less class.
-  const auto classification = assistant::classify_source(make_profile(kick_spec(), "Kick Synth"));
-  REQUIRE(classification.source == SourceClass::Kick);
+TEST_CASE("a name cannot move a measured drum to a pitched class", "[mixing][assistant]") {
+  // Keys has no row, but a confident drum measurement rules it out.
+  const auto anonymous = assistant::classify_source(make_profile(kick_spec()));
+  const auto named = assistant::classify_source(make_profile(kick_spec(), "Rhodes"));
+  REQUIRE(named.source == SourceClass::Kick);
+  REQUIRE(named.confidence < anonymous.confidence);
+}
+
+TEST_CASE("a name redirects to a row-less class the measurement cannot rule out",
+          "[mixing][assistant]") {
+  // The guitar row also catches other plucked mid-register parts, so a track
+  // named keys is keys.
+  REQUIRE(assistant::classify_source(make_profile(guitar_spec())).source == SourceClass::Guitar);
+  const auto named = assistant::classify_source(make_profile(guitar_spec(), "Rhodes"));
+  REQUIRE(named.source == SourceClass::Keys);
+  require_self_consistent(named);
+
+  // A sustained pad named keys is keys, and a synth lead named so is a lead.
+  REQUIRE(assistant::classify_source(make_profile(vocal_spec(), "keys")).source ==
+          SourceClass::Keys);
+  REQUIRE(assistant::classify_source(make_profile(lead_spec(), "synth lead")).source ==
+          SourceClass::Lead);
+}
+
+TEST_CASE("a name redirects to another class whose row the track also satisfies",
+          "[mixing][assistant]") {
+  const auto anonymous = assistant::classify_source(make_profile(tom_or_snare_spec()));
+  const auto named = assistant::classify_source(make_profile(tom_or_snare_spec(), "Snare Top"));
+  REQUIRE(anonymous.source != SourceClass::Snare);
+  REQUIRE(named.source == SourceClass::Snare);
+  require_self_consistent(named);
+}
+
+TEST_CASE("a compound name states its last hint word", "[mixing][assistant]") {
+  struct NamedClass {
+    const char* name;
+    SourceClass source;
+  };
+  const NamedClass cases[] = {
+      {"Lead Vox", SourceClass::Vocal},
+      {"synth_lead", SourceClass::Lead},
+      {"Vox Lead", SourceClass::Lead},
+      // A hint word inside a longer one is not a second class.
+      {"BVox 2", SourceClass::Backing},
+  };
+  for (const NamedClass& entry : cases) {
+    INFO("track name: " << entry.name);
+    REQUIRE(assistant::classify_source(make_profile(unclassifiable_spec(), entry.name)).source ==
+            entry.source);
+  }
 }
 
 TEST_CASE("a name naming two table-less classes supplies neither", "[mixing][assistant]") {
@@ -388,10 +451,10 @@ TEST_CASE("every advertised source class is producible", "[mixing][assistant]") 
     const char* name_hint;
   };
   const Producible expected[] = {
-      {"kick", "kick"},        {"snare", "snare"}, {"hiHat", "hihat"}, {"tom", "tom"},
-      {"cymbal", "crash"},     {"bass", "bass"},   {"guitar", "gtr"},  {"keys", "rhodes"},
-      {"strings", "violin"},   {"lead", "lead"},   {"vocal", "vox"},   {"backing", "bgv"},
-      {"percussion", "conga"}, {"fx", "whoosh"},
+      {"kick", "kick"},        {"snare", "snare"}, {"hiHat", "hihat"},   {"tom", "tom"},
+      {"cymbal", "crash"},     {"bass", "bass"},   {"guitar", "gtr"},    {"keys", "rhodes"},
+      {"strings", "violin"},   {"lead", "lead"},   {"vocal", "vox"},     {"backing", "bgv"},
+      {"percussion", "conga"}, {"fx", "whoosh"},   {"drumKit", "drums"},
   };
   const std::vector<std::string> names = assistant::source_class_names();
   // Unknown is the absence of a class rather than one of them.
@@ -413,9 +476,9 @@ TEST_CASE("every advertised source class is producible", "[mixing][assistant]") 
 }
 
 TEST_CASE("name hints match case-insensitively on a substring", "[mixing][assistant]") {
-  const auto spaced = assistant::classify_source(make_profile(vocal_spec(), "Kick In"));
-  const auto upper = assistant::classify_source(make_profile(vocal_spec(), "KICK_01"));
-  const auto bare = assistant::classify_source(make_profile(vocal_spec(), "kick"));
+  const auto spaced = assistant::classify_source(make_profile(bass_spec(), "Kick In"));
+  const auto upper = assistant::classify_source(make_profile(bass_spec(), "KICK_01"));
+  const auto bare = assistant::classify_source(make_profile(bass_spec(), "kick"));
 
   REQUIRE(spaced.confidence == upper.confidence);
   REQUIRE(spaced.confidence == bare.confidence);
@@ -443,7 +506,7 @@ TEST_CASE("an unusable track is never classified", "[mixing][assistant]") {
 TEST_CASE("classify_sources fills every profile in place", "[mixing][assistant]") {
   std::vector<assistant::TrackProfile> profiles = {
       make_profile(kick_spec()),
-      make_profile(vocal_spec()),
+      make_profile(bass_spec()),
       make_profile(unclassifiable_spec()),
   };
 
@@ -451,7 +514,7 @@ TEST_CASE("classify_sources fills every profile in place", "[mixing][assistant]"
 
   REQUIRE(profiles[0].source == SourceClass::Kick);
   REQUIRE(profiles[0].source_confidence > 0.0f);
-  REQUIRE(profiles[1].source == SourceClass::Vocal);
+  REQUIRE(profiles[1].source == SourceClass::Bass);
   REQUIRE(profiles[1].source_confidence > 0.0f);
   REQUIRE(profiles[2].source == SourceClass::Unknown);
   REQUIRE(profiles[2].source_confidence == 0.0f);
@@ -505,6 +568,24 @@ TEST_CASE("a synthesised cymbal is never handed to a neighbouring class", "[mixi
   REQUIRE(classification.source != SourceClass::HiHat);
   REQUIRE(classification.source != SourceClass::Kick);
   REQUIRE(classification.source != SourceClass::Bass);
+}
+
+TEST_CASE("a synthesised kick and hi-hat groove is a whole kit", "[mixing][assistant]") {
+  // Hats land between the kicks as well as on them, so the track plays both
+  // low-dominated and high-bearing hits.
+  std::vector<float> groove = kick_signal();
+  const std::vector<float> hats = hihat_signal();
+  for (std::size_t i = 0; i < groove.size(); ++i) groove[i] += hats[i];
+  const assistant::TrackProfile profile = profile_of(groove);
+  REQUIRE(profile.usable);
+
+  const auto classification = assistant::classify_source(profile);
+  require_self_consistent(classification);
+  REQUIRE(classification.source == SourceClass::DrumKit);
+
+  // Neither piece alone plays both kinds of hit.
+  REQUIRE(assistant::classify_source(profile_of(kick_signal())).source != SourceClass::DrumKit);
+  REQUIRE(assistant::classify_source(profile_of(hihat_signal())).source != SourceClass::DrumKit);
 }
 
 TEST_CASE("a silent track is excluded before classification", "[mixing][assistant]") {

@@ -151,13 +151,19 @@ export interface MixAssistantTrack {
   /** Strip id the suggestion is written against. Must be unique and non-empty. */
   id: string;
   /**
-   * Optional display name.
+   * Optional display name, used as a source-classification hint.
    *
-   * For a class the classifier can measure, this is only a hint that adjusts
-   * its confidence and cannot select the class on its own. For the four it
-   * cannot separate by measurement — `keys`, `strings`, `backing` and `fx` —
-   * the name is the only thing that can supply the class at all, and it does so
-   * only when the measurement produced no answer.
+   * Naming the class the classifier measured raises its confidence. Naming
+   * another class switches to it when the measurement does not contradict it:
+   * a class the classifier measures needs its own feature rule satisfied by the
+   * track, and one it cannot measure needs the track not to have been measured
+   * as a drum (a drum is never renamed `keys` or `vocal`). For the six classes
+   * it cannot separate by measurement — `keys`, `strings`, `lead`, `vocal`,
+   * `backing` and `fx` — the name is the only thing that can supply the class,
+   * so an unnamed voice, pad or lead line comes back `unknown`. A compound name
+   * states its last hint word (`'Lead Vox'` is `vocal`, `'Synth Lead'` is
+   * `lead`); hint words joined by anything else (`'Strings and Keys'`) state
+   * none.
    */
   name?: string;
   /** Left/mono plane. */

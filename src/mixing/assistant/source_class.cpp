@@ -13,7 +13,7 @@ namespace {
 
 constexpr std::array<const char*, kSourceClassCount> kSourceClassNames = {
     "unknown", "kick",    "snare", "hiHat", "tom",     "cymbal",     "bass", "guitar",
-    "keys",    "strings", "lead",  "vocal", "backing", "percussion", "fx",
+    "keys",    "strings", "lead",  "vocal", "backing", "percussion", "fx",   "drumKit",
 };
 
 }  // namespace

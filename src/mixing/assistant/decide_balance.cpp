@@ -118,6 +118,9 @@ constexpr BalanceTable kGeneralTable{
         {SourceClass::Percussion, -3.5f},
         // A garnish — loud enough to notice, quiet enough not to read as a part.
         {SourceClass::Fx, -5.0f},
+        // A whole kit carries the kick and the backbeat together, so it sits
+        // where those two do.
+        {SourceClass::DrumKit, 0.5f},
     }},
 };
 

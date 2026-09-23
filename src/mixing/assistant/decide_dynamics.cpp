@@ -192,7 +192,7 @@ struct CompressionRow {
 // starting points, sized so being wrong leaves a track slightly under-controlled
 // rather than audibly reshaped, and moved from there by the crest factor,
 // sustain ratio and onset rate of the track in hand.
-constexpr std::array<CompressionRow, 14> kCompressionTable = {{
+constexpr std::array<CompressionRow, 15> kCompressionTable = {{
     // The lowest class in the table, so it takes the firmest ratio. The late
     // attack lets the beater click through untouched, and the release is paced
     // by the gap between hits rather than by the length of one: the value here
@@ -254,6 +254,10 @@ constexpr std::array<CompressionRow, 14> kCompressionTable = {{
     // treatment in the table: enough to stop it jumping, not enough to reshape
     // it.
     {SourceClass::Fx, 2.0f, -4.0f, 20.0f, 250.0f},
+    // A whole kit spans the kick to the cymbals, so its ratio sits between the
+    // two ends of the kit, and the attack is the snare's so the hits come
+    // through before the gain moves.
+    {SourceClass::DrumKit, 3.0f, -6.0f, 15.0f, 150.0f},
 }};
 
 const CompressionRow* compression_row(SourceClass source) noexcept {

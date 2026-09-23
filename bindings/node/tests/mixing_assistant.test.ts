@@ -79,7 +79,14 @@ describe('mixing assistant native binding', () => {
   it('suggests a scene from mono tracks', () => {
     const result = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
 
-    expect(result.scene.strips.map((strip) => strip.id)).toEqual(['kick', 'bass', 'lead']);
+    // The named lead is sent to the effect buses, whose returns are strips too.
+    expect(result.scene.strips.map((strip) => strip.id)).toEqual([
+      'kick',
+      'bass',
+      'lead',
+      'reverbReturn',
+      'delayReturn',
+    ]);
     expect(result.tracks).toHaveLength(3);
     expect(result.tracks[0].stripId).toBe('kick');
     expect(result.tracks[0].bandOccupancy).toHaveProperty('sub');
@@ -186,7 +193,10 @@ describe('mixing assistant options', () => {
       options: { targetTrackLufs: -12 },
     });
 
-    const trims = (strips: { inputTrimDb: number }[]) => strips.map((strip) => strip.inputTrimDb);
+    // Effect returns carry no measured level, so only track strips are staged.
+    const trackIds = new Set(baseTracks().map((track) => track.id));
+    const trims = (strips: { id: string; inputTrimDb: number }[]) =>
+      strips.filter((strip) => trackIds.has(strip.id)).map((strip) => strip.inputTrimDb);
     expect(trims(loud.scene.strips)).toHaveLength(trims(quiet.scene.strips).length);
     trims(loud.scene.strips).forEach((db, index) => {
       expect(db).toBeGreaterThan(trims(quiet.scene.strips)[index]);
@@ -254,7 +264,8 @@ describe('suggestMixSceneJson', () => {
     const json = suggestMixSceneJson({ tracks: baseTracks(), sampleRate: SR });
     const mixer = Mixer.fromSceneJson(json, SR, 256);
     try {
-      expect(mixer.stripCount()).toBe(3);
+      // Three tracks plus the reverb and delay returns the named lead feeds.
+      expect(mixer.stripCount()).toBe(5);
       expect(mixer.stripById('bass')).not.toBeNull();
     } finally {
       mixer.destroy();

@@ -22,6 +22,7 @@ using Catch::Matchers::WithinAbs;
 using sonare::mixing::assistant::decide_image;
 using sonare::mixing::assistant::DeltaDomain;
 using sonare::mixing::assistant::kBandCount;
+using sonare::mixing::assistant::MeanPowerSpectrum;
 using sonare::mixing::assistant::MixAssistantConfig;
 using sonare::mixing::assistant::MixProfile;
 using sonare::mixing::assistant::MonoRisk;
@@ -219,6 +220,43 @@ TEST_CASE("two tracks of one class are spread symmetrically", "[mixing][assistan
   const float second = pan_of(deltas, "gtrB");
   CHECK(first < 0.0f);
   CHECK(second > 0.0f);
+  CHECK_THAT(first, WithinAbs(-second, kPositionTolerance));
+}
+
+// Mean spectrum with @p low_share of its power in one bin near 65 Hz and the
+// rest near 1 kHz.
+MeanPowerSpectrum low_end_spectrum(float low_share) {
+  constexpr int kFft = 2048;
+  constexpr int kRate = 48000;
+  constexpr std::size_t kLowBin = 3;    // about 70 Hz
+  constexpr std::size_t kHighBin = 44;  // about 1 kHz
+  MeanPowerSpectrum spectrum;
+  spectrum.n_fft = kFft;
+  spectrum.sample_rate = kRate;
+  spectrum.n_bins = kFft / 2 + 1;
+  spectrum.power.assign(static_cast<std::size_t>(spectrum.n_bins), 0.0f);
+  spectrum.power[kLowBin] = low_share;
+  spectrum.power[kHighBin] = 1.0f - low_share;
+  return spectrum;
+}
+
+TEST_CASE("a track made mostly of low end is centred whatever its class", "[mixing][assistant]") {
+  TrackProfile pedal = make_profile("pedal", SourceClass::Keys);
+  pedal.spectrum = low_end_spectrum(0.9f);
+  TrackProfile keys_a = make_profile("keysA", SourceClass::Keys);
+  keys_a.spectrum = low_end_spectrum(0.1f);
+  TrackProfile keys_b = make_profile("keysB", SourceClass::Keys);
+  keys_b.spectrum = low_end_spectrum(0.1f);
+  const std::vector<TrackProfile> profiles = {pedal, keys_a, keys_b};
+  const std::vector<SceneDelta> deltas =
+      decide_image(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+
+  CHECK_THAT(pan_of(deltas, "pedal"), WithinAbs(0.0f, kPositionTolerance));
+  CHECK(reads_as_a_sentence(find_pan(deltas, "pedal")->reason));
+  // The centred track takes no rung, so the other two still pair symmetrically.
+  const float first = pan_of(deltas, "keysA");
+  const float second = pan_of(deltas, "keysB");
+  CHECK(first < 0.0f);
   CHECK_THAT(first, WithinAbs(-second, kPositionTolerance));
 }
 

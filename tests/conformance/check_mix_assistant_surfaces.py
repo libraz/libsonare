@@ -159,14 +159,12 @@ def _make_tracks() -> list[Track]:
     corrective cut at all, and both enableEq and eqMaxCutDb agree four ways
     while proving nothing.
 
-    What this fixture deliberately does *not* cover: every track here is named
-    after a class the classifier's decision table can measure (kick, bass, vocal,
-    guitar, lead). Four classes have no row -- keys, strings, backing, fx -- and
-    are supplied by a track's name instead, which means this fixture exercises
-    only the guard half of that rule, that a name must not select a class the
-    table can decide. The supply half, where a name is the only thing that can
-    produce the class, is covered by the C++ classifier tests and by the WASM
-    suite's `acts on a source class only a track name can supply`.
+    Three tracks are named after classes the classifier's decision table can
+    measure (kick, bass, guitar); the vocal and the lead synth are named after
+    two of the six classes with no row -- keys, strings, lead, vocal, backing,
+    fx -- which only a track's name supplies. The redirect rules between the two
+    kinds are covered by the C++ classifier tests and by the WASM suite's
+    `acts on a source class only a track name can supply`.
 
     That distinction matters when reading a result from this harness. A scene
     that is byte-identical to a previous generation's says the surfaces agree

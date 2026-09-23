@@ -114,8 +114,9 @@ constexpr std::array<SubgroupRow, static_cast<std::size_t>(kSourceClassCount)> k
     // under a fader that will be moved for reasons that have nothing to do
     // with it.
     {SourceClass::Unknown, nullptr},
-    // The five kit rows share one bus: they are close mics on a single
-    // instrument, and the whole point of a drum bus is that they move together.
+    // The five close-mic rows share one bus, with a whole-kit stem below: they
+    // are one instrument, and the whole point of a drum bus is that they move
+    // together.
     {SourceClass::Kick, "drumBus"},
     {SourceClass::Snare, "drumBus"},
     {SourceClass::HiHat, "drumBus"},
@@ -139,6 +140,9 @@ constexpr std::array<SubgroupRow, static_cast<std::size_t>(kSourceClassCount)> k
     // Named for sound effects rather than for the effect buses further down;
     // this is a source class, not a return.
     {SourceClass::Fx, "sfxBus"},
+    // A kit stem is the same instrument the close-mic rows are, so it joins
+    // their bus.
+    {SourceClass::DrumKit, "drumBus"},
 }};
 
 // Verifies the table is indexed by SourceClass, so adding a class without a row
@@ -331,6 +335,9 @@ constexpr std::array<EffectSendRow, static_cast<std::size_t>(kSourceClassCount)>
         // An effects track normally arrives with its own treatment printed, so
         // adding more would double it.
         {SourceClass::Fx, kNoSendDb, kNoSendDb},
+        // Carries the kick, so it stays dry under the low-frequency rule above,
+        // and a kit stem normally arrives with its own room in the overheads.
+        {SourceClass::DrumKit, kNoSendDb, kNoSendDb},
     }};
 
 constexpr bool send_table_covers_every_class() {

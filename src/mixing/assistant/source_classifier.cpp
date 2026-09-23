@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <limits>
 #include <string>
+#include <vector>
 
 namespace sonare::mixing::assistant {
 namespace {
@@ -40,8 +41,9 @@ constexpr std::array<float, kBandCount> kBandCenterHz = {35.0f,   122.0f,  354.0
                                                          3464.0f, 8485.0f, 16000.0f};
 
 /// @brief Feature vocabulary the decision table is written in.
-/// @details Everything here is read straight off the profile or is a sum of
-///          adjacent band shares. There is no fitting, projection or clustering
+/// @details Everything here is read straight off the profile, is a sum of
+///          adjacent band shares, or is a count over the profile's band envelope
+///          (the two hit shares). There is no fitting, projection or clustering
 ///          step between the measurement and the table: a rule row compares the
 ///          measured numbers themselves.
 ///
@@ -61,6 +63,10 @@ enum class Feature {
   SustainRatio,
   AttackDensity,
   CrestFactorDb,
+  /// Share of detected hits whose frame is dominated by energy below 250 Hz.
+  LowHitShare,
+  /// Share of detected hits whose frame carries real energy above 6 kHz.
+  HighHitShare,
   Count,
 };
 
@@ -103,6 +109,8 @@ constexpr std::array<FeatureSpec, kFeatureCount> kFeatureSpecs = {{
     {Scale::Linear, 0.15f},  // SustainRatio
     {Scale::Linear, 1.0f},   // AttackDensity
     {Scale::Linear, 3.0f},   // CrestFactorDb
+    {Scale::Linear, 0.15f},  // LowHitShare
+    {Scale::Linear, 0.15f},  // HighHitShare
 }};
 
 /// @brief One feature bound inside a rule row.
@@ -135,15 +143,27 @@ struct Rule {
 
 // The table. Rows are evaluated top to bottom and the first match wins.
 //
-// Grouped by band centroid -- low register, mid register, high register -- so
-// the coarse split (kick/bass vs vocal vs cymbal) happens once at the top of
-// each row and the remaining bounds only separate neighbours inside one group.
+// Grouped by band centroid -- whole kit, low register, mid register, high
+// register -- so the coarse split (kick/bass vs guitar vs cymbal) happens once at
+// the top of each row and the remaining bounds only separate neighbours inside
+// one group.
 // Every row carries its band-centroid bound first; the static_assert below
 // enforces it, because a row without one would silently reach across groups.
 //
 // Adding a class is adding one row. There is no nesting to unpick and no branch
 // order to re-derive, which is the whole reason the rules are data.
-constexpr std::array<Rule, 10> kRules = {{
+constexpr std::array<Rule, 9> kRules = {{
+    // --- Whole kit ----------------------------------------------------------
+    // A kit plays low-dominated hits (kick) and high-bearing hits (hats, snare
+    // wires) on one track; a single drum plays almost only one kind. Its centroid
+    // lands anywhere from the kick's register to the hats', so the bound is wide,
+    // and the row sits first because the kick row also accepts a kick-heavy kit.
+    {SourceClass::DrumKit,
+     0.75f,
+     {{between(Feature::BandCentroidHz, 40.0f, 8000.0f), at_most(Feature::SustainRatio, 0.45f),
+       at_least(Feature::AttackDensity, 1.5f), at_least(Feature::LowHitShare, 0.15f),
+       at_least(Feature::HighHitShare, 0.15f)}}},
+
     // --- Low register -------------------------------------------------------
     // Kick: everything under 130 Hz, gone almost as soon as it arrives, with the
     // peak-to-RMS ratio of a repeated hit rather than of a held note.
@@ -182,30 +202,13 @@ constexpr std::array<Rule, 10> kRules = {{
      {{between(Feature::BandCentroidHz, 300.0f, 4000.0f), at_most(Feature::SustainRatio, 0.30f),
        at_least(Feature::AttackDensity, 2.0f), at_most(Feature::HighAirShare, 0.06f),
        at_most(Feature::Flatness, 0.30f)}}},
-    // Vocal: sustained, tonal, concentrated in 250-2000 Hz and rolling off well
-    // before the cymbal region. The rolloff bound is what separates it from the
-    // lead row: a voice runs out of energy where a bright lead line keeps going.
-    {SourceClass::Vocal,
-     0.70f,
-     {{between(Feature::BandCentroidHz, 250.0f, 1400.0f), at_least(Feature::SustainRatio, 0.40f),
-       at_most(Feature::Flatness, 0.22f), at_least(Feature::MidShare, 0.40f),
-       between(Feature::RolloffHz, 1000.0f, 8000.0f)}}},
-    // Guitar: mid register and tonal like a vocal, but plucked -- partly decayed
-    // rather than held, with the pick attack showing as high-mid share. Placed
-    // after the vocal row because a held vocal note satisfies neither bound of
-    // its sustain range.
+    // Guitar: mid register and tonal, but plucked -- partly decayed rather than
+    // held, with the pick attack showing as high-mid share.
     {SourceClass::Guitar,
      0.55f,
      {{between(Feature::BandCentroidHz, 250.0f, 2500.0f),
        between(Feature::SustainRatio, 0.15f, 0.45f), at_most(Feature::Flatness, 0.30f),
        between(Feature::HighMidShare, 0.08f, 0.50f), at_least(Feature::CrestFactorDb, 9.0f)}}},
-    // Lead: a sustained tonal line sitting a register above a voice, with its
-    // energy in the presence band. The centroid bound starts where the vocal
-    // row's ends, so the two cannot both claim a track outright.
-    {SourceClass::Lead,
-     0.60f,
-     {{between(Feature::BandCentroidHz, 1200.0f, 5000.0f), at_least(Feature::SustainRatio, 0.40f),
-       at_most(Feature::Flatness, 0.30f), at_least(Feature::HighMidShare, 0.25f)}}},
 
     // --- High register ------------------------------------------------------
     // Hi-hat: bright noise, short, and repeated often. Density plus the short
@@ -226,13 +229,16 @@ constexpr std::array<Rule, 10> kRules = {{
        at_least(Feature::HighAirShare, 0.50f)}}},
 }};
 
-// Classes with no row -- Keys, Strings, Backing, Fx -- are never produced by
-// measurement. No combination of the measured features separates a piano from a
-// plucked guitar, or a backing stack from a lead vocal, without the kind of
-// trained model this module refuses to carry, and the table declines to guess
-// at them. They reach a profile through the track's name instead; see
-// table_less_class_from_name below for why that is a caller's statement rather
-// than a guess the table makes.
+// Classes with no row -- Keys, Strings, Lead, Vocal, Backing, Fx -- are never
+// produced by measurement. No combination of the measured features separates a
+// piano from a plucked guitar, a backing stack from a lead vocal, or a voice
+// from a sustained synth pad or lead line without the kind of trained model this
+// module refuses to carry, and the table declines to guess at them. Measured on
+// sung phrases against pads, synth leads and winds, the best vocal-specific
+// candidate (frame-to-frame pitch jitter) still missed a quarter of the voices
+// or admitted a tenth of the synths, and syllabic modulation and formant
+// movement did not separate them at all. They reach a profile through the
+// track's name instead.
 
 // A track whose confidence lands below this is reported as Unknown. It sits
 // under every row's base confidence, so no rule is dead on arrival, but far
@@ -276,10 +282,11 @@ struct NameHint {
 // Matching is a lowercase substring test and nothing more -- no regular
 // expressions, no separator parsing, no language detection. "Kick In",
 // "KICK_01" and "kick" all have to read the same, and that is the entire
-// requirement. Every class carries an entry, including the four with no rule
-// row: for a class the table decides, the words adjust confidence, and for one
-// it cannot, they are the only thing that can supply it.
-constexpr std::array<NameHint, 13> kNameHints = {{
+// requirement. Every class carries an entry, including those with no rule row:
+// for a class the table decides, the words adjust or redirect it, and for one it
+// cannot, they are the only thing that can supply it. "synth" is deliberately
+// absent: it names how a part is made, not what the part is.
+constexpr std::array<NameHint, 14> kNameHints = {{
     {SourceClass::Kick, {{"kick", "bassdrum", "bass drum"}}},
     {SourceClass::Snare, {{"snare", "rimshot"}}},
     {SourceClass::HiHat, {{"hihat", "hi-hat", "hi hat", "hat", "hh"}}},
@@ -287,7 +294,7 @@ constexpr std::array<NameHint, 13> kNameHints = {{
     {SourceClass::Cymbal, {{"cymbal", "crash", "ride", "china", "splash"}}},
     {SourceClass::Bass, {{"bass", "sub"}}},
     {SourceClass::Guitar, {{"guitar", "gtr"}}},
-    {SourceClass::Keys, {{"piano", "keys", "rhodes", "organ", "synth"}}},
+    {SourceClass::Keys, {{"piano", "keys", "rhodes", "organ"}}},
     {SourceClass::Strings, {{"strings", "violin", "cello", "viola"}}},
     {SourceClass::Lead, {{"lead", "solo"}}},
     {SourceClass::Vocal, {{"vocal", "vox", "voice"}}},
@@ -295,6 +302,7 @@ constexpr std::array<NameHint, 13> kNameHints = {{
     // other, so one prefix is what a substring test needs.
     {SourceClass::Backing, {{"backing", "bvox", "bgv", "harmon", "choir"}}},
     {SourceClass::Fx, {{"fx", "riser", "impact", "whoosh", "sweep"}}},
+    {SourceClass::DrumKit, {{"drum", "kit", "beat", "groove"}}},
 }};
 
 // Whether the decision table has a row that can produce @p source.
@@ -373,6 +381,81 @@ float band_centroid_hz(const std::array<float, kBandCount>& occupancy) {
   return std::exp(log_sum / weight);
 }
 
+// Hit detection over the band envelope. Windows are in seconds so the frame
+// counts follow the sample rate and hop.
+constexpr float kHitLookbackSec = 0.032f;
+constexpr float kHitMinGapSec = 0.064f;
+// A band rising 6 dB (power x4) over its recent minimum marks a hit, provided
+// the band holds a real share of the frame and the frame is within 30 dB of
+// the track's loudest.
+constexpr float kHitRisePowerRatio = 4.0f;
+constexpr float kHitBandMinShare = 0.05f;
+constexpr float kHitFloorBelowPeak = 1.0e-3f;
+// A low hit is a frame mostly below 250 Hz (a kick, a floor tom); a high hit
+// carries a tenth of its energy above 6 kHz (a hat, a snare's wires, a cymbal).
+constexpr float kLowHitFrameShare = 0.5f;
+constexpr float kHighHitFrameShare = 0.10f;
+
+struct HitShares {
+  float low = 0.0f;
+  float high = 0.0f;
+};
+
+/// @brief Fractions of detected hits that are low-dominated and high-bearing.
+/// @details A whole kit plays both kinds; a single drum, a hat or a hand
+///          percussion part plays almost only one. Zero for a track with no
+///          envelope or no hits.
+HitShares hit_shares(const BandEnergyEnvelope& bands) {
+  HitShares shares;
+  const int frames = bands.n_frames;
+  if (frames <= 0 || bands.hop_length <= 0 || bands.sample_rate <= 0) return shares;
+  const float frame_rate =
+      static_cast<float>(bands.sample_rate) / static_cast<float>(bands.hop_length);
+  const int lookback = std::max(1, static_cast<int>(std::lround(kHitLookbackSec * frame_rate)));
+  const int min_gap = std::max(1, static_cast<int>(std::lround(kHitMinGapSec * frame_rate)));
+
+  std::vector<float> total(static_cast<std::size_t>(frames), 0.0f);
+  float peak = 0.0f;
+  for (int frame = 0; frame < frames; ++frame) {
+    float sum = 0.0f;
+    for (int band = 0; band < kBandCount; ++band) sum += bands.at(band, frame);
+    total[static_cast<std::size_t>(frame)] = sum;
+    peak = std::max(peak, sum);
+  }
+  if (!(peak > 0.0f)) return shares;
+
+  int hits = 0;
+  int low_hits = 0;
+  int high_hits = 0;
+  int last_hit = -min_gap;
+  for (int frame = lookback; frame < frames; ++frame) {
+    const float frame_total = total[static_cast<std::size_t>(frame)];
+    if (frame - last_hit < min_gap || !(frame_total >= kHitFloorBelowPeak * peak)) continue;
+    bool rises = false;
+    for (int band = 0; band < kBandCount && !rises; ++band) {
+      const float now = bands.at(band, frame);
+      float recent = now;
+      for (int back = 1; back <= lookback; ++back) {
+        recent = std::min(recent, bands.at(band, frame - back));
+      }
+      rises = now > kHitRisePowerRatio * recent && now >= kHitBandMinShare * frame_total;
+    }
+    if (!rises) continue;
+    last_hit = frame;
+    ++hits;
+    const float low =
+        bands.at(static_cast<int>(kSubBand), frame) + bands.at(static_cast<int>(kLowBand), frame);
+    const float high =
+        bands.at(static_cast<int>(kHighBand), frame) + bands.at(static_cast<int>(kAirBand), frame);
+    if (low >= kLowHitFrameShare * frame_total) ++low_hits;
+    if (high >= kHighHitFrameShare * frame_total) ++high_hits;
+  }
+  if (hits == 0) return shares;
+  shares.low = static_cast<float>(low_hits) / static_cast<float>(hits);
+  shares.high = static_cast<float>(high_hits) / static_cast<float>(hits);
+  return shares;
+}
+
 std::array<float, kFeatureCount> extract_features(const TrackProfile& profile) {
   const auto& occupancy = profile.band_occupancy;
   const auto& spectral = profile.base.spectral;
@@ -393,6 +476,9 @@ std::array<float, kFeatureCount> extract_features(const TrackProfile& profile) {
   features[static_cast<std::size_t>(Feature::AttackDensity)] = dynamics.attack_density;
   features[static_cast<std::size_t>(Feature::CrestFactorDb)] =
       profile.base.loudness.crest_factor_db;
+  const HitShares hits = hit_shares(profile.bands);
+  features[static_cast<std::size_t>(Feature::LowHitShare)] = hits.low;
+  features[static_cast<std::size_t>(Feature::HighHitShare)] = hits.high;
   return features;
 }
 
@@ -458,80 +544,141 @@ std::string to_lower_ascii(const std::string& text) {
   return lowered;
 }
 
-/// @brief Confidence adjustment implied by the track name.
-/// @details Agreement wins outright: a name containing its own class's word is
-///          not treated as contradicted just because it also mentions another
-///          class, which is what makes "bass gtr" on a bass track a confirmation
-///          rather than a conflict.
-/// @param name Track name, in whatever case the caller supplied.
-/// @param source The class the measurements chose.
-/// @return A bonus, a penalty, or zero when the name says nothing.
-float name_hint_adjustment(const std::string& name, SourceClass source) {
-  if (name.empty()) return 0.0f;
+/// @brief Broad kind of source, used to decide what a measurement rules out.
+enum class Family {
+  /// A drum or percussion hit.
+  Percussive,
+  /// A pitched part.
+  Tonal,
+  /// Could be either; nothing a measurement shows contradicts it.
+  Either,
+};
+
+constexpr Family family_of(SourceClass source) {
+  switch (source) {
+    case SourceClass::Kick:
+    case SourceClass::Snare:
+    case SourceClass::HiHat:
+    case SourceClass::Tom:
+    case SourceClass::Cymbal:
+    case SourceClass::Percussion:
+    case SourceClass::DrumKit:
+      return Family::Percussive;
+    case SourceClass::Bass:
+    case SourceClass::Guitar:
+    case SourceClass::Keys:
+    case SourceClass::Strings:
+    case SourceClass::Lead:
+    case SourceClass::Vocal:
+    case SourceClass::Backing:
+      return Family::Tonal;
+    case SourceClass::Unknown:
+    case SourceClass::Fx:
+      return Family::Either;
+  }
+  return Family::Either;
+}
+
+/// @brief Whether a confident measurement of @p measured rules out @p named.
+/// @details Only used for classes without a row, whose evidence cannot be
+///          checked directly: a track measured as a drum is not keys or a voice
+///          whatever it is called, while one measured as a guitar may well be
+///          keys, since the table cannot tell the two apart.
+constexpr bool measurement_excludes(SourceClass measured, SourceClass named) {
+  const Family a = family_of(measured);
+  const Family b = family_of(named);
+  return a != Family::Either && b != Family::Either && a != b;
+}
+
+constexpr const Rule* rule_for(SourceClass source) {
+  for (const Rule& rule : kRules) {
+    if (rule.source == source) return &rule;
+  }
+  return nullptr;
+}
+
+/// @brief What a track name says.
+struct NameReading {
+  /// @brief Bit per SourceClass for every class a hint word names.
+  unsigned named = 0;
+  /// @brief The one class the name states, or Unknown when it states none or
+  ///        lists several.
+  SourceClass head = SourceClass::Unknown;
+};
+
+static_assert(kSourceClassCount <= 32, "NameReading::named holds one bit per class");
+
+constexpr unsigned class_bit(SourceClass source) { return 1u << static_cast<unsigned>(source); }
+
+bool is_name_separator(char character) {
+  return character == ' ' || character == '_' || character == '-' || character == '.';
+}
+
+/// @brief Reads the classes a track name names, and which one it states.
+/// @details A hint word inside a longer hint word does not count ("bvox" is a
+///          backing stack, not a vocal). One class named is that class. Several
+///          named in one compound -- hint words separated by nothing but
+///          spaces, underscores, hyphens or dots, as in "Lead Vox" or "Synth
+///          Lead Gtr" -- is a modifier-head phrase, and the last word is the
+///          part. Anything else between them ("Strings and Keys Bed") lists two
+///          sources, which states neither.
+NameReading read_name(const std::string& name) {
+  NameReading reading;
+  if (name.empty()) return reading;
   const std::string lowered = to_lower_ascii(name);
 
-  bool names_another_class = false;
+  struct Match {
+    SourceClass source;
+    std::size_t begin;
+    std::size_t end;
+  };
+  std::vector<Match> matches;
   for (const NameHint& hint : kNameHints) {
     for (const char* word : hint.words) {
       if (word == nullptr) break;
-      if (lowered.find(word) == std::string::npos) continue;
-      if (hint.source == source) return kNameAgreementBonus;
-      names_another_class = true;
+      const std::string needle(word);
+      for (std::size_t at = lowered.find(needle); at != std::string::npos;
+           at = lowered.find(needle, at + 1)) {
+        matches.push_back({hint.source, at, at + needle.size()});
+      }
     }
   }
-  return names_another_class ? kNameConflictPenalty : 0.0f;
-}
 
-/// @brief The class a track name names, when the table has no row for it.
-/// @details Keys, strings, a backing stack and an effect return are not
-///          separable from their neighbours by the measured features, so no row
-///          exists for them and no measurement can produce one. The track name
-///          is the one per-track statement a caller makes on every surface, so
-///          it is what supplies them — and only them.
-///
-///          This is not the name selecting a class. For a class the table
-///          decides, the measurement has an opinion for a name to agree or
-///          disagree with, and the name only moves the confidence. Here the
-///          measurement has no opinion at all, so there is nothing for a name to
-///          override: silence is not disagreement.
-/// @return The named class, or Unknown when the name names nothing, names only
-///         classes the table can decide, or names two table-less classes at
-///         once — two of them is not a statement either.
-SourceClass table_less_class_from_name(const std::string& name) {
-  if (name.empty()) return SourceClass::Unknown;
-  const std::string lowered = to_lower_ascii(name);
-
-  SourceClass named = SourceClass::Unknown;
-  for (const NameHint& hint : kNameHints) {
-    if (table_produces(hint.source)) continue;
-    for (const char* word : hint.words) {
-      if (word == nullptr) break;
-      if (lowered.find(word) == std::string::npos) continue;
-      if (named != SourceClass::Unknown && named != hint.source) return SourceClass::Unknown;
-      named = hint.source;
-      break;
+  std::vector<Match> kept;
+  for (const Match& match : matches) {
+    bool inside_longer = false;
+    for (const Match& other : matches) {
+      if (other.begin <= match.begin && match.end <= other.end &&
+          other.end - other.begin > match.end - match.begin) {
+        inside_longer = true;
+        break;
+      }
     }
+    if (!inside_longer) kept.push_back(match);
   }
-  return named;
-}
+  if (kept.empty()) return reading;
+  std::sort(kept.begin(), kept.end(), [](const Match& a, const Match& b) {
+    return a.begin != b.begin ? a.begin < b.begin : a.end < b.end;
+  });
 
-/// @brief What the name alone says, once the table has had its turn.
-SourceClassification from_name_alone(const std::string& name) {
-  SourceClassification classification;
-  const SourceClass named = table_less_class_from_name(name);
-  if (named == SourceClass::Unknown) return classification;
-  classification.source = named;
-  classification.confidence = kNamedClassConfidence;
-  return classification;
+  for (const Match& match : kept) reading.named |= class_bit(match.source);
+  const Match* last = &kept.front();
+  for (std::size_t index = 1; index < kept.size(); ++index) {
+    const Match& next = kept[index];
+    for (std::size_t at = last->end; at < next.begin; ++at) {
+      if (!is_name_separator(lowered[at])) return reading;
+    }
+    if (next.end > last->end) last = &next;
+  }
+  reading.head = last->source;
+  return reading;
 }
 
 }  // namespace
 
 float source_base_confidence(SourceClass source) noexcept {
-  for (const Rule& rule : kRules) {
-    if (rule.source == source) return rule.base_confidence;
-  }
-  return 0.0f;
+  const Rule* rule = rule_for(source);
+  return rule != nullptr ? rule->base_confidence : 0.0f;
 }
 
 SourceClassification classify_source(const TrackProfile& profile) {
@@ -545,24 +692,55 @@ SourceClassification classify_source(const TrackProfile& profile) {
     if (!std::isfinite(value)) return classification;
   }
 
+  // The first matching row is the measurement's answer. Later rows are not
+  // consulted for it: a broader row must not claim a track a specific one ruled on.
+  SourceClass measured = SourceClass::Unknown;
+  float measured_confidence = 0.0f;
   for (const Rule& rule : kRules) {
     const float score = rule_score(rule, features);
     if (score < 0.0f) continue;
+    measured = rule.source;
+    measured_confidence = rule.base_confidence * score;
+    break;
+  }
+  const bool measurement_answers = measured_confidence >= kMinConfidence;
 
-    const float confidence = std::clamp(
-        rule.base_confidence * score + name_hint_adjustment(profile.name, rule.source), 0.0f, 1.0f);
-    // The first matching row is the answer even when it is not confident enough
-    // to give. Falling out of the loop rather than continuing is what keeps a
-    // weaker, broader row from claiming a track the specific one already ruled
-    // on; the name path below is reached either way, and it can only supply a
-    // class no row could have produced.
-    if (confidence < kMinConfidence) break;
-
-    classification.source = rule.source;
+  auto accept = [&classification](SourceClass source, float confidence) {
+    confidence = std::clamp(confidence, 0.0f, 1.0f);
+    if (confidence < kMinConfidence) return false;
+    classification.source = source;
     classification.confidence = confidence;
+    return true;
+  };
+
+  const NameReading reading = read_name(profile.name);
+  const bool name_agrees =
+      measured != SourceClass::Unknown && (reading.named & class_bit(measured)) != 0;
+  if (name_agrees && accept(measured, measured_confidence + kNameAgreementBonus)) {
     return classification;
   }
-  return from_name_alone(profile.name);
+
+  // A name stating another class redirects to it unless the evidence
+  // contradicts it: a class with a row needs that row satisfied, and one
+  // without needs the measurement not to have placed the track in the other
+  // family.
+  const SourceClass named = reading.head;
+  if (named != SourceClass::Unknown && named != measured) {
+    if (const Rule* rule = rule_for(named)) {
+      const float score = rule_score(*rule, features);
+      if (score >= 0.0f && accept(named, rule->base_confidence * score + kNameAgreementBonus)) {
+        return classification;
+      }
+    } else if (!(measurement_answers && measurement_excludes(measured, named)) &&
+               accept(named, kNamedClassConfidence)) {
+      return classification;
+    }
+  }
+
+  if (measured == SourceClass::Unknown) return classification;
+  const bool name_conflicts = reading.named != 0 && !name_agrees;
+  accept(measured, measured_confidence + (name_conflicts ? kNameConflictPenalty : 0.0f));
+  return classification;
 }
 
 void classify_sources(std::vector<TrackProfile>& profiles) {

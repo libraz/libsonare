@@ -60,10 +60,10 @@ constexpr float kNarrowExtent = 0.3f;
 // mixing has existed: they carry the most energy and the most information, and
 // both have to survive a mono fold, a single-subwoofer PA and a listener
 // sitting well off-axis. Everything else is spread around them to open space
-// for that centre. No part of the decision is read off the material — a
-// spectral measurement can say a band is crowded, but it cannot say which side
-// of the image a guitar belongs on, and a rule that mapped frequency content
-// onto pan position would move a part every time its tone changed.
+// for that centre. No side is read off the material — a spectral measurement
+// can say a band is crowded, but it cannot say which side of the image a guitar
+// belongs on. The material can only pin a part to the centre: one made mostly
+// of low end (see is_low_end_heavy).
 //
 // SourceClass::Unknown deliberately has no row. An unclassified track has no
 // convention to apply, so it is left where the caller had it.
@@ -83,6 +83,9 @@ constexpr std::array<PlacementRule, static_cast<std::size_t>(kSourceClassCount) 
         {SourceClass::Backing, false, kMediumExtent},
         {SourceClass::Percussion, false, kWideExtent},
         {SourceClass::Fx, false, kEdgeExtent},
+        // A kit stem holds its own image, with the kick and snare already at
+        // its centre; it is kept centred rather than spread a second time.
+        {SourceClass::DrumKit, true, kCentreExtent},
     }};
 
 // Catches a source class added to the enum without a placement rule, which
@@ -147,6 +150,10 @@ constexpr float kMonoMakerAmount = 1.0f;
 
 constexpr const char* kMonoMakerProcessor = "stereo.monoMaker";
 
+// A track with at least half its energy below the mono crossover is mostly low
+// end, which stays centred whatever its class: panning it tilts the whole mix.
+constexpr float kLowEndCentreShare = 0.5f;
+
 // Percentages and frequencies read as figures a mixer acts on, not as
 // measurements, so the reason strings carry no decimals.
 constexpr int kReasonDecimals = 0;
@@ -174,12 +181,17 @@ const PlacementRule* placement_rule(SourceClass source) {
   return nullptr;
 }
 
-// Placement reads the class and nothing else, so a track without a trustworthy
-// class is left alone. Polarity and delay deliberately do not consult this:
+// Placement starts from the class, so a track without a trustworthy class is
+// left alone. Polarity and delay deliberately do not consult this:
 // a cancellation is measured between two signals, whatever they turn out to be.
 bool is_placeable(const TrackProfile& profile) {
   return profile.usable && placement_rule(profile.source) != nullptr &&
          profile.source_confidence >= kMinPlacementConfidence;
+}
+
+// Measured from the track's own spectrum, so it holds for any class.
+bool is_low_end_heavy(const TrackProfile& profile) {
+  return profile.spectrum.energy_share_below(kMonoMakerCrossoverHz) >= kLowEndCentreShare;
 }
 
 // Offset of the `ordinal`-th member of a class, as a fraction of the class
@@ -303,8 +315,11 @@ void append_placement(const std::vector<TrackProfile>& profiles, const MixProfil
   // Two passes: the member count of a class decides the ladder every member of
   // it is placed on, so it has to be known before the first placement is made.
   std::array<int, kClassSlots> member_count{};
+  // A low-end-heavy track is centred below, so it takes no rung on its class's ladder.
   for (const TrackProfile& profile : profiles) {
     if (!is_placeable(profile)) continue;
+    const PlacementRule* rule = placement_rule(profile.source);
+    if (!rule->centered && is_low_end_heavy(profile)) continue;
     ++member_count[static_cast<std::size_t>(profile.source)];
   }
 
@@ -312,12 +327,22 @@ void append_placement(const std::vector<TrackProfile>& profiles, const MixProfil
   for (const TrackProfile& profile : profiles) {
     if (!is_placeable(profile)) continue;
     const std::size_t slot = static_cast<std::size_t>(profile.source);
-    const int ordinal = next_ordinal[slot]++;
     const PlacementRule* rule = placement_rule(profile.source);
 
     SceneDelta delta;
     delta.domain = DeltaDomain::Image;
     delta.strip_id = profile.strip_id;
+
+    if (!rule->centered && is_low_end_heavy(profile)) {
+      delta.pan = 0.0f;
+      delta.reason = "centred " + profile.strip_id + " because " +
+                     format_percent(profile.spectrum.energy_share_below(kMonoMakerCrossoverHz)) +
+                     "% of its energy sits below " + format_rounded(kMonoMakerCrossoverHz) +
+                     " Hz, where the low end stays at the centre";
+      deltas.push_back(std::move(delta));
+      continue;
+    }
+    const int ordinal = next_ordinal[slot]++;
 
     if (rule->centered) {
       // Centred explicitly rather than left alone: this domain applies last, so

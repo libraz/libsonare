@@ -59,6 +59,8 @@ constexpr std::array<SourcePriority, kSourceClassCount> kSourcePriorities = {{
     {SourceClass::Vocal, 100},
     {SourceClass::Lead, 90},
     {SourceClass::Kick, 85},
+    // Carries the kick and the backbeat, so it ranks between the two.
+    {SourceClass::DrumKit, 80},
     {SourceClass::Snare, 75},
     {SourceClass::Bass, 70},
     {SourceClass::Guitar, 55},
@@ -130,6 +132,8 @@ constexpr std::array<SourceHighPass, kSourceClassCount> kSourceHighPasses = {{
     // no lowest fundamental to sit under and no corner that is safe for all of
     // them.
     {SourceClass::Fx, kNoHighPass},
+    // Contains the kick, so it has no corner for the same reason the kick does.
+    {SourceClass::DrumKit, kNoHighPass},
     // Never consulted; see kSourcePriorities.
     {SourceClass::Unknown, kNoHighPass},
 }};
