@@ -596,6 +596,196 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
   }
 }
 
+TEST_CASE("sonare_decompose_stems_linked", "[c_api][effects]") {
+  const int sr = 22050;
+  auto left = generate_sine(440.0f, sr, 0.4f);
+  auto right = generate_sine(660.0f, sr, 0.4f);
+  const float* channels[2] = {left.data(), right.data()};
+
+  SECTION("emits [component][channel][sample] plus the factorisation") {
+    SonareDecomposeStemsConfig config{};
+    config.struct_version = 1;
+    config.n_components = 2;
+    config.n_fft = 1024;
+    config.hop_length = 256;
+    config.n_iter = 30;
+    float* out = nullptr;
+    size_t component_count = 0;
+    size_t channel_count = 0;
+    size_t component_length = 0;
+    float* w = nullptr;
+    size_t w_length = 0;
+    float* h = nullptr;
+    size_t h_length = 0;
+    REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, &config, &out,
+                                          &component_count, &channel_count, &component_length, &w,
+                                          &w_length, &h, &h_length) == SONARE_OK);
+    REQUIRE(component_count == 2);
+    REQUIRE(channel_count == 2);
+    REQUIRE(component_length == left.size());
+    REQUIRE(w_length == static_cast<size_t>(config.n_fft / 2 + 1) * component_count);
+    REQUIRE(h_length % component_count == 0);
+
+    // The masks partition each channel's own complex spectrogram, so summing
+    // the components reconstructs each channel over the interior, where the
+    // analysis window overlap is complete.
+    const size_t per_component = channel_count * component_length;
+    for (size_t c = 0; c < channel_count; ++c) {
+      const float* source = c == 0 ? left.data() : right.data();
+      double err = 0.0;
+      double ref = 0.0;
+      for (size_t i = static_cast<size_t>(config.n_fft);
+           i + static_cast<size_t>(config.n_fft) < component_length; ++i) {
+        double sum = 0.0;
+        for (size_t comp = 0; comp < component_count; ++comp) {
+          sum += out[comp * per_component + c * component_length + i];
+        }
+        err += (sum - source[i]) * (sum - source[i]);
+        ref += static_cast<double>(source[i]) * source[i];
+      }
+      REQUIRE(ref > 0.0);
+      REQUIRE(std::sqrt(err / ref) < 0.05);
+    }
+    sonare_free_floats(out);
+    sonare_free_floats(w);
+    sonare_free_floats(h);
+  }
+
+  SECTION("one channel matches sonare_decompose_stems bit for bit") {
+    SonareDecomposeStemsConfig config{};
+    config.struct_version = 1;
+    config.n_components = 2;
+    config.n_fft = 1024;
+    config.hop_length = 256;
+    config.n_iter = 20;
+
+    float* mono_out = nullptr;
+    size_t mono_count = 0;
+    size_t mono_length = 0;
+    float* mono_w = nullptr;
+    size_t mono_w_length = 0;
+    float* mono_h = nullptr;
+    size_t mono_h_length = 0;
+    REQUIRE(sonare_decompose_stems(left.data(), left.size(), sr, &config, &mono_out, &mono_count,
+                                   &mono_length, &mono_w, &mono_w_length, &mono_h,
+                                   &mono_h_length) == SONARE_OK);
+
+    const float* one_channel[1] = {left.data()};
+    float* linked_out = nullptr;
+    size_t linked_component_count = 0;
+    size_t linked_channel_count = 0;
+    size_t linked_component_length = 0;
+    float* linked_w = nullptr;
+    size_t linked_w_length = 0;
+    float* linked_h = nullptr;
+    size_t linked_h_length = 0;
+    REQUIRE(sonare_decompose_stems_linked(one_channel, 1, left.size(), sr, &config, &linked_out,
+                                          &linked_component_count, &linked_channel_count,
+                                          &linked_component_length, &linked_w, &linked_w_length,
+                                          &linked_h, &linked_h_length) == SONARE_OK);
+
+    REQUIRE(linked_component_count == mono_count);
+    REQUIRE(linked_channel_count == 1);
+    REQUIRE(linked_component_length == mono_length);
+    REQUIRE(linked_w_length == mono_w_length);
+    REQUIRE(linked_h_length == mono_h_length);
+    REQUIRE(max_abs_difference(linked_out, mono_out, linked_component_count * mono_length) == 0.0f);
+    REQUIRE(max_abs_difference(linked_w, mono_w, mono_w_length) == 0.0f);
+    REQUIRE(max_abs_difference(linked_h, mono_h, mono_h_length) == 0.0f);
+
+    sonare_free_floats(mono_out);
+    sonare_free_floats(mono_w);
+    sonare_free_floats(mono_h);
+    sonare_free_floats(linked_out);
+    sonare_free_floats(linked_w);
+    sonare_free_floats(linked_h);
+  }
+
+  SECTION("NULL config selects the defaults and W/H are optional") {
+    float* out = nullptr;
+    size_t component_count = 0;
+    size_t channel_count = 0;
+    size_t component_length = 0;
+    REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, nullptr, &out,
+                                          &component_count, &channel_count, &component_length,
+                                          nullptr, nullptr, nullptr, nullptr) == SONARE_OK);
+    REQUIRE(component_count == 4);
+    REQUIRE(channel_count == 2);
+    REQUIRE(component_length == left.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("rejects an unknown struct version and an out-of-range mask power") {
+    SonareDecomposeStemsConfig config{};
+    config.struct_version = 99;
+    float* out = non_null_sentinel_float_ptr();
+    size_t component_count = 99;
+    size_t channel_count = 99;
+    size_t component_length = 99;
+    REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, &config, &out,
+                                          &component_count, &channel_count, &component_length,
+                                          nullptr, nullptr, nullptr,
+                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(component_count == 0);
+    REQUIRE(channel_count == 0);
+    REQUIRE(component_length == 0);
+
+    config = SonareDecomposeStemsConfig{};
+    config.mask_power = 0.5f;
+    REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, &config, &out,
+                                          &component_count, &channel_count, &component_length,
+                                          nullptr, nullptr, nullptr,
+                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("rejects a half-supplied W or H out-parameter pair") {
+    float* out = nullptr;
+    size_t component_count = 0;
+    size_t channel_count = 0;
+    size_t component_length = 0;
+    float* w = nullptr;
+    REQUIRE(sonare_decompose_stems_linked(channels, 2, left.size(), sr, nullptr, &out,
+                                          &component_count, &channel_count, &component_length, &w,
+                                          nullptr, nullptr,
+                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION(
+      "rejects a null channel set, zero channels, a null channel buffer and an "
+      "over-limit channel count") {
+    float* out = non_null_sentinel_float_ptr();
+    size_t component_count = 99;
+    size_t channel_count = 99;
+    size_t component_length = 99;
+    REQUIRE(sonare_decompose_stems_linked(nullptr, 2, left.size(), sr, nullptr, &out,
+                                          &component_count, &channel_count, &component_length,
+                                          nullptr, nullptr, nullptr,
+                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(component_count == 0);
+    REQUIRE(channel_count == 0);
+    REQUIRE(component_length == 0);
+
+    REQUIRE(sonare_decompose_stems_linked(channels, 0, left.size(), sr, nullptr, &out,
+                                          &component_count, &channel_count, &component_length,
+                                          nullptr, nullptr, nullptr,
+                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+    const float* with_null[2] = {left.data(), nullptr};
+    REQUIRE(sonare_decompose_stems_linked(with_null, 2, left.size(), sr, nullptr, &out,
+                                          &component_count, &channel_count, &component_length,
+                                          nullptr, nullptr, nullptr,
+                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+    std::vector<const float*> too_many(65, left.data());
+    REQUIRE(sonare_decompose_stems_linked(too_many.data(), too_many.size(), left.size(), sr,
+                                          nullptr, &out, &component_count, &channel_count,
+                                          &component_length, nullptr, nullptr, nullptr,
+                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 TEST_CASE("sonare_hpss_with_residual", "[c_api][effects]") {
   const int sr = 22050;
   auto samples = generate_sine(440.0f, sr, 1.0f);

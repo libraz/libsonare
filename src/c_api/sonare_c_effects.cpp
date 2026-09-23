@@ -426,6 +426,113 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
   });
 }
 
+SonareError sonare_decompose_stems_linked(const float* const* channels, size_t channel_count,
+                                          size_t length, int sample_rate,
+                                          const SonareDecomposeStemsConfig* config, float** out,
+                                          size_t* out_component_count, size_t* out_channel_count,
+                                          size_t* out_component_length, float** out_w,
+                                          size_t* out_w_length, float** out_h,
+                                          size_t* out_h_length) {
+  SONARE_C_API_ENTRY;
+  // Same output-pair guard as sonare_decompose_stems, extended with the
+  // channel-count output every caller of this entry must read.
+  if (!out || !out_component_count || !out_channel_count || !out_component_length ||
+      ((out_w != nullptr) != (out_w_length != nullptr)) ||
+      ((out_h != nullptr) != (out_h_length != nullptr))) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out = nullptr;
+  *out_component_count = 0;
+  *out_channel_count = 0;
+  *out_component_length = 0;
+  if (out_w != nullptr) {
+    *out_w = nullptr;
+    *out_w_length = 0;
+  }
+  if (out_h != nullptr) {
+    *out_h = nullptr;
+    *out_h_length = 0;
+  }
+  if (config != nullptr && (config->struct_version < 0 || config->struct_version > 1)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  DecomposeStemsConfig core_config;
+  if (config != nullptr) {
+    if (config->n_components < 0 || config->n_fft < 0 || config->hop_length < 0 ||
+        config->n_iter < 0 || !std::isfinite(config->beta) || !std::isfinite(config->mask_power) ||
+        config->mask_power < 0.0f) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (config->n_components > 0) core_config.n_components = config->n_components;
+    if (config->n_fft > 0) core_config.n_fft = config->n_fft;
+    if (config->hop_length > 0) core_config.hop_length = config->hop_length;
+    if (config->n_iter > 0) core_config.n_iter = config->n_iter;
+    if (config->beta != 0.0f) core_config.beta = config->beta;
+    if (config->init != nullptr && config->init[0] != '\0') core_config.init = config->init;
+    if (config->mask_power > 0.0f) core_config.mask_power = config->mask_power;
+  }
+  if (core_config.mask_power < 1.0f) return SONARE_ERROR_INVALID_PARAMETER;
+
+  if (channels == nullptr || channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // channel_count > kMaxDecomposeStemsLinkedChannels is left to the core throw
+  // below (SONARE_C_CATCH maps it to SONARE_ERROR_INVALID_PARAMETER), same as
+  // every other bound the core owns for this entry.
+
+  std::vector<Audio> audio;
+  audio.reserve(channel_count);
+  for (size_t c = 0; c < channel_count; ++c) {
+    SonareError err = validate_audio_params(channels[c], length, sample_rate);
+    if (err != SONARE_OK) return err;
+    audio.push_back(Audio::from_buffer(channels[c], length, sample_rate));
+  }
+  std::vector<const float*> pointers;
+  pointers.reserve(channel_count);
+  for (const Audio& one : audio) pointers.push_back(one.data());
+
+  SONARE_C_TRY
+  DecomposeStemsLinkedResult result =
+      decompose_stems_linked(pointers.data(), channel_count, length, sample_rate, core_config);
+  if (result.components.empty()) return SONARE_OK;
+  const size_t component_length =
+      result.components.front().empty() ? 0 : result.components.front().front().size();
+  if (component_length == 0) return SONARE_OK;
+  // Overflow-checked the same way as sonare_decompose_stems: reject rather than
+  // wrap before the flat [component][channel][sample] allocation is sized.
+  if (channel_count > SIZE_MAX / component_length) return SONARE_ERROR_INVALID_PARAMETER;
+  const size_t per_component = channel_count * component_length;
+  if (result.components.size() > SIZE_MAX / per_component) return SONARE_ERROR_INVALID_PARAMETER;
+
+  auto flat = std::make_unique<float[]>(result.components.size() * per_component);
+  for (size_t component = 0; component < result.components.size(); ++component) {
+    for (size_t c = 0; c < channel_count; ++c) {
+      std::memcpy(flat.get() + component * per_component + c * component_length,
+                  result.components[component][c].data(), component_length * sizeof(float));
+    }
+  }
+  if (out_w != nullptr) {
+    SonareError werr = copy_vector(result.W, out_w, out_w_length);
+    if (werr != SONARE_OK) return werr;
+  }
+  if (out_h != nullptr) {
+    SonareError herr = copy_vector(result.H, out_h, out_h_length);
+    if (herr != SONARE_OK) {
+      if (out_w != nullptr) {
+        sonare_free_floats(*out_w);
+        *out_w = nullptr;
+        *out_w_length = 0;
+      }
+      return herr;
+    }
+  }
+  *out = flat.release();
+  *out_component_count = result.components.size();
+  *out_channel_count = channel_count;
+  *out_component_length = component_length;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, int sample_rate,
                                            const int* intervals, size_t interval_count,
                                            int align_zeros, int** out, size_t* out_count) {

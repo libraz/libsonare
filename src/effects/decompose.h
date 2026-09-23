@@ -98,6 +98,54 @@ struct DecomposeStemsResult {
 DecomposeStemsResult decompose_stems(const float* samples, std::size_t n, int sample_rate,
                                      const DecomposeStemsConfig& config = DecomposeStemsConfig());
 
+/// @brief Output of @ref decompose_stems_linked.
+struct DecomposeStemsLinkedResult {
+  /// One time-domain signal per (component, channel): `components[k][c]`, each
+  /// the length of the input.
+  std::vector<std::vector<std::vector<float>>> components;
+  std::vector<float> W;  ///< Component matrix [n_bins x n_components] row-major.
+  std::vector<float> H;  ///< Activation matrix [n_components x n_frames] row-major.
+};
+
+/// @brief Largest @c channel_count @ref decompose_stems_linked accepts.
+/// @details A chosen ceiling, not a derived one. Nothing else in this file's
+///          `*_linked` neighbourhood (@c denoise_classical_linked) enforces a
+///          channel-count bound of its own -- its channel vectors are sized
+///          dynamically with no ceiling -- so this value has no existing
+///          precedent to inherit; it is simply the cap this entry point picks.
+inline constexpr std::size_t kMaxDecomposeStemsLinkedChannels = 64;
+
+/// @brief Multi-channel form of @ref decompose_stems: one NMF model and one
+///        soft mask shared across every channel.
+/// @details The per-channel complex spectrograms are averaged into a single
+///          magnitude plane `M = (1/C) * sum_c |X_c|`, which drives one NMF
+///          factorisation and one set of per-component soft masks (as
+///          @ref decompose_stems computes for its single channel). Each mask is
+///          then applied, UNCHANGED, to every channel's own complex spectrum
+///          before inverse STFT, so no interchannel level or phase difference
+///          moves -- the same guarantee @c denoise_classical_linked gives its
+///          gain mask.
+///
+///          @p channel_count == 1 reproduces @ref decompose_stems bit for bit:
+///          the mean over one channel is a division by 1, which does not change
+///          the bits, so this is genuinely the same computation and not merely
+///          an equivalent one. @ref decompose_stems is implemented as this call
+///          with one channel.
+/// @param channels @p channel_count buffers of @p n samples each; none NULL.
+/// @param channel_count Number of channels; at least one and at most
+///        @ref kMaxDecomposeStemsLinkedChannels.
+/// @param n Samples per channel. One length for the set.
+/// @param sample_rate Sample rate in Hz, shared by every channel.
+/// @param config Component count, STFT geometry, NMF and mask settings.
+/// @return One signal per (component, channel) plus the factorisation that
+///         produced them.
+/// @throw sonare::SonareException on a null/empty channel set, a channel count
+///        outside [1, @ref kMaxDecomposeStemsLinkedChannels], or an invalid
+///        configuration.
+DecomposeStemsLinkedResult decompose_stems_linked(
+    const float* const* channels, std::size_t channel_count, std::size_t n, int sample_rate,
+    const DecomposeStemsConfig& config = DecomposeStemsConfig());
+
 /// @brief Nearest-neighbour filter for spectrogram denoising.
 /// @details Mirrors `librosa.decompose.nn_filter`. For each frame, the k
 /// nearest neighbour frames (by cosine similarity, with frames within `width`

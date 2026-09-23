@@ -128,6 +128,38 @@ void multiply_WH(const std::vector<float>& W, const std::vector<float>& H, int n
   }
 }
 
+/// @brief Model magnitude per component, then the shared denominator.
+/// @details Shared by @ref decompose_stems_linked's every caller (mono goes
+///          through it with @p channel_count == 1): one pass over W*H per
+///          component, computed once for the whole spectrogram rather than
+///          per channel, so C channels cost the same model build as one.
+void build_component_model(const DecomposeResult& factors, int n_bins, int n_frames, int k,
+                           float mask_power, std::vector<float>& model,
+                           std::vector<float>& denominator) {
+  const std::size_t cells = static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames);
+  model.assign(cells * static_cast<std::size_t>(k), 0.0f);
+  denominator.assign(cells, 0.0f);
+  for (int component = 0; component < k; ++component) {
+    float* plane = model.data() + static_cast<std::size_t>(component) * cells;
+    for (int bin = 0; bin < n_bins; ++bin) {
+      const float w = factors.W[static_cast<std::size_t>(bin) * static_cast<std::size_t>(k) +
+                                static_cast<std::size_t>(component)];
+      for (int frame = 0; frame < n_frames; ++frame) {
+        const float h =
+            factors.H[static_cast<std::size_t>(component) * static_cast<std::size_t>(n_frames) +
+                      static_cast<std::size_t>(frame)];
+        const float value = std::max(w * h, 0.0f);
+        const float weighted = mask_power == 1.0f ? value : std::pow(value, mask_power);
+        const std::size_t cell =
+            static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames) +
+            static_cast<std::size_t>(frame);
+        plane[cell] = weighted;
+        denominator[cell] += weighted;
+      }
+    }
+  }
+}
+
 }  // namespace
 
 DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_components,
@@ -415,73 +447,96 @@ void validate_config(const DecomposeStemsConfig& config) {
                    "DecomposeStemsConfig: maskPower must be finite and at least 1");
 }
 
-DecomposeStemsResult decompose_stems(const float* samples, std::size_t n, int sample_rate,
-                                     const DecomposeStemsConfig& config) {
+DecomposeStemsLinkedResult decompose_stems_linked(const float* const* channels,
+                                                  std::size_t channel_count, std::size_t n,
+                                                  int sample_rate,
+                                                  const DecomposeStemsConfig& config) {
   const DecomposeStemsConfig checked = Validated<DecomposeStemsConfig>::make(config).get();
-  SONARE_CHECK(samples != nullptr && n > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(channels != nullptr && channel_count > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(channel_count <= kMaxDecomposeStemsLinkedChannels, ErrorCode::InvalidParameter);
+  for (std::size_t c = 0; c < channel_count; ++c) {
+    SONARE_CHECK(channels[c] != nullptr, ErrorCode::InvalidParameter);
+  }
+  SONARE_CHECK(n > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
 
-  const Audio audio = Audio::from_buffer(samples, n, sample_rate);
-  const Spectrogram spectrum =
-      Spectrogram::compute(audio, make_stft_config(checked.n_fft, checked.hop_length));
-  const int n_bins = spectrum.n_bins();
-  const int n_frames = spectrum.n_frames();
+  const StftConfig stft_config = make_stft_config(checked.n_fft, checked.hop_length);
+  std::vector<Audio> audio;
+  std::vector<Spectrogram> spectra;
+  audio.reserve(channel_count);
+  spectra.reserve(channel_count);
+  for (std::size_t c = 0; c < channel_count; ++c) {
+    audio.push_back(Audio::from_buffer(channels[c], n, sample_rate));
+    spectra.push_back(Spectrogram::compute(audio.back(), stft_config));
+  }
+  const int n_bins = spectra.front().n_bins();
+  const int n_frames = spectra.front().n_frames();
   SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
+  const std::size_t cells = static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames);
 
-  const std::vector<float>& magnitude = spectrum.magnitude();
-  DecomposeResult factors = decompose(magnitude.data(), n_bins, n_frames, checked.n_components,
+  // M = (1/C) * sum_c |X_c|. For channel_count == 1 the sum is a single term
+  // (adding 0 changes nothing) and the divide is by 1 (exact in IEEE754), so
+  // this reproduces the mono magnitude bit for bit rather than merely
+  // approximating it.
+  std::vector<float> mean_magnitude(cells, 0.0f);
+  for (std::size_t c = 0; c < channel_count; ++c) {
+    const std::complex<float>* spectrum = spectra[c].complex_data();
+    for (std::size_t cell = 0; cell < cells; ++cell) {
+      mean_magnitude[cell] += std::abs(spectrum[cell]);
+    }
+  }
+  const float channel_count_f = static_cast<float>(channel_count);
+  for (float& value : mean_magnitude) value /= channel_count_f;
+
+  DecomposeResult factors = decompose(mean_magnitude.data(), n_bins, n_frames, checked.n_components,
                                       checked.n_iter, "mu", checked.beta, checked.init);
 
   const int k = checked.n_components;
-  const std::complex<float>* source = spectrum.complex_data();
-  const std::size_t cells = static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames);
+  std::vector<float> model;
+  std::vector<float> denominator;
+  build_component_model(factors, n_bins, n_frames, k, checked.mask_power, model, denominator);
 
-  // Model magnitude per component, then the shared denominator. Computed once
-  // for the whole spectrogram rather than per component so the k reconstructions
-  // cost one pass over W*H instead of k.
-  std::vector<float> model(cells * static_cast<std::size_t>(k), 0.0f);
-  std::vector<float> denominator(cells, 0.0f);
-  for (int component = 0; component < k; ++component) {
-    float* plane = model.data() + static_cast<std::size_t>(component) * cells;
-    for (int bin = 0; bin < n_bins; ++bin) {
-      const float w = factors.W[static_cast<std::size_t>(bin) * static_cast<std::size_t>(k) +
-                                static_cast<std::size_t>(component)];
-      for (int frame = 0; frame < n_frames; ++frame) {
-        const float h =
-            factors.H[static_cast<std::size_t>(component) * static_cast<std::size_t>(n_frames) +
-                      static_cast<std::size_t>(frame)];
-        const float value = std::max(w * h, 0.0f);
-        const float weighted =
-            checked.mask_power == 1.0f ? value : std::pow(value, checked.mask_power);
-        const std::size_t cell =
-            static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames) +
-            static_cast<std::size_t>(frame);
-        plane[cell] = weighted;
-        denominator[cell] += weighted;
-      }
-    }
-  }
-
-  DecomposeStemsResult out;
+  DecomposeStemsLinkedResult out;
   out.W = std::move(factors.W);
   out.H = std::move(factors.H);
-  out.components.reserve(static_cast<std::size_t>(k));
+  out.components.assign(static_cast<std::size_t>(k),
+                        std::vector<std::vector<float>>(channel_count));
   std::vector<std::complex<float>> masked(cells);
   for (int component = 0; component < k; ++component) {
     const float* plane = model.data() + static_cast<std::size_t>(component) * cells;
-    for (std::size_t cell = 0; cell < cells; ++cell) {
-      // A cell the model gives no energy to is dropped from every component
-      // rather than split evenly, so the masks never manufacture signal where
-      // the factorisation has none.
-      const float total = denominator[cell];
-      const float mask = total > kEps ? plane[cell] / total : 0.0f;
-      masked[cell] = source[cell] * mask;
+    for (std::size_t c = 0; c < channel_count; ++c) {
+      const std::complex<float>* source = spectra[c].complex_data();
+      for (std::size_t cell = 0; cell < cells; ++cell) {
+        // A cell the model gives no energy to is dropped from every component
+        // rather than split evenly, so the masks never manufacture signal
+        // where the factorisation has none. One mask per cell, applied
+        // unchanged to every channel's own spectrum.
+        const float total = denominator[cell];
+        const float mask = total > kEps ? plane[cell] / total : 0.0f;
+        masked[cell] = source[cell] * mask;
+      }
+      const Spectrogram component_spectrum =
+          Spectrogram::from_complex(masked.data(), n_bins, n_frames, checked.n_fft,
+                                    checked.hop_length, sample_rate, spectra[c].window());
+      const Audio rendered = component_spectrum.to_audio(static_cast<int>(n));
+      out.components[static_cast<std::size_t>(component)][c] =
+          std::vector<float>(rendered.data(), rendered.data() + rendered.size());
     }
-    const Spectrogram component_spectrum =
-        Spectrogram::from_complex(masked.data(), n_bins, n_frames, checked.n_fft,
-                                  checked.hop_length, sample_rate, spectrum.window());
-    const Audio rendered = component_spectrum.to_audio(static_cast<int>(n));
-    out.components.emplace_back(rendered.data(), rendered.data() + rendered.size());
+  }
+  return out;
+}
+
+DecomposeStemsResult decompose_stems(const float* samples, std::size_t n, int sample_rate,
+                                     const DecomposeStemsConfig& config) {
+  const float* channels[1] = {samples};
+  DecomposeStemsLinkedResult linked = decompose_stems_linked(channels, 1, n, sample_rate, config);
+
+  DecomposeStemsResult out;
+  out.W = std::move(linked.W);
+  out.H = std::move(linked.H);
+  out.components.reserve(linked.components.size());
+  for (std::vector<std::vector<float>>& component : linked.components) {
+    out.components.push_back(std::move(component[0]));
   }
   return out;
 }

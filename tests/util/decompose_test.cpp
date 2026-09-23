@@ -147,6 +147,206 @@ TEST_CASE("decompose_stems rejects an invalid configuration", "[util][decompose]
   REQUIRE_THROWS(decompose_stems(x.data(), 0, 22050, DecomposeStemsConfig()));
 }
 
+namespace {
+
+/// FNV-1a 64 over the raw bits of every float in @p values, continuing @p hash
+/// rather than resetting it, so a caller can fold several arrays into one digest.
+std::uint64_t fold_fnv1a_bits(std::uint64_t hash, const std::vector<float>& values) {
+  constexpr std::uint64_t kPrime = 1099511628211ull;
+  for (float value : values) {
+    std::uint32_t bits;
+    std::memcpy(&bits, &value, sizeof(bits));
+    for (int byte = 0; byte < 4; ++byte) {
+      hash ^= static_cast<std::uint8_t>((bits >> (byte * 8)) & 0xffu);
+      hash *= kPrime;
+    }
+  }
+  return hash;
+}
+
+}  // namespace
+
+TEST_CASE("decompose_stems output digest is pinned across the linked rewrite",
+          "[util][decompose]") {
+  // Fixed input, fixed config: this digest is captured from the pre-rewrite
+  // mono-only decompose_stems and must stay bit-identical once decompose_stems
+  // becomes a one-channel call into decompose_stems_linked. A change here is a
+  // regression in the rewrite, not an intended behaviour change.
+  constexpr int kSampleRate = 22050;
+  const std::vector<float> x = two_gated_tones(kSampleRate, 8192);
+  DecomposeStemsConfig config;
+  config.n_components = 3;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.n_iter = 40;
+  auto r = decompose_stems(x.data(), x.size(), kSampleRate, config);
+  REQUIRE(r.components.size() == 3);
+
+  constexpr std::uint64_t kFnvOffsetBasis = 1469598103934665603ull;
+  std::uint64_t hash = kFnvOffsetBasis;
+  for (const std::vector<float>& component : r.components) hash = fold_fnv1a_bits(hash, component);
+  hash = fold_fnv1a_bits(hash, r.W);
+  hash = fold_fnv1a_bits(hash, r.H);
+
+  REQUIRE(hash == 0xb832e14ef41ad3cbull);
+}
+
+namespace {
+double signal_energy_range(const std::vector<float>& v, std::size_t start, std::size_t end) {
+  double e = 0.0;
+  for (std::size_t i = start; i < end; ++i) e += static_cast<double>(v[i]) * v[i];
+  return e;
+}
+}  // namespace
+
+TEST_CASE("decompose_stems_linked with one channel matches decompose_stems bit for bit",
+          "[util][decompose]") {
+  constexpr int kSampleRate = 22050;
+  const std::vector<float> x = two_gated_tones(kSampleRate, 8192);
+  DecomposeStemsConfig config;
+  config.n_components = 2;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.n_iter = 40;
+
+  auto mono = decompose_stems(x.data(), x.size(), kSampleRate, config);
+  const float* channels[1] = {x.data()};
+  auto linked = decompose_stems_linked(channels, 1, x.size(), kSampleRate, config);
+
+  REQUIRE(linked.components.size() == mono.components.size());
+  REQUIRE(linked.W == mono.W);
+  REQUIRE(linked.H == mono.H);
+  for (std::size_t k = 0; k < mono.components.size(); ++k) {
+    REQUIRE(linked.components[k].size() == 1);
+    REQUIRE(linked.components[k][0] == mono.components[k]);
+  }
+}
+
+TEST_CASE("decompose_stems_linked reconstructs each channel above 40 dB SNR", "[util][decompose]") {
+  constexpr int kSampleRate = 22050;
+  constexpr std::size_t kSamples = 8192;
+  std::vector<float> left(kSamples);
+  std::vector<float> right(kSamples);
+  const double two_pi = 6.283185307179586;
+  for (std::size_t i = 0; i < kSamples; ++i) {
+    const double t = static_cast<double>(i) / kSampleRate;
+    left[i] = static_cast<float>(0.5 * std::sin(two_pi * 300.0 * t));
+    right[i] = static_cast<float>(0.4 * std::sin(two_pi * 1200.0 * t + 0.3));
+  }
+  DecomposeStemsConfig config;
+  config.n_components = 3;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.n_iter = 60;
+  const float* channels[2] = {left.data(), right.data()};
+  auto r = decompose_stems_linked(channels, 2, kSamples, kSampleRate, config);
+  REQUIRE(r.components.size() == 3);
+
+  for (std::size_t c = 0; c < 2; ++c) {
+    const std::vector<float>& source = c == 0 ? left : right;
+    std::vector<float> sum(kSamples, 0.0f);
+    for (const auto& component : r.components) {
+      REQUIRE(component.size() == 2);
+      for (std::size_t i = 0; i < kSamples; ++i) sum[i] += component[c][i];
+    }
+    // Compare over the interior, where the analysis-window overlap is complete
+    // (matches the mono reconstruction test's edge handling).
+    const std::size_t start = static_cast<std::size_t>(config.n_fft);
+    const std::size_t end = kSamples - static_cast<std::size_t>(config.n_fft);
+    double err = 0.0;
+    double ref = 0.0;
+    for (std::size_t i = start; i < end; ++i) {
+      const double diff = sum[i] - source[i];
+      err += diff * diff;
+      ref += static_cast<double>(source[i]) * source[i];
+    }
+    REQUIRE(ref > 0.0);
+    const double snr_db = 10.0 * std::log10(ref / err);
+    REQUIRE(snr_db >= 40.0);
+  }
+}
+
+TEST_CASE("decompose_stems_linked separates non-overlapping per-channel tones by 60 dB",
+          "[util][decompose]") {
+  constexpr int kSampleRate = 22050;
+  constexpr std::size_t kSamples = 8192;
+  // n_fft=1024 at this rate gives ~21.5 Hz/bin; 300 Hz and 2000 Hz land in
+  // disjoint bins with plenty of margin. Gated to disjoint halves too: two
+  // tones simultaneously active for the whole clip give the mean-magnitude
+  // plane no temporal cue at all, so it is well approximated by a SINGLE
+  // NMF component (a bin profile times a constant-over-time activation) and
+  // the second component never claims either frequency -- confirmed by
+  // inspection before this gating was added. Gating (as the mono
+  // two_gated_tones fixture already relies on) gives H a real per-component
+  // difference to converge on, which frequency separation alone does not.
+  std::vector<float> left(kSamples, 0.0f);
+  std::vector<float> right(kSamples, 0.0f);
+  const double two_pi = 6.283185307179586;
+  for (std::size_t i = 0; i < kSamples; ++i) {
+    const double t = static_cast<double>(i) / kSampleRate;
+    if (i < kSamples / 2) {
+      left[i] = static_cast<float>(0.5 * std::sin(two_pi * 300.0 * t));
+    } else {
+      right[i] = static_cast<float>(0.5 * std::sin(two_pi * 2000.0 * t));
+    }
+  }
+  DecomposeStemsConfig config;
+  config.n_components = 2;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.n_iter = 150;
+  config.init = "nndsvd";
+  config.mask_power = 2.0f;  // Wiener-style: sharper masks than the magnitude ratio.
+  const float* channels[2] = {left.data(), right.data()};
+  auto r = decompose_stems_linked(channels, 2, kSamples, kSampleRate, config);
+  REQUIRE(r.components.size() == 2);
+
+  // Measured over the interior of each channel's own active half, away from
+  // the STFT edge (n_fft) and the on/off gate at the midpoint, where the
+  // analysis window straddles both halves and a spectrally clean separation
+  // still shows some crossover -- a windowing artefact of the abrupt gate,
+  // not a claim about the mask itself.
+  const std::size_t guard = static_cast<std::size_t>(config.n_fft);
+  const std::size_t half = kSamples / 2;
+  const std::size_t l_start = guard;
+  const std::size_t l_end = half - guard;
+  const std::size_t r_start = half + guard;
+  const std::size_t r_end = kSamples - guard;
+
+  // Whichever component carries the most L (f1) energy must carry almost none
+  // of R's, and the other component (f2's) must carry almost none of L's --
+  // the two source frequencies never share a bin, so a real separation puts
+  // each on its own component.
+  const double l_energy0 = signal_energy_range(r.components[0][0], l_start, l_end);
+  const double l_energy1 = signal_energy_range(r.components[1][0], l_start, l_end);
+  const std::size_t l_leader = l_energy0 >= l_energy1 ? 0 : 1;
+  const std::size_t r_leader = 1 - l_leader;
+
+  const double leader_l = signal_energy_range(r.components[l_leader][0], l_start, l_end);
+  const double leader_r = signal_energy_range(r.components[l_leader][1], r_start, r_end);
+  REQUIRE(leader_l > 0.0);
+  REQUIRE(10.0 * std::log10(leader_l / std::max(leader_r, 1e-30)) >= 60.0);
+
+  const double other_r = signal_energy_range(r.components[r_leader][1], r_start, r_end);
+  const double other_l = signal_energy_range(r.components[r_leader][0], l_start, l_end);
+  REQUIRE(other_r > 0.0);
+  REQUIRE(10.0 * std::log10(other_r / std::max(other_l, 1e-30)) >= 60.0);
+}
+
+TEST_CASE("decompose_stems_linked rejects an invalid channel set", "[util][decompose]") {
+  const std::vector<float> x(2048, 0.1f);
+  const float* one_channel[1] = {x.data()};
+  REQUIRE_THROWS(decompose_stems_linked(nullptr, 1, x.size(), 22050, DecomposeStemsConfig()));
+  REQUIRE_THROWS(decompose_stems_linked(one_channel, 0, x.size(), 22050, DecomposeStemsConfig()));
+  const float* null_channel[1] = {nullptr};
+  REQUIRE_THROWS(decompose_stems_linked(null_channel, 1, x.size(), 22050, DecomposeStemsConfig()));
+  REQUIRE_THROWS(decompose_stems_linked(one_channel, 1, 0, 22050, DecomposeStemsConfig()));
+
+  std::vector<const float*> too_many(kMaxDecomposeStemsLinkedChannels + 1, x.data());
+  REQUIRE_THROWS(decompose_stems_linked(too_many.data(), too_many.size(), x.size(), 22050,
+                                        DecomposeStemsConfig()));
+}
+
 TEST_CASE("nn_filter rejects a negative width", "[util][decompose]") {
   std::vector<float> S{
       1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f,
