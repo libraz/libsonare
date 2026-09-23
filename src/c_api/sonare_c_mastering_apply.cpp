@@ -345,6 +345,29 @@ const char* sonare_mastering_insert_param_info(const char* name) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
+SonareError sonare_mastering_insert_timing(const char* name, const char* params, int sample_rate,
+                                           int* out_latency_samples, int* out_tail_samples) {
+  SONARE_C_API_ENTRY;
+  if (out_latency_samples == nullptr || out_tail_samples == nullptr) {
+    set_last_error("out_latency_samples and out_tail_samples are required");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_latency_samples = 0;
+  *out_tail_samples = 0;
+  if (sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate) {
+    set_last_error(("sample_rate " + std::to_string(sample_rate) + " is out of range").c_str());
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  const auto timing = sonare::mastering::api::insert_timing(
+      name != nullptr ? name : "", params != nullptr ? params : "{}", sample_rate);
+  *out_latency_samples = timing.latency_samples;
+  *out_tail_samples = timing.tail_samples;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_mastering_apply_pair_processor_ex(
     const char* processor_name, const float* source, size_t source_length, const float* reference,
     size_t reference_length, int sample_rate, const SonareMasteringParam* params,

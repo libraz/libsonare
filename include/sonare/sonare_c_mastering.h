@@ -385,8 +385,9 @@ const char* sonare_mastering_stereo_analysis_names(void);
 ///   or `"high"` for those ids and JSON null otherwise; it is a coarse
 ///   algorithmic estimate, not a hardware benchmark.
 ///   for the ids in @ref sonare_mastering_insert_names. Timing values come from
-///   one prepared default 48 kHz / 512-sample probe and are representative for
-///   configuration-dependent inserts; offline entries report zero. The id
+///   one prepared default 48 kHz / 512-sample probe; for a configuration that
+///   changes them, ask @ref sonare_mastering_insert_timing. Offline entries
+///   report zero. The id
 ///   universe is the union of @ref sonare_mastering_processor_names, the insert
 ///   set, and @ref sonare_mastering_pair_processor_names, so realtime-only and
 ///   pair-only ids are still reported.
@@ -491,6 +492,32 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///       supplied are not listed.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_info(const char* name);
+/// @brief Latency and tail of one insert built from @p params and prepared at
+///        @p sample_rate.
+/// @details What a host needs for delay compensation of a slot whose
+///   configuration changes the processor's delay — an oversampled saturation
+///   path, a linear-phase crossover, a lookahead. The insert is built exactly as
+///   a scene or strip would build it and asked after `prepare`, so the answer is
+///   the one that instance will report. The capability catalog's
+///   `latencySamples` and `tailSamples` are this query at default parameters and
+///   48 kHz. An insert that takes an impulse response
+///   (`effects.reverb.convolution`) answers for its configuration without one;
+///   its latency is its fixed partition size and does not depend on the IR.
+///
+///   A key the insert does not read is refused rather than ignored, because an
+///   ignored key would answer for a configuration the caller did not ask for.
+///   Both outputs are zeroed on entry and written only on success.
+/// @param name Insert processor name (see @ref sonare_mastering_insert_names).
+/// @param params JSON object of flat parameter values, keyed as in @ref
+///   sonare_mastering_insert_param_info. NULL is the empty object.
+/// @param sample_rate Rate the insert is prepared at.
+/// @param out_latency_samples Receives the latency in samples at @p sample_rate.
+/// @param out_tail_samples Receives the tail in samples at @p sample_rate.
+/// @return SONARE_ERROR_INVALID_PARAMETER for an unknown @p name, a key the
+///   insert does not read, a value its construction refuses, a sample rate
+///   outside the supported range, or a NULL output pointer.
+SonareError sonare_mastering_insert_timing(const char* name, const char* params, int sample_rate,
+                                           int* out_latency_samples, int* out_tail_samples);
 
 /// @details @ref SonareMasteringResult::non_finite_substitution_count here:
 ///   whether this can be non-zero depends on which processor was named. One

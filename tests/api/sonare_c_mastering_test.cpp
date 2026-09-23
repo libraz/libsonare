@@ -1007,6 +1007,90 @@ TEST_CASE("sonare_mastering named-processor refuses an undeclared enum value",
   sonare_free_mastering_result(&out);
 }
 
+TEST_CASE("sonare_mastering_insert_timing answers for the configured instance",
+          "[c_api][mastering]") {
+  int latency = -1;
+  int tail = -1;
+  REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", "{\"aliasing\":3}", 48000,
+                                         &latency, &tail) == SONARE_OK);
+  CHECK(latency > 0);
+  CHECK(tail >= 0);
+
+  // NULL params is the empty object.
+  int default_latency = -1;
+  int default_tail = -1;
+  REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", nullptr, 48000, &default_latency,
+                                         &default_tail) == SONARE_OK);
+  CHECK(default_latency < latency);
+
+  // At defaults and 48 kHz it is the catalog's own figure, for every insert.
+  const auto catalog = sonare::util::json::parse_strict(sonare_mastering_processor_catalog());
+  int compared = 0;
+  for (const auto& entry : catalog.as_array()) {
+    if (!entry["realtimeInsertable"].as_bool()) continue;
+    const std::string& id = entry["id"].as_string();
+    CAPTURE(id);
+    REQUIRE(sonare_mastering_insert_timing(id.c_str(), "{}", 48000, &latency, &tail) == SONARE_OK);
+    CHECK(latency == entry["latencySamples"].as_int());
+    CHECK(tail == entry["tailSamples"].as_int());
+    ++compared;
+  }
+  CHECK(compared > 0);
+}
+
+TEST_CASE("sonare_mastering_insert_timing refuses what it cannot answer for",
+          "[c_api][mastering]") {
+  int latency = -1;
+  int tail = -1;
+  const auto message = [] { return std::string(sonare_last_error_message()); };
+
+  SECTION("unknown insert") {
+    REQUIRE(sonare_mastering_insert_timing("saturation.noSuchThing", "{}", 48000, &latency,
+                                           &tail) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message().find("unknown insert processor: saturation.noSuchThing") != std::string::npos);
+    CHECK(latency == 0);
+    CHECK(tail == 0);
+  }
+  SECTION("a key the insert does not read") {
+    REQUIRE(sonare_mastering_insert_timing("saturation.softClipper",
+                                           "{\"aliasing\":3,\"zeta\":1,\"alpha\":2}", 48000,
+                                           &latency, &tail) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(message().find("saturation.softClipper does not read parameter(s): alpha, zeta") !=
+          std::string::npos);
+    CHECK(latency == 0);
+    CHECK(tail == 0);
+  }
+  SECTION("a value construction refuses") {
+    REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", "{\"aliasing\":2}", 48000,
+                                           &latency, &tail) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_FALSE(message().empty());
+  }
+  SECTION("sample rate out of range") {
+    for (int rate : {0, -48000, sonare::kMinAudioSampleRate - 1, sonare::kMaxAudioSampleRate + 1}) {
+      CAPTURE(rate);
+      latency = -1;
+      tail = -1;
+      REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", "{}", rate, &latency,
+                                             &tail) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(message().find("sample_rate " + std::to_string(rate) + " is out of range") !=
+            std::string::npos);
+      CHECK(latency == 0);
+      CHECK(tail == 0);
+    }
+    REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", "{}",
+                                           sonare::kMaxAudioSampleRate, &latency,
+                                           &tail) == SONARE_OK);
+  }
+  SECTION("NULL outputs") {
+    REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", "{}", 48000, nullptr, &tail) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_FALSE(message().empty());
+    REQUIRE(sonare_mastering_insert_timing("saturation.softClipper", "{}", 48000, &latency,
+                                           nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK_FALSE(message().empty());
+  }
+}
+
 TEST_CASE("sonare_mastering trimSilence measures an all-silent empty result safely",
           "[c_api][mastering][trim_silence][empty]") {
   constexpr int sample_rate = 48000;

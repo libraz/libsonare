@@ -7,6 +7,7 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "rt/processor_base.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::api {
 
@@ -164,29 +165,34 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept {
   return "multichannel";
 }
 
+InsertTiming insert_timing(const std::string& name, const std::string& json_params,
+                           double sample_rate) {
+  std::vector<std::string> unknown;
+  std::unique_ptr<sonare::rt::ProcessorBase> processor = make_insert(name, json_params, &unknown);
+  if (processor == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter, "unknown insert processor: " + name);
+  }
+  if (!unknown.empty()) {
+    std::string keys;
+    for (const std::string& key : unknown) {
+      if (!keys.empty()) keys += ", ";
+      keys += key;
+    }
+    throw SonareException(ErrorCode::InvalidParameter,
+                          name + " does not read parameter(s): " + keys);
+  }
+  processor->prepare(sample_rate, kInsertProbeBlockSize);
+  return {std::max(0, processor->latency_samples()), std::max(0, processor->tail_samples())};
+}
+
 namespace {
 
-// Representative configuration for probing realtime-insert timing. Config-
-// dependent processors (linear-phase EQ FFT length, lookahead limiters/
-// maximizers, delays/reverbs) derive their reported latency/tail at prepare()
-// time from the block size, sample rate, and parameters, so catalog values
-// reflect this default configuration and are representative rather than exact
-// for a differently configured insert; the host treats them as fallback
-// estimates. Both values come from one prepared instance so they cannot drift.
-
-struct InsertTiming {
-  int latency_samples = 0;
-  int tail_samples = 0;
-};
-
-// Timing an insertable processor reports for its default configuration, or
-// zeros for an id with no realtime insert or that fails to build/prepare.
-InsertTiming insert_timing(const std::string& id) {
+// Timing an insertable processor reports for its default configuration at the
+// probe rate, or zeros for an id with no realtime insert or that fails to
+// build/prepare. A configured instance can differ; insert_timing() answers it.
+InsertTiming default_insert_timing(const std::string& id) {
   try {
-    std::unique_ptr<sonare::rt::ProcessorBase> processor = make_insert(id, "{}");
-    if (processor == nullptr) return {};
-    processor->prepare(kInsertProbeSampleRate, kInsertProbeBlockSize);
-    return {std::max(0, processor->latency_samples()), std::max(0, processor->tail_samples())};
+    return insert_timing(id, "{}", kInsertProbeSampleRate);
   } catch (...) {
     return {};
   }
@@ -273,7 +279,7 @@ std::string processor_catalog_json() {
     const bool realtime_insertable = insert_set.count(id) != 0;
     const bool is_pair = pair_set.count(id) != 0;
     const char* kind = is_pair ? "pair" : (realtime_insertable ? "realtime" : "offline");
-    const InsertTiming timing = realtime_insertable ? insert_timing(id) : InsertTiming{};
+    const InsertTiming timing = realtime_insertable ? default_insert_timing(id) : InsertTiming{};
     out += "{\"id\":\"";
     out += id;
     out += "\",\"kind\":\"";

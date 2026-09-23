@@ -113,6 +113,22 @@ inline constexpr int kInsertProbeBlockSize = 512;
 std::vector<Param> insert_probe_params(const std::string& name, const std::string& key,
                                        double value);
 
+/// Latency and tail an insert reports once prepared, in samples.
+struct InsertTiming {
+  int latency_samples = 0;
+  int tail_samples = 0;
+};
+
+/// @brief Latency and tail of insert @p name built from @p json_params and
+///        prepared at @p sample_rate with kInsertProbeBlockSize.
+/// @details Both are clamped at zero. The block size does not change either.
+/// @throws sonare::SonareException (InvalidParameter) for an unknown @p name
+///         ("unknown insert processor: <name>"), a key the insert does not read
+///         ("<name> does not read parameter(s): <k1>, <k2>"), or a value its
+///         construction or prepare refuses.
+InsertTiming insert_timing(const std::string& name, const std::string& json_params,
+                           double sample_rate);
+
 /// @brief Canonical field paths for one entry of the parameter info array.
 /// @details The array is the root, so each path begins with the `[]` element
 /// segment. Keep the JSON writer and both TypeScript result types in parity by
