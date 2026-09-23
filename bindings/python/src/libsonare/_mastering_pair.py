@@ -500,6 +500,37 @@ def mastering_assistant_suggest_chain_stereo(
     return _unwrap_chain_params(json_text)
 
 
+def mastering_preset_params(preset: str) -> dict[str, float | bool]:
+    """Return a built-in preset's chain configuration as ``master_audio`` overrides.
+
+    Same document shape as :func:`mastering_assistant_suggest_chain` --
+    ``{"version": 1, "params": {...}}`` -- unwrapped the same way, so the
+    result's key set matches what the assistant would suggest and applies to
+    :func:`master_audio` as overrides unchanged.
+
+    Args:
+        preset: Preset identifier from :func:`mastering_preset_names`.
+
+    Raises:
+        SonareValueError: If ``preset`` is not a known preset name.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_preset_params_json"):
+        raise RuntimeError("libsonare was built without mastering preset support")
+    json_ptr = ctypes.c_char_p()
+    rc = lib.sonare_mastering_preset_params_json(
+        preset.encode("utf-8"),
+        ctypes.byref(json_ptr),
+    )
+    _check(rc)
+    try:
+        json_text = ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
+    finally:
+        if json_ptr.value:
+            lib.sonare_free_string(json_ptr)
+    return _unwrap_chain_params(json_text)
+
+
 @_guard_buffer("left", "right")
 def mastering_audio_profile_stereo(
     left: Sequence[float] | list[float],

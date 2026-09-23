@@ -77,6 +77,8 @@ def _run_repair(
 def _linked_channel_planes(
     fn_name: str,
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
+    *,
+    validate: bool = True,
 ) -> list[np.ndarray]:
     """Coerce and preflight the channel set of an N-channel linked repair.
 
@@ -85,6 +87,7 @@ def _linked_channel_planes(
     non-finite scan that names WHICH channel. The C entry validates every
     plane rather than only the first, and an index in the message is the
     difference between a caller checking one buffer and checking all of them.
+    ``validate`` disables that scan, for a caller trading the O(n) cost away.
     """
     if isinstance(channels, np.ndarray):
         if channels.ndim != 2:
@@ -98,7 +101,7 @@ def _linked_channel_planes(
     if not planes:
         raise SonareValueError(f"{fn_name}: channels must not be empty")
     return [
-        _validate_samples(fn_name, plane, arg_name=f"channels[{index}]")
+        _validate_samples(fn_name, plane, arg_name=f"channels[{index}]", validate=validate)
         for index, plane in enumerate(planes)
     ]
 

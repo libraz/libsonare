@@ -163,6 +163,9 @@ from .analyzer import (
     decompose_stems as decompose_stems,
 )
 from .analyzer import (
+    decompose_stems_linked as decompose_stems_linked,
+)
+from .analyzer import (
     decompose_with_init as decompose_with_init,
 )
 from .analyzer import (
@@ -335,6 +338,9 @@ from .analyzer import (
 )
 from .analyzer import (
     mastering_preset_names as mastering_preset_names,
+)
+from .analyzer import (
+    mastering_preset_params as mastering_preset_params,
 )
 from .analyzer import (
     mastering_process as mastering_process,
@@ -959,6 +965,8 @@ from .types import MasteringInsertTiming as MasteringInsertTiming
 from .types import (
     MasteringLoudnessSummary as MasteringLoudnessSummary,
 )
+from .types import MasteringPresetCatalogEntry as MasteringPresetCatalogEntry
+from .types import MasteringPresetKind as MasteringPresetKind
 from .types import MasteringProcessorCatalogEntry as MasteringProcessorCatalogEntry
 from .types import MasteringProcessorCategory as MasteringProcessorCategory
 from .types import MasteringProcessorKind as MasteringProcessorKind

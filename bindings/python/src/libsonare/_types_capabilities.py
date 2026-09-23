@@ -11,6 +11,7 @@ from typing import Literal, TypedDict
 
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
+MasteringPresetKind = Literal["mastering", "restoration"]
 
 
 class CapabilitiesAbi(TypedDict):
@@ -144,6 +145,20 @@ class CapabilityCatalogPresets(TypedDict):
     voiceChanger: list[str]
 
 
+class MasteringPresetCatalogEntry(TypedDict):
+    """One mastering preset's kind and loudness targets.
+
+    ``targetLufs``, ``truePeakCeilingDb`` and ``maxLimiterGainReductionDb`` are
+    ``None`` for a ``"restoration"`` preset, which carries no loudness stage.
+    """
+
+    name: str
+    kind: MasteringPresetKind
+    targetLufs: float | None
+    truePeakCeilingDb: float | None
+    maxLimiterGainReductionDb: float | None
+
+
 class CapabilityCatalog(TypedDict):
     """Machine-readable catalog returned by :func:`capability_catalog`."""
 
@@ -151,3 +166,4 @@ class CapabilityCatalog(TypedDict):
     abi: CapabilitiesAbi
     processors: list[MasteringProcessorCatalogEntry]
     presets: CapabilityCatalogPresets
+    masteringPresets: list[MasteringPresetCatalogEntry]

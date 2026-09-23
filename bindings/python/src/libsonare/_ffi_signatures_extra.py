@@ -154,6 +154,25 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
+    # sonare_decompose_stems_linked (channel-planar phase-carrying NMF stems)
+    if hasattr(lib, "sonare_decompose_stems_linked"):
+        lib.sonare_decompose_stems_linked.restype = ctypes.c_int32
+        lib.sonare_decompose_stems_linked.argtypes = [
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareDecomposeStemsConfig),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
     # sonare_nn_filter (matrix: n_features x n_frames)
     lib.sonare_nn_filter.restype = ctypes.c_int32
     lib.sonare_nn_filter.argtypes = [

@@ -14,6 +14,7 @@ PlanarChannels: TypeAlias = Sequence[FloatSamples] | np.ndarray[Any, Any]
 
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
+MasteringPresetKind = Literal["mastering", "restoration"]
 MasteringProcessorCategory = Literal[
     "dynamics",
     "effects",
@@ -66,6 +67,13 @@ class CapabilityCatalogPresets(TypedDict):
     synth: list[str]
     mixingScene: list[str]
     voiceChanger: list[str]
+
+class MasteringPresetCatalogEntry(TypedDict):
+    name: str
+    kind: MasteringPresetKind
+    targetLufs: float | None
+    truePeakCeilingDb: float | None
+    maxLimiterGainReductionDb: float | None
 
 class MasteringInsertParamChoice(TypedDict):
     """One accepted value of a closed-set insert parameter.
@@ -145,6 +153,7 @@ class CapabilityCatalog(TypedDict):
     abi: CapabilitiesAbi
     processors: list[MasteringProcessorCatalogEntry]
     presets: CapabilityCatalogPresets
+    masteringPresets: list[MasteringPresetCatalogEntry]
 
 class PitchClass(IntEnum):
     C = 0

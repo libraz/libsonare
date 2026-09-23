@@ -110,6 +110,10 @@ MasteringChainParams: TypeAlias = dict[str, float | bool]
 ProgressCallback: TypeAlias = Callable[[float, str], None]
 CancelCallback: TypeAlias = Callable[[], bool]
 
+# Restoration presets' repair stages, like every classical denoise
+# configuration, can mistake a steady tone -- a calibration tone, a drone, a
+# long held note -- for noise and pull it down by the configured reduction
+# depth. Check for musical sustained tones before applying one.
 MasteringPreset: TypeAlias = Literal[
     "pop",
     "edm",
@@ -1125,6 +1129,7 @@ def mastering_chain_stereo(
     cancel: CancelCallback | None = None,
 ) -> MasteringChainStereoResult: ...
 def mastering_preset_names() -> list[MasteringPreset]: ...
+def mastering_preset_params(preset: MasteringPreset | str) -> MasteringChainParams: ...
 def mastering_platform_names() -> list[str]: ...
 def mastering_insert_names() -> list[str]: ...
 def mastering_insert_param_names(name: str) -> list[str]: ...
@@ -1677,6 +1682,19 @@ def decompose_with_init(
 ) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]: ...
 def decompose_stems(
     samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_components: int = 4,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_iter: int = 100,
+    beta: float = 2.0,
+    init: str = "random",
+    mask_power: float = 1.0,
+    *,
+    validate: bool = True,
+) -> dict[str, object]: ...
+def decompose_stems_linked(
+    channels: PlanarChannels,
     sample_rate: int = 22050,
     n_components: int = 4,
     n_fft: int = 2048,

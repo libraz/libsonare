@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from ._effects_repair_common import _linked_channel_planes
 from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
 from ._runtime import (
     _DEFAULT_EFFECT_HOP_LENGTH,
@@ -20,6 +21,7 @@ from ._runtime import (
     _int_array_result,
     _out_float_array,
     _out_int_array,
+    _planar_channel_arrays,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -240,6 +242,125 @@ def decompose_stems(
         per = component_length.value
         flat = _from_c_float_array(out, count * per)
         components = [np.array(flat[i * per : (i + 1) * per]) for i in range(count)]
+        w = _from_c_float_array(out_w, out_w_length.value)
+        h = _from_c_float_array(out_h, out_h_length.value)
+        n_bins = n_fft // 2 + 1
+        return {
+            "components": components,
+            "w": w.reshape(n_bins, count) if count else w,
+            "h": h.reshape(count, -1) if count else h,
+            "sample_rate": sample_rate,
+        }
+
+
+def decompose_stems_linked(
+    channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
+    sample_rate: int = 22050,
+    n_components: int = 4,
+    n_fft: int = _DEFAULT_EFFECT_N_FFT,
+    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
+    n_iter: int = 100,
+    beta: float = 2.0,
+    init: str = "random",
+    mask_power: float = 1.0,
+    *,
+    validate: bool = True,
+) -> dict[str, object]:
+    """N-channel form of :func:`decompose_stems`: one NMF model, one soft mask.
+
+    Each channel's STFT is averaged into a single magnitude plane before the
+    factorisation, and the resulting per-component soft mask is applied
+    UNCHANGED to every channel's own complex spectrum, so no interchannel
+    level or phase difference moves -- the same guarantee
+    :func:`mastering_repair_denoise_classical_linked` gives its channel set.
+
+    A single channel reproduces :func:`decompose_stems` bit for bit: the
+    average over one channel is a division by 1, which does not change the
+    bits.
+
+    Args:
+        channels: One input buffer per channel, or a 2-D ``(channels, frames)``
+            array. All channels must be the same length; the C form has one
+            length for the set. At least one and at most 64 channels.
+        sample_rate: Sample rate in Hz, shared by every channel (default 22050).
+        n_components: Number of NMF components (default 4).
+        n_fft: STFT size (default 2048).
+        hop_length: STFT hop (default 512).
+        n_iter: NMF multiplicative-update iterations (default 100).
+        beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler).
+        init: NMF initialisation, ``"random"`` (default) or ``"nndsvd"``.
+        mask_power: Soft-mask exponent (default 1). 1 keeps the magnitude
+            ratio; 2 is the Wiener-style power ratio. Must be >= 1.
+        validate: Validate the input samples (default True).
+
+    Returns:
+        Dict with the same keys as :func:`decompose_stems` -- ``components``,
+        ``w``, ``h`` and ``sample_rate`` -- but each ``components`` element is
+        channel-planar: a 2-D float32 array of shape ``(channel_count, n)``
+        rather than :func:`decompose_stems`'s 1-D array, component c channel
+        ch at row ch.
+
+    Raises:
+        SonareValueError: If ``channels`` is empty or its planes disagree in
+            length, if ``n_components``, ``n_fft``, ``hop_length`` or
+            ``n_iter`` is not positive, or ``mask_power`` is below 1.
+        SonareError: If the library rejects a value that reaches it, such as a
+            non-finite ``beta`` or ``mask_power``, or more than 64 channels.
+    """
+    n_fft, hop_length = _validate_effect_fft_options("decompose_stems_linked", n_fft, hop_length)
+    n_components = _validate_c_int_field("decompose_stems_linked", n_components, "n_components")
+    n_iter = _validate_c_int_field("decompose_stems_linked", n_iter, "n_iter")
+    if n_components <= 0 or n_iter <= 0:
+        raise SonareValueError("decompose_stems_linked: n_components and n_iter must be positive")
+    if mask_power < 1.0:
+        raise SonareValueError("decompose_stems_linked: mask_power must be >= 1")
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_decompose_stems_linked"):
+        raise _unsupported_effect_symbol("sonare_decompose_stems_linked")
+    planes = _linked_channel_planes("decompose_stems_linked", channels, validate=validate)
+    arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
+    config = SonareDecomposeStemsConfig(
+        struct_version=1,
+        n_components=n_components,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        n_iter=n_iter,
+        beta=float(beta),
+        init=init.encode("utf-8") if init else None,
+        mask_power=float(mask_power),
+    )
+    channel_count = len(arrays)
+    component_count = ctypes.c_size_t()
+    out_channel_count = ctypes.c_size_t()
+    with (
+        _out_float_array(lib) as (out, component_length),
+        _out_float_array(lib) as (out_w, out_w_length),
+        _out_float_array(lib) as (out_h, out_h_length),
+    ):
+        _check(
+            lib.sonare_decompose_stems_linked(
+                ctypes.cast(in_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+                _to_c_size_t(channel_count, "channel_count"),
+                _to_c_size_t(frame_count, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
+                ctypes.byref(config),
+                ctypes.byref(out),
+                ctypes.byref(component_count),
+                ctypes.byref(out_channel_count),
+                ctypes.byref(component_length),
+                ctypes.byref(out_w),
+                ctypes.byref(out_w_length),
+                ctypes.byref(out_h),
+                ctypes.byref(out_h_length),
+            )
+        )
+        count = component_count.value
+        ch = out_channel_count.value
+        per = component_length.value
+        flat = _from_c_float_array(out, count * ch * per)
+        components = [
+            flat[i * ch * per : (i + 1) * ch * per].reshape(ch, per) for i in range(count)
+        ]
         w = _from_c_float_array(out_w, out_w_length.value)
         h = _from_c_float_array(out_h, out_h_length.value)
         n_bins = n_fft // 2 + 1

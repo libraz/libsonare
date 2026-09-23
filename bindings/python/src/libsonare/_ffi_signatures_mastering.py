@@ -406,6 +406,12 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
         if hasattr(lib, "sonare_mastering_preset_names"):
             lib.sonare_mastering_preset_names.restype = ctypes.c_char_p
             lib.sonare_mastering_preset_names.argtypes = []
+        if hasattr(lib, "sonare_mastering_preset_params_json"):
+            lib.sonare_mastering_preset_params_json.restype = ctypes.c_int32
+            lib.sonare_mastering_preset_params_json.argtypes = [
+                ctypes.c_char_p,
+                ctypes.POINTER(ctypes.c_char_p),
+            ]
         if hasattr(lib, "sonare_mastering_platform_names"):
             lib.sonare_mastering_platform_names.restype = ctypes.c_char_p
             lib.sonare_mastering_platform_names.argtypes = []

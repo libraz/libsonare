@@ -185,6 +185,12 @@ from ._types_capabilities import (
     MasteringInsertTiming as MasteringInsertTiming,
 )
 from ._types_capabilities import (
+    MasteringPresetCatalogEntry as MasteringPresetCatalogEntry,
+)
+from ._types_capabilities import (
+    MasteringPresetKind as MasteringPresetKind,
+)
+from ._types_capabilities import (
     MasteringProcessorCatalogEntry as MasteringProcessorCatalogEntry,
 )
 from ._types_capabilities import (
