@@ -38,6 +38,7 @@ export {
 export {
   decompose,
   decomposeStems,
+  decomposeStemsLinked,
   decomposeWithInit,
   hpssWithResidual,
   nnFilter,

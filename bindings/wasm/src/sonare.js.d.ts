@@ -2146,6 +2146,24 @@ export interface SonareModule {
     h: Float32Array;
     sampleRate: number;
   };
+  decomposeStemsLinked: (
+    channels: Float32Array[],
+    sampleRate: number,
+    options: {
+      nComponents?: number;
+      nFft?: number;
+      hopLength?: number;
+      nIter?: number;
+      beta?: number;
+      init?: string;
+      maskPower?: number;
+    },
+  ) => {
+    components: Float32Array[][];
+    w: Float32Array;
+    h: Float32Array;
+    sampleRate: number;
+  };
   remixAlignedIntervals: (
     samples: Float32Array,
     intervals: Int32Array,
@@ -2640,6 +2658,7 @@ export interface SonareModule {
     cancelCallback: (() => boolean) | null,
   ) => WasmMasteringStereoChainResult;
   masteringPresetNames: () => string[];
+  masteringPresetParams: (preset: string) => Record<string, number | boolean>;
   masteringPlatformNames: () => string[];
   masterAudio: (
     presetName: string,

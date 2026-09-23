@@ -14,6 +14,11 @@
  * `loudnessTargetLimited` set on the result. Peak-normalized input, whose
  * headroom is ~0 dB, is the common case for both. Read `outputLufs` for what was
  * achieved rather than assuming the preset's target.
+ *
+ * The restoration presets' repair stages, like every classical denoise
+ * configuration, can mistake a steady tone -- a calibration tone, a drone, a
+ * long held note -- for noise and pull it down by the configured reduction
+ * depth. Check for musical sustained tones before applying one.
  */
 export type MasteringPreset =
   | 'pop'

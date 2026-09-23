@@ -127,6 +127,31 @@ std::string js_capability_catalog() {
 #endif
   presets["voiceChanger"] = catalog_voice_changer_preset_names();
   catalog["presets"] = std::move(presets);
+
+  // Mirrors sonare_c_mastering_apply.cpp's masteringPresets entries field for
+  // field: name, kind, and the three loudness values that only a Mastering
+  // preset carries (null for a Restoration preset, whose repair stages leave
+  // level alone).
+  json::Array mastering_presets;
+  for (const auto& name : mastering::api::preset_names()) {
+    const auto preset = mastering::api::preset_from_string(name);
+    const auto config = mastering::api::preset_config(preset);
+    const bool is_mastering =
+        mastering::api::preset_kind(preset) == mastering::api::PresetKind::Mastering;
+
+    json::Object entry;
+    entry["name"] = name;
+    entry["kind"] = is_mastering ? "mastering" : "restoration";
+    entry["targetLufs"] =
+        is_mastering ? json::Value(config.loudness.target_lufs) : json::Value(nullptr);
+    entry["truePeakCeilingDb"] =
+        is_mastering ? json::Value(config.loudness.ceiling_db) : json::Value(nullptr);
+    entry["maxLimiterGainReductionDb"] =
+        is_mastering ? json::Value(config.loudness.max_limiter_gain_reduction_db)
+                     : json::Value(nullptr);
+    mastering_presets.emplace_back(json::Value(std::move(entry)));
+  }
+  catalog["masteringPresets"] = std::move(mastering_presets);
   return json::dump(json::Value(std::move(catalog)));
 }
 
@@ -448,6 +473,24 @@ val chainConfigParamsToVal(const mastering::api::MasteringChainConfig& config) {
   return out;
 }
 
+// Flat {key: number|boolean} params for preset `preset_name`'s built-in chain
+// configuration, in the same shape masteringAssistantSuggestChain returns for
+// an analyzed chain -- passing this straight through as `overrides` to
+// masterAudio/mastering reproduces the preset unchanged. Calls the core
+// directly (mastering::api::preset_config, reusing chainConfigParamsToVal's
+// mastering::api::chain_config_to_json) rather than the C ABI's mirror
+// sonare_mastering_preset_params_json, matching every other wrapper in this
+// file.
+//
+// Restoration presets' repair stages, like every classical denoise
+// configuration, can mistake a steady tone -- a calibration tone, a drone, a
+// long held note -- for noise and pull it down by the configured reduction
+// depth. Check for musical sustained tones before applying one.
+val js_mastering_preset_params(std::string preset_name) {
+  const auto preset = mastering::api::preset_from_string(preset_name);
+  return chainConfigParamsToVal(mastering::api::preset_config(preset));
+}
+
 val js_mastering_assistant_suggest_chain(val samples, const val& sample_rate_val, val params_obj) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
@@ -577,6 +620,7 @@ void registerMasteringApiBindings() {
   function("masteringAudioProfileStereo", &js_mastering_audio_profile_stereo);
   function("masteringStreamingPreviewStereo", &js_mastering_streaming_preview_stereo);
   function("masteringPresetNames", &js_mastering_preset_names);
+  function("masteringPresetParams", &js_mastering_preset_params);
   function("masteringPlatformNames", &js_mastering_platform_names);
   function("masterAudio", &js_master_audio);
   function("masterAudioStereo", &js_master_audio_stereo);

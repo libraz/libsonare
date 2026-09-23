@@ -126,12 +126,26 @@ export interface CapabilityCatalogPresets {
   voiceChanger: string[];
 }
 
+/**
+ * One entry of {@link CapabilityCatalog.masteringPresets}. The restoration
+ * kind's three loudness values are null: its repair stages leave level alone,
+ * so it carries no loudness target, ceiling or limiter allowance.
+ */
+export interface CapabilityCatalogMasteringPreset {
+  name: string;
+  kind: 'mastering' | 'restoration';
+  targetLufs: number | null;
+  truePeakCeilingDb: number | null;
+  maxLimiterGainReductionDb: number | null;
+}
+
 /** Complete runtime catalog exposed by {@link capabilityCatalog}. */
 export interface CapabilityCatalog {
   version: string;
   abi: SonareCapabilities['abi'];
   processors: CapabilityCatalogProcessor[];
   presets: CapabilityCatalogPresets;
+  masteringPresets: CapabilityCatalogMasteringPreset[];
 }
 
 /** Synchronous progress callback for offline operations. Its return value is ignored. */

@@ -37,6 +37,7 @@ export {
   masteringChainWithProgress,
   masteringPlatformNames,
   masteringPresetNames,
+  masteringPresetParams,
   normalize,
   normalizeStereo,
 } from './mastering_chain';

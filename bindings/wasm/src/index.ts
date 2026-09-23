@@ -153,6 +153,7 @@ export {
   masteringPairProcessorNames,
   masteringPlatformNames,
   masteringPresetNames,
+  masteringPresetParams,
   masteringProcess,
   masteringProcessorCatalog,
   masteringProcessorNames,
@@ -261,6 +262,8 @@ export type {
 } from './feature_core';
 export type {
   DecomposeRequest,
+  DecomposeStemsLinkedRequest,
+  DecomposeStemsLinkedResult,
   DecomposeStemsRequest,
   DecomposeStemsResult,
   DecomposeWithInitRequest,
@@ -348,6 +351,7 @@ export {
   dbToPower,
   decompose,
   decomposeStems,
+  decomposeStemsLinked,
   decomposeWithInit,
   deemphasis,
   detectBoundaries,

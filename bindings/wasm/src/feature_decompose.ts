@@ -289,6 +289,65 @@ export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsRe
   });
 }
 
+/** Request form of {@link decomposeStemsLinked}. */
+export interface DecomposeStemsLinkedRequest {
+  /** At least one channel; all the same length. */
+  channels: Float32Array[];
+  sampleRate?: number;
+  /** Number of NMF components (default 4). */
+  nComponents?: number;
+  /** STFT size (default 2048). */
+  nFft?: number;
+  /** STFT hop (default 512). */
+  hopLength?: number;
+  /** NMF multiplicative-update iterations (default 100). */
+  nIter?: number;
+  /** Beta divergence: 2 = Frobenius (default), 1 = Kullback-Leibler. */
+  beta?: number;
+  /** NMF initialisation (default `'random'`). */
+  init?: 'random' | 'nndsvd';
+  /** Soft-mask exponent (default 1); see {@link DecomposeStemsRequest.maskPower}. */
+  maskPower?: number;
+}
+
+/** One time-domain signal per (component, channel), plus the factorisation. */
+export interface DecomposeStemsLinkedResult {
+  /**
+   * Component signals: `components[k][c]` is component `k`'s signal on
+   * channel `c`, each the length of the input.
+   */
+  components: Float32Array[][];
+  /** Component matrix [nBins x nComponents], row-major. */
+  w: Float32Array;
+  /** Activation matrix [nComponents x nFrames], row-major. */
+  h: Float32Array;
+  sampleRate: number;
+}
+
+/**
+ * Multi-channel form of {@link decomposeStems}: one NMF model and one soft
+ * mask shared across every channel, built from the channels' averaged
+ * magnitude spectrogram and applied UNCHANGED to each channel's own complex
+ * spectrum, so no interchannel level or phase difference moves. A single
+ * channel reproduces {@link decomposeStems} bit for bit.
+ *
+ * @throws On a null/empty channel set, mismatched channel lengths, a channel
+ *   count above the core's ceiling, or an invalid option.
+ */
+export function decomposeStemsLinked(
+  request: DecomposeStemsLinkedRequest,
+): DecomposeStemsLinkedResult {
+  return requireModule().decomposeStemsLinked(request.channels, request.sampleRate ?? 22050, {
+    nComponents: request.nComponents,
+    nFft: request.nFft,
+    hopLength: request.hopLength,
+    nIter: request.nIter,
+    beta: request.beta,
+    init: request.init,
+    maskPower: request.maskPower,
+  });
+}
+
 /**
  * Nearest-neighbour filtering of a flattened [nFeatures x nFrames] spectrogram
  * (librosa.decompose.nn_filter).
