@@ -931,9 +931,12 @@ std::vector<float> tone(double hz, size_t n) {
 /// `output_samples` of timeline, i.e. a constant rate of source/output.
 sonare::engine::ClipSchedule stretched_clip(uint32_t id, const float* const* channels,
                                             int64_t source_samples, int64_t output_samples,
-                                            int64_t start_sample = 0) {
-  sonare::engine::ClipSchedule clip{
-      id, {channels, 1, source_samples}, 0.0, start_sample, 0, output_samples, false, 1.0f, 0, 0};
+                                            int64_t start_sample = 0, int channel_count = 1) {
+  sonare::engine::ClipSchedule clip{id,    {channels, channel_count, source_samples},
+                                    0.0,   start_sample,
+                                    0,     output_samples,
+                                    false, 1.0f,
+                                    0,     0};
   clip.warp_mode = sonare::engine::WarpMode::kTimeStretch;
   clip.warp_anchors = std::make_shared<const std::vector<sonare::engine::WarpAnchor>>(
       std::vector<sonare::engine::WarpAnchor>{
@@ -1148,4 +1151,51 @@ TEST_CASE("ClipPlayer time-stretch warp is audibly equivalent to the offline war
   const double control = correlate(realtime_env, reversed_env);
   REQUIRE(aligned > 0.8);
   REQUIRE(aligned > control + 0.15);
+}
+
+TEST_CASE("ClipPlayer time-stretch warp keeps the pitch of both channels of an uncorrelated pair",
+          "[engine][clip_player]") {
+  // One splice offset serves every channel, so it has to be chosen from all of
+  // them: a search on channel 0 alone splices channel 1 out of phase, which
+  // shows up as a pitch shift of channel 1 only.
+  constexpr size_t kSourceSamples = 48000;
+  constexpr int kOutputSamples = 60000;
+  constexpr std::array<double, 2> kPitches{330.0, 523.25};
+  const std::vector<float> left = tone(kPitches[0], kSourceSamples);
+  const std::vector<float> right = tone(kPitches[1], kSourceSamples);
+  const float* channels[] = {left.data(), right.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(kStretchSampleRate, 512);
+  player.set_clips({stretched_clip(5, channels, kSourceSamples, kOutputSamples, 0, 2)});
+  std::array<std::vector<float>, 2> out{std::vector<float>(kOutputSamples, 0.0f),
+                                        std::vector<float>(kOutputSamples, 0.0f)};
+  for (int offset = 0; offset < kOutputSamples; offset += 512) {
+    float* ptrs[] = {out[0].data() + offset, out[1].data() + offset};
+    player.process_at(ptrs, 2, 512, offset);
+  }
+
+  // Median over windows of the strongest frequency within +/-100 cents, 1-cent grid.
+  constexpr size_t kWindow = 4096;
+  const auto median_cents = [&](const std::vector<float>& x, double hz) {
+    std::vector<double> cents;
+    for (size_t from = 4096; from + kWindow + 4096 <= x.size(); from += kWindow / 2) {
+      int best = 0;
+      double best_power = -1.0;
+      for (int c = -100; c <= 100; ++c) {
+        const double power = tone_power(x, from, from + kWindow, hz * std::pow(2.0, c / 1200.0));
+        if (power > best_power) {
+          best_power = power;
+          best = c;
+        }
+      }
+      cents.push_back(best);
+    }
+    std::sort(cents.begin(), cents.end());
+    return cents[cents.size() / 2];
+  };
+  for (size_t ch = 0; ch < 2; ++ch) {
+    INFO("channel " << ch);
+    REQUIRE(std::abs(median_cents(out[ch], kPitches[ch])) <= 5.0);
+  }
 }

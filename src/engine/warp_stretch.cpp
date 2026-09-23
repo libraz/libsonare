@@ -27,8 +27,11 @@ void WarpStretchVoice::prepare(int max_block_size, int channels) {
   for (int ch = 0; ch < kMaxChannels; ++ch) {
     overlap_[static_cast<size_t>(ch)].assign(static_cast<size_t>(capacity_), 0.0f);
   }
-  match_.assign(static_cast<size_t>(kSynthesisHop), 0.0f);
-  search_.assign(static_cast<size_t>(2 * kSearchRadius + kSynthesisHop + 1), 0.0f);
+  for (int ch = 0; ch < kMaxChannels; ++ch) {
+    match_[static_cast<size_t>(ch)].assign(static_cast<size_t>(kSynthesisHop), 0.0f);
+    search_[static_cast<size_t>(ch)].assign(
+        static_cast<size_t>(2 * kSearchRadius + kSynthesisHop + 1), 0.0f);
+  }
   reset();
 }
 
@@ -43,8 +46,8 @@ void WarpStretchVoice::reset() noexcept {
   for (int ch = 0; ch < kMaxChannels; ++ch) {
     std::fill(overlap_[static_cast<size_t>(ch)].begin(), overlap_[static_cast<size_t>(ch)].end(),
               0.0f);
+    std::fill(match_[static_cast<size_t>(ch)].begin(), match_[static_cast<size_t>(ch)].end(), 0.0f);
   }
-  std::fill(match_.begin(), match_.end(), 0.0f);
 }
 
 void WarpStretchVoice::mark_idle() noexcept {
@@ -57,20 +60,25 @@ int WarpStretchVoice::best_offset(int64_t desired, WarpSourceReader reader,
   // Copy the whole candidate span once. Correlating straight through the reader
   // would fan every candidate out into a paged-provider lookup per sample.
   const int span = 2 * kSearchRadius + kSynthesisHop + 1;
-  for (int i = 0; i < span; ++i) {
-    search_[static_cast<size_t>(i)] = reader(context, 0, desired - kSearchRadius + i);
+  for (int ch = 0; ch < search_channels_; ++ch) {
+    float* dst = search_[static_cast<size_t>(ch)].data();
+    for (int i = 0; i < span; ++i) dst[i] = reader(context, ch, desired - kSearchRadius + i);
   }
   const auto score = [this](int offset) noexcept {
     double numerator = 0.0;
     double energy = 0.0;
-    for (int i = 0; i < kSynthesisHop; ++i) {
-      const double s = search_[static_cast<size_t>(offset + i)];
-      numerator += s * match_[static_cast<size_t>(i)];
-      energy += s * s;
+    for (int ch = 0; ch < search_channels_; ++ch) {
+      const float* search = search_[static_cast<size_t>(ch)].data() + offset;
+      const float* match = match_[static_cast<size_t>(ch)].data();
+      for (int i = 0; i < kSynthesisHop; ++i) {
+        const double s = search[i];
+        numerator += s * match[i];
+        energy += s * s;
+      }
     }
-    // Normalized by the candidate's energy only: the template is fixed across
-    // candidates, so its norm cannot change the ranking, and dividing by it
-    // would only add a square root per candidate.
+    // Pooled over channels, then normalized by the candidate's energy only: the
+    // template is fixed across candidates, so its norm cannot change the
+    // ranking, and dividing by it would only add a square root per candidate.
     return numerator / std::sqrt(energy + 1e-12);
   };
   int best = kSearchRadius;
@@ -111,8 +119,10 @@ void WarpStretchVoice::synthesize_frame(int offset, WarpSourceReader reader,
   }
   // The next frame must continue this segment, so the template is this
   // segment's own continuation one synthesis hop later.
-  for (int i = 0; i < kSynthesisHop; ++i) {
-    match_[static_cast<size_t>(i)] = reader(context, 0, start + kSynthesisHop + i);
+  for (int ch = 0; ch < search_channels_; ++ch) {
+    float* match = match_[static_cast<size_t>(ch)].data();
+    for (int i = 0; i < kSynthesisHop; ++i)
+      match[i] = reader(context, ch, start + kSynthesisHop + i);
   }
   have_previous_ = true;
   filled_ = std::max(filled_, offset + kFrameSize);
@@ -131,6 +141,7 @@ bool WarpStretchVoice::render(uint32_t clip_id, int64_t output_start, int count,
     next_output_ = output_start;
   }
   idle_blocks_ = 0;
+  search_channels_ = std::clamp(channels, 1, channels_);
 
   while (next_frame_offset_ < count) {
     synthesize_frame(next_frame_offset_, reader, mapper, context);

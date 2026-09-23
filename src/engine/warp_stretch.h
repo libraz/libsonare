@@ -31,7 +31,9 @@ using WarpPositionMapper = double (*)(void* context, int64_t clip_local_output) 
 /// Segment placement is WSOLA: each frame is searched within a window around
 /// the mapped position for the offset whose start best continues the previously
 /// emitted frame, which keeps waveform periods aligned across the overlap and
-/// avoids the phase cancellation plain OLA produces.
+/// avoids the phase cancellation plain OLA produces. One offset serves every
+/// channel, so the stereo image holds, and it is scored over all channels
+/// pooled so an uncorrelated second channel is not spliced out of phase.
 ///
 /// All buffers are sized in @ref prepare and never resized afterwards, and the
 /// per-block path performs no allocation, locking, or system call.
@@ -87,10 +89,11 @@ class WarpStretchVoice {
 
   std::vector<float> window_;                             // kFrameSize
   std::array<std::vector<float>, kMaxChannels> overlap_;  // accumulator
-  std::vector<float> match_;                              // kSynthesisHop template
-  std::vector<float> search_;                             // search scratch (channel 0)
+  std::array<std::vector<float>, kMaxChannels> match_;    // kSynthesisHop template
+  std::array<std::vector<float>, kMaxChannels> search_;   // search scratch
   int capacity_ = 0;
   int channels_ = 0;
+  int search_channels_ = 1;  // source channels scored by the search, <= channels_
   uint32_t clip_id_ = 0;
   bool active_ = false;
   bool have_previous_ = false;
