@@ -497,6 +497,19 @@ uint32_t RealtimeEngineWasm::warpStretchOverflowCount() const {
   return engine_.warp_stretch_overflow_count();
 }
 
+// The core rejects an out-of-domain capacity (bool return) rather than
+// clamping, so this WASM facade -- which calls the core directly, bypassing
+// the C-ABI guard -- refuses the same way Node/Python do through the C ABI.
+void RealtimeEngineWasm::setWarpVoiceCapacity(const emscripten::val& voices_val) {
+  const uint32_t voices = checkedUintFromVal(voices_val, "voices");
+  if (!engine_.set_warp_voice_capacity(voices)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "warp voice capacity must be in [0, 64]");
+  }
+}
+
+uint32_t RealtimeEngineWasm::warpVoiceCapacity() const { return engine_.warp_voice_capacity(); }
+
 // Clip-page look-ahead: the player reports pages it is about to read that are
 // not resident yet, so a streaming host can service them before the audio
 // thread reaches them (a miss alone is only reported after the read already
@@ -530,6 +543,8 @@ void registerRealtimeEngineClips(class_<RealtimeEngineWasm>& cls) {
       .function("clipPageRequestScratchSample", &RealtimeEngineWasm::clipPageRequestScratchSample)
       .function("clipPageRequestOverflowCount", &RealtimeEngineWasm::clipPageRequestOverflowCount)
       .function("warpStretchOverflowCount", &RealtimeEngineWasm::warpStretchOverflowCount)
+      .function("setWarpVoiceCapacity", &RealtimeEngineWasm::setWarpVoiceCapacity)
+      .function("warpVoiceCapacity", &RealtimeEngineWasm::warpVoiceCapacity)
       .function("setClipPagePrefetchFrames", &RealtimeEngineWasm::setClipPagePrefetchFrames)
       .function("clipPagePrefetchFrames", &RealtimeEngineWasm::clipPagePrefetchFrames);
 }

@@ -312,6 +312,17 @@ export interface SonareEngineSyncClipPagePrefetchFramesMessage {
   frames: number;
 }
 
+/**
+ * Sets the worklet engine's concurrent time-stretch voice capacity. The
+ * capacity was already validated (and applied to the offline engine) by the
+ * caller, so the worklet side just mirrors the accepted value; the pool
+ * rebuild itself happens on the audio thread, at the next block boundary.
+ */
+export interface SonareEngineSyncWarpVoiceCapacityMessage {
+  type: 'syncWarpVoiceCapacity';
+  voices: number;
+}
+
 /** Evicts one page after the main-thread sliding window advances. */
 export interface SonareEngineSyncClipPageClearMessage {
   type: 'syncClipPageClear';
@@ -644,6 +655,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncClipPageMessage
   | SonareEngineSyncClipPageClearMessage
   | SonareEngineSyncClipPagePrefetchFramesMessage
+  | SonareEngineSyncWarpVoiceCapacityMessage
   | SonareEngineSyncClipPageCommitMessage
   | SonareEngineSyncClipPageDestroyMessage
   | SonareEngineSyncMidiClipsMessage

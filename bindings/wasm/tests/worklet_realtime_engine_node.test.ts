@@ -1386,6 +1386,37 @@ describe('SonareRealtimeEngineNode', () => {
       engine.destroy();
     });
 
+    it('sets and reads the warp voice capacity, mirroring it to the worklet', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined,
+            start: () => undefined,
+          }),
+      });
+
+      expect(engine.warpVoiceCapacity()).toBe(8);
+
+      engine.setWarpVoiceCapacity(12);
+      expect(engine.warpVoiceCapacity()).toBe(12);
+      expect(posted).toEqual(
+        expect.arrayContaining([{ type: 'syncWarpVoiceCapacity', voices: 12 }]),
+      );
+
+      // A rejected value leaves the previously accepted capacity in place on
+      // both the offline mirror and the worklet (no further sync is posted).
+      posted.length = 0;
+      expect(() => engine.setWarpVoiceCapacity(65)).toThrow();
+      expect(engine.warpVoiceCapacity()).toBe(12);
+      expect(posted).toEqual([]);
+
+      engine.destroy();
+    });
+
     it('runs suspend/resume/destroy lifecycle without accepting stale transport commands', async () => {
       const posted: unknown[] = [];
       const disconnected: boolean[] = [];

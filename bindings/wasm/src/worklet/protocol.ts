@@ -150,6 +150,7 @@ export enum SonareEngineTelemetryError {
   MetronomeOverflow = 18,
   InvalidCommand = 19,
   MaxChannelsExceeded = 20,
+  ParameterBaseOverflow = 21,
 }
 
 export interface SonareMeterRingBuffer {

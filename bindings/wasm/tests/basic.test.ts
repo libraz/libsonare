@@ -116,9 +116,10 @@ describe('Sonare WASM Module', () => {
       const numericOrdinals = Object.entries(SonareEngineTelemetryError)
         .filter(([key]) => Number.isNaN(Number(key)))
         .map(([, value]) => value);
-      expect(numericOrdinals).toEqual(Array.from({ length: 21 }, (_, ordinal) => ordinal));
+      expect(numericOrdinals).toEqual(Array.from({ length: 22 }, (_, ordinal) => ordinal));
       expect(SonareEngineTelemetryError.InvalidCommand).toBe(19);
       expect(SonareEngineTelemetryError.MaxChannelsExceeded).toBe(20);
+      expect(SonareEngineTelemetryError.ParameterBaseOverflow).toBe(21);
     });
 
     it('reports the warp-stretch overflow counter beside the clip-page one', () => {

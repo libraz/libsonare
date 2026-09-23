@@ -1742,6 +1742,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       syncTrackStripPan: { type: 'syncTrackStripPan', trackId: 10, pan: 0 },
       syncTrackStripPanLaw: { type: 'syncTrackStripPanLaw', trackId: 10, panLaw: 0 },
       syncTrackStripPanMode: { type: 'syncTrackStripPanMode', trackId: 10, panMode: 0 },
+      syncWarpVoiceCapacity: { type: 'syncWarpVoiceCapacity', voices: 12 },
     };
 
     it('routes every producer sync message through the guarded port handler', async () => {

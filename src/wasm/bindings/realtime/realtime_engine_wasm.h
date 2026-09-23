@@ -269,6 +269,8 @@ class RealtimeEngineWasm {
   double clipPageRequestScratchSample() const;
   uint32_t clipPageRequestOverflowCount() const;
   uint32_t warpStretchOverflowCount() const;
+  void setWarpVoiceCapacity(const emscripten::val& voices_val);
+  uint32_t warpVoiceCapacity() const;
   void setClipPagePrefetchFrames(double frames);
   double clipPagePrefetchFrames() const;
 
@@ -353,6 +355,11 @@ class RealtimeEngineWasm {
   static std::vector<float> interleave(const std::vector<std::vector<float>>& channels);
   static mastering::final::DitherType ditherTypeFromInt(int value);
   static emscripten::val parameterToVal(const sonare::automation::ParameterInfo& info);
+  // A reserved-namespace description carries no id of its own (the id is the
+  // query, not a stored field), so it is echoed back from @p id rather than
+  // read off @p description -- same split as the C ABI's fill_c_parameter_description.
+  static emscripten::val describedParameterToVal(
+      uint32_t id, const sonare::automation::ParameterDescription& description);
   static emscripten::val markerToVal(const sonare::transport::Marker& marker);
   void publishParameterMetadata();
   bool registeredParameterRejectsRealtime(uint32_t param_id) const;

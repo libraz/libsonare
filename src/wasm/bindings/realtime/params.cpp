@@ -76,11 +76,18 @@ val RealtimeEngineWasm::parameterInfoByIndex(const val& index_val) const {
 }
 
 val RealtimeEngineWasm::parameterInfo(double id) const {
+  const uint32_t param_id = static_cast<uint32_t>(id);
   sonare::automation::ParameterInfo info{};
-  if (!parameters_.parameter_info(static_cast<uint32_t>(id), &info)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown parameter id");
+  if (parameters_.parameter_info(param_id, &info)) {
+    return parameterToVal(info);
   }
-  return parameterToVal(info);
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
+  sonare::automation::ParameterDescription description{};
+  if (engine_.describe_reserved_parameter(param_id, &description)) {
+    return describedParameterToVal(param_id, description);
+  }
+#endif
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown parameter id");
 }
 
 void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
@@ -256,6 +263,20 @@ val RealtimeEngineWasm::parameterToVal(const sonare::automation::ParameterInfo& 
   out.set("defaultValue", info.default_value);
   out.set("rtSafe", info.rt_safe);
   out.set("defaultCurve", automationCurveToInt(info.default_curve));
+  return out;
+}
+
+val RealtimeEngineWasm::describedParameterToVal(
+    uint32_t id, const sonare::automation::ParameterDescription& description) {
+  val out = val::object();
+  out.set("id", id);
+  out.set("name", description.name);
+  out.set("unit", description.unit);
+  out.set("minValue", description.min_value);
+  out.set("maxValue", description.max_value);
+  out.set("defaultValue", description.default_value);
+  out.set("rtSafe", description.rt_safe);
+  out.set("defaultCurve", automationCurveToInt(description.default_curve));
   return out;
 }
 

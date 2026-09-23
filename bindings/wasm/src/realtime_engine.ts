@@ -1270,6 +1270,24 @@ export class RealtimeEngine {
   }
 
   /**
+   * Sets the number of concurrent time-stretch voices. `voices` must be an
+   * integer in `[0, 64]`; a non-integer, negative, or larger value throws and
+   * leaves the capacity unchanged. Default is 8. Capacity 0 disables
+   * time-stretch, so every warped clip plays resampled instead and none of
+   * that counts toward {@link warpStretchOverflowCount}. A change applied
+   * while the engine is running restarts the splice state of any clip
+   * stretching through a voice at that moment. Control-thread only.
+   */
+  setWarpVoiceCapacity(voices: number): void {
+    this.native.setWarpVoiceCapacity(voices);
+  }
+
+  /** Reads the current time-stretch voice capacity (default 8). */
+  warpVoiceCapacity(): number {
+    return this.native.warpVoiceCapacity();
+  }
+
+  /**
    * Sets the clip-page look-ahead window in timeline frames.
    *
    * The player reports the pages it is *about to* read that are not resident

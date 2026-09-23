@@ -387,6 +387,10 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.engine.setClipPagePrefetchFrames(message.frames);
         break;
       }
+      case 'syncWarpVoiceCapacity': {
+        this.engine.setWarpVoiceCapacity(message.voices);
+        break;
+      }
       case 'syncClipPageCommit': {
         const providerId = this.pagedClipProviders.get(message.clipId);
         const clip = message.clip ?? this.pendingPagedClips.get(message.clipId);

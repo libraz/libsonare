@@ -727,6 +727,28 @@ export class SonareEngine {
     this.postSync({ type: 'syncClipPagePrefetchFrames', frames });
   }
 
+  /**
+   * Sets the number of concurrent time-stretch voices on both this thread's
+   * offline engine and the live worklet engine. `voices` must be an integer
+   * in `[0, 64]`; a non-integer, negative, or larger value throws and leaves
+   * the capacity unchanged on both engines. Default is 8. Capacity 0 disables
+   * time-stretch, so every warped clip plays resampled instead. A change
+   * applied while the engine is running restarts the splice state of any clip
+   * stretching through a voice at that moment.
+   */
+  setWarpVoiceCapacity(voices: number): void {
+    if (this.destroyed) {
+      throw new Error('SonareEngine is destroyed.');
+    }
+    this.offlineEngine.setWarpVoiceCapacity(voices);
+    this.postSync({ type: 'syncWarpVoiceCapacity', voices });
+  }
+
+  /** Reads the current time-stretch voice capacity (default 8). */
+  warpVoiceCapacity(): number {
+    return this.offlineEngine.warpVoiceCapacity();
+  }
+
   addClip(
     trackId: string | number,
     buffer: Float32Array[] | ClipPageProvider,

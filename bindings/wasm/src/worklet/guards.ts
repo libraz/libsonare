@@ -98,6 +98,7 @@ export const ENGINE_SYNC_MESSAGE_TYPES: Record<SonareEngineSyncMessage['type'], 
   syncTrackStripPan: true,
   syncTrackStripPanLaw: true,
   syncTrackStripPanMode: true,
+  syncWarpVoiceCapacity: true,
 };
 
 // A Set rather than a property lookup on the table: an inherited member name
