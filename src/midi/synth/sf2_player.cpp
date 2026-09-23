@@ -23,7 +23,8 @@ constexpr uint8_t kDrumChannel = 9;  // MIDI channel 10
 }  // namespace
 
 Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
-  if (!(config_.gain > 0.0f) || !std::isfinite(config_.gain)) config_.gain = 0.5f;
+  // An explicit 0 is silence; only a negative or non-finite gain is not a level.
+  if (config_.gain < 0.0f || !std::isfinite(config_.gain)) config_.gain = 0.5f;
   config_.gain = std::min(config_.gain, 4.0f);
   config_.polyphony = config_.polyphony > 0 ? std::min(config_.polyphony, kMaxSynthVoices) : 48;
   for (int part = 0; part < 16; ++part) {

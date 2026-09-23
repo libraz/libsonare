@@ -260,6 +260,47 @@ TEST_CASE("NativeSynth renders deterministically", "[midi][synth]") {
   REQUIRE(first.right == second.right);
 }
 
+TEST_CASE("an explicit zero config gain renders silence on both hosts", "[midi][synth][gain]") {
+  auto note_peak = [](auto make_instrument) {
+    auto instrument = make_instrument();
+    instrument.prepare(kOutRate, 256);
+    instrument.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    return peak(render(instrument, 2048).left);
+  };
+
+  NativeSynthConfig native_zero;
+  native_zero.gain = 0.0f;
+  REQUIRE(note_peak([&] { return NativeSynth(native_zero); }) == 0.0f);
+
+  NativeSynthConfig native_quiet;
+  native_quiet.gain = 0.01f;
+  REQUIRE(note_peak([&] { return NativeSynth(native_quiet); }) > 0.0f);
+
+  // Negative or non-finite is not a level the caller could have meant, so it
+  // still falls back to the library default rather than rendering silence.
+  for (float bad :
+       {-1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+    NativeSynthConfig native_bad;
+    native_bad.gain = bad;
+    REQUIRE(note_peak([&] { return NativeSynth(native_bad); }) > 0.0f);
+  }
+
+  Sf2PlayerConfig sf2_zero;
+  sf2_zero.gain = 0.0f;
+  REQUIRE(note_peak([&] { return Sf2Player(sf2_zero); }) == 0.0f);
+
+  Sf2PlayerConfig sf2_quiet;
+  sf2_quiet.gain = 0.01f;
+  REQUIRE(note_peak([&] { return Sf2Player(sf2_quiet); }) > 0.0f);
+
+  for (float bad :
+       {-1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+    Sf2PlayerConfig sf2_bad;
+    sf2_bad.gain = bad;
+    REQUIRE(note_peak([&] { return Sf2Player(sf2_bad); }) > 0.0f);
+  }
+}
+
 TEST_CASE("NativeSynth GM mode follows program changes and routes channel 10 to drums",
           "[midi][synth]") {
   NativeSynthConfig fixed_config;

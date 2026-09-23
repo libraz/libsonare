@@ -228,6 +228,54 @@ describe('Project.bounceWithSynthInstrument', () => {
     }
   });
 
+  it('takes gain: 0 as silence, not the base level', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      const reference = project.bounceWithSynthInstrument('warm-pad', { totalFrames: 24000 });
+      expect(peak(reference)).toBeGreaterThan(0);
+
+      const silent = project.bounceWithSynthInstrument(
+        { preset: 'warm-pad', gain: 0 },
+        { totalFrames: 24000 },
+      );
+      expect(peak(silent)).toBe(0);
+
+      const quiet = project.bounceWithSynthInstrument(
+        { preset: 'warm-pad', gain: 0.01 },
+        { totalFrames: 24000 },
+      );
+      expect(peak(quiet)).toBeGreaterThan(0);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses a mod routing naming none on either end', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      expect(() =>
+        project.bounceWithSynthInstrument(
+          { modRoutings: [{ source: 'none', destination: 'pitch-cents', depth: 80 }] },
+          { totalFrames: 128 },
+        ),
+      ).toThrow();
+      expect(() =>
+        project.bounceWithSynthInstrument(
+          { modRoutings: [{ source: 'lfo1', destination: 'none', depth: 80 }] },
+          { totalFrames: 128 },
+        ),
+      ).toThrow();
+      // Not vacuous: a real routing on both ends still passes.
+      const audio = project.bounceWithSynthInstrument(
+        { modRoutings: [{ source: 'lfo1', destination: 'pitch-cents', depth: 80 }] },
+        { totalFrames: 24000 },
+      );
+      expect(peak(audio)).toBeGreaterThan(0);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('applies field overrides and the mod matrix', () => {
     const project = buildMidiOnlyProject();
     try {
@@ -336,6 +384,25 @@ describe('RealtimeEngine.setSynthInstrument', () => {
       // Unknown presets are rejected without disturbing the binding.
       expect(() => engine.setSynthInstrument('no-such-preset', 7)).toThrow();
       expect(engine.midiInstrumentCount()).toBe(1);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('binds gain: 0 as silence, not the base level', () => {
+    const engine = new RealtimeEngine();
+    try {
+      engine.prepare(48000, 128, 16, 16);
+      engine.setSynthInstrument({ preset: 'warm-pad', gain: 0 }, 7);
+      engine.pushMidiNoteOn(7, 0, 0, 60, 100);
+      const out = engine.process([new Float32Array(4096), new Float32Array(4096)]);
+      let p = 0;
+      for (const channel of out) {
+        for (const sample of channel) {
+          p = Math.max(p, Math.abs(sample));
+        }
+      }
+      expect(p).toBe(0);
     } finally {
       engine.destroy();
     }

@@ -264,6 +264,54 @@ describe('Sonare WASM NativeSynth', () => {
     }
   });
 
+  it('takes gain: 0 as silence, not the base level', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      const reference = project.bounceWithSynthInstrument('warm-pad', { totalFrames: 24000 });
+      expect(peak(reference)).toBeGreaterThan(0);
+
+      const silent = project.bounceWithSynthInstrument(
+        { preset: 'warm-pad', gain: 0 },
+        { totalFrames: 24000 },
+      );
+      expect(peak(silent)).toBe(0);
+
+      const quiet = project.bounceWithSynthInstrument(
+        { preset: 'warm-pad', gain: 0.01 },
+        { totalFrames: 24000 },
+      );
+      expect(peak(quiet)).toBeGreaterThan(0);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses a mod routing naming none on either end', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      expect(() =>
+        project.bounceWithSynthInstrument(
+          { modRoutings: [{ source: 'none', destination: 'pitch-cents', depth: 80 }] },
+          { totalFrames: 128 },
+        ),
+      ).toThrow();
+      expect(() =>
+        project.bounceWithSynthInstrument(
+          { modRoutings: [{ source: 'lfo1', destination: 'none', depth: 80 }] },
+          { totalFrames: 128 },
+        ),
+      ).toThrow();
+      // Not vacuous: a real routing on both ends still passes.
+      const audio = project.bounceWithSynthInstrument(
+        { modRoutings: [{ source: 'lfo1', destination: 'pitch-cents', depth: 80 }] },
+        { totalFrames: 24000 },
+      );
+      expect(peak(audio)).toBeGreaterThan(0);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('applies field overrides and the mod matrix', () => {
     const project = buildMidiOnlyProject();
     try {

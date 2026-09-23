@@ -27,7 +27,8 @@ constexpr float kKsSympatheticRingS = 1.5f;
 
 NativeSynth::NativeSynth(const NativeSynthConfig& config) : config_(config) {
   config_.patch = clamp_synth_patch(config_.patch);
-  if (!(config_.gain > 0.0f) || !std::isfinite(config_.gain)) config_.gain = 0.5f;
+  // An explicit 0 is silence; only a negative or non-finite gain is not a level.
+  if (config_.gain < 0.0f || !std::isfinite(config_.gain)) config_.gain = 0.5f;
   config_.gain = std::min(config_.gain, 4.0f);
   config_.polyphony = config_.polyphony > 0 ? std::min(config_.polyphony, kMaxSynthVoices) : 16;
   config_.bus_drive =

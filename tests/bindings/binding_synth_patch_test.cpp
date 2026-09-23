@@ -254,6 +254,64 @@ TEST_CASE("synth patch presence bits express an explicit zero", "[project][synth
   sonare_project_destroy(project);
 }
 
+TEST_CASE("synth patch presence-bit gain zero renders silence", "[project][synth_patch][gain]") {
+  SonareProject* project = make_synth_project(3);
+
+  SonareSynthPatch base{};
+  base.struct_version = 2;
+  std::strncpy(base.preset, "warm-pad", SONARE_SYNTH_PRESET_NAME_MAX - 1);
+  REQUIRE(peak_of(bounce_synth(project, base)) > 0.0f);
+
+  SonareSynthPatch silent = base;
+  silent.gain = 0.0f;
+  silent.present_fields |= SONARE_SYNTH_FIELD_GAIN;
+  REQUIRE(peak_of(bounce_synth(project, silent)) == 0.0f);
+
+  SonareSynthPatch quiet = base;
+  quiet.gain = 0.01f;
+  quiet.present_fields |= SONARE_SYNTH_FIELD_GAIN;
+  REQUIRE(peak_of(bounce_synth(project, quiet)) > 0.0f);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("a mod routing naming none on either end is refused",
+          "[project][synth_patch][mod_matrix]") {
+  SonareProject* project = make_synth_project(3);
+  SonareProjectBounceOptions options{};
+  options.total_frames = 1024;
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = 3;
+  float* out = nullptr;
+  size_t out_len = 0;
+
+  SonareSynthPatch none_source{};
+  none_source.num_mod_routings = 1;
+  none_source.mod_routings[0] = {0 /*none*/, 1 /*pitchCents*/, 80.0f};
+  binding.patch = none_source;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
+                                                       &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareSynthPatch none_destination{};
+  none_destination.num_mod_routings = 1;
+  none_destination.mod_routings[0] = {3 /*lfo1*/, 0 /*none*/, 80.0f};
+  binding.patch = none_destination;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
+                                                       &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+
+  // Not vacuous: a routing naming a real source and destination on both ends
+  // still passes.
+  SonareSynthPatch valid{};
+  valid.num_mod_routings = 1;
+  valid.mod_routings[0] = {3 /*lfo1*/, 1 /*pitchCents*/, 80.0f};
+  binding.patch = valid;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
+                                                       &out_len) == SONARE_OK);
+  sonare_free_floats(out);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("synth patch field overrides shape the preset", "[project][synth_patch]") {
   SonareProject* project = make_synth_project(3);
 

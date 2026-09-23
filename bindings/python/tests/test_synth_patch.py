@@ -313,6 +313,48 @@ def test_synth_patch_zero_is_an_override_not_keep_the_base() -> None:
         project.close()
 
 
+def test_synth_patch_gain_zero_renders_silence() -> None:
+    project = _build_midi_only_project()
+    try:
+        reference = project.bounce_with_synth_instrument("warm-pad", total_frames=24000)
+        assert float(np.max(np.abs(reference))) > 0.0
+
+        silent = project.bounce_with_synth_instrument(
+            SynthPatch(preset="warm-pad", gain=0.0), total_frames=24000
+        )
+        assert float(np.max(np.abs(silent))) == 0.0
+
+        quiet = project.bounce_with_synth_instrument(
+            SynthPatch(preset="warm-pad", gain=0.01), total_frames=24000
+        )
+        assert float(np.max(np.abs(quiet))) > 0.0
+    finally:
+        project.close()
+
+
+def test_mod_routing_naming_none_is_refused() -> None:
+    project = _build_midi_only_project()
+    try:
+        with pytest.raises(SonareError):
+            project.bounce_with_synth_instrument(
+                SynthPatch(mod_routings=(SynthModRouting("none", "pitch-cents", 80.0),)),
+                total_frames=128,
+            )
+        with pytest.raises(SonareError):
+            project.bounce_with_synth_instrument(
+                SynthPatch(mod_routings=(SynthModRouting("lfo1", "none", 80.0),)),
+                total_frames=128,
+            )
+        # Not vacuous: a real routing on both ends still passes.
+        audio = project.bounce_with_synth_instrument(
+            SynthPatch(mod_routings=(SynthModRouting("lfo1", "pitch-cents", 80.0),)),
+            total_frames=24000,
+        )
+        assert float(np.max(np.abs(audio))) > 0.0
+    finally:
+        project.close()
+
+
 def test_synth_bounce_gm_programs_4_and_40_are_finite_audible_and_distinct() -> None:
     def render(program: int, auto_select_gm: bool) -> np.ndarray:
         project = _build_gm_program_project(program)

@@ -243,6 +243,11 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     const int count = std::min(c.num_mod_routings, kMaxModRoutes);
     for (int i = 0; i < count; ++i) {
       const SonareSynthModRouting& r = c.mod_routings[i];
+      // Refused like ControllerBinding's axis none: a caller mistake, not an empty slot.
+      if (r.source == 0 || r.destination == 0) {
+        if (out_error) *out_error = "mod routing refused: source and destination must not be none";
+        return false;
+      }
       p.mod_matrix.routes[static_cast<size_t>(i)] = {
           mod_source_from_c(r.source), mod_destination_from_c(r.destination), r.depth};
     }
