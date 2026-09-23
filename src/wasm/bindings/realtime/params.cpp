@@ -136,7 +136,8 @@ int RealtimeEngineWasm::automationLaneCount() const {
   return static_cast<int>(engine_.automation().lane_count());
 }
 
-void RealtimeEngineWasm::setParameter(double param_id, const val& value_val, int64_t render_frame) {
+void RealtimeEngineWasm::setParameter(double param_id, const val& value_val,
+                                      const val& render_frame_val) {
   const float value = checkedFloatFromVal(value_val, "value");
   if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -145,7 +146,7 @@ void RealtimeEngineWasm::setParameter(double param_id, const val& value_val, int
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kSetParam;
   command.target_id = static_cast<uint32_t>(param_id);
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   command.arg.f = value;
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
@@ -154,7 +155,7 @@ void RealtimeEngineWasm::setParameter(double param_id, const val& value_val, int
 }
 
 void RealtimeEngineWasm::setParameterSmoothed(double param_id, const val& value_val,
-                                              int64_t render_frame) {
+                                              const val& render_frame_val) {
   const float value = checkedFloatFromVal(value_val, "value");
   if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -163,7 +164,7 @@ void RealtimeEngineWasm::setParameterSmoothed(double param_id, const val& value_
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kSetParamSmoothed;
   command.target_id = static_cast<uint32_t>(param_id);
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   command.arg.f = value;
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
@@ -181,13 +182,13 @@ void RealtimeEngineWasm::setParamSmoothingMs(const val& smoothing_ms_val) {
 }
 
 void RealtimeEngineWasm::setSoloMute(const val& lane_index_val, bool solo, bool mute,
-                                     int64_t render_frame) {
+                                     const val& render_frame_val) {
   const uint32_t lane_index = checkedUintFromVal(lane_index_val, "laneIndex");
 #if defined(SONARE_WITH_MIXING)
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kSetSoloMute;
   command.target_id = lane_index;
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   command.arg.i = (mute ? 0x1 : 0x0) | (solo ? 0x2 : 0x0);
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
@@ -202,14 +203,14 @@ void RealtimeEngineWasm::setSoloMute(const val& lane_index_val, bool solo, bool 
   (void)lane_index;
   (void)solo;
   (void)mute;
-  (void)render_frame;
+  (void)render_frame_val;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "mixing support is not compiled in");
 #endif
 }
 
 void RealtimeEngineWasm::setTrackMonitorMode(const val& lane_index_val, const val& mode_val,
-                                             int64_t render_frame) {
+                                             const val& render_frame_val) {
   const uint32_t lane_index = checkedUintFromVal(lane_index_val, "laneIndex");
   const int mode = checkedIntFromVal(mode_val, "mode");
   // The C-ABI guard runs before the feature gate, so invalid modes remain an
@@ -222,7 +223,7 @@ void RealtimeEngineWasm::setTrackMonitorMode(const val& lane_index_val, const va
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kSetTrackMonitorMode;
   command.target_id = lane_index;
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   command.arg.i = mode;
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
@@ -230,7 +231,7 @@ void RealtimeEngineWasm::setTrackMonitorMode(const val& lane_index_val, const va
   }
 #else
   (void)lane_index;
-  (void)render_frame;
+  (void)render_frame_val;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "mixing support is not compiled in");
 #endif

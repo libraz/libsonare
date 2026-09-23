@@ -341,6 +341,9 @@ uint8_t byteProperty(val object, const char* key, uint8_t default_value);
 /// @throws SonareException(InvalidParameter) naming @p key.
 int64_t checkedInt64FromVal(const val& value, const char* key);
 int64_t int64Property(val object, const char* key, int64_t default_value);
+/// @brief Reads a trailing render-frame argument; undefined is -1 ("now").
+/// @throws SonareException(InvalidParameter) for anything checkedInt64FromVal refuses.
+int64_t renderFrameFromVal(const val& value);
 /// @brief Narrows a JS number to float, rejecting what float cannot hold.
 /// @details The integer readers' counterpart for the other overflow: a value
 ///          past FLT_MAX becomes +inf, and a config validator that rejects NaN

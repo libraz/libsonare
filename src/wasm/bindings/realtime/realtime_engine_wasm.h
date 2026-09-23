@@ -58,12 +58,12 @@ class RealtimeEngineWasm {
                            const emscripten::val& max_channels);
 
   // ---- Transport & timing (realtime_engine_transport.cpp) --------------
-  void play(int64_t render_frame);
-  void stop(int64_t render_frame);
+  void play(const emscripten::val& render_frame_val);
+  void stop(const emscripten::val& render_frame_val);
   void settleParameters();
   void flushControlCommands();
-  void seekSample(int64_t timeline_sample, int64_t render_frame);
-  void seekPpq(double ppq, int64_t render_frame);
+  void seekSample(int64_t timeline_sample, const emscripten::val& render_frame_val);
+  void seekPpq(double ppq, const emscripten::val& render_frame_val);
   void setTempo(double bpm);
   void setTempoSegments(emscripten::val segments);
   void setTimeSignature(const emscripten::val& numerator_val,
@@ -75,7 +75,7 @@ class RealtimeEngineWasm {
   int markerCount() const;
   emscripten::val markerByIndex(const emscripten::val& index_val) const;
   emscripten::val marker(const emscripten::val& id_val) const;
-  void seekMarker(const emscripten::val& id_val, int64_t render_frame);
+  void seekMarker(const emscripten::val& id_val, const emscripten::val& render_frame_val);
   void setLoopFromMarkers(const emscripten::val& start_marker_id_val,
                           const emscripten::val& end_marker_id_val);
   void setMetronome(emscripten::val config);
@@ -90,14 +90,15 @@ class RealtimeEngineWasm {
   emscripten::val parameterInfo(double id) const;
   void setAutomationLane(double param_id, emscripten::val points);
   int automationLaneCount() const;
-  void setParameter(double param_id, const emscripten::val& value_val, int64_t render_frame);
+  void setParameter(double param_id, const emscripten::val& value_val,
+                    const emscripten::val& render_frame_val);
   void setParameterSmoothed(double param_id, const emscripten::val& value_val,
-                            int64_t render_frame);
+                            const emscripten::val& render_frame_val);
   void setParamSmoothingMs(const emscripten::val& smoothing_ms_val);
   void setSoloMute(const emscripten::val& lane_index_val, bool solo, bool mute,
-                   int64_t render_frame);
+                   const emscripten::val& render_frame_val);
   void setTrackMonitorMode(const emscripten::val& lane_index_val, const emscripten::val& mode_val,
-                           int64_t render_frame);
+                           const emscripten::val& render_frame_val);
   void clearParameters();
 
   // ---- MIDI instruments, control & events (realtime_engine_midi.cpp) ---
@@ -165,10 +166,11 @@ class RealtimeEngineWasm {
                        int64_t port_time_samples);
   void pushMidiNoteOn(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                       const emscripten::val& channel_val, const emscripten::val& note_val,
-                      const emscripten::val& velocity_val, int64_t render_frame);
+                      const emscripten::val& velocity_val, const emscripten::val& render_frame_val);
   void pushMidiNoteOff(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                        const emscripten::val& channel_val, const emscripten::val& note_val,
-                       const emscripten::val& velocity_val, int64_t render_frame);
+                       const emscripten::val& velocity_val,
+                       const emscripten::val& render_frame_val);
   void pushMidiInputPitchBend(const emscripten::val& group_val, const emscripten::val& channel_val,
                               const emscripten::val& bend_val, int64_t port_time_samples);
   void pushMidiInputChannelPressure(const emscripten::val& group_val,
@@ -180,22 +182,23 @@ class RealtimeEngineWasm {
                                  const emscripten::val& pressure_val, int64_t port_time_samples);
   void pushMidiCc(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                   const emscripten::val& channel_val, const emscripten::val& controller_val,
-                  const emscripten::val& value_val, int64_t render_frame);
+                  const emscripten::val& value_val, const emscripten::val& render_frame_val);
   void pushMidiPitchBend(const emscripten::val& destination_id_val,
                          const emscripten::val& group_val, const emscripten::val& channel_val,
-                         const emscripten::val& bend_val, int64_t render_frame);
+                         const emscripten::val& bend_val, const emscripten::val& render_frame_val);
   void pushMidiChannelPressure(const emscripten::val& destination_id_val,
                                const emscripten::val& group_val, const emscripten::val& channel_val,
-                               const emscripten::val& pressure_val, int64_t render_frame);
+                               const emscripten::val& pressure_val,
+                               const emscripten::val& render_frame_val);
   void pushMidiPolyPressure(const emscripten::val& destination_id_val,
                             const emscripten::val& group_val, const emscripten::val& channel_val,
                             const emscripten::val& note_val, const emscripten::val& pressure_val,
-                            int64_t render_frame);
+                            const emscripten::val& render_frame_val);
   void pushMidiUmp(const emscripten::val& destination_id_val, const emscripten::val& word0_val,
-                   int64_t render_frame);
+                   const emscripten::val& render_frame_val);
   void pushMidiSysex(const emscripten::val& destination_id_val, emscripten::val data,
-                     int64_t render_frame);
-  void pushMidiPanic(int64_t render_frame);
+                     const emscripten::val& render_frame_val);
+  void pushMidiPanic(const emscripten::val& render_frame_val);
 
   // ---- Mixer: tracks, buses, strips (realtime_engine_mixer.cpp) --------
   void setTrackLanes(emscripten::val lanes);

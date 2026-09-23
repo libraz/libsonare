@@ -91,8 +91,8 @@
     "floor": {
       "registrations": 600,
       "declarations": 1300,
-      "parameters": 24,
-      "functions": 20,
+      "parameters": 15,
+      "functions": 13,
       "files": 4
     },
     "shapes": [
@@ -103,7 +103,7 @@
           "uint64_t"
         ],
         "parameter_pattern": ".",
-        "count": 33,
+        "count": 15,
         "status": "benign",
         "defect": "refuses",
         "mechanism": [

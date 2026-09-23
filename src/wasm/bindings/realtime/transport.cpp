@@ -9,19 +9,19 @@
 
 #include "realtime_engine_wasm.h"
 
-void RealtimeEngineWasm::play(int64_t render_frame) {
+void RealtimeEngineWasm::play(const val& render_frame_val) {
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kTransportPlay;
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to queue play command");
   }
 }
 
-void RealtimeEngineWasm::stop(int64_t render_frame) {
+void RealtimeEngineWasm::stop(const val& render_frame_val) {
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kTransportStop;
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to queue stop command");
   }
@@ -35,24 +35,24 @@ void RealtimeEngineWasm::stop(int64_t render_frame) {
 void RealtimeEngineWasm::settleParameters() { engine_.settle_parameters(); }
 void RealtimeEngineWasm::flushControlCommands() { engine_.flush_control_commands(); }
 
-void RealtimeEngineWasm::seekSample(int64_t timeline_sample, int64_t render_frame) {
+void RealtimeEngineWasm::seekSample(int64_t timeline_sample, const val& render_frame_val) {
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kTransportSeekSample;
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   command.arg.i = timeline_sample;
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to queue seek command");
   }
 }
 
-void RealtimeEngineWasm::seekPpq(double ppq, int64_t render_frame) {
+void RealtimeEngineWasm::seekPpq(double ppq, const val& render_frame_val) {
   if (!std::isfinite(ppq) || !sonare::transport::valid_public_ppq(ppq)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "seekPpq: ppq is outside the public timeline range");
   }
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kTransportSeekPpq;
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   // Engine reads the PPQ scalar from the full-precision double slot
   // (kTransportSeekPpq -> transport_.seek_ppq(command.arg.d)); writing the
   // float slot of the union would surface as garbage. Match the C API.
@@ -220,7 +220,7 @@ val RealtimeEngineWasm::marker(const val& id_val) const {
   return markerToVal(marker);
 }
 
-void RealtimeEngineWasm::seekMarker(const val& id_val, int64_t render_frame) {
+void RealtimeEngineWasm::seekMarker(const val& id_val, const val& render_frame_val) {
   const int id = checkedIntFromVal(id_val, "id");
   // Mirror the C API (sonare_engine_seek_marker): a sample-accurate seek is
   // queued as a kSeekMarker command so it lands at the requested render frame
@@ -228,7 +228,7 @@ void RealtimeEngineWasm::seekMarker(const val& id_val, int64_t render_frame) {
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kSeekMarker;
   command.target_id = static_cast<uint32_t>(id);
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "failed to queue seek marker command");

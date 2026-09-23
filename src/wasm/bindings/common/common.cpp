@@ -460,6 +460,10 @@ int64_t checkedInt64FromVal(const val& value, const char* key) {
   return static_cast<int64_t>(number);
 }
 
+int64_t renderFrameFromVal(const val& value) {
+  return value.isUndefined() ? -1 : checkedInt64FromVal(value, "renderFrame");
+}
+
 int64_t int64Property(val object, const char* key, int64_t default_value) {
   val value = objectProperty(object, key);
   return value.isUndefined() ? default_value : checkedInt64FromVal(value, key);

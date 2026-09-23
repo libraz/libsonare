@@ -1098,25 +1098,25 @@ void RealtimeEngineWasm::pushMidiInputPolyPressure(const val& group_val, const v
 
 void RealtimeEngineWasm::pushMidiNoteOn(const val& destination_id_val, const val& group_val,
                                         const val& channel_val, const val& note_val,
-                                        const val& velocity_val, int64_t render_frame) {
+                                        const val& velocity_val, const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int note = checkedIntFromVal(note_val, "note");
   const int velocity = checkedIntFromVal(velocity_val, "velocity");
-  pushMidiNote(destination_id, group, channel, note, velocity, render_frame,
+  pushMidiNote(destination_id, group, channel, note, velocity, renderFrameFromVal(render_frame_val),
                sonare::rt::CommandType::kMidiNoteOnImmediate);
 }
 
 void RealtimeEngineWasm::pushMidiNoteOff(const val& destination_id_val, const val& group_val,
                                          const val& channel_val, const val& note_val,
-                                         const val& velocity_val, int64_t render_frame) {
+                                         const val& velocity_val, const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int note = checkedIntFromVal(note_val, "note");
   const int velocity = checkedIntFromVal(velocity_val, "velocity");
-  pushMidiNote(destination_id, group, channel, note, velocity, render_frame,
+  pushMidiNote(destination_id, group, channel, note, velocity, renderFrameFromVal(render_frame_val),
                sonare::rt::CommandType::kMidiNoteOffImmediate);
 }
 
@@ -1127,7 +1127,7 @@ void RealtimeEngineWasm::pushMidiNoteOff(const val& destination_id_val, const va
 // using the encoding documented in rt/command.h (kMidiCcImmediate).
 void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& group_val,
                                     const val& channel_val, const val& controller_val,
-                                    const val& value_val, int64_t render_frame) {
+                                    const val& value_val, const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -1145,7 +1145,7 @@ void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& gr
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kMidiCcImmediate;
   command.target_id = destination_id;
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   command.arg.i = static_cast<int64_t>(packed);
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
@@ -1162,7 +1162,7 @@ void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& gr
 // whichever call the host used. It used to reach the sequencer only, which made
 // this the one live path that silently skipped the CC -> automation mapping.
 void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& word0_val,
-                                     int64_t render_frame) {
+                                     const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   // A UMP word is idiomatically spelled `(0x2 << 28) | …` in JS, which is a
   // signed int once bit 31 is set, so the whole 32-bit range is legal here.
@@ -1172,7 +1172,7 @@ void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& w
         sonare::ErrorCode::InvalidParameter,
         "pushMidiUmp: only single-word MIDI 1.0 channel-voice UMP messages are supported");
   }
-  queueMidiUmp(destination_id, word0, render_frame);
+  queueMidiUmp(destination_id, word0, renderFrameFromVal(render_frame_val));
 }
 
 void RealtimeEngineWasm::queueMidiUmp(uint32_t destination_id, uint32_t word0,
@@ -1193,7 +1193,7 @@ void RealtimeEngineWasm::queueMidiUmp(uint32_t destination_id, uint32_t word0,
 // 14 bits and that encoding has no room for it.
 void RealtimeEngineWasm::pushMidiPitchBend(const val& destination_id_val, const val& group_val,
                                            const val& channel_val, const val& bend_val,
-                                           int64_t render_frame) {
+                                           const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -1209,13 +1209,13 @@ void RealtimeEngineWasm::pushMidiPitchBend(const val& destination_id_val, const 
       sonare::midi::make_midi1_pitch_bend(
           static_cast<uint8_t>(group), static_cast<uint8_t>(channel), static_cast<uint16_t>(bend14))
           .words[0],
-      render_frame);
+      renderFrameFromVal(render_frame_val));
 #else
   (void)destination_id;
   (void)group;
   (void)channel;
   (void)bend14;
-  (void)render_frame;
+  (void)render_frame_val;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1223,7 +1223,8 @@ void RealtimeEngineWasm::pushMidiPitchBend(const val& destination_id_val, const 
 
 void RealtimeEngineWasm::pushMidiChannelPressure(const val& destination_id_val,
                                                  const val& group_val, const val& channel_val,
-                                                 const val& pressure_val, int64_t render_frame) {
+                                                 const val& pressure_val,
+                                                 const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -1239,13 +1240,13 @@ void RealtimeEngineWasm::pushMidiChannelPressure(const val& destination_id_val,
                                                          static_cast<uint8_t>(channel),
                                                          static_cast<uint8_t>(pressure))
                    .words[0],
-               render_frame);
+               renderFrameFromVal(render_frame_val));
 #else
   (void)destination_id;
   (void)group;
   (void)channel;
   (void)pressure;
-  (void)render_frame;
+  (void)render_frame_val;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1253,7 +1254,8 @@ void RealtimeEngineWasm::pushMidiChannelPressure(const val& destination_id_val,
 
 void RealtimeEngineWasm::pushMidiPolyPressure(const val& destination_id_val, const val& group_val,
                                               const val& channel_val, const val& note_val,
-                                              const val& pressure_val, int64_t render_frame) {
+                                              const val& pressure_val,
+                                              const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -1271,14 +1273,14 @@ void RealtimeEngineWasm::pushMidiPolyPressure(const val& destination_id_val, con
                    static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
                    static_cast<uint8_t>(note), static_cast<uint8_t>(pressure))
                    .words[0],
-               render_frame);
+               renderFrameFromVal(render_frame_val));
 #else
   (void)destination_id;
   (void)group;
   (void)channel;
   (void)note;
   (void)pressure;
-  (void)render_frame;
+  (void)render_frame_val;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1291,7 +1293,7 @@ void RealtimeEngineWasm::pushMidiPolyPressure(const val& destination_id_val, con
 // @p render_frame (-1 = immediate). Mirrors the C ABI
 // sonare_engine_push_midi_sysex.
 void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
-                                       int64_t render_frame) {
+                                       const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   std::vector<uint8_t> bytes = uint8ArrayToVector(data);
   // Distinguish the two rejection classes the C ABI reports (it bypasses the
@@ -1305,7 +1307,8 @@ void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
         sonare::ErrorCode::InvalidParameter,
         "pushMidiSysex: data must contain 1.." + std::to_string(kMaxSysExBytes) + " bytes");
   }
-  if (!engine_.push_midi_sysex(destination_id, bytes.data(), bytes.size(), render_frame)) {
+  if (!engine_.push_midi_sysex(destination_id, bytes.data(), bytes.size(),
+                               renderFrameFromVal(render_frame_val))) {
     throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                   "failed to queue MIDI SysEx command");
   }
@@ -1314,11 +1317,11 @@ void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
 // Queues a MIDI panic (all-notes-off) releasing every sounding note at
 // @p render_frame (-1 = immediate). Mirrors the C ABI
 // sonare_engine_push_midi_panic.
-void RealtimeEngineWasm::pushMidiPanic(int64_t render_frame) {
+void RealtimeEngineWasm::pushMidiPanic(const val& render_frame_val) {
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kMidiAllNotesOff;
   command.target_id = 0;
-  command.sample_time = render_frame;
+  command.sample_time = renderFrameFromVal(render_frame_val);
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "failed to queue MIDI panic command");
