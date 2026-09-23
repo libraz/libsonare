@@ -20,6 +20,11 @@ namespace {
 
 constexpr uint8_t kDrumChannel = 9;  // MIDI channel 10
 
+/// Shared-bus residual attribution memory: how quickly a source's learned
+/// share of the bus-wide residual (part insert/body/reverb tail after its dry
+/// voice stops) decays toward the other live sources.
+constexpr float kResidualTauSeconds = 0.5f;
+
 }  // namespace
 
 Sf2Player::Sf2Player(const Sf2PlayerConfig& config) : config_(config) {
@@ -96,6 +101,8 @@ void Sf2Player::recompute_tail() noexcept {
 
 void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
+  residual_splitter_.reset();
   pool_.prepare(config_.polyphony);
   fallback_pool_.prepare(config_.synth_fallback ? config_.polyphony : 1);
   // Plucked GM fallback programs are Karplus-Strong voices: give every
@@ -206,6 +213,7 @@ void Sf2Player::reset() {
   // reset means the next block starts from silence, so it goes with the voices.
   dc_x1_ = {};
   dc_y1_ = {};
+  residual_splitter_.reset();
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
   // Republish a fresh realised-EFX snapshot: rebuilding the inserts gives them
   // clean DSP state (the discontinuity's equivalent of resetting them), and the

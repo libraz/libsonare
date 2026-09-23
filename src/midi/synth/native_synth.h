@@ -34,6 +34,7 @@
 #include "midi/controller_profile.h"
 #include "midi/instrument.h"
 #include "midi/mpe.h"
+#include "midi/source_residual.h"
 #include "midi/synth/additive_voice.h"
 #include "midi/synth/body_resonator.h"
 #include "midi/synth/bowed_string_voice.h"
@@ -791,6 +792,14 @@ class NativeSynth final : public MidiInstrument {
   std::array<float, 2> dc_y1_{};
   float dc_r_ = 0.999f;
   float bus_drive_gain_ = 0.0f;
+  /// Shared-bus residual (mix minus dry) attributed to source targets by dry
+  /// energy. prepare() has no block-length argument, so the residual is
+  /// staged in a fixed chunk and flushed every kResidualChunk samples and at
+  /// block end (process_impl).
+  SourceResidualSplitter residual_splitter_;
+  std::array<float, kResidualChunk> residual_l_{};
+  std::array<float, kResidualChunk> residual_r_{};
+  int residual_pos_ = 0;
   VoicePool<NativeSynthVoice> pool_;
   /// Host sample bank for the kSample engine. The raw pointer is what the audio
   /// thread reads; the share below is held only when the caller handed one over.

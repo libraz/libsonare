@@ -41,6 +41,7 @@
 #include <vector>
 
 #include "midi/instrument.h"
+#include "midi/source_residual.h"
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/gs_master_eq.h"
@@ -565,6 +566,11 @@ class Sf2Player final : public MidiInstrument {
   float dc_r_ = 0.0f;
   std::array<float, 2> dc_x1_{};
   std::array<float, 2> dc_y1_{};
+  /// Shared-bus residual (mix minus dry) attributed to source targets by dry
+  /// energy, one chunk (kChunkFrames) at a time -- render_chunk already runs
+  /// the 16-part bus graph in that cadence, so no separate staging buffer is
+  /// needed here.
+  SourceResidualSplitter residual_splitter_;
 
   /// Renders one chunk (n <= kChunkFrames) of the 16-part bus graph into the
   /// internal mix scratch. In source-track mode, attributable dry voice audio

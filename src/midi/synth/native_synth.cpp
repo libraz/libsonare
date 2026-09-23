@@ -19,6 +19,11 @@ namespace {
 /// halo rings. Shared by the bank tuning (prepare_custom) and the tail estimate.
 constexpr float kKsSympatheticRingS = 1.5f;
 
+/// Shared-bus residual attribution memory: how quickly a source's learned
+/// share of the bus-wide residual (body/reverb tail after its dry voice
+/// stops) decays toward the other live sources.
+constexpr float kResidualTauSeconds = 0.5f;
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -37,6 +42,9 @@ NativeSynth::NativeSynth(const NativeSynthConfig& config) : config_(config) {
 
 void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
+  residual_splitter_.reset();
+  residual_pos_ = 0;
   pool_.prepare(config_.polyphony);
   // One entry per voice bounds the notes one channel can be sounding, and this
   // is the only place the attribution scratch is sized.
@@ -217,6 +225,8 @@ void NativeSynth::reset() {
   pool_.reset();
   dc_x1_ = {};
   dc_y1_ = {};
+  residual_splitter_.reset();
+  residual_pos_ = 0;
   resonance_.reset();
   soundboard_.reset();
   guitar_halo_.reset();
@@ -1004,6 +1014,7 @@ void NativeSynth::process_impl(float* const* channels,
   // discarded; bumped once after the loop rather than per sample, since the
   // unit is one process() call, not one sample.
   bool discarded = false;
+  if (source_render) residual_pos_ = 0;
   for (int i = 0; i < num_samples; ++i) {
     float mix_l = 0.0f;
     float mix_r = 0.0f;
@@ -1053,6 +1064,8 @@ void NativeSynth::process_impl(float* const* channels,
       if (source_render) {
         add_output(target_for(v.source_track_id), i, voice_l * config_.gain,
                    voice_r * config_.gain);
+        residual_splitter_.accumulate(v.source_track_id, voice_l * config_.gain,
+                                      voice_r * config_.gain);
       }
     }
     mix_l *= config_.gain;
@@ -1127,10 +1140,23 @@ void NativeSynth::process_impl(float* const* channels,
       mix_r = r;
     }
     if (source_render) {
-      // Shared bodies, bus drive and DC filtering are destination-scoped DSP.
-      // Keep their residual on the default target so the sum of all source
-      // targets remains exactly the legacy destination render.
-      add_output(source_outputs[0].channels, i, mix_l - dry_l, mix_r - dry_r);
+      // Shared bodies, bus drive and DC filtering are destination-scoped DSP;
+      // their residual (mix minus dry) is split across source targets by dry
+      // energy (SourceResidualSplitter) instead of being dumped on the
+      // default target. With one live source the split adds the residual
+      // unmultiplied, so that source's target is bit-identical to a
+      // slot-0-only render; with several it is exact only up to the split's
+      // floating-point rounding. Staged in a fixed chunk (prepare() has no
+      // block-length argument) and flushed every kResidualChunk samples and
+      // once more at block end below.
+      residual_l_[static_cast<size_t>(residual_pos_)] = mix_l - dry_l;
+      residual_r_[static_cast<size_t>(residual_pos_)] = mix_r - dry_r;
+      if (++residual_pos_ == kResidualChunk) {
+        residual_splitter_.flush(source_outputs, source_output_count, residual_pos_,
+                                 residual_l_.data(), residual_r_.data(), i - kResidualChunk + 1,
+                                 add_output);
+        residual_pos_ = 0;
+      }
     } else if (left != nullptr) {
       // Mono host: fold both pan legs so centre-panned voices keep level.
       left[i] += mono ? constants::kInvSqrt2 * (mix_l + mix_r) : mix_l;
@@ -1142,6 +1168,11 @@ void NativeSynth::process_impl(float* const* channels,
         channels[ch][i] += constants::kInvSqrt2 * (mix_l + mix_r);
       }
     }
+  }
+  if (source_render && residual_pos_ > 0) {
+    residual_splitter_.flush(source_outputs, source_output_count, residual_pos_, residual_l_.data(),
+                             residual_r_.data(), num_samples - residual_pos_, add_output);
+    residual_pos_ = 0;
   }
   if (discarded) note_non_finite_discard();
 }

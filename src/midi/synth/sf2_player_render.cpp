@@ -198,6 +198,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         if (source_render) {
           add_output(target_for(v.source_track_id), output_offset + i, l * out_gain_l,
                      r * out_gain_r);
+          residual_splitter_.accumulate(v.source_track_id, l * out_gain_l, r * out_gain_r);
           attributed_l[i] += l;
           attributed_r[i] += r;
         }
@@ -268,6 +269,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         if (source_render) {
           add_output(target_for(v.source_track_id), output_offset + i, l * out_gain_l,
                      r * out_gain_r);
+          residual_splitter_.accumulate(v.source_track_id, l * out_gain_l, r * out_gain_r);
           attributed_l[i] += l;
           attributed_r[i] += r;
         }
@@ -526,13 +528,18 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   }
   if (source_render) {
     // Part inserts, body resonators and system effect returns are
-    // destination-scoped. Attribute their residual to target zero while keeping
-    // the sum of all targets equal to the ordinary player render.
+    // destination-scoped; their residual is split across source targets by
+    // dry energy (SourceResidualSplitter) rather than dumped on target zero.
+    // With one live source the split adds it unmultiplied, so that source's
+    // target is bit-identical to a slot-0-only render; with several it is
+    // exact only up to the split's floating-point rounding. attributed_l/r
+    // are done carrying the dry sum, so the residual overwrites them in place.
     for (int i = 0; i < n; ++i) {
-      add_output(source_outputs[0].channels, output_offset + i,
-                 (mix_l_[static_cast<size_t>(i)] - attributed_l[i]) * out_gain_l,
-                 (mix_r_[static_cast<size_t>(i)] - attributed_r[i]) * out_gain_r);
+      attributed_l[i] = (mix_l_[static_cast<size_t>(i)] - attributed_l[i]) * out_gain_l;
+      attributed_r[i] = (mix_r_[static_cast<size_t>(i)] - attributed_r[i]) * out_gain_r;
     }
+    residual_splitter_.flush(source_outputs, source_output_count, n, attributed_l, attributed_r,
+                             output_offset, add_output);
   }
   return discarded;
 }
