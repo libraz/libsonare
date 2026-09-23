@@ -607,8 +607,8 @@ TEST_CASE("every preset's params JSON is version 1", "[mastering][preset][json]"
 
 TEST_CASE("applying a preset's own params JSON as overrides is a no-op",
           "[mastering][preset][json]") {
-  // masteringPresetParams(preset) is chain_config_to_json(preset_config(preset))
-  // (F10). Re-applying that exact document as overrides on top of the same
+  // masteringPresetParams(preset) is chain_config_to_json(preset_config(preset)).
+  // Re-applying that exact document as overrides on top of the same
   // preset must change nothing: every value it carries is already the value
   // the preset set.
   constexpr int sample_rate = 44100;
