@@ -420,6 +420,16 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return _parameter_from_c(raw)
 
     def set_automation_lane(self, param_id: int, points: Sequence[AutomationPoint]) -> None:
+        """Replace the automation lane driving ``param_id``.
+
+        An empty lane (``points`` empty) leaves the target undriven rather
+        than snapping it to 0 or a default: once the change is adopted, the
+        target reverts to the last value explicitly sent through
+        :meth:`set_parameter` / :meth:`set_parameter_smoothed`, or is left
+        unchanged if no such value was ever sent for ``param_id``. This holds
+        regardless of whether the manual value or the lane clear is adopted
+        first.
+        """
         raw_points = (SonareAutomationPoint * len(points))(
             *[
                 SonareAutomationPoint(
@@ -537,7 +547,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """Push a live parameter value to the engine (immediate jump).
 
         ``render_frame`` is the render-frame time to apply, or ``-1`` for
-        immediate.
+        immediate. This value also becomes ``param_id``'s base value: if an
+        automation lane later starts (and stops) driving ``param_id``, the
+        target reverts to this value once that lane empties -- see
+        :meth:`set_automation_lane`.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_parameter"):
@@ -552,7 +565,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
 
     def set_parameter_smoothed(self, param_id: int, value: float, render_frame: int = -1) -> None:
-        """Push a live parameter value to the engine using a smoothed ramp."""
+        """Push a live parameter value to the engine using a smoothed ramp.
+
+        The ramp's target (not its in-flight position) becomes ``param_id``'s
+        base value, with the same restore-on-lane-release behavior as
+        :meth:`set_parameter`.
+        """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_parameter_smoothed"):
             raise RuntimeError("libsonare was built without live-parameter support")
@@ -774,6 +792,40 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(
             lib.sonare_engine_warp_stretch_overflow_count(self._require_handle(), ctypes.byref(out))
         )
+        return int(out.value)
+
+    def set_warp_voice_capacity(self, voices: int) -> None:
+        """Set the number of concurrent time-stretch voices.
+
+        Voices must be in [0, 64]. Default is 8. Capacity 0 disables
+        time-stretch: every warped clip plays resampled instead, and none of
+        that counts toward :meth:`warp_stretch_overflow_count`. A change
+        applied while the engine is running rebuilds the voice pool
+        immediately; any clip stretching through a voice at that moment
+        restarts its WSOLA state rather than carrying it over.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_warp_voice_capacity"):
+            raise RuntimeError("libsonare was built without clip-warp support")
+        _check(
+            lib.sonare_engine_set_warp_voice_capacity(
+                self._require_handle(),
+                ctypes.c_uint32(_narrow_int(voices, "voices", 0, 64)),
+            )
+        )
+
+    def warp_voice_capacity(self) -> int:
+        """Read the current time-stretch voice capacity.
+
+        Returns the value most recently accepted by
+        :meth:`set_warp_voice_capacity`, or the default (8) if it was never
+        called.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_warp_voice_capacity"):
+            raise RuntimeError("libsonare was built without clip-warp support")
+        out = ctypes.c_uint32()
+        _check(lib.sonare_engine_warp_voice_capacity(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
     def drain_external_midi(self, max_records: int = 1024) -> list[ExternalMidiEvent]:

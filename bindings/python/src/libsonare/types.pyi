@@ -258,6 +258,7 @@ class EngineTelemetryError(IntEnum):
     METRONOME_OVERFLOW = 18
     # Ordinal 19 is reserved by the WASM worklet protocol.
     MAX_CHANNELS_EXCEEDED = 20
+    PARAMETER_BASE_OVERFLOW = 21
 
 class Key:
     """Detected musical key.

@@ -382,6 +382,18 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_uint32),
         ]
+    if hasattr(lib, "sonare_engine_set_warp_voice_capacity"):
+        lib.sonare_engine_set_warp_voice_capacity.restype = ctypes.c_int32
+        lib.sonare_engine_set_warp_voice_capacity.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+        ]
+    if hasattr(lib, "sonare_engine_warp_voice_capacity"):
+        lib.sonare_engine_warp_voice_capacity.restype = ctypes.c_int32
+        lib.sonare_engine_warp_voice_capacity.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
     if hasattr(lib, "sonare_engine_drain_external_midi"):
         lib.sonare_engine_drain_external_midi.restype = ctypes.c_int32
         lib.sonare_engine_drain_external_midi.argtypes = [

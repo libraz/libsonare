@@ -2005,6 +2005,40 @@ def test_engine_overflow_counters_start_at_zero_and_stay_there_when_nothing_drop
         assert engine.warp_stretch_overflow_count() == 0
 
 
+def test_engine_warp_voice_capacity_default_and_round_trip() -> None:
+    """Default capacity is 8, set/get round-trips, and 0 disables stretch cleanly."""
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        assert engine.warp_voice_capacity() == 8
+
+        engine.set_warp_voice_capacity(12)
+        assert engine.warp_voice_capacity() == 12
+
+        engine.set_warp_voice_capacity(0)
+        assert engine.warp_voice_capacity() == 0
+        engine.play()
+        engine.process([[0.0] * 128, [0.0] * 128])
+        assert engine.warp_stretch_overflow_count() == 0
+
+
+@pytest.mark.parametrize("bad_voices", [65, -1, 1.5])
+def test_engine_set_warp_voice_capacity_rejects_out_of_range_values(bad_voices: object) -> None:
+    """65, -1, and 1.5 are all refused, leaving the stored capacity unchanged."""
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        engine.set_warp_voice_capacity(12)
+        with pytest.raises(ValueError):
+            engine.set_warp_voice_capacity(bad_voices)  # type: ignore[arg-type]
+        assert engine.warp_voice_capacity() == 12
+
+
+def test_engine_telemetry_error_parameter_base_overflow_ordinal() -> None:
+    assert EngineTelemetryError.PARAMETER_BASE_OVERFLOW.value == 21
+    assert EngineTelemetryError.PARAMETER_BASE_OVERFLOW.name == "PARAMETER_BASE_OVERFLOW"
+
+
 @pytest.mark.parametrize("max_records", [1, 2])
 def test_engine_drain_external_midi_refuses_a_budget_below_the_lowering_bound(
     max_records,
