@@ -83,6 +83,7 @@ METADATA_HELPERS = {
     "isInitialized",
     "engineCapabilities",
     "masteringPresetNames",
+    "masteringPresetParams",
     "masteringProcessorNames",
     "masteringPairProcessorNames",
     "masteringPairAnalysisNames",
