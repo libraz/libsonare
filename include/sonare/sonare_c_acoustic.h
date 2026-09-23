@@ -89,7 +89,11 @@ typedef struct {
    * scattering bands default to 0. It is INDEPENDENT of absorption_bands and of
    * material_preset: a scattering array supplied on its own is applied to
    * whichever material the absorption precedence selected, so a preset or a
-   * scalar-absorption room can still be given rough walls. */
+   * scalar-absorption room can still be given rough walls.
+   * The late tail's decay time runs continuously between octave centres, so
+   * where absorption (a preset's included) changes steeply between octaves the
+   * octave-band RT60 measured back leans toward the slower neighbour, as it
+   * does for a real room; the design value holds at the octave centre. */
   const float* absorption_bands;
   size_t absorption_band_count;
   const float* scattering_bands;

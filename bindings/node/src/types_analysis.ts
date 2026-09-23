@@ -600,6 +600,12 @@ export interface RoomGeometryOptions {
    * Optional per-octave-band wall absorption (125/250/500/1k/2k/4k.. Hz). When
    * provided it overrides `absorption` unless `materialPreset` is set.
    *
+   * The late tail's decay time runs continuously between octave centres, so
+   * where absorption (a preset's included) changes steeply from one octave to
+   * the next, the octave-band RT60 measured back from the result leans toward
+   * the slower neighbour, as it does for a real room. The design value holds
+   * at the octave centre.
+   *
    * Every entry must be a finite number within [0, 1]. In a plain number array
    * a non-numeric entry is refused by index rather than read as 0, which is a
    * legal coefficient and would have been indistinguishable from a rigid wall

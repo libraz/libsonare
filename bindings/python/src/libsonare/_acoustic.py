@@ -148,7 +148,12 @@ def synthesize_rir(
         absorption: Uniform wall absorption, clamped to [0, 0.999].
         absorption_bands: Optional per-octave-band wall absorption
             (125/250/500/1k/2k/4k.. Hz). When given it overrides ``absorption``
-            (unless ``material_preset`` selects a named preset).
+            (unless ``material_preset`` selects a named preset). The late
+            tail's decay time runs continuously between octave centres, so
+            where absorption (a preset's included) changes steeply from one
+            octave to the next, the octave-band RT60 measured back from the
+            result leans toward the slower neighbour, as it does for a real
+            room; the design value holds at the octave centre.
         scattering_bands: Optional per-octave-band wall scattering; missing
             bands read as 0. Independent of ``absorption_bands`` and
             ``material_preset`` -- it applies to whichever material the

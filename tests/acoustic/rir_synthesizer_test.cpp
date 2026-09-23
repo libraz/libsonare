@@ -665,7 +665,8 @@ TEST_CASE("single-material rooms read back their own per-band RT60", "[acoustic]
   REQUIRE_THAT(got[0], WithinRel(m.design[0], 0.10f));
   for (size_t b = 4; b < got.size(); ++b) REQUIRE_THAT(got[b], WithinRel(m.design[b], 0.25f));
   // From 500 Hz up every band covers at least half (in log) of its design drop from 125 Hz.
-  // The 250 Hz band beside a 3-5x step still reads high (carpet 2.7 s vs 1.9 s).
+  // The 250 Hz band beside a 3-5x step reads high by construction: its lower third decays
+  // toward 125 Hz, and an ideal band split reads it the same (carpet 2.6 s vs 1.9 s design).
   for (size_t b = 2; b < got.size(); ++b) {
     REQUIRE(got[b] < got[0] * std::sqrt(m.design[b] / m.design[0]));
   }
