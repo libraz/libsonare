@@ -211,6 +211,46 @@ std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
   return result;
 }
 
+void butterworth_zero_phase(std::vector<float>& x, float cutoff_hz, int sr, int order,
+                            bool highpass) {
+  SONARE_CHECK(cutoff_hz > 0 && sr > 0 && cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK(order >= 2 && order % 2 == 0, ErrorCode::InvalidParameter);
+  if (x.empty()) return;
+
+  // Double precision: low-cutoff poles near the unit circle make float noise reach -60 dB.
+  const double w0 = constants::kTwoPiD * static_cast<double>(cutoff_hz) / static_cast<double>(sr);
+  const double cos_w0 = std::cos(w0);
+  const double sin_w0 = std::sin(w0);
+  const int sections = order / 2;
+  for (int pair = 0; pair < sections; ++pair) {
+    const double q = static_cast<double>(rt::butterworth_stage_q(order, pair));
+    const double alpha = sin_w0 / (2.0 * q);
+    const double a0 = 1.0 + alpha;
+    const double edge = highpass ? (1.0 + cos_w0) * 0.5 : (1.0 - cos_w0) * 0.5;
+    const double b0 = edge / a0;
+    const double b1 = (highpass ? -2.0 : 2.0) * edge / a0;
+    const double b2 = b0;
+    const double a1 = -2.0 * cos_w0 / a0;
+    const double a2 = (1.0 - alpha) / a0;
+    for (int pass = 0; pass < 2; ++pass) {
+      double z1 = 0.0;
+      double z2 = 0.0;
+      auto step = [&](float& sample) {
+        const double in = static_cast<double>(sample);
+        const double out = b0 * in + z1;
+        z1 = b1 * in - a1 * out + z2;
+        z2 = b2 * in - a2 * out;
+        sample = static_cast<float>(out);
+      };
+      if (pass == 0) {
+        for (float& sample : x) step(sample);
+      } else {
+        for (auto it = x.rbegin(); it != x.rend(); ++it) step(*it);
+      }
+    }
+  }
+}
+
 std::vector<float> preemphasis_zero_initial_state(const float* input, size_t size, float coeff) {
   return sonare::preemphasis(input, size, coeff, 0.0f);
 }

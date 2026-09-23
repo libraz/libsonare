@@ -161,8 +161,8 @@ typedef struct {
 
 /// @brief Equivalent-room estimate. Free with sonare_free_room_estimate.
 typedef struct {
-  float volume;   /* equivalent interior volume (m^3) */
-  float length_m; /* representative dimensions (m) */
+  float volume;   /* equivalent interior volume (m^3); NaN when no decay is measurable */
+  float length_m; /* representative dimensions (m); NaN likewise */
   float width_m;
   float height_m;
   float drr_db;     /* direct-to-reverberant ratio (dB) */

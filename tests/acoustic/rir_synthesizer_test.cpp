@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <string>
 
 #include "acoustic/image_source.h"
 #include "acoustic/late_reverb.h"
@@ -504,9 +506,9 @@ TEST_CASE("synthesize_rir preserves early reflections past the late tail", "[aco
 
 namespace {
 // Energy of `window` after isolating a single octave band, using the same
-// zero-phase octave bandpass the synthesizer shapes bands with.
+// complementary octave split the synthesizer shapes bands with.
 double octave_energy(std::vector<float> window, int band, int sample_rate) {
-  octave_bandpass_zero_phase(window, octave_center_hz(band), sample_rate);
+  octave_band_zero_phase(window, band, kDefaultOctaveBands, sample_rate);
   double e = 0.0;
   for (float s : window) e += static_cast<double>(s) * s;
   return e;
@@ -622,4 +624,84 @@ TEST_CASE("synthesize_rir reports a clamp when max_seconds truncates the early r
   const auto cap = static_cast<size_t>(std::ceil(cfg.max_seconds * static_cast<float>(sr)));
   REQUIRE(res.rir.size() <= cap);
   for (float v : res.rir) REQUIRE(std::isfinite(v));
+}
+
+namespace {
+ShoeboxRoom preset_room(float length, float width, float height, MaterialPreset preset) {
+  ShoeboxRoom room;
+  room.dims = {length, width, height};
+  for (Material& w : room.walls) w = make_material(preset);
+  return room;
+}
+
+struct MeasuredRir {
+  AcousticParameters params;
+  std::vector<float> design;
+  std::vector<Diagnostic> diagnostics;
+};
+
+MeasuredRir measure_rir(const ShoeboxRoom& room, const SourceListener& pl, int sr,
+                        float max_seconds = 0.0f) {
+  RirSynthConfig cfg;
+  cfg.max_seconds = max_seconds;
+  RirSynthResult res = synthesize_rir(room, pl, sr, cfg);
+  REQUIRE_FALSE(has_error(res.diagnostics));
+  AcousticConfig ac;
+  ac.n_octave_bands = kDefaultOctaveBands;
+  return {AcousticAnalyzer::from_impulse_response(res.rir, ac).parameters(),
+          shoebox_reverb_time(room, cfg.late_model).rt60_bands, std::move(res.diagnostics)};
+}
+}  // namespace
+
+TEST_CASE("single-material rooms read back their own per-band RT60", "[acoustic][rir]") {
+  // Carpet and curtain span a 20-45x RT60 range across the octaves. With leaky band
+  // splits every band above 1 kHz read the 125 Hz decay (carpet 4 kHz: 2.6 s for 0.11 s).
+  const SourceListener pl{{1.0f, 1.0f, 1.2f}, {4.5f, 3.2f, 1.2f}};
+  const auto preset = GENERATE(MaterialPreset::Carpet, MaterialPreset::Curtain);
+  const MeasuredRir m = measure_rir(preset_room(6.5f, 4.8f, 3.0f, preset), pl, 48000);
+  const std::vector<float>& got = m.params.rt60_bands;
+  REQUIRE(got.size() == m.design.size());
+  CAPTURE(got, m.design);
+  REQUIRE_THAT(got[0], WithinRel(m.design[0], 0.10f));
+  for (size_t b = 4; b < got.size(); ++b) REQUIRE_THAT(got[b], WithinRel(m.design[b], 0.25f));
+  // From 500 Hz up every band covers at least half (in log) of its design drop from 125 Hz.
+  // The 250 Hz band beside a 3-5x step still reads high (carpet 2.7 s vs 1.9 s).
+  for (size_t b = 2; b < got.size(); ++b) {
+    REQUIRE(got[b] < got[0] * std::sqrt(m.design[b] / m.design[0]));
+  }
+}
+
+TEST_CASE("mixed-material room reads back its per-band RT60", "[acoustic][rir]") {
+  ShoeboxRoom room;
+  room.dims = {6.5f, 4.8f, 3.0f};
+  room.walls[0] = make_material(MaterialPreset::Concrete);
+  room.walls[1] = make_material(MaterialPreset::Glass);
+  room.walls[2] = make_material(MaterialPreset::Wood);
+  room.walls[3] = make_material(MaterialPreset::Curtain);
+  room.walls[4] = make_material(MaterialPreset::Carpet);
+  room.walls[5] = make_material(MaterialPreset::Wood);
+  const MeasuredRir m = measure_rir(room, {{1.0f, 1.0f, 1.2f}, {4.5f, 3.2f, 1.2f}}, 48000);
+  CAPTURE(m.params.rt60_bands, m.design);
+  for (size_t b = 0; b < m.design.size(); ++b) {
+    REQUIRE_THAT(m.params.rt60_bands[b], WithinRel(m.design[b], 0.15f));
+  }
+}
+
+TEST_CASE("a max_seconds cut inside the longest RT60 is warned and not measured",
+          "[acoustic][rir][.][slow]") {
+  // A concrete hall cut at 12 s ends its 14-43 s bands on signal. The analyzer used to take
+  // the last 10% as noise and report 0.02-0.04 s for every band.
+  const SourceListener pl{{2.0f, 2.0f, 1.5f}, {14.0f, 9.0f, 1.5f}};
+  const MeasuredRir m =
+      measure_rir(preset_room(24.0f, 16.0f, 12.0f, MaterialPreset::Concrete), pl, 48000, 12.0f);
+  REQUIRE(has_code(m.diagnostics, "acoustic.rir_tail_truncated"));
+  CAPTURE(m.params.rt60_bands, m.design);
+  for (size_t b = 0; b + 1 < m.design.size(); ++b) REQUIRE(std::isnan(m.params.rt60_bands[b]));
+  // 4 kHz (14 s) is cut 51 dB down, enough for T30.
+  REQUIRE_THAT(m.params.rt60_bands.back(), WithinRel(m.design.back(), 0.10f));
+
+  // A cap past every band's RT60 stays silent.
+  const MeasuredRir full = measure_rir(preset_room(6.5f, 4.8f, 3.0f, MaterialPreset::Curtain),
+                                       {{1.0f, 1.0f, 1.2f}, {4.5f, 3.2f, 1.2f}}, 48000, 4.0f);
+  REQUIRE_FALSE(has_code(full.diagnostics, "acoustic.rir_tail_truncated"));
 }

@@ -33,8 +33,8 @@ namespace sonare {
 
 /// @brief Equivalent-room parameters recovered from a recording.
 struct RoomEstimate {
-  float volume = 0.0f;                  ///< equivalent interior volume V (m^3)
-  RoomDimensions dims;                  ///< representative shoebox dimensions (m)
+  float volume = 0.0f;                  ///< equivalent interior volume V (m^3); NaN if unmeasurable
+  RoomDimensions dims;                  ///< representative shoebox dimensions (m); NaN likewise
   std::vector<float> absorption_bands;  ///< per-octave-band mean absorption alpha-bar(f), [0,1)
   float drr_db = 0.0f;                  ///< direct-to-reverberant ratio (dB)
   std::vector<float> rt60_bands;        ///< per-band RT60 (s), straight from the analyzer
@@ -77,8 +77,8 @@ void validate_room_estimate_config(const RoomEstimateConfig& config);
 /// Runs the acoustic analyzer, inverts Sabine/Eyring under the configured
 /// priors to recover an equivalent volume and dimensions, solves the per-band
 /// mean absorption at that geometry, and measures the direct-to-reverberant
-/// ratio from the direct-sound window. A silent or unanalyzable input yields a
-/// zeroed estimate with `confidence == 0`.
+/// ratio from the direct-sound window. A silent or unanalyzable input yields NaN
+/// volume and dimensions with `confidence == 0`.
 RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& config = {});
 
 }  // namespace sonare

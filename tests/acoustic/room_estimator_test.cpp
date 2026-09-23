@@ -242,7 +242,10 @@ TEST_CASE("estimate_room reports zero confidence for silence", "[acoustic][room_
   const Audio audio = Audio::from_vector(std::move(silence), 48000);
   const RoomEstimate est = estimate_room(audio);
   REQUIRE(est.confidence == 0.0f);
-  REQUIRE(est.volume == 0.0f);
+  REQUIRE(std::isnan(est.volume));
+  REQUIRE(std::isnan(est.dims.length));
+  REQUIRE(std::isnan(est.dims.width));
+  REQUIRE(std::isnan(est.dims.height));
 }
 
 TEST_CASE("estimate_room rejects invalid priors before analysis",

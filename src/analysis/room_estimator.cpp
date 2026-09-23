@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "acoustic/late_reverb.h"
@@ -79,8 +80,14 @@ RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& con
 
   const float rt60_bb = ap.rt60;
   if (!(rt60_bb > 0.0f) || !std::isfinite(rt60_bb)) {
+    // No measurable decay: geometry is NaN, the acoustic family's "not measurable".
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    est.volume = nan;
+    est.dims.length = nan;
+    est.dims.width = nan;
+    est.dims.height = nan;
     est.confidence = 0.0f;
-    return est;  // unanalyzable input -> zeroed geometry, honest zero confidence
+    return est;
   }
 
   // Room-shape prior: length L, width L/r_lw, height L/r_lh, so the volume and

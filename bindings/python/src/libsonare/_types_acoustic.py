@@ -84,7 +84,10 @@ class RirResult:
     ``max_seconds`` clamp that cut the reverb tail
     (``acoustic.rir_length_clamped``), a ``max_seconds`` shorter than the direct
     sound's own arrival, which is raised to fit it
-    (``acoustic.rir_length_floored``), or a request reduced from "early
+    (``acoustic.rir_length_floored``), a ``max_seconds`` shorter than the
+    longest band's RT60, which cuts that band before it decays by 60 dB so its
+    reverberation time cannot be measured from the RIR
+    (``acoustic.rir_tail_truncated``), or a request reduced from "early
     reflections + diffuse tail" to early reflections only
     (``acoustic.no_late_tail``). None of them sets ``has_error``, so a truncated
     RIR is indistinguishable from a complete one without reading this field.
@@ -116,10 +119,12 @@ class RoomMorphResult:
     reduced to the safe maximum (``acoustic.ism_order_clamped``), a tail cut
     against ``max_seconds`` (``acoustic.rir_length_clamped``), a ``max_seconds``
     shorter than the direct sound's flight time and extended to fit it
-    (``acoustic.rir_length_floored``), a request that produced no diffuse tail
+    (``acoustic.rir_length_floored``), a ``max_seconds`` shorter than the
+    longest band's RT60, which cuts that band before it decays by 60 dB
+    (``acoustic.rir_tail_truncated``), a request that produced no diffuse tail
     (``acoustic.no_late_tail``) — and is otherwise invisible.
 
-    These are the four codes the synthesis can emit here, so a ``match`` over
+    These are the five codes the synthesis can emit here, so a ``match`` over
     them needs no fall-through case. :func:`room_morph` forwards ``max_seconds``
     unchanged, which is why the floored one reaches a morph at all.
     """
@@ -135,7 +140,13 @@ class RoomMorphResult:
 
 @dataclass(frozen=True, slots=True)
 class RoomEstimate:
-    """Blind equivalent-room estimate (volume/dimensions/absorption/DRR)."""
+    """Blind equivalent-room estimate (volume/dimensions/absorption/DRR).
+
+    ``volume``, ``length``, ``width`` and ``height`` are NaN, with
+    ``confidence`` 0, when the recording has no measurable broadband decay
+    (silence, or an RT60 the analyzer could not fit). NaN is the acoustic
+    family's "not measurable", as in the RT60 bands.
+    """
 
     volume: float
     length: float

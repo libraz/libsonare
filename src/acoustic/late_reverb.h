@@ -8,10 +8,10 @@
 ///
 /// The early reflections come from the image-source method; this fills in the
 /// dense, diffuse late field that the image-source method intentionally stops
-/// enumerating. The tail is octave-band-filtered Gaussian noise (fixed seed,
-/// never platform RNG) shaped by an exponential decay envelope, so its backward
-/// Schroeder integral is monotonically non-increasing by construction and its
-/// per-band decay is set directly by the design reverberation times.
+/// enumerating. The tail is Gaussian noise (fixed seed, never platform RNG) split
+/// into complementary octave bands, each shaped by its own exponential decay envelope, so its
+/// backward Schroeder integral is monotonically non-increasing by construction and its per-band
+/// decay is set directly by the design reverberation times.
 
 #include <cstddef>
 #include <vector>
@@ -97,13 +97,17 @@ float air_absorption_m_per_meter(float freq_hz, float temperature_c,
 /// place identical per-band shaping on the same octave grid.
 float octave_center_hz(int band) noexcept;
 
-/// @brief Zero-phase octave bandpass (forward + backward RBJ biquad at
-///        Q = sqrt(2)), applied to @p x in place.
+/// @brief Number of bands of an @p bands octave split that fit below Nyquist
+///        (upper edge `centre * sqrt(2)` under `sample_rate / 2`).
+int octave_split_band_count(std::size_t bands, int sample_rate) noexcept;
+
+/// @brief Isolates band @p band of a @p band_count complementary octave split, in place.
 ///
-/// The same minimal forward/backward biquad the late tail uses to shape each
-/// octave band, exposed so the early-reflection colourer can isolate a band's
-/// material-dependent deviation onto the identical octave grid.
-void octave_bandpass_zero_phase(std::vector<float>& x, float center_hz, int sample_rate);
+/// The split crosses over at `centre * sqrt(2)` with zero-phase Butterworth low/high pairs,
+/// so its bands sum back to the input exactly; the lowest band holds everything below its
+/// upper edge and the top band (`band_count - 1`) everything above its lower edge. The late
+/// tail and the early-reflection colourer both shape bands on this split.
+void octave_band_zero_phase(std::vector<float>& x, int band, int band_count, int sample_rate);
 
 /// @brief Per-octave-band reverberation time (seconds).
 ///

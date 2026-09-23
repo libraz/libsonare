@@ -5,9 +5,8 @@
 #include <cstdint>
 #include <limits>
 
-#include "rt/biquad_design.h"
+#include "filters/iir.h"
 #include "util/constants.h"
-#include "util/dsp_primitives.h"
 
 namespace sonare::acoustic {
 
@@ -17,6 +16,36 @@ using sonare::constants::kSqrt2;
 using sonare::constants::kTwoPiD;
 
 // kSabineCoeff and kMaxAutoSamples are shared via late_reverb.h.
+
+// Butterworth order of each octave crossover (96 dB/oct once run zero-phase). A single RBJ
+// bandpass let a 6 s low band outlast a 0.2 s 4 kHz band's own decay after ~0.2 s.
+constexpr int kOctaveSplitOrder = 8;
+
+// Crossover between octave band @p band and the next one up.
+float octave_upper_edge_hz(int band) noexcept { return octave_center_hz(band) * kSqrt2; }
+
+// The late tail decays on a third-octave grid whose every third band is an octave centre.
+constexpr int kThirdsPerOctave = 3;
+
+// Crossover above third-octave band @p k (centre 125 * 2^(k/3)).
+float third_octave_upper_edge_hz(int k) noexcept {
+  return 125.0f * std::pow(2.0f, (static_cast<float>(k) + 0.5f) / kThirdsPerOctave);
+}
+
+// RT60 of third-octave band @p k, log-log interpolated between its octave neighbours; a band
+// beside a non-positive (no tail) octave takes the nearer octave's value.
+float third_octave_rt60(const std::vector<float>& octave_rt60, int k) noexcept {
+  const int lower = k / kThirdsPerOctave;
+  const int step = k % kThirdsPerOctave;
+  const float lo = octave_rt60[static_cast<size_t>(lower)];
+  if (step == 0) return lo;
+  const float hi = octave_rt60[static_cast<size_t>(lower + 1)];
+  if (!(lo > 0.0f) || !(hi > 0.0f) || !std::isfinite(lo) || !std::isfinite(hi)) {
+    return 2 * step < kThirdsPerOctave ? lo : hi;
+  }
+  const float frac = static_cast<float>(step) / kThirdsPerOctave;
+  return std::exp(std::log(lo) + frac * (std::log(hi) - std::log(lo)));
+}
 
 // -60 dB of energy: env(RT60) = 10^-3 in amplitude, i.e. exp(-ln(1000) * t/RT60).
 constexpr double kLn1000 = 6.90775527898213705;
@@ -68,28 +97,27 @@ float octave_center_hz(int band) noexcept {
   return 125.0f * std::pow(2.0f, static_cast<float>(band));
 }
 
-// Zero-phase octave bandpass (forward + backward biquad pass), matching the
-// analyzer's RBJ bandpass at Q = sqrt(2) so a tail's measured per-band RT60
-// tracks the design value.
-//
-// This is a deliberately minimal forward/backward biquad and is not routed
-// through apply_biquad_filtfilt (filters/iir.cpp): that helper adds lfilter_zi
-// edge-condition seeding, whereas here the input is white noise that is later
-// per-band RMS-normalized and cross-faded, so zero initial conditions are fine
-// and the seeded-vs-zero difference in the late tail is inaudible. Kept separate
-// rather than sharing the filtfilt path (its to_filter_coeffs is file-local).
-void octave_bandpass_zero_phase(std::vector<float>& x, float center_hz, int sample_rate) {
-  const float w0 = static_cast<float>(kTwoPiD) * center_hz / static_cast<float>(sample_rate);
-  const rt::BiquadCoeffs coeffs = rt::rbj_bandpass(w0, kSqrt2);
+int octave_split_band_count(std::size_t bands, int sample_rate) noexcept {
+  if (sample_rate <= 0) return 0;
+  const float nyquist = static_cast<float>(sample_rate) * 0.5f;
+  int count = 0;
+  while (static_cast<std::size_t>(count) < bands && octave_center_hz(count) * kSqrt2 < nyquist) {
+    ++count;
+  }
+  return count;
+}
 
-  rt::BiquadState state;
-  state.set(coeffs);
-  for (float& s : x) s = state.process(s);
-
-  std::reverse(x.begin(), x.end());
-  state.reset();
-  for (float& s : x) s = state.process(s);
-  std::reverse(x.begin(), x.end());
+void octave_band_zero_phase(std::vector<float>& x, int band, int band_count, int sample_rate) {
+  std::vector<float> low;
+  // Peel off every band below this one; what remains is the complement above its lower edge.
+  for (int b = 0; b < band; ++b) {
+    low = x;
+    butterworth_zero_phase(low, octave_upper_edge_hz(b), sample_rate, kOctaveSplitOrder, false);
+    for (std::size_t i = 0; i < x.size(); ++i) x[i] -= low[i];
+  }
+  if (band + 1 < band_count) {
+    butterworth_zero_phase(x, octave_upper_edge_hz(band), sample_rate, kOctaveSplitOrder, false);
+  }
 }
 
 float sabine_rt60(float volume, float absorption_area) noexcept {
@@ -218,37 +246,30 @@ Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReve
   }
 
   const float sr = static_cast<float>(sample_rate);
-  const float nyquist = sr * 0.5f;
   const int length = static_cast<int>(resolution.samples);
 
+  // Complementary bands of one white stream: no band's decay leaks into another through a skirt.
+  std::vector<float> residual(static_cast<size_t>(length));
+  SplitMix64 rng(static_cast<std::uint64_t>(config.seed));
+  for (float& s : residual) s = gaussian(rng);
+
+  // Third-octave bands, RT60 interpolated log-log, so the decay does not step at an octave edge.
   std::vector<float> out(static_cast<size_t>(length), 0.0f);
-  std::vector<float> band(static_cast<size_t>(length));
-
-  for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
-    const float rt60 = rt.rt60_bands[b];
-    if (!(rt60 > 0.0f)) continue;
-    const float center = octave_center_hz(static_cast<int>(b));
-    if (center * kSqrt2 >= nyquist) continue;  // band above the representable range
-
-    // Decorrelated, reproducible noise stream per band.
-    SplitMix64 rng(static_cast<std::uint64_t>(config.seed) +
-                   0x9E3779B9ull * (static_cast<std::uint64_t>(b) + 1ull));
-    for (int i = 0; i < length; ++i) band[static_cast<size_t>(i)] = gaussian(rng);
-
-    octave_bandpass_zero_phase(band, center, sample_rate);
-
-    // Normalize each band to unit RMS so its starting level is independent of
-    // the bandpass bandwidth (which grows with centre frequency at fixed Q).
-    // Without this, higher bands contribute disproportionate energy purely as a
-    // filter-bandwidth artifact, tilting the tail spectrum away from the
-    // material-derived per-band decay. The decay envelope (set by RT60) then
-    // governs each band's relative weight.
-    const float band_rms = sonare::rms(band.data(), band.size());
-    if (band_rms > 1e-12f) {
-      const float norm = 1.0f / band_rms;
-      for (float& s : band) s *= norm;
+  std::vector<float> band;
+  const int octaves = octave_split_band_count(rt.rt60_bands.size(), sample_rate);
+  const int thirds = octaves > 0 ? kThirdsPerOctave * (octaves - 1) + 1 : 0;
+  for (int k = 0; k < thirds; ++k) {
+    if (k + 1 == thirds) {
+      band.swap(residual);
+    } else {
+      band = residual;
+      butterworth_zero_phase(band, third_octave_upper_edge_hz(k), sample_rate, kOctaveSplitOrder,
+                             false);
+      for (std::size_t i = 0; i < band.size(); ++i) residual[i] -= band[i];
     }
 
+    const float rt60 = third_octave_rt60(rt.rt60_bands, k);
+    if (!(rt60 > 0.0f)) continue;
     const double decay_rate = kLn1000 / static_cast<double>(rt60);
     for (int i = 0; i < length; ++i) {
       const double t = static_cast<double>(i) / sr;

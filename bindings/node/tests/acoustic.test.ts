@@ -127,6 +127,14 @@ describe('geometric room acoustics', () => {
     expect(unclamped.diagnostics.map((d) => d.code)).not.toContain('acoustic.ism_order_clamped');
   });
 
+  it('reports NaN geometry when no decay is measurable', () => {
+    const est = estimateRoom(new Float32Array(48000), 48000);
+    expect(est.confidence).toBe(0);
+    for (const value of [est.volume, est.length, est.width, est.height]) {
+      expect(Number.isNaN(value)).toBe(true);
+    }
+  });
+
   it('rejects out-of-range sample rates', () => {
     expect(() => synthesizeRir({ sampleRate: 0 })).toThrow();
     expect(() => synthesizeRir({ sampleRate: 500000 })).toThrow();

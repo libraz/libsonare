@@ -699,6 +699,12 @@ export interface RoomEstimateOptions {
 }
 
 export interface RoomEstimateResult {
+  /**
+   * Equivalent volume (m^3) and representative dimensions (m). NaN, with
+   * `confidence` 0, when the recording has no measurable broadband decay
+   * (silence, or an RT60 the analyzer could not fit) — the acoustic family's
+   * "not measurable", as in `rt60Bands`.
+   */
   volume: number;
   length: number;
   width: number;
@@ -746,10 +752,13 @@ export interface RoomMorphResult {
    * order reduced to the safe maximum (`acoustic.ism_order_clamped`), a tail cut
    * against `maxSeconds` (`acoustic.rir_length_clamped`), a `maxSeconds` shorter
    * than the direct sound's flight time and extended to fit it
-   * (`acoustic.rir_length_floored`), a request that produced no diffuse tail
+   * (`acoustic.rir_length_floored`), a `maxSeconds` shorter than the longest
+   * band's RT60, which cuts that band before it decays by 60 dB so its
+   * reverberation time cannot be measured from the RIR
+   * (`acoustic.rir_tail_truncated`), a request that produced no diffuse tail
    * (`acoustic.no_late_tail`) — and is otherwise invisible.
    *
-   * These are the four codes the synthesis can emit here, so a `switch` over
+   * These are the five codes the synthesis can emit here, so a `switch` over
    * them needs no fall-through case. `roomMorph` forwards `maxSeconds`
    * unchanged, which is why the floored one reaches a morph at all.
    */

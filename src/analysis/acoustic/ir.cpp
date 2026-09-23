@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numeric>
 #include <vector>
@@ -16,6 +17,20 @@ namespace {
 constexpr float kEarlyBoundary50Sec = 0.05f;
 constexpr float kEarlyBoundary80Sec = 0.08f;
 
+// Butterworth order of each octave-band edge filter, run zero-phase.
+constexpr int kOctaveBandOrder = 8;
+
+// A tail whose level falls by more than 1 dB across the last fifth of the span, at 3 standard
+// errors over 16 blocks, is still decaying: a 40 s decay cut at 12 s drops ~3.4 dB there.
+constexpr size_t kTailTrendBlocks = 16;
+constexpr double kTailTrendMinDropDb = 1.0;
+constexpr double kTailTrendSigmas = 3.0;
+constexpr double kLn10 = 2.302585092994046;
+
+// Margin (dB) a cut-on-signal level must sit below a fit's lower limit, the ISO 3382-1
+// noise-floor margin; the truncated curve is then within 0.5 dB of the true one at that limit.
+constexpr double kTruncationMarginDb = 10.0;
+
 // Level drop the Schroeder fit spans to report a reverberation time.
 constexpr double kDecayRangeDb = 60.0;
 
@@ -23,7 +38,11 @@ constexpr double kDecayRangeDb = 60.0;
 // noise estimate and the moving-average window are measured over the post-origin
 // span, so the returned index shifts by exactly the amount of leading silence
 // the container carries and the anchored window [origin, end) is unchanged.
-size_t lundeby_truncation_index(const std::vector<double>& energy, size_t origin, int sample_rate) {
+// Returns n with a positive `missing_energy` when the tail block is still decaying: the buffer
+// ended on signal, and `missing_energy` extrapolates the energy the decay still held past it.
+size_t lundeby_truncation_index(const std::vector<double>& energy, size_t origin, int sample_rate,
+                                double& missing_energy) {
+  missing_energy = 0.0;
   const size_t n = energy.size();
   const size_t span = n - origin;
   if (span < 64 || sample_rate <= 0) {
@@ -35,6 +54,41 @@ size_t lundeby_truncation_index(const std::vector<double>& energy, size_t origin
   const double noise_power = tail_sum / static_cast<double>(tail_count);
   if (!(noise_power > static_cast<double>(kEnergyEpsilon))) {
     return n;
+  }
+  // Still-decaying test: a consistent downward trend across the last fifth of the span.
+  const size_t block = std::max<size_t>(1, span / (5 * kTailTrendBlocks));
+  if (block * kTailTrendBlocks <= span) {
+    const size_t first_block = n - block * kTailTrendBlocks;
+    double sum_x = 0.0, sum_y = 0.0, sum_xx = 0.0, sum_xy = 0.0;
+    std::array<double, kTailTrendBlocks> level{};
+    for (size_t k = 0; k < kTailTrendBlocks; ++k) {
+      const double mean =
+          sum_range(energy, first_block + k * block, first_block + (k + 1) * block) /
+          static_cast<double>(block);
+      level[k] = power_to_db_scalar(std::max(mean, static_cast<double>(kEnergyEpsilon)));
+      const double x = static_cast<double>(k);
+      sum_x += x;
+      sum_y += level[k];
+      sum_xx += x * x;
+      sum_xy += x * level[k];
+    }
+    const double count = static_cast<double>(kTailTrendBlocks);
+    const double sxx = sum_xx - sum_x * sum_x / count;
+    const double slope = (sum_xy - sum_x * sum_y / count) / sxx;  // dB per block
+    const double intercept = (sum_y - slope * sum_x) / count;
+    double residual = 0.0;
+    for (size_t k = 0; k < kTailTrendBlocks; ++k) {
+      const double r = level[k] - (intercept + slope * static_cast<double>(k));
+      residual += r * r;
+    }
+    const double slope_error = std::sqrt(residual / (count - 2.0) / sxx);
+    if (slope * (count - 1.0) < -kTailTrendMinDropDb && slope < -kTailTrendSigmas * slope_error) {
+      const double decay_per_sample =
+          -slope * kLn10 / 10.0 / static_cast<double>(block);  // energy e-folding rate
+      const double last_mean = sum_range(energy, n - block, n) / static_cast<double>(block);
+      missing_energy = last_mean / decay_per_sample;
+      return n;
+    }
   }
 
   const size_t max_window = std::max<size_t>(16, std::min<size_t>(2048, span / 4));
@@ -93,8 +147,14 @@ AnchoredDecay AnchoredDecay::from_band(const float* samples, size_t size, int sa
   // A crossing found at or before the direct sound would invert the window; keep
   // one sample so [origin, end) stays well formed and the metrics degrade to NaN
   // rather than reading past the end of the buffer.
-  decay.end_ = std::max(lundeby_truncation_index(decay.energy_, decay.origin_, sample_rate),
-                        decay.origin_ + 1);
+  double missing_energy = 0.0;
+  decay.end_ =
+      std::max(lundeby_truncation_index(decay.energy_, decay.origin_, sample_rate, missing_energy),
+               decay.origin_ + 1);
+  if (missing_energy > 0.0) {
+    const double total = sum_range(decay.energy_, decay.origin_, decay.end_) + missing_energy;
+    decay.truncation_level_db_ = static_cast<float>(power_to_db_scalar(missing_energy / total));
+  }
   decay.edc_db_ = schroeder_edc_db(decay.energy_, decay.origin_, decay.end_);
   return decay;
 }
@@ -135,6 +195,10 @@ float AnchoredDecay::decay_time(float upper_db, float lower_db) const {
 
   const double slope = (n * sum_ty - sum_t * sum_y) / denominator;
   if (slope >= -1e-9) {
+    return nan_value();
+  }
+  // Cut on signal: the missing energy bends the curve unless the cut is well below the fit.
+  if (static_cast<double>(truncation_level_db_) > lower_db - kTruncationMarginDb) {
     return nan_value();
   }
   return static_cast<float>(-kDecayRangeDb / slope);
@@ -218,22 +282,20 @@ AcousticParameters analyze_band(const float* samples, size_t size, int sample_ra
   return result;
 }
 
-// NOTE: octave / third-octave band filtering uses a single 2nd-order biquad
-// bandpass (Q ~= 1.4) applied zero-phase via filtfilt. The resulting skirts are
-// shallow, so adjacent-band energy leaks more than an IEC 61260 class filter
-// would. A 4th-order Butterworth bandpass (two cascaded biquads) would sharpen
-// the response, but it shifts every per-band RT60/EDT/clarity value and the
-// existing acoustic tests / golden manifests are calibrated against this single
-// section. The single-section approximation is intentional and kept stable.
+// Octave band as a zero-phase Butterworth highpass at the lower edge times a lowpass at the
+// upper edge (96 dB/oct each side). A single Q-sqrt(2) bandpass rejected a band five octaves
+// away by only ~67 dB, so a 6 s low band overtook a 0.2 s high band inside the fit window.
 std::vector<float> filter_octave_band(const Audio& ir, float center_hz) {
   const float lower_hz = center_hz / kSqrt2;
   const float upper_hz = center_hz * kSqrt2;
   const float nyquist = static_cast<float>(ir.sample_rate()) * 0.5f;
-  if (upper_hz >= nyquist || lower_hz <= 0.0f) {
+  if (upper_hz >= nyquist || lower_hz <= 0.0f || ir.empty()) {
     return {};
   }
-  const auto coeffs = bandpass_coeffs(center_hz, upper_hz - lower_hz, ir.sample_rate());
-  return apply_biquad_filtfilt(ir.data(), ir.size(), coeffs);
+  std::vector<float> band(ir.data(), ir.data() + ir.size());
+  butterworth_zero_phase(band, lower_hz, ir.sample_rate(), kOctaveBandOrder, true);
+  butterworth_zero_phase(band, upper_hz, ir.sample_rate(), kOctaveBandOrder, false);
+  return band;
 }
 
 // Forward biquad pass that subtracts a constant DC offset from each input

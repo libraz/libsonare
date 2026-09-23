@@ -135,7 +135,7 @@ def test_room_morph_adds_a_target_tail_and_is_deterministic() -> None:
 def test_estimate_room_zero_confidence_for_silence() -> None:
     est = libsonare.estimate_room([0.0] * 48000, sample_rate=48000)
     assert est.confidence == 0.0
-    assert est.volume == 0.0
+    assert all(math.isnan(v) for v in (est.volume, est.length, est.width, est.height))
 
 
 @acoustic

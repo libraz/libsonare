@@ -97,6 +97,20 @@ std::vector<float> apply_cascade(const float* input, size_t size, const Cascaded
 std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
                                           const CascadedBiquad& cascade);
 
+/// @brief Zero-phase Butterworth lowpass or highpass of even @p order, applied in place.
+/// @details A forward then a backward pass over order/2 second-order sections, with double
+///          precision state and zero initial conditions (the signal is taken as zero outside the
+///          buffer). The response is |H|^2 of the order-@p order Butterworth: -6 dB at the
+///          cutoff and 12 * @p order dB/oct beyond it, so a lowpass and a highpass at the same
+///          cutoff are magnitude-complementary and sum to the input.
+/// @param x Signal, filtered in place
+/// @param cutoff_hz Cutoff frequency in Hz, below Nyquist
+/// @param sr Sample rate in Hz
+/// @param order Even Butterworth order (2, 4, 6, ...)
+/// @param highpass True for a highpass, false for a lowpass
+void butterworth_zero_phase(std::vector<float>& x, float cutoff_hz, int sr, int order,
+                            bool highpass);
+
 /// @brief Applies a zero-initial-state pre-emphasis filter to audio signal.
 /// @details Internal legacy helper. Unlike effects/preemphasis.h this starts
 /// at zero state, so its distinct name prevents accidental overload selection.

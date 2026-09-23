@@ -272,10 +272,9 @@ TEST_CASE("synthesized tail reproduces the design RT60 within 10%", "[acoustic][
   REQUIRE(std::isfinite(params.rt60));
   REQUIRE_THAT(params.rt60, WithinRel(target, 0.10f));  // binding acceptance criterion
 
-  // Per-band RT60 also tracks the (uniform) design target. The tolerance is
-  // looser than the broadband 10% because the analyzer re-filters the *summed*
-  // tail with shallow single-section octave skirts, so adjacent bands leak in;
-  // require enough bands to actually fit so the check is not vacuous.
+  // Per-band RT60 also tracks the (uniform) design target, from a narrower band of a single
+  // noise realisation than the broadband fit sees; require enough bands to fit so the check
+  // is not vacuous.
   int finite_bands = 0;
   for (float band_rt60 : params.rt60_bands) {
     if (!std::isfinite(band_rt60)) continue;

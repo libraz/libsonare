@@ -61,7 +61,7 @@ bool early_reflections_are_colored(const std::vector<ImageSource>& images) noexc
 // (a curtain absorbing highs vs glass reflecting them) survives on the first
 // arrivals, mirroring the per-band shaping the late tail already applies on the
 // same octave grid. The broadband IR collapses each image's per-band reflection
-// vector to a single RMS gain; here we add, per octave band, the bandpassed
+// vector to a single RMS gain; here we add, per octave band, the band-split
 // deviation of that band's own early IR from the broadband IR. Out-of-band
 // energy stays at the broadband level, and a spectrally flat room yields a zero
 // correction, so the coloured result reduces exactly to the broadband IR.
@@ -73,18 +73,15 @@ Audio color_early_ir(const std::vector<ImageSource>& images, int sample_rate,
   const float* b = broadband.data();
   std::vector<float> out(b, b + n);
 
-  const float nyquist = static_cast<float>(sample_rate) * 0.5f;
   // Reused across every band iteration instead of freshly allocated: per band
   // this function already holds out, broadband, and per_band concurrently
   // (each a full RIR-length buffer), and re-allocating dev on top of that on
   // every one of up to ~11 octave-band iterations multiplies allocator churn
   // well past what a caller sizing to the module's allocation cap expects.
   std::vector<float> dev(static_cast<size_t>(n), 0.0f);
-  for (size_t band = 0; band < bands; ++band) {
-    const float center = octave_center_hz(static_cast<int>(band));
-    // Skip a band whose octave sits at/above Nyquist, exactly as the late tail
-    // does; its content is not representable and stays at the broadband level.
-    if (center * sonare::constants::kSqrt2 >= nyquist) continue;
+  // Bands whose octave sits at/above Nyquist are left out of the split, as in the late tail.
+  const int band_count = octave_split_band_count(bands, sample_rate);
+  for (size_t band = 0; band < static_cast<size_t>(band_count); ++band) {
     EarlyIrConfig cfg = base_cfg;
     cfg.band = static_cast<int>(band);
     const Audio per_band = synthesize_early_ir(images, sample_rate, cfg);
@@ -92,7 +89,7 @@ Audio color_early_ir(const std::vector<ImageSource>& images, int sample_rate,
     const int lim = std::min(n, static_cast<int>(per_band.size()));
     std::fill(dev.begin(), dev.end(), 0.0f);
     for (int i = 0; i < lim; ++i) dev[static_cast<size_t>(i)] = e[i] - b[i];
-    octave_bandpass_zero_phase(dev, center, sample_rate);
+    octave_band_zero_phase(dev, static_cast<int>(band), band_count, sample_rate);
     for (int i = 0; i < n; ++i) out[static_cast<size_t>(i)] += dev[static_cast<size_t>(i)];
   }
   return Audio::from_vector(std::move(out), sample_rate);
@@ -282,9 +279,19 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   const int late_center = late_n == 0 ? 0 : std::min(t_mix, late_n - 1);
   const float late_ref =
       rms_range(late, late_n, late_center - level_half, late_center + level_half + 1);
+  // No image arrival in the window: its sidelobes alone would set the tail ~90 dB low.
+  bool window_has_arrival = false;
+  for (const auto& im : images) {
+    const float arrival = im.distance / kSoundSpeed * sr;
+    if (arrival >= static_cast<float>(early_lo) &&
+        arrival < static_cast<float>(t_mix + level_half + 1)) {
+      window_has_arrival = true;
+      break;
+    }
+  }
   float scale = 1.0f;
   if (late_ref > 1e-9f) {
-    if (early_ref > 1e-9f) {
+    if (window_has_arrival && early_ref > 1e-9f) {
       scale = early_ref / late_ref;
     } else {
       // Sparse/absent early energy at the crossover: fall back to the physical
@@ -326,6 +333,19 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
     result.diagnostics.push_back(
         {Diagnostic::Severity::Warning, "acoustic.rir_length_floored",
          "max_seconds was shorter than the direct-sound arrival and was extended to fit it"});
+  }
+  // A cap inside the longest band's RT60 cuts it before a 60 dB decay can be read back.
+  float longest_rt60 = 0.0f;
+  const int split_bands = octave_split_band_count(rt.rt60_bands.size(), sample_rate);
+  for (int b = 0; b < split_bands; ++b) {
+    const float band_rt60 = rt.rt60_bands[static_cast<size_t>(b)];
+    if (band_rt60 > 0.0f) longest_rt60 = std::max(longest_rt60, band_rt60);
+  }
+  if (config.max_seconds > 0.0f && static_cast<double>(cap) < longest_rt60 * sr) {
+    result.diagnostics.push_back(
+        {Diagnostic::Severity::Warning, "acoustic.rir_tail_truncated",
+         "max_seconds is shorter than the longest band RT60; that band is cut before it decays "
+         "by 60 dB and its reverberation time cannot be measured from the RIR"});
   }
   length = std::min(length, cap);
   if (length < 1) length = 1;

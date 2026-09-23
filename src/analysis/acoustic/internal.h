@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -109,7 +110,9 @@ class AnchoredDecay {
   static AnchoredDecay from_band(const float* samples, size_t size, int sample_rate);
 
   /// @brief Least-squares decay time in seconds between two levels of the anchored curve.
-  /// @return Seconds, or NaN when the level range holds fewer than two usable points.
+  /// @return Seconds, or NaN when the level range holds fewer than two usable points, or when
+  ///         the buffer ends on signal (no noise floor) before the decay has fallen 10 dB past
+  ///         @p lower_db, where the truncated Schroeder integral would bend the fit.
   float decay_time(float upper_db, float lower_db) const;
 
   /// @brief Clarity in dB: early-to-late energy ratio split `boundary_sec` after the origin.
@@ -137,6 +140,9 @@ class AnchoredDecay {
   size_t origin_ = 0;
   size_t end_ = 0;
   int sample_rate_ = 0;
+  /// Schroeder level (dB) of the energy a still-decaying buffer cut off; -inf when the tail
+  /// reached a noise floor.
+  float truncation_level_db_ = -std::numeric_limits<float>::infinity();
 };
 
 float estimate_confidence(float rt60, float edt, float min_decay_db);
