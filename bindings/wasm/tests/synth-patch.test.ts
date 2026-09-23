@@ -24,6 +24,7 @@ import {
   SYNTH_MOD_DESTINATIONS,
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
+  SYNTH_RETRIGGERS,
   synthEnumTables,
   synthPresetNames,
   synthPresetPatch,
@@ -146,6 +147,19 @@ describe('Sonare WASM NativeSynth', () => {
       expect(byName.modRoutings?.[0]?.destination).toBe(name);
       expect(byOrdinal.modRoutings?.[0]?.destination).toBe(name);
     }
+  });
+
+  it('round-trips the retrigger mode by name and ordinal and refuses unknown values', () => {
+    for (const [ordinal, name] of SYNTH_RETRIGGERS.entries()) {
+      expect(synthPatchRoundTripForTest({ retrigger: name }).retrigger).toBe(name);
+      expect(synthPatchRoundTripForTest({ retrigger: ordinal }).retrigger).toBe(name);
+    }
+    expect(synthPatchRoundTripForTest({}).retrigger).toBe('default');
+    expect(() =>
+      synthPatchRoundTripForTest({ retrigger: 'phase' } as unknown as SynthPatch),
+    ).toThrow();
+    expect(() => synthPatchRoundTripForTest({ retrigger: SYNTH_RETRIGGERS.length })).toThrow();
+    expect(synthPresetPatch('saw-lead').retrigger).toBe('free');
   });
 
   it('round-trips the sample-engine block by name and by ordinal', () => {

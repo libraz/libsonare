@@ -122,6 +122,8 @@ export const SAMPLE_LOOP_MODES = ['default', 'none', 'continuous', 'key-down'] a
 
 export const SAMPLE_KEY_TRACKS = ['default', 'on', 'off'] as const;
 
+export const SYNTH_RETRIGGERS = ['default', 'free', 'note'] as const;
+
 export const SYNTH_OSC_WAVEFORMS = [
   'default',
   'sine',
@@ -263,6 +265,14 @@ export type SampleLoopMode = (typeof SAMPLE_LOOP_MODES)[number];
 
 /** Whether a {@link SynthPatch} sample follows the played key (`'default'` keeps the base). */
 export type SampleKeyTrack = (typeof SAMPLE_KEY_TRACKS)[number];
+
+/**
+ * What a note-on restarts on a {@link SynthPatch} (`'default'` keeps the base
+ * patch's). `'free'` seeds each voice's start phases and random streams from
+ * the voice slot and a running note count, so two plays of one note differ;
+ * `'note'` seeds them from the note number alone.
+ */
+export type SynthRetrigger = (typeof SYNTH_RETRIGGERS)[number];
 
 /**
  * Loop behaviour recorded for one sample in a {@link SampleBank}.
@@ -554,7 +564,17 @@ export interface SynthPatch {
   resonanceQ?: number;
   /** Cutoff keyboard tracking [0, 1]. */
   keyTrack?: number;
-  /** Filter envelope's cutoff depth, in cents; 0 leaves the envelope's cutoff contribution off. */
+  /**
+   * Filter envelope's cutoff depth, in cents at full envelope; 0 leaves the
+   * envelope's cutoff contribution off. The cutoff is multiplied by
+   * 2^(envelope × envToCutoffCents / 1200), so the response moves by exactly
+   * that interval wherever the corner sits well below Nyquist; near the top the
+   * `svf` moves slightly less and the ladders slightly more. `cutoffHz` is the
+   * −3 dB corner only for `svf` at `resonanceQ` 0.707: with resonance the `svf`
+   * corner sits above it, and the ladder and Sallen-Key models put their
+   * resonant peak on it with the −3 dB point one to three octaves lower, so
+   * measure a depth as a ratio of corners rather than against `cutoffHz`.
+   */
   envToCutoffCents?: number;
   /**
    * Velocity's cutoff depth, in cents. The rendered term is
@@ -600,6 +620,17 @@ export interface SynthPatch {
   bodyMix?: number;
   /** Seeded per-voice pan scatter [0, 1]. */
   stereoSpread?: number;
+  /**
+   * Seed source for each voice's start state. `'note'` derives oscillator start
+   * phases, unison jitter, drift and every engine's noise stream from the note
+   * number, so the same note played again after its tail has ended renders the
+   * same samples; `'free'` (the built-in patches' choice) varies them per note.
+   * State outside the voice is reset by neither: controllers, the bus DC
+   * blocker, a piano's shared soundboard, a plucked string's sympathetic halo,
+   * an organ's wind chest and effect tails. The `'drum-kit'` preset's per-note
+   * pieces keep their own mode.
+   */
+  retrigger?: SynthRetrigger | number;
   /** Mod matrix (at most 8 routings; REPLACES the base matrix when non-empty). */
   modRoutings?: SynthModRouting[];
   // --- voice pool / bus ---

@@ -184,8 +184,14 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   exclusive_class = drum_mod.exclusive_class >= 0 ? static_cast<uint8_t>(drum_mod.exclusive_class)
                                                   : p.percussion.exclusive_class;
 
+  // Under note retrigger the slot and the allocation count drop out of every
+  // seed, so a repeated note starts from the same state wherever it lands.
+  const bool from_note = p.retrigger == SynthRetrigger::kNote;
+  const uint32_t seed_index = from_note ? 0u : voice_index;
+  const uint64_t seed_age = from_note ? 0u : age;
+  const uint64_t seed = voice_seed(seed_index, voiced_note, seed_age);
   VoiceRandomSequence seq;
-  seq.reseed(voice_index, voiced_note, age);
+  seq.reseed(seed_index, voiced_note, seed_age);
 
   // The coarse tune is NOT folded in here: it joins the render's pitch sum with
   // the other constant offsets, for the reason gs_scale_cents gives — every
@@ -198,64 +204,51 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   osc_norm = unison > 0 ? 1.0f / std::sqrt(static_cast<float>(unison)) : 1.0f;
   if (p.mode == SynthEngineMode::kFm) fm.start(p.fm, sample_rate, voiced_note, velocity);
   if (p.mode == SynthEngineMode::kKarplusStrong) {
-    ks.start(p.ks, sample_rate, voiced_note, velocity, voice_seed(voice_index, voiced_note, age));
+    ks.start(p.ks, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kModal) {
-    modal.start(p.modal, sample_rate, voiced_note, velocity,
-                voice_seed(voice_index, voiced_note, age));
+    modal.start(p.modal, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kAdditive) {
-    additive.start(p.additive, sample_rate, voiced_note, velocity,
-                   voice_seed(voice_index, voiced_note, age), organ_percussion);
+    additive.start(p.additive, sample_rate, voiced_note, velocity, seed, organ_percussion);
   }
   if (p.mode == SynthEngineMode::kPercussion) {
     PercussionPatchParams kit_perc = p.percussion;
     if (drum_kit != 0) kit_gain = apply_gs_drum_kit(kit_perc, amp_cfg, drum_kit, voiced_note);
-    percussion.start(kit_perc, sample_rate, voiced_note, velocity,
-                     voice_seed(voice_index, voiced_note, age));
+    percussion.start(kit_perc, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kPiano) {
-    piano.start(p.piano, sample_rate, voiced_note, velocity,
-                voice_seed(voice_index, voiced_note, age), una_corda);
+    piano.start(p.piano, sample_rate, voiced_note, velocity, seed, una_corda);
   }
   if (p.mode == SynthEngineMode::kPipeOrgan) {
-    pipe_organ.start(p.pipe_organ, sample_rate, voiced_note, velocity,
-                     voice_seed(voice_index, voiced_note, age));
+    pipe_organ.start(p.pipe_organ, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kBowedString) {
-    bowed_string.start(p.bowed_string, sample_rate, voiced_note, velocity,
-                       voice_seed(voice_index, voiced_note, age));
+    bowed_string.start(p.bowed_string, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kReed) {
-    reed.start(p.reed, sample_rate, voiced_note, velocity,
-               voice_seed(voice_index, voiced_note, age));
+    reed.start(p.reed, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kBrass) {
-    brass.start(p.brass, sample_rate, voiced_note, velocity,
-                voice_seed(voice_index, voiced_note, age));
+    brass.start(p.brass, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kFlute) {
-    flute.start(p.flute, sample_rate, voiced_note, velocity,
-                voice_seed(voice_index, voiced_note, age));
+    flute.start(p.flute, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kPluckedString) {
-    plucked_string.start(p.plucked_string, sample_rate, voiced_note, velocity,
-                         voice_seed(voice_index, voiced_note, age));
+    plucked_string.start(p.plucked_string, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kVocal) {
-    vocal.start(p.vocal, sample_rate, voiced_note, velocity,
-                voice_seed(voice_index, voiced_note, age));
+    vocal.start(p.vocal, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kFreeReed) {
-    free_reed.start(p.free_reed, sample_rate, voiced_note, velocity,
-                    voice_seed(voice_index, voiced_note, age));
+    free_reed.start(p.free_reed, sample_rate, voiced_note, velocity, seed);
   }
   if (p.mode == SynthEngineMode::kSample) {
     sampler.start(p.sample, sample_rate, voiced_note, velocity);
   }
   if (p.mode == SynthEngineMode::kHarpsichord) {
-    harpsichord.start(p.harpsichord, sample_rate, voiced_note, velocity,
-                      voice_seed(voice_index, voiced_note, age));
+    harpsichord.start(p.harpsichord, sample_rate, voiced_note, velocity, seed);
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -271,8 +264,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
     // Seeded start phase: identical unison oscillators starting at phase 0
     // sound phasey/static; noise gets a per-osc seed stream instead.
     const float phase = seq.unipolar_at(static_cast<uint64_t>(k) * 2 + 1);
-    oscs[static_cast<size_t>(k)].start(sample_rate, p.waveform, phase,
-                                       voice_seed(voice_index, voiced_note, age) ^ (k + 1));
+    oscs[static_cast<size_t>(k)].start(sample_rate, p.waveform, phase, seed ^ (k + 1));
   }
 
   const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p.mode));

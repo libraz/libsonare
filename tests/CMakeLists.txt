@@ -487,6 +487,7 @@ if(BUILD_ARRANGEMENT)
     midi/midi_ump_test.cpp
     midi/builtin_synth_test.cpp
     midi/native_synth_test.cpp
+    midi/retrigger_test.cpp
     midi/gm_program_golden_test.cpp
     midi/excitation_axis_test.cpp
     midi/controller_profile_test.cpp

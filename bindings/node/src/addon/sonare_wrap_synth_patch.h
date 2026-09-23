@@ -26,6 +26,7 @@ inline constexpr const char* kSynthFilterModels[] = {"default", "svf", "moog-lad
 inline constexpr const char* kSynthFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
 inline constexpr const char* kSynthBodyTypes[] = {"default",   "none",       "guitar", "violin",
                                                   "wood-tube", "brass-bell", "vocal"};
+inline constexpr const char* kSynthRetriggers[] = {"default", "free", "note"};
 inline constexpr const char* kSynthModSources[] = {
     "none",      "amp-env", "filter-env", "lfo1",       "lfo2",          "velocity",  "key-track",
     "mod-wheel", "random",  "breath",     "aftertouch", "expression-cc", "pitch-bend"};
@@ -57,6 +58,8 @@ static_assert(std::size(kSynthFilterOutputs) == SONARE_SYNTH_FILTER_OUTPUT_COUNT
               "Node SynthFilterOutput table drifted from C");
 static_assert(std::size(kSynthBodyTypes) == SONARE_SYNTH_BODY_TYPE_COUNT,
               "Node SynthBodyType table drifted from C");
+static_assert(std::size(kSynthRetriggers) == SONARE_SYNTH_RETRIGGER_COUNT,
+              "Node SynthRetrigger table drifted from C");
 static_assert(std::size(kSynthModSources) == SONARE_SYNTH_MOD_SOURCE_COUNT,
               "Node SynthModSource table drifted from C");
 static_assert(std::size(kSynthModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
@@ -187,6 +190,8 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
                          &patch->filter_output) ||
       !SynthEnumProperty(env, obj, "body", kSynthBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT,
                          "body type", &patch->body) ||
+      !SynthEnumProperty(env, obj, "retrigger", kSynthRetriggers, SONARE_SYNTH_RETRIGGER_COUNT,
+                         "retrigger mode", &patch->retrigger) ||
       !SynthEnumProperty(env, obj, "sampleLoop", kSampleLoopModes, SONARE_SAMPLE_LOOP_MODE_COUNT,
                          "sample loop mode", &patch->sample_loop) ||
       !SynthEnumProperty(env, obj, "sampleKeyTrack", kSampleKeyTracks,
@@ -321,6 +326,7 @@ inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& pa
   out.Set("body", enum_name(patch.body, kSynthBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT));
   out.Set("bodyMix", patch.body_mix);
   out.Set("stereoSpread", patch.stereo_spread);
+  out.Set("retrigger", enum_name(patch.retrigger, kSynthRetriggers, SONARE_SYNTH_RETRIGGER_COUNT));
   Napi::Array routings = Napi::Array::New(
       env, static_cast<size_t>(patch.num_mod_routings > 0 ? patch.num_mod_routings : 0));
   for (int i = 0; i < patch.num_mod_routings && i < SONARE_SYNTH_PATCH_MOD_ROUTINGS; ++i) {

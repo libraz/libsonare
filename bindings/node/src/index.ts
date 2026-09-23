@@ -309,6 +309,7 @@ export type {
   SynthModSource,
   SynthOscWaveform,
   SynthPatch,
+  SynthRetrigger,
   SynthWaveform,
   TakeAlignment,
   TempogramMode,
@@ -344,5 +345,6 @@ export {
   SYNTH_MOD_DESTINATIONS,
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
+  SYNTH_RETRIGGERS,
 } from './types.js';
 export type { ValidateOptions } from './validation.js';

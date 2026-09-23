@@ -74,6 +74,7 @@ from ._project_synth import (
     _SYNTH_MOD_DESTINATIONS,
     _SYNTH_MOD_SOURCES,
     _SYNTH_OSC_WAVEFORMS,
+    _SYNTH_RETRIGGERS,
     _sample_key_track_value,
     _sample_loop_value,
     _strip_va_prefix,
@@ -682,8 +683,16 @@ class SynthPatch:
     percussion channel the whole section is discarded in favor of the per-note
     drum-kit patch -- only ``gain``, ``bus_drive`` and ``polyphony`` still act.
 
-    ``env_to_cutoff_cents`` is the filter envelope's cutoff depth, in cents;
-    ``0`` leaves the envelope's cutoff contribution off.
+    ``env_to_cutoff_cents`` is the filter envelope's cutoff depth, in cents at
+    full envelope; ``0`` leaves the envelope's cutoff contribution off. The
+    cutoff is multiplied by ``2 ** (envelope * env_to_cutoff_cents / 1200)``, so
+    the response moves by exactly that interval wherever the corner sits well
+    below Nyquist; near the top the ``"svf"`` model moves slightly less and the
+    ladders slightly more. ``cutoff_hz`` is the -3 dB corner only for ``"svf"``
+    at ``resonance_q`` 0.707: with resonance the SVF corner sits above it, and
+    the ladder and Sallen-Key models put their resonant peak on it with the
+    -3 dB point one to three octaves lower, so measure a depth as a ratio of
+    corners rather than against ``cutoff_hz``.
     ``vel_to_cutoff_cents`` is velocity's cutoff depth, in cents: the rendered
     term is ``vel_to_cutoff_cents * (velocity / 127 - 1)``, so velocity 127 is
     the anchor where it is exactly zero -- a positive value darkens softer
@@ -697,6 +706,16 @@ class SynthPatch:
     (``"default"`` / ``"none"`` / ``"continuous"`` / ``"key-down"``) and
     ``sample_key_track`` whether the sample follows the played key
     (``"default"`` / ``"on"`` / ``"off"``); both accept the C ordinal too.
+
+    ``retrigger`` picks what seeds each voice's start state (``"default"`` /
+    ``"free"`` / ``"note"``, or the C ordinal). ``"note"`` derives oscillator
+    start phases, unison jitter, drift and every engine's noise stream from
+    the note number, so the same note played again after its tail has ended
+    renders the same samples; ``"free"`` (the built-in patches' choice) varies
+    them per note. State outside the voice is reset by neither: controllers,
+    the bus DC blocker, a piano's shared soundboard, a plucked string's
+    sympathetic halo, an organ's wind chest and effect tails. The
+    ``"drum-kit"`` preset's per-note pieces keep their own mode.
 
     ``sample_bank`` carries the PCM those fields address. It is a BINDING
     option, not a patch field -- it travels on the C binding struct rather than
@@ -745,6 +764,7 @@ class SynthPatch:
     body: str | int = 0
     body_mix: float | None = None
     stereo_spread: float | None = None
+    retrigger: str | int = 0
     mod_routings: tuple[SynthModRouting, ...] | None = None
     gain: float | None = None
     polyphony: int | None = None
@@ -770,7 +790,7 @@ class SynthPatch:
         if not isinstance(self.preset, str):
             raise TypeError("synth patch preset must be a string")
         c = SonareSynthPatch()
-        c.struct_version = 6
+        c.struct_version = 7
 
         # A field left at None keeps the base; anything supplied — including a
         # zero — is marked present so the core overrides with it.
@@ -837,6 +857,7 @@ class SynthPatch:
         c.body = _synth_enum_value(self.body, _SYNTH_BODY_TYPES, "body type")
         _set_float("body_mix", SONARE_SYNTH_FIELD_BODY_MIX, self.body_mix)
         _set_float("stereo_spread", SONARE_SYNTH_FIELD_STEREO_SPREAD, self.stereo_spread)
+        c.retrigger = _synth_enum_value(self.retrigger, _SYNTH_RETRIGGERS, "retrigger mode")
         routings = list(self.mod_routings or ())
         if self.mod_routings is not None:
             c.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS
@@ -911,6 +932,7 @@ class SynthPatch:
             body=_synth_enum_name(int(c.body), _SYNTH_BODY_TYPES),
             body_mix=float(c.body_mix),
             stereo_spread=float(c.stereo_spread),
+            retrigger=_synth_enum_name(int(c.retrigger), _SYNTH_RETRIGGERS),
             mod_routings=routings,
             gain=float(c.gain),
             polyphony=int(c.polyphony),

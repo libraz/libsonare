@@ -311,6 +311,11 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
     reason: 'A +1-biased synth enum, as engine_mode.',
   },
   {
+    file: 'src/c_api/synth_patch_common.h',
+    field: 'retrigger',
+    reason: 'A +1-biased synth enum, as engine_mode.',
+  },
+  {
     file: 'src/wasm/bindings/editing/polyphony.cpp',
     field: 'fade_ms',
     reason: 'The WASM door onto the same note-render config; same sentinel, same refusal.',

@@ -15,6 +15,7 @@ import {
   SYNTH_MOD_DESTINATIONS,
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
+  SYNTH_RETRIGGERS,
   synthEnumTables,
   synthPresetNames,
   synthPresetPatch,
@@ -49,6 +50,43 @@ function buildGmProgramProject(program = 4): Project {
     Project.midiNoteOff(0.5, 0, 0, 60, 0),
   ]);
   return project;
+}
+
+// One note played twice, the second long after the first has ended and at an
+// offset that is no whole number of its periods.
+function buildRepeatedNoteProject(): Project {
+  const project = Project.create();
+  project.setSampleRate(48000);
+  const { trackId, clipId } = project.addMidiClip(0, 16);
+  project.setTrackMidiDestination(trackId, 0);
+  project.setMidiEvents(clipId, [
+    Project.midiNoteOn(0, 0, 0, 48, 100),
+    Project.midiNoteOff(1, 0, 0, 48, 0),
+    Project.midiNoteOn(9.37, 0, 0, 48, 100),
+    Project.midiNoteOff(10.37, 0, 0, 48, 0),
+  ]);
+  return project;
+}
+
+// Largest difference between the two plays, each aligned on its own onset.
+function repeatedNoteDiff(audio: Float32Array): number {
+  const onset = (from: number) => {
+    for (let i = from; i < audio.length; i++) {
+      if (Math.abs(audio[i]) > 1e-4) {
+        return i;
+      }
+    }
+    return -1;
+  };
+  const first = onset(0);
+  const second = onset(first + 2 * 48000 * 2);
+  expect(first).toBeGreaterThanOrEqual(0);
+  expect(second).toBeGreaterThan(first);
+  let diff = 0;
+  for (let i = 0; i < 48000; i++) {
+    diff = Math.max(diff, Math.abs(audio[first + i] - audio[second + i]));
+  }
+  return diff;
 }
 
 function peak(audio: Float32Array): number {
@@ -152,6 +190,21 @@ describe('NativeSynth preset catalog', () => {
       expect(byName.modRoutings?.[0]?.destination).toBe(name);
       expect(byOrdinal.modRoutings?.[0]?.destination).toBe(name);
     }
+  });
+
+  it('round-trips the retrigger mode by name and ordinal and refuses unknown values', () => {
+    for (const [ordinal, name] of SYNTH_RETRIGGERS.entries()) {
+      expect(synthPatchRoundTripForTest({ retrigger: name }).retrigger).toBe(name);
+      expect(synthPatchRoundTripForTest({ retrigger: ordinal }).retrigger).toBe(name);
+    }
+    expect(synthPatchRoundTripForTest({}).retrigger).toBe('default');
+    expect(() =>
+      synthPatchRoundTripForTest({ retrigger: 'phase' } as unknown as SynthPatch),
+    ).toThrow(RangeError);
+    expect(() => synthPatchRoundTripForTest({ retrigger: SYNTH_RETRIGGERS.length })).toThrow(
+      RangeError,
+    );
+    expect(synthPresetPatch('saw-lead').retrigger).toBe('free');
   });
 
   it('rejects non-string preset properties consistently', () => {
@@ -301,6 +354,26 @@ describe('Project.bounceWithSynthInstrument', () => {
         // @ts-expect-error deliberately unknown waveform name; the patch resolver must reject it.
         project.bounceWithSynthInstrument({ waveform: 'sawtooth-ish' }, { totalFrames: 128 }),
       ).toThrow();
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('renders a repeated note identically only under note retrigger', () => {
+    const project = buildRepeatedNoteProject();
+    try {
+      const options = { totalFrames: 48000 * 6 };
+      const note = project.bounceWithSynthInstrument(
+        { preset: 'saw-lead', retrigger: 'note' },
+        options,
+      );
+      const free = project.bounceWithSynthInstrument(
+        { preset: 'saw-lead', retrigger: 'free' },
+        options,
+      );
+      expect(peak(note)).toBeGreaterThan(0.01);
+      expect(repeatedNoteDiff(note)).toBe(0);
+      expect(repeatedNoteDiff(free)).toBeGreaterThan(1e-3);
     } finally {
       project.destroy();
     }

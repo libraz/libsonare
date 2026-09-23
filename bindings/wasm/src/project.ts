@@ -26,6 +26,7 @@ export type {
   SynthModSource,
   SynthOscWaveform,
   SynthPatch,
+  SynthRetrigger,
 } from './instrument_types';
 export {
   ARTICULATIONS,
@@ -43,6 +44,7 @@ export {
   SYNTH_MOD_DESTINATIONS,
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
+  SYNTH_RETRIGGERS,
 } from './instrument_types';
 export { Project } from './project_class';
 export {

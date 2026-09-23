@@ -89,6 +89,11 @@ static_assert(static_cast<int>(sonare::midi::synth::BodyType::kBrassBell) + 1 ==
 static_assert(static_cast<int>(sonare::midi::synth::BodyType::kVocal) + 1 ==
               SONARE_SYNTH_BODY_VOCAL);
 
+static_assert(static_cast<int>(sonare::midi::synth::SynthRetrigger::kFree) + 1 ==
+              SONARE_SYNTH_RETRIGGER_FREE);
+static_assert(static_cast<int>(sonare::midi::synth::SynthRetrigger::kNote) + 1 ==
+              SONARE_SYNTH_RETRIGGER_NOTE);
+
 static_assert(static_cast<int>(sonare::midi::synth::ModSource::kPitchBend) + 1 ==
               SONARE_SYNTH_MOD_SOURCE_COUNT);
 static_assert(static_cast<int>(sonare::midi::synth::ModDestination::kSpectrumMorph) + 1 ==
@@ -128,7 +133,8 @@ inline bool valid_builtin_waveform(int value) noexcept {
 /// Struct version 2 adds @c present_fields, so a caller can also override with
 /// an explicit zero; version 1 has no presence bits and cannot express one.
 /// Version 3 adds the sample-engine block, which only a sample patch reads.
-/// Version 4 adds the series highpass.
+/// Version 4 adds the series highpass, 5 the converter, 6 the pitch offset and
+/// 7 the retrigger mode; an older caller's tail is never read.
 /// Returns false (and sets @p out_error) for an unsupported struct_version or
 /// an unknown preset name. The result still passes through NativeSynth's own
 /// constructor clamping.
@@ -144,6 +150,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   using sonare::midi::synth::SynthEngineMode;
   using sonare::midi::synth::SynthFilterModel;
   using sonare::midi::synth::SynthFilterOutput;
+  using sonare::midi::synth::SynthRetrigger;
   using sonare::midi::synth::VaWaveform;
 
   if (out_error) *out_error = nullptr;
@@ -173,6 +180,12 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   }
   if (!valid_c_enum(c.body, SONARE_SYNTH_BODY_TYPE_COUNT)) {
     if (out_error) *out_error = "invalid synth body";
+    return false;
+  }
+  // A pre-7 struct has no retrigger member, so its tail bytes are not read.
+  const int retrigger = c.struct_version >= 7 ? c.retrigger : SONARE_SYNTH_RETRIGGER_BASE;
+  if (!valid_c_enum(retrigger, SONARE_SYNTH_RETRIGGER_COUNT)) {
+    if (out_error) *out_error = "invalid synth retrigger";
     return false;
   }
   NativeSynthConfig cfg;
@@ -275,6 +288,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
       (set(SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS) || c.pitch_offset_cents != 0.0f)) {
     p.pitch_offset_cents = c.pitch_offset_cents;
   }
+  if (retrigger > 0) p.retrigger = static_cast<SynthRetrigger>(retrigger - 1);
   if (c.struct_version >= 3 && p.mode == SynthEngineMode::kSample) {
     p.sample.set_index = c.sample_set;
     if (c.sample_level != 0.0f) p.sample.level = c.sample_level;
@@ -360,6 +374,7 @@ inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
   out->body = static_cast<int>(p.body) + 1;
   out->body_mix = p.body_mix;
   out->stereo_spread = p.stereo_spread;
+  out->retrigger = static_cast<int>(p.retrigger) + 1;
   int n = 0;
   for (const sonare::midi::synth::ModRoute& r : p.mod_matrix.routes) {
     if (r.source == sonare::midi::synth::ModSource::kNone ||

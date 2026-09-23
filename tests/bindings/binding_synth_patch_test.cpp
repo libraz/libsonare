@@ -179,6 +179,14 @@ TEST_CASE("synth patch conversion rejects out-of-range enum fields", "[project][
   REQUIRE(
       rejected([](SonareSynthPatch& p) { p.filter_output = SONARE_SYNTH_FILTER_OUTPUT_COUNT; }));
   REQUIRE(rejected([](SonareSynthPatch& p) { p.body = SONARE_SYNTH_BODY_TYPE_COUNT; }));
+  REQUIRE(rejected([](SonareSynthPatch& p) {
+    p.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    p.retrigger = SONARE_SYNTH_RETRIGGER_COUNT;
+  }));
+  REQUIRE(rejected([](SonareSynthPatch& p) {
+    p.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    p.retrigger = -1;
+  }));
 
   REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
 }
@@ -409,11 +417,49 @@ TEST_CASE("the patch pitch offset is read only by a caller that declares it",
   // the previous layout has whatever its own struct ended with sitting where
   // this field now is, so the field must stay unread at its version.
   SonareSynthPatch older = asked;
-  older.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION - 1;
+  older.struct_version = 5;  // the layout before the pitch offset
   sonare::midi::synth::NativeSynthConfig ignored;
   REQUIRE(sonare_c_detail::synth_config_from_patch_c(older, &ignored, &error));
   REQUIRE(error == nullptr);
   REQUIRE(ignored.patch.pitch_offset_cents == 0.0f);
+}
+
+TEST_CASE("the patch retrigger mode is read only by a caller that declares it",
+          "[project][synth_patch][retrigger]") {
+  using sonare::midi::synth::SynthRetrigger;
+  SonareSynthPatch asked{};
+  asked.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  std::strcpy(asked.preset, "saw-lead");
+  asked.retrigger = SONARE_SYNTH_RETRIGGER_NOTE;
+  sonare::midi::synth::NativeSynthConfig read;
+  const char* error = nullptr;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(asked, &read, &error));
+  REQUIRE(read.patch.retrigger == SynthRetrigger::kNote);
+
+  // Zero keeps the base, which for every catalog preset is free running.
+  SonareSynthPatch base = asked;
+  base.retrigger = SONARE_SYNTH_RETRIGGER_BASE;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(base, &read, &error));
+  REQUIRE(read.patch.retrigger == SynthRetrigger::kFree);
+
+  // A version-6 caller's struct ends before the field, so whatever sits there
+  // (here an out-of-range value that would otherwise be refused) is not read.
+  SonareSynthPatch older = asked;
+  older.struct_version = 6;
+  older.retrigger = 99;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(older, &read, &error));
+  REQUIRE(error == nullptr);
+  REQUIRE(read.patch.retrigger == SynthRetrigger::kFree);
+
+  SonareSynthPatch newer = asked;
+  newer.struct_version = 8;
+  REQUIRE_FALSE(sonare_c_detail::synth_config_from_patch_c(newer, &read, &error));
+  REQUIRE(error != nullptr);
+
+  // The read direction reports the resolved mode rather than the keep-base zero.
+  SonareSynthPatch preset{};
+  REQUIRE(sonare_synth_preset_patch("saw-lead", &preset) == SONARE_OK);
+  REQUIRE(preset.retrigger == SONARE_SYNTH_RETRIGGER_FREE);
 }
 
 TEST_CASE("the patch pitch offset reaches both of the engine pitch sources",

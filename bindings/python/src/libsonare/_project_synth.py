@@ -74,6 +74,13 @@ _SAMPLE_KEY_TRACKS = {
     "on": 1,
     "off": 2,
 }
+# SonareSynthRetrigger; "default" = 0 keeps the base patch's mode. Outside
+# SYNTH_ENUM_TABLES for the same reason as the two tables above.
+_SYNTH_RETRIGGERS = {
+    "default": 0,
+    "free": 1,
+    "note": 2,
+}
 # The sample's own looping, in the SF2 sampleModes values SonareSampleDesc
 # takes. A different scale from _SAMPLE_LOOP_MODES above, which is the patch's
 # override of it, so the two never share a table.

@@ -19,8 +19,9 @@
 /// must outlive the voice (config member / static fallback tables).
 ///
 /// Determinism: no RNG, no wall clock. Unison detune jitter, oscillator
-/// start phases and drift-LFO variation derive from the counter-based
-/// (voice_index, note, age) hash, so identical event streams bounce
+/// start phases, drift-LFO variation and every engine's noise stream derive
+/// from the counter-based (voice_index, note, age) hash — or from the note
+/// alone under SynthRetrigger::kNote — so identical event streams bounce
 /// bit-identically within one build.
 
 #include <algorithm>
@@ -65,6 +66,15 @@ namespace sonare::midi::synth {
 
 /// Maximum unison oscillators per voice (supersaw width).
 inline constexpr int kMaxUnisonOscs = 7;
+
+/// What a note-on restarts. kFree seeds each voice's start phases and random
+/// streams from its pool slot and allocation count, so repeated notes differ;
+/// kNote seeds them from the note alone, so a repeated note renders the same
+/// samples wherever it lands (patch field; the enum is mode-tagged for the ABI).
+enum class SynthRetrigger : int {
+  kFree = 0,
+  kNote = 1,
+};
 
 /// One playable patch: oscillator section, filter section, envelopes and the
 /// single vibrato LFO. A POD by design — fallback tables are static const
@@ -157,6 +167,8 @@ struct NativeSynthPatch {
   /// Per-voice seeded stereo pan scatter in [0,1] (0 keeps every voice
   /// centre-relative, preserving bit-stable mono bounces).
   float stereo_spread = 0.0f;
+  /// Seed source for every per-voice start state (see SynthRetrigger).
+  SynthRetrigger retrigger = SynthRetrigger::kFree;
 
   /// Free-form modulation routings on top of the hardwired patch modulations.
   ModMatrix mod_matrix;
@@ -386,8 +398,8 @@ struct NativeSynthVoice : VoiceState {
 
   /// Starts the voice for @p p. note/channel/age must already be set (the
   /// pool fills them in allocate()); @p voice_index seeds the deterministic
-  /// per-voice variation. @p p must outlive the voice. @p glide_from_hz != 0
-  /// glides the pitch from that frequency (portamento; needs p.glide_ms > 0).
+  /// per-voice variation unless the patch retriggers from the note. @p p must outlive the voice. @p
+  /// glide_from_hz != 0 glides the pitch from that frequency (portamento; needs p.glide_ms > 0).
   /// @p una_corda engages the soft-pedal voicing (piano mode only).
   /// @p drum_kit != 0 applies a GS kit variation (Room/Power/808/...) to the
   /// resolved drum patch at note-on (percussion mode only; see apply_gs_drum_kit).

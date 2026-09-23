@@ -230,6 +230,58 @@ def test_synth_patch_rejects_non_string_preset() -> None:
         SynthPatch(preset=123)._to_c()  # type: ignore[arg-type]
 
 
+def test_synth_patch_retrigger_round_trips_and_refuses_unknown_values() -> None:
+    for ordinal, name in enumerate(("default", "free", "note")):
+        assert SynthPatch._from_c(SynthPatch(retrigger=name)._to_c()).retrigger == name
+        assert SynthPatch._from_c(SynthPatch(retrigger=ordinal)._to_c()).retrigger == name
+    assert SynthPatch()._to_c().struct_version == 7
+    assert synth_preset_patch("saw-lead").retrigger == "free"
+    with pytest.raises(ValueError):
+        SynthPatch(retrigger="phase")._to_c()
+    with pytest.raises(ValueError):
+        SynthPatch(retrigger=3)._to_c()
+
+
+def _repeated_note_diff(audio: np.ndarray) -> float:
+    """Largest difference between two plays of one note, each aligned on its onset."""
+    mono = audio[:, 0]
+    loud = np.flatnonzero(np.abs(mono) > 1e-4)
+    first = int(loud[0])
+    second = int(loud[loud > first + 2 * 48000][0])
+    return float(np.max(np.abs(mono[first : first + 48000] - mono[second : second + 48000])))
+
+
+def test_note_retrigger_renders_a_repeated_note_identically() -> None:
+    # The second play starts long after the first has ended, at an offset that
+    # is no whole number of the note's periods.
+    project = Project()
+    try:
+        project.set_sample_rate(48000.0)
+        track, clip = project.add_midi_clip(0.0, 16.0)
+        project.set_track_midi_destination(track, 0)
+        project.set_midi_events(
+            clip,
+            [
+                Project.midi_note_on(0.0, 0, 0, 48, 100),
+                Project.midi_note_off(1.0, 0, 0, 48, 0),
+                Project.midi_note_on(9.37, 0, 0, 48, 100),
+                Project.midi_note_off(10.37, 0, 0, 48, 0),
+            ],
+        )
+        frames = 48000 * 6
+        note = project.bounce_with_synth_instrument(
+            SynthPatch(preset="saw-lead", retrigger="note"), total_frames=frames
+        )
+        free = project.bounce_with_synth_instrument(
+            SynthPatch(preset="saw-lead", retrigger="free"), total_frames=frames
+        )
+        assert float(np.max(np.abs(note))) > 0.01
+        assert _repeated_note_diff(note) == 0.0
+        assert _repeated_note_diff(free) > 1e-3
+    finally:
+        project.close()
+
+
 def test_bounce_with_synth_instrument_renders_presets() -> None:
     project = _build_midi_only_project()
     try:

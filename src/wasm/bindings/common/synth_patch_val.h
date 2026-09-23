@@ -36,6 +36,7 @@ inline constexpr const char* kFilterModels[] = {"default", "svf", "moog-ladder",
 inline constexpr const char* kFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
 inline constexpr const char* kBodyTypes[] = {"default",   "none",       "guitar", "violin",
                                              "wood-tube", "brass-bell", "vocal"};
+inline constexpr const char* kRetriggers[] = {"default", "free", "note"};
 inline constexpr const char* kModSources[] = {
     "none",      "amp-env", "filter-env", "lfo1",       "lfo2",          "velocity",  "key-track",
     "mod-wheel", "random",  "breath",     "aftertouch", "expression-cc", "pitch-bend"};
@@ -81,6 +82,8 @@ static_assert(std::size(kFilterOutputs) == SONARE_SYNTH_FILTER_OUTPUT_COUNT,
               "WASM SynthFilterOutput table drifted from C");
 static_assert(std::size(kBodyTypes) == SONARE_SYNTH_BODY_TYPE_COUNT,
               "WASM SynthBodyType table drifted from C");
+static_assert(std::size(kRetriggers) == SONARE_SYNTH_RETRIGGER_COUNT,
+              "WASM SynthRetrigger table drifted from C");
 static_assert(std::size(kModSources) == SONARE_SYNTH_MOD_SOURCE_COUNT,
               "WASM SynthModSource table drifted from C");
 static_assert(std::size(kModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
@@ -235,6 +238,8 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   enumProperty(desc, "filterOutput", kFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT,
                "filter output", &patch.filter_output);
   enumProperty(desc, "body", kBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT, "body type", &patch.body);
+  enumProperty(desc, "retrigger", kRetriggers, SONARE_SYNTH_RETRIGGER_COUNT, "retrigger mode",
+               &patch.retrigger);
   auto read_float = [&desc, &patch](const char* key, uint32_t bit, float* out) {
     *out = floatProperty(desc, key, 0.0f);
     if (hasProperty(desc, key)) patch.present_fields |= bit;
@@ -354,6 +359,7 @@ inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   out.set("body", enumNameVal(patch.body, kBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT));
   out.set("bodyMix", patch.body_mix);
   out.set("stereoSpread", patch.stereo_spread);
+  out.set("retrigger", enumNameVal(patch.retrigger, kRetriggers, SONARE_SYNTH_RETRIGGER_COUNT));
   val routings = val::array();
   for (int i = 0; i < patch.num_mod_routings && i < SONARE_SYNTH_PATCH_MOD_ROUTINGS; ++i) {
     val routing = val::object();
