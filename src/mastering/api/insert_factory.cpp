@@ -1173,18 +1173,51 @@ std::vector<std::string> insert_param_names(const std::string& name) {
 
 namespace {
 
-// Defaults an insert's empty build records, memoized because every probe of
-// the catalog's measurement asks for them.
-const std::unordered_map<std::string, detail::ParamDefault>& declared_defaults(
-    const std::string& name) {
-  static thread_local std::unordered_map<std::string,
-                                         std::unordered_map<std::string, detail::ParamDefault>>
-      memo;
+// What an insert's empty build declares, memoized because every probe of the
+// catalog's measurement asks for it.
+const ParamMap& empty_build(const std::string& name) {
+  static thread_local std::unordered_map<std::string, ParamMap> memo;
   const auto cached = memo.find(name);
   if (cached != memo.end()) return cached->second;
   ParamMap params;
   (void)build_insert(name, params);
-  return memo.emplace(name, params.probed_defaults()).first->second;
+  return memo.emplace(name, std::move(params)).first->second;
+}
+
+using SlotList = std::vector<std::pair<std::string, detail::SlotDeclaration>>;
+
+const std::pair<std::string, detail::SlotDeclaration>* find_slot(const SlotList& slots,
+                                                                 const std::string& name) {
+  for (const auto& slot : slots) {
+    if (slot.first == name) return &slot;
+  }
+  return nullptr;
+}
+
+// The innermost slot @p key belongs to: the longest declared name it extends
+// by a dot. Membership is by prefix because a slot's keys are built as
+// `<slot>.<field>`.
+const std::pair<std::string, detail::SlotDeclaration>* slot_of(const SlotList& slots,
+                                                               const std::string& key) {
+  const std::pair<std::string, detail::SlotDeclaration>* best = nullptr;
+  for (const auto& slot : slots) {
+    const std::string& prefix = slot.first;
+    if (key.size() > prefix.size() && key.compare(0, prefix.size(), prefix) == 0 &&
+        key[prefix.size()] == '.' && (best == nullptr || prefix.size() > best->first.size())) {
+      best = &slot;
+    }
+  }
+  return best;
+}
+
+// Cutoffs the crossover must have for @p key's slot, and each enclosing one, to exist.
+int required_crossover_cutoffs(const SlotList& slots, const std::string& key) {
+  int required = 0;
+  for (const auto* slot = slot_of(slots, key); slot != nullptr;
+       slot = slot->second.parent.empty() ? nullptr : find_slot(slots, slot->second.parent)) {
+    required = std::max(required, slot->second.min_crossover_cutoffs);
+  }
+  return required;
 }
 
 }  // namespace
@@ -1192,14 +1225,25 @@ const std::unordered_map<std::string, detail::ParamDefault>& declared_defaults(
 std::vector<Param> insert_probe_params(const std::string& name, const std::string& key,
                                        double value) {
   std::vector<Param> params{Param{key, value}};
-  const std::size_t dot = key.rfind('.');
-  if (dot == std::string::npos) return params;
-  const std::string activation = key.substr(0, dot + 1) + "frequencyHz";
-  if (activation == key) return params;
-  const auto& defaults = declared_defaults(name);
-  const auto fallback = defaults.find(activation);
-  if (fallback != defaults.end() && !fallback->second.ambiguous) {
-    params.push_back(Param{activation, fallback->second.value});
+  // A presence-gated slot exists once @p key itself is supplied. A crossover
+  // band past the default split needs more cutoffs: the default ones as they
+  // are, then the rest spread log-evenly above the last of them.
+  const ParamMap& declared = empty_build(name);
+  const int required = required_crossover_cutoffs(declared.declared_slots(), key);
+  const std::vector<float> defaults = multiband::CrossoverConfig{}.cutoffs_hz;
+  const int default_count = static_cast<int>(defaults.size());
+  if (required > default_count) {
+    constexpr double kHighestCutoffHz = 16000.0;
+    const double last_default = defaults.empty() ? 20.0 : static_cast<double>(defaults.back());
+    const int extra = required - default_count;
+    for (int index = 0; index < required; ++index) {
+      const double cutoff =
+          index < default_count
+              ? static_cast<double>(defaults[static_cast<size_t>(index)])
+              : last_default * std::pow(kHighestCutoffHz / last_default,
+                                        static_cast<double>(index - default_count + 1) / extra);
+      params.push_back(Param{"cutoff" + std::to_string(index) + "Hz", cutoff});
+    }
   }
   return params;
 }
@@ -1492,6 +1536,7 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
                         const std::string& id_json, bool rt_safe, const ParamMap& params) {
   const auto& kinds = params.probed_kinds();
   const auto& defaults = params.probed_defaults();
+  const auto* slot = slot_of(params.declared_slots(), key);
   const auto& probed = params.probed_keys();
   const auto& enum_choices = params.probed_choices();
 
@@ -1567,6 +1612,15 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
     }
     out += ']';
   }
+
+  out += ",\"slot\":";
+  if (slot == nullptr) {
+    out += "null";
+  } else {
+    out += '"';
+    out += slot->first;
+    out += '"';
+  }
   out += '}';
 }
 
@@ -1603,6 +1657,31 @@ std::string build_insert_param_info_json(const std::string& name) {
 
 }  // namespace
 
+std::string insert_slot_info_json(const std::string& name) {
+  // Same declarations the param entries' `slot` field is read from.
+  std::string out = "[";
+  for (const auto& [slot_name, declaration] : empty_build(name).declared_slots()) {
+    if (out.size() > 1) out += ',';
+    out += "{\"name\":\"";
+    out += slot_name;
+    out += "\",\"parent\":";
+    if (declaration.parent.empty()) {
+      out += "null";
+    } else {
+      out += '"';
+      out += declaration.parent;
+      out += '"';
+    }
+    out += ",\"activation\":\"";
+    out += declaration.any_key ? "anyKey" : "always";
+    out += "\",\"minCrossoverCutoffs\":";
+    out += std::to_string(declaration.min_crossover_cutoffs);
+    out += '}';
+  }
+  out += ']';
+  return out;
+}
+
 std::string insert_param_info_json(const std::string& name) {
   // Measuring the bounds costs one processor construction per probe point, so a
   // repeat query — and the capability catalog, which asks for every insert —
@@ -1628,6 +1707,17 @@ const std::vector<std::string>& insert_param_info_schema_paths() {
       "[].choices",
       "[].choices[].name",
       "[].choices[].value",
+      "[].slot",
+  };
+  return paths;
+}
+
+const std::vector<std::string>& insert_slot_info_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "[].name",
+      "[].parent",
+      "[].activation",
+      "[].minCrossoverCutoffs",
   };
   return paths;
 }

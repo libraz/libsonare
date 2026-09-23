@@ -29,6 +29,7 @@ import type {
   DynamicsAnalysisResult,
   DynamicsProcessorResult,
   DynamicsResult,
+  MasteringInsertSlot,
 } from '../src/index';
 
 interface SharedTypeShapes {
@@ -101,7 +102,15 @@ const catalogParameter = {
   default: null,
   unit: null,
   choices: null,
+  slot: 'band1',
 } satisfies CapabilityCatalogParameter;
+
+const catalogSlot = {
+  name: 'band1',
+  parent: null,
+  activation: 'always',
+  minCrossoverCutoffs: 1,
+} satisfies MasteringInsertSlot;
 
 const catalogProcessor = {
   id: 'saturation.softClipper',
@@ -114,6 +123,7 @@ const catalogProcessor = {
   channelPolicy: 'perChannel',
   category: 'saturation',
   params: [catalogParameter],
+  slots: [catalogSlot],
 } satisfies CapabilityCatalogProcessor;
 
 const catalogPresets = {
@@ -146,6 +156,7 @@ describe('capability catalog type shapes', () => {
     ['CapabilityCatalogParameter', catalogParameter],
     ['CapabilityCatalogPresets', catalogPresets],
     ['CapabilityCatalogProcessor', catalogProcessor],
+    ['MasteringInsertSlot', catalogSlot],
   ] as const)('%s is the shape the shared corpus declares', (name, sample) => {
     expect(Object.keys(sample).sort()).toEqual([...shapes.types[name]].sort());
   });

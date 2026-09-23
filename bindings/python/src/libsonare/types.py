@@ -182,6 +182,9 @@ from ._types_capabilities import (
     MasteringInsertParamInfo as MasteringInsertParamInfo,
 )
 from ._types_capabilities import (
+    MasteringInsertSlot as MasteringInsertSlot,
+)
+from ._types_capabilities import (
     MasteringInsertTiming as MasteringInsertTiming,
 )
 from ._types_capabilities import (

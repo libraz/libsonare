@@ -94,22 +94,31 @@ std::vector<std::string> insert_param_names(const std::string& name);
 ///         descriptor order, with the integer param_id accepted by the engine's
 ///         realtime insert-parameter setter; then, sorted by name, every other
 ///         key construction reads, with a null id. Each carries its declared
-///         type, measured bounds or choices, default and unit. See
+///         type, measured bounds or choices, default, unit and the slot it
+///         belongs to (see insert_slot_info_json()), or null. See
 ///         insert_param_info_schema_paths() for the exact field set; every
 ///         entry carries every field, with `null` where a value could not be
 ///         measured. Returns `[]` for an unknown @p name.
 std::string insert_param_info_json(const std::string& name);
+
+/// @brief The key groups of an insert that exist only under a condition.
+/// @return A JSON array string, one entry per slot in the order construction
+///         declares them: `name` (the key prefix, e.g. "midBand3" or
+///         "band1.dyn2"), `parent` (the enclosing slot or null), `activation`
+///         ("anyKey": exists once any of its keys is supplied; "always") and
+///         `minCrossoverCutoffs` (cutoffs the crossover in effect needs for the
+///         slot to exist; 0 when it needs none). `[]` for an unknown @p name or
+///         an insert with no slots.
+std::string insert_slot_info_json(const std::string& name);
 
 /// Rate and block size an insert is prepared at when the catalog measures it.
 inline constexpr double kInsertProbeSampleRate = 48000.0;
 inline constexpr int kInsertProbeBlockSize = 512;
 
 /// @brief The configuration that measures @p key of insert @p name at @p value.
-/// @details `{key: value}`, plus the key that switches on the band @p key
-///          belongs to: for `<prefix><field>`, `<prefix>frequencyHz` at its
-///          default when the insert reads it and it is not @p key itself. A band
-///          field is read only while its band is active, so without it the value
-///          would never reach the processor.
+/// @details `{key: value}`, which on its own makes a presence-gated slot
+///          exist; plus, when @p key's slot is a crossover band past the default
+///          split, as many ascending cutoffs as that band needs to exist.
 std::vector<Param> insert_probe_params(const std::string& name, const std::string& key,
                                        double value);
 
@@ -134,5 +143,8 @@ InsertTiming insert_timing(const std::string& name, const std::string& json_para
 /// segment. Keep the JSON writer and both TypeScript result types in parity by
 /// testing them against this list.
 const std::vector<std::string>& insert_param_info_schema_paths();
+
+/// @brief Canonical field paths for one entry of insert_slot_info_json().
+const std::vector<std::string>& insert_slot_info_schema_paths();
 
 }  // namespace sonare::mastering::api

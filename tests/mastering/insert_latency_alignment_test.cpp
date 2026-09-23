@@ -127,6 +127,20 @@ const std::vector<Exemption>& PeakShiftedConfigurations() {
       {"multiband.saturation", "slope", "2", "LR8 crossover group delay"},
       {"multiband.dynamicEq", "slope", "2", "LR8 crossover group delay"},
       {"saturation.multibandExciter", "slope", "2", "LR8 crossover group delay"},
+      // Past the default two cutoffs the crossover bands no longer sum to a
+      // single-sample peak either; the arrival still lands on the declared delay.
+      {"multiband.saturation", "band3.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.saturation", "band4.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.saturation", "band5.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.saturation", "band6.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.saturation", "band7.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.saturation", "band8.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.dynamicEq", "band3.dyn*.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.dynamicEq", "band4.dyn*.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.dynamicEq", "band5.dyn*.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.dynamicEq", "band6.dyn*.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.dynamicEq", "band7.dyn*.type", "*", "multi-cutoff crossover group delay"},
+      {"multiband.dynamicEq", "band8.dyn*.type", "*", "multi-cutoff crossover group delay"},
       // A tube top band's gain breaks the flat band sum, so the sum peaks where
       // that filtered band does. Band alignment is the multiband case below.
       {"multiband.saturation", "band2.type", "2", "tube band breaks the flat band sum"},

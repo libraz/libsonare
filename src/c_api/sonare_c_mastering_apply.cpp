@@ -333,6 +333,12 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "processors[].params[].choices",
       "processors[].params[].choices[].name",
       "processors[].params[].choices[].value",
+      "processors[].params[].slot",
+      "processors[].slots",
+      "processors[].slots[].name",
+      "processors[].slots[].parent",
+      "processors[].slots[].activation",
+      "processors[].slots[].minCrossoverCutoffs",
   };
   return paths;
 }

@@ -307,6 +307,8 @@ std::string processor_catalog_json() {
     out += catalog_category(id);
     out += "\",\"params\":";
     out += realtime_insertable ? insert_param_info_json(id) : "[]";
+    out += ",\"slots\":";
+    out += realtime_insertable ? insert_slot_info_json(id) : "[]";
     out += '}';
   }
   out += ']';
@@ -336,6 +338,12 @@ const std::vector<std::string>& processor_catalog_schema_paths() {
       "[].params[].choices",
       "[].params[].choices[].name",
       "[].params[].choices[].value",
+      "[].params[].slot",
+      "[].slots",
+      "[].slots[].name",
+      "[].slots[].parent",
+      "[].slots[].activation",
+      "[].slots[].minCrossoverCutoffs",
   };
   return paths;
 }

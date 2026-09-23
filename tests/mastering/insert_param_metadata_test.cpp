@@ -453,16 +453,39 @@ TEST_CASE("measured bounds reproduce the validation they were measured through",
 TEST_CASE("declaring a band's parameters does not make its keys count as read",
           "[mastering][catalog]") {
   // The band readers are replayed against a throwaway map so the catalog learns
-  // every band key without the live map probing it. A key the processor still
-  // ignores must therefore still be reported as ignored.
+  // every band key without the live map probing it. A crossover band the
+  // default split does not create is declared that way, so its key must still
+  // be reported as ignored.
   std::vector<std::string> ignored;
-  REQUIRE(make_insert("eq.minimumPhase", R"({"band0.q":2.0})", &ignored) != nullptr);
-  REQUIRE(ignored == std::vector<std::string>{"band0.q"});
+  REQUIRE(make_insert("multiband.compressor", R"({"band5.ratio":2.0})", &ignored) != nullptr);
+  REQUIRE(ignored == std::vector<std::string>{"band5.ratio"});
 
-  // And a band the caller does supply is read as before.
+  // And once the crossover has enough cutoffs for that band, it is read.
   ignored.clear();
-  REQUIRE(make_insert("eq.minimumPhase", R"({"band0.frequencyHz":800,"band0.q":2.0})", &ignored) !=
-          nullptr);
+  REQUIRE(make_insert("multiband.compressor",
+                      R"({"cutoff0Hz":100,"cutoff1Hz":300,"cutoff2Hz":1000,"cutoff3Hz":3000,)"
+                      R"("cutoff4Hz":8000,"band5.ratio":2.0})",
+                      &ignored) != nullptr);
+  REQUIRE(ignored.empty());
+}
+
+TEST_CASE("any one key of an EQ band makes the band exist", "[mastering][catalog]") {
+  // One rule across every EQ family: a band a caller addresses by any of its
+  // keys is built, so no supplied band key is dropped for lack of a frequency.
+  for (const char* config : {R"({"band0.q":2.0})", R"({"band2.enabled":true})"}) {
+    for (const char* name : {"eq.parametric", "eq.minimumPhase", "eq.linearPhase"}) {
+      std::vector<std::string> ignored;
+      REQUIRE(make_insert(name, config, &ignored) != nullptr);
+      INFO(name << " " << config);
+      REQUIRE(ignored.empty());
+    }
+  }
+  std::vector<std::string> ignored;
+  REQUIRE(make_insert("eq.dynamic", R"({"band0.ratio":3.0})", &ignored) != nullptr);
+  REQUIRE(ignored.empty());
+  REQUIRE(make_insert("eq.midSide", R"({"sideBand1.q":2.0})", &ignored) != nullptr);
+  REQUIRE(ignored.empty());
+  REQUIRE(make_insert("multiband.dynamicEq", R"({"band1.dyn2.ratio":3.0})", &ignored) != nullptr);
   REQUIRE(ignored.empty());
 }
 
@@ -501,6 +524,77 @@ TEST_CASE("the processor catalog schema list matches what the writer emits",
     if (path.rfind("[].params[]", 0) == 0) interior.insert(path);
   }
   REQUIRE(interior == prefixed);
+
+  std::set<std::string> slot_prefixed;
+  for (const auto& path : sonare::mastering::api::insert_slot_info_schema_paths()) {
+    slot_prefixed.insert("[].slots" + path);
+  }
+  std::set<std::string> slot_interior;
+  for (const auto& path : expected) {
+    if (path.rfind("[].slots[]", 0) == 0) slot_interior.insert(path);
+  }
+  REQUIRE(slot_interior == slot_prefixed);
+}
+
+TEST_CASE("the slot info schema list matches what the writer emits", "[mastering][catalog]") {
+  std::set<std::string> actual;
+  for (const auto& name : insert_factory_names()) {
+    const auto paths =
+        sonare::test::schema_paths_of(sonare::mastering::api::insert_slot_info_json(name));
+    actual.insert(paths.begin(), paths.end());
+  }
+  const auto& expected_paths = sonare::mastering::api::insert_slot_info_schema_paths();
+  const std::set<std::string> expected(expected_paths.begin(), expected_paths.end());
+  REQUIRE_FALSE(actual.empty());
+  REQUIRE(actual == expected);
+}
+
+TEST_CASE("a slotted key supplied the way its slot's rule says is read", "[mastering][catalog]") {
+  // The published rule is the one construction applies: supplying the key
+  // alone, plus the cutoffs its crossover band needs, reaches the processor.
+  // Without those cutoffs a band past the default split is not built, which is
+  // what keeps minCrossoverCutoffs from being inflated.
+  const int default_cutoffs =
+      static_cast<int>(sonare::mastering::multiband::CrossoverConfig{}.cutoffs_hz.size());
+  size_t slotted = 0;
+  size_t gated_by_crossover = 0;
+  for (const auto& name : insert_factory_names()) {
+    const json::Value slots_value =
+        json::parse_strict(sonare::mastering::api::insert_slot_info_json(name));
+    const json::Array& slots = slots_value.as_array();
+    for (const json::Value& parameter : param_info(name)) {
+      if (field(parameter, "slot").is_null()) continue;
+      const std::string key = field(parameter, "name").as_string();
+      const json::Value& fallback = field(parameter, "default");
+      if (!fallback.is_number() && !fallback.is_bool()) continue;
+      ++slotted;
+      INFO(name << " " << key);
+      std::vector<std::string> ignored;
+      REQUIRE(make_insert(name, probe_json(name, key, fallback), &ignored) != nullptr);
+      REQUIRE(ignored.empty());
+
+      int required = 0;
+      for (std::string slot = field(parameter, "slot").as_string(); !slot.empty();) {
+        std::string parent;
+        for (const json::Value& entry : slots) {
+          if (field(entry, "name").as_string() != slot) continue;
+          required =
+              std::max(required, static_cast<int>(field(entry, "minCrossoverCutoffs").as_number()));
+          if (!field(entry, "parent").is_null()) parent = field(entry, "parent").as_string();
+        }
+        slot = parent;
+      }
+      if (required <= default_cutoffs) continue;
+      ++gated_by_crossover;
+      json::Object alone;
+      alone.emplace(key, fallback);
+      ignored.clear();
+      REQUIRE(make_insert(name, json::dump(json::Value(std::move(alone))), &ignored) != nullptr);
+      REQUIRE(ignored == std::vector<std::string>{key});
+    }
+  }
+  REQUIRE(slotted > 0);
+  REQUIRE(gated_by_crossover > 0);
 }
 
 #ifdef SONARE_WITH_FX

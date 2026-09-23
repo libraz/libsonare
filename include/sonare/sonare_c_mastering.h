@@ -391,13 +391,20 @@ const char* sonare_mastering_stereo_analysis_names(void);
 /// @return A JSON array string whose entries contain `id`, `kind`,
 ///   `realtimeInsertable`, `stereoOnly`, `latencySamples`, `tailSamples`,
 ///   `realtimeCost`,
-///   `channelPolicy`, `category`, and `params` (UTF-8). `kind` is one of
+///   `channelPolicy`, `category`, `params` and `slots` (UTF-8). `kind` is one of
 ///   "realtime" / "offline" / "pair"
 ///   (pair > realtime > offline precedence); `realtimeInsertable` is true exactly
 ///   for ids usable as live inserts. `realtimeCost` is `"low"`, `"moderate"`,
 ///   or `"high"` for those ids and JSON null otherwise; it is a coarse
 ///   algorithmic estimate, not a hardware benchmark.
-///   for the ids in @ref sonare_mastering_insert_names. Timing values come from
+///   for the ids in @ref sonare_mastering_insert_names. `slots` lists, in
+///   declaration order, the key groups that exist only under a condition,
+///   each `{"name","parent","activation","minCrossoverCutoffs"}`: `name` is the
+///   key prefix (`"midBand3"`, `"band1.dyn2"`) a parameter's `slot` names;
+///   `parent` the enclosing slot, listed earlier, or null; `activation`
+///   `"anyKey"` when supplying any one of its keys creates it, `"always"`
+///   otherwise; and `minCrossoverCutoffs` the crossover cutoffs needed in
+///   effect for it to exist (0 for none). Empty for non-insert ids. Timing values come from
 ///   one prepared default 48 kHz / 512-sample probe; for a configuration that
 ///   changes them, ask @ref sonare_mastering_insert_timing. Offline entries
 ///   report zero. The id
@@ -451,7 +458,7 @@ const char* sonare_mastering_insert_param_names(const char* name);
 /// @brief Parameter descriptors for an insert processor: every key its
 ///        construction reads, plus every realtime automation target.
 /// @return A JSON array string
-///   `[{"name","id","rtSafe","type","min","max","default","unit","choices"}, ...]`
+///   `[{"name","id","rtSafe","type","min","max","default","unit","choices","slot"}, ...]`
 ///   (UTF-8). Returns `"[]"` for an unknown @p name. The returned pointer is a
 ///   thread-local valid only until the next API call on the same thread; the
 ///   caller must NOT free it.
@@ -500,9 +507,13 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///     - a whole-number parameter whose accepted values have holes and run
 ///       past the measured window (a kernel size that must be odd) reports its
 ///       `min` and a null `max`, and not every value above `min` builds;
-///     - a band-splitting processor is described at its default band count, so
-///       the keys of a band that only exists once more crossover cutoffs are
-///       supplied are not listed.
+///     - a key in a crossover band past the default split is measured with
+///       enough cutoffs supplied for that band to exist.
+///
+///   `slot` names the conditional key group the key belongs to (an EQ band, a
+///   crossover band, a dynamic sub-band), or is null for a key that always
+///   exists; @ref sonare_mastering_processor_catalog's `slots` says when each
+///   group exists.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_info(const char* name);
 /// @brief Latency and tail of one insert built from @p params and prepared at

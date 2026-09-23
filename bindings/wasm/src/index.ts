@@ -69,6 +69,7 @@ export type {
   MasteringDynamicsTransientShaperRequest,
   MasteringInsertParamChoice,
   MasteringInsertParamInfo,
+  MasteringInsertSlot,
   MasteringInsertTiming,
   MasteringPairAnalyzeRequest,
   MasteringPairProcessRequest,

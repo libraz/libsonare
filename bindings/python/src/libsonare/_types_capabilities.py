@@ -75,6 +75,25 @@ class MasteringInsertParamChoice(TypedDict):
     value: int
 
 
+class MasteringInsertSlot(TypedDict):
+    """A group of an insert's keys that exists only under a condition.
+
+    An EQ band, a multiband crossover band, or a dynamic sub-band inside one.
+    ``name`` is the key prefix without the trailing dot (``"midBand3"``,
+    ``"band1.dyn2"``); ``parent`` names the enclosing slot, always listed
+    earlier, or is ``None``. ``activation`` is ``"anyKey"`` when the slot
+    exists once any one of its keys is supplied and ``"always"`` when it exists
+    without them; ``minCrossoverCutoffs`` is how many ``cutoff<i>Hz`` keys the
+    crossover in effect needs for the slot to exist (0 for none, and with no
+    cutoff key supplied the cutoffs that publish a default are in effect).
+    """
+
+    name: str
+    parent: str | None
+    activation: Literal["anyKey", "always"]
+    minCrossoverCutoffs: int
+
+
 class MasteringInsertParamInfo(TypedDict):
     """Metadata for one key an insert processor's construction or automation reads.
 
@@ -92,6 +111,7 @@ class MasteringInsertParamInfo(TypedDict):
     default: float | bool | None
     unit: str | None
     choices: list[MasteringInsertParamChoice] | None
+    slot: str | None
 
 
 MasteringProcessorCategory = Literal[
@@ -134,6 +154,7 @@ class MasteringProcessorCatalogEntry(TypedDict):
     channelPolicy: MasteringChannelPolicy
     category: MasteringProcessorCategory
     params: list[MasteringInsertParamInfo]
+    slots: list[MasteringInsertSlot]
 
 
 class CapabilityCatalogPresets(TypedDict):

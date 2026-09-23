@@ -101,6 +101,7 @@ describe('insert param validation (WASM)', () => {
       channelPolicy: true,
       category: true,
       params: true,
+      slots: true,
     };
     for (const entry of catalog) {
       expect(Object.keys(entry).sort()).toEqual(Object.keys(declared).sort());
@@ -117,6 +118,16 @@ describe('insert param validation (WASM)', () => {
     );
     // Non-insertable entries carry an empty list, not a missing key.
     expect(catalog.find((entry) => entry.id === 'maximizer.loudnessOptimize')?.params).toEqual([]);
+    // A crossover band past the default split is listed with the cutoffs it needs.
+    const band3 = catalog
+      .find((entry) => entry.id === 'multiband.compressor')
+      ?.slots.find((slot) => slot.name === 'band3');
+    expect(band3).toEqual({
+      name: 'band3',
+      parent: null,
+      activation: 'always',
+      minCrossoverCutoffs: 3,
+    });
   });
 
   it('surfaces silently-ignored insert params as scene warnings', () => {

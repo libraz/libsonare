@@ -104,7 +104,8 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 // coarse algorithmic estimate for choosing between inserts, not a hardware
 // benchmark (null for non-inserts); category is the UI group derived from the id
 // namespace, with match.* reported as `reference`; params carries the
-// realtime-insert parameter descriptors; and channelPolicy is channel_policy(id)
+// realtime-insert parameter descriptors; slots lists the insert's conditional
+// key groups (insert_slot_info_json(), [] for non-inserts); and channelPolicy is channel_policy(id)
 // as a wire string, i.e. how the mixer wraps a >2ch bus insert. The id universe
 // is the union of the three lists, so realtime-only and pair ids absent from
 // processor_names() are still reported. Ids are emitted sorted.
@@ -112,8 +113,9 @@ std::string processor_catalog_json();
 
 /// @brief Canonical field paths for one entry of the processor catalog array.
 /// @details The array is the root, so each path begins with the `[]` element
-/// segment. The `params` interior repeats insert_param_info_schema_paths() under
-/// a prefix; a test holds the two to each other, because the list is written out
+/// segment. The `params` and `slots` interiors repeat
+/// insert_param_info_schema_paths() and insert_slot_info_schema_paths() under a
+/// prefix; a test holds them to each other, because the list is written out
 /// literally so that a reader outside this language can parse it.
 const std::vector<std::string>& processor_catalog_schema_paths();
 

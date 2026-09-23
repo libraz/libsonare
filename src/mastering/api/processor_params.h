@@ -15,6 +15,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/named_processor.h"
@@ -110,6 +111,21 @@ struct ParamDefault {
   bool ambiguous = false;
 };
 
+/// @brief A group of keys that exists only under a condition: an EQ band, a
+///        multiband crossover band, or a dynamic sub-band inside one.
+/// @details Recorded by the builder at the point it decides whether the group
+///          exists, so the catalog reports the rule construction applies rather
+///          than one inferred from key spelling.
+struct SlotDeclaration {
+  /// Enclosing slot's name, or empty for a top-level slot.
+  std::string parent;
+  /// True when the slot exists once any of its keys is supplied; false when it
+  /// exists unconditionally (subject to @ref min_crossover_cutoffs).
+  bool any_key = false;
+  /// Crossover cutoffs in effect needed for the slot to exist; 0 for none.
+  int min_crossover_cutoffs = 0;
+};
+
 /// @brief Flat (key -> value) param store that records which keys a config
 /// builder probes, and what C++ type it read each one as.
 ///
@@ -182,6 +198,21 @@ class ParamMap {
     return choices_;
   }
 
+  /// @brief Records slot @p name (its key prefix without the trailing dot).
+  /// @details The first record wins: every builder reaching the same slot
+  ///          applies the same rule to it.
+  void note_slot(const std::string& name, SlotDeclaration declaration) const {
+    for (const auto& slot : slots_) {
+      if (slot.first == name) return;
+    }
+    slots_.emplace_back(name, std::move(declaration));
+  }
+
+  /// @brief Every slot declared while building, in declaration order.
+  const std::vector<std::pair<std::string, SlotDeclaration>>& declared_slots() const {
+    return slots_;
+  }
+
   /// @brief Turns off the declaration-only work the catalog needs.
   /// @details A bounds probe builds the same processor thousands of times and
   ///          asks one question of each build — did construction throw. It has
@@ -205,6 +236,7 @@ class ParamMap {
     for (const auto& [key, fallback] : other.defaults_) {
       if (!fallback.ambiguous) note_default(key, fallback.value);
     }
+    for (const auto& [name, declaration] : other.slots_) note_slot(name, declaration);
   }
 
   /// @brief Keys this processor read (probed) when built; reflects an empty map
@@ -229,6 +261,7 @@ class ParamMap {
   mutable std::unordered_map<std::string, ParamKind> kinds_;
   mutable std::unordered_map<std::string, ParamDefault> defaults_;
   mutable std::unordered_map<std::string, std::vector<EnumChoice>> choices_;
+  mutable std::vector<std::pair<std::string, SlotDeclaration>> slots_;
   bool records_declarations_ = true;
 };
 
@@ -331,10 +364,14 @@ inline void read_field(const ParamMap& params, const char* key, T& dst) {
   if (it != params.end()) assign_field(dst, it->second);
 }
 
+/// Most `cutoff<i>Hz` keys a crossover reads, so one fewer than the most bands it splits into.
+inline constexpr int kMaxCrossoverCutoffs = 8;
+inline constexpr size_t kMaxCrossoverBands = kMaxCrossoverCutoffs + 1;
+
 inline std::vector<float> cutoffs(const ParamMap& params) {
   const multiband::CrossoverConfig defaults;
   std::vector<float> values;
-  for (int index = 0; index < 8; ++index) {
+  for (int index = 0; index < kMaxCrossoverCutoffs; ++index) {
     const std::string key = "cutoff" + std::to_string(index) + "Hz";
     params.note_kind(key, ParamKind::Number);
     // A cutoff beyond the default split has no fallback to publish.
@@ -347,39 +384,6 @@ inline std::vector<float> cutoffs(const ParamMap& params) {
     }
   }
   return values;
-}
-
-inline bool has_eq_band_params(const ParamMap& params, const std::string& prefix) {
-  static constexpr const char* kFields[] = {
-      "type",
-      "frequencyHz",
-      "gainDb",
-      "q",
-      "enabled",
-      "coeffMode",
-      "slopeDbOct",
-      "placement",
-      "phase",
-      "soloed",
-      "bypassed",
-      "proportionalQ",
-      "proportionalQStrength",
-      "dynamic",
-      "thresholdDb",
-      "autoThreshold",
-      "ratio",
-      "rangeDb",
-      "attackMs",
-      "releaseMs",
-      "detectorDelayMs",
-      "lookaheadMs",  // former spelling of detectorDelayMs, still accepted
-      "sidechainFreqHz",
-      "sidechainQ",
-  };
-  for (const char* field : kFields) {
-    if (params.find(prefix + field) != params.end()) return true;
-  }
-  return false;
 }
 
 inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
@@ -466,12 +470,60 @@ inline void declare_dynamic_eq_band_params(const ParamMap& params, const std::st
   params.adopt_declarations(declaration);
 }
 
+/// @brief The field names @p read_band reads, found by replaying it against an
+///        empty map under an empty prefix, so no field list is kept by hand.
+template <typename ReadBand>
+inline std::vector<std::string> band_fields_of(ReadBand read_band) {
+  ParamMap declaration;
+  read_band(declaration);
+  std::vector<std::string> fields(declaration.probed_keys().begin(),
+                                  declaration.probed_keys().end());
+  std::sort(fields.begin(), fields.end());
+  return fields;
+}
+
+inline const std::vector<std::string>& eq_band_fields() {
+  static const std::vector<std::string> fields =
+      band_fields_of([](const ParamMap& params) { (void)eq_band(params, ""); });
+  return fields;
+}
+
+inline const std::vector<std::string>& dynamic_eq_band_fields() {
+  static const std::vector<std::string> fields =
+      band_fields_of([](const ParamMap& params) { (void)dynamic_eq_band(params, ""); });
+  return fields;
+}
+
+/// @brief Declares the presence-gated slot at @p prefix and reports whether the
+///        caller supplied any of its @p fields, which is what makes it exist.
+/// @details Every EQ band and dynamic sub-band goes through here, so the rule
+///          construction applies and the one the catalog publishes are one rule.
+inline bool supplied_slot(const ParamMap& params, const std::string& prefix,
+                          const std::vector<std::string>& fields,
+                          const std::string& parent = std::string()) {
+  if (params.records_declarations()) {
+    params.note_slot(prefix.substr(0, prefix.size() - 1), SlotDeclaration{parent, true, 0});
+  }
+  for (const std::string& field : fields) {
+    if (params.find(prefix + field) != params.end()) return true;
+  }
+  return false;
+}
+
+/// @brief Declares crossover band @p index, which exists once the crossover in
+///        effect has at least @p index cutoffs.
+inline void note_crossover_band_slot(const ParamMap& params, size_t index) {
+  if (!params.records_declarations()) return;
+  params.note_slot("band" + std::to_string(index),
+                   SlotDeclaration{std::string(), false, static_cast<int>(index)});
+}
+
 inline void configure_parametric(eq::ParametricEq& processor, const ParamMap& params,
                                  const std::string& prefix = "band") {
   for (size_t index = 0; index < eq::ParametricEq::kMaxBands; ++index) {
     const std::string band_prefix = prefix + std::to_string(index) + ".";
     declare_eq_band_params(params, band_prefix);
-    if (has_eq_band_params(params, band_prefix)) {
+    if (supplied_slot(params, band_prefix, eq_band_fields())) {
       processor.set_band(index, eq_band(params, band_prefix));
     }
   }
@@ -487,7 +539,7 @@ inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMa
   for (size_t index = 0; index < eq::EqualizerProcessor::kMaxBands; ++index) {
     const std::string band_prefix = prefix + std::to_string(index) + ".";
     declare_eq_band_params(params, band_prefix);
-    if (has_eq_band_params(params, band_prefix)) {
+    if (supplied_slot(params, band_prefix, eq_band_fields())) {
       processor.set_band(index, eq_band(params, band_prefix));
     }
   }
@@ -544,45 +596,68 @@ inline void resize_bands_to_crossover(std::vector<BandConfig>& bands,
   bands.resize(crossover.cutoffs_hz.size() + 1);
 }
 
+/// @brief Reads every crossover band the crossover in effect has, and declares
+///        the rest up to @ref kMaxCrossoverBands so the catalog lists each band
+///        a host can reach by supplying more cutoffs.
+/// @details @p read_band(params, prefix, band) overlays one band; a declared
+///          band replays it against an empty map and a default-constructed band,
+///          which is the band an extra cutoff creates.
+template <typename BandConfig, typename ReadBand>
+inline void populate_crossover_bands(std::vector<BandConfig>& bands,
+                                     const multiband::CrossoverConfig& crossover,
+                                     const ParamMap& params, ReadBand read_band) {
+  resize_bands_to_crossover(bands, crossover);
+  for (size_t index = 0; index < kMaxCrossoverBands; ++index) {
+    const std::string prefix = "band" + std::to_string(index) + ".";
+    note_crossover_band_slot(params, index);
+    if (index < bands.size()) {
+      read_band(params, prefix, bands[index]);
+    } else if (params.records_declarations()) {
+      ParamMap declaration;
+      BandConfig band{};
+      read_band(declaration, prefix, band);
+      params.adopt_declarations(declaration);
+    }
+  }
+}
+
 inline void populate_compressor_bands(multiband::MultibandCompressorConfig& config,
                                       const ParamMap& params) {
-  resize_bands_to_crossover(config.bands, config.crossover);
-  for (size_t index = 0; index < config.bands.size(); ++index) {
-    const std::string prefix = "band" + std::to_string(index) + ".";
-    auto& band = config.bands[index];
-    band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
-    band.ratio = f(params, (prefix + "ratio").c_str(), band.ratio);
-    band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
-    band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
-    band.knee_db = f(params, (prefix + "kneeDb").c_str(), band.knee_db);
-    band.makeup_gain_db = f(params, (prefix + "makeupGainDb").c_str(), band.makeup_gain_db);
-  }
+  populate_crossover_bands(
+      config.bands, config.crossover, params,
+      [](const ParamMap& band_params, const std::string& prefix, auto& band) {
+        band.threshold_db = f(band_params, (prefix + "thresholdDb").c_str(), band.threshold_db);
+        band.ratio = f(band_params, (prefix + "ratio").c_str(), band.ratio);
+        band.attack_ms = f(band_params, (prefix + "attackMs").c_str(), band.attack_ms);
+        band.release_ms = f(band_params, (prefix + "releaseMs").c_str(), band.release_ms);
+        band.knee_db = f(band_params, (prefix + "kneeDb").c_str(), band.knee_db);
+        band.makeup_gain_db =
+            f(band_params, (prefix + "makeupGainDb").c_str(), band.makeup_gain_db);
+      });
 }
 
 inline void populate_expander_bands(multiband::MultibandExpanderConfig& config,
                                     const ParamMap& params) {
-  resize_bands_to_crossover(config.bands, config.crossover);
-  for (size_t index = 0; index < config.bands.size(); ++index) {
-    const std::string prefix = "band" + std::to_string(index) + ".";
-    auto& band = config.bands[index];
-    band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
-    band.ratio = f(params, (prefix + "ratio").c_str(), band.ratio);
-    band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
-    band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
-    band.range_db = f(params, (prefix + "rangeDb").c_str(), band.range_db);
-  }
+  populate_crossover_bands(
+      config.bands, config.crossover, params,
+      [](const ParamMap& band_params, const std::string& prefix, auto& band) {
+        band.threshold_db = f(band_params, (prefix + "thresholdDb").c_str(), band.threshold_db);
+        band.ratio = f(band_params, (prefix + "ratio").c_str(), band.ratio);
+        band.attack_ms = f(band_params, (prefix + "attackMs").c_str(), band.attack_ms);
+        band.release_ms = f(band_params, (prefix + "releaseMs").c_str(), band.release_ms);
+        band.range_db = f(band_params, (prefix + "rangeDb").c_str(), band.range_db);
+      });
 }
 
 inline void populate_limiter_bands(multiband::MultibandLimiterConfig& config,
                                    const ParamMap& params) {
-  resize_bands_to_crossover(config.bands, config.crossover);
-  for (size_t index = 0; index < config.bands.size(); ++index) {
-    const std::string prefix = "band" + std::to_string(index) + ".";
-    auto& band = config.bands[index];
-    band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
-    band.lookahead_ms = f(params, (prefix + "lookaheadMs").c_str(), band.lookahead_ms);
-    band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
-  }
+  populate_crossover_bands(
+      config.bands, config.crossover, params,
+      [](const ParamMap& band_params, const std::string& prefix, auto& band) {
+        band.threshold_db = f(band_params, (prefix + "thresholdDb").c_str(), band.threshold_db);
+        band.lookahead_ms = f(band_params, (prefix + "lookaheadMs").c_str(), band.lookahead_ms);
+        band.release_ms = f(band_params, (prefix + "releaseMs").c_str(), band.release_ms);
+      });
 }
 
 // Overlay per-band fields (band{i}.driveDb / .mix / .outputGainDb / .type /
@@ -591,16 +666,16 @@ inline void populate_limiter_bands(multiband::MultibandLimiterConfig& config,
 // soft clipper and no band can be switched off.
 inline void populate_saturation_bands(multiband::MultibandSaturationConfig& config,
                                       const ParamMap& params) {
-  resize_bands_to_crossover(config.bands, config.crossover);
-  for (size_t index = 0; index < config.bands.size(); ++index) {
-    const std::string prefix = "band" + std::to_string(index) + ".";
-    auto& band = config.bands[index];
-    band.drive_db = f(params, (prefix + "driveDb").c_str(), band.drive_db);
-    band.mix = f(params, (prefix + "mix").c_str(), band.mix);
-    band.output_gain_db = f(params, (prefix + "outputGainDb").c_str(), band.output_gain_db);
-    band.type = read_enum(params, (prefix + "type").c_str(), band.type);
-    band.enabled = b(params, (prefix + "enabled").c_str(), band.enabled);
-  }
+  populate_crossover_bands(
+      config.bands, config.crossover, params,
+      [](const ParamMap& band_params, const std::string& prefix, auto& band) {
+        band.drive_db = f(band_params, (prefix + "driveDb").c_str(), band.drive_db);
+        band.mix = f(band_params, (prefix + "mix").c_str(), band.mix);
+        band.output_gain_db =
+            f(band_params, (prefix + "outputGainDb").c_str(), band.output_gain_db);
+        band.type = read_enum(band_params, (prefix + "type").c_str(), band.type);
+        band.enabled = b(band_params, (prefix + "enabled").c_str(), band.enabled);
+      });
 }
 
 // Resize the imager bands to match the crossover, then overlay per-band fields
@@ -608,36 +683,43 @@ inline void populate_saturation_bands(multiband::MultibandSaturationConfig& conf
 // non-default crossover works and per-band settings are not silently dropped.
 inline void populate_imager_bands(multiband::MultibandImagerConfig& config,
                                   const ParamMap& params) {
-  resize_bands_to_crossover(config.bands, config.crossover);
-  for (size_t index = 0; index < config.bands.size(); ++index) {
-    const std::string prefix = "band" + std::to_string(index) + ".";
-    auto& band = config.bands[index];
-    band.width = f(params, (prefix + "width").c_str(), band.width);
-    band.decorrelation_amount =
-        f(params, (prefix + "decorrelationAmount").c_str(), band.decorrelation_amount);
-    band.enabled = b(params, (prefix + "enabled").c_str(), band.enabled);
-    band.preserve_energy = b(params, (prefix + "preserveEnergy").c_str(), band.preserve_energy);
-  }
+  populate_crossover_bands(
+      config.bands, config.crossover, params,
+      [](const ParamMap& band_params, const std::string& prefix, auto& band) {
+        band.width = f(band_params, (prefix + "width").c_str(), band.width);
+        band.decorrelation_amount =
+            f(band_params, (prefix + "decorrelationAmount").c_str(), band.decorrelation_amount);
+        band.enabled = b(band_params, (prefix + "enabled").c_str(), band.enabled);
+        band.preserve_energy =
+            b(band_params, (prefix + "preserveEnergy").c_str(), band.preserve_energy);
+      });
 }
 
 // Resize the dynamic-EQ crossover bands to match the crossover, then read each
 // crossover band's list of dynamic sub-bands from band{i}.dyn{j}.<field> keys.
-// A sub-band is created only when its frequency key is present (mirroring
-// configure_dynamic_eq_bands for the single-band DynamicEq insert).
+// A sub-band exists once any of its keys is supplied, as a DynamicEq band does.
 inline void populate_dynamic_eq_bands(multiband::MultibandDynamicEqConfig& config,
                                       const ParamMap& params) {
   config.bands.resize(config.crossover.cutoffs_hz.size() + 1);
-  for (size_t index = 0; index < config.bands.size(); ++index) {
-    auto& dyn_bands = config.bands[index];
-    dyn_bands.clear();
+  for (size_t index = 0; index < kMaxCrossoverBands; ++index) {
+    const std::string band = "band" + std::to_string(index);
+    note_crossover_band_slot(params, index);
+    const bool exists = index < config.bands.size();
+    if (exists) config.bands[index].clear();
     for (size_t sub = 0; sub < eq::DynamicEq::kMaxBands; ++sub) {
-      const std::string prefix =
-          "band" + std::to_string(index) + ".dyn" + std::to_string(sub) + ".";
+      const std::string prefix = band + ".dyn" + std::to_string(sub) + ".";
       declare_dynamic_eq_band_params(params, prefix);
-      if (params.find(prefix + "frequencyHz") == params.end()) {
+      if (!exists) {
+        // Declared only: probing the keys of a band the crossover lacks would
+        // hide them from the unread-key report.
+        if (params.records_declarations()) {
+          params.note_slot(prefix.substr(0, prefix.size() - 1), SlotDeclaration{band, true, 0});
+        }
         continue;
       }
-      dyn_bands.push_back(dynamic_eq_band(params, prefix));
+      if (supplied_slot(params, prefix, dynamic_eq_band_fields(), band)) {
+        config.bands[index].push_back(dynamic_eq_band(params, prefix));
+      }
     }
   }
 }
@@ -736,8 +818,7 @@ inline void configure_minimum_phase(eq::MinimumPhaseEq& p, const ParamMap& param
   for (size_t index = 0; index < eq::MinimumPhaseEq::kMaxBands; ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
     declare_eq_band_params(params, prefix);
-    if (params.find(prefix + "frequencyHz") != params.end() ||
-        params.find(prefix + "gainDb") != params.end()) {
+    if (supplied_slot(params, prefix, eq_band_fields())) {
       p.set_band(index, eq_band(params, prefix));
     }
   }
@@ -765,8 +846,7 @@ inline void configure_linear_phase_bands(eq::LinearPhaseEq& p, const ParamMap& p
   for (size_t index = 0; index < eq::LinearPhaseEq::kMaxBands; ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
     declare_eq_band_params(params, prefix);
-    if (params.find(prefix + "frequencyHz") != params.end() ||
-        params.find(prefix + "gainDb") != params.end()) {
+    if (supplied_slot(params, prefix, eq_band_fields())) {
       p.set_band(index, eq_band(params, prefix));
     }
   }
@@ -776,7 +856,7 @@ inline void configure_dynamic_eq_bands(eq::DynamicEq& p, const ParamMap& params)
   for (size_t index = 0; index < eq::DynamicEq::kMaxBands; ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
     declare_dynamic_eq_band_params(params, prefix);
-    if (params.find(prefix + "frequencyHz") != params.end()) {
+    if (supplied_slot(params, prefix, dynamic_eq_band_fields())) {
       p.set_band(index, dynamic_eq_band(params, prefix));
     }
   }
@@ -837,12 +917,10 @@ inline void configure_mid_side(eq::MidSideEq& p, const ParamMap& params) {
     const std::string side = "sideBand" + std::to_string(index) + ".";
     declare_eq_band_params(params, mid);
     declare_eq_band_params(params, side);
-    if (params.find(mid + "frequencyHz") != params.end() ||
-        params.find(mid + "gainDb") != params.end()) {
+    if (supplied_slot(params, mid, eq_band_fields())) {
       p.set_mid_band(index, eq_band(params, mid));
     }
-    if (params.find(side + "frequencyHz") != params.end() ||
-        params.find(side + "gainDb") != params.end()) {
+    if (supplied_slot(params, side, eq_band_fields())) {
       p.set_side_band(index, eq_band(params, side));
     }
   }
@@ -903,18 +981,15 @@ inline saturation::TransformerConfig transformer_config(const ParamMap& params) 
 inline saturation::MultibandExciterConfig multiband_exciter_config(const ParamMap& params) {
   saturation::MultibandExciterConfig config;
   config.crossover = crossover_config(params);
-  resize_bands_to_crossover(config.bands, config.crossover);
-  for (size_t index = 0; index < config.bands.size(); ++index) {
-    const std::string prefix = "band" + std::to_string(index) + ".";
-    config.bands[index].frequency_hz =
-        f(params, (prefix + "frequencyHz").c_str(), config.bands[index].frequency_hz);
-    config.bands[index].drive_db =
-        f(params, (prefix + "driveDb").c_str(), config.bands[index].drive_db);
-    config.bands[index].amount = f(params, (prefix + "amount").c_str(), config.bands[index].amount);
-    config.bands[index].q = f(params, (prefix + "q").c_str(), config.bands[index].q);
-    config.bands[index].even_odd_mix =
-        f(params, (prefix + "evenOddMix").c_str(), config.bands[index].even_odd_mix);
-  }
+  populate_crossover_bands(
+      config.bands, config.crossover, params,
+      [](const ParamMap& band_params, const std::string& prefix, auto& band) {
+        band.frequency_hz = f(band_params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
+        band.drive_db = f(band_params, (prefix + "driveDb").c_str(), band.drive_db);
+        band.amount = f(band_params, (prefix + "amount").c_str(), band.amount);
+        band.q = f(band_params, (prefix + "q").c_str(), band.q);
+        band.even_odd_mix = f(band_params, (prefix + "evenOddMix").c_str(), band.even_odd_mix);
+      });
   return config;
 }
 

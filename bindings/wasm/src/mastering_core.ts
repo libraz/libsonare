@@ -4,6 +4,7 @@ import type {
   LoudnessMatchResult,
   MasteringAssistantParams,
   MasteringInsertParamChoice,
+  MasteringInsertSlot,
   MasteringOptions,
   MasteringProcessorParams,
   MasteringResult,
@@ -15,7 +16,7 @@ import type {
   StreamingPlatform,
 } from './public_types';
 
-export type { MasteringInsertParamChoice };
+export type { MasteringInsertParamChoice, MasteringInsertSlot };
 
 function requireModule() {
   return getSonareModule();
@@ -230,6 +231,11 @@ export interface MasteringInsertParamInfo {
    * whose accepted integers have holes; `min` / `max` are then both null.
    */
   choices: MasteringInsertParamChoice[] | null;
+  /**
+   * The {@link MasteringInsertSlot} this key belongs to, or null for a key that
+   * always exists.
+   */
+  slot: string | null;
 }
 
 /**
@@ -387,6 +393,11 @@ export interface MasteringProcessorCatalogEntry {
    * realtime-insertable.
    */
   params: MasteringInsertParamInfo[];
+  /**
+   * The insert's conditional key groups in declaration order, named by each
+   * parameter's `slot`. Empty for entries that are not realtime-insertable.
+   */
+  slots: MasteringInsertSlot[];
 }
 
 /**

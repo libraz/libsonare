@@ -48,6 +48,7 @@ export type {
   MasteringChannelPolicy,
   MasteringInsertParamChoice,
   MasteringInsertParamInfo,
+  MasteringInsertSlot,
   MasteringInsertTiming,
   MasteringPairAnalyzeRequest,
   MasteringPairProcessRequest,

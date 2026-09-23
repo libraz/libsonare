@@ -55,6 +55,33 @@ export interface MasteringInsertParamChoice {
 }
 
 /**
+ * A group of an insert's keys that exists only under a condition: an EQ band,
+ * a multiband crossover band, or a dynamic sub-band inside one. A parameter
+ * belongs to the slot its `slot` field names.
+ */
+export interface MasteringInsertSlot {
+  /** Key prefix without the trailing dot, e.g. `midBand3` or `band1.dyn2`. */
+  name: string;
+  /**
+   * Enclosing slot, which has to exist for this one to; null for a top-level
+   * slot. A parent is always listed before the slots naming it.
+   */
+  parent: string | null;
+  /**
+   * `anyKey`: the slot exists once any one of its keys is supplied, so an EQ
+   * band is built as soon as a host sends any of its keys. `always`: it exists
+   * without any of its keys, subject to `minCrossoverCutoffs`.
+   */
+  activation: 'anyKey' | 'always';
+  /**
+   * Crossover cutoffs (`cutoff<i>Hz` keys) the insert needs in effect for the
+   * slot to exist; 0 when it needs none. With no cutoff key supplied, the
+   * default split applies: the cutoffs that publish a non-null default.
+   */
+  minCrossoverCutoffs: number;
+}
+
+/**
  * One parameter descriptor in the cross-surface capability catalog.
  *
  * Entries come in two runs: automation targets (`id` the integer used by
@@ -96,6 +123,11 @@ export interface CapabilityCatalogParameter {
   default: boolean | number | null;
   unit: string | null;
   choices: MasteringInsertParamChoice[] | null;
+  /**
+   * The {@link MasteringInsertSlot} this key belongs to, or null for a key that
+   * always exists.
+   */
+  slot: string | null;
 }
 
 /** One named mastering processor and its host-facing capabilities. */
@@ -111,6 +143,11 @@ export interface CapabilityCatalogProcessor {
   channelPolicy: 'multichannel' | 'stereoPairOnly' | 'perChannel' | 'passthrough';
   category: string;
   params: CapabilityCatalogParameter[];
+  /**
+   * The insert's conditional key groups in declaration order, named by each
+   * parameter's `slot`. Empty for entries that are not realtime-insertable.
+   */
+  slots: MasteringInsertSlot[];
 }
 
 /** Built-in preset names grouped by feature family. */

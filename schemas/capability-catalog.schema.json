@@ -46,7 +46,8 @@
           "realtimeCost",
           "channelPolicy",
           "category",
-          "params"
+          "params",
+          "slots"
         ],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
@@ -65,7 +66,18 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["name", "id", "rtSafe", "type", "min", "max", "default", "unit", "choices"],
+              "required": [
+                "name",
+                "id",
+                "rtSafe",
+                "type",
+                "min",
+                "max",
+                "default",
+                "unit",
+                "choices",
+                "slot"
+              ],
               "properties": {
                 "name": { "type": "string", "minLength": 1 },
                 "id": { "type": ["integer", "null"], "minimum": 0 },
@@ -86,7 +98,22 @@
                       "value": { "type": "number" }
                     }
                   }
-                }
+                },
+                "slot": { "type": ["string", "null"], "minLength": 1 }
+              }
+            }
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "parent", "activation", "minCrossoverCutoffs"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "parent": { "type": ["string", "null"], "minLength": 1 },
+                "activation": { "enum": ["anyKey", "always"] },
+                "minCrossoverCutoffs": { "type": "integer", "minimum": 0 }
               }
             }
           }

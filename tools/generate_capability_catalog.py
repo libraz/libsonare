@@ -146,6 +146,37 @@ def validate_parameter(parameter: dict[str, Any], path: str) -> None:
         raise ValueError(f"{path}.unit must be a string or null")
 
 
+def validate_slots(processor: dict[str, Any], path: str) -> set[str]:
+    """Guard a processor's slot table and return the declared slot names.
+
+    A parent must be declared before the slot naming it, so a host can build the
+    tree in one pass.
+    """
+    slots = processor["slots"]
+    if not isinstance(slots, list):
+        raise ValueError(f"{path}.slots must be an array")  # noqa: TRY004
+    if slots and not processor["realtimeInsertable"]:
+        raise ValueError(f"{path} is not a realtime insert and must publish no slots")
+    names: set[str] = set()
+    for slot_index, slot_value in enumerate(slots):
+        slot_path = f"{path}.slots[{slot_index}]"
+        slot = require_object(slot_value, slot_path)
+        require_keys(slot, slot_path, {"name", "parent", "activation", "minCrossoverCutoffs"})
+        name = slot["name"]
+        if not isinstance(name, str) or not name or name in names:
+            raise ValueError(f"{slot_path}.name must be a unique non-empty string")
+        parent = slot["parent"]
+        if parent is not None and parent not in names:
+            raise ValueError(f"{slot_path}.parent must name an earlier slot or be null")
+        if slot["activation"] not in {"anyKey", "always"}:
+            raise ValueError(f"{slot_path}.activation must be anyKey or always")
+        cutoffs = slot["minCrossoverCutoffs"]
+        if not isinstance(cutoffs, int) or isinstance(cutoffs, bool) or cutoffs < 0:
+            raise ValueError(f"{slot_path}.minCrossoverCutoffs must be a non-negative integer")
+        names.add(name)
+    return names
+
+
 def validate_mastering_presets(root: dict[str, Any]) -> None:
     """Guard `masteringPresets`: kind decides whether the three numbers are null."""
     entries = root["masteringPresets"]
@@ -210,6 +241,7 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
                 "channelPolicy",
                 "category",
                 "params",
+                "slots",
             },
         )
         if not isinstance(processor["params"], list):
@@ -225,15 +257,29 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
             raise ValueError(
                 f"catalog.processors[{index}].realtimeCost must be non-null exactly for realtime inserts"
             )
+        slot_names = validate_slots(processor, f"catalog.processors[{index}]")
         for parameter_index, parameter_value in enumerate(processor["params"]):
             path = f"catalog.processors[{index}].params[{parameter_index}]"
             parameter = require_object(parameter_value, path)
             require_keys(
                 parameter,
                 path,
-                {"name", "id", "rtSafe", "type", "min", "max", "default", "unit", "choices"},
+                {
+                    "name",
+                    "id",
+                    "rtSafe",
+                    "type",
+                    "min",
+                    "max",
+                    "default",
+                    "unit",
+                    "choices",
+                    "slot",
+                },
             )
             validate_parameter(parameter, path)
+            if parameter["slot"] is not None and parameter["slot"] not in slot_names:
+                raise ValueError(f"{path}.slot must name one of the processor's slots or be null")
     presets = require_object(root["presets"], "catalog.presets")
     require_keys(
         presets,

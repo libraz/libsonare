@@ -6,6 +6,7 @@ import type {
   MasteringChainResult,
   MasteringChainStereoResult,
   MasteringInsertParamChoice,
+  MasteringInsertSlot,
   MasteringOptions,
   MasteringPreset,
   MasteringResult,
@@ -853,6 +854,11 @@ export interface MasteringInsertParamInfo {
    * are then both null.
    */
   choices: MasteringInsertParamChoice[] | null;
+  /**
+   * The {@link MasteringInsertSlot} this key belongs to, or null for a key that
+   * always exists.
+   */
+  slot: string | null;
 }
 
 /**
@@ -996,6 +1002,11 @@ export interface MasteringProcessorCatalogEntry {
    * realtime-insertable.
    */
   params: MasteringInsertParamInfo[];
+  /**
+   * The insert's conditional key groups in declaration order, named by each
+   * parameter's `slot`. Empty for entries that are not realtime-insertable.
+   */
+  slots: MasteringInsertSlot[];
 }
 
 /**

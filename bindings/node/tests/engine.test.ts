@@ -1897,6 +1897,7 @@ describe('RealtimeEngine native binding', () => {
       channelPolicy: true,
       category: true,
       params: true,
+      slots: true,
     };
     for (const entry of catalog) {
       expect(Object.keys(entry).sort()).toEqual(Object.keys(declared).sort());
@@ -1910,6 +1911,14 @@ describe('RealtimeEngine native binding', () => {
     );
     // Non-insertable entries carry an empty list, not a missing key.
     expect(loudnessOptimize?.params).toEqual([]);
+    // A crossover band past the default split is listed with the cutoffs it needs.
+    const band3 = byId('multiband.compressor')?.slots.find((slot) => slot.name === 'band3');
+    expect(band3).toEqual({
+      name: 'band3',
+      parent: null,
+      activation: 'always',
+      minCrossoverCutoffs: 3,
+    });
   });
 
   it('reports realtime insert param descriptors and changes them live', () => {

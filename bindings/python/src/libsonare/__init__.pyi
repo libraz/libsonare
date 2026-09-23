@@ -961,6 +961,7 @@ from .types import (
 from .types import MasteringChannelPolicy as MasteringChannelPolicy
 from .types import MasteringInsertParamChoice as MasteringInsertParamChoice
 from .types import MasteringInsertParamInfo as MasteringInsertParamInfo
+from .types import MasteringInsertSlot as MasteringInsertSlot
 from .types import MasteringInsertTiming as MasteringInsertTiming
 from .types import (
     MasteringLoudnessSummary as MasteringLoudnessSummary,
