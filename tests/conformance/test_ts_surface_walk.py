@@ -25,6 +25,7 @@ export type OpenBag = Record<string, unknown>;
 
 export interface Inner { value: number; mode: string }
 export interface Other { mode: string }
+export interface Derived extends Inner { extra: string }
 
 export interface Root {
   inner: Inner;
@@ -49,6 +50,12 @@ class Camel(unittest.TestCase):
 class NamedTypes(unittest.TestCase):
     def test_an_absent_type_yields_nothing_rather_than_a_false_body(self):
         self.assertEqual(walk.named_type_bodies(SURFACE, "Missing"), [])
+
+    def test_an_interface_carries_the_members_it_extends(self):
+        bodies = walk.named_type_bodies(SURFACE, "Derived")
+        self.assertTrue(any(walk.declares_leaf(body, "extra") for body in bodies))
+        self.assertTrue(any(walk.declares_leaf(body, "value") for body in bodies))
+        self.assertFalse(any(walk.declares_leaf(body, "nested") for body in bodies))
 
     def test_a_property_resolves_through_a_named_type(self):
         bodies = walk.property_bodies(_root(), "inner", SURFACE)

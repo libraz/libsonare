@@ -182,6 +182,15 @@ def named_type_bodies(whole: str, name: str, depth: int = _DEPTH) -> list[str]:
             body = brace_body(whole, match.end() - 1)
             if body is not None:
                 bodies.append(body)
+            # An interface's inherited members are its own, so each base's body counts too.
+            header = whole[match.start() : match.end() - 1]
+            heritage = re.search(r"\bextends\b(.*)$", header, re.DOTALL)
+            if heritage is not None and depth > 1:
+                bases = re.findall(
+                    r"([A-Za-z_]\w*)\s*(?:<[^,]*>)?\s*(?:,|$)", heritage.group(1).strip()
+                )
+                for base in bases:
+                    bodies += named_type_bodies(whole, base, depth - 1)
             continue
         terminator = whole.find(";", match.end())
         end = len(whole) if terminator == -1 else terminator
