@@ -128,7 +128,6 @@ namespace {
 // `with_report` picks the `_ex` call and wraps the intervals in an object.
 Napi::Value SplitSilenceCommonImpl(const Napi::CallbackInfo& info, bool with_report) {
   Napi::Env env = info.Env();
-  SONARE_NODE_TRY
   if (info.Length() < 1 || !info[0].IsArray()) {
     Napi::TypeError::New(env, "Expected signals: Float32Array[]").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -184,17 +183,22 @@ Napi::Value SplitSilenceCommonImpl(const Napi::CallbackInfo& info, bool with_rep
   result.Set("intervals", intervals);
   result.Set("report", report_object);
   return result;
-  SONARE_NODE_CATCH(env)
 }
 
 }  // namespace
 
 Napi::Value SonareWrap::SplitSilenceCommon(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return SplitSilenceCommonImpl(info, false);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::SplitSilenceCommonWithReport(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   return SplitSilenceCommonImpl(info, true);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::FrameSignal(const Napi::CallbackInfo& info) {
