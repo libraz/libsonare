@@ -4110,7 +4110,7 @@
       "rests_on": "0160-a-pitch-byte-is-read-out-of-a-window-the-mode-byte-picks.json"
     },
     "corner": {
-      "read_by": "byte 0 against every other byte",
+      "read_by": "byte 0 against byte 1; a byte past 1 is not taken",
       "tables": {
         "low": {
           "columns": [
@@ -4128,7 +4128,7 @@
               "source": "measured"
             },
             {
-              "settings": "01–7F",
+              "settings": "01",
               "hz": 217.1,
               "unit_specific": false,
               "approximate": false,
@@ -4160,7 +4160,7 @@
               "source": "measured"
             },
             {
-              "settings": "01–7F",
+              "settings": "01",
               "hz": 10960.9,
               "unit_specific": false,
               "approximate": false,
@@ -4962,6 +4962,1101 @@
       "approximate": false,
       "source": "measured"
     }
+  },
+  "state_lists": {
+    "rests_on": "states-a-value-the-page-prints-no-state-for-is-not-taken.json",
+    "state": "standing",
+    "what_it_is": "Every slot whose page prints a list of states, with the list's length. A byte past the list is not taken and the slot keeps the state it was in.",
+    "spelling_read": "00/01/..., consecutive from nought",
+    "spelling_not_read": {
+      "00/7F": "A function of the byte, every value taken; the claim refutes one map for both."
+    },
+    "checked_against_the_claim": 8,
+    "slots": [
+      {
+        "type": "01 00",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 00",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 00",
+        "address": "40 03 08",
+        "parameter": 5,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 00",
+        "address": "40 03 0B",
+        "parameter": 8,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 01",
+        "address": "40 03 0B",
+        "parameter": 8,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 03",
+        "address": "40 03 04",
+        "parameter": 1,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      {
+        "type": "01 03",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 10",
+        "address": "40 03 04",
+        "parameter": 1,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      {
+        "type": "01 10",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 11",
+        "address": "40 03 04",
+        "parameter": 1,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 11",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 21",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 21",
+        "address": "40 03 09",
+        "parameter": 6,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      {
+        "type": "01 23",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01/02",
+        "states": 3,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 25",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 26",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 30",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 31",
+        "address": "40 03 04",
+        "parameter": 1,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 31",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 42",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01/02",
+        "states": 3,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 44",
+        "address": "40 03 11",
+        "parameter": 14,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 50",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 50",
+        "address": "40 03 07",
+        "parameter": 4,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 50",
+        "address": "40 03 08",
+        "parameter": 5,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 51",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 55",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01/02/03/04/05",
+        "states": 6,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 56",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 57",
+        "address": "40 03 11",
+        "parameter": 14,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 70",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 70",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 70",
+        "address": "40 03 11",
+        "parameter": 14,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 71",
+        "address": "40 03 11",
+        "parameter": 14,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 73",
+        "address": "40 03 04",
+        "parameter": 1,
+        "printed_values": "00/01/02",
+        "states": 3,
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      {
+        "type": "01 73",
+        "address": "40 03 08",
+        "parameter": 5,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 73",
+        "address": "40 03 0B",
+        "parameter": 8,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "01 73",
+        "address": "40 03 0E",
+        "parameter": 11,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 00",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 00",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 01",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 01",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 02",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 02",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 03",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 03",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 04",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 04",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 05",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "02 05",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "03 00",
+        "address": "40 03 04",
+        "parameter": 1,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "03 00",
+        "address": "40 03 07",
+        "parameter": 4,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 00",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 00",
+        "address": "40 03 07",
+        "parameter": 4,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 00",
+        "address": "40 03 09",
+        "parameter": 6,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 00",
+        "address": "40 03 0A",
+        "parameter": 7,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 00",
+        "address": "40 03 0D",
+        "parameter": 10,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 00",
+        "address": "40 03 0E",
+        "parameter": 11,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 01",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 01",
+        "address": "40 03 07",
+        "parameter": 4,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 01",
+        "address": "40 03 09",
+        "parameter": 6,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 01",
+        "address": "40 03 0A",
+        "parameter": 7,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 01",
+        "address": "40 03 0B",
+        "parameter": 8,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      {
+        "type": "04 01",
+        "address": "40 03 0E",
+        "parameter": 11,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      {
+        "type": "04 01",
+        "address": "40 03 11",
+        "parameter": 14,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 02",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 02",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 02",
+        "address": "40 03 07",
+        "parameter": 4,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 02",
+        "address": "40 03 09",
+        "parameter": 6,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 02",
+        "address": "40 03 0A",
+        "parameter": 7,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 02",
+        "address": "40 03 0D",
+        "parameter": 10,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 02",
+        "address": "40 03 0E",
+        "parameter": 11,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 03",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 03",
+        "address": "40 03 09",
+        "parameter": 6,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 03",
+        "address": "40 03 0C",
+        "parameter": 9,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 04",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 04",
+        "address": "40 03 08",
+        "parameter": 5,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 04",
+        "address": "40 03 0B",
+        "parameter": 8,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 04",
+        "address": "40 03 0E",
+        "parameter": 11,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 05",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 05",
+        "address": "40 03 07",
+        "parameter": 4,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      {
+        "type": "04 05",
+        "address": "40 03 09",
+        "parameter": 6,
+        "printed_values": "00/01/02",
+        "states": 3,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 05",
+        "address": "40 03 0A",
+        "parameter": 7,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 05",
+        "address": "40 03 0B",
+        "parameter": 8,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 05",
+        "address": "40 03 0E",
+        "parameter": 11,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 05",
+        "address": "40 03 11",
+        "parameter": 14,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 06",
+        "address": "40 03 0A",
+        "parameter": 7,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 06",
+        "address": "40 03 11",
+        "parameter": 14,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 06",
+        "address": "40 03 12",
+        "parameter": 15,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "04 06",
+        "address": "40 03 15",
+        "parameter": 18,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "05 00",
+        "address": "40 03 07",
+        "parameter": 4,
+        "printed_values": "00/01/02/03/04",
+        "states": 5,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 03",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 03",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 03",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 03",
+        "address": "40 03 08",
+        "parameter": 5,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 03",
+        "address": "40 03 0A",
+        "parameter": 7,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 03",
+        "address": "40 03 0B",
+        "parameter": 8,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 04",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 04",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 04",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 05",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 05",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 05",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 06",
+        "address": "40 03 03",
+        "parameter": 0,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 06",
+        "address": "40 03 05",
+        "parameter": 2,
+        "printed_values": "00/01/02/03",
+        "states": 4,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 06",
+        "address": "40 03 06",
+        "parameter": 3,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 06",
+        "address": "40 03 08",
+        "parameter": 5,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 06",
+        "address": "40 03 0E",
+        "parameter": 11,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": false,
+        "source": "measured"
+      },
+      {
+        "type": "11 08",
+        "address": "40 03 08",
+        "parameter": 5,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      },
+      {
+        "type": "11 08",
+        "address": "40 03 0E",
+        "parameter": 11,
+        "printed_values": "00/01",
+        "states": 2,
+        "unit_specific": false,
+        "approximate": true,
+        "source": "assigned"
+      }
+    ],
+    "unit_specific": false,
+    "approximate": true,
+    "source": "assigned"
   },
   "map": [
     {

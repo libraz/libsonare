@@ -485,6 +485,10 @@ int gs_efx_addressed_unit(const uint8_t* data, size_t size) noexcept;
 /// A type the archive behind gs_efx_tables.h never measured loads nothing and
 /// leaves the block as it stood — a measurement gap rather than a rule.
 ///
+/// A parameter byte past the list of states its slot prints is not taken and
+/// the slot keeps what it held (gs_efx_parameter_takes); it still counts as
+/// reaching a field.
+///
 /// @param out_type_changed  Optional out-flag: set to true when the write
 ///   changed the EFX TYPE (address 40 03 00/01), false when it touched only
 ///   parameter/send bytes. A parameter/send-only change lets the caller update

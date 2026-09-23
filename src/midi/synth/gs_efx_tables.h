@@ -34,6 +34,13 @@ struct GsEfxSlotConversion {
   uint8_t table;             ///< Which table of that class; see the JSON.
 };
 
+/// A slot whose page prints a list of states, and how many it prints.
+struct GsEfxStateList {
+  uint16_t type;      ///< The two type bytes, MSB in the high byte.
+  uint8_t parameter;  ///< Slot index from the first parameter address.
+  uint8_t states;     ///< Bytes 0 to states - 1 are the list.
+};
+
 /// The twenty bytes a type powers up holding, and which of them were measured.
 struct GsEfxTypeDefaults {
   uint16_t type;
@@ -367,7 +374,7 @@ inline constexpr std::array<float, 5> kGsEfxWindowMs = {{
 /// Every shelf the tables carry is of this order: one pole and one zero a section.
 inline constexpr int kGsEfxShelfOrder = 1;
 
-/// Equaliser corner: byte 0 selects the first state, every other byte the second.
+/// Equaliser corner: byte 0 selects the first state and byte 1 the second.
 inline constexpr std::array<float, 2> kGsEfxCornerLow = {{118.0f, 217.1f}};
 inline constexpr std::array<float, 2> kGsEfxCornerHigh = {{6727.2f, 10960.9f}};
 
@@ -471,6 +478,33 @@ inline constexpr std::array<GsEfxSlotConversion, 91> kGsEfxSlotConversions = {{
     {0x1101, 0, 1, 0},   // delay_time.pre_delay
     {0x1101, 5, 1, 3},   // delay_time.time3
     {0x1105, 6, 0, 1},   // rate.wide
+}};
+
+/// Every slot printing a list of states. A byte past the list is not taken and
+/// the slot keeps the state it was in. Sorted by (type, parameter).
+inline constexpr std::array<GsEfxStateList, 108> kGsEfxStateLists = {{
+    {0x0100, 0, 2},  {0x0100, 2, 2},  {0x0100, 5, 5},  {0x0100, 8, 5},  {0x0101, 8, 5},
+    {0x0103, 1, 2},  {0x0103, 2, 5},  {0x0110, 1, 4},  {0x0110, 2, 2},  {0x0111, 1, 4},
+    {0x0111, 2, 2},  {0x0121, 0, 2},  {0x0121, 6, 2},  {0x0123, 0, 3},  {0x0125, 0, 5},
+    {0x0126, 0, 5},  {0x0130, 2, 4},  {0x0131, 1, 4},  {0x0131, 3, 4},  {0x0142, 0, 3},
+    {0x0144, 14, 2}, {0x0150, 3, 2},  {0x0150, 4, 2},  {0x0150, 5, 2},  {0x0151, 3, 2},
+    {0x0155, 0, 6},  {0x0156, 0, 4},  {0x0157, 14, 2}, {0x0170, 2, 2},  {0x0170, 3, 2},
+    {0x0170, 14, 2}, {0x0171, 14, 2}, {0x0173, 1, 3},  {0x0173, 5, 2},  {0x0173, 8, 4},
+    {0x0173, 11, 2}, {0x0200, 2, 4},  {0x0200, 3, 2},  {0x0201, 2, 4},  {0x0201, 3, 2},
+    {0x0202, 2, 4},  {0x0202, 3, 2},  {0x0203, 2, 4},  {0x0203, 3, 2},  {0x0204, 2, 4},
+    {0x0204, 3, 2},  {0x0205, 2, 4},  {0x0205, 3, 2},  {0x0300, 1, 2},  {0x0300, 4, 5},
+    {0x0400, 3, 2},  {0x0400, 4, 2},  {0x0400, 6, 4},  {0x0400, 7, 2},  {0x0400, 10, 2},
+    {0x0400, 11, 2}, {0x0401, 3, 2},  {0x0401, 4, 2},  {0x0401, 6, 4},  {0x0401, 7, 2},
+    {0x0401, 8, 2},  {0x0401, 11, 5}, {0x0401, 14, 2}, {0x0402, 0, 2},  {0x0402, 3, 2},
+    {0x0402, 4, 2},  {0x0402, 6, 4},  {0x0402, 7, 2},  {0x0402, 10, 2}, {0x0402, 11, 2},
+    {0x0403, 3, 2},  {0x0403, 6, 5},  {0x0403, 9, 2},  {0x0404, 0, 2},  {0x0404, 5, 2},
+    {0x0404, 8, 5},  {0x0404, 11, 2}, {0x0405, 3, 2},  {0x0405, 4, 2},  {0x0405, 6, 3},
+    {0x0405, 7, 2},  {0x0405, 8, 2},  {0x0405, 11, 5}, {0x0405, 14, 2}, {0x0406, 7, 2},
+    {0x0406, 14, 2}, {0x0406, 15, 5}, {0x0406, 18, 2}, {0x0500, 4, 5},  {0x1103, 0, 2},
+    {0x1103, 2, 4},  {0x1103, 3, 2},  {0x1103, 5, 2},  {0x1103, 7, 4},  {0x1103, 8, 2},
+    {0x1104, 0, 2},  {0x1104, 2, 4},  {0x1104, 3, 2},  {0x1105, 0, 2},  {0x1105, 2, 4},
+    {0x1105, 3, 2},  {0x1106, 0, 2},  {0x1106, 2, 4},  {0x1106, 3, 2},  {0x1106, 5, 2},
+    {0x1106, 11, 2}, {0x1108, 5, 2},  {0x1108, 11, 2},
 }};
 
 /// What every type powers up holding. `measured` is clear where a slot was refused.

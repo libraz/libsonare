@@ -971,6 +971,26 @@ constexpr uint8_t gs_efx_parameter_reset_default(uint16_t type, uint8_t slot) no
   return defaults->params[slot];
 }
 
+/// How many states EFX PARAMETER @p slot of @p type prints, or 0 where its page
+/// prints no list of states.
+constexpr int gs_efx_printed_states(uint16_t type, uint8_t slot) noexcept {
+  const uint16_t alias = gs_efx_alias_type(type);
+  for (const GsEfxStateList& entry : kGsEfxStateLists) {
+    if ((entry.type == type || entry.type == alias) && entry.parameter == slot) {
+      return entry.states;
+    }
+  }
+  return 0;
+}
+
+/// Whether writing @p value to EFX PARAMETER @p slot of @p type is taken. A
+/// value past a printed list of states is not: the slot keeps the state it was
+/// in, whatever that was. Every other slot takes every value.
+constexpr bool gs_efx_parameter_takes(uint16_t type, uint8_t slot, uint8_t value) noexcept {
+  const int states = gs_efx_printed_states(type, slot);
+  return states == 0 || static_cast<int>(value) < states;
+}
+
 /// The whole EFX PARAMETER block as it powers on — the Thru type's twenty bytes,
 /// which is what the row's `def` is defined as.
 constexpr std::array<uint8_t, 20> gs_efx_power_on_params() noexcept {

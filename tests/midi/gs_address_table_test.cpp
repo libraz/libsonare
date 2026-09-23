@@ -1134,6 +1134,15 @@ const std::array<uint8_t, 20>* efx_defaults_for(uint16_t type) {
   return nullptr;
 }
 
+/// How many values EFX PARAMETER @p slot of @p type takes: its printed list's
+/// length, or all 128 where it prints none.
+unsigned efx_printed_states(uint16_t type, unsigned slot) {
+  for (const auto& entry : sonare::midi::synth::kGsEfxStateLists) {
+    if (entry.type == type && entry.parameter == slot) return entry.states;
+  }
+  return 128;
+}
+
 /// The state @p before must reach when a run of @p data lands from block offset
 /// @p start_lo.
 ///
@@ -1146,7 +1155,9 @@ const std::array<uint8_t, 20>* efx_defaults_for(uint16_t type) {
 ///   - `01` resolves the type as (stored MSB, this LSB) and loads that type's
 ///     twenty power-on parameters. A type the archive never measured has none,
 ///     so the block stands.
-///   - `03`-`16` land in EFX PARAMETER 1-20, `17`-`19` in the three sends.
+///   - `03`-`16` land in EFX PARAMETER 1-20, `17`-`19` in the three sends. A
+///     parameter byte past the list of states its slot prints does not land;
+///     the byte still counts as reaching a field.
 ///   - Every other offset is ignored, and never drops the message.
 ///   - The unit is `assigned` once any byte reached a field.
 EfxOutcome expected_efx(const GsEfx& before, unsigned start_lo, const std::vector<uint8_t>& data) {
@@ -1170,7 +1181,9 @@ EfxOutcome expected_efx(const GsEfx& before, unsigned start_lo, const std::vecto
         break;
       }
       case EfxField::kParameter:
-        out.efx.params[offset - 0x03] = value;
+        if (value < efx_printed_states(out.efx.type, offset - 0x03)) {
+          out.efx.params[offset - 0x03] = value;
+        }
         break;
       case EfxField::kSendReverb:
         out.efx.send_reverb = value;

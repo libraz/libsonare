@@ -871,11 +871,13 @@ TEST_CASE("an EFX type set over the wire reads back the same chain", "[midi][sf2
       // the chain's shape, which is the condition the realiser uses to update
       // the live processors in place instead of rebuilding them.
       const std::vector<std::string> shape = stage_names(gs_efx_insert_chain(efx));
+      const uint8_t before = efx.params[1];
       const auto param = efx_sysex(0x04, {0x50});  // EFX PARAMETER 2 = 80
       bool param_changed_type = true;
       REQUIRE(apply_gs_efx_sysex(efx, param.data(), param.size(), &param_changed_type));
       REQUIRE_FALSE(param_changed_type);
-      REQUIRE(efx.params[1] == 0x50);
+      // A slot printing a list of states does not take a byte past it.
+      REQUIRE(efx.params[1] == (s::gs_efx_printed_states(row.type, 1) == 0 ? 0x50 : before));
       REQUIRE(stage_names(gs_efx_insert_chain(efx)) == shape);
     }
   }
@@ -1293,4 +1295,87 @@ TEST_CASE("every binding row reaches its control carrying its own law's reading"
   tally.same(unread == 0, "every binding row's class has a reader here");
   WARN("binding rows checked: " << s::kGsEfxBindings.size() << "  comparisons: " << tally.count());
   REQUIRE(tally.count() >= static_cast<int>(s::kGsEfxBindings.size()));
+}
+
+namespace {
+
+/// A fresh unit holding @p type, selected over the wire so its power-on bytes
+/// load, which is how the archive took every sweep.
+GsEfx selected(uint16_t type) {
+  GsEfx efx;
+  const auto write = efx_sysex(
+      0x00, {static_cast<uint8_t>((type >> 8) & 0x7Fu), static_cast<uint8_t>(type & 0x7Fu)});
+  apply_gs_efx_sysex(efx, write.data(), write.size());
+  return efx;
+}
+
+void write_parameter(GsEfx& efx, uint8_t slot, uint8_t value) {
+  const auto write = efx_sysex(static_cast<uint8_t>(0x03 + slot), {value});
+  apply_gs_efx_sysex(efx, write.data(), write.size());
+}
+
+double equaliser_hz(const GsEfx& efx, const std::string& key) {
+  for (const GsEfxStage& stage : gs_efx_insert_chain(efx)) {
+    double hz = 0.0;
+    if (stage.name == "eq.parametric" && json_number(stage.params_json, key, hz)) return hz;
+  }
+  return 0.0;
+}
+
+}  // namespace
+
+TEST_CASE("a byte past a printed list of states is not taken", "[midi][sf2][gs][efxtypes]") {
+  Tally tally;
+
+  // 01 00's corners power up in the second state, and the archive read each one
+  // past byte 1 with the type reloaded before every take. Floor: one band of the
+  // twelfth-octave set the half-gain points are read on.
+  constexpr double kCornerFloorOctaves = 1.0 / 12.0;
+  const std::array<uint8_t, 8> kSettings = {2, 3, 4, 32, 64, 96, 126, 127};
+  const std::array<double, 8> kLowHz = {222.7, 210.2, 222.7, 222.7, 210.2, 222.7, 210.2, 210.2};
+  const std::array<double, 8> kHighHz = {11313.7, 10678.7, 10678.7, 10678.7,
+                                         11313.7, 11313.7, 10678.7, 10678.7};
+  for (std::size_t i = 0; i < kSettings.size(); ++i) {
+    GsEfx efx = selected(0x0100);
+    write_parameter(efx, 0, kSettings[i]);
+    write_parameter(efx, 2, kSettings[i]);
+    const std::string at = ", setting " + std::to_string(kSettings[i]);
+    tally.same(std::fabs(std::log2(equaliser_hz(efx, "band0.frequencyHz") / kLowHz[i])) <=
+                   kCornerFloorOctaves,
+               "low corner" + at);
+    tally.same(std::fabs(std::log2(equaliser_hz(efx, "band3.frequencyHz") / kHighHz[i])) <=
+                   kCornerFloorOctaves,
+               "high corner" + at);
+  }
+
+  // Standing in the first state, nought against two is null.
+  GsEfx first = selected(0x0100);
+  write_parameter(first, 0, 0);
+  const double first_hz = equaliser_hz(first, "band0.frequencyHz");
+  write_parameter(first, 0, 2);
+  tally.same(equaliser_hz(first, "band0.frequencyHz") == first_hz,
+             "a corner standing at 0 holds it against 2");
+
+  // Every listed slot, from each end of its list: one past the top and the top
+  // of the byte leave it where it stood.
+  for (const s::GsEfxStateList& list : s::kGsEfxStateLists) {
+    for (const uint8_t standing : {uint8_t{0}, static_cast<uint8_t>(list.states - 1)}) {
+      GsEfx efx = selected(list.type);
+      write_parameter(efx, list.parameter, standing);
+      for (const uint8_t past : {list.states, uint8_t{127}}) {
+        write_parameter(efx, list.parameter, past);
+        tally.same(efx.params[list.parameter] == standing,
+                   hex4(list.type) + " slot " + std::to_string(list.parameter) + " at " +
+                       std::to_string(standing) + " holds against " + std::to_string(past));
+      }
+    }
+  }
+
+  // A slot printing no list takes every byte.
+  GsEfx drive = selected(0x0110);
+  write_parameter(drive, 0, 127);
+  tally.same(drive.params[0] == 127, "the overdrive's drive takes 127");
+
+  WARN("comparisons: " << tally.count());
+  REQUIRE(tally.count() >= 16 + 1 + 4 * static_cast<int>(s::kGsEfxStateLists.size()) + 1);
 }

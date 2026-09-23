@@ -406,16 +406,17 @@ TEST_CASE("apply_gs_efx_sysex captures the EFX block as raw wire", "[midi][sf2][
   REQUIRE(efx.params[0] == 100);
   REQUIRE(efx.type == 0x0110);  // the earlier type is preserved across writes
 
-  // A full-block run from 0x00: type 01 10, reserved 00, params 1..3 = 10 20 30.
-  // Checksum over 40 03 00 01 10 00 10 20 30 = 180 -> 0x4C.
+  // A full-block run from 0x00: type 01 10, reserved 00, params 1..3 = 10 02 00,
+  // the last two inside the four- and two-state lists those slots print.
+  // Checksum over 40 03 00 01 10 00 10 02 00 = 102 -> 0x1A.
   const uint8_t run[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x00,
-                         0x01, 0x10, 0x00, 0x10, 0x20, 0x30, 0x4C, 0xF7};
+                         0x01, 0x10, 0x00, 0x10, 0x02, 0x00, 0x1A, 0xF7};
   GsEfx efx_run;
   REQUIRE(apply_gs_efx_sysex(efx_run, run, sizeof(run)));
   REQUIRE(efx_run.type == 0x0110);
   REQUIRE(efx_run.params[0] == 0x10);
-  REQUIRE(efx_run.params[1] == 0x20);
-  REQUIRE(efx_run.params[2] == 0x30);
+  REQUIRE(efx_run.params[1] == 0x02);
+  REQUIRE(efx_run.params[2] == 0x00);
 
   // A non-EFX Roland message (GS reset, address 40 00 7F) is not an EFX write.
   const uint8_t gs_reset[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7};

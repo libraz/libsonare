@@ -94,8 +94,8 @@ float gs_efx_post_gain_db(uint8_t value) noexcept;
 float gs_efx_window_ms(uint8_t value) noexcept;
 
 /// CORNER byte -> a shelf's corner in Hz, at its half-gain point. Byte 0 selects
-/// one state and every other byte the other; which printed label names which
-/// state is not measurable, so the byte is read and the label is not.
+/// one state and byte 1 the other; which printed label names which state is not
+/// measurable, so the byte is read and the label is not.
 float gs_efx_corner_hz(uint8_t value, GsShelfSide side) noexcept;
 
 /// A byte read through the printed endpoints of a slot no table was measured
@@ -107,7 +107,9 @@ bool gs_efx_ratio(uint8_t value, int lo_byte, int hi_byte, int lo_unit, int hi_u
                   float* out) noexcept;
 
 /// A byte selecting one of @p count printed states. Past the list it returns
-/// the first, which is what the measured small tables were read doing.
+/// the first. On a slot printed as a list of states such a byte is never
+/// taken (gs_efx_parameter_takes), so this is the answer only where no write
+/// rule stands in front of it.
 int gs_efx_enum_index(uint8_t value, int count) noexcept;
 
 }  // namespace sonare::midi::synth

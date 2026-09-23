@@ -41,6 +41,7 @@ import importlib.util
 import itertools
 import json
 import math
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -1539,6 +1540,10 @@ def corner_tables(root: Path, scope: dict) -> dict:
     byte's two states and not the page's two figures. A model whose corner is not
     split between byte 0 and every other byte, or whose byte is not the address the
     class selects on, is refused rather than read.
+
+    The model's `*` is what the byte returns from a slot standing in its second
+    state; a byte past `01` is not taken at all (STATE_LIST_INFERENCE), so the
+    second state is carried at `01` and nowhere above it.
     """
     model, name = model_of(root, scope)
     shelves = shelves_of(model, name)
@@ -1562,7 +1567,7 @@ def corner_tables(root: Path, scope: dict) -> dict:
             "order": shelves[side]["order"],
             "entries": [
                 entry(settings="00", hz=states["values"]["0"]),
-                entry(settings="01–7F", hz=states["values"]["*"]),
+                entry(settings="01", hz=states["values"]["*"]),
             ],
             "what_the_hz_is": (
                 "The half-gain point of the shelf's deviation, which is where a first-order "
@@ -1578,7 +1583,7 @@ def corner_tables(root: Path, scope: dict) -> dict:
             "approximate": False,
         }
     return {
-        "read_by": "byte 0 against every other byte",
+        "read_by": "byte 0 against byte 1; a byte past 1 is not taken",
         "tables": tables,
         "rests_on": scope["file"],
         "model": name,
@@ -1668,6 +1673,89 @@ def fixed_corner_pairs(root: Path, inferences: Path, corner: dict) -> tuple[dict
         },
     }
     return pair, [tone_name]
+
+
+# A parameter whose page prints a list of states takes no byte outside it and
+# keeps the state it was in. The rule is the renderer's to apply at the write,
+# so what is carried is which slots print such a list and how long it is.
+STATE_LIST_INFERENCE = "states-a-value-the-page-prints-no-state-for-is-not-taken"
+
+# A list of states is spelled 00/01/..., one entry per state from nought. The
+# `00/7F` spelling uses the same slash and is not one: the claim reads it as a
+# function of the byte, every value taken.
+STATE_LIST_RE = re.compile(r"^00(?:/[0-9A-F]{2})+$")
+
+
+def printed_states(spelling: str | None) -> int | None:
+    """How many states a printed spelling lists, or None where it lists none."""
+    if spelling is None or not STATE_LIST_RE.match(spelling):
+        return None
+    entries = [int(entry, 16) for entry in spelling.split("/")]
+    return len(entries) if entries == list(range(len(entries))) else None
+
+
+def state_lists(inferences: Path, candidates: list[dict]) -> dict:
+    """Every (type, slot) that prints a list of states, and the claim that reads them.
+
+    Every slot the claim asked is checked to be here with the length it asked it
+    at, so a spelling this reads differently from the claim is refused rather
+    than carried as a list the claim never measured.
+    """
+    scope = about(inferences, STATE_LIST_INFERENCE)
+    if scope["state"] != "standing":
+        sys.exit(f"{scope['file']} is {scope['state']}; no write can be refused on it")
+    data = scope["data"]
+    # The first round's five slots are all two-state switches, by the claim's own
+    # account of them.
+    asked = [(s["type"], s["address"], 2) for s in data["the_slots_asked_and_where_each_powers_up"]]
+    asked += [
+        (s["type"], s["address"], s["states_printed"])
+        for s in data["the_round_that_asked_a_longer_list"]["slots"]
+    ]
+    asked += [
+        (s["type"], s["address"], s["states_printed"])
+        for s in data["the_round_that_closed_the_printed_list_lengths"][
+            "every_length_the_page_prints"
+        ]
+    ]
+    read = {(type_, address) for type_, address, _ in asked}
+    slots = {}
+    for slot in candidates:
+        states = printed_states(slot["printed_values"])
+        if states is not None:
+            slots[(slot["type"], slot["address"])] = {
+                "type": slot["type"],
+                "address": slot["address"],
+                "parameter": slot["parameter"],
+                "printed_values": slot["printed_values"],
+                "states": states,
+                "unit_specific": False,
+                # A slot the claim never asked is carried on its rule alone.
+                "approximate": (slot["type"], slot["address"]) not in read,
+            }
+    for type_, address, states in asked:
+        row = slots.get((type_, address))
+        if row is None or row["states"] != states:
+            sys.exit(
+                f"{scope['file']} asked {type_} {address} as a list of {states} states and "
+                f"the records here read it as {row['printed_values'] if row else 'no list'}."
+            )
+    return {
+        "rests_on": scope["file"],
+        "state": scope["state"],
+        "what_it_is": (
+            "Every slot whose page prints a list of states, with the list's length. A byte "
+            "past the list is not taken and the slot keeps the state it was in."
+        ),
+        "spelling_read": "00/01/..., consecutive from nought",
+        "spelling_not_read": {
+            "00/7F": "A function of the byte, every value taken; the claim refutes one map for both."
+        },
+        "checked_against_the_claim": len(read),
+        "slots": sorted(slots.values(), key=lambda r: (r["type"], r["address"])),
+        "unit_specific": False,
+        "approximate": any(row["approximate"] for row in slots.values()),
+    }
 
 
 def check_delay_ladders(
@@ -2017,6 +2105,7 @@ def derive(root: Path, unit: str) -> dict:
         "corner": corner_tables(root, scopes["corner"]),
     }
     fixed_corners, fixed_models = fixed_corner_pairs(root, inferences, classes["corner"])
+    lists = state_lists(inferences, candidates)
     classes["freq"], freq_notes = freq_tables(scopes["freq"], candidates)
     notes.extend(freq_notes)
 
@@ -2201,6 +2290,7 @@ def derive(root: Path, unit: str) -> dict:
         },
         "classes": classes,
         "fixed_corners": fixed_corners,
+        "state_lists": lists,
         "map": sorted(reached, key=lambda r: (r["type"], r["address"])),
         "disagreement": disagreements(classes),
         "records_outside_their_inferences_addresses": outside,
@@ -2211,6 +2301,7 @@ def derive(root: Path, unit: str) -> dict:
 
     stamp_sources(tables["classes"], "classes")
     stamp_sources(tables["fixed_corners"], "fixed_corners")
+    stamp_sources(tables["state_lists"], "state_lists")
     # A `map` row's flags are the fold its table already made, so it is stamped
     # as a fold rather than let through the walker, which would read a row with
     # no flag-carrying children as one entry and refuse the two accel slots.
@@ -2273,6 +2364,13 @@ def emit_header(tables: dict, path: Path) -> None:
     w("  uint8_t parameter;         ///< Slot index from the first parameter address.")
     w("  uint8_t conversion_class;  ///< One of the kGsEfxClass* values below.")
     w("  uint8_t table;             ///< Which table of that class; see the JSON.")
+    w("};")
+    w("")
+    w("/// A slot whose page prints a list of states, and how many it prints.")
+    w("struct GsEfxStateList {")
+    w("  uint16_t type;       ///< The two type bytes, MSB in the high byte.")
+    w("  uint8_t parameter;   ///< Slot index from the first parameter address.")
+    w("  uint8_t states;      ///< Bytes 0 to states - 1 are the list.")
     w("};")
     w("")
     w("/// The twenty bytes a type powers up holding, and which of them were measured.")
@@ -2440,7 +2538,7 @@ def emit_header(tables: dict, path: Path) -> None:
     w("/// Every shelf the tables carry is of this order: one pole and one zero a section.")
     w(f"inline constexpr int kGsEfxShelfOrder = {orders.pop()};")
     w("")
-    w("/// Equaliser corner: byte 0 selects the first state, every other byte the second.")
+    w("/// Equaliser corner: byte 0 selects the first state and byte 1 the second.")
     for side in ("low", "high"):
         states = ", ".join(cpp_float(e["hz"]) for e in corner[side]["entries"])
         w(f"inline constexpr std::array<float, 2> kGsEfxCorner{camel(side)} = {{{{{states}}}}};")
@@ -2467,6 +2565,15 @@ def emit_header(tables: dict, path: Path) -> None:
             f"    {{0x{parsed_type(row['type']):04X}, {row['parameter']}, "
             f"{index}, {table_index}}},  // {row['conversion_class']}.{row['table']}"
         )
+    w("}};")
+    w("")
+
+    lists = tables["state_lists"]["slots"]
+    w("/// Every slot printing a list of states. A byte past the list is not taken and")
+    w("/// the slot keeps the state it was in. Sorted by (type, parameter).")
+    w(f"inline constexpr std::array<GsEfxStateList, {len(lists)}> kGsEfxStateLists = {{{{")
+    for row in lists:
+        w(f"    {{0x{parsed_type(row['type']):04X}, {row['parameter']}, {row['states']}}},")
     w("}};")
     w("")
 

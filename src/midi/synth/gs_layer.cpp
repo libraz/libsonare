@@ -405,7 +405,9 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
         touched = true;
         break;
       case GsParam::kEfxParameter:
-        efx.params[write.index] = write.value;
+        if (gs_efx_parameter_takes(efx.type, static_cast<uint8_t>(write.index), write.value)) {
+          efx.params[write.index] = write.value;
+        }
         touched = true;
         break;
       case GsParam::kEfxSendToReverb:

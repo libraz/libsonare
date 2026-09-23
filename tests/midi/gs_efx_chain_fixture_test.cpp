@@ -25,12 +25,14 @@
 #include <string>
 #include <vector>
 
+#include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_tables.h"
 #include "midi/synth/gs_layer.h"
 
 namespace {
 
 using sonare::midi::synth::gs_efx_insert_chain;
+using sonare::midi::synth::gs_efx_parameter_takes;
 using sonare::midi::synth::gs_efx_type_defaults;
 using sonare::midi::synth::GsEfx;
 using sonare::midi::synth::GsEfxStage;
@@ -108,6 +110,8 @@ Sweep compute_sweep() {
     sweep[{type, -1, -1}] = baseline;
     for (int slot = 0; slot < kSlots; ++slot) {
       for (uint8_t value : kValues) {
+        // A byte past a printed list of states never reaches the block.
+        if (!gs_efx_parameter_takes(row.type, static_cast<uint8_t>(slot), value)) continue;
         GsEfx efx = make_efx(row.type);
         efx.params[static_cast<size_t>(slot)] = value;
         const std::string moved = render(gs_efx_insert_chain(efx));

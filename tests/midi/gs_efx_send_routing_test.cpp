@@ -58,13 +58,12 @@ using sonare::test::Sf2Builder;
 constexpr double kOutRate = 48000.0;
 
 // GS SysEx (Roland DT1, framed): enable EFX on part 1 (channel 0), select
-// Overdrive (01 10), write EFX PARAMETER 2 (40 03 04) at max. Checksums per the
-// DT1 rule. That slot is the amp selector rather than the drive, which is at
-// PARAMETER 1; what the case needs of it is only that it is a parameter write.
+// Overdrive (01 10), write EFX PARAMETER 1 (40 03 03, the drive) at max.
+// Checksums per the DT1 rule.
 constexpr uint8_t kPartOn[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
 constexpr uint8_t kOdType[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                                0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
-constexpr uint8_t kOdDrive[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x04, 0x7F, 0x3A, 0xF7};
+constexpr uint8_t kOdDrive[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x03, 0x7F, 0x3B, 0xF7};
 // A genuine TYPE change: select Stereo Chorus (01 42).
 constexpr uint8_t kChorusType[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                                    0x03, 0x00, 0x01, 0x42, 0x7A, 0xF7};
@@ -256,7 +255,7 @@ TEST_CASE("a GS EFX parameter-only change updates the insert in place", "[midi][
   const int prepares_after_build = counters->prepares;
   const int set_params_before = counters->set_params;
 
-  // A parameter-only edit (40 03 04, the byte beside the drive) must NOT rebuild
+  // A parameter-only edit (40 03 03, the drive) must NOT rebuild
   // the chain: it is resolved on the control thread and applied to the live
   // processor on the audio thread at the next block. on_control_sysex enqueues
   // but does not touch the processor; the set_parameter lands during the
