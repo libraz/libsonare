@@ -233,6 +233,11 @@ export interface AnalysisResult {
    * between two beats. The last entry repeats the tempo of the interval leading
    * into the final beat, which opens no interval of its own.
    *
+   * Values are continuous, not points on a tempo grid: each is a weighted
+   * average, in log tempo, of the beat intervals around it. A steady tempo
+   * reads within about 1% at every beat, and a tempo that moves is followed a
+   * few beats late.
+   *
    * This is the local tempo rather than `bpm` resampled: on material whose
    * tempo moves it departs from `bpm`, and reading a single number out of it is
    * not how to get the global tempo.

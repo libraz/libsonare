@@ -139,7 +139,9 @@ def analyze(
         - ``beat_observations`` (:class:`AnalysisBeatObservations`) — the
           beat-level evidence the downbeat and meter pass scores
         - ``beat_local_bpm`` (``list[float]``) — smoothed local tempo at each
-          beat, parallel to ``beat_times``. Empty unless
+          beat, parallel to ``beat_times``: continuous values, each a weighted
+          average of the surrounding beat intervals, so a steady tempo reads
+          within about 1% at every beat. Empty unless
           ``compute_tempo_curve`` was set
         - ``chords`` (``list[Chord]``) — detected chord segments
         - ``sections`` (``list[Section]``) — detected structural sections

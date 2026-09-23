@@ -13,14 +13,12 @@
 /// Deterministic: the same analysis input always produces byte-identical segment
 /// vectors, with no clocks and no randomness.
 ///
-/// Tempo and phase are stabilised by a Viterbi dynamic program over the
-/// inter-beat-interval sequence (activation-weighted when an onset-strength curve
-/// is supplied). Each beat takes a hidden tempo state from a discrete BPM grid,
-/// balancing how well the state's period matches the local IBI against a penalty
-/// on abrupt jumps; the decoded path is then segmented into constant and
-/// linearly-ramped TempoSegments. This is the DBN beat trackers of Korzeniowski,
-/// Böck & Widmer 2014 and Böck, Krebs & Widmer 2016 reduced to a deterministic DP
-/// with no learned model, so the bridge stays self-contained.
+/// Tempo is stabilised by a smoother over the inter-beat-interval sequence
+/// (activation-weighted when an onset-strength curve is supplied): the decoded
+/// log-tempo path balances how well it matches each local IBI against a
+/// quadratic penalty on beat-to-beat change, and is then segmented into
+/// constant and linearly-ramped TempoSegments. No learned model is involved, so
+/// the bridge stays self-contained.
 ///
 /// Half/double octave errors are any beat tracker's dominant failure mode, so
 /// the bridge returns the decoded estimate plus both octave variants with their
@@ -63,11 +61,9 @@ struct BeatAnalysisInput {
 
 /// @brief Configuration for the tempo-estimation bridge.
 struct TempoEstimatorConfig {
-  /// Discrete tempo-state grid for the Viterbi smoothing pass.
+  /// Tempo range the smoothed curve is clamped to.
   float bpm_min = 40.0f;
   float bpm_max = 240.0f;
-  /// Number of discrete tempo states between bpm_min and bpm_max (log-spaced).
-  int tempo_state_count = 64;
   /// Transition penalty weight: larger => smoother (stiffer) tempo curve.
   float transition_weight = 8.0f;
   /// Relative tempo change (fraction) above which two adjacent smoothed beats

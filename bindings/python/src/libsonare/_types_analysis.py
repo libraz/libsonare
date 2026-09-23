@@ -289,6 +289,10 @@ class AnalysisResult:
     # fewer than two beats were detected, since a tempo is a property of the
     # interval between two beats. The last entry repeats the tempo of the
     # interval leading into the final beat, which opens no interval of its own.
+    # Values are continuous, not points on a tempo grid: each is a weighted
+    # average, in log tempo, of the beat intervals around it, so a steady tempo
+    # reads within about 1% at every beat and a moving one is followed a few
+    # beats late.
     # This is the local tempo rather than ``bpm`` resampled: on material whose
     # tempo moves it departs from ``bpm``, and reading a single number out of it
     # is not how to get the global tempo.

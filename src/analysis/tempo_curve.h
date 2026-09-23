@@ -6,10 +6,10 @@
 /// A beat grid alone already carries a local tempo — the reciprocal of each
 /// inter-beat interval — but read directly that curve is far too noisy to show
 /// or to segment, because every beat-position quantization error appears as a
-/// tempo spike. This decodes a smoothed curve instead: each beat is assigned a
-/// hidden tempo state from a log-spaced BPM grid by a deterministic Viterbi
-/// recursion that balances how well a state's period matches the observed
-/// interval against a penalty on abrupt tempo jumps.
+/// tempo spike. This decodes a smoothed curve instead: the continuous log-tempo
+/// path that minimises the weighted squared log-ratio to each observed interval
+/// plus a quadratic penalty on beat-to-beat tempo change. The objective is
+/// quadratic, so its exact minimiser comes from one tridiagonal solve.
 ///
 /// The decoder lives here, in the analysis layer, rather than beside the
 /// arrangement tempo bridge that first used it, for two reasons. It needs
@@ -21,7 +21,7 @@
 /// that happen to be configured alike.
 ///
 /// Deterministic: identical input always produces an identical curve. No
-/// clocks, no randomness; ties break toward the lower state index.
+/// clocks, no randomness.
 
 #include <vector>
 
@@ -40,17 +40,16 @@ struct BeatIntervalObservation {
   double weight = 1.0;
 };
 
-/// @brief Tempo-state grid and stiffness for the per-beat tempo decoder.
+/// @brief Tempo range and stiffness for the per-beat tempo decoder.
 struct TempoCurveConfig {
-  /// @brief Lowest BPM the state grid covers.
+  /// @brief Lowest BPM the decoded curve may take.
   float bpm_min = 40.0f;
-  /// @brief Highest BPM the state grid covers.
+  /// @brief Highest BPM the decoded curve may take.
   float bpm_max = 240.0f;
-  /// @brief Number of log-spaced states between @ref bpm_min and @ref bpm_max.
-  /// @details Log spacing makes the transition cost scale-invariant, so a
-  ///          half/double jump costs the same anywhere in the grid.
-  int tempo_state_count = 64;
-  /// @brief Transition penalty weight; larger gives a stiffer, smoother curve.
+  /// @brief Penalty on squared log-tempo change between adjacent intervals;
+  ///        larger gives a stiffer, smoother curve.
+  /// @details In log tempo the penalty is scale-invariant, so a half/double
+  ///          jump costs the same at any tempo.
   float transition_weight = 8.0f;
 };
 
@@ -77,16 +76,16 @@ std::vector<BeatIntervalObservation> build_beat_interval_observations(
     const std::vector<Beat>& beats, const std::vector<float>& onset_strength, int sample_rate,
     int hop_length);
 
-/// @brief Decodes the smoothed tempo state path over the interval observations.
+/// @brief Decodes the smoothed tempo path over the interval observations.
 /// @param observations Interval observations from @ref build_beat_interval_observations.
 /// @param config Grid and stiffness settings.
 /// @return One BPM per observation, so entry `i` is the tempo of the interval
 ///         that starts at beat `i`. Empty when the input is empty.
-/// @details The returned values are grid points, not continuous estimates. They
-///          are precise enough to group beats into tempo regions but coarser
-///          than the intervals they came from, so a caller needing timing
-///          accuracy over a span should re-derive its BPM from the observed
-///          intervals across that span rather than averaging these.
+/// @details Values are continuous, clamped to [bpm_min, bpm_max]. Each is a
+///          weighted local average of the neighbouring intervals, so it lags a
+///          tempo change by a few beats and a caller needing a span's exact
+///          duration should re-derive its BPM from the intervals across that
+///          span rather than averaging these.
 std::vector<double> decode_beat_tempo_curve(
     const std::vector<BeatIntervalObservation>& observations,
     const TempoCurveConfig& config = TempoCurveConfig());

@@ -15,15 +15,14 @@ using sonare::constants::kEpsilon;
 // Period (in seconds) per beat for a given BPM.
 double period_for_bpm(double bpm) { return 60.0 / std::max(bpm, 1.0e-3); }
 
-// The tempo-state grid, the interval observations and the Viterbi decode behind
-// them live in analysis/tempo_curve.h. They are shared rather than local so the
+// The interval observations and the smoothed tempo decode behind them live in
+// analysis/tempo_curve.h. They are shared rather than local so the
 // per-beat curve an analysis reports and the segments this bridge writes into a
 // project are the same numbers grouped differently.
 TempoCurveConfig curve_config(const TempoEstimatorConfig& config) {
   TempoCurveConfig curve;
   curve.bpm_min = config.bpm_min;
   curve.bpm_max = config.bpm_max;
-  curve.tempo_state_count = config.tempo_state_count;
   curve.transition_weight = config.transition_weight;
   return curve;
 }
@@ -65,12 +64,12 @@ std::vector<transport::TimeSignatureSegment> build_time_sigs(const BeatAnalysisI
 // Converts the decoded per-beat BPM curve into piecewise tempo segments anchored
 // at integer beat ppq positions.
 //
-// The decoded grid BPM is used only to GROUP beats: a run of consecutive beats
-// whose decoded grid tempo stays within ramp_threshold of the run's start is
+// The decoded BPM is used only to GROUP beats: a run of consecutive beats
+// whose decoded tempo stays within ramp_threshold of the run's start is
 // folded into one constant segment; a larger change opens a new segment and
 // ramps the previous one toward it. Crucially the EMITTED bpm of each segment is
 // derived from the actually observed inter-beat intervals over the whole run
-// (60 / mean-IBI), not from the coarse grid value. This keeps the DP's role
+// (60 / mean-IBI), not from the smoothed value. This keeps the DP's role
 // (octave/phase stabilization, grouping) while giving the segment continuous
 // timing accuracy, so reconstructed beat positions do not drift over long spans.
 //
@@ -114,7 +113,7 @@ std::vector<transport::TempoSegment> build_segments(const BeatAnalysisInput& inp
 
   size_t run_start = 0;
   for (size_t i = 1; i <= decoded_bpm.size(); ++i) {
-    // Close the run when the decoded grid tempo departs from the run's start, or
+    // Close the run when the decoded tempo departs from the run's start, or
     // at the end of the sequence.
     const bool at_end = (i == decoded_bpm.size());
     bool boundary = at_end;

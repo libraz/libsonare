@@ -230,7 +230,10 @@ typedef struct {
      caller that does not read the curve would pay a decode over the beat grid
      for nothing. The curve describes the beat grid it was decoded from, and
      beat tracking holds a fixed tempo prior unless adaptive_tempo is also 1, so
-     measuring a tempo that moves needs both set. */
+     measuring a tempo that moves needs both set. The values are continuous,
+     each a weighted average in log tempo of the surrounding beat intervals: a
+     steady tempo reads within about 1% at every beat, and a moving one is
+     followed a few beats late. */
   int compute_tempo_curve;
   /* Meter numerators the estimator scores. Only the first
      meter_candidate_numerator_count entries are read; each must be in [2, 32].

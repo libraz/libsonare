@@ -112,6 +112,11 @@ struct AnalysisResult {
   ///          entry repeats the tempo of the interval leading into the final
   ///          beat, which opens no interval of its own.
   ///
+  ///          Values are continuous, each a weighted average in log tempo of
+  ///          the surrounding beat intervals (see tempo_curve.h), so a steady
+  ///          tempo reads within about 1% at every beat and a moving one is
+  ///          followed a few beats late.
+  ///
   ///          This is the local tempo, not @ref bpm resampled: on material whose
   ///          tempo moves it departs from @ref bpm, and reading a single number
   ///          out of it is not how to get the global tempo.

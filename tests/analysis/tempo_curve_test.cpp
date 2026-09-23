@@ -89,10 +89,22 @@ TEST_CASE("tempo curve holds flat on a constant tempo", "[analysis][tempo_curve]
       estimate_beat_local_bpm(constant_beats(132.0, 40), {}, 22050, 512);
   REQUIRE(!curve.empty());
   const auto bounds = std::minmax_element(curve.begin(), curve.end());
-  // Within one step of the log-spaced 64-state grid over [40, 240], which is
-  // about 2.9% -- the decoder cannot resolve finer than its own grid.
-  REQUIRE((*bounds.second - *bounds.first) / *bounds.first < 0.03);
-  REQUIRE(static_cast<double>(curve.front()) == Catch::Approx(132.0).epsilon(0.03));
+  // Jitter-free intervals: every value is the tempo itself, to float precision.
+  REQUIRE((*bounds.second - *bounds.first) / *bounds.first < 1.0e-4);
+  REQUIRE(static_cast<double>(curve.front()) == Catch::Approx(132.0).epsilon(1.0e-4));
+}
+
+TEST_CASE("tempo curve resolves a tempo between coarse grid steps", "[analysis][tempo_curve]") {
+  // 120 and 123 BPM fall between points of any ~3% tempo grid (a 64-state log
+  // grid over [40, 240] reads them as 121.3 and 124.8), so a quantised decode
+  // misses these by over 1%.
+  for (double bpm : {120.0, 123.0}) {
+    const std::vector<float> curve =
+        estimate_beat_local_bpm(constant_beats(bpm, 32), {}, 22050, 512);
+    for (float value : curve) {
+      REQUIRE(static_cast<double>(value) == Catch::Approx(bpm).epsilon(0.002));
+    }
+  }
 }
 
 TEST_CASE("tempo curve follows a tempo that moves", "[analysis][tempo_curve]") {
@@ -101,10 +113,10 @@ TEST_CASE("tempo curve follows a tempo that moves", "[analysis][tempo_curve]") {
   REQUIRE(curve.size() == 64);
   REQUIRE(static_cast<double>(curve.front()) == Catch::Approx(90.0).epsilon(0.05));
   REQUIRE(static_cast<double>(curve.back()) == Catch::Approx(150.0).epsilon(0.05));
-  // Monotone up to the grid's resolution: the decoder may hold a state across
-  // several beats, but it must never step back down on a rising tempo.
-  for (size_t i = 1; i < curve.size(); ++i) {
-    REQUIRE(curve[i] >= curve[i - 1]);
+  // Strictly rising with the input: a smoothed ramp has no plateaus. The last
+  // beat repeats the tempo of the interval leading into it.
+  for (size_t i = 1; i + 1 < curve.size(); ++i) {
+    REQUIRE(curve[i] > curve[i - 1]);
   }
 }
 

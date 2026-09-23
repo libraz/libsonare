@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <vector>
 
 #include "util/constants.h"
@@ -12,22 +11,9 @@ namespace {
 
 using sonare::constants::kEpsilon;
 
-// Period (in seconds) per beat for a given BPM.
-double period_for_bpm(double bpm) { return 60.0 / std::max(bpm, 1.0e-3); }
-
-// Log-spaced tempo-state grid (BPM). Log spacing makes the transition cost
-// scale-invariant: a half/double jump costs the same anywhere in the grid.
-std::vector<double> build_tempo_grid(const TempoCurveConfig& config) {
-  const int n = std::max(config.tempo_state_count, 2);
-  const double lo = std::log(std::max(config.bpm_min, 1.0f));
-  const double hi = std::log(std::max(config.bpm_max, config.bpm_min + 1.0f));
-  std::vector<double> grid(static_cast<size_t>(n));
-  for (int i = 0; i < n; ++i) {
-    const double t = static_cast<double>(i) / static_cast<double>(n - 1);
-    grid[static_cast<size_t>(i)] = std::exp(lo + t * (hi - lo));
-  }
-  return grid;
-}
+// Floor on an observation's weight, so a run of silent beats still has a
+// unique solution: the prior carries across it instead of the system going singular.
+constexpr double kMinObservationWeight = 1.0e-6;
 
 }  // namespace
 
@@ -66,73 +52,43 @@ std::vector<BeatIntervalObservation> build_beat_interval_observations(
 
 std::vector<double> decode_beat_tempo_curve(
     const std::vector<BeatIntervalObservation>& observations, const TempoCurveConfig& config) {
-  const std::vector<double> grid = build_tempo_grid(config);
-  const size_t t_count = observations.size();
-  const size_t s_count = grid.size();
+  const size_t n = observations.size();
   std::vector<double> decoded;
-  if (t_count == 0 || s_count == 0) return decoded;
+  if (n == 0) return decoded;
 
-  const double trans_w = std::max(0.0, static_cast<double>(config.transition_weight));
-  constexpr double kInf = std::numeric_limits<double>::infinity();
+  const double lam = std::max(0.0, static_cast<double>(config.transition_weight));
+  const double lo = std::log(std::max(config.bpm_min, 1.0f));
+  const double hi = std::log(std::max(config.bpm_max, config.bpm_min + 1.0f));
 
-  std::vector<double> log_grid(s_count);
-  for (size_t s = 0; s < s_count; ++s) log_grid[s] = std::log(grid[s]);
-
-  auto obs_cost = [&](size_t t, size_t s) {
-    const double state_period = period_for_bpm(grid[s]);
-    const double r = std::log(state_period) - std::log(observations[t].ibi);
-    // Trust the observation in proportion to its activation weight; an
-    // (near-)silent beat contributes little, letting the transition prior carry.
-    return observations[t].weight * r * r;
-  };
-
-  std::vector<double> prev(s_count);
-  std::vector<double> cur(s_count);
-  std::vector<std::vector<size_t>> back(t_count, std::vector<size_t>(s_count, 0));
-
-  for (size_t s = 0; s < s_count; ++s) prev[s] = obs_cost(0, s);
-
-  for (size_t t = 1; t < t_count; ++t) {
-    for (size_t s = 0; s < s_count; ++s) {
-      double best = kInf;
-      size_t best_prev = 0;
-      const double oc = obs_cost(t, s);
-      for (size_t p = 0; p < s_count; ++p) {
-        const double dr = log_grid[s] - log_grid[p];
-        const double cost = prev[p] + trans_w * dr * dr;
-        if (cost < best) {
-          best = cost;
-          best_prev = p;
-        }
-      }
-      cur[s] = best + oc;
-      back[t][s] = best_prev;
+  // Minimise sum_t w_t (x_t - y_t)^2 + lam * sum_t (x_t - x_{t-1})^2 over the
+  // log-tempo x; y_t is the log tempo of interval t. The normal equations are a
+  // symmetric, diagonally dominant tridiagonal system, solved by the Thomas algorithm.
+  std::vector<double> diag(n);
+  std::vector<double> rhs(n);
+  for (size_t t = 0; t < n; ++t) {
+    const double w = std::max(observations[t].weight, kMinObservationWeight);
+    const double y = std::log(60.0 / observations[t].ibi);
+    const double neighbours = (t > 0 ? 1.0 : 0.0) + (t + 1 < n ? 1.0 : 0.0);
+    diag[t] = w + lam * neighbours;
+    rhs[t] = w * y;
+  }
+  // Forward sweep; the off-diagonal is -lam everywhere.
+  std::vector<double> upper(n, 0.0);
+  for (size_t t = 0; t < n; ++t) {
+    double d = diag[t];
+    if (t > 0) {
+      d -= lam * upper[t - 1];
+      rhs[t] += lam * rhs[t - 1];
     }
-    prev.swap(cur);
+    upper[t] = (t + 1 < n) ? lam / d : 0.0;
+    rhs[t] /= d;
   }
-
-  // Terminate at the minimum-cost state (lowest index on ties).
-  size_t end_state = 0;
-  double best = prev[0];
-  for (size_t s = 1; s < s_count; ++s) {
-    if (prev[s] < best) {
-      best = prev[s];
-      end_state = s;
-    }
+  decoded.assign(n, 0.0);
+  for (size_t k = n; k-- > 0;) {
+    const double x = rhs[k] + (k + 1 < n ? upper[k] * decoded[k + 1] : 0.0);
+    decoded[k] = x;
   }
-
-  // Backtrace from the terminal state. back[t][s] holds the predecessor state at
-  // t-1 for current state s at t, and is only written for t in [1, t_count); row
-  // 0 carries no predecessor. Walk t = t_count-1 .. 1 stepping through back[t],
-  // then write the first frame's state explicitly so the t==0 row (which has no
-  // valid predecessor pointer) is never dereferenced.
-  decoded.assign(t_count, 0.0);
-  size_t s = end_state;
-  for (size_t t = t_count - 1; t >= 1; --t) {
-    decoded[t] = grid[s];
-    s = back[t][s];
-  }
-  decoded[0] = grid[s];
+  for (double& x : decoded) x = std::exp(std::clamp(x, lo, hi));
   return decoded;
 }
 
