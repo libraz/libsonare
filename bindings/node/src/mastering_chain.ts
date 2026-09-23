@@ -513,6 +513,18 @@ export function masteringPresetNames(): MasteringPreset[] {
 }
 
 /**
+ * A built-in preset's chain configuration as a flat `{ "module.param": value }`
+ * map -- the same key space {@link masteringAssistantSuggestChain} returns, and
+ * a preset applies unchanged when passed straight back as {@link masterAudio}'s
+ * `overrides`.
+ *
+ * @throws Error for a name not in {@link masteringPresetNames}.
+ */
+export function masteringPresetParams(preset: MasteringPreset): Record<string, number | boolean> {
+  return addon.masteringPresetParams(preset);
+}
+
+/**
  * Delivery targets the mastering assistant accepts as `targetPlatform`.
  *
  * Read from the library rather than from a list kept here, so a target added in

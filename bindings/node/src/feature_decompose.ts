@@ -308,6 +308,83 @@ export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsRe
   });
 }
 
+export interface DecomposeStemsLinkedRequest {
+  /** One plane per channel, all of the same length. At least one. */
+  channels: Float32Array[];
+  sampleRate?: number;
+  /** Number of NMF components (default 4). */
+  nComponents?: number;
+  /** STFT size (default 2048). */
+  nFft?: number;
+  /** STFT hop (default 512). */
+  hopLength?: number;
+  /** NMF multiplicative-update iterations (default 100). */
+  nIter?: number;
+  /** Beta divergence: 2 = Frobenius (default), 1 = Kullback-Leibler. */
+  beta?: number;
+  /** NMF initialisation (default `'random'`). */
+  init?: 'random' | 'nndsvd';
+  /**
+   * Soft-mask exponent (default 1). 1 keeps the magnitude ratio; 2 is the
+   * Wiener-style power ratio, which separates harder at the cost of more
+   * artefacts on overlapping partials. Must be >= 1.
+   */
+  maskPower?: number;
+}
+/** One time-domain signal per (component, channel) pair, plus the factorisation. */
+export interface DecomposeStemsLinkedResult {
+  /** `components[k][c]` is component `k`, channel `c`, the length of the input. */
+  components: Float32Array[][];
+  /** Component matrix [nBins x nComponents], row-major, from the channel-averaged plane. */
+  w: Float32Array;
+  /** Activation matrix [nComponents x nFrames], row-major. */
+  h: Float32Array;
+  sampleRate: number;
+}
+
+/**
+ * Multi-channel form of {@link decomposeStems}: one NMF model and one soft
+ * mask, built from the channels' averaged magnitude, applied unchanged to
+ * every channel's own complex spectrum -- so no interchannel level or phase
+ * difference moves, the same guarantee `masteringRepairDenoiseClassicalLinked`
+ * gives its channel set.
+ *
+ * A single channel reproduces {@link decomposeStems} bit for bit: the average
+ * over one channel is a division by 1, which does not change the bits.
+ */
+export function decomposeStemsLinked(
+  request: DecomposeStemsLinkedRequest,
+): DecomposeStemsLinkedResult {
+  if (!Array.isArray(request.channels) || request.channels.length === 0) {
+    throw new RangeError('decomposeStemsLinked: channels must be a non-empty array');
+  }
+  const [first, ...rest] = request.channels;
+  assertSamples('decomposeStemsLinked', first, true, 'channels[0]');
+  rest.forEach((channel, index) => {
+    assertSamples('decomposeStemsLinked', channel, true, `channels[${index + 1}]`);
+    if (channel.length !== first.length) {
+      throw new RangeError('decomposeStemsLinked: every channel must have the same length');
+    }
+  });
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('decomposeStemsLinked', resolvedSampleRate);
+  for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
+    const value = request[field];
+    if (value !== undefined) {
+      assertInt32('decomposeStemsLinked', value, field);
+    }
+  }
+  return addon.decomposeStemsLinked(request.channels, resolvedSampleRate, {
+    nComponents: request.nComponents,
+    nFft: request.nFft,
+    hopLength: request.hopLength,
+    nIter: request.nIter,
+    beta: request.beta,
+    init: request.init,
+    maskPower: request.maskPower,
+  });
+}
+
 /** Nearest-neighbour filtering of a flattened [nFeatures x nFrames] spectrogram. */
 export function nnFilter(request: NnFilterRequest): Matrix2D;
 export function nnFilter(

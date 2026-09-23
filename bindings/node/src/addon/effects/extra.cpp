@@ -69,6 +69,45 @@ Napi::Value EffectsCheckCResult(Napi::Env env, SonareError err) {
   return env.Undefined();
 }
 
+// Input planes for a channel-linked call that returns a freshly heap-allocated
+// result rather than writing into caller-owned output planes (unlike the
+// repair family's LinkedPlanes), so only the input side is read here.
+struct ChannelInputs {
+  std::vector<Napi::Float32Array> arrays;
+  std::vector<const float*> ptrs;
+  size_t length = 0;
+};
+
+// Refuses what the C form cannot express: a non-Float32Array element, and a
+// length disagreement, which the single `length` argument has no way to carry.
+// An empty list goes through to the C entry, which owns that rejection.
+bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, const char* fn_name,
+                       ChannelInputs* inputs) {
+  Napi::Array channels = value.As<Napi::Array>();
+  const uint32_t count = channels.Length();
+  inputs->arrays.reserve(count);
+  inputs->ptrs.reserve(count);
+  for (uint32_t index = 0; index < count; ++index) {
+    Napi::Value channel = channels.Get(index);
+    if (!IsFloat32Array(channel)) {
+      Napi::TypeError::New(env, std::string(fn_name) + ": every channel must be a Float32Array")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    inputs->arrays.push_back(channel.As<Napi::Float32Array>());
+    const size_t length = inputs->arrays.back().ElementLength();
+    if (index == 0) {
+      inputs->length = length;
+    } else if (length != inputs->length) {
+      Napi::Error::New(env, std::string(fn_name) + ": every channel must have the same length")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    inputs->ptrs.push_back(inputs->arrays.back().Data());
+  }
+  return true;
+}
+
 }  // namespace
 
 Napi::Value SonareWrap::VoiceCharacterPresetId(const Napi::CallbackInfo& info) {
@@ -234,6 +273,73 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
       std::memcpy(component.Data(), out + c * component_length, component_length * sizeof(float));
     }
     components.Set(static_cast<uint32_t>(c), component);
+  }
+  sonare_free_floats(out);
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("components", components);
+  result.Set("w", EffectsFloatResult(env, out_w, out_w_length));
+  result.Set("h", EffectsFloatResult(env, out_h, out_h_length));
+  result.Set("sampleRate", Napi::Number::New(env, sr));
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array[] channels, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  ChannelInputs inputs;
+  if (!ReadChannelInputs(env, info[0], "decomposeStemsLinked", &inputs)) {
+    return env.Undefined();
+  }
+  int sr = node_narrow_int(env, info[1], "sr");
+  SonareDecomposeStemsConfig config{};
+  config.struct_version = 1;
+  // The init string must outlive the C call, so keep it in a local.
+  std::string init;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    config.n_components = IntProperty(options, "nComponents", kZeroIsSentinel);
+    config.n_fft = IntProperty(options, "nFft", kZeroIsSentinel);
+    config.hop_length = IntProperty(options, "hopLength", kZeroIsSentinel);
+    config.n_iter = IntProperty(options, "nIter", kZeroIsSentinel);
+    config.beta = FloatProperty(options, "beta", 0.0f);
+    config.mask_power = FloatProperty(options, "maskPower", 0.0f);
+    Napi::Value init_value = options.Get("init");
+    if (init_value.IsString()) {
+      init = init_value.As<Napi::String>().Utf8Value();
+      config.init = init.c_str();
+    }
+  }
+  float* out = nullptr;
+  size_t component_count = 0;
+  size_t channel_count = 0;
+  size_t component_length = 0;
+  float* out_w = nullptr;
+  size_t out_w_length = 0;
+  float* out_h = nullptr;
+  size_t out_h_length = 0;
+  SonareError err = sonare_decompose_stems_linked(
+      inputs.ptrs.data(), inputs.ptrs.size(), inputs.length, sr, &config, &out, &component_count,
+      &channel_count, &component_length, &out_w, &out_w_length, &out_h, &out_h_length);
+  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
+  // Layout: component c, channel ch starts at (c * channel_count + ch) * component_length.
+  Napi::Array components = Napi::Array::New(env, component_count);
+  for (size_t c = 0; c < component_count; ++c) {
+    Napi::Array component_channels = Napi::Array::New(env, channel_count);
+    for (size_t ch = 0; ch < channel_count; ++ch) {
+      auto slice = Napi::Float32Array::New(env, component_length);
+      if (component_length > 0 && out != nullptr) {
+        std::memcpy(slice.Data(), out + (c * channel_count + ch) * component_length,
+                    component_length * sizeof(float));
+      }
+      component_channels.Set(static_cast<uint32_t>(ch), slice);
+    }
+    components.Set(static_cast<uint32_t>(c), component_channels);
   }
   sonare_free_floats(out);
   Napi::Object result = Napi::Object::New(env);

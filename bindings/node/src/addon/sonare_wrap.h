@@ -141,6 +141,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value RealtimeVoiceChangerPresetConfig(const Napi::CallbackInfo& info);
   static Napi::Value Decompose(const Napi::CallbackInfo& info);
   static Napi::Value DecomposeStems(const Napi::CallbackInfo& info);
+  static Napi::Value DecomposeStemsLinked(const Napi::CallbackInfo& info);
   static Napi::Value NnFilter(const Napi::CallbackInfo& info);
   static Napi::Value Remix(const Napi::CallbackInfo& info);
   static Napi::Value RemixAlignedIntervals(const Napi::CallbackInfo& info);
@@ -186,6 +187,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringStereoAnalyze(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAssistantSuggest(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAssistantSuggestChain(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringPresetParams(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAudioProfile(const Napi::CallbackInfo& info);
   static Napi::Value MasteringStreamingPreview(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAssistantSuggestStereo(const Napi::CallbackInfo& info);

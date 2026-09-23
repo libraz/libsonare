@@ -293,6 +293,27 @@ Napi::Value SonareWrap::MasteringAssistantSuggestChain(const Napi::CallbackInfo&
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::MasteringPresetParams(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected (preset: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  const std::string preset = info[0].As<Napi::String>().Utf8Value();
+  char* json_out = nullptr;
+  const SonareError err = sonare_mastering_preset_params_json(preset.c_str(), &json_out);
+  if (err != SONARE_OK) {
+    sonare_free_string(json_out);
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  Napi::Object result = ChainConfigParamsToObject(env, json_out);
+  sonare_free_string(json_out);
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringAudioProfile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {

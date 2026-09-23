@@ -121,10 +121,27 @@ export interface CapabilityCatalogPresets {
   voiceChanger: string[];
 }
 
+/**
+ * One built-in mastering preset's loudness-stage identity, in `preset_names()`
+ * order.
+ *
+ * `kind: 'restoration'` presets enable repair stages only and leave level
+ * alone, so all three numeric fields are null; every other preset carries the
+ * loudness target its chain builds toward.
+ */
+export interface MasteringPresetInfo {
+  name: string;
+  kind: 'mastering' | 'restoration';
+  targetLufs: number | null;
+  truePeakCeilingDb: number | null;
+  maxLimiterGainReductionDb: number | null;
+}
+
 /** Complete runtime catalog exposed by {@link capabilityCatalog}. */
 export interface CapabilityCatalog {
   version: string;
   abi: Capabilities['abi'];
   processors: CapabilityCatalogProcessor[];
   presets: CapabilityCatalogPresets;
+  masteringPresets: MasteringPresetInfo[];
 }

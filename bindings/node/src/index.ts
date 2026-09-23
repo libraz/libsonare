@@ -142,6 +142,7 @@ export type {
   MasteringLoudnessSummary,
   MasteringOptions,
   MasteringPreset,
+  MasteringPresetInfo,
   MasteringReport,
   MasteringResult,
   MasteringStereoResult,

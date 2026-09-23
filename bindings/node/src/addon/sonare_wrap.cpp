@@ -233,6 +233,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("decompose", Napi::Function::New(env, &SonareWrap::Decompose, "decompose"));
   exports.Set("decomposeStems",
               Napi::Function::New(env, &SonareWrap::DecomposeStems, "decomposeStems"));
+  exports.Set("decomposeStemsLinked",
+              Napi::Function::New(env, &SonareWrap::DecomposeStemsLinked, "decomposeStemsLinked"));
   exports.Set("nnFilter", Napi::Function::New(env, &SonareWrap::NnFilter, "nnFilter"));
   exports.Set("remix", Napi::Function::New(env, &SonareWrap::Remix, "remix"));
   exports.Set("remixAlignedIntervals", Napi::Function::New(env, &SonareWrap::RemixAlignedIntervals,
@@ -337,6 +339,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringAssistantSuggestChain",
               Napi::Function::New(env, &SonareWrap::MasteringAssistantSuggestChain,
                                   "masteringAssistantSuggestChain"));
+  exports.Set("masteringPresetParams", Napi::Function::New(env, &SonareWrap::MasteringPresetParams,
+                                                           "masteringPresetParams"));
   exports.Set("masteringAudioProfile", Napi::Function::New(env, &SonareWrap::MasteringAudioProfile,
                                                            "masteringAudioProfile"));
   exports.Set("masteringStreamingPreview",
