@@ -56,7 +56,7 @@ class SynthParamSurfaceTest(unittest.TestCase):
     def test_a_wrapper_field_missing_from_the_table_is_reported(self) -> None:
         # The real drift: the highpass reached the patch at struct_version 4 and
         # never reached the table.
-        without = TABLE.replace('{"hpCutoffHz", NativeSynthParamId::kHpCutoffHz},\n', "")
+        without = TABLE.replace('{"hpCutoffHz", NativeSynthParamId::kHpCutoffHz, 0.0f, 22000.0f, "Hz"},\n', "")
         self.assertNotEqual(without, TABLE)
         names = checker.table_names(without)
         self.assertNotIn("hpCutoffHz", names)
