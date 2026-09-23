@@ -65,6 +65,9 @@ class LayeredInstrument final : public MidiInstrument {
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
+  bool process_source_tracks(const MidiInstrumentSourceOutput* outputs, size_t output_count,
+                             int num_channels, int num_samples) noexcept override;
+  bool supports_source_track_rendering() const noexcept override;
   void reset() override;
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
   void set_transport(const transport::TransportState& state) noexcept override;
@@ -110,6 +113,12 @@ class LayeredInstrument final : public MidiInstrument {
   std::vector<uint32_t> note_owners_;
   /// Per-child render scratch: max_block_size frames for each of two legs.
   std::vector<float> scratch_;
+  /// Per-layer source-track render scratch, reused across layers (zero-cleared
+  /// per layer, per call): kMaxResidualSources slots x two legs x
+  /// max_block_size_ frames. Sized to midi::kMaxResidualSources rather than
+  /// the engine's own MidiInstrumentSourceOutput bound, which this header
+  /// cannot see without depending on src/engine.
+  std::vector<float> source_scratch_;
   int max_block_size_ = 0;
   bool prepared_ = false;
 };

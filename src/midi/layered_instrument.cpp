@@ -1,8 +1,10 @@
 #include "midi/layered_instrument.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 
+#include "midi/source_residual.h"
 #include "midi/ump.h"
 #include "rt/pan_law.h"
 #include "util/exception.h"
@@ -55,6 +57,7 @@ void LayeredInstrument::prepare(double sample_rate, int max_block_size) {
 
   max_block_size_ = std::max(0, max_block_size);
   scratch_.assign(static_cast<size_t>(max_block_size_) * 2u, 0.0f);
+  source_scratch_.assign(kMaxResidualSources * 2u * static_cast<size_t>(max_block_size_), 0.0f);
   note_owners_.assign(kNoteSlots, 0u);
   prepared_ = true;
 }
@@ -149,6 +152,66 @@ void LayeredInstrument::process(float* const* channels, int num_channels, int nu
     }
   }
   if (layer_discard_sum() != layer_discards_before) note_non_finite_discard();
+}
+
+bool LayeredInstrument::supports_source_track_rendering() const noexcept {
+  for (const Layer& layer : layers_) {
+    if (!layer.instrument->supports_source_track_rendering()) return false;
+  }
+  return true;
+}
+
+bool LayeredInstrument::process_source_tracks(const MidiInstrumentSourceOutput* outputs,
+                                              size_t output_count, int num_channels,
+                                              int num_samples) noexcept {
+  if (outputs == nullptr || output_count == 0 || output_count > kMaxResidualSources ||
+      num_channels <= 0 || num_samples <= 0 || num_samples > max_block_size_) {
+    return false;
+  }
+  for (const Layer& layer : layers_) {
+    if (!layer.instrument->supports_source_track_rendering()) return false;
+  }
+
+  const int legs = std::min(num_channels, 2);
+  const size_t block = static_cast<size_t>(max_block_size_);
+  const auto scratch_channel = [&](size_t slot, int leg) noexcept -> float* {
+    return source_scratch_.data() + (slot * 2u + static_cast<size_t>(leg)) * block;
+  };
+
+  // One scratch target per caller output slot, reused for every layer below
+  // (re-zeroed and re-rendered into each time) rather than allocated per layer.
+  std::array<std::array<float*, 2>, kMaxResidualSources> scratch_chans{};
+  std::array<MidiInstrumentSourceOutput, kMaxResidualSources> layer_outputs{};
+  for (size_t s = 0; s < output_count; ++s) {
+    scratch_chans[s] = {scratch_channel(s, 0), scratch_channel(s, 1)};
+    layer_outputs[s] = {outputs[s].source_track_id, scratch_chans[s].data()};
+  }
+
+  const uint64_t layer_discards_before = layer_discard_sum();
+  for (Layer& layer : layers_) {
+    for (size_t s = 0; s < output_count; ++s) {
+      std::fill_n(scratch_channel(s, 0), num_samples, 0.0f);
+      if (legs > 1) std::fill_n(scratch_channel(s, 1), num_samples, 0.0f);
+    }
+    if (!layer.instrument->process_source_tracks(layer_outputs.data(), output_count, legs,
+                                                 num_samples)) {
+      return false;
+    }
+    for (size_t s = 0; s < output_count; ++s) {
+      float* const* target = outputs[s].channels;
+      if (target == nullptr) continue;
+      if (target[0] != nullptr) {
+        const float* src = scratch_channel(s, 0);
+        for (int i = 0; i < num_samples; ++i) target[0][i] += src[i] * layer.gain_left;
+      }
+      if (legs > 1 && target[1] != nullptr) {
+        const float* src = scratch_channel(s, 1);
+        for (int i = 0; i < num_samples; ++i) target[1][i] += src[i] * layer.gain_right;
+      }
+    }
+  }
+  if (layer_discard_sum() != layer_discards_before) note_non_finite_discard();
+  return true;
 }
 
 void LayeredInstrument::set_transport(const transport::TransportState& state) noexcept {

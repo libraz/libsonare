@@ -7,24 +7,33 @@
 
 #include "midi/layered_instrument.h"
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "midi/midi_event.h"
+#include "midi/synth/native_synth.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "support/midi_render.h"
+#include "util/db.h"
 
 namespace {
 
+using sonare::db_to_linear;
 using sonare::midi::InstrumentLayerSpec;
 using sonare::midi::LayeredInstrument;
 using sonare::midi::MidiEvent;
 using sonare::midi::MidiInstrument;
+using sonare::midi::MidiInstrumentSourceOutput;
+using sonare::midi::synth::NativeSynth;
+using sonare::midi::synth::NativeSynthConfig;
 
 constexpr double kRate = 48000.0;
 
@@ -119,6 +128,26 @@ Legs render(LayeredInstrument& inst, int num_samples = 64) {
   float* chans[2] = {l.data(), r.data()};
   inst.process(chans, 2, num_samples);
   return {l[0], r[0]};
+}
+
+/// Two default-placement (level 1, pan 0 -> unity gain) NativeSynth layers,
+/// so the sum across layers exercises LayeredInstrument's source-track
+/// multiply-add without perturbing bit-exactness (multiplying by 1.0f is
+/// exact in IEEE 754).
+std::unique_ptr<LayeredInstrument> make_two_synth_layers(double rate, int block) {
+  auto inst = std::make_unique<LayeredInstrument>();
+  REQUIRE(
+      inst->add_layer(std::make_unique<NativeSynth>(NativeSynthConfig{}), InstrumentLayerSpec{}));
+  REQUIRE(
+      inst->add_layer(std::make_unique<NativeSynth>(NativeSynthConfig{}), InstrumentLayerSpec{}));
+  inst->prepare(rate, block);
+  return inst;
+}
+
+float rms(const std::vector<float>& buf) {
+  double sum = 0.0;
+  for (float v : buf) sum += static_cast<double>(v) * static_cast<double>(v);
+  return static_cast<float>(std::sqrt(sum / static_cast<double>(buf.size())));
 }
 
 }  // namespace
@@ -403,4 +432,108 @@ TEST_CASE("The layered audio path is allocation-free", "[midi][layered]") {
     inst.process(chans, 2, 128);
     REQUIRE(guard.count() == 0);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Source-track rendering: process_source_tracks() / supports_source_track_rendering()
+// ---------------------------------------------------------------------------
+
+TEST_CASE("supports_source_track_rendering is false when any layer lacks it", "[midi][layered]") {
+  LayeredInstrument mixed;
+  REQUIRE(
+      mixed.add_layer(std::make_unique<NativeSynth>(NativeSynthConfig{}), InstrumentLayerSpec{}));
+  REQUIRE(mixed.add_layer(std::make_unique<ProbeInstrument>(), InstrumentLayerSpec{}));
+  mixed.prepare(kRate, 128);
+  CHECK_FALSE(mixed.supports_source_track_rendering());
+
+  LayeredInstrument all_source_aware;
+  REQUIRE(all_source_aware.add_layer(std::make_unique<NativeSynth>(NativeSynthConfig{}),
+                                     InstrumentLayerSpec{}));
+  all_source_aware.prepare(kRate, 128);
+  CHECK(all_source_aware.supports_source_track_rendering());  // non-vacuity
+}
+
+TEST_CASE(
+    "LayeredInstrument source-track render: one active lane is bit-identical to a lane-less "
+    "render",
+    "[midi][layered]") {
+  constexpr uint32_t kTrack = 77;
+  constexpr int kSamples = 256;
+
+  auto solo = make_two_synth_layers(kRate, 256);
+  solo->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  std::vector<float> solo_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> solo_r(static_cast<size_t>(kSamples), 0.0f);
+  float* solo_target[] = {solo_l.data(), solo_r.data()};
+  const MidiInstrumentSourceOutput solo_outputs[] = {{0, solo_target}};
+  REQUIRE(solo->process_source_tracks(solo_outputs, 1, 2, kSamples));
+
+  auto laned = make_two_synth_layers(kRate, 256);
+  MidiEvent on = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  on.source_track_id = kTrack;
+  laned->on_event(0, on);
+  std::vector<float> fallback_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> fallback_r(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> lane_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> lane_r(static_cast<size_t>(kSamples), 0.0f);
+  float* fallback_target[] = {fallback_l.data(), fallback_r.data()};
+  float* lane_target[] = {lane_l.data(), lane_r.data()};
+  const MidiInstrumentSourceOutput laned_outputs[] = {{0, fallback_target}, {kTrack, lane_target}};
+  {
+    sonare::test::AllocationGuard guard;
+    REQUIRE(laned->process_source_tracks(laned_outputs, 2, 2, kSamples));
+    REQUIRE(guard.count() == 0);  // S1(d)
+  }
+
+  float solo_peak = 0.0f;
+  for (float v : solo_l) solo_peak = std::max(solo_peak, std::fabs(v));
+  REQUIRE(solo_peak > 0.0f);  // non-vacuity: there is something to match
+  for (size_t i = 0; i < static_cast<size_t>(kSamples); ++i) {
+    REQUIRE(lane_l[i] == solo_l[i]);  // S1(b): lane target == lane-less render's slot 0
+    REQUIRE(lane_r[i] == solo_r[i]);
+    REQUIRE(fallback_l[i] == 0.0f);  // S1(b): slot 0 carries nothing
+    REQUIRE(fallback_r[i] == 0.0f);
+  }
+}
+
+TEST_CASE(
+    "LayeredInstrument source-track render: muting a single lane attenuates the render by "
+    "90 dB",
+    "[midi][layered]") {
+  constexpr uint32_t kTrack = 55;
+  constexpr int kSamples = 256;
+  const float lane_gain_muted = db_to_linear(-96.0f);
+
+  auto inst = make_two_synth_layers(kRate, 256);
+  MidiEvent on = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  on.source_track_id = kTrack;
+  inst->on_event(0, on);
+
+  std::vector<float> fallback_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> fallback_r(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> lane_l(static_cast<size_t>(kSamples), 0.0f);
+  std::vector<float> lane_r(static_cast<size_t>(kSamples), 0.0f);
+  float* fallback_target[] = {fallback_l.data(), fallback_r.data()};
+  float* lane_target[] = {lane_l.data(), lane_r.data()};
+  const MidiInstrumentSourceOutput outputs[] = {{0, fallback_target}, {kTrack, lane_target}};
+  REQUIRE(inst->process_source_tracks(outputs, 2, 2, kSamples));
+
+  // A real engine sums slot 0 (unfaded) and the lane target (faded by the
+  // lane's own fader) into the master bus, so this reproduces what a lane
+  // fader at 0 dB vs -96 dB would deliver downstream.
+  std::vector<float> unmuted(static_cast<size_t>(kSamples) * 2);
+  std::vector<float> muted(static_cast<size_t>(kSamples) * 2);
+  for (size_t i = 0; i < static_cast<size_t>(kSamples); ++i) {
+    unmuted[2 * i] = fallback_l[i] + lane_l[i];
+    unmuted[2 * i + 1] = fallback_r[i] + lane_r[i];
+    muted[2 * i] = fallback_l[i] + lane_l[i] * lane_gain_muted;
+    muted[2 * i + 1] = fallback_r[i] + lane_r[i] * lane_gain_muted;
+  }
+  const float rms_unmuted = rms(unmuted);
+  const float rms_muted = rms(muted);
+  REQUIRE(rms_unmuted > 1.0e-4f);  // non-vacuity
+  const double attenuation_db = 20.0 * std::log10(static_cast<double>(rms_unmuted) /
+                                                  std::max(static_cast<double>(rms_muted), 1e-12));
+  INFO("lane-mute attenuation (dB): " << attenuation_db);
+  REQUIRE(attenuation_db >= 90.0);  // S1(a)
 }
