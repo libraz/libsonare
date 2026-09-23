@@ -108,6 +108,27 @@ bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, const char* fn_n
   return true;
 }
 
+// Shared by decomposeStems and decomposeStemsLinked. @p init receives the
+// "init" string so its storage outlives the C call that reads config.init.
+SonareDecomposeStemsConfig ReadDecomposeStemsConfig(const Napi::Value& value, std::string* init) {
+  SonareDecomposeStemsConfig config{};
+  config.struct_version = 1;
+  if (!value.IsObject()) return config;
+  Napi::Object options = value.As<Napi::Object>();
+  config.n_components = IntProperty(options, "nComponents", kZeroIsSentinel);
+  config.n_fft = IntProperty(options, "nFft", kZeroIsSentinel);
+  config.hop_length = IntProperty(options, "hopLength", kZeroIsSentinel);
+  config.n_iter = IntProperty(options, "nIter", kZeroIsSentinel);
+  config.beta = FloatProperty(options, "beta", 0.0f);
+  config.mask_power = FloatProperty(options, "maskPower", 0.0f);
+  Napi::Value init_value = options.Get("init");
+  if (init_value.IsString()) {
+    *init = init_value.As<Napi::String>().Utf8Value();
+    config.init = init->c_str();
+  }
+  return config;
+}
+
 }  // namespace
 
 Napi::Value SonareWrap::VoiceCharacterPresetId(const Napi::CallbackInfo& info) {
@@ -237,24 +258,10 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = node_narrow_int(env, info[1], "sr");
-  SonareDecomposeStemsConfig config{};
-  config.struct_version = 1;
   // The init string must outlive the C call, so keep it in a local.
   std::string init;
-  if (info.Length() >= 3 && info[2].IsObject()) {
-    Napi::Object options = info[2].As<Napi::Object>();
-    config.n_components = IntProperty(options, "nComponents", kZeroIsSentinel);
-    config.n_fft = IntProperty(options, "nFft", kZeroIsSentinel);
-    config.hop_length = IntProperty(options, "hopLength", kZeroIsSentinel);
-    config.n_iter = IntProperty(options, "nIter", kZeroIsSentinel);
-    config.beta = FloatProperty(options, "beta", 0.0f);
-    config.mask_power = FloatProperty(options, "maskPower", 0.0f);
-    Napi::Value init_value = options.Get("init");
-    if (init_value.IsString()) {
-      init = init_value.As<Napi::String>().Utf8Value();
-      config.init = init.c_str();
-    }
-  }
+  const SonareDecomposeStemsConfig config =
+      ReadDecomposeStemsConfig(info.Length() >= 3 ? info[2] : env.Undefined(), &init);
   float* out = nullptr;
   size_t component_count = 0;
   size_t component_length = 0;
@@ -297,24 +304,10 @@ Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int sr = node_narrow_int(env, info[1], "sr");
-  SonareDecomposeStemsConfig config{};
-  config.struct_version = 1;
   // The init string must outlive the C call, so keep it in a local.
   std::string init;
-  if (info.Length() >= 3 && info[2].IsObject()) {
-    Napi::Object options = info[2].As<Napi::Object>();
-    config.n_components = IntProperty(options, "nComponents", kZeroIsSentinel);
-    config.n_fft = IntProperty(options, "nFft", kZeroIsSentinel);
-    config.hop_length = IntProperty(options, "hopLength", kZeroIsSentinel);
-    config.n_iter = IntProperty(options, "nIter", kZeroIsSentinel);
-    config.beta = FloatProperty(options, "beta", 0.0f);
-    config.mask_power = FloatProperty(options, "maskPower", 0.0f);
-    Napi::Value init_value = options.Get("init");
-    if (init_value.IsString()) {
-      init = init_value.As<Napi::String>().Utf8Value();
-      config.init = init.c_str();
-    }
-  }
+  const SonareDecomposeStemsConfig config =
+      ReadDecomposeStemsConfig(info.Length() >= 3 ? info[2] : env.Undefined(), &init);
   float* out = nullptr;
   size_t component_count = 0;
   size_t channel_count = 0;
