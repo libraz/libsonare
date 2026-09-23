@@ -61,6 +61,7 @@ function reject(module: SonareModule): unknown {
       0,
       false,
       REJECTED_CHROMA_METHOD,
+      0,
     );
   } catch (error) {
     return error;

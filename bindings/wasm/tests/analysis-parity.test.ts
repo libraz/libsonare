@@ -178,6 +178,7 @@ describe('WASM wave3 analysis parity', () => {
           Mode.Major,
           false,
           2,
+          0,
         ),
       ).toThrow();
     });
@@ -219,6 +220,7 @@ describe('WASM wave3 analysis parity', () => {
           false,
           false,
           2,
+          0,
         ),
       ).toThrow();
     });
