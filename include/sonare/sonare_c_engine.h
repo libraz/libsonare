@@ -165,6 +165,15 @@ SonareError sonare_engine_parameter_info_by_index(SonareRealtimeEngine* engine, 
                                                   SonareParameterInfo* out);
 SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t id,
                                          SonareParameterInfo* out);
+/// @brief Replaces the automation lane driving @p param_id (control thread).
+/// @details An empty lane (@p point_count == 0) leaves the target
+///   undriven rather than snapping it to 0 or a default: once the audio
+///   thread adopts the change, the target reverts to the last value
+///   explicitly sent through @ref sonare_engine_set_parameter /
+///   @ref sonare_engine_set_parameter_smoothed, or is left unchanged if no
+///   such value was ever sent for @p param_id. This holds regardless of
+///   whether the manual value or the lane clear reaches the audio thread
+///   first.
 SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint32_t param_id,
                                               const SonareAutomationPoint* points,
                                               size_t point_count);
@@ -598,9 +607,16 @@ SonareError sonare_engine_drain_scope_telemetry(SonareRealtimeEngine* engine,
 /// @param param_id Target parameter id.
 /// @param value New value.
 /// @param render_frame Render-frame time to apply, or -1 for immediate.
+/// @details This value also becomes @p param_id's base value: if an
+///   automation lane later starts (and stops) driving @p param_id, the target
+///   reverts to this value once that lane empties -- see
+///   @ref sonare_engine_set_automation_lane.
 SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t param_id,
                                         float value, int64_t render_frame);
 /// @brief Pushes a live parameter value to the engine using a smoothed ramp.
+/// @details The ramp's target (not its in-flight position) becomes
+///   @p param_id's base value, with the same restore-on-lane-release behavior
+///   as @ref sonare_engine_set_parameter.
 SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
                                                  float value, int64_t render_frame);
 /// @brief Sets the default ramp time (ms) for engine-level smoothed parameters.

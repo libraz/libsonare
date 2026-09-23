@@ -55,6 +55,12 @@ enum class TelemetryErrorCode : uint16_t {
   // telemetry errors after that reserved slot so binding ordinals remain
   // stable across surfaces.
   kMaxChannelsExceeded = 20,
+  // The audio-thread base-value table (the last manually-set setParameter /
+  // setParameterSmoothed target per parameter id, restored when a lane driving
+  // that id empties) could not record a new id because it was already at its
+  // fixed capacity. The value carries the number of drops accrued during the
+  // block, once per block, mirroring kInsertAutomationOverflow.
+  kParameterBaseOverflow = 21,
 };
 
 struct Telemetry {

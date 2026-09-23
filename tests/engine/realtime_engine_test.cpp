@@ -11,6 +11,7 @@
 
 #include "engine/clip_player.h"
 #include "engine/engine_controller.h"
+#include "engine/parameter_base_table.h"
 #include "engine/telemetry.h"
 #include "transport/tempo_map.h"
 #include "util/exception.h"
@@ -542,6 +543,245 @@ TEST_CASE("RealtimeEngine applies automation at sub-block boundaries", "[engine]
   REQUIRE(processor.values[0] == 0.0f);
   REQUIRE(processor.params[1] == 7);
   REQUIRE(processor.values[1] == 0.5f);
+}
+
+TEST_CASE("ParameterBaseTable records, looks up, and updates values", "[engine]") {
+  sonare::engine::ParameterBaseTable table;
+  table.prepare(8, 4);
+
+  float value = 0.0f;
+  REQUIRE_FALSE(table.lookup(1, &value));  // nothing recorded yet.
+  REQUIRE(table.entry_count() == 0);
+
+  REQUIRE(table.record(1, 0.5f));
+  REQUIRE(table.entry_count() == 1);
+  REQUIRE(table.lookup(1, &value));
+  REQUIRE(value == 0.5f);
+
+  // Recording the same id again updates it in place, not a new entry.
+  REQUIRE(table.record(1, -0.25f));
+  REQUIRE(table.entry_count() == 1);
+  REQUIRE(table.lookup(1, &value));
+  REQUIRE(value == -0.25f);
+
+  REQUIRE(table.record(2, 1.0f));
+  REQUIRE(table.entry_count() == 2);
+  REQUIRE(table.lookup(2, &value));
+  REQUIRE(value == 1.0f);
+  // The first id's value is unaffected by recording a second, distinct one.
+  REQUIRE(table.lookup(1, &value));
+  REQUIRE(value == -0.25f);
+
+  REQUIRE_FALSE(table.lookup(3, &value));  // id 3 was never recorded.
+  REQUIRE_FALSE(table.record(0, 1.0f));    // 0 is the reserved invalid id.
+  REQUIRE(table.entry_count() == 2);       // the rejected id 0 is not an entry.
+}
+
+TEST_CASE("ParameterBaseTable reports capacity overflow once max_entries is reached", "[engine]") {
+  // A small capacity, independent of RealtimeEngine's 4096-entry sizing, so
+  // the overflow signal that drives telemetry 21 is reachable directly.
+  sonare::engine::ParameterBaseTable table;
+  table.prepare(16, 4);
+
+  REQUIRE(table.record(1, 1.0f));
+  REQUIRE(table.record(2, 2.0f));
+  REQUIRE(table.record(3, 3.0f));
+  REQUIRE(table.record(4, 4.0f));
+  REQUIRE(table.entry_count() == 4);
+
+  // A fifth distinct id cannot be recorded: "not recorded" is what the
+  // caller (RealtimeEngine::record_parameter_base) turns into telemetry 21.
+  REQUIRE_FALSE(table.record(5, 5.0f));
+  REQUIRE(table.entry_count() == 4);
+  float value = 0.0f;
+  REQUIRE_FALSE(table.lookup(5, &value));
+
+  // An update to an id already present still succeeds even while full.
+  REQUIRE(table.record(2, -2.0f));
+  REQUIRE(table.entry_count() == 4);
+  REQUIRE(table.lookup(2, &value));
+  REQUIRE(value == -2.0f);
+}
+
+TEST_CASE(
+    "RealtimeEngine restores the manual base value when its lane empties, "
+    "manual value sent before the clear",
+    "[engine][realtime]") {
+  constexpr int kFrames = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+
+  CaptureProcessor processor;
+  engine.automation().bind_target(7, &processor);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  sonare::rt::Command manual{};
+  manual.type = sonare::rt::CommandType::kSetParam;
+  manual.target_id = 7;
+  manual.sample_time = -1;
+  manual.arg.f = -6.0f;
+  REQUIRE(engine.push_command(manual));
+
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, -12.0f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+
+  std::array<float, kFrames> left{};
+  float* io[] = {left.data()};
+  engine.process(io, 1, kFrames);
+  engine.settle_parameters();
+
+  // The manual value is recorded as the base, but the lane is still alive
+  // this block and overwrites it.
+  REQUIRE(processor.count > 0);
+  REQUIRE(processor.values[static_cast<size_t>(processor.count - 1)] == -12.0f);
+
+  sonare::automation::AutomationLane emptied(7);  // clear: no points.
+  engine.automation().set_lanes({emptied});
+  engine.process(io, 1, kFrames);
+  engine.settle_parameters();
+
+  // Once the lane empties, the target reverts to the recorded manual value.
+  REQUIRE(processor.values[static_cast<size_t>(processor.count - 1)] == -6.0f);
+}
+
+TEST_CASE(
+    "RealtimeEngine applies a manual value sent after its lane clears "
+    "with no base recorded yet",
+    "[engine][realtime]") {
+  constexpr int kFrames = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+
+  CaptureProcessor processor;
+  engine.automation().bind_target(7, &processor);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, -20.0f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+
+  std::array<float, kFrames> left{};
+  float* io[] = {left.data()};
+  engine.process(io, 1, kFrames);
+  engine.settle_parameters();
+  REQUIRE(processor.count > 0);
+  REQUIRE(processor.values[static_cast<size_t>(processor.count - 1)] == -20.0f);
+
+  // Clear the lane before any manual value was ever sent: no base is
+  // recorded, so the release is a no-op and the last value is left as-is.
+  sonare::automation::AutomationLane emptied(7);
+  engine.automation().set_lanes({emptied});
+  const int count_before_clear = processor.count;
+  engine.process(io, 1, kFrames);
+  engine.settle_parameters();
+  REQUIRE(processor.count == count_before_clear);
+
+  // The manual value sent afterward applies directly -- nothing is left to
+  // drive it back.
+  sonare::rt::Command manual{};
+  manual.type = sonare::rt::CommandType::kSetParam;
+  manual.target_id = 7;
+  manual.sample_time = -1;
+  manual.arg.f = -6.0f;
+  REQUIRE(engine.push_command(manual));
+  engine.process(io, 1, kFrames);
+  engine.settle_parameters();
+  REQUIRE(processor.values[static_cast<size_t>(processor.count - 1)] == -6.0f);
+}
+
+TEST_CASE(
+    "RealtimeEngine leaves a target's value unchanged when its lane clears "
+    "and no manual value was ever sent",
+    "[engine][realtime]") {
+  constexpr int kFrames = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+
+  CaptureProcessor processor;
+  engine.automation().bind_target(7, &processor);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, -20.0f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+
+  std::array<float, kFrames> left{};
+  float* io[] = {left.data()};
+  engine.process(io, 1, kFrames);
+  engine.settle_parameters();
+  REQUIRE(processor.count > 0);
+  REQUIRE(processor.values[static_cast<size_t>(processor.count - 1)] == -20.0f);
+
+  sonare::automation::AutomationLane emptied(7);
+  engine.automation().set_lanes({emptied});
+  const int count_before_clear = processor.count;
+  engine.process(io, 1, kFrames);
+  engine.settle_parameters();
+
+  REQUIRE(processor.count == count_before_clear);  // release found nothing to restore.
+  REQUIRE(processor.values[static_cast<size_t>(processor.count - 1)] == -20.0f);
+}
+
+TEST_CASE(
+    "RealtimeEngine restores a smoothed command's ramp target, not its "
+    "in-flight value",
+    "[engine][realtime]") {
+  constexpr int kFrames = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+
+  CaptureProcessor processor;
+  engine.automation().bind_target(7, &processor);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  sonare::rt::Command manual{};
+  manual.type = sonare::rt::CommandType::kSetParamSmoothed;
+  manual.target_id = 7;
+  manual.sample_time = -1;
+  manual.arg.f = -40.0f;
+  REQUIRE(engine.push_command(manual));
+
+  std::array<float, kFrames> left{};
+  float* io[] = {left.data()};
+  engine.process(io, 1, kFrames);
+  // The base value recorded by apply_command() is the ramp's target
+  // (command.arg.f), set at command-apply time -- well before this settle
+  // forces the ramp itself to reach it.
+  engine.settle_parameters();
+  REQUIRE(processor.count > 0);
+  REQUIRE(processor.values[static_cast<size_t>(processor.count - 1)] == -40.0f);
+
+  // A lane now drives the same target to a different value.
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, 5.0f, sonare::automation::CurveType::Hold}});
+  engine.automation().set_lanes({lane});
+  engine.process(io, 1, kFrames);
+  engine.settle_parameters();
+  REQUIRE(processor.values[static_cast<size_t>(processor.count - 1)] == 5.0f);
+
+  // Clearing it restores the smoothed command's recorded target.
+  sonare::automation::AutomationLane emptied(7);
+  engine.automation().set_lanes({emptied});
+  engine.process(io, 1, kFrames);
+  engine.settle_parameters();
+  REQUIRE(processor.values[static_cast<size_t>(processor.count - 1)] == -40.0f);
 }
 
 TEST_CASE("RealtimeEngine re-prepare at a new sample rate stays consistent",

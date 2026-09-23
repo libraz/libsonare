@@ -56,6 +56,16 @@ struct RouterCapture {
 constexpr uint32_t kEngineNamespaceMask = 0xFFFF0000u;
 constexpr uint32_t kEngineNamespaceMatch = 0x4D580000u;
 
+// Captures AutomationEngine::LaneReleaseCallback invocations (see
+// set_lane_release_callback).
+struct ReleaseCapture {
+  std::vector<uint32_t> released;
+
+  static void release(void* context, uint32_t param_id) {
+    static_cast<ReleaseCapture*>(context)->released.push_back(param_id);
+  }
+};
+
 }  // namespace
 
 TEST_CASE("AutomationLane evaluates hold linear exponential and s-curve breakpoints",
@@ -447,6 +457,61 @@ TEST_CASE("AutomationEngine set_parameter routes engine-namespace ids", "[automa
   REQUIRE_FALSE(engine.set_parameter(engine_param, 0.0f));
   REQUIRE(router.call_count == 2);
   REQUIRE(engine.unknown_target_count() == 1);
+}
+
+TEST_CASE("AutomationEngine releases a target whose lane emptied", "[automation]") {
+  sonare::automation::AutomationEngine engine;
+  ReleaseCapture release;
+  engine.set_lane_release_callback(&ReleaseCapture::release, &release);
+
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, 0.25f, sonare::automation::CurveType::Linear}});
+  engine.set_lanes({lane});
+  engine.acquire_lanes();
+  // The very first adopt has no previous lane set, so nothing to release yet.
+  REQUIRE(release.released.empty());
+
+  sonare::automation::AutomationLane emptied(7);  // no points: the clear path.
+  engine.set_lanes({emptied});
+  engine.acquire_lanes();
+
+  REQUIRE(release.released == std::vector<uint32_t>{7});
+}
+
+TEST_CASE("AutomationEngine releases a target dropped from the lane set entirely", "[automation]") {
+  sonare::automation::AutomationEngine engine;
+  ReleaseCapture release;
+  engine.set_lane_release_callback(&ReleaseCapture::release, &release);
+
+  sonare::automation::AutomationLane lane(9);
+  lane.set_points({{0.0, 0.5f, sonare::automation::CurveType::Linear}});
+  engine.set_lanes({lane});
+  engine.acquire_lanes();
+  REQUIRE(release.released.empty());
+
+  engine.set_lanes({});  // target 9 no longer present at all, not just emptied.
+  engine.acquire_lanes();
+
+  REQUIRE(release.released == std::vector<uint32_t>{9});
+}
+
+TEST_CASE("AutomationEngine does not release a target whose lane keeps its points",
+          "[automation]") {
+  sonare::automation::AutomationEngine engine;
+  ReleaseCapture release;
+  engine.set_lane_release_callback(&ReleaseCapture::release, &release);
+
+  sonare::automation::AutomationLane first(3);
+  first.set_points({{0.0, 0.1f, sonare::automation::CurveType::Linear}});
+  engine.set_lanes({first});
+  engine.acquire_lanes();
+
+  sonare::automation::AutomationLane second(3);
+  second.set_points({{0.0, 0.9f, sonare::automation::CurveType::Linear}});
+  engine.set_lanes({second});
+  engine.acquire_lanes();
+
+  REQUIRE(release.released.empty());
 }
 
 TEST_CASE("ParameterRegistry enumerates stable metadata", "[automation]") {

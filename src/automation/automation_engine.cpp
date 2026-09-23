@@ -264,6 +264,29 @@ rt::ProcessorBase* AutomationEngine::target_for(uint32_t param_id) const noexcep
   return nullptr;
 }
 
+void AutomationEngine::notify_lane_targets_released(
+    const std::vector<AutomationLane>* previous, const std::vector<AutomationLane>* next) noexcept {
+  if (lane_release_callback_ == nullptr || previous == nullptr) return;
+  // Merge-walk both sorted-by-target_param_id sets (set_lanes sorts and
+  // de-duplicates before publishing). `next_index` only ever advances, so the
+  // whole walk is O(previous->size() + next->size()) with no allocation.
+  size_t next_index = 0;
+  const size_t next_size = next != nullptr ? next->size() : 0;
+  for (const AutomationLane& old_lane : *previous) {
+    if (old_lane.points().empty()) continue;  // never drove anything; nothing to release.
+    const uint32_t param_id = old_lane.target_param_id();
+    while (next_index < next_size && (*next)[next_index].target_param_id() < param_id) {
+      ++next_index;
+    }
+    const bool still_has_points = next_index < next_size &&
+                                  (*next)[next_index].target_param_id() == param_id &&
+                                  !(*next)[next_index].points().empty();
+    if (!still_has_points) {
+      lane_release_callback_(lane_release_context_, param_id);
+    }
+  }
+}
+
 bool AutomationEngine::registered_parameter_rejects_realtime(uint32_t param_id) const noexcept {
   const std::vector<ParameterInfo>* metadata = parameter_metadata_.load();
   if (metadata == nullptr) return false;

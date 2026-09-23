@@ -90,6 +90,9 @@ class RtPublisher {
     assert(!reentered &&
            "RtPublisher::acquire() is single-consumer; a concurrent acquire() was detected");
 #endif
+    // A no-op unless the callback acquire() overload below deferred a retire
+    // on a previous call (this method's own pushes below never need to).
+    flush_deferred_retire();
     std::shared_ptr<const T> popped;
     while (!audio_current_ || retire_ring_.can_push()) {
       if (!publish_ring_.pop(popped)) {
@@ -101,6 +104,78 @@ class RtPublisher {
       audio_current_ = std::move(popped);
     }
     acquire_pending();
+#ifndef NDEBUG
+    in_acquire_.store(false, std::memory_order_release);
+#endif
+  }
+
+  /// Adopt the latest pending snapshot on the AUDIO thread, like acquire()
+  /// above, but additionally reports the swap: @p on_adopt is invoked as
+  /// `on_adopt(const T* previous, const T* next)` exactly once, and only when
+  /// this call actually adopted a newer snapshot (a no-op call never invokes
+  /// it). Covers both adoption paths -- the drain loop and the coalesced
+  /// pending slot -- so a burst of publishes that overflows the ring and lands
+  /// in the pending slot is still observed.
+  ///
+  /// The snapshot held before this call (`previous`) is kept alive outside the
+  /// retire ring for the duration of the drain: pushing it in early would let
+  /// the control thread's reclaim_retired() free it -- concurrently, on the
+  /// control thread -- while @p on_adopt is still reading from it here. The
+  /// drain loop and the pending adoption below use exactly the same retire-ring
+  /// headroom check as the plain acquire() above (so their behavior is
+  /// unchanged), and `previous` is retired only after @p on_adopt returns. In
+  /// the rare case that leaves no room for that final retire (a burst that
+  /// both fully drains the ring and also adopts the coalesced pending slot in
+  /// one call), it is parked in a single audio-thread-owned slot and retried
+  /// at the start of a later acquire() -- never freed here.
+  ///
+  /// That single deferred-retire slot can hold only one snapshot at a time.
+  /// If it is still occupied when this call starts (the retire ring has not
+  /// freed up since), this call adopts nothing at all -- even if new data is
+  /// available -- rather than risk needing a second deferral, which would
+  /// have nowhere to go but to overwrite (and so free, right here on this
+  /// thread) the one already parked. Adoption resumes on a later call once
+  /// the control thread has reclaimed room.
+  ///
+  /// Same single-consumer contract as acquire() above.
+  template <class F>
+  void acquire(F&& on_adopt) noexcept {
+#ifndef NDEBUG
+    const bool reentered = in_acquire_.exchange(true, std::memory_order_acq_rel);
+    assert(!reentered &&
+           "RtPublisher::acquire() is single-consumer; a concurrent acquire() was detected");
+#endif
+    flush_deferred_retire();
+    if (deferred_retire_) {
+      // Still stuck: adopting anything this call could need a second
+      // deferral, and the single slot above has no room for one without
+      // overwriting (freeing) the first. Leave everything untouched.
+#ifndef NDEBUG
+      in_acquire_.store(false, std::memory_order_release);
+#endif
+      return;
+    }
+    std::shared_ptr<const T> previous = std::move(audio_current_);
+    bool adopted = false;
+    std::shared_ptr<const T> popped;
+    while (!audio_current_ || retire_ring_.can_push()) {
+      if (!publish_ring_.pop(popped)) break;
+      if (audio_current_) {
+        retire_ring_.push(std::move(audio_current_));
+      }
+      audio_current_ = std::move(popped);
+      adopted = true;
+    }
+    if (acquire_pending()) {
+      adopted = true;
+    }
+    if (adopted) {
+      on_adopt(static_cast<const T*>(previous.get()), static_cast<const T*>(audio_current_.get()));
+      retire_or_defer(std::move(previous));
+    } else {
+      // Nothing adopted this call: put the pre-call snapshot back.
+      audio_current_ = std::move(previous);
+    }
 #ifndef NDEBUG
     in_acquire_.store(false, std::memory_order_release);
 #endif
@@ -208,22 +283,50 @@ class RtPublisher {
     }
   }
 
-  void acquire_pending() noexcept {
+  // Adopts the pending coalesced snapshot if one is ready. Returns true when
+  // audio_current_ was replaced. Same capacity check as the original
+  // void-returning version this replaced (can_push(), i.e. >=1 free slot).
+  bool acquire_pending() noexcept {
     if (audio_current_ && !retire_ring_.can_push()) {
-      return;
+      return false;
     }
     uint8_t expected = kPendingReady;
     if (!pending_state_.compare_exchange_strong(
             expected, kPendingReading, std::memory_order_acq_rel, std::memory_order_acquire)) {
-      return;
+      return false;
     }
+    bool adopted = false;
     if (pending_slot_) {
       if (audio_current_) {
         retire_ring_.push(std::move(audio_current_));
       }
       audio_current_ = std::move(pending_slot_);
+      adopted = true;
     }
     pending_state_.store(kPendingEmpty, std::memory_order_release);
+    return adopted;
+  }
+
+  // Retires @p item if the retire ring has room; otherwise parks it in
+  // deferred_retire_ until a later acquire() call's flush_deferred_retire()
+  // can retry, rather than ever freeing it on this (audio) thread. push()
+  // only moves out of @p item on success, so a failed push leaves it intact
+  // for that retry.
+  void retire_or_defer(std::shared_ptr<const T> item) noexcept {
+    if (!item) return;
+    if (!retire_ring_.push(std::move(item))) {
+      deferred_retire_ = std::move(item);
+    }
+  }
+
+  // Best-effort retry of whatever a prior call's retire_or_defer() could not
+  // place. Call at the start of acquire() before touching audio_current_, so
+  // a snapshot deferred there is never carried indefinitely once room frees
+  // up (the control thread reclaims retire_ring_ on every publish()).
+  void flush_deferred_retire() noexcept {
+    if (deferred_retire_) {
+      retire_ring_.push(std::move(deferred_retire_));
+    }
   }
 
   // Hand-off: control -> audio.
@@ -240,6 +343,10 @@ class RtPublisher {
 
   std::shared_ptr<const T> control_current_;  // control thread
   std::shared_ptr<const T> audio_current_;    // audio thread
+  // Audio thread only. See retire_or_defer()/flush_deferred_retire(): holds a
+  // snapshot the callback acquire() overload could not place in a momentarily
+  // full retire_ring_, so it is never freed here.
+  std::shared_ptr<const T> deferred_retire_;
 
 #ifndef NDEBUG
   // Debug-only single-consumer guard for acquire() (see its contract above).

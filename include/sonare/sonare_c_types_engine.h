@@ -10,9 +10,9 @@ extern "C" {
 #endif
 
 /* Mirrors engine::TelemetryErrorCode. These ordinals are part of the
-   cross-binding telemetry contract: core owns 0..18 and 20, while ordinal 19
-   is reserved by the WASM worklet protocol. SonareEngineTelemetry.error stays
-   an int below so this enum does not change the telemetry POD layout. */
+   cross-binding telemetry contract: core owns 0..18 and 20..21, while ordinal
+   19 is reserved by the WASM worklet protocol. SonareEngineTelemetry.error
+   stays an int below so this enum does not change the telemetry POD layout. */
 typedef enum SONARE_ENUM_BASE {
   SONARE_ENGINE_TELEMETRY_ERROR_NONE = 0,
   SONARE_ENGINE_TELEMETRY_ERROR_COMMAND_QUEUE_OVERFLOW = 1,
@@ -33,7 +33,8 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_ENGINE_TELEMETRY_ERROR_INSERT_AUTOMATION_OVERFLOW = 16,
   SONARE_ENGINE_TELEMETRY_ERROR_MIDI_CLOCK_OVERFLOW = 17,
   SONARE_ENGINE_TELEMETRY_ERROR_METRONOME_OVERFLOW = 18,
-  SONARE_ENGINE_TELEMETRY_ERROR_MAX_CHANNELS_EXCEEDED = 20
+  SONARE_ENGINE_TELEMETRY_ERROR_MAX_CHANNELS_EXCEEDED = 20,
+  SONARE_ENGINE_TELEMETRY_ERROR_PARAMETER_BASE_OVERFLOW = 21
 } SonareEngineTelemetryError;
 
 /* Naming-compatible alias for code that mirrors the C++ enum's type name. */

@@ -15,6 +15,7 @@
 #include "engine/capture.h"
 #include "engine/clip_player.h"
 #include "engine/metronome.h"
+#include "engine/parameter_base_table.h"
 #include "engine/telemetry.h"
 #include "rt/command.h"
 #include "rt/overflow_counter.h"
@@ -670,9 +671,25 @@ class RealtimeEngine : private ClipPageRequestSink {
   void process_subblock(float* const* io, float* const* monitor_out, int num_channels, int offset,
                         int num_frames, bool fold_monitor_to_main) noexcept;
   void silence(float* const* io, int num_channels, int num_frames) noexcept;
-  void start_smoothed_param(uint32_t target_id, float value) noexcept;
+  // Returns true whenever @p value took effect on @p target_id -- a smoother
+  // slot claimed (retargeted, reactivated, or newly assigned), or, when the
+  // slot table was full, the immediate fallback apply via automation_ (see
+  // the kSmoothedParameterCapacity path below), whose own result is what gets
+  // returned. False only when the value reached no target at all (target_id
+  // == 0, or automation_.set_parameter itself rejected it as unknown /
+  // non-RT-safe). The caller records a base value exactly when this
+  // returns true, so it must track "took effect", not "got a slot".
+  bool start_smoothed_param(uint32_t target_id, float value) noexcept;
   void tick_smoothed_params(int num_steps) noexcept;
   bool any_smoothed_param_active() const noexcept;
+  // Audio-thread base-value table: records the target value of every
+  // successfully routed kSetParam / kSetParamSmoothed so it can be restored
+  // once the automation lane driving that id empties. See
+  // release_parameter_base() and AutomationEngine::LaneReleaseCallback.
+  void record_parameter_base(uint32_t target_id, float value) noexcept;
+  bool parameter_base_lookup(uint32_t target_id, float* out_value) const noexcept;
+  void release_parameter_base(uint32_t target_id) noexcept;
+  static void release_parameter_base_thunk(void* context, uint32_t param_id) noexcept;
 #if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
   bool route_engine_parameter(uint32_t target_id, float value) noexcept;
   // AutomationEngine::EngineParamRouter trampoline: forwards reserved-namespace
@@ -1052,6 +1069,25 @@ class RealtimeEngine : private ClipPageRequestSink {
     rt::ParamSmoother smoother{};
   };
   std::array<SmoothedParam, kMaxSmoothedParams> smoothed_params_{};
+
+  // Audio-thread base-value table (see record_parameter_base() /
+  // release_parameter_base()), sized and allocated once in prepare() so the
+  // audio thread never (re)allocates. kParameterBaseTableSlots must stay a
+  // power of two (ParameterBaseTable masks the probe index).
+  static constexpr uint32_t kParameterBaseTableSlots = 8192;
+  // 4096: distinct target ids accumulate over a whole session (entries are
+  // never evicted, only overwritten), well above what any single routing
+  // path can currently reach in one prepare() lifetime (~128 host targets,
+  // ~128 graph parameter bindings, ~150 reserved mixer/insert ids combined).
+  static constexpr uint32_t kParameterBaseTableMaxEntries = 4096;
+  static_assert((kParameterBaseTableSlots & (kParameterBaseTableSlots - 1)) == 0,
+                "kParameterBaseTableSlots must be a power of two");
+  ParameterBaseTable parameter_base_table_{};
+  // Cumulative record drops since prepare() (table already at capacity);
+  // reported as a per-block delta on the telemetry channel (kParameterBaseOverflow),
+  // mirroring insert_automation_overflow_reported_ below.
+  uint32_t parameter_base_overflow_count_ = 0;
+  uint32_t parameter_base_overflow_reported_ = 0;
 
   // Pre-allocated channel pointer scratch reused by render_offline so the
   // per-block loop performs no heap allocation.

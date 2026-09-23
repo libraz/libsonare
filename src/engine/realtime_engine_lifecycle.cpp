@@ -171,6 +171,14 @@ void RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
                      2048, scope_band_count_);
 #endif
   automation_.prepare(sample_rate, active_tempo_map_);
+  // Audio-thread base-value table (manual-value restore on lane
+  // release): sized here so record_parameter_base()/release_parameter_base()
+  // never (re)allocate on the audio thread. Unconditional -- reserved and
+  // host-registered targets are tracked identically.
+  parameter_base_table_.prepare(kParameterBaseTableSlots, kParameterBaseTableMaxEntries);
+  parameter_base_overflow_count_ = 0;
+  parameter_base_overflow_reported_ = 0;
+  automation_.set_lane_release_callback(&RealtimeEngine::release_parameter_base_thunk, this);
 #if defined(SONARE_WITH_GRAPH)
   automation_.set_external_target_resolver(&RealtimeEngine::resolve_graph_parameter_thunk, this);
 #endif

@@ -321,6 +321,15 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     enqueue_error(TelemetryErrorCode::kStaleAutomationLanes, state.render_frame,
                   state.sample_position, delta);
   }
+  // Base-value table record drops: surface the per-block delta the same
+  // way as the other audio-thread counters above. Unconditional, like the
+  // table itself.
+  if (parameter_base_overflow_count_ != parameter_base_overflow_reported_) {
+    const uint32_t delta = parameter_base_overflow_count_ - parameter_base_overflow_reported_;
+    parameter_base_overflow_reported_ = parameter_base_overflow_count_;
+    enqueue_error(TelemetryErrorCode::kParameterBaseOverflow, state.render_frame,
+                  state.sample_position, delta);
+  }
 #if defined(SONARE_WITH_MIXING)
   // Insert-parameter automation that could not claim a smoother slot (master or
   // per-lane/bus table full) is dropped silently in the audio path; surface the

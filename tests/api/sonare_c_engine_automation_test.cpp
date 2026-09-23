@@ -439,3 +439,69 @@ TEST_CASE("sonare_engine_add_parameter rejects a non-finite declared range", "[c
 
   sonare_engine_destroy(engine);
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_engine restores a lane fader's manual value once its automation lane empties",
+          "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  // 18 blocks are processed below (8 to let the fader settle, 1 to measure,
+  // twice); size the clip generously past that so it never runs out.
+  constexpr int kFrames = kBlock * 24;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
+
+  std::array<float, kFrames> clip_l{};
+  clip_l.fill(1.0f);
+  const float* clip_channels[] = {clip_l.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = clip_channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  const uint32_t fader_target = engine_lane_param_target(0, 1);  // TrackMixerRuntime::kFaderDb.
+  // Manual value first: -24 dB.
+  REQUIRE(sonare_engine_set_parameter(engine, fader_target, -24.0f, -1) == SONARE_OK);
+
+  // An automation lane then drives the same fader to 0 dB (Hold, curve 2).
+  SonareAutomationPoint points[] = {{0.0, 0.0f, 2}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, fader_target, points, 1) == SONARE_OK);
+
+  std::array<float, kBlock> buf{};
+  float* io[] = {buf.data()};
+  for (int i = 0; i < 8; ++i) {
+    buf.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(sonare_engine_settle_parameters(engine) == SONARE_OK);
+  buf.fill(0.0f);
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  REQUIRE(rms(buf) > 0.9);  // The lane drives the fader to ~0 dB (full amplitude).
+
+  // Clear the lane: the fader must revert to the manual -24 dB value, not the
+  // 0 dB the lane last drove it to.
+  REQUIRE(sonare_engine_set_automation_lane(engine, fader_target, nullptr, 0) == SONARE_OK);
+  for (int i = 0; i < 8; ++i) {
+    buf.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(sonare_engine_settle_parameters(engine) == SONARE_OK);
+  buf.fill(0.0f);
+  REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  // -24 dB is roughly a 16x amplitude reduction (10^(-24/20) ~= 0.063).
+  REQUIRE(rms(buf) < 0.15);
+  REQUIRE(rms(buf) > 0.02);
+
+  sonare_engine_destroy(engine);
+}
+#endif  // defined(SONARE_WITH_MIXING)

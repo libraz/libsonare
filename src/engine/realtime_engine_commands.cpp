@@ -62,6 +62,37 @@ bool RealtimeEngine::parameter_target_reserved(uint32_t target_id) noexcept {
          is_insert_param_id(target_id) || is_instrument_param_id(target_id);
 }
 
+void RealtimeEngine::record_parameter_base(uint32_t target_id, float value) noexcept {
+  // ParameterBaseTable::record() itself refuses target_id == 0 (the reserved
+  // invalid/none id, see automation_engine.h) and an unprepared table, so
+  // both are folded into its single false-means-"not recorded" result here.
+  if (!parameter_base_table_.record(target_id, value)) {
+    ++parameter_base_overflow_count_;
+  }
+}
+
+bool RealtimeEngine::parameter_base_lookup(uint32_t target_id, float* out_value) const noexcept {
+  return parameter_base_table_.lookup(target_id, out_value);
+}
+
+void RealtimeEngine::release_parameter_base(uint32_t target_id) noexcept {
+  float value = 0.0f;
+  if (!parameter_base_lookup(target_id, &value)) return;  // No manual value was ever sent.
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
+  if (parameter_target_reserved(target_id)) {
+    route_engine_parameter(target_id, value);
+  } else {
+    automation_.set_parameter(target_id, value);
+  }
+#else
+  automation_.set_parameter(target_id, value);
+#endif
+}
+
+void RealtimeEngine::release_parameter_base_thunk(void* context, uint32_t param_id) noexcept {
+  static_cast<RealtimeEngine*>(context)->release_parameter_base(param_id);
+}
+
 #if defined(SONARE_WITH_GRAPH)
 bool RealtimeEngine::swap_graph(std::unique_ptr<graph::Graph> graph, const char* input_node_id,
                                 const char* output_node_id, int num_channels,
@@ -191,7 +222,9 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
     case rt::CommandType::kSetParam:
 #if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
       if (parameter_target_reserved(command.target_id)) {
-        if (!route_engine_parameter(command.target_id, command.arg.f)) {
+        if (route_engine_parameter(command.target_id, command.arg.f)) {
+          record_parameter_base(command.target_id, command.arg.f);
+        } else {
           enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                         transport_.sample_position(), command.target_id);
         }
@@ -201,12 +234,18 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // Failures (unknown target / non-RT-safe) bump automation_ counters,
       // which process() converts to telemetry after the sub-block loop. Do
       // not emit an error here or the rejection would be double-reported.
-      automation_.set_parameter(command.target_id, command.arg.f);
+      // Record the manual value as this target's base only when routing
+      // actually succeeded.
+      if (automation_.set_parameter(command.target_id, command.arg.f)) {
+        record_parameter_base(command.target_id, command.arg.f);
+      }
       break;
     case rt::CommandType::kSetParamSmoothed:
 #if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
       if (parameter_target_reserved(command.target_id)) {
-        if (!route_engine_parameter(command.target_id, command.arg.f)) {
+        if (route_engine_parameter(command.target_id, command.arg.f)) {
+          record_parameter_base(command.target_id, command.arg.f);
+        } else {
           enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                         transport_.sample_position(), command.target_id);
         }
@@ -216,8 +255,12 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // Engine-level smoothing: start (or retarget) a one-pole ramp toward the
       // requested value. The ramp is ticked once per control period in
       // process() and pushed to the bound parameter, avoiding the zipper noise
-      // of an immediate jump for targets that do not smooth internally.
-      start_smoothed_param(command.target_id, command.arg.f);
+      // of an immediate jump for targets that do not smooth internally. The
+      // recorded base value is the ramp's target, not its current position,
+      // and is recorded whenever the value took effect.
+      if (start_smoothed_param(command.target_id, command.arg.f)) {
+        record_parameter_base(command.target_id, command.arg.f);
+      }
       break;
     case rt::CommandType::kTransportPlay:
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -512,12 +555,11 @@ void RealtimeEngine::flush_control_commands() noexcept {
   apply_due_commands(render_frame);
 }
 
-void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexcept {
+bool RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexcept {
   if (target_id == 0) {
     // 0 is the reserved invalid target id; treat as an unbound target so the
     // failure surfaces through the same counter path as kSetParam.
-    automation_.set_parameter(target_id, value);
-    return;
+    return automation_.set_parameter(target_id, value);
   }
   // Reuse an existing slot for this target, or claim a free one. The ramp
   // starts from the slot's current value (its last applied output) so repeated
@@ -528,7 +570,7 @@ void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
     if (slot.assigned && slot.target_id == target_id) {
       if (slot.active) {
         slot.smoother.set_target(value);
-        return;
+        return true;
       }
       settled_match = &slot;
     }
@@ -539,15 +581,18 @@ void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
   if (settled_match != nullptr) {
     settled_match->active = true;
     settled_match->smoother.set_target(value);
-    return;
+    return true;
   }
   if (free_slot == nullptr) {
     enqueue_error(TelemetryErrorCode::kSmoothedParameterCapacity, transport_.render_frame(),
                   transport_.sample_position(), target_id);
     // Preserve the command instead of dropping it. Under saturation we lose
-    // smoothing continuity, but the target still reaches the requested value.
-    automation_.set_parameter(target_id, value);
-    return;
+    // smoothing continuity, but the target still reaches the requested value
+    // immediately (unramped) through the same path kSetParam uses. No slot
+    // was claimed, but the value still took effect whenever this call
+    // succeeds, so the caller (which records a base value on "took effect",
+    // not "got a slot") sees that outcome here too.
+    return automation_.set_parameter(target_id, value);
   }
   free_slot->active = true;
   free_slot->assigned = true;
@@ -557,6 +602,7 @@ void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
   // glide toward from the former target's last value.
   free_slot->smoother.reset(value);
   free_slot->smoother.set_target(value);
+  return true;
 }
 
 bool RealtimeEngine::any_smoothed_param_active() const noexcept {

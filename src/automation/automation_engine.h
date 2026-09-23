@@ -41,6 +41,11 @@ class AutomationEngine {
   /// and stateless: configured at prepare time, called on the audio thread.
   using EngineParamGate = bool (*)(uint32_t param_id);
   using ExternalTargetResolver = rt::ProcessorBase* (*)(void* context, uint32_t param_id) noexcept;
+  /// Callback invoked by acquire_lanes() (audio thread) for a target whose
+  /// lane held points before the newly adopted lane set and holds none now
+  /// (dropped entirely or replaced by an empty lane). Lets the engine restore
+  /// whatever value should apply once nothing is driving the target anymore.
+  using LaneReleaseCallback = void (*)(void* context, uint32_t param_id);
 
   void prepare(double sample_rate, const transport::TempoMap* tempo_map);
   void set_tempo_map(const transport::TempoMap* tempo_map) noexcept { tempo_map_ = tempo_map; }
@@ -70,6 +75,12 @@ class AutomationEngine {
   void set_external_target_resolver(ExternalTargetResolver resolver, void* context) noexcept {
     external_target_resolver_ = resolver;
     external_target_context_ = context;
+  }
+  /// Installs the release callback (see LaneReleaseCallback). Configure at
+  /// prepare time, like the other router/resolver setters above.
+  void set_lane_release_callback(LaneReleaseCallback callback, void* context) noexcept {
+    lane_release_callback_ = callback;
+    lane_release_context_ = context;
   }
   void set_lanes(std::vector<AutomationLane> lanes);
   bool bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept;
@@ -101,7 +112,19 @@ class AutomationEngine {
 
   /// Adopt the latest published lane set on the audio thread. Call once at
   /// block start before apply / collect_boundaries. RT-safe, no alloc.
-  void acquire_lanes() noexcept { lanes_.acquire(); }
+  ///
+  /// When a release callback is installed (see set_lane_release_callback), a
+  /// merge-walk over the previous and newly adopted lane sets (both sorted by
+  /// target_param_id, see set_lanes) invokes it once for every target that
+  /// held points before and holds none now -- dropped from the set entirely,
+  /// or replaced by an empty lane (the no-op-apply path a cleared lane takes,
+  /// see apply()). O(n), no allocation.
+  void acquire_lanes() noexcept {
+    lanes_.acquire([this](const std::vector<AutomationLane>* previous,
+                          const std::vector<AutomationLane>* next) noexcept {
+      notify_lane_targets_released(previous, next);
+    });
+  }
 
   void apply(const transport::TransportState& state, int sub_block_offset,
              int sub_block_len) noexcept;
@@ -144,6 +167,10 @@ class AutomationEngine {
 
   rt::ProcessorBase* target_for(uint32_t param_id) const noexcept;
   bool registered_parameter_rejects_realtime(uint32_t param_id) const noexcept;
+  // Merge-walk helper backing acquire_lanes()'s release notification (see
+  // there). @p previous/@p next may each be null (no lane set adopted yet).
+  void notify_lane_targets_released(const std::vector<AutomationLane>* previous,
+                                    const std::vector<AutomationLane>* next) noexcept;
   // True when @p param_id should route through the engine router. Uses the gate
   // predicate when installed, otherwise the (id & mask) == match fast path.
   bool routes_to_engine(uint32_t param_id) const noexcept {
@@ -166,6 +193,10 @@ class AutomationEngine {
   EngineParamGate engine_param_gate_ = nullptr;
   ExternalTargetResolver external_target_resolver_ = nullptr;
   void* external_target_context_ = nullptr;
+  // Release-callback state. Plain members by design, like the router state
+  // above: written once at prepare time, read on the audio thread.
+  LaneReleaseCallback lane_release_callback_ = nullptr;
+  void* lane_release_context_ = nullptr;
   rt::RtSnapshot<std::vector<ParameterInfo>> parameter_metadata_{};
   mutable rt::RtPublisher<std::vector<AutomationLane>> lanes_;
   std::atomic<size_t> lane_count_{0};
