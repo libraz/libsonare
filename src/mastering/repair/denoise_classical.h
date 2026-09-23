@@ -25,7 +25,10 @@ enum class DenoiseMode {
 };
 
 enum class DenoiseNoiseEstimator {
-  /// Estimate one stationary noise spectrum from the quietest frames.
+  /// Estimate one stationary noise spectrum from the quietest frames. A
+  /// steady tone -- a calibration tone, a drone, a long held note -- reads
+  /// the same as noise to this estimator and is pulled down by
+  /// `reduction_db` along with it.
   Quantile,
   /// Minimum-controlled recursive averaging.
   Mcra,

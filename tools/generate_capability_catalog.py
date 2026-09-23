@@ -24,6 +24,13 @@ README_FX_OFF_COUNT_PATTERNS = {
     Path("README_ja.md"): r"外れて (\d+) 個になります",
 }
 PRESET_GROUPS = ("mastering", "synth", "mixingScene", "voiceChanger")
+MASTERING_PRESET_KEYS = {
+    "name",
+    "kind",
+    "targetLufs",
+    "truePeakCeilingDb",
+    "maxLimiterGainReductionDb",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -139,10 +146,42 @@ def validate_parameter(parameter: dict[str, Any], path: str) -> None:
         raise ValueError(f"{path}.unit must be a string or null")
 
 
+def validate_mastering_presets(root: dict[str, Any]) -> None:
+    """Guard `masteringPresets`: kind decides whether the three numbers are null."""
+    entries = root["masteringPresets"]
+    if not isinstance(entries, list):
+        raise ValueError(  # noqa: TRY004 -- one error class per document
+            "catalog.masteringPresets must be an array"
+        )
+    seen_names: list[str] = []
+    for index, entry_value in enumerate(entries):
+        path = f"catalog.masteringPresets[{index}]"
+        entry = require_object(entry_value, path)
+        require_keys(entry, path, MASTERING_PRESET_KEYS)
+        if not isinstance(entry["name"], str) or not entry["name"]:
+            raise ValueError(f"{path}.name must be a non-empty string")
+        seen_names.append(entry["name"])
+        if entry["kind"] not in {"mastering", "restoration"}:
+            raise ValueError(f"{path}.kind must be 'mastering' or 'restoration'")
+        is_mastering = entry["kind"] == "mastering"
+        for key in ("targetLufs", "truePeakCeilingDb", "maxLimiterGainReductionDb"):
+            value = entry[key]
+            if is_mastering:
+                if not optional_number(value) or value is None:
+                    raise ValueError(f"{path}.{key} must be a number for a mastering preset")
+            elif value is not None:
+                raise ValueError(f"{path}.{key} must be null for a restoration preset")
+    if len(seen_names) != len(set(seen_names)):
+        raise ValueError("catalog.masteringPresets must contain unique names")
+    mastering_names = root["presets"]["mastering"] if "presets" in root else None
+    if mastering_names is not None and seen_names != list(mastering_names):
+        raise ValueError("catalog.masteringPresets order must match catalog.presets.mastering")
+
+
 def validate_catalog(catalog: Any) -> dict[str, Any]:
     """Guard the generated artifact's stable schema without a third-party dependency."""
     root = require_object(catalog, "catalog")
-    require_keys(root, "catalog", {"version", "abi", "processors", "presets"})
+    require_keys(root, "catalog", {"version", "abi", "processors", "presets", "masteringPresets"})
     if not isinstance(root["version"], str):
         raise ValueError(  # noqa: TRY004 -- one error class per document
             "catalog.version must be a string"
@@ -214,6 +253,7 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
             raise ValueError(f"catalog.presets.{name} must contain non-empty strings")
         if len(preset_names) != len(set(preset_names)):
             raise ValueError(f"catalog.presets.{name} must contain unique names")
+    validate_mastering_presets(root)
     return root
 
 

@@ -3,6 +3,218 @@
     "engine": 3,
     "project": 2
   },
+  "masteringPresets": [
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "pop",
+      "targetLufs": -14,
+      "truePeakCeilingDb": -1
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "edm",
+      "targetLufs": -12,
+      "truePeakCeilingDb": -0.30000001192092896
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "acoustic",
+      "targetLufs": -16,
+      "truePeakCeilingDb": -1.5
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "hipHop",
+      "targetLufs": -13,
+      "truePeakCeilingDb": -0.5
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "aiMusic",
+      "targetLufs": -14,
+      "truePeakCeilingDb": -1
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "speech",
+      "targetLufs": -16,
+      "truePeakCeilingDb": -1
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "streaming",
+      "targetLufs": -14,
+      "truePeakCeilingDb": -1
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "youtube",
+      "targetLufs": -14,
+      "truePeakCeilingDb": -1
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "broadcast",
+      "targetLufs": -23,
+      "truePeakCeilingDb": -1
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "podcast",
+      "targetLufs": -16,
+      "truePeakCeilingDb": -1.5
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "audiobook",
+      "targetLufs": -18,
+      "truePeakCeilingDb": -3
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "cinema",
+      "targetLufs": -27,
+      "truePeakCeilingDb": -2
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "jpop",
+      "targetLufs": -9,
+      "truePeakCeilingDb": -0.5
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "ambient",
+      "targetLufs": -18,
+      "truePeakCeilingDb": -1
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "lofi",
+      "targetLufs": -11,
+      "truePeakCeilingDb": -1
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "classical",
+      "targetLufs": -23,
+      "truePeakCeilingDb": -2
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "drumAndBass",
+      "targetLufs": -8,
+      "truePeakCeilingDb": -0.30000001192092896
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "techno",
+      "targetLufs": -9,
+      "truePeakCeilingDb": -0.4000000059604645
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "metal",
+      "targetLufs": -9,
+      "truePeakCeilingDb": -0.5
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "trap",
+      "targetLufs": -9,
+      "truePeakCeilingDb": -0.5
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "rnb",
+      "targetLufs": -12,
+      "truePeakCeilingDb": -1
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "jazz",
+      "targetLufs": -18,
+      "truePeakCeilingDb": -1.5
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "kpop",
+      "targetLufs": -8,
+      "truePeakCeilingDb": -0.5
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "trance",
+      "targetLufs": -8.5,
+      "truePeakCeilingDb": -0.4000000059604645
+    },
+    {
+      "kind": "mastering",
+      "maxLimiterGainReductionDb": 12,
+      "name": "gameOst",
+      "targetLufs": -16,
+      "truePeakCeilingDb": -1
+    },
+    {
+      "kind": "restoration",
+      "maxLimiterGainReductionDb": null,
+      "name": "vinyl",
+      "targetLufs": null,
+      "truePeakCeilingDb": null
+    },
+    {
+      "kind": "restoration",
+      "maxLimiterGainReductionDb": null,
+      "name": "tapeHiss",
+      "targetLufs": null,
+      "truePeakCeilingDb": null
+    },
+    {
+      "kind": "restoration",
+      "maxLimiterGainReductionDb": null,
+      "name": "fieldRecording",
+      "targetLufs": null,
+      "truePeakCeilingDb": null
+    },
+    {
+      "kind": "restoration",
+      "maxLimiterGainReductionDb": null,
+      "name": "voiceMemo",
+      "targetLufs": null,
+      "truePeakCeilingDb": null
+    },
+    {
+      "kind": "restoration",
+      "maxLimiterGainReductionDb": null,
+      "name": "shellac78",
+      "targetLufs": null,
+      "truePeakCeilingDb": null
+    }
+  ],
   "presets": {
     "mastering": [
       "pop",

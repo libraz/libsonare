@@ -30,6 +30,11 @@ namespace sonare::mastering::api {
 /// re-measure. Peak-normalized input, whose headroom is ~0 dB, is the common
 /// case for both. Read the result's @c output_lufs for what was achieved rather
 /// than assuming the preset's target.
+///
+/// The restoration presets' repair stages, like every classical denoise
+/// configuration, can mistake a steady tone -- a calibration tone, a drone, a
+/// long held note -- for noise and pull it down by the configured reduction
+/// depth. Check for musical sustained tones before applying one.
 enum class Preset {
   Pop,
   EDM,
@@ -62,6 +67,18 @@ enum class Preset {
   VoiceMemo,
   Shellac78,
 };
+
+/// @brief Whether a preset targets loudness/level (Mastering) or leaves level
+/// alone and runs repair stages only (Restoration).
+enum class PresetKind {
+  Mastering,
+  Restoration,
+};
+
+/// @brief Returns the preset's kind. Exhaustive over Preset; matches
+/// preset_config(preset).loudness.enabled being true for Mastering, false for
+/// Restoration.
+PresetKind preset_kind(Preset preset) noexcept;
 
 /// @brief Returns string identifiers of all built-in presets, in display order.
 std::vector<std::string> preset_names();

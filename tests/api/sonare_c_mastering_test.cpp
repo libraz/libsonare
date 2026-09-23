@@ -928,6 +928,60 @@ TEST_CASE("sonare_capability_catalog_json aggregates processors and presets",
   REQUIRE(param.contains("unit"));
 }
 
+TEST_CASE("sonare_capability_catalog_json exposes masteringPresets", "[c_api][mastering]") {
+  const char* json = sonare_capability_catalog_json();
+  REQUIRE(json != nullptr);
+  const auto catalog = sonare::util::json::parse_strict(json);
+  REQUIRE(catalog["masteringPresets"].is_array());
+  const auto& entries = catalog["masteringPresets"].as_array();
+  REQUIRE(entries.size() == 30);
+
+  std::size_t restoration_count = 0;
+  for (const auto& entry : entries) {
+    REQUIRE(entry.contains("name"));
+    REQUIRE(entry.contains("kind"));
+    const auto& kind = entry["kind"].as_string();
+    REQUIRE((kind == "mastering" || kind == "restoration"));
+    const bool is_restoration = kind == "restoration";
+    if (is_restoration) ++restoration_count;
+    for (const char* key : {"targetLufs", "truePeakCeilingDb", "maxLimiterGainReductionDb"}) {
+      const auto* value = entry.find(key);
+      REQUIRE(value != nullptr);
+      REQUIRE(value->is_null() == is_restoration);
+    }
+  }
+  REQUIRE(restoration_count == 5);
+}
+
+TEST_CASE("sonare_mastering_preset_params_json returns each preset's chain config",
+          "[c_api][mastering]") {
+  char* json = nullptr;
+  REQUIRE(sonare_mastering_preset_params_json("pop", &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  const auto root = sonare::util::json::parse_strict(json);
+  REQUIRE(root["version"].as_int() == 1);
+  REQUIRE(root["params"].contains("loudness.enabled"));
+  REQUIRE(root["params"]["loudness.enabled"].as_bool());
+  REQUIRE(root["params"]["loudness.targetLufs"].as_number() == -14.0);
+  sonare_free_string(json);
+
+  json = nullptr;
+  REQUIRE(sonare_mastering_preset_params_json("vinyl", &json) == SONARE_OK);
+  REQUIRE(json != nullptr);
+  const auto vinyl_root = sonare::util::json::parse_strict(json);
+  REQUIRE(vinyl_root["params"]["loudness.enabled"].as_bool() == false);
+  sonare_free_string(json);
+
+  json = nullptr;
+  REQUIRE(sonare_mastering_preset_params_json("not-a-real-preset", &json) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(json == nullptr);
+
+  json = nullptr;
+  REQUIRE(sonare_mastering_preset_params_json(nullptr, &json) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(json == nullptr);
+}
+
 TEST_CASE("the capability catalog schema list matches what the writer emits",
           "[c_api][mastering]") {
   const char* json = sonare_capability_catalog_json();

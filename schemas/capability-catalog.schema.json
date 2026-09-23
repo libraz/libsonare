@@ -4,7 +4,7 @@
   "title": "libsonare Capability Catalog",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "abi", "processors", "presets"],
+  "required": ["version", "abi", "processors", "presets", "masteringPresets"],
   "properties": {
     "version": { "type": "string", "minLength": 1 },
     "abi": {
@@ -14,6 +14,21 @@
       "properties": {
         "project": { "type": "integer", "minimum": 0 },
         "engine": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "masteringPresets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind", "targetLufs", "truePeakCeilingDb", "maxLimiterGainReductionDb"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["mastering", "restoration"] },
+          "targetLufs": { "type": ["number", "null"] },
+          "truePeakCeilingDb": { "type": ["number", "null"] },
+          "maxLimiterGainReductionDb": { "type": ["number", "null"] }
+        }
       }
     },
     "processors": {

@@ -725,6 +725,45 @@ const char* preset_to_string(Preset preset) noexcept {
   return "unknown";
 }
 
+PresetKind preset_kind(Preset preset) noexcept {
+  switch (preset) {
+    case Preset::Pop:
+    case Preset::EDM:
+    case Preset::Acoustic:
+    case Preset::HipHop:
+    case Preset::AIMusic:
+    case Preset::Speech:
+    case Preset::Streaming:
+    case Preset::YouTube:
+    case Preset::Broadcast:
+    case Preset::Podcast:
+    case Preset::Audiobook:
+    case Preset::Cinema:
+    case Preset::JPop:
+    case Preset::Ambient:
+    case Preset::Lofi:
+    case Preset::Classical:
+    case Preset::DrumAndBass:
+    case Preset::Techno:
+    case Preset::Metal:
+    case Preset::Trap:
+    case Preset::RnB:
+    case Preset::Jazz:
+    case Preset::KPop:
+    case Preset::Trance:
+    case Preset::GameOst:
+      return PresetKind::Mastering;
+    case Preset::Vinyl:
+    case Preset::TapeHiss:
+    case Preset::FieldRecording:
+    case Preset::VoiceMemo:
+    case Preset::Shellac78:
+      return PresetKind::Restoration;
+  }
+  // Unreachable for well-formed Preset values; defensive default.
+  return PresetKind::Mastering;
+}
+
 MasteringChainConfig preset_config(Preset preset) {
   switch (preset) {
     case Preset::Pop:

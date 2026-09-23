@@ -11,6 +11,7 @@
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/json.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -140,6 +141,20 @@ TEST_CASE("preset_to_string round-trips", "[mastering][preset]") {
     Preset preset = preset_from_string(name);
     REQUIRE(std::string(preset_to_string(preset)) == name);
   }
+}
+
+TEST_CASE("preset_kind matches loudness.enabled, exactly five restoration presets",
+          "[mastering][preset]") {
+  std::size_t restoration_count = 0;
+  for (const auto& name : preset_names()) {
+    CAPTURE(name);
+    const auto preset = preset_from_string(name);
+    const auto config = preset_config(preset);
+    const bool is_mastering = preset_kind(preset) == PresetKind::Mastering;
+    REQUIRE(is_mastering == config.loudness.enabled);
+    if (!is_mastering) ++restoration_count;
+  }
+  REQUIRE(restoration_count == 5);
 }
 
 TEST_CASE("preset chain configs round-trip through JSON", "[mastering][preset][json]") {
@@ -577,6 +592,48 @@ TEST_CASE("all presets master a three-minute stereo fixture with bounded memory"
                         [](float sample) { return std::isfinite(sample); }));
     REQUIRE(std::all_of(result.right.begin(), result.right.end(),
                         [](float sample) { return std::isfinite(sample); }));
+  }
+}
+
+TEST_CASE("every preset's params JSON is version 1", "[mastering][preset][json]") {
+  for (const auto& name : preset_names()) {
+    CAPTURE(name);
+    const auto config = preset_config(preset_from_string(name));
+    const std::string json = chain_config_to_json(config);
+    const auto root = sonare::util::json::parse_strict(json);
+    REQUIRE(root["version"].as_int() == 1);
+  }
+}
+
+TEST_CASE("applying a preset's own params JSON as overrides is a no-op",
+          "[mastering][preset][json]") {
+  // masteringPresetParams(preset) is chain_config_to_json(preset_config(preset))
+  // (F10). Re-applying that exact document as overrides on top of the same
+  // preset must change nothing: every value it carries is already the value
+  // the preset set.
+  constexpr int sample_rate = 44100;
+  const auto fixture = create_preset_fixture(sample_rate, 0.5f);
+
+  for (const auto& name : preset_names()) {
+    CAPTURE(name);
+    const auto preset = preset_from_string(name);
+    const std::string json = chain_config_to_json(preset_config(preset));
+    const auto root = sonare::util::json::parse_strict(json);
+    const auto& params_object = root["params"].as_object();
+
+    std::vector<Param> overrides;
+    overrides.reserve(params_object.size());
+    for (const auto& [key, value] : params_object) {
+      const double numeric = value.is_bool() ? (value.as_bool() ? 1.0 : 0.0) : value.as_number();
+      overrides.push_back(Param{key, numeric});
+    }
+
+    const auto baseline = master_audio_mono(preset, fixture.data(), fixture.size(), sample_rate);
+    const auto overridden = master_audio_mono(preset, fixture.data(), fixture.size(), sample_rate,
+                                              overrides.data(), overrides.size());
+
+    REQUIRE(overridden.samples.size() == baseline.samples.size());
+    REQUIRE(overridden.samples == baseline.samples);
   }
 }
 

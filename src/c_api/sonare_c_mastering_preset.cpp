@@ -36,6 +36,19 @@ const char* sonare_mastering_preset_names(void) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
+SonareError sonare_mastering_preset_params_json(const char* preset, char** json_out) {
+  SONARE_C_API_ENTRY;
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+
+  SONARE_C_TRY
+  const auto config = sonare::mastering::api::preset_config(
+      sonare::mastering::api::preset_from_string(preset != nullptr ? preset : ""));
+  *json_out = copy_string(sonare::mastering::api::chain_config_to_json(config));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 const char* sonare_mastering_platform_names(void) {
   SONARE_C_TRY
   // Same write-once thread_local contract as sonare_mastering_preset_names: the

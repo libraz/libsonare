@@ -283,6 +283,10 @@ _ALIAS_COVERAGE = {
     # members that deliver it, so the credit lapses if one is removed.
     "mastering_assistant_suggest_chain_json": ("mastering_assistant_suggest_chain",),
     "mastering_assistant_suggest_chain_json_stereo": ("mastering_assistant_suggest_chain_stereo",),
+    # Same reasoning as the suggest_chain_json alias above: the C entry can only
+    # hand back a string, and every facade parses it into the params mapping
+    # masteringPresetParams returns, so the `_json` spelling never appears there.
+    "mastering_preset_params_json": ("mastering_preset_params",),
     "mixing_assistant_source_class_names": ("mix_source_class_names",),
     "mixing_assistant_source_class_from_name": ("mix_source_class_from_name",),
     "master_audio_stereo_with_progress": ("master_audio_stereo",),

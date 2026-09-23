@@ -8,6 +8,7 @@
 #include "core/audio.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/presets.h"
 #include "mastering/match/ab_switcher.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_c_internal.h"
@@ -264,6 +265,27 @@ const char* sonare_capability_catalog_json(void) {
 #endif
   catalog["presets"] = std::move(presets);
 
+  json::Array mastering_presets;
+  for (const auto& name : sonare::mastering::api::preset_names()) {
+    const auto preset = sonare::mastering::api::preset_from_string(name);
+    const auto config = sonare::mastering::api::preset_config(preset);
+    const bool is_mastering = sonare::mastering::api::preset_kind(preset) ==
+                              sonare::mastering::api::PresetKind::Mastering;
+
+    json::Object entry;
+    entry["name"] = name;
+    entry["kind"] = is_mastering ? "mastering" : "restoration";
+    entry["targetLufs"] =
+        is_mastering ? json::Value(config.loudness.target_lufs) : json::Value(nullptr);
+    entry["truePeakCeilingDb"] =
+        is_mastering ? json::Value(config.loudness.ceiling_db) : json::Value(nullptr);
+    entry["maxLimiterGainReductionDb"] =
+        is_mastering ? json::Value(config.loudness.max_limiter_gain_reduction_db)
+                     : json::Value(nullptr);
+    mastering_presets.emplace_back(json::Value(std::move(entry)));
+  }
+  catalog["masteringPresets"] = std::move(mastering_presets);
+
   static thread_local std::string serialized;
   serialized = json::dump(json::Value(std::move(catalog)));
   return serialized.c_str();
@@ -283,6 +305,12 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "presets.synth",
       "presets.mixingScene",
       "presets.voiceChanger",
+      "masteringPresets",
+      "masteringPresets[].name",
+      "masteringPresets[].kind",
+      "masteringPresets[].targetLufs",
+      "masteringPresets[].truePeakCeilingDb",
+      "masteringPresets[].maxLimiterGainReductionDb",
       "processors",
       "processors[].id",
       "processors[].kind",

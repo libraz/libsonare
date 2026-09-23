@@ -289,7 +289,20 @@ SonareError sonare_mastering_chain_stereo_with_progress_ex(
 ///   do NOT free it. Returns NULL if the name table cannot be built.
 const char* sonare_mastering_preset_names(void);
 
+/// @brief Returns a built-in preset's chain configuration as flat-params JSON.
+/// @details Same document shape as @ref sonare_mastering_assistant_suggest_chain_json
+/// (`{"version":1,"params":{...}}`); the flat @c params keys are the same
+/// dot-notation @c sonare_master_audio accepts as overrides.
+/// @param preset e.g. "pop", "aiMusic". See @c sonare_mastering_preset_names().
+///   Unknown names return @c SONARE_ERROR_INVALID_PARAMETER.
+/// The returned string must be released with sonare_free_string().
+SonareError sonare_mastering_preset_params_json(const char* preset, char** json_out);
+
 /// @brief Apply a preset chain to mono audio.
+/// Restoration presets' repair stages, like every classical denoise
+/// configuration, can mistake a steady tone -- a calibration tone, a drone, a
+/// long held note -- for noise and pull it down by the configured reduction
+/// depth. Check for musical sustained tones before applying one.
 /// @param preset_name e.g. "pop", "aiMusic". See @c sonare_mastering_preset_names().
 /// @param overrides   Optional Param overrides (same flat dot-notation as
 ///                    @c sonare_mastering_chain). Pass NULL/0 for preset defaults.
