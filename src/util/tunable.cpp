@@ -9,6 +9,7 @@
 #if defined(SONARE_TUNING) && SONARE_TUNING
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <map>
@@ -25,9 +26,9 @@ namespace {
 
 /// Parse `name=value` pairs from `text`, separated by commas or newlines.
 /// Whitespace around either side is trimmed; blank entries and `#` comments are
-/// skipped. An unparseable value is dropped rather than aborting — the caller
-/// then keeps its compiled-in default, which is the safe direction for a
-/// development-only path.
+/// skipped. An unparseable entry is dropped rather than aborting, and named on
+/// stderr: a dropped override renders the compiled-in default, which a sweep
+/// otherwise reads as the knob doing nothing.
 void parse_into(const std::string& text, std::unordered_map<std::string, float>& out) {
   auto trim = [](const std::string& s) {
     const size_t b = s.find_first_not_of(" \t\r\n");
@@ -43,16 +44,19 @@ void parse_into(const std::string& text, std::unordered_map<std::string, float>&
     pos = (next == std::string::npos) ? text.size() + 1 : next + 1;
     if (entry.empty() || entry[0] == '#') continue;
     const size_t eq = entry.find('=');
-    if (eq == std::string::npos) continue;
-    const std::string key = trim(entry.substr(0, eq));
-    const std::string val = trim(entry.substr(eq + 1));
-    if (key.empty() || val.empty()) continue;
+    const std::string key = eq == std::string::npos ? std::string() : trim(entry.substr(0, eq));
+    const std::string val = eq == std::string::npos ? std::string() : trim(entry.substr(eq + 1));
     // strtof rather than stof: this TU is linked into the WebAssembly module,
     // where a `catch` is elided at compile time unless the file opts in, so an
     // unparseable value must be a return code and not an exception.
     char* end = nullptr;
     const float parsed = std::strtof(val.c_str(), &end);
-    if (end != nullptr && *end == '\0') out[key] = parsed;
+    if (!key.empty() && !val.empty() && end != nullptr && *end == '\0') {
+      out[key] = parsed;
+    } else {
+      std::fprintf(stderr, "SONARE_TUNING_OVERRIDES: ignoring unparseable entry '%s'\n",
+                   entry.c_str());
+    }
   }
 }
 
