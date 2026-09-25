@@ -133,8 +133,6 @@ class Music:
 
     provenance: Provenance
     take: str = ""
-    by: str = ""
-    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -194,8 +192,6 @@ def load(path: Path | None = None) -> dict[str, Record]:
             music = Music(
                 provenance=_provenance(m.get("provenance") or {}),
                 take=str(m.get("take", "")).strip(),
-                by=str(m.get("by", "")).strip(),
-                note=str(m.get("note", "")).strip(),
             )
         if structure or music:
             table[slug] = Record(structure=structure, music=music)

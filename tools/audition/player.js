@@ -10,7 +10,7 @@
 
 'use strict';
 
-import { $, state, SWITCH_RAMP, FUSED_S } from './state.js';
+import { $, state, SWITCH_RAMP, FUSED_S, roleOf } from './state.js';
 import { t } from './i18n.js';
 
 export function audio() {
@@ -334,15 +334,26 @@ export function hitAt(at) {
  * One producer, two consumers — the clipboard button and the feedback the page
  * sends — so a report typed into the page and a report pasted out of it carry
  * the same fields. */
+/// The library version last heard in this take, which is what a note written
+/// while the reference is sounding is about.
+function lastModelKey() {
+  const keys = state.take ? state.take.keys : [];
+  const slot = state.lastByRole.model;
+  if (slot != null && roleOf(keys[slot]) === 'model') return keys[slot];
+  return keys.find((k) => roleOf(k) === 'model') || null;
+}
+
 export function conditions() {
   const item = state.items[state.itemIndex];
   const at = playhead();
   const hit = hitAt(at);
+  const version = state.blind ? null : (state.take ? activeKey() : null);
   return {
     set: state.setId,
     take: item ? item.id : null,
     take_label: (item && item.label) || null,
-    version: state.blind ? null : (state.take ? activeKey() : null),
+    version,
+    against: version && roleOf(version) === 'reference' ? lastModelKey() : null,
     blind: state.blind,
     playhead: Number(at.toFixed(3)),
     duration: state.take ? Number(state.take.duration.toFixed(3)) : null,

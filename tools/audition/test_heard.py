@@ -82,13 +82,25 @@ def _bank(root: Path, units: dict[str, dict[str, int]]) -> None:
     )
 
 
-def _audition(root: Path, set_id: str, patch: str, kit: bool = False) -> None:
+def _audition(
+    root: Path, set_id: str, patch: str, kit: bool = False, sources: dict | None = None
+) -> None:
     heard.AUDITION_ROOT = root
     (root / set_id).mkdir(parents=True, exist_ok=True)
     voice = {"program": 40, "patch": patch}
     if kit:
         voice = {"program": 0, "kit": True}
-    (root / set_id / "manifest.json").write_text(json.dumps({"voice": voice}), encoding="utf-8")
+    manifest = {"voice": voice}
+    if sources:
+        manifest["sources"] = sources
+    (root / set_id / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+_SOURCES = {
+    "model": {"role": "model"},
+    "bow-light": {"role": "model"},
+    "gm041": {"role": "reference"},
+}
 
 
 def _with_scratch(fn):
@@ -358,8 +370,6 @@ def test_a_clean_verdict_signs_off_with_both_provenance_numbers_resolved() -> No
         assert block == {
             "provenance": {"date": "2026-09-19", "bank_generation": 2, "patch_version": 2},
             "take": "single-long",
-            "by": "",
-            "note": "",
         }, block
 
 
@@ -484,6 +494,60 @@ def test_bank_generation_is_the_note_days_not_the_signoffs_own_day() -> None:
         _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
         block = heard.signoff("p040-violin")
         assert block["provenance"]["bank_generation"] == 40, block
+
+
+@_with_scratch
+def test_a_note_written_with_the_reference_sounding_is_about_the_model_it_names() -> None:
+    """The page records what was selected; a listener often writes with the
+    reference still up. `against` names the library version the note is about."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin", sources=_SOURCES)
+        _bank(root, {"violin": {"2026-09-11": 1}})
+        entry = _note("2026-09-19T10:00:00+00:00", "acceptable")
+        entry["conditions"].update({"version": "gm041", "against": "model"})
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
+        note = heard.collect([], "")[0]["notes"][0]
+        assert note["judged"] == "model", note
+        assert "gm041 sounding, about model" in note["where"], note["where"]
+        assert heard.signoff("p040-violin")["take"] == "single-long"
+
+
+@_with_scratch
+def test_a_reference_sounding_note_with_no_subject_recorded_does_not_sign_off() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin", sources=_SOURCES)
+        _bank(root, {"violin": {"2026-09-11": 1}})
+        entry = _note("2026-09-19T10:00:00+00:00", "ok")
+        entry["conditions"]["version"] = "gm041"
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
+        note = heard.collect([], "")[0]["notes"][0]
+        assert "model version not recorded" in note["where"], note["where"]
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "unrecorded" in str(e), e
+
+
+@_with_scratch
+def test_a_verdict_on_a_candidate_is_not_a_signoff_of_the_shipped_voice() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        _audition(root / "audition", "p040-violin", "violin", sources=_SOURCES)
+        _bank(root, {"violin": {"2026-09-11": 1}})
+        entry = _note("2026-09-19T10:00:00+00:00", "ok")
+        entry["conditions"]["version"] = "bow-light"
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "bow-light" in str(e), e
 
 
 def _run_all() -> int:

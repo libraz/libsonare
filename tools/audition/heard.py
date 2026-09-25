@@ -127,6 +127,39 @@ def voice_of(set_id: str) -> dict:
     return voice if isinstance(voice, dict) else {}
 
 
+#: The versions `make_audition.py` renders from the library as it stands; every
+#: other `model`-role key is a recorded candidate.
+SHIPPED = ("model", "model-di")
+
+
+def roles_of(set_id: str) -> dict[str, str]:
+    """Each version's role on the page -- `model` or `reference` -- by key."""
+    try:
+        manifest = json.loads(
+            (AUDITION_ROOT / set_id / "manifest.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return {}
+    sources = manifest.get("sources")
+    if not isinstance(sources, dict):
+        return {}
+    return {k: str(v.get("role") or "") for k, v in sources.items() if isinstance(v, dict)}
+
+
+def judged(entry: dict, roles: dict[str, str]) -> str:
+    """The library version a note is about, or "" when the log cannot say.
+
+    The page records whichever version was selected when written, and a note
+    written while the reference sounds is still about the model -- only
+    `against` (recorded since the page began writing it) says which one.
+    """
+    cond = entry.get("conditions") or {}
+    version = str(cond.get("version") or "")
+    if roles.get(version) == "reference":
+        return str(cond.get("against") or "")
+    return version
+
+
 def drum_name(note: int) -> str:
     """What the GM map calls this drum note, from the harness's own table."""
     tools = REPO_ROOT / "tools" / "voicematch"
@@ -181,13 +214,21 @@ def unit_facts() -> dict[str, tuple[int, str]]:
     return out
 
 
-def where(entry: dict, voice: dict) -> str:
+def where(entry: dict, voice: dict, roles: dict[str, str] | None = None) -> str:
     """The one line saying what was sounding when this was written."""
+    roles = roles or {}
     cond = entry.get("conditions") or {}
     bits = [str(cond.get("take_label") or cond.get("take") or "")]
     version = cond.get("version")
     if cond.get("blind"):
         bits.append("blind")
+    elif version and roles.get(str(version)) == "reference":
+        against = cond.get("against")
+        bits.append(
+            f"{version} sounding, about {against}"
+            if against
+            else f"{version} sounding (reference; model version not recorded)"
+        )
     elif version:
         bits.append(str(version))
     hit = cond.get("hit")
@@ -216,6 +257,7 @@ def where(entry: dict, voice: dict) -> str:
 def digest(set_id: str, entries: list[dict]) -> dict:
     """One voice's notes, with what is known about the voice around them."""
     voice = voice_of(set_id)
+    roles = roles_of(set_id)
     facts = unit_facts()
     notes = []
     for entry in entries:
@@ -231,7 +273,8 @@ def digest(set_id: str, entries: list[dict]) -> dict:
                 "tag": str(entry.get("tag") or ""),
                 "text": str(entry.get("text") or ""),
                 "lang": str(entry.get("lang") or ""),
-                "where": where(entry, voice),
+                "where": where(entry, voice, roles),
+                "judged": judged(entry, roles),
                 "units": units,
                 "last_moved": moved,
                 # Compared as dates, which is all the log records to a day's
@@ -438,8 +481,8 @@ def signoff(set_id: str) -> dict:
     Raises `ValueError` naming the reason nothing can be signed off -- no
     verdict stands, the standing one says it is not the instrument, or the
     note behind it predates the voice's own last move -- rather than handing
-    back a record with the gap papered over. `by` and `note` are the human's
-    words and are never guessed; they come back empty.
+    back a record with the gap papered over. It carries no listener text: the
+    words stay in the untracked log.
     """
     entries = logs().get(set_id)
     if not entries:
@@ -462,6 +505,13 @@ def signoff(set_id: str) -> dict:
             f"{set_id}: note taken {chosen['at'][:10]} predates "
             f"{'/'.join(chosen['units'])}'s last move on {chosen['last_moved']}"
         )
+    # A sign-off is a claim about the shipped voice, not a candidate or an unrecorded subject.
+    if chosen["judged"] not in SHIPPED:
+        about = chosen["judged"] or "an unrecorded version"
+        raise ValueError(
+            f"{set_id}: the note of {chosen['at'][:10]} is about {about}, "
+            f"not the shipped voice ({' / '.join(SHIPPED)})"
+        )
     entry = _entry_for(entries, chosen)
     take = str((entry.get("conditions") or {}).get("take") or "")
     facts = unit_facts()
@@ -476,8 +526,6 @@ def signoff(set_id: str) -> dict:
             "patch_version": facts.get(unit, (0, ""))[0],
         },
         "take": take,
-        "by": "",
-        "note": "",
     }
 
 
