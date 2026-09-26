@@ -26,6 +26,7 @@ import metrics as metrics_module
 from autofit_test_fixtures import _bounded_knob
 from knobs import at_bound
 from loss import (
+    TNR_ABSENT_CAP_DB,
     _refine_grid,
     _refine_partial,
     _refine_partial_direct,
@@ -358,6 +359,48 @@ def test_a_probe_with_no_velocity_axis_reports_that_it_measured_nothing():
     out = score_terms(rows, rows, n_harm=10)
     assert out["dyn"] == 0.0
     assert out["dyn_groups"] == 0.0
+
+
+def test_the_attack_dynamics_term_sees_a_hammer_law_the_held_ladder_cannot():
+    """`hfdyn` reads the attack's 4-8 kHz share per pitch; `dyn` reads the held ladder.
+
+    Two candidates with the same per-row attack error, one swinging with the
+    reference and one against it. Rows carry no ladder, so `dyn` has nothing to
+    read and only `hfdyn` can tell them apart.
+    """
+    from loss_dimensions import _attack_hf_share, _dyn_terms
+    from metrics_attack import ATTACK_BANDS_HZ
+
+    def rows(law):
+        out = []
+        for v in (24, 56, 88, 120):
+            share = law(v)
+            bands = [share if i % len(ATTACK_BANDS_HZ) == 0 else -60.0 for i in range(30)]
+            out.append({"note": 60, "velocity": v, "attack_hf_db": bands})
+        return out
+
+    ref = rows(lambda v: -60.0 + 28.0 * (v - 24) / 96.0)
+    right = rows(lambda v: -57.0 + 28.0 * (v - 24) / 96.0)
+    wrong = rows(lambda v: -54.0 - 28.0 * (v - 24) / 96.0 + 28.0 * (v >= 88))
+    for cand in (right, wrong):
+        assert _dyn_terms(cand, ref) == (0.0, 0)
+    hf_right, groups = _dyn_terms(right, ref, read=_attack_hf_share, cap_db=24.0)
+    hf_wrong, _ = _dyn_terms(wrong, ref, read=_attack_hf_share, cap_db=24.0)
+    assert groups == 1
+    assert hf_right == pytest.approx(0.0, abs=1e-9)
+    assert hf_wrong > 5.0
+
+
+def test_a_probe_with_no_velocity_axis_measures_no_attack_dynamics():
+    """Same contract as `dyn`: an unmeasured curve reports zero groups, not a match."""
+    sr = 48000
+    pattern = build_pattern("sustain", 0, notes=[45])
+    t = np.arange(int(8.0 * sr)) / sr
+    y = np.sin(2 * np.pi * 110 * t) + 0.5 * np.sin(2 * np.pi * 220 * t)
+    rows = probe_rows(y, pattern, sr, raw=y)
+    out = score_terms(rows, rows, n_harm=10)
+    assert out["hfdyn"] == 0.0
+    assert out["hfdyn_groups"] == 0.0
 
 
 def test_the_attack_windows_follow_the_note_rather_than_the_score():
@@ -831,3 +874,43 @@ def test_a_zero_noise_term_says_whether_it_measured_anything():
     free = loss_terms([cleaner], [row], n_harm=10)
     assert free["tnr"] == 0.0, "a cleaner model is deliberately not penalised"
     assert free["tnr_notes"] == 0.0, "and the zero must not read as a match"
+
+
+def test_a_model_that_fell_silent_does_not_collect_the_tnr_term():
+    """A NaN model tnr_db must cost the absent cap, not read as clean.
+
+    A model whose own analysis window decayed into silence reads an implausibly
+    high tnr_db (a decaying sinusoid's residual still outweighs an uninjected
+    noise floor), which `max(0, oracle - model)` would score as cleaner than the reference.
+    """
+    sr = 48000
+    y, _ = _string(sr, 0.0)
+    note = Note(33, 96, 0.0, 2.0)
+    row = analyze_note(y, sr, note, 3.0).to_dict()
+
+    silent = dict(row)
+    silent["tnr_db"] = float("nan")
+    charged = loss_terms([silent], [row], n_harm=10)
+    assert charged["tnr"] == pytest.approx(TNR_ABSENT_CAP_DB)
+    assert charged["tnr_notes"] == 1.0
+
+    # An oracle NaN is the reference offering nothing here — skipped, not charged.
+    oracle_silent = dict(row)
+    oracle_silent["tnr_db"] = float("nan")
+    unmeasurable = loss_terms([row], [oracle_silent], n_harm=10)
+    assert unmeasurable["tnr"] == 0.0
+    assert unmeasurable["tnr_notes"] == 0.0
+    assert charged["tnr_absent"] == 1.0 and unmeasurable["tnr_absent"] == 0.0
+
+
+def test_the_tnr_term_reports_how_far_past_the_reference_it_let_the_model_go():
+    """Past the reference the term charges nothing; the distance is still reported."""
+    sr = 48000
+    y, _ = _string(sr, 0.0)
+    row = analyze_note(y, sr, Note(33, 96, 0.0, 2.0), 3.0).to_dict()
+    cleaner = dict(row)
+    cleaner["tnr_db"] = row["tnr_db"] + 20.0
+    past = loss_terms([cleaner], [row], n_harm=10)
+    assert past["tnr"] == 0.0 and past["tnr_notes"] == 0.0
+    assert past["tnr_past_db"] == pytest.approx(20.0)
+    assert loss_terms([row], [row], n_harm=10)["tnr_past_db"] == 0.0

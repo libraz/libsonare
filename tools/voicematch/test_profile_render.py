@@ -1279,3 +1279,13 @@ def test_a_capital_capture_still_selects_bank_zero(tmp_path, monkeypatch):
     emitted = _spy_smf_bytes(monkeypatch)
     profile_module.compare(cfg, path, timbre="t", notes_filter=set())
     assert bytes([0xB0, 0x00, 9]) not in emitted[60]
+
+
+def test_attack_hf_swing_is_signed_and_read_at_the_shared_extremes():
+    """A law that falls with force against one that rises is two laws, not two equal spans."""
+    from profile_gate import velocity_swing_deltas
+
+    model = {60: {24: -45.0, 56: -40.0, 120: -36.0}, 72: {24: -40.0, 120: -50.0}}
+    ref = {60: {24: -60.0, 88: -30.0, 120: -20.0}, 72: {24: -58.0, 120: -30.0}, 84: {24: 0.0}}
+    # n60 shares 24 and 120 only; n84 has one shared velocity and is left out.
+    assert velocity_swing_deltas(model, ref) == [9.0 - 40.0, -10.0 - 28.0]

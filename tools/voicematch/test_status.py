@@ -617,6 +617,28 @@ def test_a_bound_outranks_a_reason_recorded_beside_it():
     assert got["complete"] and "unbounded" not in got
 
 
+def test_a_gates_excluded_reason_completes_coverage():
+    """`_excluded` is a statement about the source — like `dimensions_na` and
+    unlike `_unbounded` — so it joins `excused` and completes coverage rather
+    than leaving the voice short of `fitted`."""
+
+    class V:
+        program, kit = 0, False
+
+    canon = canonical_dimensions(0)
+    gate = {"bounds": {d: {"median": 1.0} for d in canon if d != "balance"}}
+    assert status.coverage(V(), [{}], [gate])["gaps"] == ["balance"]
+
+    gate["_excluded"] = {
+        "balance": "the references disagree on it; a bound would freeze one side's mix"
+    }
+    got = status.coverage(V(), [{}], [gate])
+    assert got["gaps"] == []
+    assert got["complete"]
+    assert "balance" in got["excused"]
+    assert "unbounded" not in got
+
+
 def test_agreement_folds_a_gate_that_has_no_spread_to_adjudicate_against():
     """A one-timbre capture's gate reports no `outside` key at all rather than
     an empty one, and three of the standard kit's four captures are that."""

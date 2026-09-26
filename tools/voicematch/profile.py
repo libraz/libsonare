@@ -90,7 +90,7 @@ from capture import (
     out_root,
     tail_seconds,
 )
-from corpus import load_corpus
+from corpus import in_declared_grid, load_corpus
 from loss import KIT_MIN_MEMBERS, kit_report
 from metrics import (
     ATTACK_FLOOR_MS,
@@ -127,6 +127,7 @@ from profile_gate import (
     register_spread_by_note,
     select_dimensions,
     summarize_deltas,
+    velocity_swing_deltas,
     write_gate_file,
 )
 from profile_measure import (
@@ -177,6 +178,7 @@ from profile_summary import (
     a4_offset_cents,
     band_db,
     partial_balance_db,
+    partial_tilt_db_s,
     print_percussion_summary,
     print_summary,
     profile_bank,
@@ -217,6 +219,19 @@ SILENT_HIT_DBFS = -80.0
 # What a recorded room carries back into a `Room`. The entry beside them says how
 # many notes agreed and over what range, which is provenance rather than the space.
 ROOM_FIELDS = tuple(f.name for f in dataclasses.fields(Room))
+
+
+def scored_profile(profile_path: Path, cfg: dict) -> dict:
+    """The reference profile restricted to the rows the capture definition asks for.
+
+    `measure` keeps every row that was recorded; the comparing readers go through
+    this so that a row the definition has dropped — an articulation kept as data
+    for another program — reaches neither a delta nor the spread it is read against.
+    """
+    profile = json.loads(profile_path.read_text())
+    admits = in_declared_grid(cfg)
+    profile["rows"] = [r for r in profile.get("rows", []) if admits(r["note"], r["velocity"])]
+    return profile
 
 
 def reference_window(
@@ -635,7 +650,7 @@ def dynamics(
     if not profile_path.exists():
         print(f"no profile at {profile_path} — run `profile.py measure` first")
         return 2
-    profile = json.loads(profile_path.read_text())
+    profile = scored_profile(profile_path, cfg)
     cap = profile["capture"]
     preroll_s = cap["preroll_ms"] / 1000.0
     gate_s = cap["gate_ms"] / 1000.0
@@ -657,9 +672,9 @@ def dynamics(
     print("(each column is the change ACROSS velocity, not the absolute value)\n")
     print(
         f"{'note':>5} | {'level model':>11} {'level ref':>9} | {'h2-7 model':>10} {'h2-7 ref':>8} "
-        f"| {'h8-16 model':>11} {'h8-16 ref':>9}"
+        f"| {'h8-16 model':>11} {'h8-16 ref':>9} | {'4-8k model':>10} {'4-8k ref':>8}"
     )
-    print("-" * 82)
+    print("-" * 104)
 
     # Which side of the instrument's boundary the model stops at, from the
     # capture's own answer: a direct reference is compared against the direct
@@ -706,6 +721,9 @@ def dynamics(
             "low_r": band_delta(r_hi, r_lo, 2, 7),
             "high_m": band_delta(m_hi, m_lo, 8, 16),
             "high_r": band_delta(r_hi, r_lo, 8, 16),
+            # 4-8 kHz share of the first 120 ms, which the held partials never see.
+            "hf_m": delta(m_hi, m_lo, "attack_hf_db"),
+            "hf_r": delta(r_hi, r_lo, "attack_hf_db"),
         }
         for k, v in cols.items():
             if v is not None and np.isfinite(v):
@@ -721,7 +739,8 @@ def dynamics(
         print(
             f"{note:5d} | {fmt(cols['level_m'], 11)} {fmt(cols['level_r'], 9)} "
             f"| {fmt(cols['low_m'], 10)} {fmt(cols['low_r'], 8)} "
-            f"| {fmt(cols['high_m'], 11)} {fmt(cols['high_r'], 9)}"
+            f"| {fmt(cols['high_m'], 11)} {fmt(cols['high_r'], 9)} "
+            f"| {fmt(cols['hf_m'], 10)} {fmt(cols['hf_r'], 8)}"
         )
 
     print("\nmedian swing (model vs reference, and the error between them):")
@@ -729,6 +748,7 @@ def dynamics(
         ("level (dB)", "level_m", "level_r"),
         ("h2-h7 vs h1 (dB)", "low_m", "low_r"),
         ("h8-h16 vs h1 (dB)", "high_m", "high_r"),
+        ("attack 4-8 kHz (dB)", "hf_m", "hf_r"),
     ):
         if mk not in swing or rk not in swing:
             continue
@@ -807,9 +827,10 @@ def compare_percussion(
     print(
         f"{'note':>5} {'vel':>4} | {'tilt Δdb':>9} {'shape db':>9} "
         f"{'decay Δdb/s':>12} {'centroid Δ%':>12} {'attack Δms':>11} "
-        f"{'crest Δdb':>10} {'level Δdb':>10} {'ring Δ2x':>9} {'tonal Δdb':>10}"
+        f"{'crest Δdb':>10} {'level Δdb':>10} {'ring Δ2x':>9} {'tonal Δdb':>10} "
+        f"{'rise Δdb':>9}"
     )
-    print("-" * 110)
+    print("-" * 120)
 
     deltas: dict[str, list[float]] = {}
     peaks: dict[str, dict[int, dict[int, float]]] = {}
@@ -916,7 +937,7 @@ def compare_percussion(
             f"{fmt(row['band_shape'], '9.1f')} {decay_col} "
             f"{fmt(row['centroid_pct'], '+12.1f')} {fmt(row['attack'], '+11.1f')} "
             f"{fmt(row['crest'], '+10.1f')} {fmt(row['level'], '+10.1f')} "
-            f"{ring_col} {fmt(row['tonality'], '+10.2f')}"
+            f"{ring_col} {fmt(row['tonality'], '+10.2f')} {fmt(row['tilt_rise'], '+9.1f')}"
         )
 
     if ring_gone:
@@ -1267,7 +1288,7 @@ def compare(
     if not profile_path.exists():
         print(f"no profile at {profile_path} — run `profile.py measure` first")
         return 2
-    profile = json.loads(profile_path.read_text())
+    profile = scored_profile(profile_path, cfg)
     if is_percussion(profile["capture"]):
         return compare_percussion(
             cfg,
@@ -1337,6 +1358,8 @@ def compare(
     rig = model_rig(str(cfg.get("rig", RIG_UNCLASSIFIED)))
     window = reference_window(cfg, corpus_dir, timbre, preroll_s=preroll_s, gate_s=gate_s)
     levels: dict[str, dict[int, dict[int, float]]] = {}
+    # Per side, per note, per velocity, since the velocity law is a relation between rows.
+    attack_hf: dict[str, dict[int, dict[int, float]]] = {}
     for note, vel in pairs:
         window_s = window(note, vel)
         smf = write_smf(
@@ -1394,6 +1417,8 @@ def compare(
             # sinks in. How late either side sounded is `onset_ms` and is not
             # in here: that is the capture chain and the plugin, not the voice.
             "attack": d("attack_ms"),
+            # 4-8 kHz share of the first 120 ms; see `profile_measure.attack_hf_share_db`.
+            "attack_hf": d("attack_hf_db"),
             # The SECOND decay rate. A piano string loses energy fast while the
             # strings of its unison move together and far more slowly once they
             # have drifted apart and are trading it through the bridge rather
@@ -1418,6 +1443,9 @@ def compare(
         bal_m = partial_balance_db(m.get("partials_db"))
         bal_r = partial_balance_db(r.get("partials_db"))
         row["balance"] = None if bal_m is None or bal_r is None else bal_m - bal_r
+        tilt_m = partial_tilt_db_s(m.get("partial_decay_db_s"))
+        tilt_r = partial_tilt_db_s(r.get("partial_decay_db_s"))
+        row["partial_tilt"] = None if tilt_m is None or tilt_r is None else tilt_m - tilt_r
         scored = list(row.items()) + [("centroid_pct", centroid_pct)]
         offered_keys |= {k for k, _v in scored}
         for k, v in scored:
@@ -1426,6 +1454,8 @@ def compare(
         for side, src in (("m", m), ("r", r)):
             if "peak_dbfs" in src:
                 peaks.setdefault(side, {}).setdefault(note, {})[vel] = src["peak_dbfs"]
+            if src.get("attack_hf_db") is not None:
+                attack_hf.setdefault(side, {}).setdefault(note, {})[vel] = src["attack_hf_db"]
             if src.get("held_peak_dbfs") is not None and np.isfinite(src["held_peak_dbfs"]):
                 levels.setdefault(side, {}).setdefault(note, {})[vel] = src["held_peak_dbfs"]
 
@@ -1490,6 +1520,9 @@ def compare(
         deltas.setdefault("vel_range", []).append(
             (max(span[0]) - min(span[0])) - (max(span[1]) - min(span[1]))
         )
+    swing = velocity_swing_deltas(attack_hf.get("m", {}), attack_hf.get("r", {}))
+    if swing:
+        deltas["attack_hf_swing"] = swing
     register = register_deltas(levels.get("m", {}), levels.get("r", {}))
     if register:
         deltas["register"] = [d for _, _, d in register]
@@ -2025,7 +2058,7 @@ def main() -> int:
             return 2
         return agree(
             cfg,
-            json.loads(profile_path.read_text()),
+            scored_profile(profile_path, cfg),
             timbre=timbre,
             notes_filter=notes_filter,
             corpus_dir=corpus_dir,

@@ -134,6 +134,16 @@ def onset_profile(sig: np.ndarray, sr: int = 48000, start: float = 0.1):
     return terms.onset_stats(sig, sr, start)
 
 
+def onset_trace(sig: np.ndarray, sr: int = 48000, start: float = 0.1):
+    """(band level dB, shape (bands, frames)), (frame times ms) -- see `terms.onset_trace`."""
+    return terms.onset_trace(sig, sr, start)
+
+
+def onset_dip(sig: np.ndarray, sr: int = 48000, start: float = 0.1) -> np.ndarray:
+    """Per-band post-attack dip depth, in dB -- see `terms.onset_dip_stats`."""
+    return terms.onset_dip_stats(sig, sr, start)
+
+
 #: Octave bands for the balance probe, from the bottom of a keyboard upward.
 BALANCE_BANDS = (
     (30, 60),

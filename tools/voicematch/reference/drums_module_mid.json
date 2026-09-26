@@ -1,7 +1,7 @@
 {
  "id": "drums_module_mid",
  "label": "Standard kit, the drums that ring for a sixth of a second, read out of a module's own recordings",
- "measured_utc": "2026-09-20T04:37:51+00:00",
+ "measured_utc": "2026-09-25T20:32:13+00:00",
  "capture": {
   "program": 0,
   "params": [],
@@ -88,6 +88,7 @@
    "level_db": -23.86,
    "flatness_db": -40.4,
    "stereo_width": null,
+   "tilt_rise_db": -26.29,
    "modal_hz": [
     47.53,
     61.43,
@@ -188,6 +189,7 @@
    "level_db": -22.47,
    "flatness_db": -49.24,
    "stereo_width": null,
+   "tilt_rise_db": -22.46,
    "modal_hz": [
     69.02,
     106.16,
@@ -288,6 +290,7 @@
    "level_db": -25.83,
    "flatness_db": -14.9,
    "stereo_width": null,
+   "tilt_rise_db": 11.24,
    "modal_hz": [
     175.89,
     186.0,
@@ -388,6 +391,7 @@
    "level_db": -30.37,
    "flatness_db": -12.53,
    "stereo_width": null,
+   "tilt_rise_db": 8.4,
    "modal_hz": [
     545.03,
     618.65,
@@ -488,6 +492,7 @@
    "level_db": -24.41,
    "flatness_db": -10.68,
    "stereo_width": null,
+   "tilt_rise_db": 20.62,
    "modal_hz": [
     179.87,
     218.82,
@@ -588,6 +593,7 @@
    "level_db": -28.79,
    "flatness_db": -15.65,
    "stereo_width": null,
+   "tilt_rise_db": 8.23,
    "modal_hz": [
     5001.58,
     5844.75,
@@ -688,6 +694,7 @@
    "level_db": -26.72,
    "flatness_db": -43.79,
    "stereo_width": null,
+   "tilt_rise_db": -0.61,
    "modal_hz": [
     167.84,
     182.1,
@@ -788,6 +795,7 @@
    "level_db": -32.21,
    "flatness_db": -25.38,
    "stereo_width": null,
+   "tilt_rise_db": 3.27,
    "modal_hz": [
     225.3,
     448.1,
@@ -888,6 +896,7 @@
    "level_db": -32.36,
    "flatness_db": -36.93,
    "stereo_width": null,
+   "tilt_rise_db": 0.87,
    "modal_hz": [
     1906.58,
     2007.05,
@@ -988,6 +997,7 @@
    "level_db": -43.0,
    "flatness_db": -8.83,
    "stereo_width": null,
+   "tilt_rise_db": 9.8,
    "modal_hz": [
     1940.39,
     2100.61,
@@ -1088,6 +1098,7 @@
    "level_db": -25.33,
    "flatness_db": -43.87,
    "stereo_width": null,
+   "tilt_rise_db": 5.87,
    "modal_hz": [
     645.17,
     665.06,
@@ -1188,6 +1199,7 @@
    "level_db": -27.52,
    "flatness_db": -44.95,
    "stereo_width": null,
+   "tilt_rise_db": 11.17,
    "modal_hz": [
     151.3,
     187.36,

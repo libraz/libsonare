@@ -31,10 +31,11 @@ nobody has adopted means there may be more to gain — not that what shipped is
 worse than it was.
 
 The second is that **coverage is all-or-nothing** (0.6). A canonical dimension
-is gated, or it is named in the capture's `dimensions_na` with a reason, or it
-is a gap; there is no fraction to tune and no majority to argue about. The
-piano's two exclusions were already argued in prose and are now data, which is
-the difference between an exclusion and an oversight.
+is gated, or it is named in the capture's `dimensions_na` or a gate's
+`_excluded` with a reason, or it is a gap; there is no fraction to tune and no
+majority to argue about. The piano's two exclusions were already argued in
+prose and are now data, which is the difference between an exclusion and an
+oversight.
 
 **One reference is enough, and the ear is what promotes a voice.** Both follow
 from `docs/objective.md`, which is the contract this ladder implements: the
@@ -369,17 +370,16 @@ def coverage(voice, cap_raws: list[dict], gates: list[dict]) -> dict:
     excuses the colour it handed to the module grids — so it settles a dimension
     only where nothing gates it.
 
-    **There are TWO registers a reason can be written in and they say different
-    things**, so both are read and they are reported apart. A capture's
-    `dimensions_na` says the source cannot carry the dimension at all; a gate's
-    `_unbounded` says the source carries it and no bound could be recorded from
-    this comparison, which is where a live disagreement between model and
-    reference gets written down. Reading only the first reported every such
-    entry as an oversight — the state its own prose had already ruled out.
+    **Three registers hold a reason.** `dimensions_na`: the source cannot carry
+    the dimension at all. A gate's `_excluded`: the source CAN measure it but
+    must never be bounded (two references disagreeing on kit balance, say) —
+    permanent, like `dimensions_na`, so both join `excused` below. A gate's
+    `_unbounded`: no bound recorded yet, which stays open and does not complete coverage.
     """
     canon = canonical_dimensions(voice.program, percussive=voice.kit)
     gated = {d for gate in gates for d in (gate.get("bounds") or {})}
     excused = {d for raw in cap_raws for d in (raw.get("dimensions_na") or {})}
+    excused |= {d for gate in gates for d in (gate.get("_excluded") or {})}
     unbounded = {d for gate in gates for d in (gate.get("_unbounded") or {})}
     excused -= gated
     unbounded -= gated | excused
@@ -389,14 +389,9 @@ def coverage(voice, cap_raws: list[dict], gates: list[dict]) -> dict:
         "gated": len([d for d in canon if d in gated]),
         "excused": sorted(excused),
         "gaps": gaps,
-        # The two registers part company here, and this is the whole reason they
-        # are read apart. `dimensions_na` is permanent — the source does not
-        # carry the dimension and no later run will change that — so it
-        # completes coverage. `_unbounded` says this comparison recorded no
-        # bound, which covers both "nothing more can be measured" and "the model
-        # has nothing there yet"; the prose says which and no reader can. So it
-        # stops the dimension reading as an oversight and does not let the voice
-        # claim a coverage it does not have.
+        # `dimensions_na` and `_excluded` merge into `excused` and complete
+        # coverage together, since both are permanent. `_unbounded` stays apart:
+        # it means no bound was recorded yet, so it does not complete coverage.
         "complete": not gaps and not (unbounded & set(canon)),
     }
     if unbounded & set(canon):

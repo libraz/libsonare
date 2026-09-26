@@ -54,12 +54,15 @@ In place of the harmonic set:
 - `level_db` — hit RMS after global RMS alignment
 - `flatness_db` — geometric over arithmetic mean of the power spectrum over the first 300 ms, cut at the capture's edge. 0 dB is a flat spectrum; a struck bar runs tens of dB under a shaker. This is what stands in for `tnr_db`, which cannot be computed here at all: that one masks around a harmonic ladder and a drum has no fundamental to build one on.
 - `stereo_width` — `1 − |channel correlation|` over the hit's own window, the same measurement the pitched set takes. Measured over the hit rather than the file, because a capture is mostly tail and a correlation taken across it reports the padding as a source in the middle.
+- `tilt_rise_db` — the band tilt 30–60 ms after the strike minus the tilt of its first 15 ms, so positive is a hit that brightens. The whole-hit profile is summed over time and cannot see the order the energy arrived in: the module's crashes strike leaning 16–19 dB toward their highs and wash to 34–39 dB within 60 ms, a linear plate holds one lean from the first millisecond, and the two can integrate to the same `bands_db`. Both windows fit inside the 60 ms every piece of the module's kit fills, which is why `drums_module_hit` gates it as `tilt_rise`.
 
 ### Two qualities the band profile is structurally unable to carry
 
 Every spectral column above is a level or a first moment over 1/3-octave bands. Build a comb of tones — one per band, each carrying that band's energy — and it has the **same** `bands_db` as the noise it was built from, to a hundredth of a decibel, the same `band_tilt`, the same `band_shape` and the same centroid. Nothing in the set could separate a struck bar from a filtered shaker. `flatness_db` separates those two by 87 dB.
 
 Measured across the reference kit it spans 49 dB, from −55.6 to −6.8, in the order a listener would give: open triangle −45.8, woodblock −28.1, claves −27.6, cowbell −22.7, kick −22.1, ride −17.2, conga −14.2, maracas −9.7, hats and snare −8.8, crash −8.0.
+
+A drum fit scores it as `tonal` (`--w-tonal`, weighted by default beside `tilt` and `bright`), the absolute flatness delta per row; `tilt_rise_db` is scored the same way as `rise` (`--w-rise`), and the gate's `ring` as `ring` (`--w-ring`), in doublings, where `env` prices the same reading at a hundredth of a unit per millisecond — a crash ringing half as long as its reference cost five units there, less than the tilt and centroid a fit bought back with it. Before that term existed the gate bounded `tonality` and nothing a fit minimised could see it, so a plate answering only a noise band read 5 to 7 dB noisier than the module's rides while every band level agreed.
 
 What it does **not** answer is how narrow a peak is. A line and a filled quarter-octave carrying the same band energy over the same floor come back about a decibel apart, which is inside the 3.5 dB the two reference kits disagree by. Narrowness within a band is unmeasured, and a small `tonality` delta is not evidence about it.
 

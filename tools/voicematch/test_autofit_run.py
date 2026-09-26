@@ -138,37 +138,40 @@ def test_a_winner_that_loses_off_the_probe_writes_nothing_either():
     assert winner_or_defaults(knobs, [0.9], won, None) == [0.9]
 
 
-def test_a_winner_that_stopped_being_scored_on_noise_writes_nothing():
+def test_a_winner_that_left_the_reference_behind_writes_nothing():
     """`tnr` charges only where the model is noisier, so leaving is free.
 
     The shamisen's buzz is its sawari and it is the only between-partial energy
     the model has. A fit took it from 0.5 to 0.146 and the gate then read the
     voice 29.97 dB cleaner than its reference against a 1.81 bound, while the
-    term reported 0.00 at every candidate — not a match, but a comparison that
-    had stopped happening. The count of notes it still charged for is what
-    separates those, and it falls as the model walks past the reference.
+    term reported 0.00 at every candidate. How many notes it charged cannot tell
+    that from a match, so the guard reads how far past the reference the model
+    went, and how many notes it fell silent on.
     """
     knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
-    quit_early = argparse.Namespace(
-        normalize=True, best_loss=0.5071, start_tnr_notes=7.0, best_tnr_notes=0.0
-    )
-    assert winner_or_defaults(knobs, [0.9], quit_early) == [0.25]
-    # Still scored on every note it started with: nothing went quiet.
-    held = argparse.Namespace(
-        normalize=True, best_loss=0.5071, start_tnr_notes=7.0, best_tnr_notes=7.0
-    )
-    assert winner_or_defaults(knobs, [0.9], held) == [0.9]
-    # A model cleaner than a sampled reference from the start is ordinary, and
-    # the term never spoke about any candidate — there is no delta to read.
-    silent = argparse.Namespace(
-        normalize=True, best_loss=0.5071, start_tnr_notes=0.0, best_tnr_notes=0.0
-    )
-    assert winner_or_defaults(knobs, [0.9], silent) == [0.9]
-    # A --raw-loss run leaves both anchors unset; the guard has nothing to read.
-    unanchored = argparse.Namespace(
-        normalize=True, best_loss=0.5071, start_tnr_notes=None, best_tnr_notes=None
-    )
-    assert winner_or_defaults(knobs, [0.9], unanchored) == [0.9]
+
+    def ev(past, absent, notes_start=7.0, notes_best=0.0):
+        return argparse.Namespace(
+            normalize=True,
+            best_loss=0.5071,
+            start_tnr_notes=notes_start,
+            best_tnr_notes=notes_best,
+            start_tnr_past_db=past[0],
+            best_tnr_past_db=past[1],
+            start_tnr_absent=absent[0],
+            best_tnr_absent=absent[1],
+        )
+
+    # Walked 28 dB past the reference: refused.
+    assert winner_or_defaults(knobs, [0.9], ev((2.0, 30.0), (0.0, 0.0))) == [0.25]
+    # Fell silent on notes it used to sound on: refused, even with no overshoot.
+    assert winner_or_defaults(knobs, [0.9], ev((2.0, 2.0), (0.0, 3.0))) == [0.25]
+    # Every shortfall closed without going past: a match, and it is written.
+    assert winner_or_defaults(knobs, [0.9], ev((2.0, 2.5), (1.0, 1.0))) == [0.9]
+    # Only the fit's own growth past the gate's `tnr` floor is a finding.
+    assert winner_or_defaults(knobs, [0.9], ev((12.0, 12.9), (0.0, 0.0), 0.0, 0.0)) == [0.9]
+    # A --raw-loss run leaves the anchors unset; the guard has nothing to read.
+    assert winner_or_defaults(knobs, [0.9], ev((None, None), (None, None), None, None)) == [0.9]
 
 
 def test_a_screen_that_moves_something_still_narrows_to_it():
@@ -595,7 +598,14 @@ def test_a_refusal_names_itself_in_the_out_artifact(tmp_path):
     """
     knobs = [_reach_knob("a", 0.0, 1.0, 0.25)]
     blind = argparse.Namespace(
-        normalize=True, best_loss=0.5071, start_tnr_notes=7.0, best_tnr_notes=0.0
+        normalize=True,
+        best_loss=0.5071,
+        start_tnr_notes=7.0,
+        best_tnr_notes=0.0,
+        start_tnr_absent=0.0,
+        best_tnr_absent=0.0,
+        start_tnr_past_db=2.0,
+        best_tnr_past_db=30.0,
     )
     assert winner_or_defaults(knobs, [0.9], blind) == [0.25]
     assert blind.write_back_refusal == "objective_went_blind"
@@ -608,6 +618,8 @@ def test_a_refusal_names_itself_in_the_out_artifact(tmp_path):
     assert record["write_back"] == {
         "refused": "objective_went_blind",
         "tnr_notes": {"start": 7.0, "best": 0.0},
+        "tnr_absent": {"start": 0.0, "best": 0.0},
+        "tnr_past_db": {"start": 2.0, "best": 30.0},
     }
 
 

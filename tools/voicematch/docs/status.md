@@ -58,7 +58,7 @@ One number per voice, in fifths. Each step is a predicate over facts already on 
 
 ## Coverage is all-or-nothing
 
-A canonical dimension is gated, or it is named in the capture's `dimensions_na` with a reason, or it is a gap. There is no fraction to tune and no majority to argue about.
+A canonical dimension is gated, or it is named with a reason in the capture's `dimensions_na` or a gate's `_excluded`, or it is a gap. There is no fraction to tune and no majority to argue about.
 
 `toneclass.canonical_dimensions` is the denominator: the dimensions a class can be judged on, listed for the class when the measurement means something for that excitation rather than when some instrument happened to be measured on it. A sustained voice is not judged on a free decay it does not have; a bar or a bell is not judged against equal temperament; a kit uses the percussion vocabulary and no ladder.
 
@@ -71,6 +71,8 @@ A canonical dimension is gated, or it is named in the capture's `dimensions_na` 
 ```
 
 A dimension with no reason is not excusable. That is the whole of the discipline here — the same rule the parity allowlist runs on, for the same reason.
+
+**`dimensions_na` excuses a dimension the source cannot carry at all; a gate's `_excluded` excuses one the source CAN produce a number for and must never be held to one anyway.** The drum kit's `level` is the case: the two references sit a median 5-7 dB apart and agree on fewer than half the hits, so a bound recorded from either would freeze that reference's own mix balance rather than the instrument. Both are permanent statements about the source and both complete coverage the same way. A gate's `_unbounded` is a third register and does not complete coverage — see [profile_gate.py](../profile_gate.py) for what it says instead.
 
 ## What the engine column comes from
 

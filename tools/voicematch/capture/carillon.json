@@ -41,14 +41,17 @@
     "vel_range": "the font declares no velocity layers at all - `velRange` is set on none of its zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads",
     "stereo": "the recordings are mono (`sampleType` 1) and the font sets no `pan`, so the image is absent by construction rather than by voicing",
     "register": "the font sets no `initialAttenuation` anywhere, so the level relation between one note and the next is not in it. Over this grid the peaks span 1.1 dB, which is the headroom each recording was normalised into rather than the instrument's fall across its compass",
-    "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from"
+    "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from",
+    "attack_hf_swing": "this reference holds one velocity (100) per note, so there is no softest-to-hardest change to measure -- the same fact vel_range is excused for"
   },
   "dimensions": [
     "decay",
     "aftersound",
     "doubling",
+    "partial_tilt",
     "body",
     "attack",
+    "attack_hf",
     "balance",
     "centroid_pct",
     "tnr"

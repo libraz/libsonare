@@ -31,8 +31,8 @@
         "profile_rows": 180,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "damper",
             "tnr"
@@ -41,8 +41,8 @@
           "complete": true
         },
         "agreement": {
-          "inside": 9,
-          "total": 11,
+          "inside": 12,
+          "total": 14,
           "outside": {
             "stereo": 1.46,
             "aftersound": 1.16
@@ -80,9 +80,10 @@
         "profile_rows": 13,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -98,11 +99,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -133,7 +136,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -141,8 +144,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -184,9 +190,10 @@
         "profile_rows": 13,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -202,11 +209,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -237,7 +246,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -245,8 +254,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -288,8 +300,8 @@
         "profile_rows": 45,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 13,
+          "canonical": 16,
+          "gated": 16,
           "excused": [],
           "gaps": [],
           "complete": true
@@ -301,12 +313,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "stretch",
@@ -315,9 +330,13 @@
           ]
         },
         "structure": null,
-        "music": null
+        "music": {
+          "state": "stale",
+          "date": "2026-09-25",
+          "take": "single-long"
+        }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "the sign-off is stale against this bank: listen again"
     },
     {
       "slug": "p001b001-bright-acoustic-piano",
@@ -340,9 +359,10 @@
         "profile_rows": 9,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -358,11 +378,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -393,9 +415,10 @@
         "profile_rows": 9,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -411,11 +434,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -446,9 +471,10 @@
         "profile_rows": 53,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
+            "attack_hf_swing",
             "stereo"
           ],
           "gaps": [],
@@ -461,12 +487,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -499,9 +527,10 @@
         "profile_rows": 9,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -517,11 +546,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -552,9 +583,10 @@
         "profile_rows": 9,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -570,11 +602,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -605,8 +639,8 @@
         "profile_rows": 45,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 13,
+          "canonical": 16,
+          "gated": 16,
           "excused": [],
           "gaps": [],
           "complete": true
@@ -618,12 +652,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "stretch",
@@ -657,7 +694,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -665,8 +702,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -708,7 +748,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -716,8 +756,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -759,8 +802,8 @@
         "profile_rows": 45,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 15,
           "excused": [
             "stereo"
           ],
@@ -774,12 +817,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -812,7 +858,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -820,8 +866,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -863,7 +912,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -871,8 +920,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -914,7 +966,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -922,8 +974,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -965,7 +1020,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -973,8 +1028,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -1016,7 +1074,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -1024,8 +1082,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -1067,7 +1128,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -1075,8 +1136,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -1118,8 +1182,8 @@
         "profile_rows": 45,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 15,
           "excused": [
             "stereo"
           ],
@@ -1133,12 +1197,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -1171,9 +1238,10 @@
         "profile_rows": 9,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -1189,11 +1257,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -1224,7 +1294,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -1232,8 +1302,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -1275,9 +1348,10 @@
         "profile_rows": 9,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -1293,11 +1367,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -1328,7 +1404,7 @@
         "profile_rows": 0,
         "gate_state": null,
         "coverage": {
-          "canonical": 13,
+          "canonical": 16,
           "gated": 0,
           "excused": [],
           "gaps": [
@@ -1336,8 +1412,11 @@
             "decay",
             "aftersound",
             "doubling",
+            "partial_tilt",
             "body",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "stereo",
             "damper",
             "balance",
@@ -1379,17 +1458,20 @@
         "profile_rows": 176,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 13,
+          "canonical": 16,
+          "gated": 16,
           "excused": [],
           "gaps": [],
           "complete": true
         },
         "agreement": {
           "inside": 10,
-          "total": 13,
+          "total": 16,
           "outside": {
+            "attack_hf_swing": 4.24,
             "body": 2.2,
+            "partial_tilt": 2.0,
+            "attack_hf": 1.7,
             "balance": 1.29,
             "vel_range": 1.29
           }
@@ -1426,9 +1508,10 @@
         "profile_rows": 10,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -1444,11 +1527,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -1479,9 +1564,10 @@
         "profile_rows": 10,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -1497,11 +1583,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -1532,9 +1620,10 @@
         "profile_rows": 10,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -1550,11 +1639,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -1585,9 +1676,10 @@
         "profile_rows": 10,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -1603,11 +1695,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -1638,9 +1732,10 @@
         "profile_rows": 10,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -1656,11 +1751,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -1691,9 +1788,10 @@
         "profile_rows": 10,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -1709,11 +1807,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -1747,8 +1847,8 @@
         "profile_rows": 45,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "stereo"
           ],
@@ -1764,11 +1864,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -1801,8 +1904,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 10,
+          "canonical": 15,
+          "gated": 13,
           "excused": [
             "balance",
             "stereo"
@@ -1817,11 +1920,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -1853,8 +1959,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 9,
+          "canonical": 15,
+          "gated": 12,
           "excused": [
             "balance",
             "damper",
@@ -1870,10 +1976,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -1905,8 +2014,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 10,
+          "canonical": 15,
+          "gated": 13,
           "excused": [
             "damper",
             "stereo"
@@ -1921,11 +2030,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -1957,8 +2069,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 10,
+          "canonical": 15,
+          "gated": 13,
           "excused": [
             "damper",
             "stereo"
@@ -1973,11 +2085,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -2009,9 +2124,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 9,
+          "canonical": 15,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "stereo",
             "vel_range"
@@ -2026,11 +2142,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr"
           ]
@@ -2061,9 +2179,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 9,
+          "canonical": 15,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "stereo",
             "vel_range"
@@ -2078,11 +2197,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr"
           ]
@@ -2123,8 +2244,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 8,
+          "canonical": 15,
+          "gated": 11,
           "excused": [
             "aftersound",
             "damper",
@@ -2140,10 +2261,13 @@
           "outside": {},
           "unjudgeable": [
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -2175,9 +2299,10 @@
         "profile_rows": 7,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 8,
+          "canonical": 15,
+          "gated": 10,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -2193,11 +2318,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "tnr"
           ]
         },
@@ -2227,9 +2354,10 @@
         "profile_rows": 7,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 8,
+          "canonical": 15,
+          "gated": 10,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -2245,11 +2373,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "tnr"
           ]
         },
@@ -2281,8 +2411,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 8,
+          "canonical": 15,
+          "gated": 11,
           "excused": [
             "aftersound",
             "damper",
@@ -2298,10 +2428,13 @@
           "outside": {},
           "unjudgeable": [
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -2333,8 +2466,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 8,
+          "canonical": 15,
+          "gated": 11,
           "excused": [
             "balance",
             "damper",
@@ -2351,10 +2484,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "vel_range"
           ]
@@ -2385,9 +2521,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 8,
+          "canonical": 15,
+          "gated": 10,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -2403,11 +2540,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "tnr"
           ]
         },
@@ -2437,9 +2576,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 8,
+          "canonical": 15,
+          "gated": 10,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -2455,11 +2595,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "tnr"
           ]
         },
@@ -2489,9 +2631,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 8,
+          "canonical": 15,
+          "gated": 10,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -2507,11 +2650,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "tnr"
           ]
         },
@@ -2541,9 +2686,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 8,
+          "canonical": 15,
+          "gated": 10,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -2559,11 +2705,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "tnr"
           ]
         },
@@ -2593,8 +2741,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "damper",
             "stereo"
@@ -2609,11 +2757,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -3332,7 +3483,11 @@
           "accepted": [],
           "open": []
         },
-        "music": null
+        "music": {
+          "state": "stale",
+          "date": "2026-09-25",
+          "take": "single-long"
+        }
       },
       "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16, foundations-only, mixtures-forward, chiff-strong, chiff-none, slow-speech, wind-unsteady — then listen to a take and record the verdict in signoff.json"
     },
@@ -3803,8 +3958,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 13,
+          "canonical": 16,
+          "gated": 16,
           "excused": [],
           "gaps": [],
           "complete": true
@@ -3816,12 +3971,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "stretch",
@@ -3830,9 +3988,13 @@
           ]
         },
         "structure": null,
-        "music": null
+        "music": {
+          "state": "stale",
+          "date": "2026-09-25",
+          "take": "music"
+        }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "the sign-off is stale against this bank: listen again"
     },
     {
       "slug": "p024b001-acoustic-guitar-nylon",
@@ -3855,9 +4017,10 @@
         "profile_rows": 6,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -3873,11 +4036,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -3908,9 +4073,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -3926,11 +4092,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -3961,9 +4129,10 @@
         "profile_rows": 6,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -3979,11 +4148,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -4014,9 +4185,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -4032,11 +4204,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -4057,8 +4231,8 @@
       "patch": "steel_guitar",
       "engine": "karplus_strong",
       "capture": "steel_guitar",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4067,13 +4241,11 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 16,
           "excused": [],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -4082,11 +4254,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
+            "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "stretch",
@@ -4097,7 +4273,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p025b001-acoustic-guitar-steel",
@@ -4120,9 +4296,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -4138,11 +4315,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -4173,9 +4352,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -4191,11 +4371,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -4226,9 +4408,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -4244,11 +4427,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -4279,9 +4464,10 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 11,
           "excused": [
+            "attack_hf_swing",
             "damper",
             "register",
             "stereo",
@@ -4297,11 +4483,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "stretch",
             "tnr"
           ]
@@ -4322,8 +4510,8 @@
       "patch": "electric_guitar",
       "engine": "karplus_strong",
       "capture": "jazz_guitar",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "string-rings-longer"
       ],
@@ -4334,13 +4522,11 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 16,
           "excused": [],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -4349,11 +4535,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
+            "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "stretch",
@@ -4370,7 +4560,7 @@
         },
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "judge the recorded candidate(s) — string-rings-longer — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p027-electric-guitar-clean",
@@ -4380,14 +4570,12 @@
       "name": "Electric Guitar (clean)",
       "group": "24-31 Guitar",
       "tone_class": "plucked-string",
-      "patch": "electric_guitar",
+      "patch": "clean_guitar",
       "engine": "karplus_strong",
       "capture": "electric_guitar_di",
       "stage": 0.6,
       "stage_name": "fitted",
       "open_candidates": [
-        "di-fitted",
-        "di-fitted-sustained",
         "amp-cleanCombo",
         "amp-chimeEdge",
         "amp-classicCrunch",
@@ -4401,13 +4589,13 @@
       ],
       "axes": {
         "engine": "karplus_strong",
-        "patch": "electric_guitar",
+        "patch": "clean_guitar",
         "timbres": 2,
         "profile_rows": 100,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "damper",
             "stereo"
@@ -4416,20 +4604,21 @@
           "complete": true
         },
         "agreement": {
-          "inside": 6,
-          "total": 11,
+          "inside": 8,
+          "total": 14,
           "outside": {
-            "body": 4.96,
-            "tnr": 3.13,
-            "attack": 3.0,
-            "doubling": 1.53,
-            "vel_range": 1.33
+            "vel_range": 38.48,
+            "attack_hf_swing": 7.82,
+            "tnr": 4.59,
+            "body": 4.28,
+            "attack_hf": 1.8,
+            "attack": 1.5
           }
         },
         "structure": null,
         "music": null
       },
-      "next": "judge the recorded candidate(s) — di-fitted, di-fitted-sustained, amp-cleanCombo, amp-chimeEdge, amp-classicCrunch, amp-tweedGrind, amp-britStack, amp-modernLead, amp-rectifierChug, amp-coldBiasBuzz, amp-bassDi, amp-bassRig — then listen to a take and record the verdict in signoff.json"
+      "next": "judge the recorded candidate(s) — amp-cleanCombo, amp-chimeEdge, amp-classicCrunch, amp-tweedGrind, amp-britStack, amp-modernLead, amp-rectifierChug, amp-coldBiasBuzz, amp-bassDi, amp-bassRig — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p028-electric-guitar-muted",
@@ -4452,8 +4641,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 15,
           "excused": [
             "damper"
           ],
@@ -4467,11 +4656,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "stretch",
@@ -4497,10 +4689,7 @@
       "capture": "overdriven_guitar",
       "stage": 0.6,
       "stage_name": "fitted",
-      "open_candidates": [
-        "di-fitted",
-        "di-fitted-drive-0.75"
-      ],
+      "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
         "patch": "overdriven",
@@ -4508,8 +4697,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 13,
+          "canonical": 16,
+          "gated": 16,
           "excused": [],
           "gaps": [],
           "complete": true
@@ -4521,12 +4710,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "stretch",
@@ -4537,7 +4729,7 @@
         "structure": null,
         "music": null
       },
-      "next": "judge the recorded candidate(s) — di-fitted, di-fitted-drive-0.75 — then listen to a take and record the verdict in signoff.json"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p030-distortion-guitar",
@@ -4560,8 +4752,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 13,
+          "canonical": 16,
+          "gated": 16,
           "excused": [],
           "gaps": [],
           "complete": true
@@ -4573,12 +4765,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "stretch",
@@ -4612,8 +4807,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "balance",
             "body"
@@ -4628,10 +4823,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "stretch",
@@ -4665,8 +4863,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 15,
           "excused": [
             "stereo"
           ],
@@ -4680,12 +4878,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -4718,8 +4919,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "damper",
             "stereo"
@@ -4734,11 +4935,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -4771,8 +4975,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 15,
           "excused": [
             "stereo"
           ],
@@ -4786,12 +4990,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -4824,8 +5031,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 15,
           "excused": [
             "stereo"
           ],
@@ -4839,12 +5046,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -4877,8 +5087,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 15,
           "excused": [
             "stereo"
           ],
@@ -4892,12 +5102,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -4926,8 +5139,8 @@
       "patch": "bass_pop",
       "engine": "karplus_strong",
       "capture": "bass_pop",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "karplus_strong",
@@ -4936,15 +5149,13 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 15,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "damper"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -4953,11 +5164,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
+            "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -4967,7 +5182,7 @@
         "structure": null,
         "music": null
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: damper"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p038-synth-bass-1",
@@ -4990,8 +5205,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 12,
           "excused": [
             "aftersound",
             "decay",
@@ -5007,10 +5222,13 @@
           "outside": {},
           "unjudgeable": [
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -5043,8 +5261,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 9,
+          "canonical": 16,
+          "gated": 12,
           "excused": [
             "aftersound",
             "decay",
@@ -5060,10 +5278,13 @@
           "outside": {},
           "unjudgeable": [
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -5469,8 +5690,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "damper",
             "stereo"
@@ -5485,11 +5706,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -5528,8 +5752,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 12,
+          "canonical": 16,
+          "gated": 15,
           "excused": [
             "stereo"
           ],
@@ -5543,12 +5767,15 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "damper",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -5581,8 +5808,8 @@
         "profile_rows": 25,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 10,
+          "canonical": 15,
+          "gated": 13,
           "excused": [
             "damper",
             "stereo"
@@ -5597,11 +5824,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -6032,8 +6262,8 @@
         "profile_rows": 25,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 10,
+          "canonical": 15,
+          "gated": 13,
           "excused": [
             "damper",
             "stereo"
@@ -6048,11 +6278,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -8501,8 +8734,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "damper",
             "stereo"
@@ -8517,11 +8750,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -8554,8 +8790,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "damper",
             "stereo"
@@ -8570,11 +8806,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -8610,8 +8849,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "damper",
             "stereo"
@@ -8626,11 +8865,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -8663,8 +8905,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 13,
-          "gated": 11,
+          "canonical": 16,
+          "gated": 14,
           "excused": [
             "damper",
             "stereo"
@@ -8679,11 +8921,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -8716,8 +8961,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 10,
+          "canonical": 15,
+          "gated": 13,
           "excused": [
             "damper",
             "stereo"
@@ -8732,11 +8977,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stretch",
             "tnr",
@@ -8925,8 +9173,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 9,
+          "canonical": 15,
+          "gated": 12,
           "excused": [
             "balance",
             "damper",
@@ -8942,10 +9190,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -8977,8 +9228,8 @@
         "profile_rows": 25,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 9,
+          "canonical": 15,
+          "gated": 12,
           "excused": [
             "balance",
             "damper",
@@ -8994,10 +9245,13 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -9029,8 +9283,8 @@
         "profile_rows": 30,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 10,
+          "canonical": 15,
+          "gated": 13,
           "excused": [
             "damper",
             "stereo"
@@ -9045,11 +9299,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "tnr",
             "vel_range"
@@ -9081,8 +9338,8 @@
         "profile_rows": 25,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 5,
+          "canonical": 15,
+          "gated": 7,
           "excused": [
             "balance",
             "damper",
@@ -9094,7 +9351,8 @@
             "aftersound",
             "body",
             "decay",
-            "doubling"
+            "doubling",
+            "partial_tilt"
           ]
         },
         "agreement": {
@@ -9103,6 +9361,8 @@
           "outside": {},
           "unjudgeable": [
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "centroid_pct",
             "register",
             "tnr",
@@ -9118,7 +9378,7 @@
         },
         "music": null
       },
-      "next": "4 dimension(s) recorded unbounded in the gate: aftersound, body, decay, doubling — read the reason there, then either record a bound that became measurable or fix what the model is missing"
+      "next": "5 dimension(s) recorded unbounded in the gate: aftersound, body, decay, doubling, partial_tilt — read the reason there, then either record a bound that became measurable or fix what the model is missing"
     },
     {
       "slug": "p116-taiko-drum",
@@ -9141,8 +9401,8 @@
         "profile_rows": 25,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 10,
+          "canonical": 15,
+          "gated": 13,
           "excused": [
             "damper",
             "tnr"
@@ -9157,11 +9417,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "vel_range"
@@ -9193,8 +9456,8 @@
         "profile_rows": 30,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 10,
+          "canonical": 15,
+          "gated": 13,
           "excused": [
             "damper",
             "tnr"
@@ -9209,11 +9472,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "vel_range"
@@ -9245,8 +9511,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
-          "gated": 10,
+          "canonical": 15,
+          "gated": 13,
           "excused": [
             "damper",
             "tnr"
@@ -9261,11 +9527,14 @@
           "unjudgeable": [
             "aftersound",
             "attack",
+            "attack_hf",
+            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
             "decay",
             "doubling",
+            "partial_tilt",
             "register",
             "stereo",
             "vel_range"
@@ -9765,11 +10034,9 @@
         "profile_rows": 637,
         "gate_state": "current",
         "coverage": {
-          "canonical": 11,
-          "gated": 8,
+          "canonical": 12,
+          "gated": 11,
           "excused": [
-            "band_decay",
-            "ring",
             "stereo"
           ],
           "gaps": [],
@@ -9781,11 +10048,14 @@
           "outside": {},
           "unjudgeable": [
             "attack",
+            "band_decay",
             "band_shape",
             "band_tilt",
             "centroid_pct",
             "crest",
             "level",
+            "ring",
+            "tilt_rise",
             "tonality"
           ]
         },

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 from profile_measure import double_decay_gap, register_deltas
-from profile_summary import a4_offset_cents, partial_balance_db
+from profile_summary import a4_offset_cents, partial_balance_db, partial_tilt_db_s
 
 DELTA_LABELS = {
     "stretch": "tuning vs the reference (cents)",
@@ -25,6 +25,7 @@ DELTA_LABELS = {
     "stereo": "board width, + = model radiates wider (0 = mono)",
     "aftersound": "aftersound, the decay AFTER the knee (dB/s)",
     "doubling": "double decay, prompt minus aftersound (dB/s)",
+    "partial_tilt": "partial decay rate, high (h5-h8) minus low (h1-h2) (dB/s)",
     "body": "body under the note, below-f0 minus f0 (dB)",
     "band_tilt": "band tilt, + = model is brighter (dB)",
     "band_shape": "band profile error, magnitude only (dB)",
@@ -36,10 +37,13 @@ DELTA_LABELS = {
     # the bloom after it. Naming the peak rather than the cause is
     # the only wording true of both.
     "attack": "time to the note's arrival (ms)",
+    "attack_hf": "4-8 kHz share of the first 120 ms, + = model is brighter (dB)",
+    "attack_hf_swing": "softest-to-hardest change in the 4-8 kHz attack share, + = model swings more (dB)",
     "crest": "peak over RMS of the hit (dB)",
     "level": "how loud the hit is vs the reference (dBFS)",
     "ring": "ring length, + = model rings longer (doublings)",
     "tonality": "spectral flatness, + = model is noisier (dB)",
+    "tilt_rise": "tilt change from strike to body, + = model brightens more (dB)",
 }
 
 
@@ -50,6 +54,24 @@ def register_levels(rows: list[dict], timbre: str) -> dict[int, dict[int, float]
         if r["timbre"] != timbre or r.get("held_peak_dbfs") is None:
             continue
         out.setdefault(r["note"], {})[r["velocity"]] = r["held_peak_dbfs"]
+    return out
+
+
+def velocity_swing_deltas(
+    a: dict[int, dict[int, float]], b: dict[int, dict[int, float]]
+) -> list[float]:
+    """Per note, side a's softest-to-hardest change minus side b's, at the velocities both hold.
+
+    Signed, unlike `vel_range`'s span: a reading that falls with force on one side
+    and rises on the other is two opposite laws, not two equal ranges.
+    """
+    out: list[float] = []
+    for note, pa in sorted(a.items()):
+        pb = b.get(note, {})
+        both = sorted(set(pa) & set(pb))
+        if len(both) >= 2:
+            lo, hi = both[0], both[-1]
+            out.append((pa[hi] - pa[lo]) - (pb[hi] - pb[lo]))
     return out
 
 
@@ -169,6 +191,7 @@ def reference_spread(profile: dict, dimensions: list[str] | None = None) -> dict
         out: dict[str, list[float]] = {}
         shared = sorted(set(by_key.get(a, {})) & set(by_key.get(b, {})))
         peaks: dict[str, dict[int, dict[int, float]]] = {}
+        attack_hf: dict[str, dict[int, dict[int, float]]] = {}
         for key in shared:
             x, y = by_key[a][key], by_key[b][key]
 
@@ -189,6 +212,7 @@ def reference_spread(profile: dict, dimensions: list[str] | None = None) -> dict
                 ),
                 "body": diff("body_below_f0_db"),
                 "attack": diff("attack_ms"),
+                "attack_hf": diff("attack_hf_db"),
                 "stereo": diff("stereo_width"),
                 "damper": (
                     None
@@ -201,6 +225,11 @@ def reference_spread(profile: dict, dimensions: list[str] | None = None) -> dict
                 partial_balance_db(y.get("partials_db")),
             )
             row["balance"] = None if bal_x is None or bal_y is None else bal_x - bal_y
+            tilt_x, tilt_y = (
+                partial_tilt_db_s(x.get("partial_decay_db_s")),
+                partial_tilt_db_s(y.get("partial_decay_db_s")),
+            )
+            row["partial_tilt"] = None if tilt_x is None or tilt_y is None else tilt_x - tilt_y
             if x.get("centroid_hz") and y.get("centroid_hz"):
                 row["centroid_pct"] = 100.0 * (x["centroid_hz"] / y["centroid_hz"] - 1.0)
             for k, v in row.items():
@@ -209,6 +238,10 @@ def reference_spread(profile: dict, dimensions: list[str] | None = None) -> dict
             for side, src in ((a, x), (b, y)):
                 if "peak_dbfs" in src:
                     peaks.setdefault(side, {}).setdefault(key[0], {})[key[1]] = src["peak_dbfs"]
+                if src.get("attack_hf_db") is not None:
+                    attack_hf.setdefault(side, {}).setdefault(key[0], {})[key[1]] = src[
+                        "attack_hf_db"
+                    ]
         for note, pa in sorted(peaks.get(a, {}).items()):
             pb = peaks.get(b, {}).get(note, {})
             both = sorted(set(pa) & set(pb))
@@ -217,6 +250,9 @@ def reference_spread(profile: dict, dimensions: list[str] | None = None) -> dict
                     (max(pa[v] for v in both) - min(pa[v] for v in both))
                     - (max(pb[v] for v in both) - min(pb[v] for v in both))
                 )
+        swing = velocity_swing_deltas(attack_hf.get(a, {}), attack_hf.get(b, {}))
+        if swing:
+            out["attack_hf_swing"] = swing
         register = register_deltas(register_levels(rows, a), register_levels(rows, b))
         if register:
             out["register"] = [d for _, _, d in register]
@@ -264,7 +300,7 @@ def summarize_deltas(deltas: dict[str, list[float]]) -> dict[str, dict]:
 #: aggregating that note's velocities, so a count below the grid's is their shape
 #: and not evidence a censor took away. Reporting them as thin would put a line
 #: on every gate and teach the reader to skip the one that means something.
-PER_NOTE_DIMENSIONS = ("vel_range", "register")
+PER_NOTE_DIMENSIONS = ("vel_range", "attack_hf_swing", "register")
 
 #: Floor for a dimension with neither a measured spread nor a guess. Nobody
 #: chose it for the dimension it lands on, in whatever unit that is: 101 of 119
@@ -293,12 +329,20 @@ FLOOR_GUESSES = {
     "stereo": 0.27,
     "attack": 40.0,
     "aftersound": 1.81,
+    # A difference of two decay rates, so its own floor is wider than a single
+    # rate's (0.5 for `decay`).
+    "partial_tilt": 3.0,
+    # The median absolute crest disagreement between the two sampled kits in
+    # `reference/drums.json`, over the 282 hits they share.
+    "crest": 2.12,
     # A sixth of a doubling and a decibel: the smallest change in ring length
     # and in tonality a listener would call a different instrument. Both are
     # fallbacks — a capture with two references measures its own floor and
     # that one wins.
     "ring": 0.17,
     "tonality": 1.0,
+    # A decibel of tilt, the unit `band_tilt` is floored in.
+    "tilt_rise": 1.0,
 }
 
 
@@ -489,11 +533,19 @@ def check_gate(
     # above walks the gate, so such a dimension is held to nothing and says so
     # nowhere -- which is the same silence a capture naming an unmeasured
     # dimension produces, and reads the same way: as a column that was fine.
-    ungated = [k for k in summary if k not in bounds]
+    # `_excluded` is not this case: it is deliberately never bounded, so re-recording would not help.
+    excluded = gate.get("_excluded") or {}
+    ungated = [k for k in summary if k not in bounds and k not in excluded]
     if ungated:
         print(
             f"  {', '.join(DELTA_LABELS.get(k, k) for k in ungated)}: measured, no bound "
             f"recorded — nothing here holds it. Re-record with --write-gate."
+        )
+    excluded_measured = [k for k in summary if k in excluded]
+    if excluded_measured:
+        print(
+            f"  never bounded by design: {', '.join(DELTA_LABELS.get(k, k) for k in excluded_measured)} "
+            f"— see _excluded in the gate file for why."
         )
     # A gate written before `p90` existed carries only its two median columns,
     # and the loop above skips a stat with no bound. That is the same silence as
@@ -624,7 +676,7 @@ RATCHETED_BOUND_KEYS = ("median", "abs_median", "p90")
 
 
 def _carry_the_unbounded(bounds: dict[str, dict], gate_path: Path) -> dict[str, str]:
-    """Carry forward the recorded reasons a dimension holds no bound.
+    """Carry forward the recorded reasons a dimension holds no bound YET.
 
     `_unbounded` is hand-written — it says why a dimension the capture asks for
     could not be measured into one, which nothing computes — and this writer
@@ -633,13 +685,25 @@ def _carry_the_unbounded(bounds: dict[str, dict], gate_path: Path) -> dict[str, 
     ones it would have been deleted from.
 
     An entry whose dimension now HAS a bound is dropped rather than carried: the
-    reason has been answered, and a stale one would explain away a bound that is
-    sitting right beside it.
+    reason has been answered, and a stale one would explain away a bound sitting
+    right beside it. A permanently excluded dimension is a different register (see `_excluded`).
     """
     if not gate_path.exists():
         return {}
     recorded = json.loads(gate_path.read_text()).get("_unbounded") or {}
     return {k: v for k, v in recorded.items() if k not in bounds}
+
+
+def _carry_the_excluded(gate_path: Path) -> dict[str, str]:
+    """Carry forward the recorded reasons a dimension must NEVER be bounded.
+
+    Unlike `_unbounded`, this reason is never retired by a bound becoming
+    computable — it is a permanent fact about the sources, not a measurement
+    gap. Read before `bounds` is built, so the writer skips the dimension entirely.
+    """
+    if not gate_path.exists():
+        return {}
+    return json.loads(gate_path.read_text()).get("_excluded") or {}
 
 
 def _model_build_state() -> dict[str, object]:
@@ -679,12 +743,17 @@ def _carry_the_annotations(gate_path: Path) -> dict[str, object]:
     is spent, which change consumed it — has no computed counterpart either, and
     a writer that emits a fixed payload deletes it on the next re-record. That is
     worse than never writing it, because the note is found until the day it is
-    needed. `_` itself is the writer's own preamble and is regenerated.
+    needed. `_` itself is the writer's own preamble and is regenerated. `_excluded`
+    is also its own register, written explicitly below.
     """
     if not gate_path.exists():
         return {}
     recorded = json.loads(gate_path.read_text())
-    return {k: v for k, v in recorded.items() if k.startswith("_") and k not in ("_", "_unbounded")}
+    return {
+        k: v
+        for k, v in recorded.items()
+        if k.startswith("_") and k not in ("_", "_unbounded", "_excluded")
+    }
 
 
 def _keep_the_tighter(bounds: dict[str, dict], gate_path: Path) -> list[str]:
@@ -732,12 +801,19 @@ def write_gate_file(
     nothing. There is also a floor under each bound, since a dimension that
     happens to be near zero today would otherwise be held to a tolerance no
     change could stay inside.
+
+    A dimension recorded in `_excluded` never gets one of these, however
+    cleanly `summary` measured it: that register is for a number that CAN be
+    computed and must not be turned into a bound anyway.
     """
+    excluded = _carry_the_excluded(gate_path)
     # The floor table is `FLOOR_GUESSES` / `dimension_floor`, at module scope so
     # a reader can reach it too. Nothing here loosens a bound below what was
     # measured: the recorded value times the margin still wins when it is larger.
     bounds = {}
     for key, row in summary.items():
+        if key in excluded:
+            continue
         floor, floor_from = dimension_floor(key, spread)
         bounds[key] = {
             "floor": round(floor, 4),
@@ -787,9 +863,12 @@ def write_gate_file(
                 # bounds so a later reader can see which of them are the measured floor
                 # rather than the voice's own number times the margin.
                 "reference_spread": {k: round(v, 4) for k, v in sorted((spread or {}).items())},
-                # Why a dimension this capture asks for carries no bound. Hand-written
+                # Why a dimension this capture asks for carries no bound YET. Hand-written
                 # and carried across a re-record, since nothing measures it.
                 **({"_unbounded": carried} if carried else {}),
+                # Why a dimension must NEVER carry a bound, even once one can be
+                # computed. Hand-written and carried unconditionally, unlike `_unbounded`.
+                **({"_excluded": excluded} if excluded else {}),
                 # Any other hand-written note recorded beside these bounds. Nothing
                 # computes one, so the writer preserves rather than regenerates it.
                 **annotations,

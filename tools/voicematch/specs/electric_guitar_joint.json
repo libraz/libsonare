@@ -1,0 +1,57 @@
+[
+  {
+    "_": "Joint re-fit of electric_guitar_di (p027) after two fixes: solve_string_loop_filter's sub-fundamental ring bound now applies once to the mid_decay_s cascade's own combined gain instead of a fake per-stage proxy, and the tnr loss term no longer reads a model note that decayed into silence as impossibly clean -- the trap the prior di-fitted-mid-decay/di-fitted-sustained-pick candidates in calibrations.json both hit, where a longer decay_s bought a free tnr windfall by going quiet on notes the objective could not tell from noise. Nine knobs: the excitation family from specs/electric_guitar.json (exc_brightness, cutoff_hz, vel_to_brightness, pick_position), the decay family the mid-band anchor was built for (decay_s, mid_decay_s, decay_stretch), and the two remaining fields the prior candidates' diagnose connected (body_coupling, pick_noise). brightness is excluded for the reason specs/electric_guitar.json gives -- the loop pole it sets is unreachable anywhere in this patch's compass.",
+    "tunable": "clean_guitar.ks.decay_s",
+    "min": 1.0,
+    "max": 20.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "clean_guitar.ks.mid_decay_s",
+    "min": 0.0,
+    "max": 2.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "clean_guitar.ks.decay_stretch",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "clean_guitar.ks.exc_brightness",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "clean_guitar.cutoff_hz",
+    "min": 800.0,
+    "max": 22000.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "clean_guitar.ks.vel_to_brightness",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "clean_guitar.ks.pick_position",
+    "min": 0.0,
+    "max": 0.5,
+    "scale": "linear"
+  },
+  {
+    "tunable": "clean_guitar.ks.body_coupling",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "clean_guitar.ks.pick_noise",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  }
+]

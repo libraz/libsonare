@@ -45,14 +45,17 @@
       "slot_channel": 11
     }
   ],
-  "_dimensions": "All 13 a plucked string can be judged on, with none excused. `stereo` is kept and is worth a word: this slot has no width to speak of, its two channels differing only at -86 dB relative to the signal with their levels equal to a thousandth of a decibel, which is the render's own numerical noise rather than a recorded image. Kept rather than excused because a reference of zero width is still a target -- what it checks is that the model does not invent one -- and because every guitar captured beside it keeps it too.",
+  "_dimensions": "All 16 a plucked string can be judged on, with none excused. `stereo` is kept and is worth a word: this slot has no width to speak of, its two channels differing only at -86 dB relative to the signal with their levels equal to a thousandth of a decibel, which is the render's own numerical noise rather than a recorded image. Kept rather than excused because a reference of zero width is still a target -- what it checks is that the model does not invent one -- and because every guitar captured beside it keeps it too.",
   "dimensions": [
     "stretch",
     "decay",
     "aftersound",
     "doubling",
+    "partial_tilt",
     "body",
     "attack",
+    "attack_hf",
+    "attack_hf_swing",
     "stereo",
     "damper",
     "balance",

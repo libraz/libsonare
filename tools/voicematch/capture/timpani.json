@@ -41,13 +41,16 @@
       "slot_channel": 16
     }
   ],
-  "_dimensions": "10 of the 12 a modal voice can be judged on. `tnr` is kept and earns it: this is a strongly pitched drum, carrying 93 to 98 per cent of its energy within two per cent of the harmonics of the note struck, which is what a tuned kettle does and what separates it from every other percussion voice in the bank.",
+  "_dimensions": "13 of the 15 a modal voice can be judged on. `tnr` is kept and earns it: this is a strongly pitched drum, carrying 93 to 98 per cent of its energy within two per cent of the harmonics of the note struck, which is what a tuned kettle does and what separates it from every other percussion voice in the bank.",
   "dimensions": [
     "decay",
     "aftersound",
     "doubling",
+    "partial_tilt",
     "body",
     "attack",
+    "attack_hf",
+    "attack_hf_swing",
     "balance",
     "centroid_pct",
     "tnr",

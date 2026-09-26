@@ -43,14 +43,17 @@
       "slot_channel": 9
     }
   ],
-  "_dimensions": "11 of the 13 this voice's class can be judged on. `vel_range` is kept for the 13.1 dB measured above.",
+  "_dimensions": "14 of the 16 this voice's class can be judged on. `vel_range` is kept for the 13.1 dB measured above.",
   "dimensions": [
     "stretch",
     "decay",
     "aftersound",
     "doubling",
+    "partial_tilt",
     "body",
     "attack",
+    "attack_hf",
+    "attack_hf_swing",
     "balance",
     "centroid_pct",
     "tnr",

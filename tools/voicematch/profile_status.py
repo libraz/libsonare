@@ -147,6 +147,7 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
         "stereo": "stereo_width",
         "damper": "damper_release_ms",
         "balance": "partials_db",
+        "partial_tilt": "partial_decay_db_s",
         "centroid_pct": "centroid_hz",
         "tnr": "tnr_db",
         "vel_range": "peak_dbfs",

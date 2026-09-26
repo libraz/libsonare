@@ -1,0 +1,74 @@
+{
+  "_": "The joint excitation-and-decay fit with register balance weighted, plus the two fields that shape the partial stack from the output side: resonance_q, the resonant peak a magnetic pickup's inductance makes against the cable's capacitance at the filter corner, and ks.pickup_pos, the pickup's own position comb. Without them the fit reached the reference's steep roll-off only by lowering cutoff_hz to 906 Hz, which darkened h2-h6 against h1 by 17 dB.",
+  "weights": {
+    "level": 1.0
+  },
+  "knobs": [
+    {
+      "tunable": "clean_guitar.ks.decay_s",
+      "min": 1.0,
+      "max": 30.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "clean_guitar.ks.mid_decay_s",
+      "min": 0.0,
+      "max": 2.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "clean_guitar.ks.decay_stretch",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "clean_guitar.ks.exc_brightness",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "clean_guitar.cutoff_hz",
+      "min": 800.0,
+      "max": 22000.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "clean_guitar.ks.vel_to_brightness",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "clean_guitar.ks.pick_position",
+      "min": 0.0,
+      "max": 0.5,
+      "scale": "linear"
+    },
+    {
+      "tunable": "clean_guitar.ks.body_coupling",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "clean_guitar.ks.pick_noise",
+      "min": 0.0,
+      "max": 1.0,
+      "scale": "linear"
+    },
+    {
+      "tunable": "clean_guitar.resonance_q",
+      "min": 0.5,
+      "max": 8.0,
+      "scale": "log"
+    },
+    {
+      "tunable": "clean_guitar.ks.pickup_pos",
+      "min": 0.02,
+      "max": 0.5,
+      "scale": "linear"
+    }
+  ]
+}

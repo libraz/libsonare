@@ -13,6 +13,7 @@ from metrics_bands import (
     THIRD_OCTAVE_CENTERS,
     THIRD_OCTAVE_RATIO,
     band_edge_index,
+    band_tilt_db,
 )
 from metrics_decay import _band_decay, _band_power
 from metrics_modal import measure_modes
@@ -121,6 +122,50 @@ ATTACK_FLOOR_MS = HIT_ENVELOPE_WIN_MS / 2.0
 # fundamentals (note 45 at 67-73 Hz, 47 at 73-83, 48 at 87-93, 50 at 93-97,
 # 41 at 163-170, 43 at 183-190) in a note to the reader, because there was
 # nowhere in the measurement path to put them.
+
+
+#: The two windows a hit's colour is read in to see whether it moves: the strike
+#: itself, and the body once a struck metal's energy has had time to flow up
+#: its band. Both inside the 60 ms every piece of the module's kit fills.
+RISE_STRIKE_S = (0.0, 0.015)
+RISE_BODY_S = (0.030, 0.060)
+#: Transform length for those windows. A 15 ms slice holds too few bins to put
+#: one in every low third-octave band, and an empty band would read as the
+#: floor on one side and as leakage on the other.
+RISE_FFT = 8192
+
+
+def tilt_rise_db(seg: np.ndarray, sr: int, max_band_hz: float | None = None) -> float | None:
+    """How far the hit's tilt moves from the strike to the body, in dB.
+
+    The whole-hit profile integrates over time and cannot see the order the
+    energy arrived in. A crash in the module strikes leaning 16 to 19 dB toward
+    its highs and 30 ms later leans 34 to 39, because its energy flows up the
+    band after the stick leaves; a linear plate holds one lean from the first
+    millisecond, and both can integrate to the same profile. Positive is a hit
+    that brightens.
+    """
+    tilts = []
+    keep = band_edge_index(max_band_hz)
+    for a, b in (RISE_STRIKE_S, RISE_BODY_S):
+        win = np.asarray(seg[int(a * sr) : int(b * sr)], dtype=np.float64)
+        if len(win) < 64 or not np.any(win):
+            return None
+        n = max(RISE_FFT, len(win))
+        power = np.abs(np.fft.rfft(win * np.hanning(len(win)), n)) ** 2
+        freqs = np.fft.rfftfreq(n, 1.0 / sr)
+        bands = np.asarray(
+            _db(np.sqrt(_band_power(freqs, power, THIRD_OCTAVE_CENTERS, THIRD_OCTAVE_RATIO))),
+            dtype=np.float64,
+        )
+        bands = np.maximum(bands - float(bands[:keep].max()), BAND_FLOOR_DB)
+        if keep < len(bands):
+            bands[keep:] = BAND_FLOOR_DB
+        tilt = band_tilt_db(list(bands))
+        if tilt is None:
+            return None
+        tilts.append(tilt)
+    return float(tilts[1] - tilts[0])
 
 
 HIT_TONE_WINDOW_S = 0.30
@@ -337,6 +382,9 @@ class HitMetrics:
     #: centred source.
     flatness_db: float | None
     stereo_width: float | None
+    #: The body's tilt minus the strike's; `None` where the hit is shorter than
+    #: the body window.
+    tilt_rise_db: float | None
     #: The tonal part, for the two thirds of a kit that has one. Empty for a
     #: cymbal or a shaker, which is an absence rather than a pitch of zero.
     modal_hz: list[float]
@@ -349,6 +397,25 @@ class HitMetrics:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def ring_doublings(model: dict, ref: dict) -> float | None:
+    """How much longer the model rings than the reference, in doublings.
+
+    In doublings rather than in milliseconds or percent, because the kit spans
+    24x on this quantity — 60 ms of woodblock against 1428 of cymbal — so a
+    median taken in milliseconds is the cymbals and a median taken in percent
+    prices a doubling at +100 and a halving at -50.
+
+    Refused where either side hit its analysis ceiling: a capped reading is the
+    window and not the instrument, the same way a capped damper release is.
+    """
+    m, r = model.get("decay_ms"), ref.get("decay_ms")
+    if not m or not r or m <= 0.0 or r <= 0.0:
+        return None
+    if model.get("decay_capped") or ref.get("decay_capped"):
+        return None
+    return float(np.log2(m / r))
 
 
 def _hit_onset(mono: np.ndarray, sr: int, start: float, limit: float) -> float:
@@ -458,6 +525,7 @@ def analyze_hit(
     crest_db = float(_db(np.max(np.abs(seg))) - _db(rms))
 
     tone = hit_tone(seg, sr, max_band_hz=max_band_hz)
+    rise = tilt_rise_db(seg, sr, max_band_hz)
     drop = pitch_drop(seg, sr, tone["tone_f0_hz"])
 
     return HitMetrics(
@@ -473,6 +541,7 @@ def analyze_hit(
             for i, v in enumerate(_band_decay(seg, sr, OCTAVE_CENTERS, OCTAVE_RATIO))
         ],
         centroid_hz=round(centroid, 1),
+        tilt_rise_db=None if rise is None else round(rise, 2),
         onset_ms=round((onset - note.start) * 1000.0, 2),
         attack_ms=round(attack_ms, 2),
         attack_floored=attack_ms <= ATTACK_FLOOR_MS,

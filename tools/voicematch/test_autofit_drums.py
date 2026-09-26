@@ -105,7 +105,19 @@ def test_a_drum_fit_weights_the_percussion_terms_not_the_harmonic_ones():
     # 1/3-octave profile cannot resolve. None of the harmonic ones: a hit has no
     # fundamental, so a ladder or an intonation error would be measuring a
     # frequency the sound does not contain.
-    assert set(weights) == {"band", "bdecay", "tilt", "bright", "lf", "env", "modes", "crest"}
+    assert set(weights) == {
+        "band",
+        "bdecay",
+        "tilt",
+        "bright",
+        "tonal",
+        "rise",
+        "ring",
+        "lf",
+        "env",
+        "modes",
+        "crest",
+    }
     assert not {"harm", "cents", "tnr", "init", "slope", "tail", "hf", "stiff", "mod"} & set(
         weights
     )
@@ -192,6 +204,46 @@ def test_the_lean_of_the_spectrum_is_scored_where_the_band_profile_cannot_see_it
         "bright"
     ] == pytest.approx(100.0)
     assert percussion_terms([bright], [ref])["bright_hits"] == 0.0
+
+
+def test_the_flatness_the_gate_bounds_is_scored_where_the_band_profile_cannot_see_it():
+    """A line per band has the band levels of the noise it replaced.
+
+    The kit's gate bounds `tonality` and the band profile is blind to it by
+    construction, so a fit could move a hit from a field of lines to a noise
+    band without any term it minimised noticing.
+    """
+    bands = [0.0, -6.0, -12.0]
+    ref = {**_hit(bands, [-20.0]), "flatness_db": -19.0}
+    noisy = {**_hit(bands, [-20.0]), "flatness_db": -12.0}
+    terms = percussion_terms([noisy], [ref])
+    assert terms["band"] == 0.0
+    assert terms["tonal"] == pytest.approx(7.0)
+    assert terms["tonal_hits"] == 1.0
+    # Absent on either side, it is not charged and not counted.
+    assert percussion_terms([_hit(bands, [-20.0])], [ref])["tonal_hits"] == 0.0
+
+
+def test_the_order_the_colour_arrives_in_is_scored_where_integrated_terms_cannot_see_it():
+    """Two hits with one band profile, one washing bright and one bright throughout."""
+    bands = [0.0, -6.0, -12.0]
+    ref = {**_hit(bands, [-20.0]), "tilt_rise_db": 17.0}
+    flat = {**_hit(bands, [-20.0]), "tilt_rise_db": -1.0}
+    terms = percussion_terms([flat], [ref])
+    assert terms["band"] == 0.0 and terms["tilt"] == 0.0
+    assert terms["rise"] == pytest.approx(18.0)
+    assert terms["rise_hits"] == 1.0
+    assert percussion_terms([_hit(bands, [-20.0])], [ref])["rise_hits"] == 0.0
+
+
+def test_a_ring_half_as_long_costs_a_doubling_and_a_capped_one_costs_nothing():
+    bands = [0.0, -6.0, -12.0]
+    ref = _hit(bands, [-20.0], decay_ms=1000.0)
+    terms = percussion_terms([_hit(bands, [-20.0], decay_ms=500.0)], [ref])
+    assert terms["ring"] == pytest.approx(1.0)
+    assert terms["ring_hits"] == 1.0
+    capped = {**_hit(bands, [-20.0], decay_ms=500.0), "decay_capped": True}
+    assert percussion_terms([capped], [ref])["ring_hits"] == 0.0
 
 
 def test_one_empty_band_cannot_decide_the_whole_objective():

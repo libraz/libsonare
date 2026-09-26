@@ -284,6 +284,22 @@ def partial_balance_db(partials_db: list[float] | None) -> float | None:
     return float(np.mean(upper) - ref)
 
 
+def partial_tilt_db_s(partial_decay_db_s: list[float] | None) -> float | None:
+    """High minus low partial decay rate (dB/s): how much faster the top of the stack falls than the bottom.
+
+    A single loop pole places one corner, so pinning a near-lossless
+    fundamental against a fixed high-partial target can exceed what one pole
+    can span, leaving the upper partials ringing as long as the fundamental. Negative means the top falls faster, which is what a real string does.
+    """
+    if not partial_decay_db_s or len(partial_decay_db_s) < 8:
+        return None
+    low = [v for v in partial_decay_db_s[0:2] if np.isfinite(v)]
+    high = [v for v in partial_decay_db_s[4:8] if np.isfinite(v)]
+    if not low or not high:
+        return None
+    return float(np.mean(high) - np.mean(low))
+
+
 def a4_offset_cents(rows: list[dict], timbre: str) -> float:
     """How far the reference instrument's A4 itself sits from 440 Hz.
 

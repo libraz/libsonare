@@ -171,6 +171,7 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
         "stiff": 0.5,
         "crest": 1.0,
         "dyn": 1.0,
+        "hfdyn": 1.0,
     },
     # A plucked string: the same shape, weighted toward the onset, since the
     # pluck sets the spectrum and nothing feeds it afterwards.
@@ -229,6 +230,14 @@ PERCUSSION_WEIGHTS: dict[str, float] = {
     # gated dimension of eight that had been inside the reference kits' spread.
     "tilt": 1.0,
     "bright": 1.0,
+    # Whether the hit stands in lines or lies in a continuum, which no band
+    # level can say. Gated beside tilt and brightness, so weighted as they are.
+    "tonal": 1.0,
+    # Which way the colour moves once struck; gated beside them for the same
+    # reason.
+    "rise": 1.0,
+    # How long it rings, in the doublings the module grids gate it in.
+    "ring": 1.0,
     # Weighted as heavily as the whole band profile it is drawn from, because
     # it is one region against that profile's twenty-five bands and the kick is
     # the loudest thing in the kit. See `loss._perc_lf_terms`.
@@ -277,8 +286,11 @@ _MELODIC_ALL = (
     "decay",  # decay_db_s        — the free fall while the key is held
     "aftersound",  # decay_late_db_s   — what is left after the prompt stage
     "doubling",  # decay_early_db_s  — the prompt stage itself
+    "partial_tilt",  # partial_decay_db_s — high vs low partial decay RATE
     "body",  # body_below_f0_db  — radiated energy under the fundamental
     "attack",  # attack_ms         — time to peak
+    "attack_hf",  # attack_hf_db      — 4-8 kHz share of the first 120 ms
+    "attack_hf_swing",  # attack_hf_db — how that share moves from softest to hardest
     "stereo",  # stereo_width      — the image
     "damper",  # damper_release_ms — how the note is stopped
     "balance",  # partials_db       — the partial levels against each other
@@ -297,9 +309,14 @@ CANONICAL_DIMENSIONS: dict[ToneClass, tuple[str, ...]] = {
     # Energy is fed continuously, so the three free-decay dimensions describe a
     # fall this voice does not have. The release still does — `damper` is how
     # the pipe or the bow stops, which is measurable and is where a sustained
-    # voice most often gives itself away.
+    # voice most often gives itself away; `attack_hf` needs a broadband strike
+    # neither a bow nor a reed has, and `partial_tilt` is a decay-rate split
+    # over a tone that never stops being fed.
     ToneClass.SUSTAINED: tuple(
-        d for d in _MELODIC_ALL if d not in ("decay", "aftersound", "doubling")
+        d
+        for d in _MELODIC_ALL
+        if d
+        not in ("decay", "aftersound", "doubling", "attack_hf", "attack_hf_swing", "partial_tilt")
     ),
     # A bar, bell or membrane has no series equal temperament predicts, so
     # `stretch` measures the distance between two things that were never meant
@@ -320,6 +337,8 @@ CANONICAL_DIMENSIONS: dict[ToneClass, tuple[str, ...]] = {
 #: not in a spectrum at all; and the image is not in a mono mix. `tonality`
 #: stands where `tnr` stands in `_MELODIC_ALL` and is a different measurement,
 #: because that one masks around a harmonic ladder and a drum has none.
+#: `tilt_rise` is the fourth: the order the energy arrives in, which a profile
+#: integrated over the whole hit has already summed away.
 PERCUSSION_DIMENSIONS: tuple[str, ...] = (
     "band_tilt",
     "band_shape",
@@ -332,6 +351,7 @@ PERCUSSION_DIMENSIONS: tuple[str, ...] = (
     "ring",
     "tonality",
     "stereo",
+    "tilt_rise",
 )
 
 

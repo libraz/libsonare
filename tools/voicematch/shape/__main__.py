@@ -46,6 +46,7 @@ from .search import (
     summarise,
 )
 from .spectro import Spectro
+from .terms import ONSET_BANDS
 
 CAPTURE_DIR = Path(__file__).resolve().parents[1] / "capture"
 
@@ -307,6 +308,76 @@ def cmd_attack(args):
     for n in notes:
         print(f"\nnote {n}")
         print(attack.format_table(attack.compare(mod[(n, vel)], ref[(n, vel)], sr)))
+
+
+def cmd_onset(args):
+    """Absolute band level over the first 60 ms, and time to 6 dB under peak.
+
+    Unlike `attack`'s normalised timing, this reads whether a band has any
+    energy at all. Also prints the post-attack dip depth (`probes.onset_dip`),
+    which the single rise-time crossing conflates with a slow rise; `--trace` dumps the full per-frame trace behind both.
+    """
+    _cap, _corpus, sigs, loss, notes = build(args)
+    ov = ""
+    if args.overrides:
+        ov = ",".join(
+            f"{k}={v!r}"
+            for k, v in sorted(read_overrides(Path(args.overrides).read_text()).items())
+        )
+    vel = loss.velocities[len(loss.velocities) // 2]
+    pairs = [(n, vel) for n in notes]
+    ref, mod = sigs(pairs, ref=True), sigs(pairs, ov=ov)
+    sr = loss.spectro.sample_rate
+
+    def label(lo, hi):
+        return f"{lo // 1000}k" if lo >= 1000 else str(lo)
+
+    if args.trace:
+        print("Full per-frame band level (dB). One column per frame, ~1.33 ms apart.")
+        for n in notes:
+            rdb, t_ms = probes.onset_trace(ref[(n, vel)], sr)
+            mdb, _ = probes.onset_trace(mod[(n, vel)], sr)
+            n_frames = min(rdb.shape[1], 24)  # first ~32 ms, where the dip sits
+            print(f"\nnote {n}")
+            print(f"{'t (ms)':>10}" + "".join(f"{t:>7.1f}" for t in t_ms[:n_frames]))
+            for bi, (lo, hi) in enumerate(ONSET_BANDS):
+                print(
+                    f"{label(lo, hi) + ' ref':>10}"
+                    + "".join(f"{v:>7.1f}" for v in rdb[bi, :n_frames])
+                )
+                print(
+                    f"{label(lo, hi) + ' mdl':>10}"
+                    + "".join(f"{v:>7.1f}" for v in mdb[bi, :n_frames])
+                )
+        return
+
+    print(f"velocity {vel}. Band level over the first 60 ms (dB), and time to 6 dB")
+    print("under peak (ms). Delta is model minus reference; negative is darker/slower.")
+    print("Dip is the post-attack sag depth (dB): the surrounding level minus the")
+    print("trough in the 4-14 ms window, floored at 0, NaN where the band is not")
+    print("live for this note. See `terms.onset_dip_stats`.")
+
+    def fmt_row(label_, vals, spec):
+        return f"{label_:>10}" + "".join(
+            (" " * 9 + "-") if np.isnan(v) else format(v, f"{spec}") for v in vals
+        )
+
+    for n in notes:
+        rlvl, rrise = probes.onset_profile(ref[(n, vel)], sr)
+        mlvl, mrise = probes.onset_profile(mod[(n, vel)], sr)
+        rdip = probes.onset_dip(ref[(n, vel)], sr)
+        mdip = probes.onset_dip(mod[(n, vel)], sr)
+        header = f"{'':>10}" + "".join(f"{label(lo, hi):>10}" for lo, hi in ONSET_BANDS)
+        print(f"\nnote {n}")
+        print(header)
+        print(f"{'ref dB':>10}" + "".join(f"{v:>10.1f}" for v in rlvl))
+        print(f"{'mdl dB':>10}" + "".join(f"{v:>10.1f}" for v in mlvl))
+        print(f"{'Δ dB':>10}" + "".join(f"{v:>+10.1f}" for v in (mlvl - rlvl)))
+        print(f"{'ref ms':>10}" + "".join(f"{v:>10.0f}" for v in rrise))
+        print(f"{'mdl ms':>10}" + "".join(f"{v:>10.0f}" for v in mrise))
+        print(fmt_row("ref dip", rdip, ">10.1f"))
+        print(fmt_row("mdl dip", mdip, ">10.1f"))
+        print(fmt_row("Δ dip", mdip - rdip, ">+10.1f"))
 
 
 def cmd_probe(args):
@@ -647,6 +718,11 @@ def main(argv=None):
     s = sub.add_parser("attack", parents=[common])
     s.add_argument("--overrides", default="")
     s.set_defaults(fn=cmd_attack)
+
+    s = sub.add_parser("onset", parents=[common])
+    s.add_argument("--overrides", default="")
+    s.add_argument("--trace", action="store_true", help="dump the full per-frame band trace")
+    s.set_defaults(fn=cmd_onset)
 
     s = sub.add_parser("purity", parents=[common])
     s.add_argument("--overrides", default="")

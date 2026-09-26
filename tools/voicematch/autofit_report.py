@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from knobs import at_bound
+from profile_gate import FLOOR_GUESSES
 
 
 def winner_or_defaults(
@@ -31,14 +32,13 @@ def winner_or_defaults(
     `tnr` is the one term in `loss.py` that is one-sided: it charges only where
     the model is NOISIER than the reference, so a candidate that walks the model
     past the reference leaves the term nothing to say and collects its whole
-    unit for doing it. `loss.py` reports `tnr_notes` so a reader can tell that
-    apart from a genuine match, and deliberately keeps it out of
-    `TERM_COUNT_KEYS` — but that objection is about the LEVEL, since a physical
-    model starting cleaner than a sampled recording is ordinary and charging it
-    would penalise a voice for being clean. The DELTA is a different reading and
-    the objection does not reach it: a winner comparing on fewer notes than the
-    start point stopped comparing during the fit, which is the term going quiet
-    rather than being satisfied.
+    unit for doing it. How many notes it still charges cannot separate that from
+    a match — both read zero — so the guard reads the two things directly: the
+    median distance the model sits past the reference (`tnr_past_db`), refused
+    when it grew by more than the gate's own `tnr` floor, and the notes the
+    model fell silent on (`tnr_absent`), refused when there are more of them.
+    The level of either at the start is not a finding: a physical model cleaner
+    than a sampled recording is ordinary, and only the fit's own growth is.
     """
     # Which refusal fired, for the --out record. A refusal leaves the tree
     # showing a voice whose values did not change, and that reads the same as a
@@ -64,15 +64,31 @@ def winner_or_defaults(
             file=sys.stderr,
         )
         return [k.start_value for k in knobs]
-    start_tnr = getattr(evaluator, "start_tnr_notes", None)
-    best_tnr = getattr(evaluator, "best_tnr_notes", None)
-    if start_tnr is not None and best_tnr is not None and best_tnr < start_tnr:
+    start_absent = getattr(evaluator, "start_tnr_absent", None)
+    best_absent = getattr(evaluator, "best_tnr_absent", None)
+    start_past = getattr(evaluator, "start_tnr_past_db", None)
+    best_past = getattr(evaluator, "best_tnr_past_db", None)
+    fell_silent = (
+        start_absent is not None and best_absent is not None and best_absent > start_absent
+    )
+    went_past = (
+        start_past is not None
+        and best_past is not None
+        and best_past - start_past > FLOOR_GUESSES["tnr"]
+    )
+    if fell_silent or went_past:
         evaluator.write_back_refusal = "objective_went_blind"
+        reading = (
+            f"falls silent on {best_absent:g} notes where the start point fell silent on "
+            f"{start_absent:g}"
+            if fell_silent
+            else f"sits a median {best_past:.2f} dB cleaner than the reference where the "
+            f"start point sat {start_past:.2f}"
+        )
         print(
-            f"\nthe winner is scored against the reference's noise on {best_tnr:g} "
-            f"notes where the start point was scored on {start_tnr:g} — keeping the "
-            f"defaults, since a fit that took the model past the reference collected "
-            f"the whole `tnr` term for going quiet rather than for matching",
+            f"\nthe winner {reading} — keeping the defaults, since the one-sided `tnr` "
+            f"term charges nothing for either and the fit collected it for leaving the "
+            f"reference rather than for matching it",
             file=sys.stderr,
         )
         return [k.start_value for k in knobs]

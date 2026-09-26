@@ -169,9 +169,10 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
     if chosen not in available:
         raise ValueError(f"timbre {chosen!r} is not in {path.name} (it has {', '.join(available)})")
 
+    admits = in_declared_grid(_declared_config(manifest))
     renders: dict[tuple[int, int], Path] = {}
     for rec in manifest.get("renders", []):
-        if rec.get("timbre") != chosen:
+        if rec.get("timbre") != chosen or not admits(rec["note"], rec["velocity"]):
             continue
         renders[(int(rec["note"]), int(rec["velocity"]))] = root / rec["path"]
     if not renders:
@@ -186,7 +187,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
     slots = {
         (int(rec["note"]), int(rec["velocity"])): float(rec["seconds"]) - preroll_s
         for rec in manifest.get("renders", [])
-        if rec.get("timbre") == chosen and "seconds" in rec
+        if rec.get("timbre") == chosen and "seconds" in rec and admits(rec["note"], rec["velocity"])
     }
     slot_s = max(slots.values()) if slots else gate_s + _tail_seconds(manifest.get("tail", "2s"))
 
@@ -267,6 +268,34 @@ def _config_paths(config: str):
         rooted = Path(REPO_ROOT) / path
         if rooted.exists():
             yield rooted
+
+
+def in_declared_grid(cfg: dict):
+    """Whether a (note, velocity) row is one the capture definition asks to be scored.
+
+    A definition can narrow its grid after capture without re-measuring, so every
+    scoring reader routes its rows through this or risks scoring an articulation
+    the voice does not have. An axis the definition does not list admits everything.
+    """
+    notes = {int(n) for n in cfg.get("notes") or []}
+    velocities = {int(v) for v in cfg.get("velocities") or []}
+
+    def admits(note: int, velocity: int) -> bool:
+        return (not notes or int(note) in notes) and (not velocities or int(velocity) in velocities)
+
+    return admits
+
+
+def _declared_config(manifest: dict) -> dict:
+    """The tracked capture definition a manifest names, or {} when none is readable."""
+    import json
+
+    for candidate in _config_paths(manifest.get("config", "")):
+        try:
+            return json.loads(candidate.read_text())
+        except (OSError, ValueError):
+            continue
+    return {}
 
 
 def _dryness(manifest: dict) -> bool:

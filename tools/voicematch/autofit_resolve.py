@@ -293,12 +293,13 @@ def resolve_probe(args) -> None:
     # dynamics match on every candidate and quietly dilute the whole objective.
     # Only what was asked for explicitly reaches here: a class default is already
     # gone, dropped by `cli_weights` off `has_velocity_spread`.
-    if getattr(args, "w_dyn", None) and not args.has_velocity_spread:
-        raise ValueError(
-            f"--w-dyn fits brightness against velocity per pitch, and pattern "
-            f"{args.pattern!r} sounds each note at a single velocity, so there is no "
-            f"curve to fit. Use --pattern velocity, a drum probe, or drop --w-dyn."
-        )
+    for flag in ("dyn", "hfdyn"):
+        if getattr(args, f"w_{flag}", None) and not args.has_velocity_spread:
+            raise ValueError(
+                f"--w-{flag} fits against velocity per pitch, and pattern "
+                f"{args.pattern!r} sounds each note at a single velocity, so there is no "
+                f"curve to fit. Use --pattern velocity, a drum probe, or drop --w-{flag}."
+            )
     # The same again on the time axis, and the reason it is worth a refusal: an
     # unreachable `tail` is 0.0, which is also its best score, so a run
     # weighting it would report a perfect aftersound on every candidate.

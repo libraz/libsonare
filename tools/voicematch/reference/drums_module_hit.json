@@ -1,7 +1,7 @@
 {
  "id": "drums_module_hit",
  "label": "Standard kit, every piece at the shortest gate they all fill, read out of a module's own recordings",
- "measured_utc": "2026-09-20T04:37:52+00:00",
+ "measured_utc": "2026-09-25T20:32:13+00:00",
  "capture": {
   "program": 0,
   "params": [],
@@ -120,6 +120,7 @@
    "level_db": -23.86,
    "flatness_db": -40.4,
    "stereo_width": null,
+   "tilt_rise_db": -26.29,
    "modal_hz": [
     47.53,
     61.43,
@@ -220,6 +221,7 @@
    "level_db": -22.47,
    "flatness_db": -49.24,
    "stereo_width": null,
+   "tilt_rise_db": -22.46,
    "modal_hz": [
     69.02,
     106.16,
@@ -320,6 +322,7 @@
    "level_db": -28.69,
    "flatness_db": -9.12,
    "stereo_width": null,
+   "tilt_rise_db": 6.69,
    "modal_hz": [
     190.28,
     450.5,
@@ -420,6 +423,7 @@
    "level_db": -25.83,
    "flatness_db": -14.9,
    "stereo_width": null,
+   "tilt_rise_db": 11.24,
    "modal_hz": [
     175.89,
     186.0,
@@ -520,6 +524,7 @@
    "level_db": -30.37,
    "flatness_db": -12.53,
    "stereo_width": null,
+   "tilt_rise_db": 8.4,
    "modal_hz": [
     545.03,
     618.65,
@@ -620,6 +625,7 @@
    "level_db": -24.41,
    "flatness_db": -10.68,
    "stereo_width": null,
+   "tilt_rise_db": 20.62,
    "modal_hz": [
     179.87,
     218.82,
@@ -720,6 +726,7 @@
    "level_db": -24.1,
    "flatness_db": -39.92,
    "stereo_width": null,
+   "tilt_rise_db": -8.53,
    "modal_hz": [
     79.7,
     105.73,
@@ -820,6 +827,7 @@
    "level_db": -38.4,
    "flatness_db": -4.87,
    "stereo_width": null,
+   "tilt_rise_db": -3.08,
    "modal_hz": [
     3744.9,
     4932.16,
@@ -920,6 +928,7 @@
    "level_db": -25.14,
    "flatness_db": -39.85,
    "stereo_width": null,
+   "tilt_rise_db": -5.03,
    "modal_hz": [
     94.51,
     134.12,
@@ -1020,6 +1029,7 @@
    "level_db": -42.92,
    "flatness_db": -4.33,
    "stereo_width": null,
+   "tilt_rise_db": 2.75,
    "modal_hz": [
     379.77,
     3767.98,
@@ -1120,6 +1130,7 @@
    "level_db": -26.5,
    "flatness_db": -42.82,
    "stereo_width": null,
+   "tilt_rise_db": -13.43,
    "modal_hz": [
     102.9,
     118.09,
@@ -1220,6 +1231,7 @@
    "level_db": -38.58,
    "flatness_db": -6.71,
    "stereo_width": null,
+   "tilt_rise_db": -1.58,
    "modal_hz": [
     3770.47,
     4943.08,
@@ -1320,6 +1332,7 @@
    "level_db": -28.24,
    "flatness_db": -42.26,
    "stereo_width": null,
+   "tilt_rise_db": -11.69,
    "modal_hz": [
     120.39,
     140.55,
@@ -1420,6 +1433,7 @@
    "level_db": -28.92,
    "flatness_db": -43.17,
    "stereo_width": null,
+   "tilt_rise_db": -10.56,
    "modal_hz": [
     137.69,
     161.43,
@@ -1520,6 +1534,7 @@
    "level_db": -34.53,
    "flatness_db": -11.73,
    "stereo_width": null,
+   "tilt_rise_db": 15.5,
    "modal_hz": [
     3412.85,
     3649.97,
@@ -1620,6 +1635,7 @@
    "level_db": -31.86,
    "flatness_db": -42.29,
    "stereo_width": null,
+   "tilt_rise_db": -11.21,
    "modal_hz": [
     162.27,
     191.24,
@@ -1720,6 +1736,7 @@
    "level_db": -40.89,
    "flatness_db": -19.12,
    "stereo_width": null,
+   "tilt_rise_db": 1.73,
    "modal_hz": [
     352.37,
     373.45,
@@ -1820,6 +1837,7 @@
    "level_db": -31.32,
    "flatness_db": -14.32,
    "stereo_width": null,
+   "tilt_rise_db": 5.3,
    "modal_hz": [
     1576.42,
     1775.33,
@@ -1920,6 +1938,7 @@
    "level_db": -36.51,
    "flatness_db": -21.32,
    "stereo_width": null,
+   "tilt_rise_db": 6.28,
    "modal_hz": [
     1458.95,
     2330.24,
@@ -2020,6 +2039,7 @@
    "level_db": -28.79,
    "flatness_db": -15.65,
    "stereo_width": null,
+   "tilt_rise_db": 8.23,
    "modal_hz": [
     5001.58,
     5844.75,
@@ -2120,6 +2140,7 @@
    "level_db": -31.99,
    "flatness_db": -9.35,
    "stereo_width": null,
+   "tilt_rise_db": 14.17,
    "modal_hz": [
     2195.6,
     2334.72,
@@ -2220,6 +2241,7 @@
    "level_db": -29.83,
    "flatness_db": -21.24,
    "stereo_width": null,
+   "tilt_rise_db": 10.27,
    "modal_hz": [
     472.05,
     975.45,
@@ -2320,6 +2342,7 @@
    "level_db": -30.34,
    "flatness_db": -9.99,
    "stereo_width": null,
+   "tilt_rise_db": 17.75,
    "modal_hz": [
     3568.88,
     3692.57,
@@ -2420,6 +2443,7 @@
    "level_db": -32.66,
    "flatness_db": -7.91,
    "stereo_width": null,
+   "tilt_rise_db": -2.56,
    "modal_hz": [
     931.4,
     984.81,
@@ -2520,6 +2544,7 @@
    "level_db": -42.26,
    "flatness_db": -18.53,
    "stereo_width": null,
+   "tilt_rise_db": 2.03,
    "modal_hz": [
     373.46,
     395.65,
@@ -2620,6 +2645,7 @@
    "level_db": -35.3,
    "flatness_db": -27.58,
    "stereo_width": null,
+   "tilt_rise_db": -10.42,
    "modal_hz": [
     408.91,
     821.01,
@@ -2720,6 +2746,7 @@
    "level_db": -35.85,
    "flatness_db": -34.69,
    "stereo_width": null,
+   "tilt_rise_db": 0.95,
    "modal_hz": [
     239.83,
     293.1,
@@ -2820,6 +2847,7 @@
    "level_db": -31.25,
    "flatness_db": -17.88,
    "stereo_width": null,
+   "tilt_rise_db": -0.65,
    "modal_hz": [
     117.5,
     157.47,
@@ -2920,6 +2948,7 @@
    "level_db": -24.24,
    "flatness_db": -40.85,
    "stereo_width": null,
+   "tilt_rise_db": 0.35,
    "modal_hz": [
     291.9,
     366.5,
@@ -3020,6 +3049,7 @@
    "level_db": -26.72,
    "flatness_db": -43.79,
    "stereo_width": null,
+   "tilt_rise_db": -0.61,
    "modal_hz": [
     167.84,
     182.1,
@@ -3120,6 +3150,7 @@
    "level_db": -32.21,
    "flatness_db": -25.38,
    "stereo_width": null,
+   "tilt_rise_db": 3.27,
    "modal_hz": [
     225.3,
     448.1,
@@ -3220,6 +3251,7 @@
    "level_db": -30.76,
    "flatness_db": -37.23,
    "stereo_width": null,
+   "tilt_rise_db": -2.49,
    "modal_hz": [
     130.19,
     241.88,
@@ -3320,6 +3352,7 @@
    "level_db": -26.6,
    "flatness_db": -21.93,
    "stereo_width": null,
+   "tilt_rise_db": -0.4,
    "modal_hz": [
     1016.79,
     1049.69,
@@ -3420,6 +3453,7 @@
    "level_db": -26.07,
    "flatness_db": -24.49,
    "stereo_width": null,
+   "tilt_rise_db": 1.94,
    "modal_hz": [
     781.19,
     2794.02,
@@ -3520,6 +3554,7 @@
    "level_db": -33.02,
    "flatness_db": -6.64,
    "stereo_width": null,
+   "tilt_rise_db": 13.09,
    "modal_hz": [
     3279.45,
     4330.16,
@@ -3620,6 +3655,7 @@
    "level_db": -33.53,
    "flatness_db": -26.87,
    "stereo_width": null,
+   "tilt_rise_db": 6.0,
    "modal_hz": [
     2104.87,
     2173.36,
@@ -3720,6 +3756,7 @@
    "level_db": -32.36,
    "flatness_db": -36.93,
    "stereo_width": null,
+   "tilt_rise_db": 0.87,
    "modal_hz": [
     1906.58,
     2007.05,
@@ -3820,6 +3857,7 @@
    "level_db": -43.0,
    "flatness_db": -8.83,
    "stereo_width": null,
+   "tilt_rise_db": 9.8,
    "modal_hz": [
     1940.39,
     2100.61,
@@ -3920,6 +3958,7 @@
    "level_db": -36.65,
    "flatness_db": -22.69,
    "stereo_width": null,
+   "tilt_rise_db": 5.04,
    "modal_hz": [
     721.88,
     743.77,
@@ -4020,6 +4059,7 @@
    "level_db": -36.74,
    "flatness_db": -26.81,
    "stereo_width": null,
+   "tilt_rise_db": 3.81,
    "modal_hz": [
     506.61,
     558.05,
@@ -4120,6 +4160,7 @@
    "level_db": -25.33,
    "flatness_db": -43.87,
    "stereo_width": null,
+   "tilt_rise_db": 5.87,
    "modal_hz": [
     645.17,
     665.06,
@@ -4220,6 +4261,7 @@
    "level_db": -27.52,
    "flatness_db": -44.95,
    "stereo_width": null,
+   "tilt_rise_db": 11.17,
    "modal_hz": [
     151.3,
     187.36,
@@ -4320,6 +4362,7 @@
    "level_db": -31.69,
    "flatness_db": -33.4,
    "stereo_width": null,
+   "tilt_rise_db": -2.29,
    "modal_hz": [
     1691.51,
     2589.24,
@@ -4420,6 +4463,7 @@
    "level_db": -32.17,
    "flatness_db": -40.77,
    "stereo_width": null,
+   "tilt_rise_db": 3.42,
    "modal_hz": [
     4.37,
     1691.46,

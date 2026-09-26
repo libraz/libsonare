@@ -764,6 +764,10 @@ class Evaluator:
         # the reference collects the term's whole unit and reports zero.
         self.start_tnr_notes: float | None = None
         self.best_tnr_notes: float | None = None
+        self.start_tnr_absent: float | None = None
+        self.best_tnr_absent: float | None = None
+        self.start_tnr_past_db: float | None = None
+        self.best_tnr_past_db: float | None = None
         # A rebuild rewrites the shared tree, so its evaluations can only ever
         # run one at a time however many workers were asked for.
         self.workers = 1 if self.needs_rebuild else max(1, args.workers)
@@ -1121,6 +1125,8 @@ class Evaluator:
             self.start_level_offset_db = terms.get("level_offset_db")
             self.start_sustain_excess_db_s = terms.get("sustain_excess_db_s")
             self.start_tnr_notes = terms.get("tnr_notes")
+            self.start_tnr_absent = terms.get("tnr_absent")
+            self.start_tnr_past_db = terms.get("tnr_past_db")
             # What one unit of loss is worth in the units this run reports. The
             # fence rates are per dB on a loss the start scores 1.0, so on a raw
             # run — where the start scores its own weighted sum, two orders of
@@ -1173,6 +1179,8 @@ class Evaluator:
             # quieter scores exactly as if it had not.
             self.best_level_offset_db = None if terms is None else terms.get("level_offset_db")
             self.best_tnr_notes = None if terms is None else terms.get("tnr_notes")
+            self.best_tnr_absent = None if terms is None else terms.get("tnr_absent")
+            self.best_tnr_past_db = None if terms is None else terms.get("tnr_past_db")
         if not fresh:
             return loss
         self.trajectory.append((self.best_loss, loss, self.stage))
@@ -1588,6 +1596,14 @@ def _fold_write_back_verdict(out_path: str, evaluator) -> None:
         "tnr_notes": {
             "start": getattr(evaluator, "start_tnr_notes", None),
             "best": getattr(evaluator, "best_tnr_notes", None),
+        },
+        "tnr_absent": {
+            "start": getattr(evaluator, "start_tnr_absent", None),
+            "best": getattr(evaluator, "best_tnr_absent", None),
+        },
+        "tnr_past_db": {
+            "start": getattr(evaluator, "start_tnr_past_db", None),
+            "best": getattr(evaluator, "best_tnr_past_db", None),
         },
     }
     path.write_text(json.dumps(record, indent=2) + "\n")
@@ -2243,6 +2259,34 @@ def main() -> int:
         "moves the quantity the kit is judged on",
     )
     parser.add_argument(
+        "--w-tonal",
+        type=float,
+        default=None,
+        dest="w_tonal",
+        help="drum fits: weight on the hit's spectral flatness against the "
+        "reference's, in dB — the gate's `tonality`. Whether the hit "
+        "stands in lines or in a continuum, which no band level can see",
+    )
+    parser.add_argument(
+        "--w-rise",
+        type=float,
+        default=None,
+        dest="w_rise",
+        help="drum fits: weight on how far the hit's tilt moves from its first "
+        "15 ms to 30-60 ms in, against the reference's — the gate's "
+        "`tilt_rise`. The order the energy arrives in, which every "
+        "integrated spectral term has summed away",
+    )
+    parser.add_argument(
+        "--w-ring",
+        type=float,
+        default=None,
+        dest="w_ring",
+        help="drum fits: weight on how long the hit takes to fall 20 dB, in "
+        "doublings of the reference's — the module grids' `ring`, which "
+        "`--w-env` prices at a hundredth of a unit per millisecond",
+    )
+    parser.add_argument(
         "--w-kit",
         type=float,
         default=None,
@@ -2328,6 +2372,16 @@ def main() -> int:
         "one — a model can match every note of a grid one at a time "
         "and still get the trend between them wrong. Needs a probe "
         "with a velocity axis (--pattern velocity, or a drum probe)",
+    )
+    parser.add_argument(
+        "--w-hfdyn",
+        type=float,
+        default=None,
+        dest="w_hfdyn",
+        help="weight on the ATTACK DYNAMICS CURVE: how the 4-8 kHz share of "
+        "the first 120 ms tracks velocity, fitted per pitch. `--w-dyn` reads "
+        "the held ladder and cannot see a hammer whose attack brightens with "
+        "force while the ring does not. Needs a probe with a velocity axis",
     )
     parser.add_argument(
         "--w-level",

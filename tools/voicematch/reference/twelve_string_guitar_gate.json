@@ -3,21 +3,26 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-19T16:35:40+00:00",
-  "recorded_utc": "2026-09-20T19:34:16+00:00",
+  "recorded_utc": "2026-09-25T20:35:41+00:00",
+  "model_build": {
+    "built_utc": "2026-09-25T20:30:56Z",
+    "newest_source_utc": "2026-09-25T20:34:54Z",
+    "stale": true
+  },
   "reference_spread": {},
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
       "median": 1.0,
-      "abs_median": 3.125,
+      "abs_median": 3.1,
       "p90": 6.368,
       "rows": 5
     },
     "decay": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 1.775,
+      "median": 1.725,
       "abs_median": 2.263,
       "p90": 4.317,
       "rows": 5
@@ -38,18 +43,26 @@
       "p90": 40.0,
       "rows": 5
     },
+    "attack_hf": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 50.525,
+      "abs_median": 50.525,
+      "p90": 58.612,
+      "rows": 5
+    },
     "aftersound": {
       "floor": 1.81,
       "floor_from": "guess",
-      "median": 2.412,
-      "abs_median": 2.412,
-      "p90": 4.775,
+      "median": 2.388,
+      "abs_median": 2.388,
+      "p90": 4.768,
       "rows": 5
     },
     "doubling": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 2.612,
+      "median": 1.663,
       "abs_median": 6.538,
       "p90": 11.75,
       "rows": 5
@@ -57,9 +70,17 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 15.44,
-      "abs_median": 15.44,
+      "median": 15.062,
+      "abs_median": 15.062,
       "p90": 26.675,
+      "rows": 5
+    },
+    "partial_tilt": {
+      "floor": 3.0,
+      "floor_from": "guess",
+      "median": 115.281,
+      "abs_median": 115.281,
+      "p90": 184.861,
       "rows": 5
     },
     "centroid_pct": {
@@ -67,7 +88,7 @@
       "floor_from": "guess",
       "median": 43.201,
       "abs_median": 43.201,
-      "p90": 60.302,
+      "p90": 59.789,
       "rows": 5
     },
     "body": {

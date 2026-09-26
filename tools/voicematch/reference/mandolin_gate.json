@@ -3,7 +3,12 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-19T16:35:39+00:00",
-  "recorded_utc": "2026-09-20T19:34:13+00:00",
+  "recorded_utc": "2026-09-25T20:34:22+00:00",
+  "model_build": {
+    "built_utc": "2026-09-25T20:30:56Z",
+    "newest_source_utc": "2026-09-25T20:28:05Z",
+    "stale": false
+  },
   "reference_spread": {},
   "bounds": {
     "stretch": {
@@ -17,9 +22,9 @@
     "decay": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 25.125,
-      "abs_median": 25.125,
-      "p90": 44.898,
+      "median": 24.45,
+      "abs_median": 24.45,
+      "p90": 44.537,
       "rows": 5
     },
     "tnr": {
@@ -27,7 +32,7 @@
       "floor_from": "guess",
       "median": 6.125,
       "abs_median": 6.125,
-      "p90": 12.35,
+      "p90": 12.263,
       "rows": 5
     },
     "attack": {
@@ -38,20 +43,28 @@
       "p90": 40.0,
       "rows": 5
     },
+    "attack_hf": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 50.725,
+      "abs_median": 50.725,
+      "p90": 54.383,
+      "rows": 5
+    },
     "aftersound": {
       "floor": 1.81,
       "floor_from": "guess",
-      "median": 18.488,
-      "abs_median": 18.488,
-      "p90": 24.733,
+      "median": 18.45,
+      "abs_median": 18.45,
+      "p90": 24.65,
       "rows": 5
     },
     "doubling": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 104.125,
-      "abs_median": 104.125,
-      "p90": 148.063,
+      "median": 103.6,
+      "abs_median": 103.6,
+      "p90": 147.868,
       "rows": 5
     },
     "body": {
@@ -70,11 +83,19 @@
       "p90": 23.5,
       "rows": 5
     },
+    "partial_tilt": {
+      "floor": 3.0,
+      "floor_from": "guess",
+      "median": 198.458,
+      "abs_median": 198.458,
+      "p90": 234.945,
+      "rows": 4
+    },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
       "median": 3.062,
-      "abs_median": 6.84,
+      "abs_median": 5.566,
       "p90": 41.145,
       "rows": 5
     }

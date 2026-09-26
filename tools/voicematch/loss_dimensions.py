@@ -11,6 +11,7 @@ from metrics import (
     THIRD_OCTAVE_CENTERS,
     stretch_cents,
 )
+from metrics_attack import ATTACK_BANDS_HZ
 
 #: How far up the ladder `harm` compares. `analyze_note` measures exactly
 #: `N_HARMONICS` bins, so this is the whole of what the measurement offers
@@ -40,11 +41,15 @@ LOSS_TERMS = (
     "level",
     "crest",
     "dyn",
+    "hfdyn",
     "mss",
     "band",
     "bdecay",
     "tilt",
     "bright",
+    "tonal",
+    "rise",
+    "ring",
     "kit",
 )
 
@@ -65,6 +70,10 @@ HF_DELTA_CAP_DB = 24.0
 # the bass, which is the only register the band was added to watch.
 LF_DELTA_CAP_DB = 24.0
 LEVEL_DELTA_CAP_DB = 18.0
+# What a note charges `tnr` when the model's own window fell silent (NaN) while
+# the reference's did not: the same cap the other absent-model terms use,
+# rather than skipping a note a fit could make disappear for free.
+TNR_ABSENT_CAP_DB = 24.0
 
 # Which terms a metric set actually produces. Both reducers fill every entry of
 # LOSS_TERMS so the dict has one shape, which means a term belonging to the
@@ -83,6 +92,7 @@ PITCHED_TERMS = (
     "hf",
     "lf",
     "stiff",
+    "hfdyn",
 ) + _SHARED_TERMS
 #: `modes` is shared because a drum has one too. A tom, a conga, a timbale, a
 #: woodblock and a cowbell all have a definite pitch, and the 1/3-octave band
@@ -112,7 +122,30 @@ PITCHED_TERMS = (
 #: kits' own spread, pushed outside it. These two are the gate's own arithmetic,
 #: read from the same `band_tilt_db` and the same centroid ratio, so a fit
 #: optimises the quantity the kit is judged on rather than a proxy for it.
-PERCUSSION_TERMS = ("band", "bdecay", "tilt", "bright", "lf", "kit") + _SHARED_TERMS
+#: `tonal` is the gate's `tonality`, the hit's spectral flatness against the
+#: reference's. The band profile is blind to it by construction — a line per
+#: third-octave band has the band levels of the noise it replaced — and a plate
+#: that answers only a noise band reads several dB noisier than a struck metal
+#: while every band level agrees.
+#: `ring` is the gate's own, the time to fall 20 dB in doublings. `env` carries
+#: the same reading at a hundredth of a unit per millisecond, which prices a
+#: cymbal ringing half as long as its reference at five units — less than a
+#: decibel of tilt and a few points of centroid bought back in exchange.
+#: `rise` is the gate's `tilt_rise`: how far the lean moves from the strike to
+#: the body. Every other spectral term integrates over the hit, so a crash that
+#: strikes dull and washes bright and one bright from the first millisecond
+#: score the same on all of them.
+PERCUSSION_TERMS = (
+    "band",
+    "bdecay",
+    "tilt",
+    "bright",
+    "tonal",
+    "rise",
+    "ring",
+    "lf",
+    "kit",
+) + _SHARED_TERMS
 
 
 def measured_terms(percussive: bool) -> tuple[str, ...]:
@@ -209,7 +242,26 @@ def _brightness(row: dict) -> float | None:
     return None
 
 
-def _dyn_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float, int]:
+def _attack_hf_share(row: dict) -> float | None:
+    """The 4-8 kHz share of the first 120 ms: the first attack band's median over its slices.
+
+    The hammer's velocity law lives here and not in `_brightness`, which reads
+    the held ladder: three concert grands swing this share ~28 dB from v24 to
+    v120 while their held h2-h7 moves under 1 dB.
+    """
+    bands = row.get("attack_hf_db")
+    if not bands:
+        return None
+    vals = [v for v in bands[:: len(ATTACK_BANDS_HZ)] if v is not None]
+    return float(np.median(vals)) if vals else None
+
+
+def _dyn_terms(
+    model_rows: list[dict],
+    oracle_rows_: list[dict],
+    read=_brightness,
+    cap_db: float = DYN_DELTA_CAP_DB,
+) -> tuple[float, int]:
     """How differently brightness tracks velocity, and how many notes said so.
 
     Every other term is a per-note comparison averaged over the probe, so the
@@ -238,7 +290,7 @@ def _dyn_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float,
     for idx in groups.values():
         pairs = []
         for i in idx:
-            m, o = _brightness(model_rows[i]), _brightness(oracle_rows_[i])
+            m, o = read(model_rows[i]), read(oracle_rows_[i])
             if m is not None and o is not None:
                 pairs.append((float(model_rows[i]["velocity"]), m, o))
         if len(pairs) < 2:
@@ -249,7 +301,7 @@ def _dyn_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float,
         v = np.asarray(vel, dtype=np.float64)
         sm = float(np.polyfit(v, [p[1] for p in pairs], 1)[0]) * DYN_VELOCITY_SPAN
         so = float(np.polyfit(v, [p[2] for p in pairs], 1)[0]) * DYN_VELOCITY_SPAN
-        total += min(abs(sm - so), DYN_DELTA_CAP_DB)
+        total += min(abs(sm - so), cap_db)
         used += 1
     return (total / used if used else 0.0), used
 

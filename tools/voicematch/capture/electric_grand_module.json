@@ -45,15 +45,18 @@
     "vel_range": "`velRange` is set on none of this tone's zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads",
     "stereo": "every one of the 25 recordings is mono (`sampleType` 1) and no `pan` is set, so the image is absent by construction rather than by voicing",
     "register": "no `initialAttenuation` is set anywhere, so the level relation between one note and the next is not in the source. Over this grid the peaks span 4.46 dB and do not fall with pitch - the loudest cell is note 72 and the quietest note 36 - which is the headroom each recording was normalised into rather than the instrument's fall across its compass",
-    "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from. `electric_grand` gates this dimension and this capture cannot"
+    "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from. `electric_grand` gates this dimension and this capture cannot",
+    "attack_hf_swing": "this reference holds one velocity (100) per note, so there is no softest-to-hardest change to measure -- the same fact vel_range is excused for"
   },
   "dimensions": [
     "stretch",
     "decay",
     "aftersound",
     "doubling",
+    "partial_tilt",
     "body",
     "attack",
+    "attack_hf",
     "balance",
     "centroid_pct",
     "tnr"

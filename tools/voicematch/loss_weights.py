@@ -57,6 +57,9 @@ TERM_UNITS = {
     "level": 0.5,
     "crest": 0.5,
     "dyn": 0.5,
+    # A decibel per 64 velocity steps: the attack band is read over 120 ms of
+    # hammer transient, so its per-note wobble is wider than the held ladder's.
+    "hfdyn": 1.0,
     # The third-octave profile's twenty-five bands at a dB each, and its eight
     # octave decay rates at a tenth of a doubling each.
     "mss": 0.01,
@@ -67,6 +70,12 @@ TERM_UNITS = {
     # inside what two takes of the same drum differ by.
     "tilt": 1.0,
     "bright": 5.0,
+    # A decibel of flatness, the unit the gate records `tonality` in, and a
+    # decibel of tilt for `tilt_rise`.
+    "tonal": 1.0,
+    "rise": 1.0,
+    # The gate's own floor on `ring`: a sixth of a doubling.
+    "ring": 0.17,
     # A tenth of a doubling: about a semitone and a half of pitch, 7 % of a
     # decay, or 0.6 dB of level. Below that the relation is inside the
     # reference's own strike-to-strike variation.
@@ -127,6 +136,7 @@ def cli_weights(args) -> dict[str, float]:
         # than refused because fitting a `sustain` probe is an ordinary thing to
         # run; an explicit `--w-dyn` gets refused by the caller instead.
         weights.pop("dyn", None)
+        weights.pop("hfdyn", None)
     group = set(measured_terms(percussive))
     for term in LOSS_TERMS:
         given = getattr(args, f"w_{term}", None)
@@ -162,6 +172,7 @@ def refused_weights(args) -> list[str]:
 DROP_REASONS = {
     "kit": ("has_kit_groups", "the probe covers no whole family of the capture's"),
     "dyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
+    "hfdyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
     "tail": ("has_tail_window", "no note is held long enough to reach the 2-6 s band"),
 }
 
@@ -225,10 +236,14 @@ TERM_COUNT_KEYS = {
     "mod": "mod_notes",
     "stiff": "stiff_notes",
     "dyn": "dyn_groups",
+    "hfdyn": "hfdyn_groups",
     "band": "band_bins",
     "bdecay": "bdecay_bins",
     "tilt": "tilt_hits",
     "bright": "bright_hits",
+    "tonal": "tonal_hits",
+    "rise": "rise_hits",
+    "ring": "ring_hits",
     "lf": "lf_notes",
     # The one most likely to go blind of any of them: a relation is dropped
     # whenever the reference stops holding it or a member stops supplying a

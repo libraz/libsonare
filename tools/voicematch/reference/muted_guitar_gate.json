@@ -3,34 +3,53 @@
   "timbre": "gm029",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-02T06:38:16+00:00",
-  "recorded_utc": "2026-09-20T23:54:11+00:00",
-  "_fossil": "2babd0d2 moved this patch's ks.decay_s 0.355891 -> 1.16 at 20:37 UTC; this gate was recorded 3h17m later, through the documented SONARE_LIB_PATH fallback to a stale build/lib/libsonare.dylib that predated the fix. Confirmed 2026-09-22 against the current, verified-non-stale build-python-shared dylib: tnr reads -4.60/4.60/10.09 against this file's 29.925/29.925/46.0 (median/abs_median/p90) - the bound is holding almost seven times more slack than the voice now needs. decay reads unchanged (-1.16/4.29/12.19 vs the recorded 1.45/5.362/15.232), so not every dimension here moved. Not re-recorded here because src/midi/synth/string_loop.h and ks_voice.h - the exact engine this patch's Karplus-Strong loop runs on - are under live edit by a concurrent agent; re-recording now risks a second fossil within the hour. Re-record once that work lands. centroid_pct, body and vel_range were already failing this gate before 2babd0d2 and are unrelated to this fossil.",
+  "recorded_utc": "2026-09-25T20:34:35+00:00",
+  "model_build": {
+    "built_utc": "2026-09-25T20:30:56Z",
+    "newest_source_utc": "2026-09-25T20:28:05Z",
+    "stale": false
+  },
   "reference_spread": {},
+  "_fossil": "2babd0d2 moved this patch's ks.decay_s 0.355891 -> 1.16 at 20:37 UTC; this gate was recorded 3h17m later, through the documented SONARE_LIB_PATH fallback to a stale build/lib/libsonare.dylib that predated the fix. Confirmed 2026-09-22 against the current, verified-non-stale build-python-shared dylib: tnr reads -4.60/4.60/10.09 against this file's 29.925/29.925/46.0 (median/abs_median/p90) - the bound is holding almost seven times more slack than the voice now needs. decay reads unchanged (-1.16/4.29/12.19 vs the recorded 1.45/5.362/15.232), so not every dimension here moved. Not re-recorded here because src/midi/synth/string_loop.h and ks_voice.h - the exact engine this patch's Karplus-Strong loop runs on - are under live edit by a concurrent agent; re-recording now risks a second fossil within the hour. Re-record once that work lands. centroid_pct, body and vel_range were already failing this gate before 2babd0d2 and are unrelated to this fossil.",
   "bounds": {
     "stretch": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 1.09,
+      "p90": 1.0,
       "rows": 35
     },
     "decay": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 1.45,
+      "median": 1.438,
       "abs_median": 5.362,
       "p90": 15.232,
       "rows": 35
     },
     "tnr": {
-      "median": 29.925,
-      "abs_median": 29.925,
-      "p90": 46.0,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 5.75,
+      "abs_median": 5.75,
+      "p90": 12.603,
       "rows": 35
     },
     "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
       "median": 40.0,
       "abs_median": 40.0,
       "p90": 40.0,
+      "rows": 35
+    },
+    "attack_hf": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 50.962,
+      "abs_median": 50.962,
+      "p90": 74.05,
       "rows": 35
     },
     "aftersound": {
@@ -44,42 +63,70 @@
     "doubling": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 22.938,
-      "abs_median": 22.938,
+      "median": 22.775,
+      "abs_median": 22.775,
       "p90": 32.925,
       "rows": 35
     },
     "stereo": {
+      "floor": 0.27,
+      "floor_from": "guess",
       "median": 0.27,
       "abs_median": 0.27,
       "p90": 0.27,
       "rows": 35
     },
     "balance": {
-      "median": 16.905,
-      "abs_median": 16.905,
-      "p90": 45.504,
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 12.921,
+      "abs_median": 12.921,
+      "p90": 34.979,
+      "rows": 35
+    },
+    "partial_tilt": {
+      "floor": 3.0,
+      "floor_from": "guess",
+      "median": 26.487,
+      "abs_median": 37.734,
+      "p90": 64.814,
       "rows": 35
     },
     "centroid_pct": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 12.302,
-      "abs_median": 30.972,
-      "p90": 94.384,
+      "abs_median": 30.936,
+      "p90": 33.016,
       "rows": 35
     },
     "body": {
+      "floor": 1.0,
+      "floor_from": "default",
       "median": 6.3,
       "abs_median": 22.737,
-      "p90": 40.55,
+      "p90": 32.632,
       "rows": 25
     },
     "vel_range": {
-      "median": 4.725,
-      "abs_median": 7.963,
-      "p90": 9.838,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 2.063,
+      "rows": 7
+    },
+    "attack_hf_swing": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 20.087,
+      "abs_median": 20.087,
+      "p90": 21.75,
       "rows": 7
     },
     "register": {
+      "floor": 1.0,
+      "floor_from": "default",
       "median": 1.0,
       "abs_median": 2.387,
       "p90": 7.212,

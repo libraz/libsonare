@@ -3,40 +3,72 @@
   "timbre": "gm116",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-04T21:30:29+00:00",
-  "recorded_utc": "2026-09-09T16:50:35+00:00",
+  "recorded_utc": "2026-09-25T20:40:35+00:00",
+  "model_build": {
+    "built_utc": "2026-09-25T20:30:56Z",
+    "newest_source_utc": "2026-09-25T20:40:02Z",
+    "stale": true
+  },
   "reference_spread": {},
   "_unbounded": {
     "decay": "the reference's usable decay span is 0.015-0.035 s, which is 3 to 7 points on the envelope's 5 ms hop and under the 9 `measure_note` needs to fit a slope, so `decay_db_s` is absent on 25 of 25 reference rows. Measured off the corpus, the reference falls 60 dB within 40 ms of its peak. The model's span is 0.060-0.065 s - it rings 1.86 to 4.33 times longer than the reference, and with no rate on the reference side nothing here holds that.",
     "aftersound": "as `decay`. `double_decay` needs 12 envelope points and the reference's span holds 3 to 7, so `decay_late_db_s` is absent on 25 of 25 reference rows.",
     "doubling": "as `decay`. `double_decay` never runs on the reference, so the prompt-minus-aftersound gap is absent on 25 of 25 reference rows and there is no pair to difference.",
-    "body": "the 0.2-1.2 s body window opens 165 ms after the reference has already fallen 60 dB. Read off the corpus WAVs, that segment is exactly digital zero - absolute maximum 0.000e+00, RMS -240 dBFS - so both bands of `body_below_f0_db` are 0 and it returns nothing on 25 of 25 reference rows."
+    "body": "the 0.2-1.2 s body window opens 165 ms after the reference has already fallen 60 dB. Read off the corpus WAVs, that segment is exactly digital zero - absolute maximum 0.000e+00, RMS -240 dBFS - so both bands of `body_below_f0_db` are 0 and it returns nothing on 25 of 25 reference rows.",
+    "partial_tilt": "as `decay`. Fitting a per-partial decay rate needs the same envelope points the free-fall slope does, so `partial_decay_db_s` is eight NaNs on 25 of 25 reference rows and there is no rate to split into high and low."
   },
   "bounds": {
     "tnr": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 9.45,
       "abs_median": 9.838,
       "p90": 12.067,
       "rows": 25
     },
     "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
       "median": 40.0,
       "abs_median": 40.0,
       "p90": 40.0,
       "rows": 25
     },
+    "attack_hf": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 21.863,
+      "abs_median": 21.863,
+      "p90": 36.188,
+      "rows": 25
+    },
     "centroid_pct": {
-      "median": 119.748,
-      "abs_median": 119.748,
-      "p90": 173.753,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 64.274,
+      "abs_median": 64.274,
+      "p90": 123.432,
       "rows": 25
     },
     "vel_range": {
-      "median": 2.1,
-      "abs_median": 2.1,
-      "p90": 2.643,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.375,
+      "abs_median": 1.375,
+      "p90": 1.54,
+      "rows": 5
+    },
+    "attack_hf_swing": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 4.288,
+      "abs_median": 4.288,
+      "p90": 12.878,
       "rows": 5
     },
     "register": {
+      "floor": 1.0,
+      "floor_from": "default",
       "median": 1.0,
       "abs_median": 1.0,
       "p90": 1.657,

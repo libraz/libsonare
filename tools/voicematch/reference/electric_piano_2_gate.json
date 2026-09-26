@@ -3,14 +3,14 @@
   "timbre": "gm006",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-02T06:37:54+00:00",
-  "recorded_utc": "2026-09-21T17:16:15+00:00",
-  "_recorded_while_stale": "model_build.stale is true and does not apply to this voice. The flag is whole-tree: it compares the dylib against the newest source anywhere in src/, and at recording time that was concurrent work on the wind engines, the Karplus-Strong sympathetic path and the effects inserts. This voice renders through fm_voice.{cpp,h} and gm_fallback_programs_variations.h, all three older than the dylib, and the FM path never enters the branch the sympathetic edit touches. The bound it replaces was a genuine fossil: recorded through a library that predated 2babd0d2, it read tnr 12.475/12.75/32.992 where the same voice measures 18.66/18.66/36.51 today. Re-recording required deleting the old tnr bound by hand first, because _keep_the_tighter keeps whichever bound is numerically tighter and a fossil recorded through a quieter library is always the tighter one.",
+  "recorded_utc": "2026-09-25T20:31:46+00:00",
   "model_build": {
-    "built_utc": "2026-09-21T12:00:43Z",
-    "newest_source_utc": "2026-09-21T17:14:20Z",
-    "stale": true
+    "built_utc": "2026-09-25T20:30:56Z",
+    "newest_source_utc": "2026-09-25T20:28:05Z",
+    "stale": false
   },
   "reference_spread": {},
+  "_recorded_while_stale": "model_build.stale is true and does not apply to this voice. The flag is whole-tree: it compares the dylib against the newest source anywhere in src/, and at recording time that was concurrent work on the wind engines, the Karplus-Strong sympathetic path and the effects inserts. This voice renders through fm_voice.{cpp,h} and gm_fallback_programs_variations.h, all three older than the dylib, and the FM path never enters the branch the sympathetic edit touches. The bound it replaces was a genuine fossil: recorded through a library that predated 2babd0d2, it read tnr 12.475/12.75/32.992 where the same voice measures 18.66/18.66/36.51 today. Re-recording required deleting the old tnr bound by hand first, because _keep_the_tighter keeps whichever bound is numerically tighter and a fossil recorded through a quieter library is always the tighter one.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
@@ -52,6 +52,14 @@
       "p90": 40.0,
       "rows": 45
     },
+    "attack_hf": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 25.8,
+      "abs_median": 25.8,
+      "p90": 70.247,
+      "rows": 45
+    },
     "aftersound": {
       "floor": 1.81,
       "floor_from": "guess",
@@ -76,6 +84,14 @@
       "p90": 39.22,
       "rows": 45
     },
+    "partial_tilt": {
+      "floor": 3.0,
+      "floor_from": "guess",
+      "median": 5.378,
+      "abs_median": 5.378,
+      "p90": 23.688,
+      "rows": 45
+    },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -98,6 +114,14 @@
       "median": 1.35,
       "abs_median": 2.9,
       "p90": 7.935,
+      "rows": 9
+    },
+    "attack_hf_swing": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 25.95,
+      "abs_median": 25.95,
+      "p90": 37.203,
       "rows": 9
     },
     "register": {

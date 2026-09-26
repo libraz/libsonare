@@ -58,9 +58,11 @@ from loss_dimensions import (
     STIFF_DELTA_CENTS_CAP,
     SUSTAIN_SLOPE_CAP_DB_S,
     TAIL_DELTA_CAP_DB_S,
+    TNR_ABSENT_CAP_DB,
     CellCount,
     _absent_or,
     _attack_delta_ms,
+    _attack_hf_share,
     _brightness,
     _dyn_terms,
     _fell_silent,
@@ -125,6 +127,7 @@ from metrics import (
     partial_offset,
     stretch_cents,
 )
+from metrics_hit import ring_doublings
 from patterns import analysis_window_end
 from toneclass import default_weights
 
@@ -602,6 +605,9 @@ def loss_terms(
     # cleaner than a sampled recording by default — and on those voices the term
     # says nothing about any candidate. `loss_cells.py` counts which ones.
     tnr_notes = 0
+    # The two readings `tnr_notes` cannot separate from a match; the write-back guard reads their growth.
+    tnr_absent = 0
+    tnr_past: list[float] = []
     # How many cells of each capped aggregate were a comparison rather than a
     # cap standing in for one. See `CellCount`: the raw value of a term whose
     # cells all hit the cap is its worst, not its best, so none of the empty-set
@@ -646,9 +652,16 @@ def loss_terms(
             totals["harm"] += float(weights[i]) * abs(mh - oh)
             compared += i > 0 and present_m[i] and present_o[i]
         totals["cents"] += abs(m["f0_cents_err"] - o["f0_cents_err"])
-        shortfall = max(0.0, o["tnr_db"] - m["tnr_db"])  # only when the model is noisier
-        totals["tnr"] += shortfall
-        tnr_notes += shortfall > 0.0
+        # A model NaN (dropped out where the oracle scored) is charged the cap rather than skipped; an oracle NaN is skipped.
+        m_tnr, o_tnr = m["tnr_db"], o["tnr_db"]
+        if math.isfinite(o_tnr):
+            shortfall = TNR_ABSENT_CAP_DB if not math.isfinite(m_tnr) else max(0.0, o_tnr - m_tnr)
+            totals["tnr"] += shortfall
+            tnr_notes += shortfall > 0.0
+            if math.isfinite(m_tnr):
+                tnr_past.append(max(0.0, m_tnr - o_tnr))
+            else:
+                tnr_absent += 1
         totals["env"] += _absent_or(
             m["sustain_slope_db_s"], o["sustain_slope_db_s"], SUSTAIN_SLOPE_CAP_DB_S
         )
@@ -698,12 +711,18 @@ def loss_terms(
     # Reported alongside the value because a probe with no velocity axis can
     # only score zero here, and zero is this term's best possible value.
     out["dyn"], dyn_groups = _dyn_terms(model_rows, oracle_rows_)
+    out["hfdyn"], hfdyn_groups = _dyn_terms(
+        model_rows, oracle_rows_, read=_attack_hf_share, cap_db=HF_DELTA_CAP_DB
+    )
     out["stiff"], stiff_notes = _stiff_terms(model_rows, oracle_rows_)
     if any(not math.isfinite(v) for v in out.values()):
         return None
     out["dyn_groups"] = float(dyn_groups)
+    out["hfdyn_groups"] = float(hfdyn_groups)
     out["stiff_notes"] = float(stiff_notes)
     out["tnr_notes"] = float(tnr_notes)
+    out["tnr_absent"] = float(tnr_absent)
+    out["tnr_past_db"] = float(np.median(tnr_past)) if tnr_past else 0.0
     out["mod_notes"] = float(mod_notes)
     out["modes_notes"] = float(modes_notes)
     # How many ladder bins above the fundamental held a partial on both sides.
@@ -752,7 +771,7 @@ def percussion_terms(
         # fixed everything.
         return {**{name: 0.0 for name in LOSS_TERMS}, "mss": mss, "comparable": 0.0}
     totals = {name: 0.0 for name in LOSS_TERMS}
-    band_bins = bdecay_bins = tilt_hits = bright_hits = 0
+    band_bins = bdecay_bins = tilt_hits = bright_hits = tonal_hits = rise_hits = ring_hits = 0
     # See `CellCount` and the pitched reducer: how much of each capped aggregate
     # is a comparison rather than a cap standing in for one.
     cells = {t: CellCount() for t in ("band", "bdecay", "modes")}
@@ -764,6 +783,18 @@ def percussion_terms(
         if o.get("centroid_hz") and m.get("centroid_hz"):
             totals["bright"] += abs(100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0))
             bright_hits += 1
+        flat_m, flat_o = m.get("flatness_db"), o.get("flatness_db")
+        if flat_m is not None and flat_o is not None:
+            totals["tonal"] += abs(flat_m - flat_o)
+            tonal_hits += 1
+        rise_m, rise_o = m.get("tilt_rise_db"), o.get("tilt_rise_db")
+        if rise_m is not None and rise_o is not None:
+            totals["rise"] += abs(rise_m - rise_o)
+            rise_hits += 1
+        ring = ring_doublings(m, o)
+        if ring is not None:
+            totals["ring"] += abs(ring)
+            ring_hits += 1
         for a, b in zip(m["bands_db"], o["bands_db"]):
             if b <= BAND_REFERENCE_FLOOR_DB:
                 # The reference has floored this band. See
@@ -839,6 +870,9 @@ def percussion_terms(
     # candidate can cause by rendering silence, so both are counted and guarded.
     out["tilt_hits"] = float(tilt_hits)
     out["bright_hits"] = float(bright_hits)
+    out["tonal_hits"] = float(tonal_hits)
+    out["rise_hits"] = float(rise_hits)
+    out["ring_hits"] = float(ring_hits)
     for term, tally in cells.items():
         out.update(tally.out(term))
     out["level_offset_db"] = offset

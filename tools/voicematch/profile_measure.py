@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 from capture import PERCUSSION_CHANNEL
 from metrics import (
+    ATTACK_BANDS_HZ,
     INHARMONICITY_TOLERANCES,
     MAX_FIT_PARTIALS,
     MIN_PARTIALS_FOR_B,
@@ -15,6 +16,7 @@ from metrics import (
     _spectrum,
     _under_peak_db,
     analyze_hit,
+    attack_bands,
     channel_width,
     fit_partial_series,
     midi_to_hz,
@@ -208,6 +210,24 @@ def decay_origin_index(env_db: np.ndarray, hop_s: float) -> int:
     start = arrival_index(env_db)
     span = max(1, round(RISE_WINDOW_S / max(hop_s, 1e-9)))
     return start + int(np.argmax(env_db[start : min(env_db.size, start + span)]))
+
+
+#: `metrics_attack.ATTACK_BANDS_HZ` band the gate reads: 4-8 kHz, where a felt
+#: lowpass's cutoff or width first shows; every other read here starts at 120 ms.
+ATTACK_HF_BAND_INDEX = 0
+
+
+def attack_hf_share_db(mono: np.ndarray, sr: int, note: int, onset_s: float) -> float | None:
+    """4-8 kHz share of the strike's own broadband level, through the first 120 ms.
+
+    Reuses `attack_bands` rather than a second spectral pass. Each 20 ms slice
+    is its own band-over-total-power ratio, so a gain difference between two
+    captures cancels; the six are collapsed to their median so one bad slice does not swing the row.
+    """
+    bands = attack_bands(mono, sr, Note(note, 0, 0.0, 0.0), onset_s)
+    n_bands = len(ATTACK_BANDS_HZ)
+    vals = [v for v in bands[ATTACK_HF_BAND_INDEX::n_bands] if v is not None]
+    return round(float(np.median(vals)), 2) if vals else None
 
 
 #: Where the body reading is taken, in seconds from the onset. After the strike,
@@ -570,6 +590,9 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *, preroll_s: float, gat
     # On a piano this is not the strike — the hammer is over in a couple of
     # milliseconds — it is the bloom the soundboard adds after it.
     row["attack_ms"] = round(float(t_env[arrival_i] * 1000.0), 1)
+    hf = attack_hf_share_db(mono, sr, note, onset_s)
+    if hf is not None:
+        row["attack_hf_db"] = hf
 
     tail = slice(origin_i, usable_decay_end(env_db, origin_i))
     # How much of the held note the two rates were fitted over. Both are slopes,

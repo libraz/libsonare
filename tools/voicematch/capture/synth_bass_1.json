@@ -51,8 +51,11 @@
   },
   "dimensions": [
     "stretch",
+    "partial_tilt",
     "body",
     "attack",
+    "attack_hf",
+    "attack_hf_swing",
     "damper",
     "balance",
     "centroid_pct",

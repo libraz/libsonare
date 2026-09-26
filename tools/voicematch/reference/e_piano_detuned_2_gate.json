@@ -3,24 +3,29 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-19T16:35:37+00:00",
-  "recorded_utc": "2026-09-20T19:34:10+00:00",
-  "_approximation": "The reference side is genuinely this tone: font-level check (2026-09-22) confirms 'Detuned EP 2' and 'E.Piano 2' are distinct instruments in the module recordings' piano family (indices 23 and 22) with different sample lengths and audio content at every grid note, so the capture is not reading the capital's recording under this voice's name. The model side is thin by construction instead: `gm_fallback_programs_variations.h` sets `o.e_piano_detuned_2 = o.e_piano_detuned_1` (itself `= o.e_piano` plus two numbers) and adds two more - `drift_cents` and one FM operator's `detune_cents`. `policy.json.approximated` already records program 5's own capital as answered by program 4's patch for the same underlying reason; this voice inherits that gap one layer down rather than repeating it, since no patch was written for 'Detuned EP 2' specifically. So every bound below, tnr included, measures the distance from that inherited two-number sketch to a real recording - not a mistuning of a patch this voice owns. Compounded by `capture/e_piano_detuned_2.json`'s own rig classification, which is terminal-unclassified: even a dedicated patch fitted here could never be verified free of the module's own recording chain. Bounds are kept rather than moved to `dimensions_na` because the measurement itself is sound and will still show whether a future dedicated patch narrows the gap.",
+  "recorded_utc": "2026-09-25T20:31:15+00:00",
+  "model_build": {
+    "built_utc": "2026-09-25T20:30:56Z",
+    "newest_source_utc": "2026-09-25T20:28:05Z",
+    "stale": false
+  },
   "reference_spread": {},
+  "_approximation": "The reference side is genuinely this tone: font-level check (2026-09-22) confirms 'Detuned EP 2' and 'E.Piano 2' are distinct instruments in the module recordings' piano family (indices 23 and 22) with different sample lengths and audio content at every grid note, so the capture is not reading the capital's recording under this voice's name. The model side is thin by construction instead: `gm_fallback_programs_variations.h` sets `o.e_piano_detuned_2 = o.e_piano_detuned_1` (itself `= o.e_piano` plus two numbers) and adds two more - `drift_cents` and one FM operator's `detune_cents`. `policy.json.approximated` already records program 5's own capital as answered by program 4's patch for the same underlying reason; this voice inherits that gap one layer down rather than repeating it, since no patch was written for 'Detuned EP 2' specifically. So every bound below, tnr included, measures the distance from that inherited two-number sketch to a real recording - not a mistuning of a patch this voice owns. Compounded by `capture/e_piano_detuned_2.json`'s own rig classification, which is terminal-unclassified: even a dedicated patch fitted here could never be verified free of the module's own recording chain. Bounds are kept rather than moved to `dimensions_na` because the measurement itself is sound and will still show whether a future dedicated patch narrows the gap.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 2.937,
-      "p90": 5.572,
+      "p90": 4.988,
       "rows": 9
     },
     "decay": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 12.188,
-      "abs_median": 12.188,
-      "p90": 14.665,
+      "median": 2.525,
+      "abs_median": 2.525,
+      "p90": 3.58,
       "rows": 9
     },
     "tnr": {
@@ -39,12 +44,20 @@
       "p90": 40.0,
       "rows": 9
     },
+    "attack_hf": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 41.05,
+      "abs_median": 41.05,
+      "p90": 76.725,
+      "rows": 9
+    },
     "aftersound": {
       "floor": 1.81,
       "floor_from": "guess",
-      "median": 11.938,
-      "abs_median": 11.938,
-      "p90": 14.008,
+      "median": 2.862,
+      "abs_median": 2.862,
+      "p90": 8.803,
       "rows": 9
     },
     "doubling": {
@@ -58,17 +71,25 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 30.9,
-      "abs_median": 30.9,
-      "p90": 44.65,
+      "median": 27.977,
+      "abs_median": 27.977,
+      "p90": 36.389,
+      "rows": 9
+    },
+    "partial_tilt": {
+      "floor": 3.0,
+      "floor_from": "guess",
+      "median": 10.656,
+      "abs_median": 10.656,
+      "p90": 25.754,
       "rows": 9
     },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 46.758,
-      "abs_median": 46.758,
-      "p90": 55.719,
+      "median": 42.734,
+      "abs_median": 42.734,
+      "p90": 52.471,
       "rows": 9
     },
     "body": {

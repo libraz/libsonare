@@ -51,14 +51,17 @@
   },
   "dimensions": [
     "stretch",
+    "partial_tilt",
     "body",
+    "attack",
+    "attack_hf",
+    "attack_hf_swing",
     "damper",
     "balance",
     "centroid_pct",
     "tnr",
     "vel_range",
-    "register",
-    "attack"
+    "register"
   ],
   "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `synth_bass_2.local.json`. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/synth_bass_2.json` and need nothing.",

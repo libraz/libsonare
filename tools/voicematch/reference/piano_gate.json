@@ -3,15 +3,23 @@
   "timbre": "grand-274",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-02T06:38:36+00:00",
-  "recorded_utc": "2026-09-09T16:53:33+00:00",
+  "recorded_utc": "2026-09-25T20:35:05+00:00",
+  "model_build": {
+    "built_utc": "2026-09-25T20:30:56Z",
+    "newest_source_utc": "2026-09-25T20:34:54Z",
+    "stale": true
+  },
   "reference_spread": {
     "aftersound": 1.16,
     "attack": 5.0,
+    "attack_hf": 5.145,
+    "attack_hf_swing": 4.77,
     "balance": 6.899,
     "body": 7.26,
     "centroid_pct": 25.9312,
     "decay": 0.775,
     "doubling": 4.87,
+    "partial_tilt": 1.8737,
     "register": 1.285,
     "stereo": 0.229,
     "stretch": 4.18,
@@ -19,69 +27,115 @@
   },
   "bounds": {
     "stretch": {
+      "floor": 4.18,
+      "floor_from": "measured spread",
       "median": 4.18,
       "abs_median": 4.18,
-      "p90": 11.135,
+      "p90": 9.889,
       "rows": 60
     },
     "decay": {
+      "floor": 0.775,
+      "floor_from": "measured spread",
       "median": 0.775,
-      "abs_median": 0.969,
-      "p90": 3.044,
+      "abs_median": 0.956,
+      "p90": 2.956,
       "rows": 50
     },
     "attack": {
+      "floor": 5.0,
+      "floor_from": "measured spread",
       "median": 6.25,
       "abs_median": 6.25,
       "p90": 19.375,
       "rows": 60
     },
+    "attack_hf": {
+      "floor": 5.145,
+      "floor_from": "measured spread",
+      "median": 1.0,
+      "abs_median": 13.469,
+      "p90": 28.054,
+      "rows": 60
+    },
     "aftersound": {
+      "floor": 1.16,
+      "floor_from": "measured spread",
       "median": 1.681,
       "abs_median": 2.075,
       "p90": 6.24,
       "rows": 50
     },
     "doubling": {
+      "floor": 4.87,
+      "floor_from": "measured spread",
       "median": 4.87,
       "abs_median": 5.419,
-      "p90": 29.2,
+      "p90": 29.08,
       "rows": 50
     },
     "stereo": {
-      "median": 0.418,
+      "floor": 0.229,
+      "floor_from": "measured spread",
+      "median": 0.417,
       "abs_median": 0.502,
       "p90": 0.823,
       "rows": 60
     },
     "balance": {
+      "floor": 6.899,
+      "floor_from": "measured spread",
       "median": 6.899,
       "abs_median": 6.899,
-      "p90": 16.517,
+      "p90": 15.777,
+      "rows": 56
+    },
+    "partial_tilt": {
+      "floor": 1.8737,
+      "floor_from": "measured spread",
+      "median": 1.874,
+      "abs_median": 2.197,
+      "p90": 16.075,
       "rows": 56
     },
     "centroid_pct": {
+      "floor": 25.9312,
+      "floor_from": "measured spread",
       "median": 25.931,
-      "abs_median": 33.914,
-      "p90": 130.846,
+      "abs_median": 32.758,
+      "p90": 130.603,
       "rows": 60
     },
     "body": {
+      "floor": 7.26,
+      "floor_from": "measured spread",
       "median": 7.26,
       "abs_median": 7.26,
-      "p90": 18.664,
+      "p90": 18.639,
       "rows": 40
     },
     "vel_range": {
+      "floor": 0.92,
+      "floor_from": "measured spread",
       "median": 0.92,
       "abs_median": 2.163,
       "p90": 4.045,
       "rows": 15
     },
+    "attack_hf_swing": {
+      "floor": 4.77,
+      "floor_from": "measured spread",
+      "median": 4.77,
+      "abs_median": 5.587,
+      "p90": 12.0,
+      "rows": 15
+    },
     "register": {
+      "floor": 1.285,
+      "floor_from": "measured spread",
       "median": 1.285,
       "abs_median": 2.0,
-      "p90": 8.205,
+      "p90": 8.149,
       "rows": 60
     }
   }

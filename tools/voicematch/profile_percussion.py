@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 from loss import KIT_MIN_MEMBERS, kit_report
 from metrics import band_tilt_db
+from metrics_hit import ring_doublings
 
 
 def band_shape_error_db(model: list[float] | None, ref: list[float] | None) -> float | None:
@@ -33,25 +34,6 @@ def mean_band_decay_delta(model: list, ref: list) -> float | None:
     """
     pairs = [(m, r) for m, r in zip(model or [], ref or []) if m is not None and r is not None]
     return float(np.mean([m - r for m, r in pairs])) if pairs else None
-
-
-def ring_doublings(model: dict, ref: dict) -> float | None:
-    """How much longer the model rings than the reference, in doublings.
-
-    In doublings rather than in milliseconds or percent, because the kit spans
-    24x on this quantity — 60 ms of woodblock against 1428 of cymbal — so a
-    median taken in milliseconds is the cymbals and a median taken in percent
-    prices a doubling at +100 and a halving at -50.
-
-    Refused where either side hit its analysis ceiling: a capped reading is the
-    window and not the instrument, the same way a capped damper release is.
-    """
-    m, r = model.get("decay_ms"), ref.get("decay_ms")
-    if not m or not r or m <= 0.0 or r <= 0.0:
-        return None
-    if model.get("decay_capped") or ref.get("decay_capped"):
-        return None
-    return float(np.log2(m / r))
 
 
 def ring_collapsed(model: dict, ref: dict) -> str:
@@ -173,6 +155,14 @@ def percussion_row_deltas(m: dict, r: dict) -> dict[str, float | None]:
             None
             if m.get("flatness_db") is None or r.get("flatness_db") is None
             else m["flatness_db"] - r["flatness_db"]
+        ),
+        # Whether the colour moves after the strike, which a profile integrated
+        # over the whole hit cannot see: a crash that strikes dull and washes
+        # bright and one that is bright throughout can share every band level.
+        "tilt_rise": (
+            None
+            if m.get("tilt_rise_db") is None or r.get("tilt_rise_db") is None
+            else m["tilt_rise_db"] - r["tilt_rise_db"]
         ),
         # The image. 38 of the kit's drum notes carry a `stereo_spread` and
         # nothing faced it until this column existed.

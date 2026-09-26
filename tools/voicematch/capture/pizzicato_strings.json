@@ -43,14 +43,17 @@
       "slot_channel": 14
     }
   ],
-  "_dimensions": "11 of the 13 a plucked string can be judged on. `decay` is the one that matters here and it is the one the compass moves: a pizzicato is almost entirely how fast it stops, and this voice stops twice as fast at the top of the grid as at the bottom.",
+  "_dimensions": "14 of the 16 a plucked string can be judged on. `decay` is the one that matters here and it is the one the compass moves: a pizzicato is almost entirely how fast it stops, and this voice stops twice as fast at the top of the grid as at the bottom.",
   "dimensions": [
     "stretch",
     "decay",
     "aftersound",
     "doubling",
+    "partial_tilt",
     "body",
     "attack",
+    "attack_hf",
+    "attack_hf_swing",
     "balance",
     "centroid_pct",
     "tnr",

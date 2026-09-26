@@ -233,6 +233,7 @@ class ShapeLoss:
                 "held_window": held_window,
                 "held": terms.held_db(sig, window=held_window, sr=sr),
                 "onset": terms.onset_stats(sig, sr),
+                "onset_dip": terms.onset_dip_stats(sig, sr),
                 "curve": terms.residue_curve(self.spectro, clean[0], hm, window=late),
                 "balance": [terms.band_balance(self.spectro, clean[0], w) for w in bal_windows],
                 "peaks": terms.peak_rows(self.spectro, clean[0], pm, window=late),
@@ -269,6 +270,7 @@ class ShapeLoss:
             "M": M,
             "held": terms.held_db(sig, window=r["held_window"], sr=sr),
             "onset": terms.onset_stats(sig, sr),
+            "onset_dip": terms.onset_dip_stats(sig, sr),
             "balance": [terms.band_balance(self.spectro, M[0], w) for w in r["windows"]],
             "curve": terms.residue_curve(self.spectro, M[0], r["harmonic"], window=r["late"]),
             "peaks": terms.peak_rows(self.spectro, M[0], r["peak_mask"], window=r["late"]),
@@ -367,6 +369,11 @@ class ShapeLoss:
                     terms.ONSET_CLIP,
                 )
             )
+            # Post-attack sag; bands not live on both sides are dropped, not scored as agreement.
+            md, rd = mo["onset_dip"], r["onset_dip"]
+            live = ~np.isnan(md) & ~np.isnan(rd)
+            if live.any():
+                onset_err.append(np.clip(md[live] - rd[live], -terms.ONSET_CLIP, terms.ONSET_CLIP))
 
             # One-sided, and scored only while the reference still had a note to
             # damp: once it has decayed past seventy decibels under its own peak

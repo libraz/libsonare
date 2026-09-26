@@ -110,7 +110,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 110.3,
    "tnr_db": 34.01,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -97.5
   },
   {
    "timbre": "gm013",
@@ -187,7 +188,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 110.6,
    "tnr_db": 34.02,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -90.06
   },
   {
    "timbre": "gm013",
@@ -264,7 +266,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 110.9,
    "tnr_db": 34.03,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -82.11
   },
   {
    "timbre": "gm013",
@@ -341,7 +344,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 111.0,
    "tnr_db": 34.03,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "attack_hf_db": -74.42
   },
   {
    "timbre": "gm013",
@@ -418,7 +422,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 111.1,
    "tnr_db": 34.03,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -68.12
   },
   {
    "timbre": "gm013",
@@ -496,7 +501,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 155.9,
    "tnr_db": 38.69,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "attack_hf_db": -93.72
   },
   {
    "timbre": "gm013",
@@ -574,7 +580,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 156.3,
    "tnr_db": 38.7,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -85.78
   },
   {
    "timbre": "gm013",
@@ -652,7 +659,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 156.7,
    "tnr_db": 38.7,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -77.7
   },
   {
    "timbre": "gm013",
@@ -730,7 +738,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 157.0,
    "tnr_db": 38.7,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -70.2
   },
   {
    "timbre": "gm013",
@@ -808,7 +817,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 157.1,
    "tnr_db": 38.7,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -64.34
   },
   {
    "timbre": "gm013",
@@ -886,7 +896,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 220.4,
    "tnr_db": 40.12,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -93.24
   },
   {
    "timbre": "gm013",
@@ -964,7 +975,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 220.9,
    "tnr_db": 40.12,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "attack_hf_db": -85.25
   },
   {
    "timbre": "gm013",
@@ -1042,7 +1054,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 221.5,
    "tnr_db": 40.13,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -77.3
   },
   {
    "timbre": "gm013",
@@ -1120,7 +1133,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 221.9,
    "tnr_db": 40.13,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -70.15
   },
   {
    "timbre": "gm013",
@@ -1198,7 +1212,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 222.1,
    "tnr_db": 40.13,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "attack_hf_db": -64.8
   },
   {
    "timbre": "gm013",
@@ -1276,7 +1291,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 311.5,
    "tnr_db": 43.6,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -90.38
   },
   {
    "timbre": "gm013",
@@ -1354,7 +1370,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 312.2,
    "tnr_db": 43.61,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -82.84
   },
   {
    "timbre": "gm013",
@@ -1432,7 +1449,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 313.1,
    "tnr_db": 43.61,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -75.15
   },
   {
    "timbre": "gm013",
@@ -1510,7 +1528,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 313.8,
    "tnr_db": 43.62,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -68.38
   },
   {
    "timbre": "gm013",
@@ -1588,7 +1607,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 314.1,
    "tnr_db": 43.62,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -63.63
   },
   {
    "timbre": "gm013",
@@ -1666,7 +1686,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 440.4,
    "tnr_db": 46.21,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -64.6
   },
   {
    "timbre": "gm013",
@@ -1744,7 +1765,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 441.3,
    "tnr_db": 46.21,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -57.29
   },
   {
    "timbre": "gm013",
@@ -1822,7 +1844,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 442.6,
    "tnr_db": 46.22,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -50.55
   },
   {
    "timbre": "gm013",
@@ -1900,7 +1923,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 443.6,
    "tnr_db": 46.22,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -45.55
   },
   {
    "timbre": "gm013",
@@ -1978,7 +2002,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 444.1,
    "tnr_db": 46.22,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -42.8
   },
   {
    "timbre": "gm013",
@@ -2056,7 +2081,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 622.6,
    "tnr_db": 48.16,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -73.3
   },
   {
    "timbre": "gm013",
@@ -2134,7 +2160,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 623.7,
    "tnr_db": 48.17,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -66.03
   },
   {
    "timbre": "gm013",
@@ -2212,7 +2239,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 625.5,
    "tnr_db": 48.17,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -59.0
   },
   {
    "timbre": "gm013",
@@ -2290,7 +2318,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 627.1,
    "tnr_db": 48.17,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -53.41
   },
   {
    "timbre": "gm013",
@@ -2368,7 +2397,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 628.1,
    "tnr_db": 48.17,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "attack_hf_db": -50.03
   },
   {
    "timbre": "gm013",
@@ -2446,7 +2476,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 784.4,
    "tnr_db": 48.9,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -72.25
   },
   {
    "timbre": "gm013",
@@ -2524,7 +2555,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 785.5,
    "tnr_db": 48.9,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "attack_hf_db": -65.79
   },
   {
    "timbre": "gm013",
@@ -2602,7 +2634,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 787.7,
    "tnr_db": 48.91,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -59.89
   },
   {
    "timbre": "gm013",
@@ -2680,7 +2713,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 790.0,
    "tnr_db": 48.91,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -55.25
   },
   {
    "timbre": "gm013",
@@ -2758,7 +2792,8 @@
    "decayed_before_note_off": true,
    "centroid_hz": 791.3,
    "tnr_db": 48.91,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "attack_hf_db": -52.22
   }
  ],
  "summary": {

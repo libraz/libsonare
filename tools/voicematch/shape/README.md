@@ -14,6 +14,8 @@ PYTHONPATH=tools/voicematch python -m shape fit    --corpus <capture dir> --knob
 PYTHONPATH=tools/voicematch python -m shape ablate --corpus <capture dir> --knobs dump.txt --overrides fitted.txt
 PYTHONPATH=tools/voicematch python -m shape prune  --corpus <capture dir> --knobs dump.txt --overrides fitted.txt --out kept.txt
 PYTHONPATH=tools/voicematch python -m shape probe  --corpus <capture dir> --overrides fitted.txt --notes 36,60,84
+PYTHONPATH=tools/voicematch python -m shape onset   --corpus <capture dir> --overrides fitted.txt --notes 36,60,84
+PYTHONPATH=tools/voicematch python -m shape onset   --corpus <capture dir> --overrides fitted.txt --notes 60 --trace
 PYTHONPATH=tools/voicematch python -m shape purity --corpus <capture dir> --overrides fitted.txt --notes 36,60,84
 PYTHONPATH=tools/voicematch python -m shape admittance --corpus <capture dir> --overrides fitted.txt
 PYTHONPATH=tools/voicematch python -m shape takes  --corpus <capture dir> --page <audition dir>
@@ -213,6 +215,12 @@ The budget is in megabytes rather than notes, with a floor of two grids. Below t
 - `sustain_colour` — "it sounds metallic." Partials 3–10 against partials 1–2 a second and a half in. A note can be entirely made of its own partials and still read as hard.
 - `decay_profile` — "it rings too long." Decay rate as a function of partial frequency, which is the slope metal has and wood does not.
 - `onset_profile` — "the attack has no richness." Band level and rise time through the strike.
+
+`onset_profile` had no caller anywhere in the harness — it is now `shape onset`. Run on the piano and bright-piano captures, it found the reference's first-60-ms rise (6 dB under peak) landing inside about 15 ms in every band and note tried, against 13–28 ms for the model at the same notes. The single crossing time is inflated by a real shape underneath it, visible only in the full per-frame trace (`shape onset --trace`): the model has content from frame 1, sags over roughly 4–14 ms, then recovers to a plateau by 14–16 ms — a dip-then-recover, not a slow monotonic rise, and the crossing time reports whichever side of the dip happens to cross the threshold.
+
+`onset_dip_stats` (`terms.py`) measures the sag directly rather than through the crossing: the surrounding level minus the trough in the 4–14 ms window, per band, smoothed over three frames so a single 1.3 ms frame's own estimator variance is not read as the sag, and NaN below a note-relative floor so a dead band (60 Hz on a note whose fundamental sits an octave above it) is not scored as agreement. Run at n36/60/84 against bright-piano and all three grand references, the 60 Hz band separates cleanly and consistently: the reference reads 0.0–2.1 dB there at every note and every one of the four references, the model 2.1–4.8 dB at the same notes — a real, reference-verified defect rather than noise or beating read as one. It is now folded into `shape`'s own `onset` loss term (`loss.py`), so `shape fit`/`shape ablate`/`shape prune` see it; the older `profile.py`/`autofit.py` canonical-dimension system is untouched, since promoting it there needs `profile_measure.py` and `profile.py` (not this package).
+
+No mechanism is confirmed. Ablated and ruled out: `piano_voice.kTwoStageDrainPartials=0`, `piano_voice.kBridgeHfDrain=0` and both together leave the 60 Hz dip unchanged (3.6 dB), so the coupled two-stage decay's `fb`/`drain_out_` warm-up is not it. `fam0.piano.dispersion=0` and `fam0.piano.strike_position=0`, alone and together, move the dip BETWEEN bands rather than removing it (dispersion=0 shifts it from 3 kHz into 1 kHz; both together drop 60 Hz to 1.8 dB but raise 250 Hz to 5.0) — the dispersion cascade and the strike-position comb interact and jointly shape where the artifact lands, without being its source. `fam0.amp_env.attack_ms=0` and `piano_voice.kContactPeriodsPerOct` swept to the reference's own measured contact fraction move neither number either.
 
 A probe withholds a number rather than guessing one. A rate fitted where the reference's partial has fallen into the recorded floor is a property of the recording, and a metric that skips its unusable points and averages the rest scores an empty set as perfect — a shape this harness has been caught in before.
 

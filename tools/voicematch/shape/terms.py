@@ -42,6 +42,21 @@ ONSET_SPAN = 0.35
 ONSET_BANDS = ((60, 250), (250, 1000), (1000, 3000), (3000, 8000), (8000, 16000))
 ONSET_CLIP = 24.0
 
+#: Windows for the dip metric, in seconds from the strike: the attack's own
+#: first frames, a mid window where a destructive-interference dip would show,
+#: and a window late enough that a real attack has settled onto its sustain.
+ONSET_DIP_EARLY = (0.0, 0.004)
+ONSET_DIP_TROUGH = (0.004, 0.014)
+ONSET_DIP_PLATEAU = (0.014, 0.030)
+#: A band this far under the note's own loudest band is FFT-bin estimator
+#: variance, not content (measured -25..+1 dB swing on bright_piano n84's 60 Hz
+#: band); the floor is relative to the note's own peak rather than absolute.
+ONSET_DIP_LIVE_DB = 30.0
+#: Boxcar width, in frames, smoothing the trace before the dip windows read it:
+#: a raw `min()` over the window takes the worst frame's variance rather than
+#: the level. Three frames (~4 ms) stays short enough to leave a real 8-12 ms dip untouched.
+ONSET_DIP_SMOOTH = 3
+
 RESIDUE_WINDOWS = ((0.8, 3.0), (3.0, 7.0))
 RESIDUE_CLIP = 20.0
 INVARIANCE_CLIP = 24.0
@@ -50,18 +65,12 @@ RELEASE_CLIP = 30.0
 _OWIN = np.hanning(ONSET_NFFT)
 
 
-def onset_stats(sig: np.ndarray, sr: int = 48000, start: float = 0.1):
-    """Band level over the first 60 ms and time-to-rise, per band.
+def _onset_band_energy(sig: np.ndarray, sr: int, start: float) -> np.ndarray:
+    """Per-band power per frame over the onset span: shape (bands, frames).
 
-    A separate and much shorter transform than either analysis scale, because
-    neither can see this: the long window's first frame is centred at 85 ms, by
-    which time the strike is over.
-
-    The rise is the first crossing of six decibels under the peak, not the peak
-    itself. Both sides beat hard in the first tenths of a second -- several
-    unisons and a dozen partials inside one band -- so the largest sample is as
-    likely to be a beat maximum as the end of the rise, and an argmax on it
-    reports the beat period instead.
+    The shared transform behind `onset_stats`, `onset_trace` and
+    `onset_dip_stats` -- one STFT short enough that its first frame is inside
+    the strike, which neither analysis scale used elsewhere in this module is.
     """
     freq = np.fft.rfftfreq(ONSET_NFFT, 1.0 / sr)
     sel = [np.where((freq >= lo) & (freq < hi))[0] for lo, hi in ONSET_BANDS]
@@ -75,15 +84,77 @@ def onset_stats(sig: np.ndarray, sr: int = 48000, start: float = 0.1):
         * _OWIN
     )
     p = np.abs(np.fft.rfft(fr, axis=1)) ** 2
+    return np.stack([p[:, s].sum(axis=1) for s in sel])
+
+
+def onset_stats(sig: np.ndarray, sr: int = 48000, start: float = 0.1):
+    """Band level over the first 60 ms and time-to-rise, per band.
+
+    A separate and much shorter transform than either analysis scale, because
+    neither can see this: the long window's first frame is centred at 85 ms, by
+    which time the strike is over.
+
+    The rise is the first crossing of six decibels under the peak, not the peak
+    itself. Both sides beat hard in the first tenths of a second -- several
+    unisons and a dozen partials inside one band -- so the largest sample is as
+    likely to be a beat maximum as the end of the rise, and an argmax on it
+    reports the beat period instead; the same crossing is inflated by the dip
+    `onset_dip_stats` measures directly, which is why it reads noisy on a beating reference.
+    """
+    e = _onset_band_energy(sig, sr, start)
     n60 = max(1, int(0.06 * sr / ONSET_HOP))
     lvl, rise = [], []
-    for s in sel:
-        e = p[:, s].sum(axis=1)
-        lvl.append(10 * np.log10(max(float(e[:n60].mean()), 1e-30)))
-        thr = e.max() * 10.0 ** (-0.6)
-        i = int(np.argmax(e >= thr)) if (e >= thr).any() else len(e) - 1
+    for row in e:
+        lvl.append(10 * np.log10(max(float(row[:n60].mean()), 1e-30)))
+        thr = row.max() * 10.0 ** (-0.6)
+        i = int(np.argmax(row >= thr)) if (row >= thr).any() else len(row) - 1
         rise.append((float(i) + 1.0) * ONSET_HOP / sr * 1000.0)
     return np.array(lvl), np.array(rise)
+
+
+def onset_trace(sig: np.ndarray, sr: int = 48000, start: float = 0.1):
+    """Full per-frame band level (dB), shape (bands, frames), and frame times (ms).
+
+    `onset_stats` collapses this into one crossing time per band; this is the
+    trace behind it, for reading a defect no single-number metric can
+    represent -- a rise that dips and recovers reads identically to a slow monotonic one.
+    """
+    e = _onset_band_energy(sig, sr, start)
+    t_ms = (np.arange(e.shape[1]) * ONSET_HOP / sr) * 1000.0
+    return 10 * np.log10(np.maximum(e, 1e-30)), t_ms
+
+
+def onset_dip_stats(sig: np.ndarray, sr: int = 48000, start: float = 0.1) -> np.ndarray:
+    """Depth of a post-attack dip per band, in dB, NaN where the band is not live.
+
+    `onset_stats`'s single crossing time conflates a dip-then-recover with a
+    slow rise and reads noisy on a beating reference; this reads the sag
+    directly, as the trough in `ONSET_DIP_TROUGH` under the lower of the early
+    attack and the later plateau, floored at zero. The reference gets the
+    identical measurement, so only an excess over it is a claim about the
+    model. A band under `ONSET_DIP_LIVE_DB` below the note's loudest reads NaN
+    rather than 0, since 0 would read as "no dip" rather than "unmeasurable."
+    """
+    e = _onset_band_energy(sig, sr, start)
+    k = np.ones(ONSET_DIP_SMOOTH) / ONSET_DIP_SMOOTH
+    e = np.apply_along_axis(lambda row: np.convolve(row, k, mode="same"), 1, e)
+    db = 10 * np.log10(np.maximum(e, 1e-30))
+    t_ms = (np.arange(e.shape[1]) * ONSET_HOP / sr) * 1000.0
+    t_s = t_ms / 1000.0
+    early = (t_s >= ONSET_DIP_EARLY[0]) & (t_s < ONSET_DIP_EARLY[1])
+    trough = (t_s >= ONSET_DIP_TROUGH[0]) & (t_s < ONSET_DIP_TROUGH[1])
+    plateau = (t_s >= ONSET_DIP_PLATEAU[0]) & (t_s < ONSET_DIP_PLATEAU[1])
+    if not (early.any() and trough.any() and plateau.any()):
+        return np.full(db.shape[0], np.nan)
+    note_peak = float(db[:, early | trough | plateau].max())
+    out = []
+    for row in db:
+        if float(row[early | trough | plateau].max()) < note_peak - ONSET_DIP_LIVE_DB:
+            out.append(np.nan)
+            continue
+        surround = min(float(row[early].max()), float(np.median(row[plateau])))
+        out.append(max(0.0, surround - float(row[trough].min())))
+    return np.array(out)
 
 
 def residue_ratio(spectro, S: np.ndarray, harmonic: np.ndarray, scale: int = 0):

@@ -64,7 +64,7 @@ def test_every_patch_key_names_the_patch_of_the_voice_it_is_filed_under():
     """A patch prefix reaches that patch and no other, and says nothing when it misses.
 
     Where one patch is built by copying another — `overdriven` and `distortion`
-    from `electric_guitar` — the copy is taken before either is tuned, so a key
+    from `clean_guitar` — the copy is taken before either is tuned, so a key
     aimed at the source renders the copy byte-identical to the unmodified build.
     The page then shows a candidate that changes nothing, which reads as a knob
     with no effect rather than as a setting filed under the wrong voice.

@@ -53,6 +53,8 @@ class NoteMetrics:
     harmonics_db: list[float]  # h1..h12, dB relative to h1 (h1 == 0)
     centroid_hz: float
     odd_even_db: float
+    #: NaN where the window never rose out of SILENT_WINDOW_DB: there is no
+    #: measurement to report, not a clean one.
     tnr_db: float
     attack_ms: float
     #: None where the sustain window sat on the dB clamp: a note that reached
@@ -156,8 +158,10 @@ def analyze_note(
     # The cap above is in seconds, so it cannot see a window that is long enough
     # and lands after the sound: a woodblock is over in 25 ms and its window is
     # 300 ms of silence starting at 150. See `SILENT_WINDOW_DB`.
-    if _under_peak_db(sustain, mono[on:off]) < SILENT_WINDOW_DB:
+    under_peak_db = _under_peak_db(sustain, mono[on:off])
+    if under_peak_db < SILENT_WINDOW_DB:
         sustain = mono[on:off]
+        under_peak_db = _under_peak_db(sustain, mono[on:off])
 
     freqs, mag = _spectrum(sustain, sr)
 
@@ -214,7 +218,12 @@ def analyze_note(
     band = (freqs >= 80.0) & (freqs <= 16000.0)
     p_harm = float(np.sum(power[band & harmonic_mask]))
     p_noise = float(np.sum(power[band & ~harmonic_mask]))
-    tnr = 10.0 * np.log10(max(p_harm, 1e-12) / max(p_noise, 1e-12))
+    # A silent window has nothing real in either bin, so the ratio would read implausibly clean.
+    tnr = (
+        float("nan")
+        if under_peak_db < SILENT_WINDOW_DB
+        else 10.0 * np.log10(max(p_harm, 1e-12) / max(p_noise, 1e-12))
+    )
 
     # Envelope metrics.
     seg_end = min(int(render_end * sr), len(mono))

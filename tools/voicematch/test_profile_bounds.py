@@ -296,6 +296,21 @@ def test_an_unbounded_reason_is_dropped_once_its_dimension_gains_a_bound(tmp_pat
     assert "_unbounded" not in written
 
 
+def test_an_excluded_dimension_is_never_bounded_even_when_it_measures(tmp_path):
+    """`_excluded` says a bound would encode the source's own disagreement, not
+    the voice — so unlike `_unbounded` a measured value does not retire it."""
+    gate = tmp_path / "gate.json"
+    profile_module.write_gate_file(_summary(decay=18), gate, "ref", 1.25)
+    held = json.loads(gate.read_text())
+    held["_excluded"] = {"level": "the two references disagree on kit balance"}
+    gate.write_text(json.dumps(held))
+
+    profile_module.write_gate_file(_summary(decay=18, level=50), gate, "ref", 1.25)
+    written = json.loads(gate.read_text())
+    assert "level" not in written["bounds"]
+    assert written["_excluded"] == {"level": "the two references disagree on kit balance"}
+
+
 def _one_bound(tmp_path, error: float, name: str = "gate.json") -> dict:
     """Write a gate whose single dimension carries `error`, and read it back."""
     gate = tmp_path / name

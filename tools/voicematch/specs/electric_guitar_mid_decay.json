@@ -1,0 +1,7 @@
+{
+  "_": "electric_guitar's decay against electric_guitar_di's DI reference, with the new mid-band anchor engaged. Two knobs only: decay_s (the fundamental T60) and the new mid_decay_s (the cascade's second-pole anchor at kKsMidQuoteHz). Run with --corpus pointed at the electric_guitar_di capture directory.",
+  "knobs": [
+    { "tunable": "clean_guitar.ks.decay_s", "min": 1.0, "max": 20.0, "scale": "log" },
+    { "tunable": "clean_guitar.ks.mid_decay_s", "min": 0.0, "max": 3.0, "scale": "linear" }
+  ]
+}

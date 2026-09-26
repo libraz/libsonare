@@ -3,56 +3,93 @@
   "timbre": "gm032",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-02T06:37:59+00:00",
-  "recorded_utc": "2026-09-20T23:54:11+00:00",
-  "_fossil": "This recording sits 3h17m after 2babd0d2 moved this patch's ks.decay_s, through the documented SONARE_LIB_PATH fallback to a stale build/lib/libsonare.dylib that predated the fix. Confirmed 2026-09-22 against the current, verified-non-stale build-python-shared dylib: tnr reads 39.57/39.57/55.27 against this file's 20.538/22.763/45.985 (median/abs_median/p90), and centroid_pct, doubling and vel_range also exceed their recorded bounds. Not re-recorded here because src/midi/synth/string_loop.h and ks_voice.h - the exact engine this patch's Karplus-Strong loop runs on - are under live edit by a concurrent agent; re-recording now risks a second fossil within the hour. Re-record once that work lands.",
+  "recorded_utc": "2026-09-25T20:33:58+00:00",
+  "model_build": {
+    "built_utc": "2026-09-25T20:30:56Z",
+    "newest_source_utc": "2026-09-25T20:28:05Z",
+    "stale": false
+  },
   "reference_spread": {},
+  "_fossil": "This recording sits 3h17m after 2babd0d2 moved this patch's ks.decay_s, through the documented SONARE_LIB_PATH fallback to a stale build/lib/libsonare.dylib that predated the fix. Confirmed 2026-09-22 against the current, verified-non-stale build-python-shared dylib: tnr reads 39.57/39.57/55.27 against this file's 20.538/22.763/45.985 (median/abs_median/p90), and centroid_pct, doubling and vel_range also exceed their recorded bounds. Not re-recorded here because src/midi/synth/string_loop.h and ks_voice.h - the exact engine this patch's Karplus-Strong loop runs on - are under live edit by a concurrent agent; re-recording now risks a second fossil within the hour. Re-record once that work lands.",
   "bounds": {
     "stretch": {
-      "median": 1.575,
-      "abs_median": 6.15,
-      "p90": 164.292,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 6.698,
       "rows": 35
     },
     "decay": {
-      "median": 12.106,
-      "abs_median": 12.106,
-      "p90": 13.969,
-      "rows": 20
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 0.537,
+      "abs_median": 0.537,
+      "p90": 1.468,
+      "rows": 35
     },
     "tnr": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 20.538,
       "abs_median": 22.763,
       "p90": 45.985,
       "rows": 35
     },
     "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
       "median": 40.0,
       "abs_median": 40.0,
       "p90": 40.0,
       "rows": 35
     },
+    "attack_hf": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 30.825,
+      "abs_median": 30.825,
+      "p90": 48.115,
+      "rows": 35
+    },
     "aftersound": {
-      "median": 10.738,
-      "abs_median": 10.738,
-      "p90": 13.354,
-      "rows": 20
+      "floor": 1.81,
+      "floor_from": "guess",
+      "median": 1.81,
+      "abs_median": 1.81,
+      "p90": 1.81,
+      "rows": 35
     },
     "doubling": {
+      "floor": 1.0,
+      "floor_from": "default",
       "median": 3.363,
       "abs_median": 3.363,
-      "p90": 8.335,
-      "rows": 20
+      "p90": 8.308,
+      "rows": 35
     },
     "stereo": {
+      "floor": 0.27,
+      "floor_from": "guess",
       "median": 0.27,
       "abs_median": 0.27,
       "p90": 0.27,
       "rows": 35
     },
+    "partial_tilt": {
+      "floor": 3.0,
+      "floor_from": "guess",
+      "median": 24.647,
+      "abs_median": 24.647,
+      "p90": 35.545,
+      "rows": 35
+    },
     "centroid_pct": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 5.265,
       "abs_median": 71.478,
-      "p90": 145.053,
+      "p90": 100.635,
       "rows": 35
     },
     "damper": {
@@ -60,18 +97,30 @@
       "floor_from": "guess",
       "median": 18.75,
       "abs_median": 50.0,
-      "p90": 255.0,
-      "rows": 15
+      "p90": 156.25,
+      "rows": 20
     },
     "vel_range": {
-      "median": 4.275,
-      "abs_median": 4.275,
-      "p90": 6.4,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 1.53,
+      "rows": 7
+    },
+    "attack_hf_swing": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 6.3,
+      "abs_median": 6.3,
+      "p90": 7.06,
       "rows": 7
     },
     "register": {
+      "floor": 1.0,
+      "floor_from": "default",
       "median": 1.0,
-      "abs_median": 1.238,
+      "abs_median": 1.0,
       "p90": 3.587,
       "rows": 35
     }

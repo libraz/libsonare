@@ -455,6 +455,36 @@ def test_a_corpus_carries_what_its_capture_answered_about_a_rig(tmp_path):
     assert load_corpus(_write_corpus(tmp_path / "typo", rig="DI")).rig == RIG_UNCLASSIFIED
 
 
+def test_a_row_the_capture_definition_no_longer_asks_for_is_scored_by_no_reader(tmp_path):
+    """The mute rows the DI guitar keeps as data must reach neither a fit nor a gate.
+
+    Both readers are checked, because a fit scored on one grid and a gate on
+    another is the failure: velocity 32 there is a different articulation, and a
+    reader pairing it with 104 reports a velocity law the instrument does not have.
+    """
+    import json
+    from profile import scored_profile
+
+    config = tmp_path / "capture.json"
+    config.write_text(json.dumps({"id": "mini", "notes": [60, 72], "velocities": [56, 104]}))
+    manifest = _write_corpus(tmp_path / "c", velocities=(32, 56, 104)) / "manifest.json"
+    header = json.loads(manifest.read_text())
+    header["config"] = str(config)
+    manifest.write_text(json.dumps(header))
+    assert load_corpus(manifest).velocities == (56, 104)
+    # Positive control: with no definition to read, every recorded row is served.
+    header.pop("config")
+    manifest.write_text(json.dumps(header))
+    assert load_corpus(manifest).velocities == (32, 56, 104)
+
+    profile = tmp_path / "ref.json"
+    rows = [{"timbre": "t", "note": n, "velocity": v} for n in (60, 72) for v in (32, 56, 104)]
+    profile.write_text(json.dumps({"capture": {}, "rows": rows}))
+    kept = scored_profile(profile, json.loads(config.read_text()))["rows"]
+    assert sorted({r["velocity"] for r in kept}) == [56, 104] and len(kept) == 4
+    assert len(scored_profile(profile, {})["rows"]) == 6
+
+
 def test_the_model_stops_on_the_same_side_of_the_boundary_the_reference_did():
     """The rig record drives the model render, not only the fit refusal.
 

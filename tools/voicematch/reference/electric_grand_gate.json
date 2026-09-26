@@ -3,10 +3,10 @@
   "timbre": "gm003",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-04T11:47:41+00:00",
-  "recorded_utc": "2026-09-21T11:04:09+00:00",
+  "recorded_utc": "2026-09-25T18:47:11+00:00",
   "model_build": {
-    "built_utc": "2026-09-21T10:59:27Z",
-    "newest_source_utc": "2026-09-21T10:53:08Z",
+    "built_utc": "2026-09-25T18:46:35Z",
+    "newest_source_utc": "2026-09-25T18:46:18Z",
     "stale": false
   },
   "reference_spread": {},
@@ -16,7 +16,7 @@
       "floor_from": "guess",
       "median": 4.475,
       "abs_median": 4.475,
-      "p90": 7.149,
+      "p90": 7.145,
       "rows": 44
     },
     "decay": {
@@ -32,15 +32,15 @@
       "floor_from": "guess",
       "median": 20.913,
       "abs_median": 20.913,
-      "p90": 31.406,
+      "p90": 31.397,
       "rows": 44
     },
     "damper": {
       "floor": 5.0,
       "floor_from": "guess",
-      "median": 81.25,
-      "abs_median": 81.25,
-      "p90": 199.375,
+      "median": 50.0,
+      "abs_median": 50.0,
+      "p90": 193.75,
       "rows": 12
     },
     "attack": {
@@ -88,7 +88,7 @@
       "floor_from": "default",
       "median": 20.95,
       "abs_median": 20.95,
-      "p90": 35.209,
+      "p90": 35.2,
       "rows": 34
     },
     "vel_range": {

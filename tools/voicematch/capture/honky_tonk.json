@@ -45,14 +45,17 @@
       "slot_channel": 4
     }
   ],
-  "_dimensions": "13 of the 13 a struck string can be judged on. `decay`, `aftersound` and `doubling` are the load-bearing three here: what a piano is, past the first fifty milliseconds, is how it falls, where the fall changes rate, and whether the strings of a unison have drifted apart by then. A model with one string cannot have the third at all, which is why it is measured rather than assumed.",
+  "_dimensions": "16 of the 16 a struck string can be judged on. `decay`, `aftersound` and `doubling` are the load-bearing three here: what a piano is, past the first fifty milliseconds, is how it falls, where the fall changes rate, and whether the strings of a unison have drifted apart by then. A model with one string cannot have the third at all, which is why it is measured rather than assumed.",
   "dimensions": [
     "stretch",
     "decay",
     "aftersound",
     "doubling",
+    "partial_tilt",
     "body",
     "attack",
+    "attack_hf",
+    "attack_hf_swing",
     "stereo",
     "damper",
     "balance",

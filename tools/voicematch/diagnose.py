@@ -89,6 +89,7 @@ TERM_UNIT_NAMES = {
     "hf": "dB",
     "lf": "dB",
     "dyn": "dB per 64 velocity",
+    "hfdyn": "dB per 64 velocity",
     "stiff": "cents",
     "level": "dB",
     "crest": "dB",
@@ -99,6 +100,9 @@ TERM_UNIT_NAMES = {
     "mod": "composite",
     "tilt": "dB",
     "bright": "% of the reference centroid",
+    "tonal": "dB of spectral flatness",
+    "rise": "dB of tilt change, strike to body",
+    "ring": "doublings of the time to fall 20 dB",
     "kit": "doublings",
 }
 
@@ -113,6 +117,7 @@ TERM_MEANS = {
     "hf": "the high-frequency content of the first 120 ms",
     "lf": "the low and mid bands of the first 50 ms — the attack's weight",
     "dyn": "the dynamics curve: how brightness tracks velocity, per pitch",
+    "hfdyn": "how the attack's 4-8 kHz share tracks velocity, per pitch",
     "stiff": "string stiffness — how far it stretches its twelfth partial",
     "level": "how the level is distributed across the probe",
     "crest": "peak against RMS",
@@ -123,6 +128,10 @@ TERM_MEANS = {
     "level below 500 Hz, which `band` measures the magnitude of and "
     "never the direction",
     "bright": "where the hit's energy sits, as a percentage of the reference's own centroid",
+    "tonal": "whether the hit stands in lines or lies in a continuum — its spectral flatness",
+    "ring": "how long the hit rings — the time it takes to fall 20 dB, in doublings",
+    "rise": "whether the hit's colour moves after the strike — its tilt 30-60 ms in "
+    "against its first 15 ms",
     "modes": "the partials as measured — where they actually are, not where a "
     "harmonic series predicts. The only pitched reading a bar, a bell "
     "or a membrane has",

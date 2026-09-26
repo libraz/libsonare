@@ -3,7 +3,12 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-09-19T16:35:38+00:00",
-  "recorded_utc": "2026-09-20T19:34:12+00:00",
+  "recorded_utc": "2026-09-25T20:34:03+00:00",
+  "model_build": {
+    "built_utc": "2026-09-25T20:30:56Z",
+    "newest_source_utc": "2026-09-25T20:28:05Z",
+    "stale": false
+  },
   "reference_spread": {},
   "bounds": {
     "stretch": {
@@ -25,8 +30,8 @@
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 2.881,
-      "abs_median": 7.069,
+      "median": 2.656,
+      "abs_median": 6.837,
       "p90": 18.54,
       "rows": 10
     },
@@ -36,6 +41,14 @@
       "median": 40.0,
       "abs_median": 40.0,
       "p90": 40.0,
+      "rows": 10
+    },
+    "attack_hf": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 11.894,
+      "abs_median": 11.894,
+      "p90": 16.039,
       "rows": 10
     },
     "aftersound": {
@@ -60,6 +73,14 @@
       "median": 8.53,
       "abs_median": 8.53,
       "p90": 24.568,
+      "rows": 10
+    },
+    "partial_tilt": {
+      "floor": 3.0,
+      "floor_from": "guess",
+      "median": 3.0,
+      "abs_median": 3.0,
+      "p90": 6.171,
       "rows": 10
     },
     "centroid_pct": {

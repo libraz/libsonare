@@ -46,6 +46,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from corpus import in_declared_grid
 from gm_names import gm_name
 from toneclass import tone_class
 
@@ -152,11 +153,12 @@ def check_one(cap_id: str, scratch: Path) -> dict:
     if not ref_path.exists():
         return {"id": cap_id, "status": "no-reference"}
     profile = json.loads(ref_path.read_text())
-    rows = profile.get("rows") or []
+    cfg = json.loads((CAPTURE_DIR / f"{cap_id}.json").read_text())
+    admits = in_declared_grid(cfg)
+    rows = [r for r in profile.get("rows") or [] if admits(r["note"], r["velocity"])]
     notes = sorted({r["note"] for r in rows if "note" in r})
     if not notes:
         return {"id": cap_id, "status": "no-rows"}
-    cfg = json.loads((CAPTURE_DIR / f"{cap_id}.json").read_text())
     program = int(profile.get("capture", {}).get("program", cfg.get("program", 0)))
     note = notes[len(notes) // 2]
     velocities = sorted({r["velocity"] for r in rows if r.get("note") == note and "velocity" in r})

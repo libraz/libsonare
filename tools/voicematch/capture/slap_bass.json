@@ -46,14 +46,17 @@
       "slot_channel": 5
     }
   ],
-  "_dimensions": "12 of the 13 a plucked string can be judged on. `decay` and `aftersound` carry it: this is the fastest-decaying of the eight basses on the rack, 16.0 dB down two seconds into a held note where the others sit between 0.8 and 14.9, and how a struck-then-plucked string gives its energy up is most of what separates this program from the four beside it.",
+  "_dimensions": "15 of the 16 a plucked string can be judged on. `decay` and `aftersound` carry it: this is the fastest-decaying of the eight basses on the rack, 16.0 dB down two seconds into a held note where the others sit between 0.8 and 14.9, and how a struck-then-plucked string gives its energy up is most of what separates this program from the four beside it.",
   "dimensions": [
     "stretch",
     "decay",
     "aftersound",
     "doubling",
+    "partial_tilt",
     "body",
     "attack",
+    "attack_hf",
+    "attack_hf_swing",
     "damper",
     "balance",
     "centroid_pct",

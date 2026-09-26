@@ -41,13 +41,16 @@
       "slot_channel": 8
     }
   ],
-  "_dimensions": "10 of the 12 a modal voice can be judged on. `decay` carries this one: what the program is, past the first fifty milliseconds, is a fall, and the fall changes by a factor of three across the two octaves the grid covers.",
+  "_dimensions": "13 of the 15 a modal voice can be judged on. `decay` carries this one: what the program is, past the first fifty milliseconds, is a fall, and the fall changes by a factor of three across the two octaves the grid covers.",
   "dimensions": [
     "decay",
     "aftersound",
     "doubling",
+    "partial_tilt",
     "body",
     "attack",
+    "attack_hf",
+    "attack_hf_swing",
     "balance",
     "centroid_pct",
     "tnr",
