@@ -59,6 +59,9 @@ def test_every_bank_voice_gets_the_capture_policy_aims_it_at(monkeypatch):
 
     Catalogue lookup is disabled so the comparison does not depend on whether
     a `-DBUILD_TUNING=ON` library happens to be on disk where the test runs.
+    Holds with `comparison_captures` in play too, on any voice that has one:
+    offering the other captures beside the reference must never move which
+    one the reference itself is.
     """
     monkeypatch.setattr(make_audition, "load_catalogue", lambda lib: None)
     kits = ",".join(str(k) for k in sorted(bank.KIT_NAMES))
@@ -69,6 +72,48 @@ def test_every_bank_voice_gets_the_capture_policy_aims_it_at(monkeypatch):
         # `==` rather than `is`: `bank.voices` re-reads `capture/` for its own
         # pool, so an equal `Capture` from a second read is a distinct object.
         assert voice.capture == expected, voice.slug
+        comparisons = make_audition.comparison_captures(voice)
+        assert all(c != voice.capture for c in comparisons), voice.slug
+
+
+def test_the_standard_kit_gets_the_library_kit_as_its_only_comparison():
+    """The kit's three module grids are one set of recordings split by decay
+    window for gating, not three things to hear -- only the sampled library
+    kit, which the page used to substitute in as the reference outright
+    (`bf04145c`), is a genuinely different capture to offer beside it."""
+    pool = bank.captures()
+    voice = bank.Voice(
+        program=0, kit=True, captures=tuple(bank.captures_for(0, kit=True, pool=pool))
+    )
+    assert voice.capture.id == "drums_module"
+    assert [c.id for c in make_audition.comparison_captures(voice)] == ["drums"]
+
+
+def test_electric_grand_gets_the_library_capture_as_its_only_comparison():
+    pool = bank.captures()
+    voice = bank.Voice(program=2, captures=tuple(bank.captures_for(2, 0, pool=pool)))
+    assert voice.capture.id == "electric_grand_module"
+    assert [c.id for c in make_audition.comparison_captures(voice)] == ["electric_grand"]
+
+
+def test_build_sources_gives_a_comparison_its_own_role_and_keeps_one_reference():
+    """A module-aimed voice with a library capture gets a `comparison` source
+    and still exactly one `reference` capture: the policy's own."""
+    module_cap = bank.load_capture(bank.CAPTURE_DIR / "drums_module.json")
+    library_cap = bank.load_capture(bank.CAPTURE_DIR / "drums.json")
+    voice = bank.Voice(program=0, kit=True, captures=(module_cap, library_cap))
+    timbres = list(module_cap.timbres)
+    comparisons = [(library_cap, list(library_cap.timbres))]
+
+    sources = make_audition.build_sources(voice, timbres, [], comparisons)
+    roles = {k: v["role"] for k, v in sources.items()}
+
+    assert [k for k, r in roles.items() if r == "reference"] == [module_cap.timbres[0]["id"]]
+    assert sorted(k for k, r in roles.items() if r == "comparison") == sorted(
+        t["id"] for t in library_cap.timbres
+    )
+    for t in library_cap.timbres:
+        assert sources[t["id"]]["detail"].startswith("a modern recording of the same instrument")
 
 
 def _fake_font(monkeypatch, tmp_path, *, bank: int, program: int, name: str = "KIT A"):

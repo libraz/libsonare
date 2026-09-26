@@ -10,7 +10,7 @@
 
 'use strict';
 
-import { $, state, SWITCH_RAMP, FUSED_S, roleOf } from './state.js';
+import { $, state, SWITCH_RAMP, FUSED_S, roleOf, sourceLabel } from './state.js';
 import { t } from './i18n.js';
 
 export function audio() {
@@ -343,6 +343,19 @@ function lastModelKey() {
   return keys.find((k) => roleOf(k) === 'model') || null;
 }
 
+/* The oracle a note is judged against: the listener's override, else the
+ * last one played, else `null` rather than a guess. */
+export function comparedAgainst() {
+  const picked = state.oracleOverride || state.lastOracle;
+  if (!picked) return null;
+  return {
+    role: picked.role,
+    version: picked.key,
+    label: sourceLabel(picked.key),
+    chosen: state.oracleOverride ? 'manual' : 'last_played',
+  };
+}
+
 export function conditions() {
   const item = state.items[state.itemIndex];
   const at = playhead();
@@ -354,6 +367,7 @@ export function conditions() {
     take_label: (item && item.label) || null,
     version,
     against: version && roleOf(version) === 'reference' ? lastModelKey() : null,
+    compared_against: comparedAgainst(),
     blind: state.blind,
     playhead: Number(at.toFixed(3)),
     duration: state.take ? Number(state.take.duration.toFixed(3)) : null,

@@ -81,6 +81,8 @@ import webbrowser
 from pathlib import Path
 from typing import ClassVar
 
+from heard import oracle_flag
+
 APP_DIR = Path(__file__).resolve().parent
 #: The page itself: `index.html`, with its stylesheets under `css/` and its
 #: modules under `js/`.
@@ -204,6 +206,8 @@ def feedback_index() -> dict[str, dict]:
             # been listened to hard and judged not at all.
             "prefer": sum(1 for e in entries if e.get("tag") == "prefer"),
             "last": max((str(e.get("at") or "") for e in entries), default=""),
+            # `oracle_flag` is the one rule, shared with heard.py's per-note flag.
+            "off_reference": sum(1 for e in entries if oracle_flag(e.get("conditions") or {})),
         }
     return out
 

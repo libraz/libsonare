@@ -515,6 +515,71 @@ def test_a_note_written_with_the_reference_sounding_is_about_the_model_it_names(
 
 
 @_with_scratch
+def test_a_note_taken_on_a_comparison_is_about_neither_the_model_nor_the_reference() -> None:
+    """A comparison is a capture offered beside the reference, not a candidate
+    and not the target `against` resolves to -- a note taken while it sounds
+    must not be counted as being about either."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        sources = dict(_SOURCES, **{"kit-a": {"role": "comparison"}})
+        _audition(root / "audition", "p040-violin", "violin", sources=sources)
+        _bank(root, {"violin": {"2026-09-11": 1}})
+        entry = _note("2026-09-19T10:00:00+00:00", "ok")
+        entry["conditions"]["version"] = "kit-a"
+        _log(heard.FEEDBACK_ROOT, "p040-violin", [entry])
+        note = heard.collect([], "")[0]["notes"][0]
+        assert note["judged"] == "kit-a", note
+        try:
+            heard.signoff("p040-violin")
+            raise AssertionError("expected a refusal")
+        except ValueError as e:
+            assert "kit-a" in str(e), e
+
+
+@_with_scratch
+def test_compared_against_is_surfaced_and_flagged() -> None:
+    """Judged against the policy reference reads clean; a comparison is a real
+    answer and flagged as one; nothing recorded and no field at all are both
+    "unknown" -- neither is guessed into the other."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        heard.FEEDBACK_ROOT = root / "feedback"
+        sources = dict(_SOURCES, **{"kit-a": {"role": "comparison"}})
+        _audition(root / "audition", "p040-violin", "violin", sources=sources)
+        _bank(root, {"violin": {"2026-09-11": 1}})
+
+        against_reference = _note("2026-09-19T10:00:00+00:00", "ok")
+        against_reference["conditions"]["compared_against"] = {
+            "role": "reference",
+            "version": "gm041",
+            "label": "gm041",
+        }
+        against_comparison = _note("2026-09-19T10:01:00+00:00", "ok")
+        against_comparison["conditions"]["compared_against"] = {
+            "role": "comparison",
+            "version": "kit-a",
+            "label": "kit-a",
+        }
+        nothing_played = _note("2026-09-19T10:02:00+00:00", "ok")
+        nothing_played["conditions"]["compared_against"] = None
+        legacy = _note("2026-09-19T10:03:00+00:00", "ok")  # predates the field entirely
+
+        _log(
+            heard.FEEDBACK_ROOT,
+            "p040-violin",
+            [against_reference, against_comparison, nothing_played, legacy],
+        )
+        notes = {n["at"]: n for n in heard.collect([], "")[0]["notes"]}
+        assert notes["2026-09-19T10:00:00+00:00"]["oracle_flag"] == "", notes
+        assert notes["2026-09-19T10:00:00+00:00"]["compared_against"]["version"] == "gm041"
+        assert notes["2026-09-19T10:01:00+00:00"]["oracle_flag"] == "comparison", notes
+        assert notes["2026-09-19T10:02:00+00:00"]["oracle_flag"] == "unknown", notes
+        assert notes["2026-09-19T10:02:00+00:00"]["compared_against"] is None
+        assert notes["2026-09-19T10:03:00+00:00"]["oracle_flag"] == "unknown", notes
+
+
+@_with_scratch
 def test_a_reference_sounding_note_with_no_subject_recorded_does_not_sign_off() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

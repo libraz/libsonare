@@ -22,6 +22,14 @@ exists.
 the subject: it fixes the program, the phrase set and the timbres in one, which
 is what a calibration page wants.
 
+A voice can reach more than one capture, and only the first — the one
+`policy.json` aims it at — is the reference. Every other capture that can
+still supply takes is offered too, under its own `comparison` role rather than
+folded into the reference: the standard kit's page plays the module recording
+it is fitted to AND the sampled library kit it used to be judged against
+instead, side by side rather than one substituted for the other.
+`--no-comparisons` turns this off.
+
 A phrase set belongs to an instrument rather than to the tool — a harpsichord
 has no pedal to lift and a piano has no stops to draw — so each is written for
 what its own instrument is hard to get right, and the generic ones are written
@@ -104,7 +112,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import calibration
 from _repo import REPO_ROOT
 from au_oracle import AuRenderError, render_oracle_au, with_keyswitches
-from bank import Voice, load_capture, parse_selection, voices, write_index
+from bank import Capture, Voice, load_capture, parse_selection, voices, write_index
 from calibration import Variant
 from capture import CORPUS_ROOT, resolve_font, source_for
 from phrases import Take, build_takes
@@ -291,10 +299,50 @@ def moves_the_instrument(overrides: str) -> bool:
     return any(not k.startswith(RIG_KNOB_PREFIX) for k in keys)
 
 
+def comparison_captures(voice: Voice) -> list[Capture]:
+    """Every capture beyond the policy reference that names a genuinely different source.
+
+    `captures_for` can return several captures sharing the reference's own
+    `source_class` -- the standard kit's three module grids are one set of
+    recordings split by decay window for gating, not a second thing to hear --
+    so only the first capture of each OTHER class is offered as a comparison.
+    """
+    if not voice.captures:
+        return []
+    seen = {voice.capture.source_class}
+    out = []
+    for cap in voice.captures[1:]:
+        if cap.source_class in seen:
+            continue
+        seen.add(cap.source_class)
+        out.append(cap)
+    return out
+
+
+#: What a comparison capture is, per source class, without naming a product;
+#: its `detail` carries this since nothing else on the page says it.
+_COMPARISON_KIND = {
+    "module": "the module's own recording",
+    "library": "a modern recording of the same instrument",
+    "dedicated": "a dedicated instrument's recording",
+}
+
+
+def comparison_detail(cap: Capture) -> str:
+    kind = _COMPARISON_KIND.get(cap.source_class, "another recording of the same instrument")
+    return f"{kind} — {cap.label.split(',')[0]}"
+
+
 def build_sources(
-    voice: Voice, timbres: list[dict], variants: list[Variant], di: bool = False
+    voice: Voice,
+    timbres: list[dict],
+    variants: list[Variant],
+    comparisons: list[tuple[Capture, list[dict]]],
+    di: bool = False,
 ) -> dict:
-    """The page's version switch, split into a model row and a reference row.
+    """The page's version switch, split into a model row, a reference row and,
+    where `comparisons` names one, a row of captures beside the reference
+    rather than instead of it.
 
     Seven versions of a take is an ordinary number once a couple of candidate
     settings are in play, and as one undifferentiated strip of buttons it takes
@@ -354,6 +402,14 @@ def build_sources(
             "role": "reference",
             "detail": reference_of,
         }
+    for cap, cap_timbres in comparisons:
+        detail = comparison_detail(cap)
+        for t in cap_timbres:
+            sources[t["id"]] = {
+                "label": t["label"],
+                "role": "comparison",
+                "detail": detail,
+            }
     return sources
 
 
@@ -396,6 +452,123 @@ def reference_note(voice: Voice, timbres: list[dict], model_sends: str = "auto")
     )
 
 
+def render_reference_timbres(
+    cfg: Capture,
+    timbres: list[dict],
+    take: Take,
+    channel: int,
+    total: float,
+    smf: bytes,
+    program: int,
+    bank: int,
+    args,
+    archive: Path | None,
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+    """Every timbre of one capture, rendered or read from the archive.
+
+    Shared by the page's reference and by each capture `comparison_captures`
+    adds beside it, so a comparison is rendered the same way the reference
+    is rather than down a second, looser path. Raises `ReferenceUnavailable`
+    for the failure that makes the WHOLE capture unusable here (a module
+    render error, or a capture naming no plugin); a single timbre the plugin
+    itself cannot reach is printed and left out instead, since the rest of the
+    capture still answers.
+    """
+    held = archived_references(archive, cfg.id, take.id, timbres) if archive is not None else {}
+    renders: dict[str, np.ndarray] = {}
+    fresh: dict[str, np.ndarray] = {}
+    for timbre in timbres:
+        if timbre["id"] in held:
+            renders[timbre["id"]] = held[timbre["id"]]
+            print(f"  {timbre['id']} (archived)", file=sys.stderr)
+            continue
+        if cfg.source_class == "module":
+            # Addressed by the overlay's preset name: a family font renumbers the GS map.
+            ref_channel = int(timbre.get("slot_channel", timbre.get("channel", channel + 1))) - 1
+            try:
+                audio = render_module_reference(
+                    cfg.raw,
+                    timbre,
+                    take.notes,
+                    take.cc_events,
+                    ref_channel,
+                    take.tail_s,
+                    total,
+                    SR,
+                )
+            except (ValueError, RuntimeError, FileNotFoundError) as exc:
+                raise ReferenceUnavailable(
+                    f"{cfg.id}/{timbre['id']}'s module reference did not render: {exc}. "
+                    f"--reference-from holds none of this take either."
+                ) from exc
+            fresh[timbre["id"]] = audio
+            renders[timbre["id"]] = audio
+            print(f"  {timbre['id']}", file=sys.stderr)
+            continue
+        if "plugin" not in cfg.raw:
+            # No other layer may stand in for what a capture cannot supply.
+            raise ReferenceUnavailable(
+                f"{cfg.id}/{timbre['id']} names no plugin and is not a module capture, "
+                f"so no reference can be rendered here, and --reference-from holds none "
+                f"of this take either."
+            )
+        # Built through the same helper the capture path uses, so a timbre
+        # selected by preset reaches the plugin here too.
+        source = source_for(cfg.raw, timbre, tail=f"{take.tail_s:.0f}s", sample_rate=SR)
+        # A slot of a multitimbral rack is NOT selected by the source here,
+        # though: aubounce ignores `--channel` whenever it is given a MIDI file,
+        # because the file supplies its own channels. So the slot that answers is
+        # whichever one sits on the channel the SMF was written on, and every
+        # timbre of a rack renders from that same slot unless the file is
+        # rewritten per timbre. It is silent -- each render has the right length,
+        # the right level and an organ in it, and the two registrations come back
+        # byte-identical.
+        #
+        # The model keeps the take's own channel, which is what makes a note
+        # number a drum rather than a pitch; a reference gets its timbre's,
+        # one-based in the capture definition and zero-based in the file.
+        ref_channel = int(timbre.get("slot_channel", timbre.get("channel", channel + 1))) - 1
+        # A take is written in sounding pitch, so an instrument mapped away from
+        # it needs its own score even when the channel already matches.
+        ref_notes = (
+            [replace(n, note=source.key(n.note)) for n in take.notes]
+            if source.key_offset
+            else take.notes
+        )
+        # A timbre selected from the keyboard needs its own score for the same
+        # reason a rack slot does, and for the same failure: the switch would
+        # simply be absent and every switched timbre would render as the
+        # unswitched instrument, at the right length and level, byte-identical to
+        # its sibling. One switch per onset, since a switch is consumed by the
+        # note it arms rather than latching for the phrase.
+        ref_notes = with_keyswitches(source, ref_notes)
+        # The phrase moves back by the lead, so anything else on its timeline
+        # moves with it. On a take under the sustain pedal, leaving CC64 where it
+        # was would lift the dampers a third of a second early and read as the
+        # variant.
+        lead_s = source.keyswitch_lead_ms / 1000.0
+        ref_cc = tuple((at + lead_s, cc, v) for at, cc, v in take.cc_events)
+        timbre_smf = (
+            smf
+            if (ref_channel == channel and not source.key_offset and not source.keyswitch)
+            else write_smf(
+                ref_notes,
+                program=program,
+                bank=bank,
+                end_pad=take.tail_s,
+                cc_events=ref_cc,
+                channel=ref_channel,
+            )
+        )
+        try:
+            fresh[timbre["id"]] = render_oracle_au(timbre_smf, total, SR, source=source)
+            renders[timbre["id"]] = fresh[timbre["id"]]
+            print(f"  {timbre['id']}", file=sys.stderr)
+        except (AuRenderError, FileNotFoundError) as exc:
+            print(f"  {timbre['id']}: SKIPPED — {exc}", file=sys.stderr)
+    return renders, fresh
+
+
 def render_take(
     take: Take,
     voice: Voice,
@@ -404,6 +577,7 @@ def render_take(
     args,
     variants: list[Variant],
     archive: Path | None,
+    comparisons: list[tuple[Capture, list[dict]]] = (),
     di_state: dict | None = None,
 ) -> dict:
     """Every version of one take, written out, as the manifest item describing it."""
@@ -509,113 +683,56 @@ def render_take(
             print(f"  {variant.name}-di", file=sys.stderr)
 
     cfg = voice.capture
-    held = (
-        archived_references(archive, cfg.id, take.id, timbres)
-        if archive is not None and cfg is not None
-        else {}
-    )
-    fresh: dict[str, np.ndarray] = {}
-    for timbre in timbres:
-        if timbre["id"] in held:
-            renders[timbre["id"]] = held[timbre["id"]]
-            print(f"  {timbre['id']} (archived)", file=sys.stderr)
-            continue
-        if cfg.source_class == "module":
-            # Addressed by the overlay's preset name: a family font renumbers the GS map.
-            ref_channel = int(timbre.get("slot_channel", timbre.get("channel", channel + 1))) - 1
-            try:
-                audio = render_module_reference(
-                    cfg.raw,
-                    timbre,
-                    take.notes,
-                    take.cc_events,
-                    ref_channel,
-                    take.tail_s,
-                    total,
-                    SR,
-                )
-            except (ValueError, RuntimeError, FileNotFoundError) as exc:
-                raise ReferenceUnavailable(
-                    f"{voice.slug}: {cfg.id}/{timbre['id']} is the capture `policy.json` "
-                    f"aims this voice at, and its module reference did not render: {exc}. "
-                    f"--reference-from holds none of this take either, so this page cannot "
-                    f"show the reference it is meant to — playing a different capture's "
-                    f"reference instead is the substitution this page must not make."
-                ) from exc
-            fresh[timbre["id"]] = audio
-            renders[timbre["id"]] = audio
-            print(f"  {timbre['id']}", file=sys.stderr)
-            continue
-        if "plugin" not in cfg.raw:
-            # The policy's capture can supply nothing, and no other layer may stand in for it.
-            raise ReferenceUnavailable(
-                f"{voice.slug}: {cfg.id}/{timbre['id']} names no plugin and is not a "
-                f"module capture, so no reference can be rendered here, and "
-                f"--reference-from holds none of this take either. This is the capture "
-                f"`policy.json` aims this voice at; playing a different layer's capture "
-                f"instead is the substitution this page must not make."
-            )
-        # Built through the same helper the capture path uses, so a timbre
-        # selected by preset reaches the plugin here too.
-        source = source_for(cfg.raw, timbre, tail=f"{take.tail_s:.0f}s", sample_rate=SR)
-        # A slot of a multitimbral rack is NOT selected by the source here,
-        # though: aubounce ignores `--channel` whenever it is given a MIDI file,
-        # because the file supplies its own channels. So the slot that answers is
-        # whichever one sits on the channel the SMF was written on, and every
-        # timbre of a rack renders from that same slot unless the file is
-        # rewritten per timbre. It is silent -- each render has the right length,
-        # the right level and an organ in it, and the two registrations come back
-        # byte-identical.
-        #
-        # The model keeps the take's own channel, which is what makes a note
-        # number a drum rather than a pitch; a reference gets its timbre's,
-        # one-based in the capture definition and zero-based in the file.
-        ref_channel = int(timbre.get("slot_channel", timbre.get("channel", channel + 1))) - 1
-        # A take is written in sounding pitch, so an instrument mapped away from
-        # it needs its own score even when the channel already matches.
-        ref_notes = (
-            [replace(n, note=source.key(n.note)) for n in take.notes]
-            if source.key_offset
-            else take.notes
-        )
-        # A timbre selected from the keyboard needs its own score for the same
-        # reason a rack slot does, and for the same failure: the switch would
-        # simply be absent and every switched timbre would render as the
-        # unswitched instrument, at the right length and level, byte-identical to
-        # its sibling. One switch per onset, since a switch is consumed by the
-        # note it arms rather than latching for the phrase.
-        ref_notes = with_keyswitches(source, ref_notes)
-        # The phrase moves back by the lead, so anything else on its timeline
-        # moves with it. On a take under the sustain pedal, leaving CC64 where it
-        # was would lift the dampers a third of a second early and read as the
-        # variant.
-        lead_s = source.keyswitch_lead_ms / 1000.0
-        ref_cc = tuple((at + lead_s, cc, v) for at, cc, v in take.cc_events)
-        timbre_smf = (
-            smf
-            if (ref_channel == channel and not source.key_offset and not source.keyswitch)
-            else write_smf(
-                ref_notes,
-                program=voice.program,
-                bank=voice.bank,
-                end_pad=take.tail_s,
-                cc_events=ref_cc,
-                channel=ref_channel,
-            )
-        )
+    if cfg is not None and timbres:
         try:
-            fresh[timbre["id"]] = render_oracle_au(timbre_smf, total, SR, source=source)
-            renders[timbre["id"]] = fresh[timbre["id"]]
-            print(f"  {timbre['id']}", file=sys.stderr)
-        except (AuRenderError, FileNotFoundError) as exc:
-            print(f"  {timbre['id']}: SKIPPED — {exc}", file=sys.stderr)
-    # Only a take whose every reference came from the plugin THIS run is
-    # written, so the archive never holds a render that has been through 16-bit
-    # twice. A partial take is left alone rather than topped up.
-    if args.archive_references and cfg is not None and timbres and len(fresh) == len(timbres):
-        archive_references(
-            Path(args.archive_references).expanduser().resolve(), cfg.id, take.id, fresh
-        )
+            got, fresh = render_reference_timbres(
+                cfg, timbres, take, channel, total, smf, voice.program, voice.bank, args, archive
+            )
+        except ReferenceUnavailable as exc:
+            raise ReferenceUnavailable(
+                f"{voice.slug}: {exc} This is the capture `policy.json` aims this voice "
+                f"at; playing a different capture's reference instead is the "
+                f"substitution this page must not make."
+            ) from exc
+        renders.update(got)
+        # Only a take whose every reference came from the plugin THIS run is
+        # written, so the archive never holds a render that has been through
+        # 16-bit twice. A partial take is left alone rather than topped up.
+        if args.archive_references and len(fresh) == len(timbres):
+            archive_references(
+                Path(args.archive_references).expanduser().resolve(), cfg.id, take.id, fresh
+            )
+
+    # Every OTHER capture `comparison_captures` found beside the reference,
+    # rendered the same way and shown under its own role rather than in place
+    # of it (`.claude/rules/synth-bank.md`). A capture that cannot render this
+    # take is a gap in that capture, not in the page: it is skipped rather than
+    # raised, since the reference above already answers the question this take
+    # exists for.
+    for comp, comp_timbres in comparisons:
+        if not comp_timbres:
+            continue
+        try:
+            got, comp_fresh = render_reference_timbres(
+                comp,
+                comp_timbres,
+                take,
+                channel,
+                total,
+                smf,
+                voice.program,
+                voice.bank,
+                args,
+                archive,
+            )
+        except ReferenceUnavailable as exc:
+            print(f"  {comp.id}: comparison SKIPPED — {exc}", file=sys.stderr)
+            continue
+        renders.update(got)
+        if args.archive_references and comp_fresh and len(comp_fresh) == len(comp_timbres):
+            archive_references(
+                Path(args.archive_references).expanduser().resolve(), comp.id, take.id, comp_fresh
+            )
 
     gain = shared_gain(renders)
     tracks = {}
@@ -703,6 +820,13 @@ def render_set(
             if not args.wanted_timbres or t["id"] in args.wanted_timbres
         ]
     )
+    # Every OTHER capture this voice reaches, filtered to the same timbre
+    # selection as the reference so `--timbres` narrows both alike.
+    comparisons = [
+        (cap, [t for t in cap.timbres if not args.wanted_timbres or t["id"] in args.wanted_timbres])
+        for cap in ([] if args.model_only or args.no_comparisons else comparison_captures(voice))
+    ]
+    comparisons = [(cap, ts) for cap, ts in comparisons if ts]
     # A listening page carries the musical take; a measurement run does not, and
     # `--no-music` is for the case where the ten seconds of polyphony are just
     # render time — a sweep across the bank narrowed with `--only`, say.
@@ -723,7 +847,9 @@ def render_set(
     variant_digests: dict[str, set[str]] = {}
     di_state: dict = {}
     for take in selected:
-        item = render_take(take, voice, timbres, out, args, variants, archive, di_state)
+        item = render_take(
+            take, voice, timbres, out, args, variants, archive, comparisons, di_state
+        )
         variant_digests[take.id] = item.pop("_digests")
         items.append(item)
 
@@ -746,7 +872,11 @@ def render_set(
         ),
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "sources": build_sources(
-            voice, timbres, variants, di=any("model-di" in (i.get("tracks") or {}) for i in items)
+            voice,
+            timbres,
+            variants,
+            comparisons,
+            di=any("model-di" in (i.get("tracks") or {}) for i in items),
         ),
         "items": items,
     }
@@ -1000,6 +1130,12 @@ def main() -> int:
     )
     ap.add_argument(
         "--model-only", action="store_true", help="skip the reference renders even where one exists"
+    )
+    ap.add_argument(
+        "--no-comparisons",
+        action="store_true",
+        help="skip every capture beyond the policy reference, even where "
+        "`comparison_captures` finds one",
     )
     ap.add_argument(
         "--no-music",

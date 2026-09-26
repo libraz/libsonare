@@ -15,6 +15,54 @@
   font-weight: 600;
 }
 
+/* What a note about to be sent will be judged against, and the one control
+   that can correct it: the last oracle played is usually right, and the
+   select is for when it is not. */
+.fb-cmp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.cmp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--role) 34%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--role) 10%, var(--panel));
+  color: var(--role);
+  font-size: 12px;
+}
+
+.cmp-chip .dot { background: var(--role); }
+.cmp-chip .cmp-name { font-weight: 600; }
+.cmp-chip .cmp-role { color: var(--ink-dim); font-size: 10.5px; }
+
+/* Nothing has sounded to judge a note against, which a note sent from here
+   would otherwise carry silently -- the one state this chip exists to flag. */
+.cmp-chip.warn {
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--line));
+  background: color-mix(in srgb, var(--warn) 11%, var(--panel));
+  color: var(--warn);
+}
+.cmp-chip.warn .dot { background: var(--warn); }
+
+.cmp-override {
+  margin-left: auto;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 11.5px;
+}
+
 .fb-ask {
   margin: 12px 0 14px;
   padding: 13px 14px 14px;
@@ -138,7 +186,7 @@ textarea {
   color: var(--ink-faint);
 }
 
-.fb-who {
+.fb-who, .fb-cmp {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -151,7 +199,7 @@ textarea {
   font-size: 10.5px;
 }
 
-.fb-who .dot { background: var(--role); }
+.fb-who .dot, .fb-cmp .dot { background: var(--role); }
 
 /* The verdict, in the same three weights the rest of the page uses: the voice
    is fine, the voice is liveable, the voice is a defect. */

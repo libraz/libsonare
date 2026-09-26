@@ -133,7 +133,7 @@ SHIPPED = ("model", "model-di")
 
 
 def roles_of(set_id: str) -> dict[str, str]:
-    """Each version's role on the page -- `model` or `reference` -- by key."""
+    """Each version's role on the page -- `model`, `reference` or `comparison` -- by key."""
     try:
         manifest = json.loads(
             (AUDITION_ROOT / set_id / "manifest.json").read_text(encoding="utf-8")
@@ -254,6 +254,22 @@ def where(entry: dict, voice: dict, roles: dict[str, str] | None = None) -> str:
     return " · ".join(b for b in bits if b)
 
 
+def oracle_flag(cond: dict) -> str:
+    """`""` when a note was judged against the policy reference; the reason otherwise.
+
+    `"unknown"` covers a note with no `compared_against` at all -- one written
+    before the page recorded it, or one recorded explicitly as nothing having
+    played yet -- since neither carries an oracle to check the verdict
+    against. `"comparison"` is a real answer, not a gap: the note is dated and
+    attributable, it was just taken against the layer the policy did not aim
+    this voice at.
+    """
+    ca = cond.get("compared_against")
+    if not isinstance(ca, dict) or not ca.get("role"):
+        return "unknown"
+    return "" if ca["role"] == "reference" else "comparison"
+
+
 def digest(set_id: str, entries: list[dict]) -> dict:
     """One voice's notes, with what is known about the voice around them."""
     voice = voice_of(set_id)
@@ -266,6 +282,7 @@ def digest(set_id: str, entries: list[dict]) -> dict:
         # The latest of them: a fill strikes six toms and a note about it is
         # stale as soon as any one of the six has moved under it.
         moved = max((facts.get(u, (0, ""))[1] for u in units), default="")
+        cond = entry.get("conditions") or {}
         notes.append(
             {
                 "at": at,
@@ -275,6 +292,9 @@ def digest(set_id: str, entries: list[dict]) -> dict:
                 "lang": str(entry.get("lang") or ""),
                 "where": where(entry, voice, roles),
                 "judged": judged(entry, roles),
+                # The oracle the note was judged against; flag is empty for the policy reference.
+                "compared_against": cond.get("compared_against"),
+                "oracle_flag": oracle_flag(cond),
                 "units": units,
                 "last_moved": moved,
                 # Compared as dates, which is all the log records to a day's
@@ -407,9 +427,11 @@ def render(voices: list[dict], full: bool) -> str:
                 else ""
             )
             unit = f"[{'/'.join(note['units'])}] " if voice["kit"] and note["units"] else ""
+            # A verdict against a non-reference or unknown oracle is marked.
+            flag = f"  ⚠ oracle={note['oracle_flag']}" if note["oracle_flag"] else ""
             lines.append(
                 f"  {note['at'][:16]}  {note['grade'] or '-':<16} "
-                f"{note['tag'] or '-':<23} {unit}{note['where']}{mark}"
+                f"{note['tag'] or '-':<23} {unit}{note['where']}{mark}{flag}"
             )
             if note["text"]:
                 for row in note["text"].splitlines():

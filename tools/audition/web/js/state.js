@@ -30,6 +30,8 @@ export const state = {
   display: [],         // slots in the order they are shown, which is what 1..9 count
   wantKey: '',         // version to re-select when the take or the set changes
   lastByRole: {},      // role -> the slot last chosen in it, for the swap key
+  lastOracle: null,    // { role, key } -- the last reference/comparison version selected
+  oracleOverride: null, // { role, key } -- a listener's correction to lastOracle, or null
   take: null,          // { id, keys[], buffers{}, rms{}, duration, specs{}, peaks{} }
   ctx: null,
   sources: [],
@@ -57,18 +59,14 @@ export const SPEC_FLOOR_DB = -78;
  * which is the rule `shape/hits.py` groups its rows by. */
 export const FUSED_S = 0.035;
 
-//: Source roles, in the order their rows are shown. A manifest that declares
-//: none puts every version in one unlabelled row, which is what a hand-made
-//: directory gets.
-export const ROLE_ORDER = ['model', 'reference'];
+//: Source roles, in the order their rows are shown; a manifest that declares
+//: none puts every version in one unlabelled row. `comparison` is a capture
+//: heard beside the reference, never the target.
+export const ROLE_ORDER = ['model', 'reference', 'comparison'];
 
-/* The two roles are the page's whole subject, so each one keeps a colour and
- * keeps it everywhere: the row it is in, the button that selects it, the trace
- * on the waveform, the ramp the spectrogram is painted with, and the banner
- * saying what is sounding. Reading these out of the stylesheet rather than
- * repeating them here is what stops the canvas drifting away from the CSS — the
- * canvas takes numbers and the rest takes a custom property, and two spellings
- * of one colour is how they came to disagree. */
+/* Each role keeps one colour on its row, button, waveform trace, spectrogram
+ * ramp and banner. Read from the stylesheet so the canvas cannot drift from
+ * the CSS. */
 const ROLE_RGB = {};
 
 export function roleRgb(role) {
@@ -109,6 +107,15 @@ export const pathOf = (key) => (sourceOf(key).path === 'direct' ? 'direct' : '')
 
 /// The block a version belongs to: one question, one block.
 export const blockOf = (key) => `${roleOf(key)}|${pathOf(key)}`;
+
+/// Every source a feedback note could be judged against, reference before
+/// comparison, in the order the manifest lists them within each role.
+export function oracleSources() {
+  const sources = (state.manifest && state.manifest.sources) || {};
+  return ['reference', 'comparison'].flatMap((role) =>
+    Object.keys(sources).filter((key) => sources[key].role === role)
+      .map((key) => ({ role, key, label: sourceLabel(key) })));
+}
 
 export const notesKey = () => `audition:picks-note:${state.setId || 'untitled'}`;
 export const picksKey = () => `audition:picks:${state.setId || 'untitled'}`;

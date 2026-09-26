@@ -14,7 +14,7 @@ import {
 } from './state.js';
 import { t, phrase } from './i18n.js';
 import { activeKey, applyGains, renderLevels, span, startAt } from './player.js';
-import { recordPreference } from './feedback.js';
+import { recordPreference, renderComparedAgainst } from './feedback.js';
 import { renderIdent, writeRoute } from './address.js';
 
 /* Slots in the order they are shown, which is the order `1`…`9` count in.
@@ -188,11 +188,14 @@ function fillHead({ role, path, head, seg }) {
  * The direct path is an axis, so its block says what it is for rather than
  * asking anything: choosing between two paths is not a judgement about the
  * voice.
+ *
+ * A comparison is neither model nor target, so its block only says what it is.
  */
 function hintKey(role, path) {
   if (state.blind) return 'ver.hintBlind';
   if (path) return 'ver.hintDirect';
   if (role === 'reference') return 'ver.hintReference';
+  if (role === 'comparison') return 'ver.hintComparison';
   if (!role) return 'ver.hint';
   return hasReference() ? 'ver.hintModel' : 'ver.hintModelAlone';
 }
@@ -296,6 +299,11 @@ export function setVersion(slot, { play = false } = {}) {
     state.wantKey = activeKey();
     const role = roleOf(activeKey());
     if (role) state.lastByRole[role] = slot;
+    // Only reference and comparison versions move the judged oracle.
+    if (role === 'reference' || role === 'comparison') {
+      state.lastOracle = { role, key: activeKey() };
+      renderComparedAgainst();
+    }
   }
   markVersion();
   // Two ways to switch, and they answer different questions. Crossfading in

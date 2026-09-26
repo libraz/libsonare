@@ -2,12 +2,13 @@
    decoration at all, and data set in the monospace so 188 rows align into
    columns the eye can run down. The sans is for prose only.
 
-   ONE COLOUR PER ROLE, AND IT IS THE PAGE'S ONLY STRONG COLOUR. Teal is what
-   the library produced and amber is what it is being measured against, and the
-   pair holds everywhere: the dot on a button, the block a version sits in, the
-   trace on the waveform, the ramp the spectrogram is painted with, the banner
-   above the transport and the chip on a listening note. Nothing else on the
-   page may use either of them for anything else, which is why "needs
+   ONE COLOUR PER ROLE, AND EACH IS ONE OF THE PAGE'S ONLY STRONG COLOURS. Teal
+   is what the library produced, amber is what it is being measured against,
+   and violet is a capture offered beside the reference rather than as it —
+   the set holds everywhere: the dot on a button, the block a version sits in,
+   the trace on the waveform, the ramp the spectrogram is painted with, the
+   banner above the transport and the chip on a listening note. Nothing else on
+   the page may use any of them for anything else, which is why "needs
    attention" is a red and not the sand it used to be — the sand became a
    meaning. */
 
@@ -22,14 +23,17 @@
   --ink-dim: #7f8899;
   --ink-faint: #59616e;
 
-  /* The two sides of every comparison. Kept as components as well as colours:
-     the canvases take numbers and everything else takes a custom property, and
-     two spellings of one colour is how they came to disagree. */
+  /* The two sides of every comparison, plus a third for a capture that is not
+     either side of it. Kept as components as well as colours: the canvases
+     take numbers and everything else takes a custom property, and two
+     spellings of one colour is how they came to disagree. */
   --role-model-rgb: 94 199 168;
   --role-reference-rgb: 226 163 63;
+  --role-comparison-rgb: 163 140 214;
   --role-other-rgb: 133 141 155;
   --role-model: rgb(94 199 168);
   --role-reference: rgb(226 163 63);
+  --role-comparison: rgb(163 140 214);
   --role-other: rgb(133 141 155);
 
   --accent: var(--role-model);
@@ -71,6 +75,7 @@
 
 .role-model { --role: var(--role-model); --role-rgb: var(--role-model-rgb); }
 .role-reference { --role: var(--role-reference); --role-rgb: var(--role-reference-rgb); }
+.role-comparison { --role: var(--role-comparison); --role-rgb: var(--role-comparison-rgb); }
 .role-other { --role: var(--role-other); --role-rgb: var(--role-other-rgb); }
 
 * { box-sizing: border-box; }

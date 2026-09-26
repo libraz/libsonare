@@ -65,11 +65,13 @@ const STRINGS = {
 
     'role.model': 'libsonare',
     'role.reference': 'reference',
+    'role.comparison': 'comparison',
     'role.other': 'versions',
     'path.direct': 'no rig',
     'path.direct.long': 'the same voice with the bank\u2019s rig cleared \u2014 where the instrument itself stops',
     'role.model.long': 'libsonare — what the library produces',
     'role.reference.long': 'reference — what it is being compared against',
+    'role.comparison.long': 'comparison — a capture offered beside the reference, not instead of it',
 
     'subj.slot': 'slot',
     'subj.gm': 'GM {n}',
@@ -98,6 +100,16 @@ const STRINGS = {
     'prov.offTarget': 'not what this slot is aimed at',
     'prov.unclassified': 'the capture does not say what answered it',
 
+    'cmp.label': 'compared against:',
+    'cmp.unplayed': 'not played yet',
+    'cmp.unplayedTitle': 'No reference or comparison has sounded in this set yet.',
+    'cmp.manualTitle': 'Set by hand, overriding the last one played.',
+    'cmp.autoTitle': 'The last reference or comparison version played.',
+    'cmp.overrideAuto': '(the last one played)',
+    'cmp.overrideTitle': 'If the last one played is not what this note is about, name it here.',
+    'cmp.unknown': 'unknown',
+    'cmp.unknownTitle': 'This note predates recording what it was judged against.',
+
     'ver.hint': 'Versions of the same take, to be chosen between — the line above says what the selected one is meant to sound like.',
     'ver.baseline': 'as it ships',
     'ver.baselineDirect': 'as it ships, DI',
@@ -105,6 +117,7 @@ const STRINGS = {
     'ver.hintModel': 'Candidates — pick the one CLOSEST TO THE REFERENCE, which is not always the one you like most.',
     'ver.hintModelAlone': 'No reference for this slot, so there is nothing to be near: pick the one that could pass for the real instrument.',
     'ver.hintReference': 'The target itself, not candidates: several recordings of the instrument this slot is aimed at.',
+    'ver.hintComparison': 'Not the target and not a candidate: another capture of the same instrument, offered for context.',
     'ver.hintDirect': 'The same settings with the rig cleared. A path to hear them down, not another set to choose from.',
     'ver.hintBlind': 'Names hidden. Switching decides nothing — answer each take with “this one” or “could not tell”.',
 
@@ -302,11 +315,13 @@ const STRINGS = {
 
     'role.model': 'libsonare',
     'role.reference': 'リファレンス',
+    'role.comparison': '比較',
     'role.other': 'バージョン',
     'path.direct': 'リグなし',
     'path.direct.long': 'バンクのリグを外した同じ音色 — 楽器そのものが終わる地点',
     'role.model.long': 'libsonare — このライブラリが出している音',
     'role.reference.long': 'リファレンス — 目標にしている音',
+    'role.comparison.long': '比較 — リファレンスの代わりではなく、その横に添えたキャプチャ',
 
     'subj.slot': 'スロット',
     'subj.gm': 'GM {n}',
@@ -335,6 +350,16 @@ const STRINGS = {
     'prov.offTarget': 'このスロットが目指している音源ではない',
     'prov.unclassified': 'キャプチャに音源の種別が書かれていない',
 
+    'cmp.label': '比較対象:',
+    'cmp.unplayed': '未再生',
+    'cmp.unplayedTitle': 'このセットではまだリファレンスも比較も再生されていません。',
+    'cmp.manualTitle': '手動で指定した比較対象です（直前に再生したものより優先されます）。',
+    'cmp.autoTitle': '直前に再生したリファレンスまたは比較です。',
+    'cmp.overrideAuto': '（直前に再生したもの）',
+    'cmp.overrideTitle': '直前に再生したものがこのメモの対象と違う場合は、ここで指定してください。',
+    'cmp.unknown': '不明',
+    'cmp.unknownTitle': 'この項目が記録される前に書かれたメモです。',
+
     'ver.hint': '同じテイクの別バージョンです。聴き比べて良いものを選んでください — 選んだものが何を狙った設定かは上の行が説明します。',
     'ver.baseline': '出荷状態',
     'ver.baselineDirect': '出荷状態（DI）',
@@ -342,6 +367,7 @@ const STRINGS = {
     'ver.hintModel': '候補です。リファレンスに最も近いものを選んでください（好きなものとは限りません）。',
     'ver.hintModelAlone': 'このスロットにリファレンスはありません。実在の楽器の音として通用するものを選んでください。',
     'ver.hintReference': '狙う目標そのものです。候補ではなく、この楽器のリファレンス録音が複数あります。',
+    'ver.hintComparison': '目標でも候補でもありません。参考として添えた、同じ楽器の別のキャプチャです。',
     'ver.hintDirect': '同じ設定をリグなしで鳴らしたものです。選ぶ対象ではなく、聴く経路です。',
     'ver.hintBlind': '名前を伏せています。切り替えても何も決まりません。テイクごとに「これにする」か「区別できない」で答えてください。',
 

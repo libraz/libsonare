@@ -349,7 +349,13 @@ def test_the_index_marks_each_voice_with_the_worst_thing_said_about_it() -> None
         )
         quiet = serve.feedback_path("p040-violin")
         serve.append_feedback(
-            quiet, {"at": "2026-09-05T00:00:00+00:00", "grade": "ok", "tag": "ok"}
+            quiet,
+            {
+                "at": "2026-09-05T00:00:00+00:00",
+                "grade": "ok",
+                "tag": "ok",
+                "conditions": {"compared_against": {"role": "reference", "version": "gm041"}},
+            },
         )
 
         index = serve.feedback_index()
@@ -357,9 +363,12 @@ def test_the_index_marks_each_voice_with_the_worst_thing_said_about_it() -> None
         assert index["p081-lead"]["n"] == 3, index
         assert index["p081-lead"]["prefer"] == 1, index
         assert index["p081-lead"]["last"] == "2026-09-20T00:00:00+00:00", index
+        # None of the three records `compared_against`, so all count as off-reference.
+        assert index["p081-lead"]["off_reference"] == 3, index
         # A voice nobody has faulted is not the same as one nobody has opened,
         # and the second must not appear in the index at all.
         assert index["p040-violin"]["worst"] == "ok", index
+        assert index["p040-violin"]["off_reference"] == 0, index
         assert "p019-organ" not in index, index
 
 

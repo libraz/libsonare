@@ -77,6 +77,9 @@ export async function loadSet(id, want) {
   state.itemIndex = i >= 0 ? i : 0;
   state.versionIndex = 0;
   state.lastByRole = {};
+  // Per-set: the previous voice's last oracle says nothing about this one.
+  state.lastOracle = null;
+  state.oracleOverride = null;
   buildTakeList();
   await loadFeedback();
   if (state.items.length) await selectTake(state.itemIndex);

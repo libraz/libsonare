@@ -16,9 +16,9 @@
 
 'use strict';
 
-import { $, el, state, roleClass, roleOf, sourceLabel } from './state.js';
+import { $, el, state, roleClass, roleOf, sourceLabel, oracleSources } from './state.js';
 import { t, phrase, tree, currentLang } from './i18n.js';
-import { conditions } from './player.js';
+import { comparedAgainst, conditions } from './player.js';
 
 const fb = {
   node: null,      // the question on screen, or null once an answer is final
@@ -86,6 +86,60 @@ function renderComposer() {
   idk.type = 'button';
   idk.addEventListener('click', () => unsure(fb.node));
   box.append(idk);
+}
+
+/* --------------------------------------------------------- compared against */
+
+/* Which oracle a note is about: the last reference or comparison played in
+ * this set, which the select beside it can correct. */
+
+export function renderComparedAgainst() {
+  const chip = $('cmpChip');
+  if (!chip) return;
+  const ca = comparedAgainst();
+  chip.replaceChildren();
+  chip.className = 'cmp-chip';
+  if (!ca) {
+    // Absent is a state worth flagging rather than a quiet default: a note
+    // sent from here carries no oracle, which is the one thing this whole
+    // feature exists to stop happening unnoticed.
+    chip.classList.add(roleClass(''), 'warn');
+    chip.append(el('span', 'dot'), el('span', '', t('cmp.unplayed')));
+    chip.title = t('cmp.unplayedTitle');
+  } else {
+    chip.classList.add(roleClass(ca.role));
+    chip.append(
+      el('span', 'dot'),
+      el('span', 'cmp-name', ca.label),
+      el('span', 'cmp-role', `(${t(`role.${ca.role}`)})`),
+    );
+    chip.title = ca.chosen === 'manual' ? t('cmp.manualTitle') : t('cmp.autoTitle');
+  }
+  const sel = $('cmpOverride');
+  if (sel) sel.value = state.oracleOverride ? state.oracleOverride.key : '';
+}
+
+/// Rebuilt per set, so it only offers this manifest's own oracles.
+function buildComparedAgainstOverride() {
+  const sel = $('cmpOverride');
+  if (!sel) return;
+  sel.replaceChildren();
+  const auto = el('option', '', t('cmp.overrideAuto'));
+  auto.value = '';
+  sel.append(auto);
+  for (const src of oracleSources()) {
+    const opt = el('option', '', `${t(`role.${src.role}`)}: ${src.label}`);
+    opt.value = src.key;
+    sel.append(opt);
+  }
+  // Left at auto; `renderComparedAgainst` applies any override in force.
+}
+
+function onOverrideChange(ev) {
+  const key = ev.target.value;
+  const found = key ? oracleSources().find((s) => s.key === key) : null;
+  state.oracleOverride = found ? { role: found.role, key: found.key } : null;
+  renderComparedAgainst();
 }
 
 /* ------------------------------------------------------------------- send */
@@ -176,7 +230,10 @@ async function send() {
     text,
     // Unattached, a note is about the voice rather than about the moment, so
     // it still has to carry which voice: that is what the log is keyed by.
-    conditions: $('fbAttach').checked ? conditions() : { set: state.setId },
+    // The judged oracle survives un-attaching, unlike the take and playhead.
+    conditions: $('fbAttach').checked
+      ? conditions()
+      : { set: state.setId, compared_against: comparedAgainst() },
   }, 'fb.sent', () => {
     $('fbComment').value = '';
     resetComposer();
@@ -251,6 +308,27 @@ const clock = (iso) => {
   });
 };
 
+/// A saved note's oracle: recorded, explicitly none, or unknown (predates the field).
+function comparedAgainstChip(c) {
+  const chip = el('span', 'fb-cmp');
+  if (!('compared_against' in c)) {
+    chip.classList.add(roleClass(''));
+    chip.append(el('span', 'dot'), el('span', '', t('cmp.unknown')));
+    chip.title = t('cmp.unknownTitle');
+    return chip;
+  }
+  const ca = c.compared_against;
+  if (!ca) {
+    chip.classList.add(roleClass(''));
+    chip.append(el('span', 'dot'), el('span', '', t('cmp.unplayed')));
+    return chip;
+  }
+  chip.classList.add(roleClass(ca.role));
+  chip.append(el('span', 'dot'), el('span', '', ca.label || ca.version));
+  chip.title = t(`role.${ca.role}`);
+  return chip;
+}
+
 function entryEl(entry) {
   const row = el('div', 'fb-entry');
   const head = el('div', 'fb-entry-head');
@@ -267,6 +345,7 @@ function entryEl(entry) {
     chip.classList.add(roleClass(''));
     head.append(chip);
   }
+  head.append(comparedAgainstChip(c));
   if (c.take) head.append(el('span', 'fb-take', c.take));
   head.append(el('span', 'grow'));
   head.append(el('span', 'fb-when', clock(entry.at)));
@@ -310,6 +389,8 @@ export async function loadFeedback() {
   }
   resetComposer();
   renderRecent();
+  buildComparedAgainstOverride();
+  renderComparedAgainst();
 }
 
 /// The composer and the log are re-rendered wholesale on a language change. The
@@ -319,6 +400,8 @@ export function refreshFeedback() {
   say('');
   renderComposer();
   renderRecent();
+  buildComparedAgainstOverride();
+  renderComparedAgainst();
 }
 
 export function wireFeedback() {
@@ -331,4 +414,5 @@ export function wireFeedback() {
   $('fbComment').addEventListener('keydown', (ev) => {
     if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') { ev.preventDefault(); send(); }
   });
+  $('cmpOverride').addEventListener('change', onOverrideChange);
 }
