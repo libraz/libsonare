@@ -121,8 +121,7 @@ class FdnPlate {
     const float level = std::clamp(strike_level, 1.0e-3f, 1.0f);
     stop_ratio_ =
         cascade_drop_db > 0.0f ? std::pow(10.0f, -0.1f * cascade_drop_db) / (level * level) : 0.0f;
-    // Two octaves under the corner the drop doubles (crash: 500 Hz ~10 dB, 100-250 Hz 40-60 dB
-    // down).
+    // Two octaves under the corner the drop doubles, as the crash's lowest modes fall.
     deep_stop_ = stop_ratio_ * stop_ratio_ * level * level;
     deep_a_ = cascade_hz > 0.0f && cascade_drop_db > 0.0f
                   ? 1.0f - std::exp(-sonare::constants::kTwoPi *
