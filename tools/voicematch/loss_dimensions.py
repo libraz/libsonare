@@ -49,6 +49,7 @@ LOSS_TERMS = (
     "bright",
     "tonal",
     "rise",
+    "strike",
     "ring",
     "kit",
 )
@@ -135,6 +136,8 @@ PITCHED_TERMS = (
 #: the body. Every other spectral term integrates over the hit, so a crash that
 #: strikes dull and washes bright and one bright from the first millisecond
 #: score the same on all of them.
+#: `strike` is the lean of the first 15 ms: `rise` differences it away, and `tilt`
+#: read a snare 11 dB dark at the strike as 6 dB too bright (notches between modes).
 PERCUSSION_TERMS = (
     "band",
     "bdecay",
@@ -142,6 +145,7 @@ PERCUSSION_TERMS = (
     "bright",
     "tonal",
     "rise",
+    "strike",
     "ring",
     "lf",
     "kit",

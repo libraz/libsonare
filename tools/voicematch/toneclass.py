@@ -236,6 +236,8 @@ PERCUSSION_WEIGHTS: dict[str, float] = {
     # Which way the colour moves once struck; gated beside them for the same
     # reason.
     "rise": 1.0,
+    # The colour of the strike itself, which `rise` differences away.
+    "strike": 1.0,
     # How long it rings, in the doublings the module grids gate it in.
     "ring": 1.0,
     # Weighted as heavily as the whole band profile it is drawn from, because

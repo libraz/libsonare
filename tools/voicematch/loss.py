@@ -772,6 +772,7 @@ def percussion_terms(
         return {**{name: 0.0 for name in LOSS_TERMS}, "mss": mss, "comparable": 0.0}
     totals = {name: 0.0 for name in LOSS_TERMS}
     band_bins = bdecay_bins = tilt_hits = bright_hits = tonal_hits = rise_hits = ring_hits = 0
+    strike_hits = 0
     # See `CellCount` and the pitched reducer: how much of each capped aggregate
     # is a comparison rather than a cap standing in for one.
     cells = {t: CellCount() for t in ("band", "bdecay", "modes")}
@@ -791,6 +792,10 @@ def percussion_terms(
         if rise_m is not None and rise_o is not None:
             totals["rise"] += abs(rise_m - rise_o)
             rise_hits += 1
+        strike_m, strike_o = m.get("tilt_strike_db"), o.get("tilt_strike_db")
+        if strike_m is not None and strike_o is not None:
+            totals["strike"] += abs(strike_m - strike_o)
+            strike_hits += 1
         ring = ring_doublings(m, o)
         if ring is not None:
             totals["ring"] += abs(ring)
@@ -872,6 +877,7 @@ def percussion_terms(
     out["bright_hits"] = float(bright_hits)
     out["tonal_hits"] = float(tonal_hits)
     out["rise_hits"] = float(rise_hits)
+    out["strike_hits"] = float(strike_hits)
     out["ring_hits"] = float(ring_hits)
     for term, tally in cells.items():
         out.update(tally.out(term))

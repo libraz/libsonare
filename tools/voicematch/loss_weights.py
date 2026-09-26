@@ -71,9 +71,10 @@ TERM_UNITS = {
     "tilt": 1.0,
     "bright": 5.0,
     # A decibel of flatness, the unit the gate records `tonality` in, and a
-    # decibel of tilt for `tilt_rise`.
+    # decibel of tilt for `tilt_rise` and for the strike's own tilt.
     "tonal": 1.0,
     "rise": 1.0,
+    "strike": 1.0,
     # The gate's own floor on `ring`: a sixth of a doubling.
     "ring": 0.17,
     # A tenth of a doubling: about a semitone and a half of pitch, 7 % of a
@@ -243,6 +244,7 @@ TERM_COUNT_KEYS = {
     "bright": "bright_hits",
     "tonal": "tonal_hits",
     "rise": "rise_hits",
+    "strike": "strike_hits",
     "ring": "ring_hits",
     "lf": "lf_notes",
     # The one most likely to go blind of any of them: a relation is dropped

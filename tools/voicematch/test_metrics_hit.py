@@ -28,7 +28,7 @@ from metrics import (
     channel_width,
     spectral_flatness_db,
 )
-from metrics_hit import HIT_TONE_WINDOW_S
+from metrics_hit import HIT_TONE_WINDOW_S, tilt_rise_db, tilt_strike_db
 from metrics_signal import _spectrum
 from smf import Note
 
@@ -211,3 +211,14 @@ def test_a_hit_measured_without_its_channels_reports_no_image(rng):
     assert analyze_hit(hit, SR, note, 0.4).stereo_width is None
     two = np.stack([hit, rng.standard_normal(len(hit))], axis=1)
     assert analyze_hit(hit, SR, note, 0.4, stereo=two).stereo_width > 0.9
+
+
+def test_a_crack_inside_the_first_millisecond_is_read_where_the_rise_cannot_see_it(rng):
+    """A contact over by 1 ms sits where the rise's Hann window weighs almost nothing."""
+    t = np.arange(int(0.1 * SR)) / SR
+    body = np.sin(2 * np.pi * 200.0 * t) * np.exp(-t / 0.05)
+    cracked = body + 0.5 * rng.standard_normal(len(t)) * np.exp(-t / 0.0005)
+    assert tilt_strike_db(cracked, SR) > tilt_strike_db(body, SR) + 10.0
+    assert tilt_rise_db(cracked, SR) == pytest.approx(tilt_rise_db(body, SR), abs=1.0)
+    # Too short to hold the window at all: no reading rather than a tilt.
+    assert tilt_strike_db(cracked[:32], SR) is None

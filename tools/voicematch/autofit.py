@@ -2278,6 +2278,15 @@ def main() -> int:
         "integrated spectral term has summed away",
     )
     parser.add_argument(
+        "--w-strike",
+        type=float,
+        default=None,
+        dest="w_strike",
+        help="drum fits: weight on the hit's tilt over its first 15 ms against "
+        "the reference's. `--w-rise` is a difference and cannot see a strike "
+        "and a body that are too dark together",
+    )
+    parser.add_argument(
         "--w-ring",
         type=float,
         default=None,

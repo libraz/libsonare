@@ -102,6 +102,7 @@ TERM_UNIT_NAMES = {
     "bright": "% of the reference centroid",
     "tonal": "dB of spectral flatness",
     "rise": "dB of tilt change, strike to body",
+    "strike": "dB of tilt over the first 15 ms",
     "ring": "doublings of the time to fall 20 dB",
     "kit": "doublings",
 }
@@ -132,6 +133,8 @@ TERM_MEANS = {
     "ring": "how long the hit rings — the time it takes to fall 20 dB, in doublings",
     "rise": "whether the hit's colour moves after the strike — its tilt 30-60 ms in "
     "against its first 15 ms",
+    "strike": "the colour of the strike itself — the tilt of the first 15 ms, which "
+    "`rise` differences away",
     "modes": "the partials as measured — where they actually are, not where a "
     "harmonic series predicts. The only pitched reading a bar, a bell "
     "or a membrane has",

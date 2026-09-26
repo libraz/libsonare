@@ -135,6 +135,49 @@ RISE_BODY_S = (0.030, 0.060)
 RISE_FFT = 8192
 
 
+def _window_tilt_db(
+    seg: np.ndarray,
+    sr: int,
+    window: tuple[float, float],
+    max_band_hz: float | None,
+    taper=np.hanning,
+) -> float | None:
+    """`band_tilt_db` of one slice of the hit, normalised to that slice's loudest band."""
+    keep = band_edge_index(max_band_hz)
+    a, b = window
+    win = np.asarray(seg[int(a * sr) : int(b * sr)], dtype=np.float64)
+    if len(win) < 64 or not np.any(win):
+        return None
+    n = max(RISE_FFT, len(win))
+    power = np.abs(np.fft.rfft(win * taper(len(win)), n)) ** 2
+    freqs = np.fft.rfftfreq(n, 1.0 / sr)
+    bands = np.asarray(
+        _db(np.sqrt(_band_power(freqs, power, THIRD_OCTAVE_CENTERS, THIRD_OCTAVE_RATIO))),
+        dtype=np.float64,
+    )
+    bands = np.maximum(bands - float(bands[:keep].max()), BAND_FLOOR_DB)
+    if keep < len(bands):
+        bands[keep:] = BAND_FLOOR_DB
+    return band_tilt_db(list(bands))
+
+
+def _falling_half_hann(n: int) -> np.ndarray:
+    """The second half of a Hann window: full weight at the onset, zero at the end."""
+    return np.cos(0.5 * np.pi * np.arange(n) / n) ** 2
+
+
+def tilt_strike_db(seg: np.ndarray, sr: int, max_band_hz: float | None = None) -> float | None:
+    """The hit's tilt over its first 15 ms, weighted toward the onset, in dB.
+
+    `tilt_rise_db` is a difference, so a strike and a body both too dark by the
+    same amount read as a match on it. Its Hann window also gives the first 2 ms
+    under a sixth of full weight, which is where a stick's contact lies: moving a
+    snare's contact from 0.07 to 0.4 ms put 20 dB into its 2 kHz octave there and
+    moved that reading by 0.1 dB, against 4.6 dB here.
+    """
+    return _window_tilt_db(seg, sr, RISE_STRIKE_S, max_band_hz, _falling_half_hann)
+
+
 def tilt_rise_db(seg: np.ndarray, sr: int, max_band_hz: float | None = None) -> float | None:
     """How far the hit's tilt moves from the strike to the body, in dB.
 
@@ -145,27 +188,11 @@ def tilt_rise_db(seg: np.ndarray, sr: int, max_band_hz: float | None = None) -> 
     millisecond, and both can integrate to the same profile. Positive is a hit
     that brightens.
     """
-    tilts = []
-    keep = band_edge_index(max_band_hz)
-    for a, b in (RISE_STRIKE_S, RISE_BODY_S):
-        win = np.asarray(seg[int(a * sr) : int(b * sr)], dtype=np.float64)
-        if len(win) < 64 or not np.any(win):
-            return None
-        n = max(RISE_FFT, len(win))
-        power = np.abs(np.fft.rfft(win * np.hanning(len(win)), n)) ** 2
-        freqs = np.fft.rfftfreq(n, 1.0 / sr)
-        bands = np.asarray(
-            _db(np.sqrt(_band_power(freqs, power, THIRD_OCTAVE_CENTERS, THIRD_OCTAVE_RATIO))),
-            dtype=np.float64,
-        )
-        bands = np.maximum(bands - float(bands[:keep].max()), BAND_FLOOR_DB)
-        if keep < len(bands):
-            bands[keep:] = BAND_FLOOR_DB
-        tilt = band_tilt_db(list(bands))
-        if tilt is None:
-            return None
-        tilts.append(tilt)
-    return float(tilts[1] - tilts[0])
+    strike = _window_tilt_db(seg, sr, RISE_STRIKE_S, max_band_hz)
+    body = _window_tilt_db(seg, sr, RISE_BODY_S, max_band_hz)
+    if strike is None or body is None:
+        return None
+    return float(body - strike)
 
 
 HIT_TONE_WINDOW_S = 0.30
@@ -385,6 +412,9 @@ class HitMetrics:
     #: The body's tilt minus the strike's; `None` where the hit is shorter than
     #: the body window.
     tilt_rise_db: float | None
+    #: The strike's own tilt, which the rise is taken from; `None` where the
+    #: hit is too short to transform.
+    tilt_strike_db: float | None
     #: The tonal part, for the two thirds of a kit that has one. Empty for a
     #: cymbal or a shaker, which is an absence rather than a pitch of zero.
     modal_hz: list[float]
@@ -526,6 +556,7 @@ def analyze_hit(
 
     tone = hit_tone(seg, sr, max_band_hz=max_band_hz)
     rise = tilt_rise_db(seg, sr, max_band_hz)
+    strike = tilt_strike_db(seg, sr, max_band_hz)
     drop = pitch_drop(seg, sr, tone["tone_f0_hz"])
 
     return HitMetrics(
@@ -542,6 +573,7 @@ def analyze_hit(
         ],
         centroid_hz=round(centroid, 1),
         tilt_rise_db=None if rise is None else round(rise, 2),
+        tilt_strike_db=None if strike is None else round(strike, 2),
         onset_ms=round((onset - note.start) * 1000.0, 2),
         attack_ms=round(attack_ms, 2),
         attack_floored=attack_ms <= ATTACK_FLOOR_MS,

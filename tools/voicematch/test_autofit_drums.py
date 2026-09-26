@@ -112,6 +112,7 @@ def test_a_drum_fit_weights_the_percussion_terms_not_the_harmonic_ones():
         "bright",
         "tonal",
         "rise",
+        "strike",
         "ring",
         "lf",
         "env",
@@ -234,6 +235,18 @@ def test_the_order_the_colour_arrives_in_is_scored_where_integrated_terms_cannot
     assert terms["rise"] == pytest.approx(18.0)
     assert terms["rise_hits"] == 1.0
     assert percussion_terms([_hit(bands, [-20.0])], [ref])["rise_hits"] == 0.0
+
+
+def test_a_strike_too_dark_is_scored_where_the_rise_and_the_whole_hit_tilt_agree():
+    """A strike and a body darker together keep the rise, and the profile keeps its tilt."""
+    bands = [0.0, -6.0, -12.0]
+    ref = {**_hit(bands, [-20.0]), "tilt_rise_db": 10.0, "tilt_strike_db": -10.0}
+    dark = {**_hit(bands, [-20.0]), "tilt_rise_db": 10.0, "tilt_strike_db": -17.0}
+    terms = percussion_terms([dark], [ref])
+    assert terms["band"] == 0.0 and terms["tilt"] == 0.0 and terms["rise"] == 0.0
+    assert terms["strike"] == pytest.approx(7.0)
+    assert terms["strike_hits"] == 1.0
+    assert percussion_terms([_hit(bands, [-20.0])], [ref])["strike_hits"] == 0.0
 
 
 def test_a_ring_half_as_long_costs_a_doubling_and_a_capped_one_costs_nothing():
