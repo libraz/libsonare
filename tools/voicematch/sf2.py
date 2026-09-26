@@ -127,6 +127,10 @@ class UnplayableAsCorpus(ValueError):
     """The file needs a player, so reading its samples would not be a measurement."""
 
 
+class PresetNotFound(ValueError):
+    """No preset in the file answers the name asked for, or more than one does."""
+
+
 class SoundFont:
     """A parsed SoundFont, kept open so samples are read by seek rather than held.
 
@@ -317,6 +321,28 @@ class SoundFont:
             if p.bank == bank and p.program == program:
                 return p
         return None
+
+    def find_by_name(self, name: str) -> Preset:
+        """The preset called `name`, refusing an ambiguous or absent one.
+
+        Resolved by name because a font whose presets are flattened into one
+        bank carries the tone list in its names alone: the numbers are
+        positions, and a position means a different instrument in the next
+        font of the set — never address one of these files by number.
+        """
+        hits = [p for p in self.presets if p.name == name]
+        if not hits:
+            near = [p.name for p in self.presets if name.lower() in p.name.lower()][:6]
+            raise PresetNotFound(
+                f"{self.path.name} has no preset called {name!r}"
+                + (f" — did you mean {near}?" if near else f" (it has {len(self.presets)} presets)")
+            )
+        if len(hits) > 1:
+            raise PresetNotFound(
+                f"{self.path.name} has {len(hits)} presets called {name!r}, so a name "
+                f"cannot select one of them"
+            )
+        return hits[0]
 
     def note_map(self, preset: Preset) -> dict[int, Sample]:
         """Note -> the sample recorded AT that note, for the notes that have one.

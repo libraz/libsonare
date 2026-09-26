@@ -44,7 +44,8 @@ from capture import (
     note_groups,
     note_map,
 )
-from sf2 import SoundFont, UnplayableAsCorpus
+from capture import resolve_font as _capture_resolve_font
+from sf2 import PresetNotFound, SoundFont, UnplayableAsCorpus
 from wavio import write_wav
 
 
@@ -56,45 +57,27 @@ def _resolve_font(cfg: dict, timbre: dict) -> tuple[Path, str]:
     """The SoundFont file and preset name that answer one timbre.
 
     Both come from the untracked overlay. Their absence is the ordinary state of
-    a fresh clone and is reported as such rather than as a corruption.
+    a fresh clone and is reported as such rather than as a corruption. The
+    resolution itself is `capture.resolve_font`, shared with the audition page's
+    own module render so the two cannot disagree about where a timbre's font
+    lives; only the exception type is this module's own.
     """
-    name = timbre.get("preset")
-    file = timbre.get("sf2") or cfg.get("sf2")
-    root = cfg.get("soundfont_dir", "")
-    if not name or not file:
-        raise ImportRefused(
-            f"timbre {timbre.get('id', '?')!r} names no SoundFont preset. The font and "
-            f"the preset live in the untracked {Path(cfg['_path']).stem}.local.json — "
-            f'a timbre block of {{"id": ..., "sf2": "FAMILY.sf2", "preset": "Tone Name"}}, '
-            f"with `soundfont_dir` beside it"
-        )
-    path = Path(root).expanduser() / file if root else Path(file).expanduser()
-    if not path.exists():
-        raise ImportRefused(f"{path} does not exist")
-    return path, name
+    try:
+        return _capture_resolve_font(cfg, timbre)
+    except ValueError as exc:
+        raise ImportRefused(str(exc)) from exc
 
 
 def _preset(font: SoundFont, name: str) -> object:
     """The preset called `name`, refusing an ambiguous or absent one by name.
 
-    Resolved by name rather than by (bank, program) because a font whose presets
-    were flattened into one bank carries the tone list in its names and nothing
-    else: the numbers there are positions, and a position silently means a
-    different instrument in the next font of the set.
+    `SoundFont.find_by_name` does the resolution; only the exception type is
+    this module's own, so a caller here still sees `ImportRefused`.
     """
-    hits = [p for p in font.presets if p.name == name]
-    if not hits:
-        near = [p.name for p in font.presets if name.lower() in p.name.lower()][:6]
-        raise ImportRefused(
-            f"{font.path.name} has no preset called {name!r}"
-            + (f" — did you mean {near}?" if near else f" (it has {len(font.presets)} presets)")
-        )
-    if len(hits) > 1:
-        raise ImportRefused(
-            f"{font.path.name} has {len(hits)} presets called {name!r}, so a name "
-            f"cannot select one of them"
-        )
-    return hits[0]
+    try:
+        return font.find_by_name(name)
+    except PresetNotFound as exc:
+        raise ImportRefused(str(exc)) from exc
 
 
 def _check_velocity_axis(cfg: dict, font: SoundFont) -> int:

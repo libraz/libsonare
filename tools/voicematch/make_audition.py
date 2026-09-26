@@ -61,7 +61,9 @@ the plugin for a take the archive does not hold. That is what makes a page cheap
 enough to throw away: the model renders take seconds and can always be made
 again from the library plus the overrides the manifest records, while a
 reference render is a real-time pass through a commercial plugin and is the one
-part that cannot be reproduced from this repository. Kept per page instead, it
+part that cannot be reproduced from this repository. A module capture's
+reference is a fast dry fluidsynth render instead, so it is remade fresh every
+run and never needs the archive at all. Kept per page instead, it
 was both the bulk of the disk and the reason nobody dared delete a page — and a
 directory of pages nobody dares delete stops being a place to look.
 
@@ -102,12 +104,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import calibration
 from _repo import REPO_ROOT
 from au_oracle import AuRenderError, render_oracle_au, with_keyswitches
-from bank import Capture, Voice, load_capture, parse_selection, voices, write_index
+from bank import Voice, load_capture, parse_selection, voices, write_index
 from calibration import Variant
-from capture import CORPUS_ROOT, source_for
+from capture import CORPUS_ROOT, resolve_font, source_for
 from phrases import Take, build_takes
 from render_model import render_model
-from smf import write_smf
+from render_oracle import render_oracle_fluidsynth
+from sf2 import SoundFont
+from smf import Note, write_smf
 from wavio import read_wav, write_wav
 
 SR = 48000
@@ -516,19 +520,41 @@ def render_take(
             renders[timbre["id"]] = held[timbre["id"]]
             print(f"  {timbre['id']} (archived)", file=sys.stderr)
             continue
-        if "plugin" not in cfg.raw:
-            # A capture whose reference came from a SoundFont rather than from a
-            # hosted plugin, which this path has no renderer for. Named and
-            # skipped rather than raised: the model side of this page is what a
-            # listener is here for, and one voice with no renderable reference
-            # took the whole run down with it — including every voice after it.
-            print(
-                f"  {timbre['id']}: {cfg.id} names no plugin, so its reference cannot be "
-                f"rendered here — the archive under --reference-from is the only route, "
-                f"and it does not hold this take",
-                file=sys.stderr,
-            )
+        if cfg.source_class == "module":
+            # Addressed by the overlay's preset name: a family font renumbers the GS map.
+            ref_channel = int(timbre.get("slot_channel", timbre.get("channel", channel + 1))) - 1
+            try:
+                audio = render_module_reference(
+                    cfg.raw,
+                    timbre,
+                    take.notes,
+                    take.cc_events,
+                    ref_channel,
+                    take.tail_s,
+                    total,
+                    SR,
+                )
+            except (ValueError, RuntimeError, FileNotFoundError) as exc:
+                raise ReferenceUnavailable(
+                    f"{voice.slug}: {cfg.id}/{timbre['id']} is the capture `policy.json` "
+                    f"aims this voice at, and its module reference did not render: {exc}. "
+                    f"--reference-from holds none of this take either, so this page cannot "
+                    f"show the reference it is meant to — playing a different capture's "
+                    f"reference instead is the substitution this page must not make."
+                ) from exc
+            fresh[timbre["id"]] = audio
+            renders[timbre["id"]] = audio
+            print(f"  {timbre['id']}", file=sys.stderr)
             continue
+        if "plugin" not in cfg.raw:
+            # The policy's capture can supply nothing, and no other layer may stand in for it.
+            raise ReferenceUnavailable(
+                f"{voice.slug}: {cfg.id}/{timbre['id']} names no plugin and is not a "
+                f"module capture, so no reference can be rendered here, and "
+                f"--reference-from holds none of this take either. This is the capture "
+                f"`policy.json` aims this voice at; playing a different layer's capture "
+                f"instead is the substitution this page must not make."
+            )
         # Built through the same helper the capture path uses, so a timbre
         # selected by preset reaches the plugin here too.
         source = source_for(cfg.raw, timbre, tail=f"{take.tail_s:.0f}s", sample_rate=SR)
@@ -823,41 +849,54 @@ class Unselectable(Exception):
     """
 
 
-def can_supply_a_reference(capture: Capture, archive: Path | None) -> bool:
-    """Whether a reference take can actually be produced from this capture.
+class ReferenceUnavailable(Exception):
+    """`Voice.capture` cannot supply the reference this page needs, and nothing else may.
 
-    A capture imported from a file names no plugin, so nothing can be rendered
-    from it and the archive is its only route.
+    The page's reference is the capture `policy.json` aims this voice at — that
+    is what `Voice.capture` means — so a capture that cannot render one is a
+    defect to report, never a reason to show a different layer's capture under
+    the same label. A listener comparing the model against the wrong instrument
+    is a worse failure than a page that says so and stops.
     """
-    if capture.raw.get("plugin"):
-        return True
-    return bool(archive) and (archive / capture.id).is_dir()
 
 
-def playable_first(voice: Voice, archive: Path | None) -> Voice:
-    """Move a capture that can supply a reference to the front of the voice.
+def render_module_reference(
+    cfg: dict,
+    timbre: dict,
+    notes: list[Note],
+    cc_events: tuple[tuple[float, int, int], ...],
+    channel: int,
+    tail_s: float,
+    total_seconds: float,
+    sr: int,
+) -> np.ndarray:
+    """A take's reference, played from a module's own font at the tone it recorded.
 
-    `Voice.capture` is defined as the one whose reference a PAGE PLAYS, so a
-    capture that can play none is the wrong representative for a page however
-    well it answers the policy's layer. The kit is the live case: the policy
-    aims a kit at the machine, the module captures therefore lead, and none of
-    them names a plugin — so the most-calibrated voice in the bank rendered
-    model-only while its library reference sat in the archive.
-
-    Order is otherwise preserved, so the layer preference still decides among
-    captures that can each supply one. This reorders the audition run's own view
-    and not `capture_for`, which answers a different question for the gates.
+    Addressed by the (bank, program) the font itself reports for the named
+    preset, never by the GM number the model answers to — a module family file
+    flattens the GS map into its own sequential numbering, so a preset's
+    position has no relation to the program it stands beside on the page (see
+    `.claude/rules/synth-bank.md`).
     """
-    playable = [c for c in voice.captures if can_supply_a_reference(c, archive)]
-    if not playable or playable[0] is voice.capture:
-        return voice
-    rest = [c for c in voice.captures if c not in playable]
-    print(
-        f"{voice.slug}: {voice.capture.id} can render no reference; "
-        f"the page plays {playable[0].id}",
-        file=sys.stderr,
+    font_path, preset_name = resolve_font(cfg, timbre)
+    with SoundFont(font_path) as font:
+        preset = font.find_by_name(preset_name)
+    # SF2 bank 128 is reached by the percussion channel alone (measured), so it is never sent.
+    if preset.bank >= 128 and channel != 9:
+        raise ValueError(
+            f"{font_path.name}: {preset_name!r} sits at SF2 bank {preset.bank}, which "
+            f"this font's own layout reserves for percussion (channel 10) — but this "
+            f"timbre is addressed on channel {channel + 1}, where nothing reaches it"
+        )
+    smf = write_smf(
+        notes,
+        program=preset.program,
+        bank=0 if preset.bank >= 128 else preset.bank,
+        end_pad=tail_s,
+        cc_events=cc_events,
+        channel=channel,
     )
-    return replace(voice, captures=tuple(playable + rest))
+    return render_oracle_fluidsynth(smf, total_seconds, sr, soundfont=font_path)
 
 
 def resolve_voices(args) -> list[Voice]:
@@ -901,11 +940,7 @@ def resolve_voices(args) -> list[Voice]:
 
     banks = parse_selection(args.banks) if args.banks else None
     catalogue = load_catalogue(args.lib) if banks is None and programs else None
-    archive = Path(args.reference_from).expanduser().resolve() if args.reference_from else None
-    return [
-        playable_first(v, archive)
-        for v in voices(sorted(set(programs)), banks=banks, kits=kits, catalogue=catalogue)
-    ]
+    return voices(sorted(set(programs)), banks=banks, kits=kits, catalogue=catalogue)
 
 
 def main() -> int:
@@ -1070,8 +1105,12 @@ def main() -> int:
     # to name or group them. `write_index` merges by slug for exactly this
     # reason, and the flat path was the one route that skipped it.
     total = 0
-    for voice in selected:
-        total += render_set(voice, root / voice.slug, args, table, extra)
+    try:
+        for voice in selected:
+            total += render_set(voice, root / voice.slug, args, table, extra)
+    except ReferenceUnavailable as exc:
+        print(exc, file=sys.stderr)
+        return 2
 
     write_index(root, selected)
     print(f"\n{len(selected)} voice(s), {total} takes -> {root}", file=sys.stderr)

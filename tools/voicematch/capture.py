@@ -476,6 +476,30 @@ def source_for(cfg: dict, timbre: dict, **overrides) -> AuSource:
     return replace(src, **overrides) if overrides else src
 
 
+def resolve_font(cfg: dict, timbre: dict) -> tuple[Path, str]:
+    """The SoundFont file and preset name that answer one timbre of a module capture.
+
+    The same resolution `source_for` does for a plugin's component triple, with
+    a font in place of one: both live in the untracked overlay, and both are
+    needed only to *render* the reference — `reference/<id>.json` is what
+    everything downstream reads instead.
+    """
+    name = timbre.get("preset")
+    file = timbre.get("sf2") or cfg.get("sf2")
+    root = cfg.get("soundfont_dir", "")
+    if not name or not file:
+        raise ValueError(
+            f"timbre {timbre.get('id', '?')!r} names no SoundFont preset. The font and "
+            f"the preset live in the untracked {Path(cfg['_path']).stem}.local.json — "
+            f'a timbre block of {{"id": ..., "sf2": "FAMILY.sf2", "preset": "Tone Name"}}, '
+            f"with `soundfont_dir` beside it"
+        )
+    path = Path(root).expanduser() / file if root else Path(file).expanduser()
+    if not path.exists():
+        raise ValueError(f"{path} does not exist")
+    return path, name
+
+
 def out_root(cfg: dict, cli_out: str) -> Path:
     if cli_out:
         return Path(cli_out).expanduser().resolve()
