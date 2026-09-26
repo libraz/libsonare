@@ -260,9 +260,7 @@ def test_module_reference_gain_matches_the_reference_minus_a_measured_probe(monk
     }
     monkeypatch.setattr(make_audition, "_module_reference_rows", lambda *a, **k: rows)
 
-    # Every probe comes back at the same fixed peak (-30 dBFS) regardless of
-    # which note it was rendered for, so each note's expected delta is exactly
-    # its own `peak_dbfs` minus that constant.
+    # Every probe peaks at -30 dBFS, so each note's delta is its `peak_dbfs` minus that.
     measured_peak = 10.0 ** (-30.0 / 20.0)
     monkeypatch.setattr(
         make_audition,
