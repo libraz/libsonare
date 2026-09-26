@@ -728,32 +728,56 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[46].amp_env.release_ms = 40.0f;
   t[42].percussion.exclusive_class = 1;
   t[44].percussion.exclusive_class = 1;
-  // Plates spaced 380-900 Hz read 6.2-7.6 dB more tonal than the module; a denser,
-  // darker plate closes tilt, band shape and tonality, centroid paying 3-14%.
-  // Open: tilt +16.4 -> +12.3 dB, band shape 18.2 -> 12.7 dB, tonality -7.58 -> -2.68 dB.
+  // The module's open pair rings at 525, 1550 and 1731 Hz within 8 dB of its loudest
+  // partial, where the voice had nothing under 3.7 kHz; all three hats take 140 Hz plate
+  // spacing. Open: tilt +12.3 -> +3.1 dB, band shape 12.7 -> 9.0 dB, centroid +7.7 -> +4.0%.
   t[46].percussion.noise_gain = 1.6f;
-  t[46].percussion.tone_gain = 0.12f;
-  t[46].percussion.plate_low_hz = 180.0f;
+  t[46].percussion.tone_gain = 0.25f;
+  t[46].gain = 0.1683f;
+  t[46].percussion.contact = 4.97395f;
+  t[46].percussion.contact_ms = 0.170637f;
+  t[46].percussion.plate_low_hz = 140.0f;
   t[46].percussion.plate_hf_ratio = 0.45f;
-  // Closed, fitted: tilt +22.5 -> +19.9 dB, band shape 17.2 -> 15.5 dB, tonality -7.22 -> -5.45 dB.
+  t[46].percussion.base_freq_hz = 525.0f;
+  t[46].percussion.num_modes = 7;
+  t[46].percussion.mode_ratios = {1.0f, 2.952f, 3.297f, 7.18f, 9.62f, 12.35f, 15.44f};
+  // Closed: partials at 390, 436, 826 and 1500 Hz, the stick driving the plate, and
+  // the wash on the module's 12.5 kHz peak band: tilt +19.8 -> -3.7 dB, band shape
+  // 15.4 -> 6.8 dB, centroid -14.5 -> -2.0%, tonality -6.2 -> -2.3 dB.
   t[42].percussion.noise_gain = 1.61952f;
-  t[42].percussion.tone_gain = 0.404574f;
-  t[42].percussion.contact = 2.97345f;
+  t[42].percussion.tone_gain = 0.145077f;
+  t[42].gain = 0.2701f;
+  t[42].percussion.contact = 1.05184f;
+  t[42].percussion.contact_ms = 1.17666f;
+  t[42].percussion.plate_contact = 2.04655f;
   t[42].percussion.mode_decay_s = 0.774367f;
   t[42].percussion.noise_air_hz = 12207.3f;
-  t[42].percussion.noise_cutoff_hz = 8686.37f;
+  t[42].percussion.noise_cutoff_hz = 12500.0f;
   t[42].percussion.noise_decay_ms = 43.8095f;
   t[42].percussion.noise_q = 2.33405f;
   t[42].percussion.plate_air_hz = 13262.8f;
   t[42].percussion.plate_gain = 0.683913f;
   t[42].percussion.plate_hf_ratio = 0.422297f;
-  t[42].percussion.plate_low_hz = 291.46f;
+  t[42].percussion.plate_low_hz = 140.0f;
   t[42].percussion.plate_t60_s = 0.151031f;
-  // Pedal: tilt +24.7 -> +23.4 dB, band shape 20.6 -> 16.8 dB, tonality -6.24 -> -3.44 dB.
+  t[42].percussion.base_freq_hz = 390.0f;
+  t[42].percussion.num_modes = 8;
+  t[42].percussion.mode_ratios = {1.0f, 1.118f, 3.846f, 2.118f, 9.603f, 12.87f, 16.51f, 20.65f};
+  // Pedal: the two plates meeting hold partials from 248 to 1353 Hz, and the rims'
+  // longer contact drives the plate: tilt +23.4 -> -2.9 dB, band shape 16.8 -> 9.4 dB.
   t[44].percussion.noise_gain = 1.6f;
-  t[44].percussion.tone_gain = 0.12f;
-  t[44].percussion.plate_low_hz = 150.0f;
+  t[44].percussion.tone_gain = 0.19306f;
+  t[44].gain = 0.1167f;
+  t[44].percussion.contact = 2.26505f;
+  t[44].percussion.contact_ms = 1.88912f;
+  t[44].percussion.plate_contact = 0.92003f;
+  t[44].percussion.noise_cutoff_hz = 12500.0f;
+  t[44].percussion.plate_low_hz = 140.0f;
   t[44].percussion.plate_hf_ratio = 0.5f;
+  t[44].percussion.base_freq_hz = 380.0f;
+  t[44].percussion.num_modes = 10;
+  t[44].percussion.mode_ratios = {1.0f,   0.821f, 0.653f, 1.368f, 2.418f,
+                                  3.561f, 9.916f, 13.29f, 17.06f, 21.33f};
   // The china's wash is a band rather than a corner, and a narrow one: that is
   // what trashy is, and it is a different filter rather than a different
   // corner. Its partials are pulled off the plate ratios the others share until
@@ -1329,18 +1353,22 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[38].percussion.shell_freq_hz = {165.0f, 205.0f, 330.0f, 400.0f};
   t[38].percussion.shell_t60_s = {0.12f, 0.1f, 0.08f, 0.07f};
   t[38].percussion.shell_weight = {1.0f, 4.0f, 5.0f, 3.0f};
-  t[38].percussion.noise_gain = 0.55f;
+  // The head's upper modes and the wires together sat 9-14 dB under the module
+  // across 1-8 kHz for the whole hit, which left the centroid near 300 Hz where
+  // the module's runs 1.3-1.8 kHz.
+  t[38].percussion.noise_gain = 1.655f;
   t[38].percussion.noise_decay_ms = 120.0f;
-  t[38].percussion.noise_cutoff_hz = 1500.0f;
+  t[38].percussion.noise_cutoff_hz = 973.0f;
   t[38].percussion.noise_q = 0.8f;
-  // Crest read 5.8 dB under the module; the stick-tip radiation, summed outside
-  // the amp envelope, takes it to -0.2 dB and adds 5.7 dB of peak level.
+  // The stick's contact, summed outside the amp envelope. At 0.07 ms it spoke at
+  // 14 kHz, 23 dB over the module there, and left the first 15 ms 11 dB darker
+  // than the module's strike; 0.237 ms puts it in the 1-4 kHz the strike fills.
   t[38].percussion.contact = 3.95462f;
-  t[38].percussion.contact_ms = 0.07f;
+  t[38].percussion.contact_ms = 0.237f;
   // The strainer: high-passed into its own band, bounded above by the radiated
   // ceiling so the rattle sits where a wire bed sits instead of running to
   // Nyquist, and ringing 60 ms past the head that started it.
-  t[38].percussion.wire_buzz = 0.15f;
+  t[38].percussion.wire_buzz = 0.418f;
   t[38].percussion.wire_threshold = 0.12f;
   t[38].percussion.wire_cutoff_hz = 1500.0f;
   t[38].percussion.wire_decay_ms = 400.0f;
@@ -1353,10 +1381,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // Zero sustain, because a one-shot voice ignores note-off and a patch that
   // sustains never frees its slot. The fit it replaces held 0.26.
   t[38].amp_env = fallback_env(0.5f, 600.0f, 0.0f, 80.0f);
-  // Level read 2.18 dB quiet against the module; gain is linear in level, so
-  // this is the exact correction (x10^(2.18/20)) rather than a further search.
-  // Pays back the 5.7 dB `contact` adds above (x10^(-5.7/20)).
-  t[38].gain = 1.3827f;  // Acoustic Snare
+  // Level against the module, corrected exactly since gain is linear in it; the
+  // brighter voicing above read 0.71 dB loud at 1.3827.
+  t[38].gain = 1.2742f;  // Acoustic Snare
   t[39].percussion.noise_air_hz = 1459.44f;
   t[39].gain = 4.20f;  // Hand Clap
   t[39].amp_env.attack_ms = 3.87415f;
