@@ -10030,8 +10030,8 @@
       "axes": {
         "engine": "percussion",
         "patch": null,
-        "timbres": 2,
-        "profile_rows": 637,
+        "timbres": 1,
+        "profile_rows": 355,
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
@@ -10043,8 +10043,8 @@
           "complete": true
         },
         "agreement": {
-          "inside": 1,
-          "total": 1,
+          "inside": 0,
+          "total": 0,
           "outside": {},
           "unjudgeable": [
             "attack",
@@ -10056,7 +10056,8 @@
             "level",
             "ring",
             "tilt_rise",
-            "tonality"
+            "tonality",
+            "vel_range"
           ]
         },
         "structure": {

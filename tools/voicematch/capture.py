@@ -365,10 +365,10 @@ def note_map(cfg: dict) -> dict[int, int]:
     """Which model note answers each captured note, where they disagree.
 
     A drum note number names an instrument, and a sampled kit is under no
-    obligation to lay its instruments out the way GM does. The kit measured for
-    `reference/drums.json` does not: its six toms ascend in the order 45, 47,
-    48, 50, 41, 43, so a note-for-note comparison scores the low floor tom
-    against the high one and reports a tuning error that is really a mapping.
+    obligation to lay its instruments out the way GM does. One measured here
+    ascended its six toms in the order 45, 47, 48, 50, 41, 43, so a note-for-note
+    comparison scores the low floor tom against the high one and reports a
+    tuning error that is really a mapping.
 
     Applied to the ORACLE side only — the model is rendered on GM's layout,
     which is the layout it ships with and the one a user's MIDI file is written
@@ -376,8 +376,8 @@ def note_map(cfg: dict) -> dict[int, int]:
     idiosyncrasy into the product.
 
     Keys arrive from JSON as strings and are returned as ints. An empty map is
-    the normal case: only a capture whose layout was measured and found to
-    differ carries one.
+    the normal case, and no committed capture carries one today: only a capture
+    whose layout was measured and found to differ would.
     """
     return {int(k): int(v) for k, v in (cfg.get("note_map") or {}).items()}
 

@@ -37,7 +37,7 @@ from pathlib import Path
 
 import numpy as np
 from autofit_resolve import reference_band_edge
-from corpus import corpus_oracle, corpus_pattern, load_corpus
+from corpus import corpus_oracle, corpus_pattern, declared_timbres, load_corpus
 from loss import (
     HARM_REACH,
     LOSS_TERMS,
@@ -626,7 +626,12 @@ def _round(x: float) -> float | None:
 def _reference_timbres(manifest: Path) -> list[str]:
     """Timbre ids the manifest carries that are references rather than models."""
     data = json.loads(manifest.read_text())
-    return [t["id"] for t in data.get("timbres", []) if isinstance(t, dict) and not t.get("model")]
+    kept = set(declared_timbres(data))
+    return [
+        t["id"]
+        for t in data.get("timbres", [])
+        if isinstance(t, dict) and not t.get("model") and t["id"] in kept
+    ]
 
 
 # --------------------------------------------------------------------------- #

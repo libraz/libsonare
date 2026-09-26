@@ -34,7 +34,7 @@ from capture import (
     ROOM_PRESENT,
     ROOM_UNCLASSIFIED,
 )
-from corpus import corpus_oracle, corpus_pattern, load_corpus
+from corpus import corpus_oracle, corpus_pattern, declared_timbres, load_corpus
 from loss import cli_weights, probe_rows
 from patterns import (
     PATTERN_BUILDERS,
@@ -242,8 +242,8 @@ def test_the_hold_out_is_scored_against_its_own_reference(monkeypatch):
 def test_a_capture_that_lays_its_instruments_out_differently_is_answered_note_for_note(
     tmp_path,
 ):
-    """The kit reference ascends its six toms as 45, 47, 48, 50, 41, 43, so a
-    model that follows General MIDI has to be struck on the note of the same
+    """A kit reference is free to lay its toms out in another order, and a model
+    that follows General MIDI then has to be struck on the note of the same
     RANK or every tom is fitted against a different sized drum. `profile.py
     compare` has always read `note_map`; the corpus the fit scores against did
     not, so the two disagreed about which drum a number meant."""
@@ -276,6 +276,39 @@ def test_a_capture_that_lays_its_instruments_out_differently_is_answered_note_fo
     assert bare.note_map == {}
     assert bare.played_notes() == bare.notes
     assert [n.note for n in corpus_pattern(bare).notes] == [60, 60, 72, 72]
+
+
+def test_a_reference_the_definition_dropped_is_not_read_from_the_manifest(tmp_path):
+    """A re-capture keeps an unrecognised timbre on disk and first in the manifest,
+    so the default timbre would be the retired reference rather than the one the
+    capture now declares."""
+    import json
+
+    root = _write_corpus(tmp_path / "c", notes=(60,), velocities=(56,))
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    retired = [dict(r, timbre="retired") for r in manifest["renders"]]
+    manifest["renders"] = retired + manifest["renders"]
+    manifest["timbres"] = [
+        {"id": "retired", "channel": 1},
+        *manifest["timbres"],
+        {"id": "model", "model": True},
+    ]
+    config = tmp_path / "def.json"
+    config.write_text(json.dumps({"id": "mini", "timbres": [{"id": "t"}]}))
+    manifest["config"] = str(config)
+    manifest_path.write_text(json.dumps(manifest))
+
+    assert declared_timbres(manifest) == ["t", "model"]
+    assert load_corpus(root).timbre == "t"
+    # The loss-sensitivity yardstick pairs every reference timbre against the base.
+    from loss_sensitivity import _reference_timbres
+
+    assert _reference_timbres(manifest_path) == ["t"]
+    with pytest.raises(ValueError, match="retired"):
+        load_corpus(root, "retired")
+    # No readable definition: the manifest is taken whole.
+    assert declared_timbres(dict(manifest, config="")) == ["retired", "t", "model"]
 
 
 def test_a_corpus_probe_is_laid_out_by_the_capture_not_by_a_builder(tmp_path):

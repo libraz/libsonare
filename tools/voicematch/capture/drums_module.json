@@ -28,7 +28,7 @@
   "dry": false,
   "rig": "none",
   "room": "none",
-  "_note_map": "There is deliberately none. The sampled kits in `drums.json` needed one because their toms do not hold GM's pitch order, and the two of them disagree about which order they do hold. This source IS the GS kit map, so its keys are GM's by construction and a remap would be inventing a disagreement.",
+  "_note_map": "There is deliberately none. This source IS the GS kit map, so its keys are GM's by construction and a remap would be inventing a disagreement.",
   "_dimensions": "This capture answers the behaviour axis. Colour is the module's too - `policy.json` gives a kit the machine on BOTH axes - but it is read once, on `drums_module_hit.json`, whose 44 keys are the widest coverage the module's three grids offer against this one's 17. The exclusion below is therefore about not counting one property twice, and is no longer the older claim that colour belongs to a modern reference; that claim was true under a policy this kit no longer follows.",
   "dimensions": ["band_decay", "ring", "attack", "crest", "level"],
   "dimensions_na": {
@@ -38,7 +38,7 @@
     "centroid_pct": "colour, as `band_tilt`.",
     "tonality": "colour, as `band_tilt`.",
     "tilt_rise": "colour over time, as `band_tilt`: read once on `drums_module_hit.json`, whose 60 ms gate holds both of its windows for 44 keys.",
-    "stereo": "the recordings are single-channel, so a width is zero by construction rather than by voicing. `drums.json`'s second kit is genuinely wide and is where a width is read."
+    "stereo": "the recordings are single-channel, so a width is zero by construction rather than by voicing. `drums.json`'s kit is wide (median 0.710) and excuses the dimension too, so a kit's image is unmeasured."
   },
   "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `drums_module.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/drums_module.json`.",
   "source_class": "module",

@@ -118,10 +118,9 @@ ATTACK_FLOOR_MS = HIT_ENVELOPE_WIN_MS / 2.0
 # `pitch_drop` are all patch fields `--spec auto` offers, and until this existed
 # a fit could move any of them and see almost nothing come back.
 #
-# The capture already knew. `capture/drums.json` records measured tom
-# fundamentals (note 45 at 67-73 Hz, 47 at 73-83, 48 at 87-93, 50 at 93-97,
-# 41 at 163-170, 43 at 183-190) in a note to the reader, because there was
-# nowhere in the measurement path to put them.
+# A sampled kit's tom fundamentals were measured by hand (note 45 at 67-73 Hz,
+# 47 at 73-83, 48 at 87-93, 50 at 93-97, 41 at 163-170, 43 at 183-190) because
+# there was nowhere in the measurement path to put them.
 
 
 #: The two windows a hit's colour is read in to see whether it moves: the strike
@@ -274,8 +273,8 @@ def hit_tone(seg: np.ndarray, sr: int, *, max_band_hz: float | None = None) -> d
 
     `tone_f0_hz` is the STRONGEST mode — the pitch a listener assigns. Taking
     the lowest instead was tried and is wrong on exactly the drums it matters
-    for. Measured against `capture/drums.json`, whose `_toms` note records the
-    six tom fundamentals by hand: the lowest-mode rule reproduces four of them
+    for. Measured against six hand-measured tom fundamentals on a sampled kit
+    whose toms ascend 45, 47, 48, 50, 41, 43: the lowest-mode rule reproduces four of them
     and reports the two smallest toms at 55.8 and 61.7 Hz against hand
     measurements of 163-170 and 183-190, which inverts the kit's pitch order.
     Those two notes carry a low component within 2 dB of the head's tuned mode

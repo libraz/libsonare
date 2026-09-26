@@ -145,9 +145,10 @@ class Corpus:
 def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
     """Read a capture manifest and resolve one timbre's renders.
 
-    `timbre` defaults to the first the manifest lists, which is the capture
-    config's own order — for the piano corpus that is the comparison target the
-    reference profile is anchored on.
+    `timbre` defaults to the first the manifest lists that the capture definition
+    still declares (`declared_timbres`), which is the capture config's own order
+    — for the piano corpus that is the comparison target the reference profile
+    is anchored on.
     """
     import json
 
@@ -162,7 +163,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
     manifest = json.loads(path.read_text())
     root = path.parent
 
-    available = [t["id"] if isinstance(t, dict) else str(t) for t in manifest.get("timbres", [])]
+    available = declared_timbres(manifest)
     chosen = timbre or (available[0] if available else "")
     if not chosen:
         raise ValueError(f"{path} lists no timbres")
@@ -284,6 +285,25 @@ def in_declared_grid(cfg: dict):
         return (not notes or int(note) in notes) and (not velocities or int(velocity) in velocities)
 
     return admits
+
+
+def declared_timbres(manifest: dict) -> list[str]:
+    """The manifest's timbre ids, less any reference the capture definition dropped.
+
+    A re-capture keeps timbres it does not recognise, so a reference retired from
+    the definition stays on disk and first in the manifest. The model's own grid
+    is kept, and a manifest whose definition cannot be read is taken whole.
+    """
+    listed = manifest.get("timbres", [])
+    declared = _declared_config(manifest).get("timbres")
+    kept = {t.get("id") for t in declared or [] if isinstance(t, dict)}
+    return [
+        t["id"] if isinstance(t, dict) else str(t)
+        for t in listed
+        if declared is None
+        or (isinstance(t, dict) and (t.get("model") or t.get("id") in kept))
+        or (not isinstance(t, dict) and str(t) in kept)
+    ]
 
 
 def _declared_config(manifest: dict) -> dict:
@@ -466,15 +486,15 @@ def _note_map(manifest: dict) -> dict[int, int]:
     """Which model note answers each captured note, from the manifest or its config.
 
     Same two-step as `_groups`. Declared because a reference is free to lay its
-    kit out however it likes and this one does: its six toms ascend as 45, 47,
-    48, 50, 41, 43, so scoring a model that follows General MIDI note for note
-    fits each tom against a different sized drum. Applied to the oracle side
-    only — libsonare ships GM's layout because that is what a MIDI file is
-    written against, and correcting the model would calibrate one reference's
-    idiosyncrasy into the product.
+    kit out however it likes — one measured here ascended its six toms as 45,
+    47, 48, 50, 41, 43 — and scoring a model that follows General MIDI note for
+    note then fits each tom against a different sized drum. Applied to the
+    oracle side only — libsonare ships GM's layout because that is what a MIDI
+    file is written against, and correcting the model would calibrate one
+    reference's idiosyncrasy into the product.
 
-    Empty everywhere means the two sides agree about what a note number means,
-    which is every capture but this one.
+    Empty means the two sides agree about what a note number means, which is
+    every committed capture today.
     """
     import json
 

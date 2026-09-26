@@ -49,7 +49,7 @@ Nothing in the sequence is an analysis note: every per-hit measurement assumes a
 
 ### A sampled kit need not lay its instruments out the way GM does
 
-`note_map` in a capture definition is where a capture says so. The kit measured for `reference/drums.json` does not: its six toms ascend 45, 47, 48, 50, 41, 43, with the two largest on the keys where GM puts the two smallest. Without a map, `profile.py compare` scores the low floor tom against the high one and reports a tuning error that is really a mapping — the reference rows are correct measurements that could not be used, for want of a correspondence.
+`note_map` in a capture definition is where a capture says so. No committed capture carries one today; one sampled kit measured here ascended its six toms 45, 47, 48, 50, 41, 43, with the two largest on the keys where GM puts the two smallest. Without a map, `profile.py compare` scores the low floor tom against the high one and reports a tuning error that is really a mapping — the reference rows are correct measurements that could not be used, for want of a correspondence.
 
 The map is applied to the **oracle side only**: libsonare ships GM's layout because that is what a MIDI file is written against, and correcting the model would calibrate this reference's idiosyncrasy into the product. A mapped row prints as `41>48`.
 

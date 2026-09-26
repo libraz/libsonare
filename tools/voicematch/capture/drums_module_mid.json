@@ -39,7 +39,7 @@
     "centroid_pct": "colour, as `band_tilt`.",
     "tonality": "colour, as `band_tilt`.",
     "tilt_rise": "colour over time, as `band_tilt`: read once on `drums_module_hit.json`, whose 60 ms gate holds both of its windows for 44 keys.",
-    "stereo": "the recordings are single-channel, so a width is zero by construction rather than by voicing. `drums.json`'s second kit is where a width is read."
+    "stereo": "the recordings are single-channel, so a width is zero by construction rather than by voicing. `drums.json`'s kit is wide and excuses the dimension too, so a kit's image is unmeasured."
   },
   "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `drums_module_mid.local.json`.",
   "source_class": "module",
