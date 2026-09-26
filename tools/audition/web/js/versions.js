@@ -63,15 +63,21 @@ function versionFace(slot) {
     return { name: pick && pick.revealed ? `${letter} · ${key}` : letter, key: '' };
   }
   const title = sourceTitle(key);
-  return title ? { name: title, key } : { name: key, key: '' };
+  if (!title) return { name: key, key: '' };
+  return { name: title, key: roleOf(key) === 'model' ? key : '' };
 }
 
 /// The unmodified build is not a recorded setting and never will be, so its two
 /// keys carry their title on the page rather than in the registry.
 const BASELINE_TITLES = { model: 'ver.baseline', 'model-di': 'ver.baselineDirect' };
 
-const sourceTitle = (key) =>
-  (BASELINE_TITLES[key] ? t(BASELINE_TITLES[key]) : phrase(sourceOf(key).title));
+/// A capture has no registry title, so its own label names it instead of its key.
+const sourceTitle = (key) => {
+  if (BASELINE_TITLES[key]) return t(BASELINE_TITLES[key]);
+  const src = sourceOf(key);
+  const title = phrase(src.title);
+  return title || (roleOf(key) !== 'model' ? src.label || '' : '');
+};
 
 export function buildVersionButtons() {
   const box = $('versions');

@@ -21,11 +21,14 @@
 .fb-cmp-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   margin: 0 0 12px;
   font-size: 12px;
   color: var(--ink-dim);
 }
+
+.fb-cmp-row .lab { white-space: nowrap; }
 
 .cmp-chip {
   display: inline-flex;
@@ -37,6 +40,9 @@
   background: color-mix(in srgb, var(--role) 10%, var(--panel));
   color: var(--role);
   font-size: 12px;
+  flex: 0 1 auto;
+  min-width: 0;
+  word-break: keep-all;
 }
 
 .cmp-chip .dot { background: var(--role); }
@@ -53,7 +59,8 @@
 .cmp-chip.warn .dot { background: var(--warn); }
 
 .cmp-override {
-  margin-left: auto;
+  flex: 1 1 100%;
+  min-width: 0;
   padding: 3px 8px;
   border: 1px solid var(--line);
   border-radius: 5px;
