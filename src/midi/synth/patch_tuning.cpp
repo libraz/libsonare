@@ -201,6 +201,7 @@ void apply_piano(NativeSynthPatch& p, const Fields& f) {
   F(piano.hammer_exponent);
   F(piano.hammer_contact_ms);
   F(piano.hammer_dynamics);
+  F(piano.attack_hf_dynamics);
   F(piano.soundboard);
   F(piano.release_damp_s);
 }
@@ -350,6 +351,10 @@ void apply_ks(NativeSynthPatch& p, const Fields& f) {
   F(ks.octave_mix);
   F(ks.harmonic_node);
   F(ks.keyoff_noise);
+  F(ks.pick_noise);
+  F(ks.hf_decay_s);
+  F(ks.mid_decay_s);
+  F(ks.velocity_exponent);
 }
 
 void apply_plucked_string(NativeSynthPatch& p, const Fields& f) {
@@ -533,6 +538,11 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   F(percussion.plate_hf_ratio);
   F(percussion.plate_low_hz);
   F(percussion.plate_air_hz);
+  F(percussion.plate_contact);
+  F(percussion.plate_cascade);
+  F(percussion.plate_cascade_hz);
+  F(percussion.plate_cascade_drop_db);
+  F(percussion.plate_floor_hz);
   F(percussion.phisem_beans);
   F(percussion.phisem_energy_ms);
   F(percussion.phisem_sound_ms);

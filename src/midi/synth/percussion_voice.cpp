@@ -277,7 +277,8 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   tone_direct_ = plate_gain_ > 0.0f ? params.tone_direct : 1.0f;
   if (plate_gain_ > 0.0f) {
     plate_.start(sr, params.plate_low_hz, params.plate_t60_s, params.plate_hf_ratio,
-                 params.plate_air_hz);
+                 params.plate_air_hz, params.plate_cascade, params.plate_cascade_hz,
+                 params.plate_floor_hz, params.plate_cascade_drop_db, vel01);
   } else {
     plate_.reset();
   }
@@ -288,12 +289,15 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   contact_ = std::max(0.0f, params.contact) * vel01;
   contact_i_ = 0;
   contact_len_ = 0;
-  if (contact_ > 0.0f) {
-    // One more sample than the period: the pulse spans [0, 1] inclusive, so the
-    // period it voices is contact_len_ - 1 samples and the knob keeps its unit.
-    const float period = std::max(0.001f, params.contact_ms) * 0.001f * static_cast<float>(sr);
-    contact_len_ = std::max(2, 1 + static_cast<int>(std::lround(period)));
-  }
+  // One more sample than the period: the pulse spans [0, 1] inclusive, so the
+  // period it voices is contact_len_ - 1 samples and the knob keeps its unit.
+  const float contact_period =
+      std::max(0.001f, params.contact_ms) * 0.001f * static_cast<float>(sr);
+  const int contact_samples = std::max(2, 1 + static_cast<int>(std::lround(contact_period)));
+  if (contact_ > 0.0f) contact_len_ = contact_samples;
+  plate_contact_ = plate_gain_ > 0.0f ? std::max(0.0f, params.plate_contact) * vel01 : 0.0f;
+  plate_contact_i_ = 0;
+  plate_contact_len_ = plate_contact_ > 0.0f ? contact_samples : 0;
 
   // Snare wire rattle: gated noise driven by the membrane crossing the wire
   // contact threshold. Voiced through a dedicated high-pass. The threshold is
@@ -515,7 +519,12 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
   // dry hit rather than blended with it — the strike is the noisy half of the
   // sound and the plate is the dense half, and metal needs both.
   if (plate_gain_ > 0.0f) {
-    const float strike = mix + plate_drive;
+    float strike = mix + plate_drive;
+    if (plate_contact_i_ < plate_contact_len_) {
+      const float p =
+          static_cast<float>(plate_contact_i_++) / static_cast<float>(plate_contact_len_ - 1);
+      strike += plate_contact_ * std::sin(kTwoPi * p);
+    }
     mix += plate_gain_ * plate_.process(strike);
   }
 
@@ -553,6 +562,9 @@ void PercussionVoiceCore::kill() noexcept {
   shell_.reset();
   plate_gain_ = 0.0f;
   plate_.reset();
+  plate_contact_ = 0.0f;
+  plate_contact_len_ = 0;
+  plate_contact_i_ = 0;
   tone_direct_ = 1.0f;
   contact_ = 0.0f;
   contact_len_ = 0;

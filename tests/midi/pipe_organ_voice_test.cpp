@@ -492,24 +492,20 @@ TEST_CASE("the swell box darkens the organ as the pedal closes", "[midi][synth][
   };
   const std::vector<float> open = play(127);  // shutter fully open
   const std::vector<float> shut = play(8);    // shutter nearly closed
-  // The closed shutter is a lowpass: it cuts the upperwork's share of the
-  // spectrum hard (the level cut is the expression's job and is not what this
-  // asserts). The band-energy fraction above ~1.2 kHz is the direct measure —
-  // the pipes' post-loop tone purity keeps the overall centroid near the
-  // played pitch either way, so a centroid ratio under-reads the shutter. The
-  // window skips the first half second so the ranks' speech swell has settled.
-  const auto hf_fraction = [](const std::vector<float>& buf) {
+  // Measured as energy above 1.2 kHz over energy below it, not as a share of the whole spectrum,
+  // which a registration's own upperwork balance also shifts. The window skips the first half
+  // second so the ranks' speech swell has settled.
+  const auto hf_lf_ratio = [](const std::vector<float>& buf) {
     const std::vector<double> ps = power_spectrum(buf, 24000);
     double hf = 0.0;
-    double total = 0.0;
+    double lf = 0.0;
     for (size_t b = 1; b < ps.size(); ++b) {
       const double hz = static_cast<double>(b) * kRate / kFft;
-      total += ps[b];
-      if (hz > 1200.0) hf += ps[b];
+      (hz > 1200.0 ? hf : lf) += ps[b];
     }
-    return total > 0.0 ? hf / total : 0.0;
+    return lf > 0.0 ? hf / lf : 0.0;
   };
-  REQUIRE(hf_fraction(shut) < 0.5 * hf_fraction(open));
+  REQUIRE(hf_lf_ratio(shut) < 0.5 * hf_lf_ratio(open));
 }
 
 // --- Mouth/radiation correction and room coupling ---

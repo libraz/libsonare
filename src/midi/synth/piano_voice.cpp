@@ -9,6 +9,7 @@
 // model), but the loss filter it needs is the same one, solved the same way.
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
+#include "rt/biquad_design.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -18,6 +19,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kButterworthQ;
 using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 
@@ -397,6 +399,9 @@ SONARE_TUNABLE(kStrikeNoiseInject, 0.298027f);
 /// attack only. What rings on is the scrub the strings are injected with,
 /// which is kStrikeNoiseInject and is not affected by this.
 SONARE_TUNABLE(kStrikeNoiseDirect, 0.6f);
+/// Corner of the high shelf `attack_hf_dynamics` tilts the injected scrub with. Inert
+/// while a patch leaves that field at zero.
+SONARE_TUNABLE(kScrubHfShelfHz, 3680.0f);
 /// The injection tapers above C4 (halvings per octave): the treble hammer
 /// rests on the string for around a full period, shorting high-frequency
 /// string motion at the contact point — broadband seeding there rings the
@@ -1814,6 +1819,16 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   noise_hp_a_ =
       std::clamp(1.0f - std::exp(-kTwoPi * 1.2f * f0 / static_cast<float>(sr)), 0.0f, 1.0f);
   noise_rng_ = static_cast<uint32_t>(seed ^ (seed >> 32) ^ 0x9E3779B9u) | 1u;
+  const float hf_dyn = std::clamp(params.attack_hf_dynamics, 0.0f, 8.0f);
+  scrub_hf_gain_ = hf_dyn > 0.0f ? std::pow(vel01 / kHammerMfVel, hf_dyn) : 1.0f;
+  if (scrub_hf_gain_ != 1.0f) {
+    const float w0 = rt::frequency_to_w0(kScrubHfShelfHz, static_cast<double>(sr));
+    const float half_db = 10.0f * std::log10(scrub_hf_gain_);
+    for (rt::BiquadState& st : scrub_hi_) {
+      st.set(rt::rbj_high_shelf(w0, kButterworthQ, half_db));
+      st.reset();
+    }
+  }
   // Below C4 the injection GROWS instead: the massive bass hammer's felt
   // scrub and re-strike chatter seed the dense h8-h20 partial cloud a wound
   // string radiates (absent it, the bass is a clean plucked stack).
@@ -1956,7 +1971,10 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
     // (its own history — the force comb carries different units/lifetime).
     // Without this the noise fills in the comb's h8-region notch, the
     // reference bass ladder's signature dip.
-    const float scrub = noise_inject_ * (noise - noise_low_);
+    float scrub = noise_inject_ * (noise - noise_low_);
+    if (scrub_hf_gain_ != 1.0f) {
+      scrub = scrub_hi_[1].process(scrub_hi_[0].process(scrub));
+    }
     const size_t widx = static_cast<size_t>((noise_pos_ - 1) % kHammerCombCapacity);
     noise_hist_[widx] = scrub;
     const int64_t tap_i = noise_pos_ - 1 - comb_delay_;

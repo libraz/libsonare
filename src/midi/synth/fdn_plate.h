@@ -91,10 +91,50 @@ class FdnPlate {
   /// piece needs 100 ms after the strike. One is a ceiling and the other is a
   /// decay, and a piece that speaks under a ceiling needs the ceiling moved.
   ///
+  /// @p floor_hz is where the plate stops responding (0 = @p low_hz), so the
+  /// partial spacing and the floor can differ: a ride needs ~16 Hz spacing and
+  /// a floor at its 350 Hz body.
+  ///
+  /// @p cascade (per second, 0 = linear) hands energy under @p cascade_hz (0 =
+  /// the whole band) up the band as the network's own high-passed square, at
+  /// equal energy (von Karman; Touze, Bilbao & Cadot, JSV 331, 2012).
+  ///
+  /// @p cascade_drop_db is how far a full-velocity strike's low band falls
+  /// before the flow stops (0 = never), twice that two octaves under the
+  /// corner. @p strike_level (0..1) scales where the stop sits.
+  ///
   /// A @p t60_s at or below zero leaves the plate inactive.
-  void start(double sample_rate, float low_hz, float t60_s, float hf_ratio, float air_hz) noexcept {
+  void start(double sample_rate, float low_hz, float t60_s, float hf_ratio, float air_hz,
+             float cascade = 0.0f, float cascade_hz = 0.0f, float floor_hz = 0.0f,
+             float cascade_drop_db = 0.0f, float strike_level = 1.0f) noexcept {
     const float sr = static_cast<float>(sample_rate > 0.0 ? sample_rate : 48000.0);
     active_ = t60_s > 0.0f;
+    cascade_ = active_ ? std::max(0.0f, cascade) / sr : 0.0f;
+    energy_ = 0.0f;
+    peak_energy_ = 0.0f;
+    deep_energy_ = 0.0f;
+    deep_peak_ = 0.0f;
+    sq_.fill(0.0f);
+    low_.fill(0.0f);
+    deep_.fill(0.0f);
+    // Stop level against the low band's own peak, rescaled to a full-velocity strike.
+    const float level = std::clamp(strike_level, 1.0e-3f, 1.0f);
+    stop_ratio_ =
+        cascade_drop_db > 0.0f ? std::pow(10.0f, -0.1f * cascade_drop_db) / (level * level) : 0.0f;
+    // Two octaves under the corner the drop doubles (crash: 500 Hz ~10 dB, 100-250 Hz 40-60 dB
+    // down).
+    deep_stop_ = stop_ratio_ * stop_ratio_ * level * level;
+    deep_a_ = cascade_hz > 0.0f && cascade_drop_db > 0.0f
+                  ? 1.0f - std::exp(-sonare::constants::kTwoPi *
+                                    std::min(0.25f * cascade_hz, 0.45f * sr) / sr)
+                  : 0.0f;
+    // One-pole corner of the drained band; no corner drains the whole band.
+    low_a_ =
+        cascade_hz > 0.0f
+            ? 1.0f - std::exp(-sonare::constants::kTwoPi * std::min(cascade_hz, 0.45f * sr) / sr)
+            : 1.0f;
+    // A millisecond: averages the partials' beating, short against the flow.
+    follow_a_ = 1.0f - std::exp(-1.0f / (0.001f * sr));
     if (!active_) {
       pos_.fill(0);
       return;
@@ -117,7 +157,9 @@ class FdnPlate {
     // radiates nothing at all. `low_hz` already names the lowest partial the
     // plate has, so it is also the frequency below which the plate does not
     // respond.
-    lo_a_ = 1.0f - std::exp(-sonare::constants::kTwoPi * std::min(low_hz, 0.45f * sr) / sr);
+    const float floor = floor_hz > 0.0f ? floor_hz : low_hz;
+    lo_a_ = 1.0f - std::exp(-sonare::constants::kTwoPi * std::min(floor, 0.45f * sr) / sr);
+    product_a_ = cascade_hz > 0.0f ? low_a_ : lo_a_;
     lo1_ = 0.0f;
     lo2_ = 0.0f;
     bound_ = air_hz > 0.0f;
@@ -147,6 +189,8 @@ class FdnPlate {
       const int want = std::clamp(static_cast<int>(base * kSpread[k]), 8, kMaxDelay - 32);
       const int len = std::min(fdn_plate_detail::next_prime_at_least(want), kMaxDelay);
       len_[k] = len;
+      // Drained once per trip round the line, so the per-trip loss scales with its length.
+      drain_[k] = 0.5f * cascade_ * static_cast<float>(len);
 
       // Jot: the round-trip gain that reaches t60 after len samples, so every
       // line decays at the same rate however long it is.
@@ -171,6 +215,7 @@ class FdnPlate {
   /// Feeds one sample of excitation in and returns one sample of plate.
   float process(float x) noexcept {
     if (!active_) return 0.0f;
+    if (cascade_ > 0.0f) return process_cascade(x);
     lo1_ += (x - lo1_) * lo_a_;
     x -= lo1_;
     lo2_ += (x - lo2_) * lo_a_;
@@ -210,6 +255,7 @@ class FdnPlate {
 
   void reset() noexcept {
     active_ = false;
+    cascade_ = 0.0f;
     bound_ = false;
     air1_ = 0.0f;
     air2_ = 0.0f;
@@ -222,6 +268,88 @@ class FdnPlate {
   bool active() const noexcept { return active_; }
 
  private:
+  // process() with the drained low band put back as the output's high-passed square.
+  float process_cascade(float x) noexcept {
+    lo1_ += (x - lo1_) * lo_a_;
+    x -= lo1_;
+    lo2_ += (x - lo2_) * lo_a_;
+    x -= lo2_;
+
+    std::array<float, kLines> s{};
+    float sum = 0.0f;
+    float out = 0.0f;
+    for (int i = 0; i < kLines; ++i) {
+      const auto k = static_cast<size_t>(i);
+      s[k] = lines_[k][static_cast<size_t>(pos_[k])];
+      sum += s[k];
+      out += s[k] * kOutputSign[k];
+    }
+    out *= 1.0f / std::sqrt(static_cast<float>(kLines));
+
+    // Four poles: the product's difference tones would otherwise fall back into the band.
+    float q = out * out;
+    for (float& state : sq_) {
+      state += (q - state) * product_a_;
+      q -= state;
+    }
+
+    const float shared = sum * (2.0f / static_cast<float>(kLines));
+    std::array<float, kLines> v{};
+    float low_energy = 0.0f;
+    float deep_energy = 0.0f;
+    for (int i = 0; i < kLines; ++i) {
+      const auto k = static_cast<size_t>(i);
+      const float w = (s[k] - shared) * gain_[k];
+      lp_[k] = w * (1.0f - damp_[k]) + lp_[k] * damp_[k];
+      v[k] = lp_[k];
+      low_[k] += (v[k] - low_[k]) * low_a_;
+      low_energy += low_[k] * low_[k];
+      deep_[k] += (v[k] - deep_[k]) * deep_a_;
+      deep_energy += deep_[k] * deep_[k];
+    }
+    energy_ += (low_energy * (1.0f / kLines) - energy_) * follow_a_;
+    peak_energy_ = std::max(peak_energy_, energy_);
+    deep_energy_ += (deep_energy * (1.0f / kLines) - deep_energy_) * follow_a_;
+    deep_peak_ = std::max(deep_peak_, deep_energy_);
+    // The flow runs while the low band sits above its stop level and then ceases.
+    const float excess =
+        energy_ > 0.0f ? std::max(0.0f, 1.0f - stop_ratio_ * peak_energy_ / energy_) : 0.0f;
+    const float deep_excess =
+        deep_energy_ > 0.0f ? std::max(0.0f, 1.0f - deep_stop_ * deep_peak_ / deep_energy_) : 0.0f;
+    float drained = 0.0f;
+    float kept = 0.0f;
+    float along = 0.0f;
+    for (int i = 0; i < kLines; ++i) {
+      const auto k = static_cast<size_t>(i);
+      const float before = v[k] * v[k];
+      v[k] -= (1.0f - std::exp(-drain_[k] * excess)) * low_[k] +
+              (1.0f - std::exp(-drain_[k] * deep_excess)) * deep_[k];
+      kept += v[k] * v[k];
+      drained += before;
+      along += v[k] * kInputSign[k];
+    }
+    drained = std::max(0.0f, drained - kept);
+    // Root of |v + a*q*sign|^2 - |v|^2 = drained that is zero when nothing drained.
+    const float uu = static_cast<float>(kLines) * q * q;
+    const float vu = along * q;
+    const float root = std::sqrt(vu * vu + uu * drained);
+    const float den = vu >= 0.0f ? vu + root : vu - root;
+    const float a = std::abs(den) > 1.0e-30f ? drained / den : 0.0f;
+    // Energy handed up past the ceiling is lost, as the plate does not respond there.
+    float in = x + a * q;
+    if (bound_) {
+      air1_ += (in - air1_) * air_a_;
+      air2_ += (air1_ - air2_) * air_a_;
+      in = air2_;
+    }
+    for (int i = 0; i < kLines; ++i) {
+      const auto k = static_cast<size_t>(i);
+      lines_[k][static_cast<size_t>(pos_[k])] = v[k] + in * kInputSign[k];
+      if (++pos_[k] >= len_[k]) pos_[k] = 0;
+    }
+    return out;
+  }
+
   // Orthogonal sign patterns: the excitation enters on one and the pickup
   // reads on the other, so what leaves the network is not a copy of what
   // entered it.
@@ -244,6 +372,21 @@ class FdnPlate {
   float lo2_ = 0.0f;
   bool bound_ = false;
   bool active_ = false;
+  float cascade_ = 0.0f;
+  std::array<float, kLines> drain_{};
+  float follow_a_ = 0.0f;
+  float energy_ = 0.0f;
+  float peak_energy_ = 0.0f;
+  float stop_ratio_ = 0.0f;
+  float deep_energy_ = 0.0f;
+  float deep_peak_ = 0.0f;
+  float deep_stop_ = 0.0f;
+  float deep_a_ = 0.0f;
+  std::array<float, kLines> deep_{};
+  std::array<float, 4> sq_{};
+  std::array<float, kLines> low_{};
+  float low_a_ = 1.0f;
+  float product_a_ = 0.0f;
 };
 
 }  // namespace sonare::midi::synth

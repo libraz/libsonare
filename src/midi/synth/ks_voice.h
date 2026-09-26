@@ -183,6 +183,22 @@ struct KsPatchParams {
   /// lowpassed noise burst is added to the output at note-off, scaled by this
   /// amount (the GS "with key off" harpsichord variation).
   float keyoff_noise = 0.0f;
+  /// Pick/finger contact-click burst in [0,1] (0 = off, bit-identical). Added
+  /// to the OUTPUT at note-on rather than fed into the loop, so its fixed
+  /// few-ms decay does not track @ref decay_s; scaled by velocity.
+  float pick_noise = 0.0f;
+  /// T60 in seconds of the partial at the engine's fixed high-frequency quote
+  /// (4 kHz); 0 keeps the pole the tone knob implies. Default is shorter than
+  /// every reference (2.0-9.6 s), so a patch moves it only with its excitation.
+  float hf_decay_s = 0.07f;
+  /// Independent mid-band T60 in seconds, at the engine's fixed mid-frequency
+  /// anchor (0 = off, bit-identical). A second cascaded pole past the single
+  /// pole's own tilt ceiling, giving the loop a third decay point.
+  float mid_decay_s = 0.0f;
+  /// Exponent of the SoundFont velocity-to-amplitude curve on this string
+  /// (0 = off). The spec's 2.0 swung nine unamplified references 4.4-19.6 dB
+  /// wider than their grids; the default 1.19 is the median of what they ask for (0.36-1.50).
+  float velocity_exponent = 1.19f;
 };
 
 /// Per-voice plucked-string state, embedded in NativeSynthVoice. The voice's
@@ -288,6 +304,15 @@ class KsVoiceCore {
   float keyoff_alpha_ = 1.0f;
   float keyoff_decay_ = 0.0f;
   float keyoff_env_ = 0.0f;
+
+  // Pick/finger contact-noise burst, armed at start() (bit-identical when off).
+  float pick_amount_ = 0.0f;
+  int pick_pos_ = 0;
+  int pick_len_ = 0;
+  float pick_lp_ = 0.0f;
+  float pick_alpha_ = 1.0f;
+  float pick_decay_ = 0.0f;
+  float pick_env_ = 0.0f;
 };
 
 }  // namespace sonare::midi::synth

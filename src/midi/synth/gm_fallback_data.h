@@ -37,7 +37,8 @@ struct ProgramOverrides {
   NativeSynthPatch dulcimer;            // program 15 (hammered string, KS)
   NativeSynthPatch nylon_guitar;        // program 24
   NativeSynthPatch steel_guitar;        // program 25 (Acoustic Guitar, steel)
-  NativeSynthPatch electric_guitar;     // programs 26-27 (jazz / clean)
+  NativeSynthPatch electric_guitar;     // program 26 (jazz)
+  NativeSynthPatch clean_guitar;        // program 27 (clean, the direct-out string)
   NativeSynthPatch muted_guitar;        // program 28 (palm mute)
   NativeSynthPatch overdriven;          // program 29
   NativeSynthPatch distortion;          // program 30
@@ -218,6 +219,7 @@ struct ProgramOverrides {
   X(nylon_guitar)                     \
   X(steel_guitar)                     \
   X(electric_guitar)                  \
+  X(clean_guitar)                     \
   X(muted_guitar)                     \
   X(overdriven)                       \
   X(distortion)                       \

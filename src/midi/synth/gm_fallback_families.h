@@ -68,6 +68,9 @@ SONARE_TUNABLE(kPianoSoundboard, 0.35f);
 /// knob is not.
 SONARE_TUNABLE(kPianoHammerContactMs, 1.35f);
 SONARE_TUNABLE(kPianoHammerDynamics, 0.5f);
+/// Fitted on the concert-grand corpus: the attack's 4-8 kHz share swings +9.5 dB
+/// from v24 to v120 at zero against the reference's +28.1, and +27.3 here.
+SONARE_TUNABLE(kPianoAttackHfDynamics, 2.15f);
 /// Damper t60 at note-off, at the loud end of the velocity range; the voice
 /// lengthens it for a softer blow, because felt damps a quiet string weakly
 /// (see kDamperVelSlope in piano_voice.cpp). Fitted against the concert grand's
@@ -114,6 +117,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   t[0].piano.soundboard = kPianoSoundboard;
   t[0].piano.hammer_contact_ms = kPianoHammerContactMs;
   t[0].piano.hammer_dynamics = kPianoHammerDynamics;
+  t[0].piano.attack_hf_dynamics = kPianoAttackHfDynamics;
   t[0].piano.release_damp_s = kPianoReleaseDampS;
   t[0].stereo_spread = 0.3f;
   // Levelled against a captured concert grand, which is also where the

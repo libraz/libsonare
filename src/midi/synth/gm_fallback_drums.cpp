@@ -700,11 +700,25 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // nowhere to put its result.
   t[49] = cymbal_patch(kCymbals[0]);
   t[57] = cymbal_patch(kCymbals[1]);
+  // The stick rings the plate and its low band hands energy up until it is 10 dB
+  // down: strike-to-body tilt change -20.9 -> -5.5 dB against the module, band shape
+  // 10.9 -> 9.4 dB, crest +5.9 -> +3.6 dB.
+  t[57].percussion.plate_contact = 5.0f;
+  t[57].percussion.contact_ms = 1.0f;
+  t[57].percussion.plate_cascade = 150.0f;
+  t[57].percussion.plate_cascade_hz = 1500.0f;
+  t[57].percussion.plate_cascade_drop_db = 10.0f;
+  t[57].percussion.plate_t60_s = 3.4f;
+  t[57].gain = 0.2032f;
   t[51] = cymbal_patch(kCymbals[2]);
   t[59] = cymbal_patch(kCymbals[3]);
   t[53] = cymbal_patch(kCymbals[4]);
   t[52] = cymbal_patch(kCymbals[5]);
   t[55] = cymbal_patch(kCymbals[6]);
+  // The module's 500 Hz strike lasts under 5 ms, so it is the stick's click rather
+  // than the plate: strike-to-body tilt change -11.3 -> -0.4 dB.
+  t[55].percussion.contact_ms = 1.6f;
+  t[55].percussion.contact = 1.0f;
   t[46] = cymbal_patch(kCymbals[7]);
   t[42] = cymbal_patch(kCymbals[8]);
   t[44] = cymbal_patch(kCymbals[9]);
@@ -714,6 +728,32 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[46].amp_env.release_ms = 40.0f;
   t[42].percussion.exclusive_class = 1;
   t[44].percussion.exclusive_class = 1;
+  // Plates spaced 380-900 Hz read 6.2-7.6 dB more tonal than the module; a denser,
+  // darker plate closes tilt, band shape and tonality, centroid paying 3-14%.
+  // Open: tilt +16.4 -> +12.3 dB, band shape 18.2 -> 12.7 dB, tonality -7.58 -> -2.68 dB.
+  t[46].percussion.noise_gain = 1.6f;
+  t[46].percussion.tone_gain = 0.12f;
+  t[46].percussion.plate_low_hz = 180.0f;
+  t[46].percussion.plate_hf_ratio = 0.45f;
+  // Closed, fitted: tilt +22.5 -> +19.9 dB, band shape 17.2 -> 15.5 dB, tonality -7.22 -> -5.45 dB.
+  t[42].percussion.noise_gain = 1.61952f;
+  t[42].percussion.tone_gain = 0.404574f;
+  t[42].percussion.contact = 2.97345f;
+  t[42].percussion.mode_decay_s = 0.774367f;
+  t[42].percussion.noise_air_hz = 12207.3f;
+  t[42].percussion.noise_cutoff_hz = 8686.37f;
+  t[42].percussion.noise_decay_ms = 43.8095f;
+  t[42].percussion.noise_q = 2.33405f;
+  t[42].percussion.plate_air_hz = 13262.8f;
+  t[42].percussion.plate_gain = 0.683913f;
+  t[42].percussion.plate_hf_ratio = 0.422297f;
+  t[42].percussion.plate_low_hz = 291.46f;
+  t[42].percussion.plate_t60_s = 0.151031f;
+  // Pedal: tilt +24.7 -> +23.4 dB, band shape 20.6 -> 16.8 dB, tonality -6.24 -> -3.44 dB.
+  t[44].percussion.noise_gain = 1.6f;
+  t[44].percussion.tone_gain = 0.12f;
+  t[44].percussion.plate_low_hz = 150.0f;
+  t[44].percussion.plate_hf_ratio = 0.5f;
   // The china's wash is a band rather than a corner, and a narrow one: that is
   // what trashy is, and it is a different filter rather than a different
   // corner. Its partials are pulled off the plate ratios the others share until
@@ -721,6 +761,15 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[52].percussion.noise_output = SynthFilterOutput::kBandpass;
   t[52].percussion.noise_q = 3.0091f;
   t[52].percussion.mode_ratios = {1.0f, 1.19f, 1.51f, 1.83f, 0.0f, 0.0f};
+  // Fitted against the module's china: a denser, longer plate carrying more of
+  // the tail than the strike layer took decay -1.97 -> -1.18 dB/s, ring +0.18 ->
+  // +0.03 doublings and crest +3.2 -> +0.4 dB.
+  t[52].percussion.mode_decay_s = 0.30592f;
+  t[52].percussion.noise_decay_ms = 110.40f;
+  t[52].percussion.plate_gain = 1.37131f;
+  t[52].percussion.plate_hf_ratio = 0.73363f;
+  t[52].percussion.plate_t60_s = 2.04106f;
+  t[52].percussion.shimmer = 0.24636f;
   // The bell is the one piece carried by its modes, so its ring is narrow
   // rather than dense and its wash is only the stick.
   t[53].percussion.mode_ratios = {1.0f, 1.40f, 2.76f, 3.27f, 0.0f, 0.0f};
@@ -1284,7 +1333,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[38].percussion.noise_decay_ms = 120.0f;
   t[38].percussion.noise_cutoff_hz = 1500.0f;
   t[38].percussion.noise_q = 0.8f;
-  t[38].percussion.contact = 0.3f;
+  // Crest read 5.8 dB under the module; the stick-tip radiation, summed outside
+  // the amp envelope, takes it to -0.2 dB and adds 5.7 dB of peak level.
+  t[38].percussion.contact = 3.95462f;
   t[38].percussion.contact_ms = 0.07f;
   // The strainer: high-passed into its own band, bounded above by the radiated
   // ceiling so the rattle sits where a wire bed sits instead of running to
@@ -1304,7 +1355,8 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[38].amp_env = fallback_env(0.5f, 600.0f, 0.0f, 80.0f);
   // Level read 2.18 dB quiet against the module; gain is linear in level, so
   // this is the exact correction (x10^(2.18/20)) rather than a further search.
-  t[38].gain = 2.665f;  // Acoustic Snare
+  // Pays back the 5.7 dB `contact` adds above (x10^(-5.7/20)).
+  t[38].gain = 1.3827f;  // Acoustic Snare
   t[39].percussion.noise_air_hz = 1459.44f;
   t[39].gain = 4.20f;  // Hand Clap
   t[39].amp_env.attack_ms = 3.87415f;

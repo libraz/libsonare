@@ -79,10 +79,10 @@ SONARE_TUNABLE(kSendsSfxCho, 1.0f);
 /// full-scale signal and the bank's guitar arrives well under one, so without
 /// it a driven binding reads a part of the curve that is still clean. The level
 /// trim sits after the amplifier and is loudness only — measured identical
-/// crest from 0 to 60 dB — so it peaks a program against its unrigged siblings
-/// and nothing else. Drive moves the triode's operating point AND the
-/// bright-cap shelf in front of it, so buying saturation with it also buys
-/// brightness, which is why the driven bindings buy theirs with the trim.
+/// crest from 0 to 60 dB — so it sets the program's level and nothing else.
+/// Drive moves the triode's operating point AND the bright-cap shelf in front
+/// of it, so buying saturation with it also buys brightness, which is why the
+/// driven bindings buy theirs with the trim.
 ///
 /// Measured on E3 at velocity 100, peak-to-RMS, against the same voice direct
 /// (23.8 dB): clean stays there, 29 lands 3.0 dB under it and 30 lands 8.1.
@@ -113,9 +113,11 @@ SONARE_TUNABLE(kRigLeadPresenceDb, 0.0f);
 SONARE_TUNABLE(kRigCleanDrive, 0.35f);
 SONARE_TUNABLE(kRigCleanLevelDb, 44.1f);
 SONARE_TUNABLE(kRigCrunchDrive, 0.55f);
-SONARE_TUNABLE(kRigCrunchLevelDb, 16.67f);
+// The crunch and lead levels match the amped reference's peak over notes 40-64 at
+// velocity 104 (they read a median 6.4 and 2.3 dB under it at these input trims).
+SONARE_TUNABLE(kRigCrunchLevelDb, 23.1f);
 SONARE_TUNABLE(kRigLeadDrive, 0.95f);
-SONARE_TUNABLE(kRigLeadLevelDb, 19.76f);
+SONARE_TUNABLE(kRigLeadLevelDb, 22.1f);
 
 /// The amplifiers a binding can name, indexed by its preset selector. The order
 /// mirrors the mastering module's `amp_preset_names()`, which the synth
@@ -407,8 +409,9 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
     case 25:  // Acoustic Guitar (steel)
       return program_overrides().steel_guitar;
     case 26:  // Electric Guitar (jazz)
-    case 27:  // Electric Guitar (clean)
       return program_overrides().electric_guitar;
+    case 27:  // Electric Guitar (clean)
+      return program_overrides().clean_guitar;
     case 28:  // Electric Guitar (muted)
       return program_overrides().muted_guitar;
     case 29:  // Overdriven Guitar

@@ -91,7 +91,8 @@ SONARE_TUNABLE(kBrassVelocityExponent, 0.93f);
 /// exponent each asks for is 0.47 and 0.52.
 SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
 
-/// Exponent of the SoundFont velocity-to-amplitude curve for @p mode, 0 = off.
+/// Exponent of the SoundFont velocity-to-amplitude curve for @p p, 0 = off; the
+/// Karplus-Strong string carries its own in `ks.velocity_exponent`.
 ///
 /// `sf2_velocity_gain` exists because a sampled note was recorded at one force
 /// and has to be scaled to the force actually played. A physical engine is
@@ -120,11 +121,13 @@ SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
 /// An engine opts out only once it has been measured against a reference corpus.
 /// Every other physical engine was voiced with the curve in place and would
 /// shift underneath its own calibration if this changed for it too.
-float sampler_velocity_exponent(SynthEngineMode mode) noexcept {
+float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
+  const SynthEngineMode mode = p.mode;
   if (mode == SynthEngineMode::kPiano || mode == SynthEngineMode::kHarpsichord) return 0.0f;
   if (mode == SynthEngineMode::kBrass) return kBrassVelocityExponent;
   if (mode == SynthEngineMode::kPercussion) return kPercussionVelocityExponent;
   if (mode == SynthEngineMode::kAdditive) return kAdditiveVelocityExponent;
+  if (mode == SynthEngineMode::kKarplusStrong) return p.ks.velocity_exponent;
   return 2.0f;
 }
 
@@ -267,7 +270,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
     oscs[static_cast<size_t>(k)].start(sample_rate, p.waveform, phase, seed ^ (k + 1));
   }
 
-  const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p.mode));
+  const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p));
   velocity_gain = sampler_vel * kit_gain * drum_mod.level_gain;
   static_cutoff_cents =
       p.vel_to_cutoff_cents * (static_cast<float>(velocity & 0x7Fu) / 127.0f - 1.0f) +

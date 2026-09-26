@@ -129,6 +129,15 @@ namespace string_loop_detail {
 /// loop is numerically a resonator rather than a string.
 inline constexpr float kMaxPole = 0.995f;
 
+/// The loop's peak response (at DC, for a lowpass pole) must stay under one or
+/// the delay line grows without bound.
+inline constexpr float kMaxLoopGain = 0.9999f;
+
+/// How many times longer than the fundamental the frequencies under it may
+/// ring, since a lowpass in the loop peaks at DC and the gain holding the
+/// fundamental's t60 always leaves something beneath it ringing longer.
+inline constexpr float kMaxSubFundamentalRing = 8.0f;
+
 /// The root of a^2 + beta*a + 1 == 0 inside the unit circle. The two roots are
 /// reciprocals, so one always is; a complex pair collapses to -beta/2.
 inline float stable_pole(float beta) noexcept {
@@ -141,6 +150,34 @@ inline float stable_pole(float beta) noexcept {
 }
 
 }  // namespace string_loop_detail
+
+/// The one-pole feedback coefficient giving |H(omega0)|/|H(omega_ref)| ==
+/// @p ratio (ratio > 1), from the quadratic a^2 + beta*a + 1 == 0. No clamp,
+/// no compensation: the shape solve_string_loop_filter reuses for both its
+/// own tilt solve and its sub-fundamental ring cap, and that a caller
+/// composing several poles into a cascade calls directly so the ring bound
+/// can be applied once to the cascade rather than to one stage alone.
+inline float solve_tilt_pole(float omega0, float omega_ref, float ratio) noexcept {
+  const float c1 = std::cos(omega0);
+  const float r2 = ratio * ratio;
+  return string_loop_detail::stable_pole(-2.0f * (std::cos(omega_ref) - r2 * c1) / (1.0f - r2));
+}
+
+/// The darkest per-traversal gain content below the fundamental may keep, so
+/// it rings no more than kMaxSubFundamentalRing times as long as a loop whose
+/// fundamental itself keeps @p g_fundamental per traversal.
+inline float sub_fundamental_gain_cap(float g_fundamental) noexcept {
+  return std::min(string_loop_detail::kMaxLoopGain,
+                  std::pow(g_fundamental, 1.0f / string_loop_detail::kMaxSubFundamentalRing));
+}
+
+/// Gain in front of a solved pole @p a that keeps its response at
+/// @p omega_target equal to @p g_target, clamped to the loop's stability
+/// ceiling.
+inline float compensated_loop_gain(float a, float omega_target, float g_target) noexcept {
+  return std::min(string_loop_detail::kMaxLoopGain,
+                  g_target / std::max(1.0e-6f, onepole_magnitude(a, omega_target)));
+}
 
 /// Solves the loop's loss filter from what the string has to DO rather than
 /// from a tone knob: @p g_fundamental is the per-traversal gain the fundamental
@@ -178,20 +215,9 @@ inline float stable_pole(float beta) noexcept {
 /// still sound and still stay inside the unit circle.
 inline StringLoopFilter solve_string_loop_filter(float omega0, float omega_ref, float g_fundamental,
                                                  float g_reference) noexcept {
-  /// The loop's peak response (at DC, for a lowpass pole) must stay under one or
-  /// the delay line grows without bound.
-  constexpr float kMaxLoopGain = 0.9999f;
-  /// How many times longer than the fundamental the frequencies under it may
-  /// ring. A string has no mode down there, but a lowpass in the loop peaks at
-  /// DC, so the gain that holds the fundamental's t60 always leaves something
-  /// beneath it ringing longer — 837 s under a 6.8 s note, at the point the
-  /// compensation clamped. The bank's own working cases sit at 1.7 times.
-  constexpr float kMaxSubFundamentalRing = 8.0f;
-
   StringLoopFilter out;
-  const float g0 = std::clamp(g_fundamental, 0.0f, kMaxLoopGain);
+  const float g0 = std::clamp(g_fundamental, 0.0f, string_loop_detail::kMaxLoopGain);
   const float ratio = g_reference > 0.0f ? g0 / g_reference : 1.0f;
-  const float c1 = std::cos(omega0);
 
   if (!(ratio > 1.000001f)) {
     // The two targets agree: no tilt to build, so the pole is transparent.
@@ -200,29 +226,19 @@ inline StringLoopFilter solve_string_loop_filter(float omega0, float omega_ref, 
     return out;
   }
 
-  const float r2 = ratio * ratio;
   // |H(w0)|/|H(w_ref)| == ratio reduces to a^2 + beta*a + 1 == 0, whose two
   // roots are reciprocals — the stable one is the root inside the unit circle.
-  out.a = string_loop_detail::stable_pole(-2.0f * (std::cos(omega_ref) - r2 * c1) / (1.0f - r2));
+  out.a = solve_tilt_pole(omega0, omega_ref, ratio);
 
-  // The darkest pole the compensation can still pay for, from the same quadratic
-  // — the response the fundamental needs is what bounds |H(w0)| from below.
-  const float g_max = std::min(kMaxLoopGain, std::pow(g0, 1.0f / kMaxSubFundamentalRing));
+  // The darkest pole the compensation can still pay for; below it, no pole at all.
+  const float g_max = sub_fundamental_gain_cap(g0);
   const float mag_floor = g_max > 0.0f ? g0 / g_max : 1.0f;
-  if (mag_floor < 0.999999f) {
-    const float m2 = mag_floor * mag_floor;
-    out.a =
-        std::min(out.a, string_loop_detail::stable_pole(-2.0f * (1.0f - m2 * c1) / (1.0f - m2)));
-  } else {
-    // A decay already at the loop's ceiling leaves nothing to compensate with,
-    // so the only pole that keeps the fundamental's gain is no pole at all.
-    out.a = std::min(out.a, 0.0f);
-  }
+  out.a = std::min(out.a, mag_floor < 0.999999f ? solve_tilt_pole(omega0, 0.0f, mag_floor) : 0.0f);
 
   // Scale the pole back up so the fundamental keeps exactly the gain it was
   // asked for; without this the pole's own attenuation at w0 is an unaccounted
   // second decay.
-  out.g = std::min(kMaxLoopGain, g0 / std::max(1.0e-6f, onepole_magnitude(out.a, omega0)));
+  out.g = compensated_loop_gain(out.a, omega0, g0);
   return out;
 }
 
@@ -249,7 +265,15 @@ struct StringLoop {
   float alpha = 1.0f;
   float lp_state = 0.0f;
 
-  /// Per-traversal amplitude factor for the sounding t60, and the one release()
+  /// A second, cascaded loss pole (off by default: loop2_active == false skips
+  /// it entirely, bit-identical to the single-pole form). Lifts the one-pole
+  /// tilt ceiling by giving the loop a third, independent decay point.
+  float alpha2 = 1.0f;
+  float lp_state2 = 0.0f;
+  bool loop2_active = false;
+
+  /// Per-traversal amplitude factor for the sounding t60 (the product of both
+  /// poles' front gains when the second is active), and the one release()
   /// re-targets it to (the damper).
   float gain = 0.0f;
   float release_gain = 0.0f;
@@ -273,15 +297,24 @@ struct StringLoop {
   /// fundamental on every traversal, and at 1400 traversals a second that loss
   /// dwarfs the nominal t60, so a string built from a brightness knob loses its
   /// top octave no matter what decay it was asked for.
+  ///
+  /// @p has_pole2 engages the cascaded second pole (@p a2, @p g2); left false
+  /// (the default) the loop is exactly the single-pole form above, bit-for-bit.
   void configure_filter(float* slab, int capacity, float period_samples, float a, float g,
-                        float release_g) noexcept {
+                        float release_g, bool has_pole2 = false, float a2 = 0.0f,
+                        float g2 = 1.0f) noexcept {
     buffer = slab;
     period = period_samples;
     write = 0;
     alpha = 1.0f - a;
     lp_state = 0.0f;
-    loop_comp = 1.0f + onepole_group_delay_samples(a, constants::kTwoPi / period_samples);
-    gain = g;
+    float comp = onepole_group_delay_samples(a, constants::kTwoPi / period_samples);
+    loop2_active = has_pole2;
+    alpha2 = 1.0f - a2;
+    lp_state2 = 0.0f;
+    if (has_pole2) comp += onepole_group_delay_samples(a2, constants::kTwoPi / period_samples);
+    loop_comp = 1.0f + comp;
+    gain = g * g2;  // g2 == 1.0f by default, an exact IEEE754 no-op
     release_gain = release_g;
     size = capacity;
     if (buffer != nullptr) {
@@ -295,6 +328,8 @@ struct StringLoop {
     size = 0;
     write = 0;
     lp_state = 0.0f;
+    lp_state2 = 0.0f;
+    loop2_active = false;
     gain = 0.0f;
   }
 
@@ -310,8 +345,12 @@ struct StringLoop {
                                           input);
   }
 
-  /// Closes the loop: the (possibly shaped) delayed sample enters the loss filter.
-  void commit(float shaped) noexcept { lp_state += alpha * (shaped - lp_state); }
+  /// Closes the loop: the (possibly shaped) delayed sample enters the loss
+  /// filter, cascaded through the second pole when engaged.
+  void commit(float shaped) noexcept {
+    lp_state += alpha * (shaped - lp_state);
+    if (loop2_active) lp_state2 += alpha2 * (lp_state - lp_state2);
+  }
 
   /// advance() then commit(), for a loop with nothing shaped inside it.
   float process(float input, float ratio) noexcept {
@@ -321,7 +360,7 @@ struct StringLoop {
   }
 
   /// The feedback term to add into the next sample's loop input.
-  float feedback() const noexcept { return gain * lp_state; }
+  float feedback() const noexcept { return gain * (loop2_active ? lp_state2 : lp_state); }
 
   /// Note-off: re-target the decay to the damped t60. Never lengthens a decay
   /// that is already shorter than the damper's.
@@ -331,6 +370,7 @@ struct StringLoop {
   void kill() noexcept {
     gain = 0.0f;
     lp_state = 0.0f;
+    lp_state2 = 0.0f;
   }
 };
 

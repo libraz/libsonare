@@ -165,6 +165,25 @@ int vibrato_half_cycles(const Render& r, size_t from, size_t to) {
   return half_cycles;
 }
 
+/// The played note's fundamental (MIDI 60, C4).
+constexpr double kPlayedNoteHz = 261.6256;
+
+/// Isolates @p r to content at or below @p cutoff_hz with four cascaded
+/// one-pole passes, so the model bank's piano partials do not add zero
+/// crossings the vibrato itself did not make; the sine fixture is untouched.
+Render lowpass(const Render& r, double cutoff_hz) {
+  Render lp(r.begin(), r.end());
+  const float alpha = 1.0f - static_cast<float>(std::exp(-kTwoPi * cutoff_hz / kOutRate));
+  for (int pass = 0; pass < 4; ++pass) {
+    float state = 0.0f;
+    for (float& s : lp) {
+      state += alpha * (s - state);
+      s = state;
+    }
+  }
+  return lp;
+}
+
 void write_rate(Sf2Player& p, uint8_t value) {
   const std::vector<uint8_t> m = dt1(kModBlock, kLfo1Rate, {value});
   p.handle_sysex(m.data(), m.size());
@@ -237,7 +256,9 @@ TEST_CASE("40 2x 03 changes how often the vibrato swings", "[midi][synth][gs]") 
         write_rate(p, rate);
         wheel(p, 127);
       });
-      return vibrato_half_cycles(r, 0, r.size());
+      // The model piano's own partials add zero crossings the sine fixture has none of.
+      const Render counted = bank == Bank::kModel ? lowpass(r, 1.5 * kPlayedNoteHz) : r;
+      return vibrato_half_cycles(counted, 0, counted.size());
     };
     const int slow = swings(0x00);
     const int centred = swings(kCentre);

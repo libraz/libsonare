@@ -708,3 +708,78 @@ TEST_CASE("the shipped guitar harmonics program is a flageolet, not the open str
   REQUIRE(peak < steel_peak);
   REQUIRE(peak > 0.5f * steel_peak);
 }
+
+TEST_CASE("pick/finger click colours the attack, scales with velocity, off by default",
+          "[midi][synth][ks]") {
+  NativeSynthPatch clean = ks_base_patch();
+  clean.ks.brightness = 0.7f;
+  clean.ks.decay_s = 4.0f;
+  clean.gain = 0.7f;
+  NativeSynthPatch clicked = clean;
+  clicked.ks.pick_noise = 0.6f;
+  const std::vector<float> off_soft = render_patch(clean, 45, 40, 4096);  // pick_noise == 0
+  const std::vector<float> off_hard = render_patch(clean, 45, 120, 4096);
+  const std::vector<float> on_soft = render_patch(clicked, 45, 40, 4096);
+  const std::vector<float> on_hard = render_patch(clicked, 45, 120, 4096);
+  // Off is bit-identical whatever the velocity; on differs and scales with it.
+  REQUIRE(off_soft == render_patch(clean, 45, 40, 4096));
+  REQUIRE(on_soft != off_soft);
+  REQUIRE(on_hard != off_hard);
+  const float delta_soft = rms(on_soft, 0, 1200) - rms(off_soft, 0, 1200);
+  const float delta_hard = rms(on_hard, 0, 1200) - rms(off_hard, 0, 1200);
+  REQUIRE(delta_hard > delta_soft);
+  float peak = 0.0f;
+  for (float s : on_hard) peak = std::max(peak, std::fabs(s));
+  REQUIRE(peak < 2.0f);
+}
+
+namespace {
+
+/// dB/s decay rate of harmonic @p k between two analysis windows.
+double harmonic_decay_rate(const std::vector<float>& buf, double f0, int k, size_t early_from,
+                           size_t late_from) {
+  const double early = harmonic_power(power_spectrum(buf, early_from), f0, k);
+  const double late = harmonic_power(power_spectrum(buf, late_from), f0, k);
+  const double dt = static_cast<double>(late_from - early_from) / kRate;
+  return 10.0 * std::log10(std::max(late, 1e-30) / std::max(early, 1e-30)) / dt;
+}
+
+}  // namespace
+
+TEST_CASE("mid_decay_s cascades a second loop pole; off by default is bit-identical",
+          "[midi][synth][ks]") {
+  NativeSynthPatch base = ks_base_patch();
+  base.ks.brightness = 0.8f;
+  base.ks.decay_stretch = 0.0f;  // isolate the loop filter from the register stretch
+  base.ks.decay_s = 15.0f;       // near-lossless fundamental: hits the single pole's tilt ceiling
+  const uint8_t note = 40;       // E2, ~82.4 Hz: the DI reference's low string
+  const int samples = 110000;    // ~2.3 s, enough for a late analysis window
+
+  NativeSynthPatch cascaded = base;
+  cascaded.ks.mid_decay_s = 0.15f;
+
+  // Two default-valued patches render identically; enabling the cascade changes the render.
+  REQUIRE(render_patch(base, note, 100, 4096) == render_patch(base, note, 100, 4096));
+  REQUIRE(render_patch(cascaded, note, 100, 4096) != render_patch(base, note, 100, 4096));
+
+  const std::vector<float> off = render_patch(base, note, 100, samples);
+  const std::vector<float> on = render_patch(cascaded, note, 100, samples);
+  const double f0 = 82.4069;
+  const size_t early = static_cast<size_t>(0.3 * kRate);
+  const size_t late = static_cast<size_t>(2.0 * kRate);
+
+  // The fundamental keeps its exact given gain either way, so h1 is the one harmonic the cascade
+  // must leave alone.
+  const double h1_off = harmonic_decay_rate(off, f0, 1, early, late);
+  const double h1_on = harmonic_decay_rate(on, f0, 1, early, late);
+  REQUIRE(std::fabs(h1_on - h1_off) < 3.0);
+
+  // h4 sits below the mid anchor, where a single pole gives up once decay_s pins the fundamental;
+  // h4 is the discriminator.
+  const double h4_off = harmonic_decay_rate(off, f0, 4, early, late);
+  const double h4_on = harmonic_decay_rate(on, f0, 4, early, late);
+  REQUIRE(h4_on < h4_off - 15.0);  // meaningfully faster (more negative) with the cascade
+
+  // The tilt (high minus low decay rate) is what profile_gate.py gates as `partial_tilt`.
+  REQUIRE((h4_on - h1_on) < (h4_off - h1_off) - 15.0);
+}

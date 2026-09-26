@@ -916,6 +916,13 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     // Smooths the held sample. Well above the band the drive filter passes, so
     // it costs the member nothing and only removes the hold's own steps.
     case_out_a_ = 1.0f - std::exp(-kTwoPi * std::min(800.0f, 0.45f * sr) / sr);
+    // 0.4 of the internal rate: flat through the member's band, 30 dB down at its first image.
+    const float image_w0 = rt::frequency_to_w0(0.4f * sr_case, static_cast<double>(sr));
+    for (int i = 0; i < kCaseImageStages; ++i) {
+      case_image_lp_[i].set(
+          rt::rbj_lowpass(image_w0, rt::butterworth_stage_q(2 * kCaseImageStages, i)));
+      case_image_lp_[i].reset();
+    }
     board_strike_a_ = std::clamp(
         1.0f - std::exp(-1000.0f / (std::max(0.01f, kBoardStrikeSpreadMs) * sr)), 0.0f, 1.0f);
   }
@@ -971,6 +978,7 @@ void PianoSoundboard::reset() noexcept {
   case_phase_ = 0;
   case_hold_ = 0.0f;
   case_out_lp_ = 0.0f;
+  for (rt::BiquadState& st : case_image_lp_) st.reset();
   in1_ = 0.0f;
   in2_ = 0.0f;
   air_env_ = 0.0f;
@@ -1123,7 +1131,9 @@ float PianoSoundboard::process(float in) noexcept {
     case_phase_ = case_phase_ + 1u < kCaseDecim ? case_phase_ + 1u : 0u;
     // Smooth the held sample rather than radiating its steps.
     case_out_lp_ += case_out_a_ * (case_hold_ - case_out_lp_);
-    late = case_out_lp_ * kCaseLevel;
+    float held = case_out_lp_;
+    for (rt::BiquadState& st : case_image_lp_) held = st.process(held);
+    late = held * kCaseLevel;
   } else {
     // Nothing consumes the accumulator when the network is off, so it is spent
     // here rather than left to grow across a render. Folds out of a shipped

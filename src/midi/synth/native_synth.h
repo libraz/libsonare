@@ -1020,6 +1020,11 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.ks.harmonic_node =
       std::clamp(patch_clamp_detail::sanitize(p.ks.harmonic_node, 0.0f), 0.0f, 8.0f);
   p.ks.keyoff_noise = patch_clamp_detail::sanitize(p.ks.keyoff_noise, 0.0f);
+  p.ks.pick_noise = patch_clamp_detail::sanitize(p.ks.pick_noise, 0.0f);
+  p.ks.hf_decay_s = std::clamp(patch_clamp_detail::sanitize(p.ks.hf_decay_s, 0.07f), 0.0f, 60.0f);
+  p.ks.mid_decay_s = std::clamp(patch_clamp_detail::sanitize(p.ks.mid_decay_s, 0.0f), 0.0f, 60.0f);
+  p.ks.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.ks.velocity_exponent, 1.19f), 0.0f, 4.0f);
   p.modal.num_modes = std::clamp(p.modal.num_modes, 0, kMaxModalModes);
   for (ModalMode& mode : p.modal.modes) {
     mode.ratio = std::clamp(patch_clamp_detail::sanitize(mode.ratio, 1.0f), 0.01f, 64.0f);
@@ -1169,6 +1174,18 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   // squeezing a plate below its own band.
   p.percussion.plate_air_hz =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_air_hz, 0.0f), 0.0f, 20000.0f);
+  // The same ceiling as the stick's direct radiation, which is the same pulse.
+  p.percussion.plate_contact =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_contact, 0.0f), 0.0f, 16.0f);
+  p.percussion.plate_cascade =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_cascade, 0.0f), 0.0f, 1.0e4f);
+  p.percussion.plate_cascade_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_cascade_hz, 0.0f), 0.0f, 20000.0f);
+  p.percussion.plate_cascade_drop_db = std::clamp(
+      patch_clamp_detail::sanitize(p.percussion.plate_cascade_drop_db, 0.0f), 0.0f, 60.0f);
+  // Same floor as plate_low_hz, 0 kept as "follow plate_low_hz".
+  p.percussion.plate_floor_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.plate_floor_hz, 0.0f), 0.0f, 4000.0f);
   p.percussion.phisem_beans =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.phisem_beans, 0.0f), 0.0f, 256.0f);
   p.percussion.phisem_energy_ms = std::clamp(
@@ -1210,6 +1227,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.piano.hammer_contact_ms, 1.2f), 0.2f, 10.0f);
   p.piano.hammer_dynamics =
       std::clamp(patch_clamp_detail::sanitize(p.piano.hammer_dynamics, 0.0f), 0.0f, 1.0f);
+  p.piano.attack_hf_dynamics =
+      std::clamp(patch_clamp_detail::sanitize(p.piano.attack_hf_dynamics, 0.0f), 0.0f, 8.0f);
   p.piano.soundboard =
       std::clamp(patch_clamp_detail::sanitize(p.piano.soundboard, 0.25f), 0.0f, 1.0f);
   p.piano.release_damp_s =

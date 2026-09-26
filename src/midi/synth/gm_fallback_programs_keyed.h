@@ -28,6 +28,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // a released note is 40 dB down in 280 ms here against the grand's 1432, and
   // each follows the recording it is aimed at rather than the family value.
   o.bright_piano.piano.release_damp_s = fam[0].piano.release_damp_s * 0.15f;
+  // Against its reference the attack's 4-8 kHz swing runs 6.55 dB short at zero, 0.75 here.
+  o.bright_piano.piano.attack_hf_dynamics = 0.655f;
 
   // Electric Grand Piano (GM 2): the CP-style short-string grand, whose whole
   // difference is that a piezo under the bridge takes the string directly.
@@ -45,6 +47,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // With no board to carry the note on, the damper is the whole release: 110 ms
   // against the reference, where the grand's takes over a second to fall as far.
   o.electric_grand.piano.release_damp_s = fam[0].piano.release_damp_s * 0.10f;
+  // The grand's attack law costs the wide variant 2 dB of tone-to-noise.
+  o.electric_grand.piano.attack_hf_dynamics = 0.0f;
   o.electric_grand.stereo_spread = 0.15f;
   // The only one of the four that is levelled. An amplified instrument has no
   // acoustic output level -- the player sets it at the amp -- so leaving it
@@ -339,6 +343,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.guitar_harmonics.ks.decay_s = 8.0f;
   o.guitar_harmonics.ks.exc_brightness = 0.6f;
   o.guitar_harmonics.ks.tension_mod = 0.1f;
+  // Solved against the reference's own level range, v32 to v127, which the
+  // engine default of 1.19 left 3.54 dB narrow.
+  o.guitar_harmonics.ks.velocity_exponent = 1.49f;
 
   // Nylon: soft finger pluck near the middle of the string, dull loop. Keeps the
   // sympathetic halo (classical guitars sing with open-string resonance) but
@@ -361,6 +368,13 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.nylon_guitar.ks.release_damp_s = 0.0585365f;
   o.nylon_guitar.ks.vel_to_brightness = 0.829639f;
   o.nylon_guitar.resonance_q = 4.05989f;
+  // A fingertip/nail contact click the loop's own excitation cannot carry
+  // (it feeds the resonance, not the attack). 0.2 passed the reference gate
+  // unchanged and moved body-under-the-note and tone-to-noise a shade closer.
+  o.nylon_guitar.ks.pick_noise = 0.2f;
+  // Solved against the reference's own level range, v32 to v127, which the
+  // engine default of 1.19 left 3.59 dB wide.
+  o.nylon_guitar.ks.velocity_exponent = 0.89f;
 
   // Electric (jazz/clean) — the `electric-guitar` preset: bright sustaining
   // loop, near-bridge pick, a pickup-ish lowpass instead of the open string.
@@ -383,12 +397,45 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.electric_guitar.ks.nail = 0.7f;         // pick
   o.electric_guitar.gain = 1.3f;
 
+  // Clean (program 27): the same solid-body string, fitted against the direct-out
+  // reference. It is its own patch because the jazz reference wants the h2-h6
+  // stack below this string's and the direct one wants it above.
+  o.clean_guitar = o.electric_guitar;
+  // The amplified programs keep this string, taken before the clean and jazz fits:
+  // under either amp the direct-fitted string reads the centroid 100-110% and the
+  // h2-h6 stack 10-20 dB over the amped references, which this one holds.
+  o.overdriven = o.electric_guitar;
+  o.distortion = o.electric_guitar;
+  // Jazz alone, set after the copy. Against its reference the pickup nearer the
+  // neck and a damped 2.5 kHz pickup corner take the h2-h6 stack 13.3 -> 3.7 dB
+  // over and the centroid 51 -> 10% over; the exponent then zeroes the level range.
+  o.electric_guitar.ks.pickup_pos = 0.3f;
+  o.electric_guitar.cutoff_hz = 2500.0f;
+  o.electric_guitar.resonance_q = 2.0f;
+  o.electric_guitar.ks.velocity_exponent = 1.31f;
+  // Against the direct reference: partial decay tilt -91.7
+  // -> -8.3 dB/s, held decay 4.32 -> 1.73 dB/s off, double decay 6.86 -> 2.30,
+  // held crest +10.6 -> -1.4 dB; the register profile 0.86 -> 2.73 dB off.
+  o.clean_guitar.ks.hf_decay_s = 0.843f;
+  o.clean_guitar.ks.mid_decay_s = 5.98f;
+  o.clean_guitar.ks.decay_s = 9.85f;
+  o.clean_guitar.ks.decay_stretch = 0.144f;
+  o.clean_guitar.ks.exc_brightness = 0.407f;
+  o.clean_guitar.ks.vel_to_brightness = 0.231f;
+  // Against the direct reference at 0: held crest 2.59 -> 2.88 dB off and the
+  // note arriving 15 -> 20 ms late. The jazz reference reads the same at either
+  // value but for double decay, which 0.2 takes from 21.1 to 31.1 dB/s at p90.
+  o.clean_guitar.ks.pick_noise = 0.2f;
+  // Against the direct reference at 0.14: h2-h6 stack 12.9 -> -0.2 dB off,
+  // tone-to-noise 15.1 -> 11.4 dB cleaner, register profile back inside its bound.
+  o.clean_guitar.ks.pickup_pos = 0.35f;
+
   // Palm mute: the same electric string with a hand on it. The mute is the whole
   // of the difference and it is not a shorter decay — a choked decay alone left
   // this the bank's worst centroid at 1.9 octaves over the reference, because
   // the partials that make it bright were still there. `mute_harmonic` is the
   // break the palm puts in the series; the rest is fitted against the reference.
-  o.muted_guitar = o.electric_guitar;
+  o.muted_guitar = o.clean_guitar;
   o.muted_guitar.ks.mute_harmonic = 2.5f;
   // A palm chokes the string; it does not stop it. Against the reference's
   // 22.4 dB/s the old value fell at 72.7, three times too fast, and the note was
@@ -404,6 +451,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.muted_guitar.ks.pluck_style = 0.437694f;
   o.muted_guitar.ks.pick_position = 0.381966f;
   o.muted_guitar.ks.pickup_pos = 0.336881f;
+  // Solved against the reference's own level range, v32 to v127, which the
+  // engine default of 1.19 left 4.75 dB narrow.
+  o.muted_guitar.ks.velocity_exponent = 1.59f;
 
   // Overdriven / distortion: the same instrument. What makes these two programs
   // different from the clean guitar is the amplifier, which the bank binds after
@@ -411,8 +461,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // voice drive is the sound of clipping, and it is a cabinet that makes
   // distortion sound like a guitar. The darker filter and lower gain each patch
   // used to carry existed only to tame that drive and go with it.
-  o.overdriven = o.electric_guitar;
-  o.distortion = o.electric_guitar;
+  // The square law holds both amplified level ranges inside their bounds.
+  o.overdriven.ks.velocity_exponent = 2.0f;
+  o.distortion.ks.velocity_exponent = 2.0f;
 
   // Electric / acoustic bass (GM 32-35): the KS string voiced for the low
   // register — long, strongly stretched decays (bass strings ring far longer
@@ -465,6 +516,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bass_picked.ks.release_damp_s = 0.06f;
   o.bass_picked.cutoff_hz = 5000.0f;
   o.bass_picked.gain = 1.2f;
+  // Solved against the reference's own level range, v32 to v127, which the
+  // engine default of 1.19 left 4.92 dB narrow.
+  o.bass_picked.ks.velocity_exponent = 1.60f;
 
   // Fretless: rounder, darker, longer glide-friendly ring.
   o.bass_fretless = bass;
@@ -476,6 +530,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bass_fretless.ks.release_damp_s = 0.12f;
   o.bass_fretless.cutoff_hz = 4200.0f;
   o.bass_fretless.gain = 1.2f;
+  // Solved against the reference's own level range, v32 to v127, which the
+  // engine default of 1.19 left 4.01 dB narrow.
+  o.bass_fretless.ks.velocity_exponent = 1.53f;
 
   // Slap Bass 1 (GM 36, thumb): the hard near-bridge attack of the pick voicing
   // driven into the fret-slap limiter — the string knocks the frets, so the
@@ -488,6 +545,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bass_slap.ks.slap = 0.7f;
   o.bass_slap.ks.polarization = 0.0f;  // percussive: the beat would muddy the pop
   o.bass_slap.cutoff_hz = 6000.0f;
+  // Solved against the reference's own level range, v32 to v127, which the
+  // engine default of 1.19 left 6.65 dB narrow.
+  o.bass_slap.ks.velocity_exponent = 1.75f;
 
   // Slap Bass 2 (GM 37, pull/pop): a sharper, brighter pop with a harder fret
   // slap and a shorter ring.
@@ -496,6 +556,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bass_pop.ks.exc_brightness = 0.98f;
   o.bass_pop.ks.decay_s = 4.13f;  // 6.3 dB/s against the reference, from 8.1
   o.bass_pop.ks.slap = 0.85f;
+  // Measured inside 1.7 dB of its reference at the engine default; slap's own
+  // value would put it 5 dB wide.
+  o.bass_pop.ks.velocity_exponent = 1.19f;
   o.bass_pop.cutoff_hz = 6500.0f;
 
   // Orchestral harp: long stretched decay, strings keep ringing after
@@ -519,6 +582,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harp.cutoff_hz = 11609.5f;
   o.harp.ks.exc_brightness = 0.923523f;
   o.harp.resonance_q = 0.627799f;
+  // Solved against the reference's own level range, v32 to v127, which the
+  // engine default of 1.19 left 3.69 dB narrow.
+  o.harp.ks.velocity_exponent = 1.50f;
 
   // Sitar (GM 104): a plucked string over the curved jawari bridge — the
   // grazing bridge contact keeps spraying energy into the upper partials, so
@@ -561,6 +627,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.banjo.ks.tension_mod = 0.2f;
   o.banjo.body_mix = 0.12f;
   o.banjo.gain = 1.2f;
+  // Solved against the reference's own level range, v32 to v127, which the
+  // engine default of 1.19 left 9.88 dB wide.
+  o.banjo.ks.velocity_exponent = 0.37f;
 
   // Shamisen (GM 106): the sawari — only a slight graze against the bare wood
   // at the nut — gives a drier, harder buzz than the sitar, over a shorter
@@ -740,16 +809,19 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // 21 dB by C7. The 2-2/3' quint sits at its clamp maximum, which is the model
   // saying it cannot supply that rank's share any other way.
   o.church_organ.pipe_organ.rank_count = 6;
-  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.232389f, 0.42f, 0.0f,
-                                        0.0f};                                      // 16'
-  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.841979f, 1.0f, 0.0f, 0.3f};  // 8' principal
+  // Foundations back and upperwork forward: the centroid sat 22% under the
+  // reference (1.3x the registrations' spread) and now sits at 1.0x, every other
+  // gated bound held. Going further overshoots tuning and the partial stack.
+  o.church_organ.pipe_organ.ranks[0] = {0.5f, /*stopped=*/true, 0.232389f, 0.28f, 0.0f,
+                                        0.0f};                                       // 16'
+  o.church_organ.pipe_organ.ranks[1] = {1.0f, false, 0.841979f, 0.85f, 0.0f, 0.3f};  // 8' principal
   o.church_organ.pipe_organ.ranks[2] = {2.0f,      false, 0.636014f,
                                         0.978447f, 0.0f,  0.45f};                    // 4' octave
   o.church_organ.pipe_organ.ranks[3] = {3.0f, false, 0.476471f, 1.0f, 0.0f, 0.55f};  // 2-2/3' quint
-  o.church_organ.pipe_organ.ranks[4] = {4.0f,      false, 0.712067f,
-                                        0.918024f, 0.0f,  0.6f};  // 2' super-octave
-  o.church_organ.pipe_organ.ranks[5] = {5.0f,      false, 0.369863f,
-                                        0.687749f, 0.0f,  0.6f};  // 1-3/5' tierce
+  o.church_organ.pipe_organ.ranks[4] = {4.0f,  false, 0.712067f,
+                                        0.96f, 0.0f,  0.6f};  // 2' super-octave
+  o.church_organ.pipe_organ.ranks[5] = {5.0f,  false, 0.369863f,
+                                        0.84f, 0.0f,  0.6f};  // 1-3/5' tierce
   // Inert: the implicit single-rank voicing, read only at rank_count 0, and all
   // three organ patches draw ranks. It was fitted anyway, in the same change
   // that drew them. Left in place because deleting it moves the bank

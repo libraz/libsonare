@@ -87,6 +87,10 @@ constexpr KsPatchParams blank_ks() noexcept {
   z.octave_mix = 0.0f;
   z.harmonic_node = 0.0f;
   z.keyoff_noise = 0.0f;
+  z.pick_noise = 0.0f;
+  z.hf_decay_s = 0.0f;
+  z.mid_decay_s = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 
@@ -165,6 +169,11 @@ constexpr PercussionPatchParams blank_percussion() noexcept {
   z.plate_hf_ratio = 0.0f;
   z.plate_low_hz = 0.0f;
   z.plate_air_hz = 0.0f;
+  z.plate_contact = 0.0f;
+  z.plate_cascade = 0.0f;
+  z.plate_cascade_hz = 0.0f;
+  z.plate_cascade_drop_db = 0.0f;
+  z.plate_floor_hz = 0.0f;
   z.phisem_beans = 0.0f;
   z.phisem_energy_ms = 0.0f;
   z.phisem_sound_ms = 0.0f;
@@ -191,6 +200,7 @@ constexpr PianoPatchParams blank_piano() noexcept {
   z.hammer_exponent = 0.0f;
   z.hammer_contact_ms = 0.0f;
   z.hammer_dynamics = 0.0f;
+  z.attack_hf_dynamics = 0.0f;
   z.soundboard = 0.0f;
   z.release_damp_s = 0.0f;
   return z;

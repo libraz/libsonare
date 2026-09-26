@@ -1171,3 +1171,142 @@ TEST_CASE("a held one-shot frees its slot once the piece has stopped radiating",
   ringing.process(chans, 2, 256);
   REQUIRE(ringing.active_voice_count() == 1);
 }
+
+// ---------------------------------------------------------------------------
+// The stick's contact driving the plate, and the cascade that hands its energy
+// up the band.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// A plate set ringing by the stick alone: no modes, no noise, so whatever the
+/// network radiates came in through the contact.
+NativeSynthPatch stick_plate_patch() {
+  NativeSynthPatch p = cymbal_patch();
+  p.amp_env.decay_ms = 0.0f;
+  p.amp_env.sustain = 1.0f;
+  p.percussion.tone_gain = 0.0f;
+  p.percussion.plate_gain = 1.0f;
+  p.percussion.plate_t60_s = 2.0f;
+  p.percussion.plate_hf_ratio = 0.95f;
+  p.percussion.plate_low_hz = 250.0f;
+  p.percussion.contact_ms = 1.0f;
+  p.percussion.plate_contact = 8.0f;
+  return p;
+}
+
+/// Energy of the first difference over energy: a brightness that needs no band
+/// edges, and reads a field of partials the same way whatever their spacing.
+double brightness(const std::vector<float>& buf, size_t from, size_t to) {
+  double diff = 0.0;
+  double plain = 0.0;
+  for (size_t i = std::max<size_t>(from, 1); i < to && i < buf.size(); ++i) {
+    const double d = static_cast<double>(buf[i]) - buf[i - 1];
+    diff += d * d;
+    plain += static_cast<double>(buf[i]) * buf[i];
+  }
+  return plain > 0.0 ? diff / plain : 0.0;
+}
+
+/// Share of the window's energy under about 1 kHz (two one-pole low-passes).
+double low_share(const std::vector<float>& buf, size_t from, size_t to) {
+  const double a = 1.0 - std::exp(-2.0 * 3.14159265358979 * 1000.0 / kRate);
+  double s1 = 0.0;
+  double s2 = 0.0;
+  double low = 0.0;
+  double all = 0.0;
+  for (size_t i = 0; i < to && i < buf.size(); ++i) {
+    s1 += (buf[i] - s1) * a;
+    s2 += (s1 - s2) * a;
+    if (i < from) continue;
+    low += s2 * s2;
+    all += static_cast<double>(buf[i]) * buf[i];
+  }
+  return all > 0.0 ? low / all : 0.0;
+}
+
+}  // namespace
+
+TEST_CASE("plate_contact, plate_cascade and plate_floor_hz at 0 leave the plate as it was",
+          "[midi][synth][percussion]") {
+  NativeSynthPatch plain = washing_cymbal_patch();
+  plain.percussion.plate_gain = 0.8f;
+  plain.percussion.plate_low_hz = 300.0f;
+  NativeSynthPatch configured = plain;
+  configured.percussion.plate_contact = 0.0f;
+  configured.percussion.plate_cascade = 0.0f;
+  configured.percussion.plate_cascade_hz = 1500.0f;  // configured but inert
+  configured.percussion.plate_cascade_drop_db = 18.0f;
+
+  const std::vector<float> a = render_patch(plain, 49, 110, 8192);
+  const std::vector<float> b = render_patch(configured, 49, 110, 8192);
+  REQUIRE(a.size() == b.size());
+  for (size_t i = 0; i < a.size(); ++i) REQUIRE(a[i] == b[i]);
+}
+
+TEST_CASE("the stick's contact rings the plate where the dry hit has nothing",
+          "[midi][synth][percussion]") {
+  // Driven by a wash high-passed at 5.5 kHz, the plate has nothing to answer
+  // under a kilohertz; the stick reaches it there.
+  NativeSynthPatch washed = washing_cymbal_patch();
+  washed.percussion.shimmer = 0.0f;
+  washed.percussion.wire_buzz = 0.0f;
+  washed.percussion.plate_gain = 1.0f;
+  washed.percussion.plate_low_hz = 250.0f;
+  NativeSynthPatch struck = washed;
+  struck.percussion.plate_contact = 8.0f;
+  struck.percussion.contact_ms = 1.0f;
+
+  const std::vector<float> w = render_patch(washed, 49, 110, 16384);
+  const std::vector<float> s = render_patch(struck, 49, 110, 16384);
+  const std::vector<float> w_tail(w.begin() + 4800, w.begin() + 9600);
+  const std::vector<float> s_tail(s.begin() + 4800, s.begin() + 9600);
+  double w_low = 0.0;
+  double s_low = 0.0;
+  for (double f : {400.0, 550.0, 700.0, 850.0}) {
+    w_low += goertzel(w_tail, f);
+    s_low += goertzel(s_tail, f);
+  }
+  REQUIRE(s_low > 10.0 * w_low);
+}
+
+TEST_CASE("the cascade carries a hard strike's energy up the band without adding any",
+          "[midi][synth][percussion]") {
+  NativeSynthPatch linear = stick_plate_patch();
+  NativeSynthPatch cascading = linear;
+  cascading.percussion.plate_cascade = 200.0f;
+  cascading.percussion.plate_cascade_hz = 1500.0f;
+
+  const std::vector<float> l = render_patch(linear, 49, 127, 48000);
+  const std::vector<float> c = render_patch(cascading, 49, 127, 48000);
+
+  // Before the network has come round once, the two are the same strike.
+  REQUIRE(brightness(c, 0, 96) == Catch::Approx(brightness(l, 0, 96)).epsilon(1e-6));
+  // Tens of milliseconds on, the cascading plate has moved up the band while
+  // the linear one holds the colour the stick gave it.
+  REQUIRE(low_share(c, 2400, 7200) < 0.5 * low_share(l, 2400, 7200));
+  // It redistributes and does not pump: a second on, the two carry energy
+  // within a few decibels of each other, and the cascade's is not the larger.
+  const double late_l = window_energy(l, 24000, 48000);
+  const double late_c = window_energy(c, 24000, 48000);
+  REQUIRE(late_c < 1.05 * late_l);
+  REQUIRE(late_c > 0.1 * late_l);
+}
+
+TEST_CASE("a soft strike stays nearer the linear plate than a hard one",
+          "[midi][synth][percussion]") {
+  // The flow stops a set drop under a full-velocity strike, so a soft strike
+  // that starts near that level barely moves.
+  NativeSynthPatch linear = stick_plate_patch();
+  NativeSynthPatch cascading = linear;
+  cascading.percussion.plate_cascade = 200.0f;
+  cascading.percussion.plate_cascade_hz = 1500.0f;
+  cascading.percussion.plate_cascade_drop_db = 20.0f;
+
+  auto lift = [&](uint8_t velocity) {
+    const std::vector<float> l = render_patch(linear, 49, velocity, 7200);
+    const std::vector<float> c = render_patch(cascading, 49, velocity, 7200);
+    return low_share(c, 2400, 7200) / low_share(l, 2400, 7200);
+  };
+  REQUIRE(lift(127) < 0.5 * lift(20));
+}

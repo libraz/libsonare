@@ -332,6 +332,21 @@ struct PercussionPatchParams {
   /// far enough to fix the band profile it also removes the top the piece still
   /// needs a tenth of a second after the strike.
   float plate_air_hz = 0.0f;
+  /// How hard the stick's contact_ms pulse drives the plate (0 = off). Without
+  /// it only the dry hit rings the plate, and the module's crash strike, loudest
+  /// at 0.5-1 kHz, came out 26-36 dB short there.
+  float plate_contact = 0.0f;
+  /// Rate (per second) the plate hands its low band up the band once struck
+  /// (0 = linear). See FdnPlate::start.
+  float plate_cascade = 0.0f;
+  /// Top of the band the cascade drains (Hz; 0 = the whole band).
+  float plate_cascade_hz = 0.0f;
+  /// How far a full-velocity strike's low band falls before the cascade stops
+  /// (dB; 0 = it never stops).
+  float plate_cascade_drop_db = 0.0f;
+  /// Where the plate stops responding (Hz; 0 = plate_low_hz). The ride's
+  /// 2351 Hz plate_low_hz left 29 peaks in 4-8 kHz against the module's 154.
+  float plate_floor_hz = 0.0f;
 
   // --- stochastic particle excitation (PhISEM: shakers / scrapers) ---
   /// Effective particle (bean) count driving the collision rate. 0 = off (no
@@ -483,6 +498,10 @@ class PercussionVoiceCore {
   // paid in memory rather than in arithmetic.
   float plate_gain_ = 0.0f;
   FdnPlate plate_;
+  // The contact pulse again; next_contact() runs outside render() on its own step.
+  float plate_contact_ = 0.0f;
+  int plate_contact_i_ = 0;
+  int plate_contact_len_ = 0;
 
   // Snare wire rattle: gated high-passed noise driven by the membrane
   // displacement crossing wire_threshold_. `wire_scale_` turns that

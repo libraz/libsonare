@@ -42,6 +42,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "rt/biquad_design.h"
+
 namespace sonare::midi::synth {
 
 inline constexpr int kMaxPianoStrings = 3;
@@ -143,6 +145,10 @@ struct PianoPatchParams {
   /// the pp<->ff timbre spread widens; the shaping pivots at the mezzo-forte
   /// reference so the nominal voicing is preserved.
   float hammer_dynamics = 0.0f;
+  /// Velocity exponent of a high shelf on the string-injected scrub, pivoting at
+  /// mezzo-forte (0 = off, bit-identical). Moves the attack's 4-8 kHz share with the
+  /// blow without moving the level law hammer_dynamics sets.
+  float attack_hf_dynamics = 0.0f;
   /// Soundboard resonator mix in [0,1].
   float soundboard = 0.25f;
   /// Damped t60 in seconds applied at note-off (the damper falling back), for
@@ -418,6 +424,9 @@ class PianoVoiceCore {
   float noise_alpha3_ = 1.0f;
   float noise_low_ = 0.0f;
   float noise_hp_a_ = 0.0f;
+  // Two high-shelf sections on the injected scrub, half of this blow's gain each.
+  float scrub_hf_gain_ = 1.0f;
+  rt::BiquadState scrub_hi_[2]{};
   uint32_t noise_rng_ = 1u;
 };
 
@@ -662,8 +671,8 @@ class PianoSoundboard {
   // filter that band-limits the drive IS the anti-alias filter, forty decibels
   // down there at its default corner -- which is why the corner is clamped to a
   // tenth of the internal rate rather than left free. On the way out the held
-  // sample is smoothed by a one-pole, costing 0.07 dB at the top of the member's
-  // own band and removing the stepping a bare hold would radiate.
+  // sample is smoothed by a one-pole and then by a fourth-order lowpass that
+  // removes the hold's images at multiples of the internal rate.
   static constexpr uint32_t kCaseDecim = 8;
   // Shared pool rather than a buffer per line, sized for the whole set at the
   // rates this synth runs at. Above them the lengths scale down together, which
@@ -699,6 +708,10 @@ class PianoSoundboard {
   float case_hold_ = 0.0f;
   float case_out_lp_ = 0.0f;
   float case_out_a_ = 1.0f;
+  // Rejects the hold's images at k * sr/8 +- f, which sit 35-55 dB under the member
+  // with the one-pole alone and are the whole 12-24 kHz content of a C4 attack.
+  static constexpr int kCaseImageStages = 2;
+  rt::BiquadState case_image_lp_[kCaseImageStages]{};
   // An allpass diffuser inside each line. Eight lines put eight echoes into
   // every circulation of the network, and eight is few enough that the pattern
   // is audible as flutter before the mixing matrix has had time to fill it in.

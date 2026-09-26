@@ -187,7 +187,8 @@ TEST_CASE("each bound rig drives its amplifier where the bank's own level puts i
   auto thd_at_bank_level = [](const GmFallbackRig& rig) {
     auto proc = sonare::mastering::api::make_insert(
         "saturation.ampSim", std::string("{\"preset\":\"") + rig.preset +
-                                 "\",\"drive\":" + std::to_string(rig.drive) + "}");
+                                 "\",\"drive\":" + std::to_string(rig.drive) +
+                                 ",\"inputDb\":" + std::to_string(rig.input_db) + "}");
     REQUIRE(proc != nullptr);
     proc->prepare(kOutRate, 256);
     // A whole number of blocks: a tail that ran past the last processed block

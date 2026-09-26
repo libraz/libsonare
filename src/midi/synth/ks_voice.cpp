@@ -57,19 +57,23 @@ constexpr uint64_t kKeyoffNoiseIndexBase = 1ull << 20;
 SONARE_TUNABLE(kKsKeyoffMs, 18.0f);
 SONARE_TUNABLE(kKsKeyoffCutoffHz, 2200.0f);
 
-/// How long the partial at kKsHfQuoteHz rings, in seconds; 0 keeps the pole the
-/// tone knob implies. A pole taken from a tone knob is charged once per
-/// traversal, so its tilt scales with the note's own pitch and a bass string
-/// keeps partials a wound string has lost: over the fifteen voices on this
-/// engine, quoting the decay instead takes the mean brightness error from 1.22
-/// octaves to 0.38, the partial stack from 15.8 dB to 11.8 and the noise from
-/// 18.4 dB to 11.0. Stated as a t60 rather than as a multiple of the
-/// fundamental's, which would inherit decay_stretch and ask the bass string
-/// whose fundamental was stretched to 14 s to hold 4 kHz for 5 of them.
-SONARE_TUNABLE(kKsHfT60S, 0.07f);
-/// Where that decay is quoted. A fixed frequency for the reason string_loop.h
+/// Pick/finger contact-click noise draws sit past the key-off stream so the
+/// three seeded bursts (excitation, key-off, pick) never overlap.
+constexpr uint64_t kPickNoiseIndexBase = 1ull << 24;
+/// Pick-click burst length and lowpass corner. Shorter and brighter than the
+/// key-off thump above: a pick or fingernail scraping the string is a harder,
+/// higher-frequency contact than a felt damper falling onto it.
+SONARE_TUNABLE(kKsPickNoiseMs, 25.0f);
+SONARE_TUNABLE(kKsPickNoiseCutoffHz, 6000.0f);
+
+/// Where ks.hf_decay_s is quoted. A fixed frequency for the reason string_loop.h
 /// gives: a target quoted at the octave is unreachable in the bass.
 SONARE_TUNABLE(kKsHfQuoteHz, 4000.0f);
+
+/// Where the optional mid-band anchor (ks.mid_decay_s) is quoted, between the
+/// fundamental and kKsHfQuoteHz — where a wound string's internal
+/// (viscoelastic) loss starts to dominate the support loss below it.
+SONARE_TUNABLE(kKsMidQuoteHz, 1000.0f);
 
 /// How many times faster the partial at ks.mute_harmonic decays than the
 /// fundamental, when a hand is on the strings. The captured palm mute puts its
@@ -102,11 +106,9 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   const float tone_a = (1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f;
   const float fixed_quote_w = kTwoPi * kKsHfQuoteHz / static_cast<float>(sr);
   const float mute = std::clamp(params.mute_harmonic, 0.0f, 16.0f);
-  // Set one loop up from its two decay targets: its fundamental's t60 and the
-  // ring left at the quote frequency. A quote at or below the fundamental has no
-  // tilt to describe, and there the tone-derived pole stands.
+  // Sets one loop up from its t60, quote-frequency ring and optional mid anchor.
   auto voice_loop = [&](StringLoop& loop, float* span, float period, float t60_s, float hf_t60_s,
-                        float tone_a_offset = 0.0f) noexcept {
+                        float mid_t60_s = 0.0f, float tone_a_offset = 0.0f) noexcept {
     float a = std::min(0.97f, tone_a + tone_a_offset);
     float g = string_loop_gain_for(period, sr, t60_s);
     float release_g = string_loop_gain_for(period, sr, damped_t60);
@@ -117,14 +119,50 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     // losses and the air's are a property of the frequency.
     const float quote_w = mute > 0.0f ? std::min(mute * w0, 0.9f * kPi) : fixed_quote_w;
     const float quote_t60 = mute > 0.0f ? t60_s / kKsMuteDecayRatio : hf_t60_s;
-    if (kKsHfT60S > 0.0f && quote_w > w0 * 1.5f) {
-      const StringLoopFilter solved =
-          solve_string_loop_filter(w0, quote_w, g, string_loop_gain_for(period, sr, quote_t60));
-      // The damper is broadband, so its gain takes the compensation the
-      // fundamental's did; otherwise the pole is counted into it twice.
-      release_g = std::min(0.9999f, release_g * (g > 0.0f ? solved.g / g : 1.0f));
-      a = solved.a;
-      g = solved.g;
+    if (hf_t60_s > 0.0f && quote_w > w0 * 1.5f) {
+      const float g0 = g;
+      const float g_ref = string_loop_gain_for(period, sr, quote_t60);
+      const float mid_w = kTwoPi * kKsMidQuoteHz / static_cast<float>(sr);
+      bool has_pole2 = false;
+      float a2 = 0.0f, g2 = 1.0f;
+      if (mute <= 0.0f && mid_t60_s > 0.0f && mid_w > w0 * 1.5f && mid_w < quote_w) {
+        // Stage A carries fundamental-to-mid; stage B supplies the residual loss at the quote
+        // frequency.
+        const StringLoopFilter stage_a =
+            solve_string_loop_filter(w0, mid_w, g0, string_loop_gain_for(period, sr, mid_t60_s));
+        const float stage_a_at_ref = stage_a.g * onepole_magnitude(stage_a.a, quote_w);
+        const float residual =
+            stage_a_at_ref > 1.0e-8f ? std::min(1.0f, g_ref / stage_a_at_ref) : g_ref;
+        // Stage B's own tilt, ring-bounded against the cascade's combined DC gain.
+        float b_a = 0.0f;
+        const float ratio_b = residual > 0.0f ? 1.0f / residual : 1.0f;
+        if (ratio_b > 1.000001f) {
+          b_a = solve_tilt_pole(w0, quote_w, ratio_b);
+          const float g_max = sub_fundamental_gain_cap(g0);
+          if (stage_a.g >= g_max) {
+            b_a = std::min(b_a, 0.0f);
+          } else {
+            const float mag_floor_b = stage_a.g / g_max;
+            b_a = std::min(b_a,
+                           mag_floor_b < 0.999999f ? solve_tilt_pole(w0, 0.0f, mag_floor_b) : 0.0f);
+          }
+        }
+        a = stage_a.a;
+        g = stage_a.g;
+        a2 = b_a;
+        g2 = compensated_loop_gain(b_a, w0, 1.0f);
+        has_pole2 = true;
+        release_g = std::min(0.9999f, release_g * (g0 > 0.0f ? (g * g2) / g0 : 1.0f));
+      } else {
+        const StringLoopFilter solved = solve_string_loop_filter(w0, quote_w, g0, g_ref);
+        // The damper is broadband, so its gain takes the compensation the
+        // fundamental's did; otherwise the pole is counted into it twice.
+        release_g = std::min(0.9999f, release_g * (g0 > 0.0f ? solved.g / g0 : 1.0f));
+        a = solved.a;
+        g = solved.g;
+      }
+      loop.configure_filter(span, capacity_, period, a, g, release_g, has_pole2, a2, g2);
+      return a;
     }
     loop.configure_filter(span, capacity_, period, a, g, release_g);
     return a;
@@ -134,7 +172,9 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   // tunes it by compensating the EXACT phase delay of the loop filter at the
   // fundamental (not just its DC group delay) plus the one-sample feedback path,
   // so the sounding pitch matches the note to a few cents.
-  const float a = voice_loop(string_, slab_, loop_period, t60, kKsHfT60S);
+  const float hf_t60 = std::max(0.0f, params.hf_decay_s);
+  const float mid_t60 = std::max(0.0f, params.mid_decay_s);
+  const float a = voice_loop(string_, slab_, loop_period, t60, hf_t60, mid_t60);
 
   // Stiff-string dispersion (steel strings). 0 disables the allpass cascade so
   // the loop stays a harmonic string, bit-identical. Otherwise scale the steel
@@ -238,8 +278,8 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     // The horizontal plane takes the same fraction off both its targets: it
     // decays faster than the primary and loses its highs faster still, which is
     // what gives the two-stage decay.
-    voice_loop(pol_, slab_ + capacity_, pol_period, kPolT60Fraction * t60,
-               kPolT60Fraction * kKsHfT60S, kPolToneDarken);
+    voice_loop(pol_, slab_ + capacity_, pol_period, kPolT60Fraction * t60, kPolT60Fraction * hf_t60,
+               kPolT60Fraction * mid_t60, kPolToneDarken);
     // The damper grips both planes at once, so the horizontal one is released at
     // the played string's damped gain rather than at one solved for its own
     // (slightly shorter) period.
@@ -289,7 +329,7 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   if (octave_mix > 0.0f && slab_ != nullptr) {
     // The same decay targets as the primary, solved at the octave-up period so
     // both the 4' pitch and its loss are right for the shorter string.
-    voice_loop(oct_, slab_ + 2 * capacity_, 0.5f * loop_period, t60, kKsHfT60S);
+    voice_loop(oct_, slab_ + 2 * capacity_, 0.5f * loop_period, t60, hf_t60, mid_t60);
     oct_exc_ = 0.7f;  // the 4' jack grips its string a touch less than the 8'
     oct_couple_ = octave_mix;
   } else {
@@ -310,6 +350,17 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   keyoff_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * kKsKeyoffCutoffHz / static_cast<float>(sr)),
                              0.01f, 1.0f);
   keyoff_decay_ = std::exp(-4.0f / static_cast<float>(keyoff_len_));  // ~-35 dB over the burst
+
+  // Pick/finger contact click, armed at note-on; 0 disables it (bit-identical).
+  pick_amount_ = std::clamp(params.pick_noise, 0.0f, 1.0f) * vel01 *
+                 onepole_noise_rate_gain(kKsPickNoiseCutoffHz, sr);
+  pick_len_ = std::max(1, static_cast<int>(kKsPickNoiseMs * 0.001f * static_cast<float>(sr)));
+  pick_pos_ = 0;
+  pick_lp_ = 0.0f;
+  pick_env_ = 1.0f;
+  pick_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * kKsPickNoiseCutoffHz / static_cast<float>(sr)),
+                           0.01f, 1.0f);
+  pick_decay_ = std::exp(-4.0f / static_cast<float>(pick_len_));  // ~-35 dB over the burst
 }
 
 float KsVoiceCore::render(float pitch_ratio) noexcept {
@@ -423,6 +474,15 @@ float KsVoiceCore::render(float pitch_ratio) noexcept {
     ++keyoff_pos_;
   }
 
+  if (pick_pos_ < pick_len_) {
+    // Short lowpassed noise burst added to the output, independent of the loop.
+    const float nz = noise_.bipolar_at(kPickNoiseIndexBase + static_cast<uint64_t>(pick_pos_));
+    pick_lp_ += pick_alpha_ * (nz - pick_lp_);
+    result += pick_amount_ * pick_env_ * pick_lp_;
+    pick_env_ *= pick_decay_;
+    ++pick_pos_;
+  }
+
   if (pickup_depth_ != 0.0f) {
     // Magnetic pickup: the output-side position comb notches the harmonics with
     // a node at the pickup point, then the field-gradient nonlinearity adds the
@@ -453,6 +513,7 @@ void KsVoiceCore::kill() noexcept {
   pol_.kill();
   oct_.kill();
   keyoff_pos_ = keyoff_len_;
+  pick_pos_ = pick_len_;
 }
 
 }  // namespace sonare::midi::synth
