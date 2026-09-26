@@ -3,8 +3,8 @@
  * This file is the entry point and the wiring: which view is up, which language
  * the page is in, what every key does, and the frame loop that redraws the two
  * pictures. The transport is `player.js`, the pictures are `scope.js`, the
- * listening surface is `listen.js`, the bank is `bank.js`, and what a listener
- * says about what they heard is `feedback.js`.
+ * listening surface is `listen.js` and the modules it names, the bank is
+ * `bank.js`, and what a listener says about what they heard is `feedback.js`.
  */
 
 'use strict';
@@ -18,13 +18,19 @@ import {
   rewind, seekTo, setLoop, startAt, stop, togglePlay,
 } from './player.js';
 import { drawSpec, drawWave, seekFromEvent } from './scope.js';
+import { applyRoute, loadSet, refreshListen, selectTake } from './listen.js';
+import { copyConditions, readRoute } from './address.js';
 import {
-  applyRoute, buildSetPicker, closePalette, copyConditions, loadFeedbackIndex,
-  loadSet, openPalette, paletteKey, paletteOpen, readRoute, rebuildVersions,
-  abstainBlind, chooseBlind,
-  recordBlindResult, refreshListen, renderCaptions, renderScore, renderSubject,
-  resetBlindReveal, reshuffleBlind, selectTake, setVersion, stepVersion, swapRole,
-} from './listen.js';
+  buildSetPicker, closePalette, loadFeedbackIndex, openPalette, paletteKey, paletteOpen,
+  wirePalette,
+} from './palette.js';
+import {
+  rebuildVersions, renderCaptions, setVersion, stepVersion, swapRole,
+} from './versions.js';
+import {
+  abstainBlind, chooseBlind, recordBlindResult, renderScore, resetBlindReveal, reshuffleBlind,
+} from './blind.js';
+import { renderSubject } from './subject.js';
 import { bankKey, loadBank, refreshBank, renderBank, wireBank } from './bank.js';
 import { refreshFeedback, wireFeedback } from './feedback.js';
 
@@ -176,19 +182,7 @@ function wire() {
   $('blindUnsure').addEventListener('click', abstainBlind);
   $('blindRecord').addEventListener('click', recordBlindResult);
   $('swapBtn').addEventListener('click', swapRole);
-  $('voicePick').addEventListener('click', () => {
-    if (paletteOpen()) closePalette(); else openPalette();
-  });
-  $('voiceFind').addEventListener('input', buildSetPicker);
-  // Click-away rather than a scrim: the palette is a control on the header and
-  // the page behind it stays live, so a click meant for the transport should
-  // reach the transport.
-  document.addEventListener('pointerdown', (ev) => {
-    if (!paletteOpen()) return;
-    if (!$('voicePanel').contains(ev.target) && !$('voicePick').contains(ev.target)) {
-      closePalette();
-    }
-  });
+  wirePalette((id) => loadSet(id));
 
   $('matchRms').addEventListener('change', () => {
     if (state.take) { applyGains(false); renderLevels(); }

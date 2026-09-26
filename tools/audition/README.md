@@ -225,9 +225,15 @@ Any format the browser decodes will play. 16-bit PCM WAV is the safe choice — 
 
 ## The page's own files
 
-`index.html`, `style.css`, and one ES module per job: `app.js` wires the two views and the keys, `i18n.js` holds every string the page shows in both languages and the question tree, `player.js` is the transport, `scope.js` draws the two pictures, `listen.js` is the listening surface, `bank.js` is the bank, `feedback.js` is the panel that takes a note, and `state.js` is what they all read.
+`serve.py` and `heard.py` stay at the top, beside their tests; the page is `web/`. `web/index.html` loads one stylesheet per region from `web/css/` — `base.css` holds the tokens and shared controls, then `header.css`, `listen.css`, `console.css`, `feedback.css` and `bank.css` — and one ES module per job from `web/js/`:
 
-`test_page.py` checks the agreements a server cannot: every element the script reaches for exists, every class it uses has a rule, every string it asks for is declared in both languages, and the question tree has no unreachable node or dead end. It reads every module rather than the entry point, since most of what builds an element is in the others.
+- `app.js` wires the two views, the keys and the frame loop.
+- `listen.js` loads a set and moves between its takes; `versions.js` is the version switch and the banner naming what is sounding; `blind.js` is blind mode; `address.js` is the URL, the breadcrumbs and the copied block; `palette.js` is the voice picker; `subject.js` is the line saying which slot the page is about.
+- `player.js` is the transport, `scope.js` draws the two pictures, `bank.js` is the bank, `feedback.js` is the panel that takes a note, `i18n.js` holds every string in both languages and the question tree, `take-text.js` translates take labels, and `state.js` is what they all read.
+
+The server serves `web/js/*.js` and `web/css/*.css` by pattern and nothing else from the tree, so a new file under either needs no change to it; a new directory does.
+
+`test_page.py` checks the agreements a server cannot: every element the script reaches for exists, every class it uses has a rule, every string it asks for is declared in both languages, and the question tree has no unreachable node or dead end. It reads every module and every sheet rather than the entry point, since most of what builds an element is in the others.
 
 ## In this repository
 

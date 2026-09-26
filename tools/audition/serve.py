@@ -82,6 +82,9 @@ from pathlib import Path
 from typing import ClassVar
 
 APP_DIR = Path(__file__).resolve().parent
+#: The page itself: `index.html`, with its stylesheets under `css/` and its
+#: modules under `js/`.
+WEB_DIR = APP_DIR / "web"
 REPO_ROOT = APP_DIR.parents[1]
 AUDIO_SUFFIXES = (".wav", ".flac", ".mp3", ".ogg", ".m4a", ".aac")
 #: The scratch root the whole harness renders into, and the one `capture.py`
@@ -675,9 +678,9 @@ class Sets:
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
-    """Serve the app from `tools/audition/` and the audio from the render dirs."""
+    """Serve the page from `tools/audition/web/` and the audio from the render dirs."""
 
-    app_dir = APP_DIR
+    app_dir = WEB_DIR
 
     def _set_and_rest(self, rel: str) -> tuple[Path | None, str]:
         """Split `s/<id>/<rest>` into the set's root and the path inside it."""
@@ -697,9 +700,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if rel in ("", "index.html"):
             return self.app_dir / "index.html"
         # The page is ES modules, so its own files are a set rather than two
-        # names: a leaf name with no separator in it cannot leave this
-        # directory, and the file has to already be here.
-        if re.fullmatch(r"[a-z0-9_-]+\.(?:js|css)", rel) and (self.app_dir / rel).is_file():
+        # names: one fixed directory and a leaf name with no separator in it
+        # cannot leave the page, and the file has to already be there.
+        if (
+            re.fullmatch(r"js/[a-z0-9_-]+\.js|css/[a-z0-9_-]+\.css", rel)
+            and (self.app_dir / rel).is_file()
+        ):
             return self.app_dir / rel
         root, rest = self._set_and_rest(rel)
         if root is None or not rest:
@@ -894,6 +900,10 @@ def main() -> int:
         print(f"  {entry['id']:<16} {entry['takes']:>3} takes  [{kind:^10}]  {url}#{entry['id']}")
 
     socketserver.TCPServer.allow_reuse_address = True
+    # One thread, so the queue is what absorbs a page load: the browser opens
+    # every stylesheet and module at once, and the default backlog of five
+    # resets the rest, which leaves a page that never boots and says nothing.
+    socketserver.TCPServer.request_queue_size = 64
     with socketserver.TCPServer(("127.0.0.1", args.port), Handler) as httpd:
         # Where the listening notes land, printed whether or not any have been
         # taken: a log nobody knows the path of is a log nobody reads back.

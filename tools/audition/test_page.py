@@ -20,10 +20,15 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
-HTML = (APP_DIR / "index.html").read_text()
-JS_FILES = sorted(p for p in APP_DIR.glob("*.js"))
+WEB_DIR = APP_DIR / "web"
+JS_DIR = WEB_DIR / "js"
+HTML = (WEB_DIR / "index.html").read_text()
+JS_FILES = sorted(p for p in JS_DIR.glob("*.js"))
 JS = "\n".join(p.read_text() for p in JS_FILES)
-CSS = (APP_DIR / "style.css").read_text()
+#: Every sheet, for the same reason every module is read: a rule moved to the
+#: sheet for its region is still the page's rule.
+CSS_FILES = sorted(p for p in (WEB_DIR / "css").glob("*.css"))
+CSS = "\n".join(p.read_text() for p in CSS_FILES)
 
 #: Elements the page writes as void tags, which have no closing tag to match.
 VOID = {"meta", "link", "br", "input", "img", "hr", "source", "col"}
@@ -97,7 +102,7 @@ def _string_table() -> dict[str, set[str]]:
     to stay one: it is the file a translation is written into, and anything
     clever enough to need parsing would be too clever to hand to a translator.
     """
-    text = (APP_DIR / "i18n.js").read_text()
+    text = (JS_DIR / "i18n.js").read_text()
     body = text.split("const STRINGS = {", 1)[1]
     out: dict[str, set[str]] = {}
     for lang in ("en", "ja"):
@@ -128,7 +133,7 @@ def test_every_string_the_page_asks_for_is_declared() -> None:
 
 def _tree_nodes() -> dict[str, str]:
     """Each triage node's id and the source of its body."""
-    text = (APP_DIR / "i18n.js").read_text()
+    text = (JS_DIR / "i18n.js").read_text()
     body = text.split("const TREE = {", 1)[1].split("\n};", 1)[0]
     nodes = body.split("  nodes: {", 1)[1]
     found: dict[str, str] = {}
@@ -142,7 +147,7 @@ def _tree_nodes() -> dict[str, str]:
 def test_the_triage_tree_has_no_dead_ends() -> None:
     """A fork pointing at a node that is not there is a question that answers
     into nothing, and the page shows a blank panel rather than an error."""
-    text = (APP_DIR / "i18n.js").read_text()
+    text = (JS_DIR / "i18n.js").read_text()
     start = re.search(r"start: '(\w+)'", text).group(1)
     nodes = _tree_nodes()
     assert start in nodes, start
@@ -178,7 +183,7 @@ def test_every_verdict_the_tree_can_reach_has_a_label() -> None:
     verdicts |= set(re.findall(r"unsure: '([\w/-]+)'", nodes["off"]))
     labelled = set(
         re.findall(
-            r"^  '?([\w/-]+)'?: 'grade\.", (APP_DIR / "feedback.js").read_text(), re.MULTILINE
+            r"^  '?([\w/-]+)'?: 'grade\.", (JS_DIR / "feedback.js").read_text(), re.MULTILINE
         )
     )
     assert verdicts <= labelled, f"no label for: {sorted(verdicts - labelled)}"
@@ -221,7 +226,7 @@ def test_every_take_string_the_harness_can_render_is_translated() -> None:
     """A take's label and note are baked into the manifest in English, so the
     Japanese for them lives on the page. A phrase added without one renders an
     English line in a Japanese list, which nothing else would report."""
-    text = (APP_DIR / "take-text.js").read_text()
+    text = (JS_DIR / "take-text.js").read_text()
     keys = set(re.findall(r"^  (?:'([^']*)'|\"([^\"]*)\"):", text, re.MULTILINE))
     known = {a or b for a, b in keys}
     missing = _take_strings() - known

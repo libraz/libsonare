@@ -12,6 +12,7 @@ there was nothing to notice beyond a picker that had grown.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -303,11 +304,24 @@ def test_every_module_the_page_loads_is_servable() -> None:
     blank page rather than a missing style: the import throws before anything
     on it runs."""
     handler = serve.Handler.__new__(serve.Handler)
-    modules = sorted(p.name for p in serve.APP_DIR.glob("*.js"))
-    assert len(modules) >= 4, modules
-    for name in modules + ["style.css", "index.html", ""]:
-        assert handler._resolve(name) == serve.APP_DIR / (name or "index.html"), name
-    for bad in ("../serve.py", "sub/dir.js", "serve.py", "nope.js"):
+    web = serve.WEB_DIR
+    files = sorted(str(p.relative_to(web)) for p in [*web.glob("js/*.js"), *web.glob("css/*.css")])
+    assert len(files) >= 4, files
+    # Every sheet and the entry module the markup names, so a file added to the
+    # page and not to the resolver's pattern fails here rather than in a browser.
+    linked = re.findall(r'(?:href|src)="((?:js|css)/[^"]+)"', (web / "index.html").read_text())
+    assert linked and set(linked) <= set(files), linked
+    for name in files + ["index.html", ""]:
+        assert handler._resolve(name) == web / (name or "index.html"), name
+    for bad in (
+        "../serve.py",
+        "js/../../serve.py",
+        "sub/dir.js",
+        "css/a/b.css",
+        "serve.py",
+        "app.js",
+        "js/nope.js",
+    ):
         assert handler._resolve(bad) is None, bad
 
 

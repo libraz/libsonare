@@ -1,0 +1,191 @@
+/* The listening surface's frame: the take rail, the stage, and the two
+   pictures. The console at the top of the stage is `console.css`. */
+
+/* ---- listen layout ---- */
+
+main {
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
+  min-height: 0;
+}
+
+nav {
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  background: var(--panel);
+  padding: 6px 0 16px;
+}
+
+nav .group {
+  position: sticky;
+  top: 0;
+  padding: 12px 15px 5px;
+  background: var(--panel);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+nav button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 9px;
+  grid-template-rows: auto auto;
+  column-gap: 9px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 15px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+nav button:hover { background: var(--panel-2); }
+
+/* The take list is a flat-edged rail, which is where a one-sided marker
+   belongs; nothing rounded carries one. */
+nav button[aria-current="true"] {
+  border-left-color: var(--accent);
+  background: var(--tint);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.take-name {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One line, clipped. The id leads it because that is what a link carries; an
+   entry that grows to three lines stops being a list you can scan. */
+nav .sub {
+  grid-column: 1;
+  grid-row: 2;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A take that holds a reference is the one worth opening first, and on a voice
+   where only some takes were captured there is otherwise no way to see which. */
+.take-ref {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  justify-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--role-reference);
+}
+
+#stage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* The console: what is sounding, the switch, and the transport, in one block
+   that stays put. The switch and the play button are the listening loop. */
+.console {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.stage-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px 16px 26px;
+}
+
+.scopes { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* ---- canvases ---- */
+
+.pane { margin: 0; }
+
+canvas {
+  display: block;
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: crosshair;
+}
+
+/* The layout height has to come from CSS: the canvas is resized in script to
+   the device pixel ratio, and with the height left to the element's own
+   attribute each resize would feed back into the next one. */
+#wave { height: 142px; }
+#spec { height: 212px; }
+
+.cap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.legend-row { display: flex; gap: 12px; }
+
+.wl { display: inline-flex; align-items: center; gap: 6px; color: var(--role); }
+.wl .dot { background: var(--role); }
+
+@media (max-width: 860px) {
+  main { grid-template-columns: 200px minmax(0, 1fr); }
+}
+
+/* Stacked and short: a console held in place would leave the pictures a strip
+   to scroll in, so it scrolls with them and the keys still reach it. */
+@media (max-width: 1179px) and (max-height: 899px) {
+  .console { position: static; }
+}
+
+/* Wide enough for both: the console stops floating, the pictures take the
+   left of the stage and stay put, and the note panel scrolls on its own at the
+   right, so what is being described never leaves the screen while it is. */
+@media (min-width: 1180px) {
+  #stage {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .console { position: static; }
+
+  .stage-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 430px);
+    gap: 0;
+    padding: 0;
+    min-height: 0;
+  }
+
+  .scopes { overflow-y: auto; padding: 14px 16px 20px; }
+
+  /* The spectrogram takes whatever height the console leaves. */
+  #spec { height: clamp(212px, calc(100vh - 520px), 520px); }
+}

@@ -1,0 +1,457 @@
+/* The console: which slot, what is sounding, the version switch and the
+   transport. */
+
+/* ---- which slot, and where its reference came from ---- */
+
+/* One quiet line above the banner. It is true of the whole page rather than of
+   what is sounding, so it is typographic rather than boxed: the banner below is
+   the only tinted block in the console and stays the thing the eye lands on. */
+.subject {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 18px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.subject:empty { display: none; }
+
+.subj {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.subj .dot { align-self: center; background: var(--role); }
+
+/* The one label on this line that is about a side of the comparison takes that
+   side's colour, so the reference half is recognisable before it is read. */
+.subj-ref .lab { color: var(--role); }
+
+.subj-key { color: var(--ink); }
+.subj-key.dim { color: var(--ink-dim); }
+
+.subj-more {
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The separator rides on the item rather than sitting between two of them, so a
+   wrapped line never starts with a dangling dot. */
+.subj-more::before {
+  content: "·";
+  margin-right: 7px;
+  color: var(--ink-faint);
+}
+
+.subj .badge { font-size: 10px; }
+
+/* Two facts in one badge when they disagree: what the slot is aimed at, and
+   that this is not it. Apart they read as two unrelated chips. */
+.badge-why {
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid var(--warn-line);
+}
+
+/* ---- what is sounding ---- */
+
+/* The banner and the swap as one bar: the swap is the same question answered
+   the other way, so it matches the banner's height rather than floating. */
+.now {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The banner. A full border plus a tint of the role's colour, never a stripe
+   down one side: the straight edge of a stripe fights the rounded corner. */
+.now-role {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--role) 34%, var(--line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--role) 9%, var(--panel));
+}
+
+.now-role:empty { display: none; }
+
+.now-role .dot {
+  align-self: center;
+  width: 9px;
+  height: 9px;
+  background: var(--role);
+}
+
+.now-what {
+  flex: none;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--role);
+}
+
+/* What the version sounding IS, in the words it was registered under. Set in
+   the page's ink rather than the role's: the role is already said by the chip
+   and the colour, and this is the one part of the line that is new information.
+ */
+.now-title {
+  flex: none;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.now-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+/* ---- identity strip ---- */
+
+/* The tail of the transport row. The basis is what the crumbs and the copy
+   button need; past it the path takes the rest, and short of it the whole
+   strip wraps under the player. */
+.ident {
+  display: flex;
+  flex: 1 1 38rem;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.crumbs {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-dim);
+  flex: none;
+  white-space: nowrap;
+}
+
+.ident .ghost { white-space: nowrap; }
+
+.crumbs .sep { color: var(--ink-faint); }
+.crumbs .now { color: var(--ink); font-weight: 600; }
+
+/* Yields long before the breadcrumbs do: the path is a detail anyone can widen
+   the window for, and the crumbs are what says which render is sounding. */
+.path {
+  flex: 0 8 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;      /* keep the file name visible when the path is clipped */
+  text-align: left;
+}
+
+/* One key for the comparison the page exists for. Coloured for where it goes
+   rather than for where it is: it is the other side, offered. */
+.swap {
+  flex: none;
+  padding: 5px 16px;
+  border: 1px solid color-mix(in srgb, var(--role) 40%, var(--line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--role) 12%, var(--panel));
+  color: var(--role);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.swap:hover { background: var(--role); color: var(--accent-ink); border-color: var(--role); }
+.swap[hidden] { display: none; }
+
+/* ---- version switch ---- */
+
+/* Two roles, two blocks, side by side: the two ends of one comparison belong
+   on one line. Each block's share of the row is its count of versions (`--n`,
+   set in script), so every button in the row is about the same width. */
+.versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.versions:empty { display: none; }
+
+/* A block is its own heading over its own control, rather than a label in a
+   column beside it. The label column cost 8.5rem of the row — on a voice with
+   eleven candidates that is the width a name needs to survive — and it left the
+   heading with nowhere to put a sentence, which is how the one sentence the
+   switch had ended up at the foot of the whole thing. */
+.vrow {
+  display: flex;
+  flex: var(--n, 1) 1 0;
+  flex-direction: column;
+  gap: 5px;
+  min-width: min(100%, 14rem);
+}
+
+.vhead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-size: 11.5px;
+}
+
+.vhead > .role {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  color: var(--role);
+  white-space: nowrap;
+  flex: none;
+}
+
+.vhead > .role .dot { background: var(--role); }
+
+/* The axis a block sits on, beside the role rather than instead of it: both
+   blocks are libsonare and only one of them is the path that ships. */
+.vpath {
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--role) 30%, var(--line));
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--role) 60%, var(--ink-dim));
+}
+
+/* Beside the sentence rather than at the far end of the row: the instruction
+   and the button that answers it are one thing, and a button alone at the other
+   edge of a wide page is a verb with no object. */
+.vhead > button { flex: none; }
+
+/* Bordered in the role's own colour, so a block of buttons says which side of
+   the comparison it belongs to before any of them is pressed. */
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 1px;
+  background: color-mix(in srgb, var(--role) 26%, var(--line));
+  border: 1px solid color-mix(in srgb, var(--role) 26%, var(--line));
+  border-radius: 5px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* One height whether or not a button carries its key under its title, so two
+   blocks side by side line up. */
+.segmented button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--role) 7%, var(--panel));
+  color: color-mix(in srgb, var(--role) 55%, var(--ink-dim));
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+  transition: background 110ms ease, color 110ms ease;
+}
+
+.segmented button:hover {
+  background: color-mix(in srgb, var(--role) 16%, var(--panel));
+  color: var(--role);
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--role);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* Wrapped rather than narrowed. `auto-fit` keeps every segment the same width
+   as its neighbours, which is the rule a segmented control is held to; what it
+   gives up is the single line, which was costing the labels.
+
+   The block stops drawing itself as one control once it wraps. A segmented
+   control's separators are its own background showing through the gaps, and a
+   last row that does not fill leaves that background standing where a button
+   would be — which reads as a twelfth version, greyed out. Bordered
+   individually, an incomplete row is just space. */
+.segmented.many {
+  grid-auto-flow: row;
+  /* Wide enough for a title rather than for a key: a setting's name is an
+     identifier and fits in eight characters, and what it is for is a phrase. */
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 5px;
+  background: transparent;
+  border-color: transparent;
+  overflow: visible;
+}
+
+.segmented.many button {
+  border: 1px solid color-mix(in srgb, var(--role) 26%, var(--line));
+  border-radius: 5px;
+}
+
+/* What this block of versions is, beside the role that owns it and above the
+   buttons it describes. */
+.vhint {
+  min-width: 0;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segmented .key { font-family: var(--mono); opacity: 0.55; flex: none; }
+
+/* The title over the key it is reached at. Two lines rather than one because
+   they are two different things — a sentence for the ear and an address for the
+   URL — and a button that showed only the address is what made a row of nine
+   candidates unreadable. */
+.segmented .vtext {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+
+.segmented .vname,
+.segmented .vkey {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segmented .vkey {
+  font-family: var(--mono);
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+/* ---- transport ---- */
+
+/* The controls that make a sound are grouped and the readouts are spaced away
+   from them, so the row says at a glance which part of it is the player. */
+#transport {
+  display: flex;
+  align-items: center;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+}
+
+.tport { display: flex; align-items: center; gap: 6px; }
+
+.tbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+}
+
+/* Type, not emoji: the glyphs are set in the monospace at the weight of the
+   word beside them. A colour font would put three stickers in the one row that
+   has to be read without being looked at. */
+/* A box rather than a glyph: `pause` is two bars where `play` is one triangle,
+   so an icon sized to its own ink moved the button under the pointer at the
+   instant it was pressed. */
+.ticon {
+  display: inline-block;
+  min-width: 15px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+
+/* Engaged, not accented. Teal and amber are the two sides of the comparison
+   everywhere else on this page and a transport button is neither of them, so
+   `sounding` and `looping` read as a key held down. */
+#transport button[aria-pressed="true"] {
+  background: var(--panel-3);
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+#transport button[aria-pressed="true"] .ticon { color: var(--ink); }
+
+/* The one primary action on the surface, in the page's ink rather than either
+   role's colour: it plays whichever side is selected. It keeps its fill while
+   sounding, so the button does not change weight under the pointer. */
+.tbtn.play,
+#transport .tbtn.play[aria-pressed="true"] {
+  padding-inline: 18px;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.tbtn.play:hover { border-color: #fff; background: #fff; }
+.tbtn.play .ticon,
+#transport .tbtn.play[aria-pressed="true"] .ticon { color: var(--bg); }
+
+/* Play and pause are words of different lengths in both languages, so without
+   a floor the button changes width under the pointer at the instant it is
+   pressed — which is the one moment it must not move. */
+.play .tlabel { min-width: 4.6em; text-align: left; }
+
+/* The one readout the eye comes back to, so the position is set in the ink the
+   rest of the row is not, and the length it is out of stays quiet. */
+.clock { font-size: 13px; color: var(--ink); }
+.clock .of { color: var(--ink-faint); }
+
+/* The marked passage, as one object that says what is being played and how to
+   stop playing only that. */
+.passage {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 3px 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.passage[hidden] { display: none; }
+.passage .mono { color: var(--ink); }
+
+.passage-x {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-dim);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.passage-x:hover { background: var(--panel-3); color: var(--ink); }

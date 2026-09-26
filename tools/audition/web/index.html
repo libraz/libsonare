@@ -7,7 +7,14 @@
 <!-- An empty icon, so the browser stops asking for one the server does not have
      and the console stays clear for problems that matter. -->
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css">
+<!-- One sheet per region, in cascade order: the tokens and shared controls
+     first, then each surface on its own. -->
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/header.css">
+<link rel="stylesheet" href="css/listen.css">
+<link rel="stylesheet" href="css/console.css">
+<link rel="stylesheet" href="css/feedback.css">
+<link rel="stylesheet" href="css/bank.css">
 </head>
 <body>
 
@@ -184,19 +191,15 @@
            product would name the version. -->
       <div id="subject" class="subject"></div>
 
-      <!-- The one line that answers "what am I listening to" in words: the role,
-           in the role's own colour, and the source's full label beside it. -->
-      <div id="nowRole" class="now-role"></div>
-
       <div id="versions" class="versions compare-only"></div>
 
-      <div class="ident">
+      <!-- The one line that answers "what am I listening to" in words: the role,
+           in the role's own colour, and the source's full label beside it. The
+           swap sits at its end because it is the same question, answered the
+           other way. -->
+      <div class="now">
+        <div id="nowRole" class="now-role"></div>
         <button id="swapBtn" type="button" class="swap compare-only" hidden></button>
-        <div class="crumbs" id="crumbs"></div>
-        <span class="grow"></span>
-        <code id="identPath" class="path"></code>
-        <button id="copyLink" type="button" class="ghost"
-                data-i18n="now.copy" data-i18n-title="now.copyTitle">copy what I hear</button>
       </div>
 
       <div id="transport">
@@ -245,22 +248,35 @@
                 data-i18n="blind.unsure" data-i18n-title="blind.unsureTitle">could not tell</button>
         <button id="blindRecord" type="button" class="ghost" hidden
                 data-i18n="blind.record">record this result</button>
+
+        <!-- The address of what is sounding, at the end of the row that plays
+             it: the file a report refers to is never inferred. -->
+        <div class="ident">
+          <div class="crumbs" id="crumbs"></div>
+          <code id="identPath" class="path"></code>
+          <button id="copyLink" type="button" class="ghost"
+                  data-i18n="now.copy" data-i18n-title="now.copyTitle">copy what I hear</button>
+        </div>
       </div>
     </div>
 
+    <!-- The pictures and the panel that takes a note sit side by side on a wide
+         window, so what is being described stays in view while it is written. -->
     <div class="stage-body">
-      <figure class="pane">
-        <canvas id="wave" height="142"></canvas>
-        <figcaption class="cap">
-          <span id="waveCaption"></span>
-          <span id="waveLegend" class="legend-row"></span>
-        </figcaption>
-      </figure>
+      <div class="scopes">
+        <figure class="pane">
+          <canvas id="wave" height="142"></canvas>
+          <figcaption class="cap">
+            <span id="waveCaption"></span>
+            <span id="waveLegend" class="legend-row"></span>
+          </figcaption>
+        </figure>
 
-      <figure class="pane">
-        <canvas id="spec" height="212"></canvas>
-        <figcaption id="specCaption" class="cap"></figcaption>
-      </figure>
+        <figure class="pane">
+          <canvas id="spec" height="212"></canvas>
+          <figcaption id="specCaption" class="cap"></figcaption>
+        </figure>
+      </div>
 
       <!-- Saying what you heard, while you are still hearing it. Two answers at
            a time and "not sure" always a third, in the words a listener would
@@ -310,6 +326,6 @@
   </section>
 </main>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>
