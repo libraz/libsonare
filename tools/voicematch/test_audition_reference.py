@@ -12,6 +12,7 @@ a module capture's reference is played at the FONT's own address.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -166,12 +167,15 @@ def test_render_module_reference_addresses_a_percussion_preset_via_the_drum_chan
     Measured against the module's own drum file: channel 10 selects bank 128
     whatever the bank-select bytes say, and nothing sent on any other channel
     reaches it — so no bank-select is the right thing to send here, and the
-    channel is doing the addressing instead.
+    channel is doing the addressing instead. The level calibration is mocked
+    out here — it is this file's own subject below — so this test stays about
+    addressing alone.
     """
     font_path = _fake_font(monkeypatch, tmp_path, bank=128, program=3)
     captured = _fake_render(monkeypatch)
+    monkeypatch.setattr(make_audition, "module_reference_gain", lambda *a, **k: 1.0)
 
-    cfg = {"_path": str(tmp_path / "drums_module.json")}
+    cfg = {"id": "drums_module", "_path": str(tmp_path / "drums_module.json")}
     timbre = {"id": "t0", "preset": "KIT A"}
     out = make_audition.render_module_reference(
         cfg, timbre, [Note(38, 100, 0.1, 0.2)], (), 9, 0.5, 1.5, 48000
@@ -189,11 +193,14 @@ def test_render_module_reference_addresses_a_percussion_preset_via_the_drum_chan
 def test_render_module_reference_sends_bank_select_for_a_nonzero_melodic_bank(
     monkeypatch, tmp_path
 ):
-    """A bank under 128 is a plain Bank-Select-MSB, sent as any GS variation is."""
+    """A bank under 128 is a plain Bank-Select-MSB, sent as any GS variation is.
+
+    The level calibration is mocked out — it is this file's own subject below."""
     _fake_font(monkeypatch, tmp_path, bank=9, program=7, name="TONE X")
     captured = _fake_render(monkeypatch)
+    monkeypatch.setattr(make_audition, "module_reference_gain", lambda *a, **k: 1.0)
 
-    cfg = {"_path": str(tmp_path / "electric_grand_module.json")}
+    cfg = {"id": "electric_grand_module", "_path": str(tmp_path / "electric_grand_module.json")}
     timbre = {"id": "t0", "preset": "TONE X"}
     make_audition.render_module_reference(
         cfg, timbre, [Note(60, 100, 0.1, 1.0)], (), 0, 0.5, 2.0, 48000
@@ -236,3 +243,133 @@ def test_render_module_reference_fails_loudly_on_an_unresolvable_font(monkeypatc
         make_audition.render_module_reference(
             {"_path": "x.json"}, {"id": "t0"}, [Note(60, 100, 0.0, 0.1)], (), 0, 0.1, 0.5, 48000
         )
+
+
+def test_module_reference_gain_matches_the_reference_minus_a_measured_probe(monkeypatch):
+    """`fluidsynth` puts a rendered note tens of dB under the raw sample the
+    reference was extracted from; the gain must close exactly that gap, note
+    by note, and take the MEDIAN across the take's own distinct notes.
+
+    A third row (84) sits in the reference but is never played, so it must not
+    enter the median — the gain is calibrated to what the take actually needs.
+    """
+    rows = {
+        60: {"peak_dbfs": -6.0, "velocity": 100},
+        72: {"peak_dbfs": -12.0, "velocity": 100},
+        84: {"peak_dbfs": -40.0, "velocity": 100},
+    }
+    monkeypatch.setattr(make_audition, "_module_reference_rows", lambda *a, **k: rows)
+
+    # Every probe comes back at the same fixed peak (-30 dBFS) regardless of
+    # which note it was rendered for, so each note's expected delta is exactly
+    # its own `peak_dbfs` minus that constant.
+    measured_peak = 10.0 ** (-30.0 / 20.0)
+    monkeypatch.setattr(
+        make_audition,
+        "render_oracle_fluidsynth",
+        lambda smf_bytes, total_seconds, sr, soundfont=None: np.full(
+            (1, 2), measured_peak, dtype=np.float32
+        ),
+    )
+
+    preset = SimpleNamespace(program=0, bank=0, name="STANDARD 1")
+    notes = [Note(60, 110, 0.0, 0.4), Note(72, 90, 0.5, 0.4)]
+    gain = make_audition.module_reference_gain(
+        {"id": "drums_module", "gate_ms": 400},
+        {"id": "t0"},
+        Path("FONT.sf2"),
+        preset,
+        notes,
+        9,
+        0.5,
+        44100,
+    )
+    expected = 10.0 ** (float(np.median([-6.0 - (-30.0), -12.0 - (-30.0)])) / 20.0)
+    assert gain == pytest.approx(expected, rel=1e-6)
+
+
+def test_module_reference_gain_raises_when_no_played_note_has_a_measured_row(monkeypatch):
+    """A note the reference never measured anywhere is a refusal, not a guess."""
+    monkeypatch.setattr(
+        make_audition,
+        "_module_reference_rows",
+        lambda *a, **k: {60: {"peak_dbfs": -6.0, "velocity": 100}},
+    )
+    preset = SimpleNamespace(program=0, bank=0, name="STANDARD 1")
+    with pytest.raises(ValueError, match="measured"):
+        make_audition.module_reference_gain(
+            {"id": "drums_module", "gate_ms": 400},
+            {"id": "t0"},
+            Path("FONT.sf2"),
+            preset,
+            [Note(61, 100, 0.0, 0.4)],
+            9,
+            0.5,
+            44100,
+        )
+
+
+def test_render_module_reference_applies_the_calibration_gain(monkeypatch, tmp_path):
+    """The gain `module_reference_gain` returns actually reaches the render."""
+    _fake_font(monkeypatch, tmp_path, bank=0, program=0, name="STANDARD 1")
+    monkeypatch.setattr(
+        make_audition,
+        "render_oracle_fluidsynth",
+        lambda smf_bytes, total_seconds, sr, soundfont=None: np.full((1, 2), 0.1, dtype=np.float32),
+    )
+    monkeypatch.setattr(make_audition, "module_reference_gain", lambda *a, **k: 4.0)
+
+    cfg = {"id": "drums_module", "_path": str(tmp_path / "drums_module.json")}
+    timbre = {"id": "t0", "preset": "STANDARD 1"}
+    out = make_audition.render_module_reference(
+        cfg, timbre, [Note(41, 100, 0.1, 0.2)], (), 9, 0.5, 1.5, 48000
+    )
+    assert out == pytest.approx(np.full((1, 2), 0.4, dtype=np.float32))
+
+
+def test_module_reference_rows_merges_across_sibling_module_captures(tmp_path):
+    """The same font+preset measured on two different grids answers as one.
+
+    The standard kit's own recordings are split this way for real
+    (`drums_module`'s 17 keys, `drums_module_hit`'s 44) -- this is the same
+    shape on a scratch pair of captures instead of the real bank.
+    """
+    capture_dir, reference_dir = tmp_path / "capture", tmp_path / "reference"
+    capture_dir.mkdir()
+    reference_dir.mkdir()
+    font_path = tmp_path / "FONT.sf2"
+    font_path.touch()
+
+    def write_grid(cap_id: str, notes: list[int]) -> None:
+        (capture_dir / f"{cap_id}.json").write_text(
+            json.dumps(
+                {"id": cap_id, "source_class": "module", "timbres": [{"id": "t0"}], "notes": notes}
+            )
+        )
+        (capture_dir / f"{cap_id}.local.json").write_text(
+            json.dumps(
+                {
+                    "soundfont_dir": str(tmp_path),
+                    "sf2": "FONT.sf2",
+                    "timbres": [{"id": "t0", "preset": "STANDARD 1"}],
+                }
+            )
+        )
+        (reference_dir / f"{cap_id}.json").write_text(
+            json.dumps(
+                {
+                    "rows": [
+                        {"timbre": "t0", "note": n, "velocity": 100, "peak_dbfs": -float(n)}
+                        for n in notes
+                    ]
+                }
+            )
+        )
+
+    write_grid("grid_a", [41, 45])
+    write_grid("grid_b", [45, 49])
+
+    rows = make_audition._module_reference_rows(
+        font_path, "STANDARD 1", "t0", capture_dir=capture_dir, reference_dir=reference_dir
+    )
+    assert sorted(rows) == [41, 45, 49]

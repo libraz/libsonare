@@ -115,6 +115,8 @@ from au_oracle import AuRenderError, render_oracle_au, with_keyswitches
 from bank import Capture, Voice, load_capture, parse_selection, voices, write_index
 from calibration import Variant
 from capture import CORPUS_ROOT, resolve_font, source_for
+from capture import load_config as capture_load_config
+from metrics import _db
 from phrases import Take, build_takes
 from render_model import render_model
 from render_oracle import render_oracle_fluidsynth
@@ -990,6 +992,101 @@ class ReferenceUnavailable(Exception):
     """
 
 
+#: (font path, preset name, timbre id) -> {note: reference row}, merged across
+#: every module capture naming that exact (font, preset, timbre).
+_MODULE_REFERENCE_ROW_CACHE: dict[tuple[str, str, str], dict[int, dict]] = {}
+
+
+def _module_reference_rows(
+    font_path: Path,
+    preset_name: str,
+    timbre_id: str,
+    *,
+    capture_dir: Path | None = None,
+    reference_dir: Path | None = None,
+) -> dict[int, dict]:
+    """Every measured row for this exact (font, preset, timbre), across all module captures.
+
+    A module's recordings are split across several grids (the standard kit is read
+    at 17 and again at 44 keys), and a take plays whatever notes its phrase needs.
+    """
+    key = (str(font_path), preset_name, timbre_id)
+    if key in _MODULE_REFERENCE_ROW_CACHE:
+        return _MODULE_REFERENCE_ROW_CACHE[key]
+    here = Path(__file__).resolve().parent
+    capture_dir = capture_dir or here / "capture"
+    reference_dir = reference_dir or here / "reference"
+    rows: dict[int, dict] = {}
+    for path in sorted(capture_dir.glob("*.json")):
+        if path.name.endswith(".local.json"):
+            continue
+        try:
+            other_cfg = capture_load_config(path)
+        except (ValueError, KeyError, OSError, json.JSONDecodeError):
+            continue
+        if other_cfg.get("source_class") != "module":
+            continue
+        for other_timbre in other_cfg.get("timbres", []):
+            if other_timbre.get("id") != timbre_id:
+                continue
+            try:
+                other_font, other_preset = resolve_font(other_cfg, other_timbre)
+            except ValueError:
+                continue
+            if other_font != font_path or other_preset != preset_name:
+                continue
+            ref_path = reference_dir / f"{other_cfg['id']}.json"
+            if not ref_path.exists():
+                continue
+            for row in json.loads(ref_path.read_text())["rows"]:
+                if row["timbre"] == timbre_id:
+                    rows.setdefault(row["note"], row)
+    _MODULE_REFERENCE_ROW_CACHE[key] = rows
+    return rows
+
+
+def module_reference_gain(
+    cfg: dict,
+    timbre: dict,
+    font_path: Path,
+    preset: object,
+    notes: list[Note],
+    channel: int,
+    tail_s: float,
+    sr: int,
+) -> float:
+    """The gain that puts a module render at the level `import_sf2.py` extracted it at.
+
+    fluidsynth's velocity curve and output stage put a note 10-30 dB under the raw
+    sample, by an offset that differs 3-9 dB between notes. So each distinct note of
+    the take is rendered alone at its own reference velocity, compared with that
+    row's `peak_dbfs`, and the median offset is applied to the whole render.
+    """
+    rows = _module_reference_rows(font_path, preset.name, timbre["id"])
+    distinct = sorted({n.note for n in notes if n.note in rows})
+    if not distinct:
+        raise ValueError(
+            f"{cfg['id']}/{timbre['id']}: none of this take's notes has a measured "
+            f"row anywhere for {font_path.name} {preset.name!r} to calibrate the "
+            f"render's level against"
+        )
+    gate_s = float(cfg["gate_ms"]) / 1000.0
+    deltas = []
+    for note in distinct:
+        row = rows[note]
+        probe = write_smf(
+            [Note(note=note, velocity=int(row["velocity"]), start=0.0, dur=gate_s)],
+            program=preset.program,
+            bank=0 if preset.bank >= 128 else preset.bank,
+            end_pad=tail_s,
+            channel=channel,
+        )
+        rendered = render_oracle_fluidsynth(probe, gate_s + tail_s, sr, soundfont=font_path)
+        mono = rendered.mean(axis=1) if rendered.ndim > 1 else rendered
+        deltas.append(float(row["peak_dbfs"]) - float(_db(np.abs(mono).max())))
+    return float(10.0 ** (float(np.median(deltas)) / 20.0))
+
+
 def render_module_reference(
     cfg: dict,
     timbre: dict,
@@ -1026,7 +1123,9 @@ def render_module_reference(
         cc_events=cc_events,
         channel=channel,
     )
-    return render_oracle_fluidsynth(smf, total_seconds, sr, soundfont=font_path)
+    audio = render_oracle_fluidsynth(smf, total_seconds, sr, soundfont=font_path)
+    gain = module_reference_gain(cfg, timbre, font_path, preset, notes, channel, tail_s, sr)
+    return audio * gain
 
 
 def resolve_voices(args) -> list[Voice]:
