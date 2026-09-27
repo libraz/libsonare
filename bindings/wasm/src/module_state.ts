@@ -22,7 +22,7 @@ interface NativeExceptionInfo {
  * Returns null when the thrown value is neither (a genuine JS error), so the
  * caller rethrows it unchanged.
  */
-function nativeExceptionPtr(error: unknown): number | null {
+export function nativeExceptionPtr(error: unknown): number | null {
   if (typeof error === 'number') {
     return error;
   }

@@ -20,7 +20,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, isSonareError } from '../src/index';
-import { getSonareModule } from '../src/module_state';
+import { getSonareModule, nativeExceptionPtr } from '../src/module_state';
 import type { SonareModule } from '../src/sonare.js';
 
 /** The unwrapped module: it throws the raw pointer instead of a SonareError. */
@@ -69,11 +69,15 @@ function reject(module: SonareModule): unknown {
   return undefined;
 }
 
-/** Rejects on the UNWRAPPED module; the caller owns the returned reference. */
+/**
+ * Rejects on the UNWRAPPED module; the caller owns the returned reference.
+ * Decoded by the wrapper's own reader, since the toolchain decides whether the
+ * pointer arrives bare or inside a `CppException`.
+ */
 function throwUnwrapped(): number {
-  const caught = reject(raw);
-  expect(typeof caught, 'an unwrapped native throw surfaces as a pointer number').toBe('number');
-  return caught as number;
+  const ptr = nativeExceptionPtr(reject(raw));
+  expect(ptr, 'an unwrapped native throw carries the exception pointer').not.toBeNull();
+  return ptr as number;
 }
 
 function release(ptr: number): void {
