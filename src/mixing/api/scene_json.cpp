@@ -370,11 +370,14 @@ Bus bus_from_value(const JsonValue& object) {
   if (bus.pan_law < 0 || bus.pan_law >= kPanLawCount) {
     throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
   }
-  // A surround bus has no pan stage, so a non-default pan there is refused rather than dropped.
+  // A surround bus has no pan or stereo-width stage, so a non-default value there is
+  // refused rather than dropped.
   if (channel_count(bus.layout) > 2) {
     const Bus defaults;
     const char* offending = nullptr;
-    if (bus.pan != defaults.pan) {
+    if (bus.width != defaults.width) {
+      offending = "width";
+    } else if (bus.pan != defaults.pan) {
       offending = "pan";
     } else if (bus.pan_mode != defaults.pan_mode) {
       offending = "panMode";

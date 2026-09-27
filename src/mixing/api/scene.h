@@ -56,10 +56,11 @@ struct Send {
 };
 
 // Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
-// azimuth/divergence/lfe; elevation/distance are reserved. Applied when the
-// engine's track mixer feeds this strip's lane into a destination with more
-// than two channels; ignored by the stereo-only standalone mixer block entry
-// points, which sum through the stereo panner. Mirrors
+// azimuth/divergence/lfe; elevation/distance are reserved. Applied wherever the
+// strip's main output meets a destination wider than two planes: the engine's
+// lane scatter and the mixer graph's strip scatter (a project bounce at 6/8
+// channels). The public stereo mixer builds its master at two planes, so there
+// it has no effect. Mirrors
 // mixing::SurroundPanParams without pulling the realtime DSP header into the
 // pure-data scene schema.
 struct SurroundPan {
@@ -111,9 +112,9 @@ struct Strip {
   bool polarity_invert_right = false;
   int pan_law = 0;  // 0 = Const3dB (matches PanLaw enum order).
   int channel_delay_samples = 0;
-  // Input channel layout of the source feeding this strip. A mono/stereo source
-  // can feed a surround bus; the panner upmixes it (see surround design). Stored
-  // but inert until the surround DSP path lands.
+  // Input channel layout of the source feeding this strip. Stored and
+  // round-tripped only: a strip processes two planes, and a wider destination is
+  // reached through the surround pan above.
   ChannelLayout source_layout = ChannelLayout::Stereo;
   // Surround pan position, used when this strip feeds a surround bus. Serialized
   // only when non-default (see scene_json) so existing stereo scenes are
@@ -134,9 +135,9 @@ struct Bus {
 
   std::string id;
   std::string role = "aux";
-  // Channel layout of this bus. The master bus (role == "master") carries the
-  // project output layout. Defaults to stereo; surround layouts are stored but
-  // inert until the surround DSP path lands.
+  // Channel layout of this bus. A 5.1/7.1 bus processes that many planes; mono
+  // and stereo buses process two. The master (role == "master") is instead built
+  // at the render's output width, and its layout is the widest output allowed.
   ChannelLayout layout = ChannelLayout::Stereo;
   // Output processing applied to the bus's summed signal, mirroring a Strip's
   // input trim / stereo width / polarity. Trim and polarity run before the
@@ -146,7 +147,8 @@ struct Bus {
   float width = 1.0f;
   bool polarity_invert_left = false;
   bool polarity_invert_right = false;
-  // Pan, as on Strip. A non-default value on a layout wider than two channels is rejected.
+  // Pan, as on Strip. A non-default pan or width on a layout wider than two
+  // channels is rejected.
   float pan = 0.0f;
   int pan_mode = 0;  // 0 = balance (matches SONARE_PAN_MODE_*).
   float dual_pan_left = -1.0f;

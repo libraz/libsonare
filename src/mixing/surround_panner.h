@@ -90,18 +90,17 @@ bool try_compute_surround_pan_gains(const SurroundPanParams& params, ChannelLayo
 /// Realtime surround panner: smooths each output-plane gain with a one-pole and
 /// scatters a (mono-summed) lane signal additively across the destination planes.
 ///
-/// Both this processor and TrackMixerRuntime's inline lane scatter compute their
-/// placement from the shared @ref compute_surround_pan_gains; they differ only in
-/// per-plane gain smoothing (this uses a one-pole, the lane scatter a per-block
-/// linear ramp). The live mixer path uses the lane scatter; this processor is a
-/// standalone building block. The smoothing styles are intentionally not unified
-/// (no audible difference, and they have separate call sites).
+/// Numerically the same scatter as TrackMixerRuntime's lane path: gains from
+/// @ref try_compute_surround_pan_gains, a 0.5(L+R) point source, a 5 ms one-pole
+/// per plane, and a snap to the target on the first block after prepare()/reset()
+/// and on a layout change. The standalone mixer graph scatters strips with it.
 class SurroundPannerProcessor {
  public:
   explicit SurroundPannerProcessor(ChannelLayout layout = ChannelLayout::FivePointOne,
                                    SurroundPanParams params = {}, float smoothing_ms = 5.0f);
 
   void prepare(double sample_rate, int max_block_size);
+  /// Makes the next process_add() open at its target gains rather than glide.
   void reset();
 
   void set_params(const SurroundPanParams& params) noexcept;
@@ -129,11 +128,12 @@ class SurroundPannerProcessor {
   double sample_rate_ = 48000.0;
   float smoothing_ms_ = 5.0f;
   std::array<rt::ParamSmoother, kMaxSurroundPlanes> smoothers_{};
-  // The layout the smoothers currently hold gains for. Gains are computed
-  // against a layout, so carried across a change they are a different quantity
-  // and the next block snaps instead of gliding from them -- the contract the
-  // first block after prepare() already gets. Audio thread only.
-  uint8_t rendered_layout_{static_cast<uint8_t>(ChannelLayout::FivePointOne)};
+  // The layout the smoothers currently hold gains for, or kUnprimed after
+  // prepare()/reset(). Gains are computed against a layout, so carried across a
+  // change they are a different quantity and the next block snaps instead of
+  // gliding from them. Audio thread only.
+  static constexpr uint8_t kUnprimed = 0xFF;
+  uint8_t rendered_layout_{kUnprimed};
   std::atomic<uint8_t> layout_{static_cast<uint8_t>(ChannelLayout::FivePointOne)};
   std::atomic<float> azimuth_{0.0f};
   std::atomic<float> elevation_{0.0f};

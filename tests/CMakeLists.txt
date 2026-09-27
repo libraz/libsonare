@@ -304,6 +304,7 @@ if(BUILD_MIXING)
     engine/monitor_runtime_test.cpp
     engine/track_mixer_test.cpp
     engine/track_mixer_concurrency_test.cpp
+    engine/track_mixer_routing_test.cpp
     mixing/downmix_test.cpp
     mixing/golden_hash_test.cpp
     mixing/insert_automation_c_api_test.cpp
@@ -600,6 +601,7 @@ if(BUILD_ARRANGEMENT)
     engine/instrument_clock_domain_test.cpp
     engine/instrument_automation_test.cpp
     engine/bus_strip_agreement_test.cpp
+    engine/midi_clip_gain_test.cpp
     bindings/binding_project_c_surface_test.cpp
     bindings/binding_project_bounce_test.cpp
     bindings/project_bounce_overflow_test.cpp
@@ -611,9 +613,12 @@ if(BUILD_ARRANGEMENT)
     bindings/binding_sample_bank_test.cpp
     arrangement/c_abi_external_stems_test.cpp
   )
-  # Sums a clip and a MIDI instrument into one group bus.
+  # Tests that need both the arrangement and the mixing subsystems.
   if(BUILD_MIXING)
-    target_sources(sonare_tests PRIVATE engine/bus_aggregation_test.cpp)
+    target_sources(sonare_tests PRIVATE
+      engine/bus_aggregation_test.cpp
+      mixing/graph_surround_test.cpp
+    )
   endif()
   target_link_libraries(sonare_tests PRIVATE sonare_arrangement sonare_mir sonare_serialize sonare_midi)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_ARRANGEMENT=1)

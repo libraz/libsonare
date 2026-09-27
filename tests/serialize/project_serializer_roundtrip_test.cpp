@@ -270,11 +270,10 @@ Fixture make_fixture() {
   // round-tripped to their defaults because the project serializer's bus walker
   // dropped them, so a reloaded project rendered differently from the saved one).
   master.input_trim_db = -2.5f;
-  master.width = 0.75f;
   master.polarity_invert_left = true;
-  // Bus pan is rejected at a non-default value on a >2-channel layout, so a
-  // surround master exercises the EQ field only; bus.fx below is stereo and
-  // carries the pan fields instead.
+  // Bus pan and width are rejected at a non-default value on a >2-channel
+  // layout, so a surround master exercises the EQ field only; bus.fx below is
+  // stereo and carries the pan and width fields instead.
   mastering::eq::EqBand master_band;
   master_band.type = mastering::eq::EqBandType::HighShelf;
   master_band.frequency_hz = 8000.0f;

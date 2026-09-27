@@ -210,6 +210,13 @@ SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
   SonareMixer* mixer =
       sonare_mixer_from_scene_json(scene_json.c_str(), static_cast<int>(sample_rate), block_size);
   if (mixer == nullptr) return nullptr;
+  if (!direct_strip_id.empty()) {
+    // The direct stem is an already-mixed stereo pair, not a panned source, so it
+    // reaches a wider master's front pair rather than being scattered.
+    if (SonareStrip* strip = sonare_mixer_strip_by_id(mixer, direct_strip_id.c_str())) {
+      strip->surround_scatter = false;
+    }
+  }
   sonare_c_mixing_detail::build_and_compile(mixer);
   schedule_mixer_automation(timeline, routing, sample_rate, mixer, out_diagnostics);
 
@@ -218,9 +225,11 @@ SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
   // fading in from the previous value over the first ~5 ms block. This keeps the
   // offline bounce deterministic; without it a non-default static fader ramps in
   // on the master. (See ChannelStrip::settle for the full set of snapped stages.)
+  // The surround scatter is settled alongside so it opens at its placement.
   for (const std::string& strip_id : routing.strip_ids) {
     if (SonareStrip* strip = sonare_mixer_strip_by_id(mixer, strip_id.c_str())) {
       strip->strip.settle();
+      strip->surround.reset();
     }
   }
   if (!direct_strip_id.empty()) {
@@ -300,6 +309,9 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
                                             direct_strip_id, out_diagnostics));
   }
   if (!mixer_owner) return SONARE_ERROR_INVALID_STATE;
+  // The master runs at the output width (a mono bounce folds a 2-wide master).
+  sonare_c_mixing_detail::set_output_channels(mixer_owner.get(), num_channels);
+  const int master_planes = mixer_owner->output_channels;
   // An automation lane that did not fit its strip is caught here, before any
   // stem is rendered, so the caller gets the diagnostic instead of audio whose
   // automation curve froze partway through.
@@ -334,7 +346,8 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   size_t mixer_frame_count = 0;
   size_t master_floats = 0;
   if (!checked_frame_count(mixer_render_frames, &mixer_frame_count) ||
-      !checked_frame_shape(mixer_render_frames, 2, &master_floats)) {
+      !checked_frame_shape(mixer_render_frames, static_cast<size_t>(master_planes),
+                           &master_floats)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::unique_ptr<MidiSourceStemSink> midi_source_stems;
@@ -426,8 +439,14 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   }
 
   // Sum the strip stems through the mixer block by block.
-  std::vector<float> master_l(mixer_frame_count, 0.0f);
-  std::vector<float> master_r(mixer_frame_count, 0.0f);
+  std::vector<std::vector<float>> master(static_cast<size_t>(master_planes),
+                                         std::vector<float>(mixer_frame_count, 0.0f));
+  std::vector<float*> master_block(static_cast<size_t>(master_planes), nullptr);
+  auto point_master = [&](int64_t off) {
+    for (int ch = 0; ch < master_planes; ++ch) {
+      master_block[static_cast<size_t>(ch)] = master[static_cast<size_t>(ch)].data() + off;
+    }
+  };
   std::vector<const float*> in_l(strip_count, nullptr);
   std::vector<const float*> in_r(strip_count, nullptr);
   SonareError err = SONARE_OK;
@@ -438,36 +457,33 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
       in_l[i] = stems[i][0].data() + off;
       in_r[i] = stems[i][1].data() + off;
     }
-    err = sonare_mixer_process_stereo(mixer_owner.get(), in_l.data(), in_r.data(), strip_count,
-                                      master_l.data() + off, master_r.data() + off, n);
+    point_master(off);
+    err =
+        sonare_c_mixing_detail::process_planar(mixer_owner.get(), in_l.data(), in_r.data(),
+                                               strip_count, master_block.data(), master_planes, n);
     if (err != SONARE_OK) break;
   }
   for (int64_t off = input_frames; err == SONARE_OK && off < mixer_render_frames;
        off += block_size) {
     const size_t n = static_cast<size_t>(std::min<int64_t>(block_size, mixer_render_frames - off));
-    err = sonare_mixer_drain_tail_stereo(mixer_owner.get(), master_l.data() + off,
-                                         master_r.data() + off, n);
+    point_master(off);
+    err = sonare_c_mixing_detail::process_planar(mixer_owner.get(), nullptr, nullptr, 0,
+                                                 master_block.data(), master_planes, n);
   }
   if (err != SONARE_OK) return err;
 
-  // Interleave into the requested channel count: mono downmixes the stereo
-  // master; channels beyond stereo are left silent.
+  // Interleave: mono folds the 2-wide master, every other width copies its planes.
   const size_t mixer_latency_count = static_cast<size_t>(mixer_latency);
   std::unique_ptr<float[]> interleaved(new float[total]);
   for (int64_t f = 0; f < frames; ++f) {
     const size_t source = static_cast<size_t>(f) + mixer_latency_count;
-    const float l = master_l[source];
-    const float r = master_r[source];
+    float* frame = interleaved.get() + static_cast<size_t>(f) * static_cast<size_t>(num_channels);
+    if (num_channels == 1) {
+      frame[0] = 0.5f * (master[0][source] + master[1][source]);
+      continue;
+    }
     for (int ch = 0; ch < num_channels; ++ch) {
-      float v = 0.0f;
-      if (num_channels == 1) {
-        v = 0.5f * (l + r);
-      } else if (ch == 0) {
-        v = l;
-      } else if (ch == 1) {
-        v = r;
-      }
-      interleaved[static_cast<size_t>(f) * num_channels + ch] = v;
+      frame[ch] = master[static_cast<size_t>(ch)][source];
     }
   }
   *out_interleaved = interleaved.release();

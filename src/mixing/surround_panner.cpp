@@ -159,12 +159,10 @@ void SurroundPannerProcessor::load_target_gains(SurroundPanGains& out) const {
 }
 
 void SurroundPannerProcessor::reset() {
-  SurroundPanGains gains;
-  load_target_gains(gains);
-  rendered_layout_ = static_cast<uint8_t>(layout());
-  for (int p = 0; p < kMaxSurroundPlanes; ++p) {
-    smoothers_[p].reset(p < gains.count ? gains.gain[p] : 0.0f);
-  }
+  // Snapping on the next block, rather than seeding the smoothers here, takes
+  // the gains from the parameters that block actually renders with.
+  rendered_layout_ = kUnprimed;
+  for (auto& s : smoothers_) s.reset(0.0f);
 }
 
 void SurroundPannerProcessor::set_params(const SurroundPanParams& params) noexcept {
@@ -208,8 +206,8 @@ void SurroundPannerProcessor::process_add(const float* const* in, int num_in_cha
   SurroundPanGains gains;
   load_target_gains(gains);
   const int planes = std::min(gains.count, num_out_planes);
-  // A layout change makes the carried gains a different quantity, so this block
-  // starts at placement the way the first block after prepare() does.
+  // The first block after prepare()/reset(), and a layout change, start at
+  // placement: carried gains from another layout are a different quantity.
   const uint8_t active = static_cast<uint8_t>(layout());
   const bool relaid_out = active != rendered_layout_;
   rendered_layout_ = active;

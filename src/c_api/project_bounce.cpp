@@ -18,11 +18,13 @@
 #include "c_api/project_bounce_internal.h"
 #include "c_api/sample_bank_internal.h"
 #include "c_api/synth_patch_common.h"
+#include "core/channel_layout.h"
 #include "engine/track_mixer.h"
 #include "mastering/api/insert_factory.h"
 #include "midi/builtin_synth.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/synth/synth_presets.h"
+#include "mixing/api/scene.h"
 #if defined(SONARE_WITH_MIXING)
 #include <sonare/sonare_c_mixing.h>
 
@@ -60,6 +62,28 @@ bool arrangement_end_frames(const arr::CompiledTimeline& timeline, int64_t* out_
   }
   *out_end = end;
   return true;
+}
+
+// Widest output a scene's master allows: its layout's width, with mono and
+// stereo (and a scene with no master) allowing two. The master is resolved the
+// way the mixer graph resolves it: role "master" first, then id "master".
+int max_output_channels(const sonare::mixing::api::Scene& scene) noexcept {
+  const sonare::mixing::api::Bus* master = nullptr;
+  for (const auto& bus : scene.buses) {
+    if (bus.role == "master") {
+      master = &bus;
+      break;
+    }
+  }
+  if (master == nullptr) {
+    for (const auto& bus : scene.buses) {
+      if (bus.id == "master") {
+        master = &bus;
+        break;
+      }
+    }
+  }
+  return master == nullptr ? 2 : std::max(2, sonare::channel_count(master->layout));
 }
 
 // Resets the recorded compile result to the empty state a project starts in.
@@ -102,11 +126,14 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   const int block_size = opts.block_size > 0 ? opts.block_size : 128;
   const int num_channels = opts.num_channels > 0 ? opts.num_channels : 2;
   if (block_size <= 0 || num_channels <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-  // The project bounce sums to a stereo master and only writes a mono downmix or
-  // the stereo pair; any wider count would leave the extra planes silent. Reject
-  // unsupported widths up front, matching engine-bounce (which rejects channel
-  // counts that do not map to a speaker layout) instead of emitting dead planes.
-  if (num_channels != 1 && num_channels != 2) return SONARE_ERROR_INVALID_PARAMETER;
+  // The master is built at the requested width, so only a speaker-layout count
+  // is meaningful, and the scene's master layout caps it.
+  if (num_channels != 1 && num_channels != 2 && !sonare::is_surround_channel_count(num_channels)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (num_channels > max_output_channels(project->history.project().scene())) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   const double project_sr = project->history.project().sample_rate();
   const double sample_rate =
       opts.sample_rate > 0 ? static_cast<double>(opts.sample_rate) : project_sr;
@@ -253,7 +280,9 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
 
   // Single-render path: no channel strips bound (output identical to the legacy
   // bounce). Plugin-delay compensation renders `pdc` extra frames and drops the
-  // leading delay-line fill so musical time [0, frames) aligns to output 0.
+  // leading delay-line fill so musical time [0, frames) aligns to output 0. The
+  // unmixed render is a stereo pair, so a wider output carries it on the front
+  // pair and leaves the other planes silent.
   const int64_t render_frames = single_render_frames;
   size_t render_floats = 0;
   if (!checked_frame_shape(render_frames, 2, &render_floats)) {

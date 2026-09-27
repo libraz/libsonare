@@ -24,6 +24,7 @@
 #include "mixing/fx_bus.h"
 #include "mixing/panner.h"
 #include "mixing/send.h"
+#include "mixing/surround_panner.h"
 #include "rt/processor_base.h"
 #include "sonare_c_internal.h"
 
@@ -40,6 +41,13 @@ struct SonareStrip {
   std::string id;
   sonare::mixing::api::Strip scene_strip;
   sonare::mixing::ChannelStrip strip;
+  // Scatters the post-strip stereo signal across a destination wider than two
+  // planes. Persistent like `strip`, so a graph rebuild does not restart a glide.
+  sonare::mixing::SurroundPannerProcessor surround;
+  bool surround_prepared = false;
+  // False for a strip whose source is a plain stereo mix rather than a panned
+  // lane (the bounce's direct stem): it reaches a wide destination's front pair.
+  bool surround_scatter = true;
   SonareMixer* owner = nullptr;
 };
 
@@ -79,6 +87,10 @@ struct SonareMixer {
   std::vector<sonare::mixing::api::VcaGroup> vca_groups;
   std::vector<sonare::mixing::api::Connection> connections;
   std::string master_id;
+  // Width the master node is built at: the render's output channel count, with
+  // mono built at two (the caller folds 0.5(L+R)). The public stereo entry points
+  // leave it at 2; the project bounce sets it through set_output_channels().
+  int output_channels = 2;
   sonare::graph::Graph graph;
   bool compiled_dirty = true;
   int latency_samples = 0;
@@ -220,5 +232,17 @@ inline void copy_meter_snapshot(const sonare::mixing::MeterSnapshot& snapshot,
 
 void apply_solo_mutes(SonareMixer* mixer);
 void build_and_compile(SonareMixer* mixer);
+
+/// @brief Sets the width the master is built at (1, 2, 6 or 8; 1 builds it at 2).
+/// @details Marks the graph dirty when the width changes. Throws
+///          SonareException(InvalidParameter) for any other count.
+void set_output_channels(SonareMixer* mixer, int channels);
+
+/// @brief The planar block entry behind sonare_mixer_process_stereo.
+/// @details Same input contract and rejections as the stereo entry; writes the
+///          first min(out_channels, master width) master planes and zeroes the rest.
+SonareError process_planar(SonareMixer* mixer, const float* const* input_left,
+                           const float* const* input_right, size_t input_count,
+                           float* const* output, int out_channels, size_t num_samples);
 
 }  // namespace sonare_c_mixing_detail

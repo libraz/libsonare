@@ -426,7 +426,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       // the first rendered block (mirrors ChannelStrip::settle).
       dsp->panner.reset();
       dsp->eq.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
-      dsp->eq.prepare_channels(2);
+      dsp->eq.prepare_channels(sonare::channel_count(sonare::ChannelLayout::SevenPointOne));
       sonare::mixing::apply_eq(dsp->eq, dsp->eq_enabled, bus.eq, nullptr);
       for (const auto& insert : bus.inserts) {
         std::vector<std::string> unknown_keys;
@@ -447,7 +447,11 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
           }
           ignored_param_notes.push_back(std::move(note));
         }
-        dsp->fx.add_insert(std::move(processor));
+        // Same channel policy the engine's bus chain passes, so a pair-only insert
+        // on a surround bus touches the front pair alone in both.
+        const bool spo = sonare::mastering::api::channel_policy(insert.processor_name) ==
+                         sonare::mastering::api::ChannelPolicy::StereoPairOnly;
+        dsp->fx.add_insert(std::move(processor), spo);
       }
       mixer->bus_dsp.push_back(std::move(dsp));
     }
@@ -572,10 +576,71 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       SonareMixer * mixer, const float* const* input_left, const float* const* input_right,
       size_t input_count, float* output_left, float* output_right, size_t num_samples) {
     SONARE_C_API_ENTRY;
-    if (!mixer || !output_left || !output_right || (!input_left && input_count > 0) ||
+    if (!output_left || !output_right) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    float* output[] = {output_left, output_right};
+    return process_planar(mixer, input_left, input_right, input_count, output, 2, num_samples);
+  }
+
+  SonareError sonare_mixer_drain_tail_stereo(SonareMixer * mixer, float* output_left,
+                                             float* output_right, size_t num_samples) {
+    SONARE_C_API_ENTRY;
+    return sonare_mixer_process_stereo(mixer, nullptr, nullptr, 0, output_left, output_right,
+                                       num_samples);
+  }
+
+  const char* sonare_mixing_scene_preset_names(void) {
+    // thread_local (not plain static): each call reassigns the storage and returns
+    // a borrowed pointer into it. A plain static would let a concurrent caller
+    // reassign the string and invalidate another thread's returned pointer. Per
+    // the C-ABI contract this pointer is borrowed (callers must not free it) and
+    // is valid until the next call ON THE SAME THREAD.
+    static thread_local std::string storage;
+    return sonare_c_detail::join_names(sonare::mixing::api::scene_preset_names(), storage);
+  }
+
+  SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out) {
+    SONARE_C_API_ENTRY;
+    if (!preset_name || !json_out) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    SONARE_C_TRY
+    *json_out = nullptr;
+    const auto preset = sonare::mixing::api::scene_preset_from_string(preset_name);
+    const auto scene = sonare::mixing::api::scene_preset(preset);
+    *json_out = sonare_c_detail::copy_string(sonare::mixing::api::scene_to_json(scene));
+    return SONARE_OK;
+    SONARE_C_CATCH
+  }
+
+  void sonare_mixer_destroy(SonareMixer * mixer) { delete mixer; }
+
+  namespace sonare_c_mixing_detail {
+
+  void set_output_channels(SonareMixer* mixer, int channels) {
+    if (mixer == nullptr ||
+        (channels != 1 && channels != 2 && !sonare::is_surround_channel_count(channels))) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "mixer output width must be 1, 2, 6 or 8");
+    }
+    const int width = std::max(channels, 2);
+    if (mixer->output_channels != width) {
+      mixer->output_channels = width;
+      mixer->compiled_dirty = true;
+    }
+  }
+
+  SonareError process_planar(SonareMixer* mixer, const float* const* input_left,
+                             const float* const* input_right, size_t input_count,
+                             float* const* output, int out_channels, size_t num_samples) {
+    if (!mixer || !output || out_channels <= 0 || (!input_left && input_count > 0) ||
         (!input_right && input_count > 0) || input_count > mixer->strips.size() ||
         num_samples > static_cast<size_t>(mixer->max_block_size)) {
       return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    for (int ch = 0; ch < out_channels; ++ch) {
+      if (!output[ch]) return SONARE_ERROR_INVALID_PARAMETER;
     }
     // EMPTY-BLOCK POLICY: a zero-frame block is a no-op, not an error. This is a
     // block-processing entry, not an offline analysis (validate_audio_params
@@ -611,8 +676,9 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     }
 
     SONARE_C_TRY
-    std::fill(output_left, output_left + num_samples, 0.0f);
-    std::fill(output_right, output_right + num_samples, 0.0f);
+    for (int ch = 0; ch < out_channels; ++ch) {
+      std::fill(output[ch], output[ch] + num_samples, 0.0f);
+    }
 
     // Lazy compile: rebuild the routing graph if topology changed since the last
     // process/compile. Acceptable to allocate here (offline/block convenience entry).
@@ -631,45 +697,15 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     mixer->graph.process_block(n);
     mixer->timeline_sample_pos += static_cast<int64_t>(num_samples);
 
-    const float* master_l = mixer->graph.output(mixer->master_id, 0);
-    const float* master_r = mixer->graph.output(mixer->master_id, 1);
-    if (master_l != nullptr && master_r != nullptr) {
-      std::copy(master_l, master_l + num_samples, output_left);
-      std::copy(master_r, master_r + num_samples, output_right);
+    const int planes = std::min(out_channels, mixer->output_channels);
+    for (int ch = 0; ch < planes; ++ch) {
+      const float* master = mixer->graph.output(mixer->master_id, ch);
+      if (master != nullptr) {
+        std::copy(master, master + num_samples, output[ch]);
+      }
     }
     return SONARE_OK;
     SONARE_C_CATCH
   }
 
-  SonareError sonare_mixer_drain_tail_stereo(SonareMixer * mixer, float* output_left,
-                                             float* output_right, size_t num_samples) {
-    SONARE_C_API_ENTRY;
-    return sonare_mixer_process_stereo(mixer, nullptr, nullptr, 0, output_left, output_right,
-                                       num_samples);
-  }
-
-  const char* sonare_mixing_scene_preset_names(void) {
-    // thread_local (not plain static): each call reassigns the storage and returns
-    // a borrowed pointer into it. A plain static would let a concurrent caller
-    // reassign the string and invalidate another thread's returned pointer. Per
-    // the C-ABI contract this pointer is borrowed (callers must not free it) and
-    // is valid until the next call ON THE SAME THREAD.
-    static thread_local std::string storage;
-    return sonare_c_detail::join_names(sonare::mixing::api::scene_preset_names(), storage);
-  }
-
-  SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out) {
-    SONARE_C_API_ENTRY;
-    if (!preset_name || !json_out) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    SONARE_C_TRY
-    *json_out = nullptr;
-    const auto preset = sonare::mixing::api::scene_preset_from_string(preset_name);
-    const auto scene = sonare::mixing::api::scene_preset(preset);
-    *json_out = sonare_c_detail::copy_string(sonare::mixing::api::scene_to_json(scene));
-    return SONARE_OK;
-    SONARE_C_CATCH
-  }
-
-  void sonare_mixer_destroy(SonareMixer * mixer) { delete mixer; }
+  }  // namespace sonare_c_mixing_detail
