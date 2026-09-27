@@ -278,7 +278,9 @@ def mastering_assistant_suggest(
     """Analyze audio and suggest a mastering chain as shared JSON.
 
     ``params`` accepts ``targetPlatform`` as a delivery-target name (see
-    :func:`mastering_platform_names`); every other key is numeric.
+    :func:`mastering_platform_names`) and ``preset`` as the mastering preset the
+    suggestion starts from (default ``"streaming"``; restoration presets are
+    refused); every other key is numeric.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_assistant_suggest"):
@@ -465,7 +467,8 @@ def mastering_assistant_suggest_stereo(
 
     Profiles through :func:`mastering_audio_profile_stereo`, so the loudness
     stage of the suggestion is built on the channel-summed program. ``params``
-    accepts ``targetPlatform`` as a delivery-target name.
+    accepts ``targetPlatform`` and ``preset`` by name, as
+    :func:`mastering_assistant_suggest` does.
     """
     param_array, param_count = _assistant_params(params)
     return _stereo_analysis_json(

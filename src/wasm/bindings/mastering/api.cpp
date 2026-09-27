@@ -403,15 +403,18 @@ std::vector<float> interleaveValidatedPair(val left_samples, val right_samples, 
   return interleaved;
 }
 
-// Builds an assistant config from a JS params object. `targetPlatform` is a
-// delivery-target NAME on this surface: it is read here, validated against the
-// shared table, and kept out of the numeric conversion. The index the C ABI
+// Builds an assistant config from a JS params object. `targetPlatform` and
+// `preset` are NAMES on this surface: they are read here, validated against the
+// shared tables, and kept out of the numeric conversion. The index the C ABI
 // carries is a transport detail for callers that cannot pass a string, so a
 // number is rejected here rather than silently accepted as an index.
 mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) {
   static const std::vector<std::string> kPlatformKeys = {"targetPlatform", "target_platform"};
+  static const std::vector<std::string> kNameKeys = {"targetPlatform", "target_platform", "preset"};
   std::string platform;
   bool has_platform = false;
+  std::string preset;
+  bool has_preset = false;
   if (!params_obj.isNull() && !params_obj.isUndefined()) {
     for (const std::string& key : kPlatformKeys) {
       if (!hasProperty(params_obj, key.c_str())) continue;
@@ -424,12 +427,22 @@ mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) 
       platform = value.as<std::string>();
       has_platform = true;
     }
+    if (hasProperty(params_obj, "preset")) {
+      val value = params_obj["preset"];
+      if (value.typeOf().as<std::string>() != "string") {
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "'preset' must be a mastering preset name");
+      }
+      preset = value.as<std::string>();
+      has_preset = true;
+    }
   }
   const std::vector<mastering::api::Param> params =
-      masteringParamsFromObject(params_obj, kPlatformKeys);
+      masteringParamsFromObject(params_obj, kNameKeys);
   mastering::assistant::AssistantConfig config =
       mastering::assistant::assistant_config_from_params(params.data(), params.size());
   if (has_platform) mastering::assistant::set_target_platform(config, platform);
+  if (has_preset) config.preset = mastering::api::preset_from_string(preset);
   return config;
 }
 

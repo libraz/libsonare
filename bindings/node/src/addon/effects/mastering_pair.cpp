@@ -7,6 +7,7 @@
 
 #include "core/audio.h"
 #include "mastering/api/named_processor.h"
+#include "mastering/api/presets.h"
 #include "mastering/assistant/config_from_params.h"
 #include "mastering/assistant/platform_targets.h"
 #include "mastering/assistant/suggester.h"
@@ -53,14 +54,15 @@ bool ReadStereoPair(const Napi::CallbackInfo& info, const char* usage,
   return true;
 }
 
-// Builds an assistant config from a JS params object. `targetPlatform` is a
-// delivery-target NAME on this surface: it is read here, validated against the
-// shared table, and kept out of the numeric conversion. The index the C ABI
+// Builds an assistant config from a JS params object. `targetPlatform` and
+// `preset` are NAMES on this surface: they are read here, validated against the
+// shared tables, and kept out of the numeric conversion. The index the C ABI
 // carries is a transport detail for callers that cannot pass a string, so a
 // number is rejected here rather than silently accepted as an index.
 sonare::mastering::assistant::AssistantConfig AssistantConfigFromParams(
     const Napi::CallbackInfo& info, size_t index) {
   static const std::vector<std::string> kPlatformKeys = {"targetPlatform", "target_platform"};
+  static const std::vector<std::string> kNameKeys = {"targetPlatform", "target_platform", "preset"};
   std::vector<sonare::mastering::api::Param> params;
   std::string platform;
   bool has_platform = false;
@@ -77,11 +79,18 @@ sonare::mastering::assistant::AssistantConfig AssistantConfigFromParams(
       platform = platform_value.As<Napi::String>().Utf8Value();
       has_platform = true;
     }
-    params = ParamsFromObject(object, kPlatformKeys);
+    params = ParamsFromObject(object, kNameKeys);
   }
   sonare::mastering::assistant::AssistantConfig config =
       sonare::mastering::assistant::assistant_config_from_params(params.data(), params.size());
   if (has_platform) sonare::mastering::assistant::set_target_platform(config, platform);
+  if (info.Length() > index && info[index].IsObject()) {
+    // Absent, undefined and null keep the default, as WASM's reader does; an
+    // explicit empty string is not a preset name and is refused.
+    config.preset = sonare::mastering::api::preset_from_string(
+        StringProperty(info[index].As<Napi::Object>(), "preset",
+                       sonare::mastering::api::preset_to_string(config.preset)));
+  }
   return config;
 }
 

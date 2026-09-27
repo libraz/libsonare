@@ -18,13 +18,9 @@
 #include "mixing/assistant/track_profile.h"
 
 using Catch::Matchers::WithinAbs;
-using sonare::mastering::assistant::GenreCandidate;
-using sonare::mixing::assistant::balance_table_count;
-using sonare::mixing::assistant::balance_table_index_for_genre;
 using sonare::mixing::assistant::decide_balance;
 using sonare::mixing::assistant::DeltaDomain;
 using sonare::mixing::assistant::kBandCount;
-using sonare::mixing::assistant::kDefaultBalanceTableIndex;
 using sonare::mixing::assistant::kSourceClassCount;
 using sonare::mixing::assistant::MixAssistantConfig;
 using sonare::mixing::assistant::SceneDelta;
@@ -263,57 +259,6 @@ TEST_CASE("suggestion strength scales the offset proportionally", "[mixing][assi
     CHECK_THAT(fader_of(half_deltas, full.strip_id),
                WithinAbs(0.5f * *full.fader_db, kDbTolerance));
   }
-}
-
-TEST_CASE("an unrecognised genre falls back to the default balance table", "[mixing][assistant]") {
-  REQUIRE(balance_table_count() >= 1);
-  CHECK(kDefaultBalanceTableIndex < balance_table_count());
-
-  // A genre the profiler has never emitted, and no genre at all, both resolve to
-  // a table rather than to no balance.
-  CHECK(balance_table_index_for_genre("") == kDefaultBalanceTableIndex);
-  CHECK(balance_table_index_for_genre("notAGenre") == kDefaultBalanceTableIndex);
-
-  // Every label the profiler can emit resolves to a table that exists.
-  const std::vector<std::string> labels{"pop",      "edm",       "techno",  "trance", "drumAndBass",
-                                        "hipHop",   "trap",      "rnb",     "metal",  "jazz",
-                                        "acoustic", "classical", "ambient", "lofi",   "jpop",
-                                        "kpop",     "gameOst",   "speech"};
-  for (const std::string& label : labels) {
-    CHECK(balance_table_index_for_genre(label) < balance_table_count());
-  }
-}
-
-TEST_CASE("the genre read from the tracks selects one table for the whole call",
-          "[mixing][assistant]") {
-  std::vector<TrackProfile> pop = profiles_for_every_class();
-  for (TrackProfile& profile : pop) {
-    profile.base.genre_candidates.push_back(GenreCandidate{"pop", 0.9f});
-  }
-  std::vector<TrackProfile> classical = profiles_for_every_class();
-  for (TrackProfile& profile : classical) {
-    profile.base.genre_candidates.push_back(GenreCandidate{"classical", 0.9f});
-  }
-
-  const std::vector<SceneDelta> pop_deltas = decide_balance(pop, MixAssistantConfig{});
-  const std::vector<SceneDelta> classical_deltas = decide_balance(classical, MixAssistantConfig{});
-  REQUIRE(pop_deltas.size() == classical_deltas.size());
-
-  // Both genres resolve to the same table while only one exists, so the two runs
-  // must agree. Once a second table lands this case is what shows the switch
-  // reaching the decision.
-  for (const SceneDelta& delta : pop_deltas) {
-    REQUIRE(delta.fader_db.has_value());
-    CHECK_THAT(fader_of(classical_deltas, delta.strip_id),
-               WithinAbs(*delta.fader_db, kDbTolerance));
-  }
-}
-
-TEST_CASE("a mix with no genre at all is still balanced", "[mixing][assistant]") {
-  // The profiler leaves genre_candidates empty for material it cannot place, and
-  // that must not cost the mix its balance.
-  const std::vector<TrackProfile> profiles = profiles_for_every_class();
-  CHECK(decide_balance(profiles, MixAssistantConfig{}).size() == profiles.size());
 }
 
 TEST_CASE("degenerate input yields an empty balance suggestion", "[mixing][assistant]") {

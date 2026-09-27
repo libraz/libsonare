@@ -292,6 +292,9 @@ node = [
   # it never calls this; the index is the C-ABI transport form. The accepted set
   # is exposed as masteringPlatformNames.
   "mastering_platform_from_name",
+  # The same converter for the assistant's preset: Node takes the preset by name
+  # and resolves it against the core catalogue; the set is masteringPresetNames.
+  "mastering_preset_from_name",
   # --- composition assist: reachable from the C ABI and C++ only, by design ---
   # All three entry points are RUN path. Registering a host module is C++-only
   # (the interfaces in src/midi/assist/ are same-build abstracts), so binding the
@@ -395,6 +398,8 @@ wasm = [
   # See the Node note: WASM also takes the delivery target by name and resolves
   # it against the core table, and exposes the set as masteringPlatformNames.
   "mastering_platform_from_name",
+  # See the Node note: WASM takes the assistant's preset by name too.
+  "mastering_preset_from_name",
   # See the Node note: the composition-assist seam is C-ABI and C++ only. WASM
   # does not link sonare_assist at all, so these compile their NOT_SUPPORTED
   # stub (src/CMakeLists.txt states why linking it is not a one-line change).
@@ -482,6 +487,8 @@ python = [
   # the numeric param transport carries; the public Python API takes the name,
   # and mastering_platform_names() exposes the accepted set.
   "mastering_platform_from_name",
+  # The same for the assistant's preset name; mastering_preset_names() lists it.
+  "mastering_preset_from_name",
   # See the Node note: the composition-assist seam is C-ABI and C++ only. The
   # layer that would plug into it is TypeScript, so a Python-only exposure would
   # be an asymmetry needing its own reason rather than a quiet re-expansion.

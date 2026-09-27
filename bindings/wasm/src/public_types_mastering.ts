@@ -256,10 +256,12 @@ export type MasteringProcessorParams = Record<string, number | boolean>;
 
 /**
  * Params accepted by the assistant entry points. Every key is numeric except
- * `targetPlatform`, which is a delivery-target NAME (`'broadcast'`, `'podcast'`,
- * `'club'`, ...). A number is rejected for it: the numeric index the C ABI
- * carries is a transport detail for callers that cannot pass a string, not part
- * of the JavaScript vocabulary.
+ * two NAMES: `targetPlatform`, a delivery target (`'broadcast'`, `'podcast'`,
+ * `'club'`, ...), and `preset`, the mastering preset the suggestion starts from
+ * (default `'streaming'`; restoration presets are refused). The assistant never
+ * picks a preset from the audio. A number is rejected for either: the numeric
+ * index the C ABI carries is a transport detail for callers that cannot pass a
+ * string, not part of the JavaScript vocabulary.
  */
 export type MasteringAssistantParams = Record<string, number | boolean | string>;
 

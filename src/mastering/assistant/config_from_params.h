@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstddef>
 #include <string>
+#include <vector>
 
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
@@ -55,6 +56,22 @@ inline AssistantConfig assistant_config_from_params(const api::Param* params, st
                        "targetPlatform must be a delivery-target index; expected one of: " +
                            platform_names_joined());
       config.target_platform = platform_name_at(static_cast<int>(index));
+    } else if (key == "preset") {
+      // Same index transport as targetPlatform: the position in preset_names().
+      const std::vector<std::string> names = api::preset_names();
+      double index = 0.0;
+      const bool integral = std::modf(value, &index) == 0.0;
+      const bool in_range = index >= 0.0 && index < static_cast<double>(names.size());
+      SONARE_CHECK_MSG(integral && in_range, ErrorCode::InvalidParameter,
+                       "preset must be a preset index from sonare_mastering_preset_from_name");
+      config.preset = api::preset_from_string(names[static_cast<std::size_t>(index)]);
+    } else {
+      // Refused rather than ignored, as a chain override is: a misspelt key
+      // would otherwise leave its setting at the default with nothing to say so.
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "unknown mastering assistant param: " + key +
+                                " (expected targetLufs, ceilingDb, enableRepair, "
+                                "preferStreamingSafe, speechMonoAmount, targetPlatform, preset)");
     }
   }
   return config;
@@ -76,6 +93,10 @@ inline AudioProfileConfig audio_profile_config_from_params(const api::Param* par
       api::assign_int_param(key, value, config.true_peak_oversample);
     } else if (key == "detectDefects" || key == "detect_defects") {
       config.detect_defects = value != 0.0;
+    } else {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "unknown mastering profile param: " + key +
+                                " (expected nFft, hopLength, truePeakOversample, detectDefects)");
     }
   }
   return config;

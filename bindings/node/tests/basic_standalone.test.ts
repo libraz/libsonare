@@ -554,7 +554,7 @@ describe('standalone functions', () => {
     expect(result).toHaveProperty('chainConfig');
     expect(result).toHaveProperty('profile');
     expect(Array.isArray(result.explanation)).toBe(true);
-    expect(Array.isArray(result.genreCandidates)).toBe(true);
+    expect(result).not.toHaveProperty('genreCandidates');
     expect(result.chainConfig.params['loudness.targetLufs']).toBe(-13);
     expect(result.chainConfig.params['loudness.ceilingDb']).toBeCloseTo(-0.8, 6);
 
@@ -579,7 +579,7 @@ describe('standalone functions', () => {
     expect(result).toHaveProperty('loudness.integratedLufs');
     expect(result).toHaveProperty('spectral.centroidHz');
     expect(result).toHaveProperty('dynamics.attackDensity');
-    expect(Array.isArray(result.genreCandidates)).toBe(true);
+    expect(result).not.toHaveProperty('genreCandidates');
   });
 
   it('exposes streaming platform loudness previews', () => {

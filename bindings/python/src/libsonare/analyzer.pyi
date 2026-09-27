@@ -103,8 +103,9 @@ AutomationCurveArg: TypeAlias = AutomationCurve | str | int
 IntSamples: TypeAlias = Sequence[int] | list[int] | np.ndarray[Any, Any]
 MasteringParamValue: TypeAlias = float | int | bool
 MasteringParams: TypeAlias = dict[str, MasteringParamValue]
-# The assistant additionally accepts targetPlatform, whose value is a
-# delivery-target name (see mastering_platform_names).
+# The assistant additionally accepts two names: targetPlatform, a delivery
+# target (see mastering_platform_names), and preset, the mastering preset the
+# suggestion starts from (see mastering_preset_names; default "streaming").
 MasteringAssistantParams: TypeAlias = dict[str, MasteringParamValue | str]
 MasteringChainParams: TypeAlias = dict[str, float | bool]
 ProgressCallback: TypeAlias = Callable[[float, str], None]
@@ -1272,6 +1273,8 @@ class Mixer:
     def drain_tail_stereo(self, num_samples: int) -> MixerStereoResult: ...
     def to_scene_json(self) -> str: ...
     def close(self) -> None: ...
+    def __enter__(self) -> Mixer: ...
+    def __exit__(self, *_exc: object) -> None: ...
     def __del__(self) -> None: ...
 
 def mix_stereo(

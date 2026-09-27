@@ -31,6 +31,7 @@ import {
   analyzeWithProgress,
   assignNoteTargets,
   decomposeStems,
+  decomposeStemsLinked,
   detectBoundaries,
   estimateMeter,
   extractNotes,
@@ -465,6 +466,22 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         result.sampleRate,
         result.components.length,
         Array.from(result.components[0]).slice(0, 8),
+      ];
+    },
+  },
+  {
+    jsName: 'decomposeStemsLinked',
+    invoke: (o) => {
+      const result = decomposeStemsLinked({
+        ...o,
+        channels: [sine(4096), sine(4096)],
+        sampleRate: SR,
+        nIter: 5,
+      });
+      return [
+        result.sampleRate,
+        result.components.length,
+        Array.from(result.components[0][1]).slice(0, 8),
       ];
     },
   },
@@ -1079,6 +1096,22 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ['estimateRoom', 'Needs a measured impulse response.'],
       ['freezeOffline', 'Needs a prepared engine graph.'],
       ['importExternalStems', 'Needs external stem buffers; covered by project-edit tests.'],
+      [
+        'masteringAssistantSuggest',
+        'Reads through AssistantConfigFromParams, which the scanner does not follow; mastering-assistant-preset.test.ts drives preset: undefined against an omitted preset.',
+      ],
+      [
+        'masteringAssistantSuggestChain',
+        'Reads through AssistantConfigFromParams, which the scanner does not follow; mastering-assistant-preset.test.ts drives preset: undefined against an omitted preset.',
+      ],
+      [
+        'masteringAssistantSuggestChainStereo',
+        'Reads through AssistantConfigFromParams, which the scanner does not follow; mastering-assistant-preset.test.ts drives preset: undefined against an omitted preset.',
+      ],
+      [
+        'masteringAssistantSuggestStereo',
+        'Reads through AssistantConfigFromParams, which the scanner does not follow; mastering-assistant-preset.test.ts drives preset: undefined against an omitted preset.',
+      ],
       ['meteringSpectrum', 'Covered by metering-and-scale.test.ts.'],
       ['meteringSpectrumFrame', 'Covered by metering-and-scale.test.ts.'],
       ['midiCcLearn', 'Covered by public-input-conformance.test.ts.'],

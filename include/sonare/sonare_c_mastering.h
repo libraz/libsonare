@@ -654,12 +654,22 @@ const char* sonare_mastering_platform_names(void);
 ///   library that consumes it, so callers must look it up rather than embed it.
 int sonare_mastering_platform_from_name(const char* name);
 
+/// @brief Converts a preset identifier to the index the assistant's @c preset
+///        param carries.
+/// @details Accepts the names returned by @ref sonare_mastering_preset_names.
+///   Returns -1 for NULL or an unknown name. The index is resolved by the same
+///   library that consumes it, so callers must look it up rather than embed it.
+int sonare_mastering_preset_from_name(const char* name);
+
 /// @brief Analyze audio and suggest a mastering chain as JSON.
 /// @details @p params accepts targetLufs, ceilingDb, enableRepair,
-/// preferStreamingSafe, speechMonoAmount, and targetPlatform. The last carries
-/// the index from @ref sonare_mastering_platform_from_name, because a param
-/// value is a number; an out-of-range or non-integral value is rejected. The
-/// returned string must be released with sonare_free_string().
+/// preferStreamingSafe, speechMonoAmount, targetPlatform and preset. The last
+/// two carry the index from @ref sonare_mastering_platform_from_name and
+/// @ref sonare_mastering_preset_from_name, because a param value is a number;
+/// an out-of-range or non-integral value is rejected. @c preset names the
+/// catalogue preset the suggestion starts from (default "streaming") and must
+/// be a mastering preset, not a restoration one. The returned string must be
+/// released with sonare_free_string().
 SonareError sonare_mastering_assistant_suggest(const float* samples, size_t length, int sample_rate,
                                                const SonareMasteringParam* params,
                                                size_t param_count, char** json_out);
@@ -676,7 +686,7 @@ SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const f
 
 /// @brief As @ref sonare_mastering_assistant_suggest, but writes only the chain
 ///        configuration the mastering chain consumes.
-/// @details The fuller document carries an explanation, genre candidates and a
+/// @details The fuller document carries an explanation and a
 /// profile alongside the configuration, so a caller that wants to apply a
 /// suggestion has to dig the configuration out of it. This writes that
 /// configuration alone, in the core's own canonical serialization. The document's

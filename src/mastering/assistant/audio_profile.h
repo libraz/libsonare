@@ -41,11 +41,6 @@ struct DynamicsProfile {
   float sustain_ratio = 0.0f;   ///< 0 = transient-heavy, 1 = sustained.
 };
 
-struct GenreCandidate {
-  std::string name;
-  float score = 0.0f;
-};
-
 /// @brief What the six repair detectors measured in the profiled signal.
 /// @details Each field is one detector's own scalar carried unchanged; the
 ///          repair headers define what each measures. Filled only when
@@ -131,7 +126,6 @@ struct AudioProfile {
   SpectralProfile spectral{};
   DynamicsProfile dynamics{};
   DefectProfile defects{};
-  std::vector<GenreCandidate> genre_candidates;
 };
 
 struct AudioProfileConfig {

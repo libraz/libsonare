@@ -147,19 +147,10 @@ def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
     )
 
     assert _cli_mastering.cmd_mastering(args) == 0
-    # targetLufs / ceilingDb are absent because neither was named on the command
-    # line: supplying a key marks the field explicit for the assistant, and a
-    # delivery target only fills in what the caller left alone, so passing the
-    # default through unconditionally suppressed every platform target's
-    # loudness. The remaining three carry the assistant controls the CLI now
-    # reaches -- delivery target, streaming-safe repair, speech mono amount --
-    # at their defaults.
-    assert calls["assistant_params"] == {
-        "enableRepair": True,
-        "targetPlatform": "streaming",
-        "preferStreamingSafe": True,
-        "speechMonoAmount": 1.0,
-    }
+    # Only what the command line named reaches the assistant. A supplied
+    # loudness key is what marks the field explicit for a delivery target, and
+    # every unnamed control keeps the library's own default.
+    assert calls["assistant_params"] == {"enableRepair": True}
     assert calls["config"] == {
         "loudness.targetLufs": -14.0,
         "repair.declick.enabled": 1,
@@ -506,6 +497,31 @@ def test_target_platform_moves_the_loudness_the_assistant_masters_to(capsys, mon
     assert -9.5 < master_to("club") < -8.5
 
 
+def test_preset_names_the_base_the_assistant_starts_from(monkeypatch, capsys) -> None:
+    """Alongside --assistant, --preset is the suggestion's base, not a second chain."""
+    import math
+
+    from libsonare import _cli_mastering, cli
+
+    sample_rate = 22_050
+    samples = [
+        0.5 * math.sin(2.0 * math.pi * 440.0 * index / sample_rate) for index in range(sample_rate)
+    ]
+    monkeypatch.setattr(cli, "_load_audio", lambda path: (samples, sample_rate))
+
+    def explanation(*extra: str) -> list[str]:
+        argv = ["mastering", "input.wav", "--assistant", "--explain", "--json", *extra]
+        args = cli._build_parser().parse_args(argv)
+        assert _cli_mastering.cmd_mastering(args) == 0
+        return json.loads(capsys.readouterr().out)["explanation"]
+
+    assert "base preset: streaming" in explanation()
+    assert "base preset: classical" in explanation("--preset", "classical")
+    # A restoration preset leaves level alone, which the suggestion never does.
+    with pytest.raises(Exception, match="vinyl"):
+        explanation("--preset", "vinyl")
+
+
 def test_assistant_controls_are_refused_without_assistant(monkeypatch) -> None:
     """Options that only reach an AssistantConfig field are refused, not dropped."""
     from libsonare import _cli_mastering, cli
@@ -745,3 +761,70 @@ def test_eq_names_and_refuses_a_params_key_the_processor_does_not_read(monkeypat
         ["eq", "input.wav", "--params", "band0.gainDb=3", "--json"]
     )
     assert _cli_mastering.cmd_eq(good) == 0
+
+
+def _suggest(monkeypatch, capsys, *extra: str) -> dict[str, object]:
+    import math
+
+    from libsonare import _cli_mastering, cli
+
+    sample_rate = 22_050
+    samples = [
+        0.5 * math.sin(2.0 * math.pi * 440.0 * index / sample_rate) for index in range(sample_rate)
+    ]
+    monkeypatch.setattr(cli, "_load_audio", lambda path: (samples, sample_rate))
+    args = cli._build_parser().parse_args(["mastering-suggest", "input.wav", *extra])
+    assert _cli_mastering.cmd_mastering_suggest(args) == 0
+    return json.loads(capsys.readouterr().out)
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ("--preset", "classical"),
+        ("--params", "preset=classical"),
+    ],
+)
+def test_mastering_suggest_takes_the_preset_by_name(monkeypatch, capsys, extra) -> None:
+    """As an option or a --params key, the preset is a name on the command line."""
+    assert "base preset: classical" in _suggest(monkeypatch, capsys, *extra)["explanation"]
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ("--target-platform", "broadcast"),
+        ("--params", "targetPlatform=broadcast"),
+        ("--params", "target_platform=broadcast"),
+    ],
+)
+def test_mastering_suggest_takes_the_delivery_target_by_name(monkeypatch, capsys, extra) -> None:
+    payload = _suggest(monkeypatch, capsys, *extra)
+    assert payload["chain_config"]["params"]["loudness.targetLufs"] == -23  # type: ignore[index]
+
+
+def test_mastering_suggest_named_options_reach_the_assistant(monkeypatch, capsys) -> None:
+    """The options `mastering --assistant` declares mean the same thing here."""
+    payload = _suggest(monkeypatch, capsys, "--target-lufs", "-12", "--ceiling-db", "-2")
+    params = payload["chain_config"]["params"]  # type: ignore[index]
+    assert params["loudness.targetLufs"] == -12
+    assert params["loudness.ceilingDb"] == -2
+
+
+@pytest.mark.parametrize(
+    ("extra", "match"),
+    [
+        (("--preset", "jazz", "--params", "preset=jazz"), "set the same value"),
+        (("--target-lufs", "-12", "--params", "targetLufs=-12"), "set the same value"),
+        (("--target-platform", "club", "--params", "target_platform=club"), "set the same value"),
+        (("--params", "notAKey=1"), "notAKey"),
+        # The index the C ABI carries is a transport detail, not a CLI value.
+        (("--params", "preset=3"), "3"),
+        (("--params", "targetPlatform=2"), "2"),
+    ],
+)
+def test_mastering_suggest_refuses_a_contradiction_or_an_unknown(
+    monkeypatch, capsys, extra, match
+) -> None:
+    with pytest.raises(Exception, match=match):
+        _suggest(monkeypatch, capsys, *extra)

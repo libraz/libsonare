@@ -757,8 +757,13 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // `--config-out` writes the suggested chain in the core's own chain-config
     // form, which is what `mastering --chain-config` reads back -- the same
     // role `suggest-mix --scene-out` plays for a mix scene.
+    // The assistant options `mastering --assistant` declares, with the same
+    // names, defaults and domains; --params still carries them as flat keys.
     add_command(commands, "mastering-suggest", true,
-                {string_value("params"), string_value("config-out", "")});
+                {string_value("params"), string_value("config-out", ""),
+                 number_value("target-lufs", -14.0), number_value("ceiling-db", -1.0),
+                 flag("enable-repair"), string_value("preset"), target_platform_value(),
+                 flag("no-streaming-safe"), number_value("speech-mono-amount", 1.0)});
     add_command(commands, "mastering-processors", false, {});
     add_command(commands, "mastering-pair-processors", false, {});
     add_command(commands, "mastering-pair-analyses", false, {});

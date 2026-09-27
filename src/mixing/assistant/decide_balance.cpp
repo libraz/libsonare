@@ -135,23 +135,6 @@ constexpr bool covers_every_class(const BalanceTable& table) {
 static_assert(covers_every_class(kGeneralTable),
               "the general balance table must hold one row per SourceClass, in enum order");
 
-// Index order must match kDefaultBalanceTableIndex.
-constexpr std::array<BalanceTable, 1> kBalanceTables{{kGeneralTable}};
-static_assert(kDefaultBalanceTableIndex < kBalanceTables.size(),
-              "the default balance table index must name a table that exists");
-
-/// @brief One genre label and the table that voices it.
-struct GenreTableEntry {
-  const char* genre;
-  std::size_t table_index;
-};
-
-// Genre labels resolve here before falling back to the default table. Only the
-// general table exists so far, so the map is empty and every genre reaches the
-// fallback; adding a table means appending its labels here, and decide_balance
-// itself does not change.
-constexpr std::array<GenreTableEntry, 0> kGenreTableMap{};
-
 std::string format_signed_db(float value) {
   // Negative zero would print as "-0.0" and read as a real downward move.
   if (value == 0.0f) value = 0.0f;
@@ -170,44 +153,6 @@ float offset_for(const BalanceTable& table, SourceClass source) noexcept {
   const auto index = static_cast<std::size_t>(source);
   if (index >= table.offsets.size()) return 0.0f;
   return table.offsets[index].offset_db;
-}
-
-// Returns the genre every track is balanced against, or an empty string when no
-// track offers one.
-//
-// The whole call is balanced against one label rather than each track against
-// its own. A relative level table only means anything when every part is read
-// from the same one, and a single stem is a poor genre witness anyway — a solo
-// hi-hat track carries none of the material the label describes. The modal
-// label across the usable tracks is the most robust reading available without
-// asking the caller, and choosing one representative track would only move the
-// guess to which track is representative. Ties keep the label seen first, so
-// the result does not depend on the order two equally supported labels happen
-// to be tallied in.
-std::string dominant_genre(const std::vector<TrackProfile>& profiles) {
-  std::vector<std::pair<std::string, int>> tally;
-  for (const TrackProfile& profile : profiles) {
-    if (!profile.usable) continue;
-    if (profile.base.genre_candidates.empty()) continue;
-    const std::string& label = profile.base.genre_candidates.front().name;
-    if (label.empty()) continue;
-
-    bool counted = false;
-    for (std::pair<std::string, int>& entry : tally) {
-      if (entry.first == label) {
-        ++entry.second;
-        counted = true;
-        break;
-      }
-    }
-    if (!counted) tally.emplace_back(label, 1);
-  }
-
-  const std::pair<std::string, int>* best = nullptr;
-  for (const std::pair<std::string, int>& entry : tally) {
-    if (best == nullptr || entry.second > best->second) best = &entry;
-  }
-  return best == nullptr ? std::string() : best->first;
 }
 
 // Returns why the track is not balanced, or nullptr when it is.
@@ -235,23 +180,12 @@ const char* balance_exclusion(const TrackProfile& profile) {
 
 }  // namespace
 
-std::size_t balance_table_count() noexcept { return kBalanceTables.size(); }
-
-std::size_t balance_table_index_for_genre(const std::string& genre) noexcept {
-  for (const GenreTableEntry& entry : kGenreTableMap) {
-    if (genre == entry.genre) return entry.table_index;
-  }
-  return kDefaultBalanceTableIndex;
-}
-
 std::vector<SceneDelta> decide_balance(const std::vector<TrackProfile>& profiles,
                                        const MixAssistantConfig& config) {
   std::vector<SceneDelta> deltas;
   if (!config.enable_balance) return deltas;
 
-  const std::size_t table_index =
-      std::min(balance_table_index_for_genre(dominant_genre(profiles)), kBalanceTables.size() - 1);
-  const BalanceTable& table = kBalanceTables[table_index];
+  const BalanceTable& table = kGeneralTable;
 
   const float strength =
       std::clamp(config.suggestion_strength, kMinSuggestionStrength, kMaxSuggestionStrength);

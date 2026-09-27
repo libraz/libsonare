@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 from ._cli_common import (
     _atomic_write_bytes,
     _float_sequence,
+    _json_key_to_snake_case,
     _json_keys_to_snake_case,
     _load_channels_or_downmix,
     _load_json_object,
@@ -94,6 +95,66 @@ def _option_supplied(args: argparse.Namespace, name: str) -> bool:
     """
     supplied = getattr(args, "_supplied_options", ())
     return name.replace("-", "_") in supplied
+
+
+# Each named assistant option and the flat-param key it sets; the same table
+# the native CLI's assistant_config_from_cli() reads.
+_ASSISTANT_OPTIONS = (
+    ("targetLufs", "target-lufs"),
+    ("ceilingDb", "ceiling-db"),
+    ("enableRepair", "enable-repair"),
+    ("preferStreamingSafe", "no-streaming-safe"),
+    ("speechMonoAmount", "speech-mono-amount"),
+    ("targetPlatform", "target-platform"),
+    ("preset", "preset"),
+)
+_NAMED_ASSISTANT_KEYS = ("target_platform", "preset")
+
+
+def _assistant_params_from_args(
+    args: argparse.Namespace, params_raw: str
+) -> dict[str, float | int | bool | str]:
+    """Build the assistant's flat params from the command line.
+
+    ``mastering --assistant`` and ``mastering-suggest`` declare the same named
+    options, and ``mastering-suggest`` also takes them as ``--params``. Only what
+    the caller named is sent: a supplied loudness key is what marks it explicit
+    for a delivery target, and the library holds every other default.
+    ``targetPlatform`` and ``preset`` take a name, which the library resolves; a
+    setting named by an option and by ``--params`` is a contradiction rather
+    than a precedence question. Unknown keys are the library's to refuse.
+    """
+    params: dict[str, float | int | bool | str] = {}
+    for item in params_raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            raise ValueError(f"invalid param (expected key=value): {item}")
+        key, raw = (part.strip() for part in item.split("=", 1))
+        canonical = _json_key_to_snake_case(key)
+        for named_key, option in _ASSISTANT_OPTIONS:
+            if canonical == _json_key_to_snake_case(named_key) and _option_supplied(args, option):
+                raise ValueError(f"--{option} and --params {key}= set the same value")
+        if canonical in _NAMED_ASSISTANT_KEYS:
+            params[key] = raw
+        else:
+            params.update(_parse_kv_params(item))
+    if _option_supplied(args, "target-lufs"):
+        params["targetLufs"] = float(args.target_lufs)
+    if _option_supplied(args, "ceiling-db"):
+        params["ceilingDb"] = float(args.ceiling_db)
+    if getattr(args, "enable_repair", False):
+        params["enableRepair"] = True
+    if getattr(args, "no_streaming_safe", False):
+        params["preferStreamingSafe"] = False
+    if _option_supplied(args, "speech-mono-amount"):
+        params["speechMonoAmount"] = float(args.speech_mono_amount)
+    if _option_supplied(args, "target-platform"):
+        params["targetPlatform"] = args.target_platform
+    if getattr(args, "preset", ""):
+        params["preset"] = args.preset
+    return params
 
 
 def _mastering_config(raw: str | None) -> dict[str, Any]:
@@ -240,7 +301,6 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     preset = getattr(args, "preset", None) or ""
     config_raw = getattr(args, "config", None) or ""
     assistant = bool(getattr(args, "assistant", False))
-    enable_repair = bool(getattr(args, "enable_repair", False))
     explain = bool(getattr(args, "explain", False))
     params_raw = getattr(args, "params", "") or ""
     bits = _wav_bits(args)
@@ -256,15 +316,14 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         )
         if selected
     ]
-    if len(selectors) > 1:
+    # Alongside --assistant, --preset names the base the suggestion starts from
+    # rather than a second chain, so only --chain-config excludes the other two.
+    if config_raw and (preset or assistant):
         raise ValueError(
-            "--preset, --chain-config (--config), and --assistant are mutually exclusive"
+            "--chain-config (--config) is mutually exclusive with --preset and --assistant"
         )
     if params_raw and not selectors:
         raise ValueError("--params requires --preset, --chain-config, or --assistant")
-    target_platform = getattr(args, "target_platform", "streaming") or "streaming"
-    no_streaming_safe = bool(getattr(args, "no_streaming_safe", False))
-    speech_mono_amount = float(getattr(args, "speech_mono_amount", 1.0))
     # Every option that only reaches an AssistantConfig field, refused rather
     # than accepted and dropped -- the same list, in the same order, the native
     # handler refuses.
@@ -304,7 +363,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     result: Any
     mode = "loudness"
     explanation: list[str] = []
-    if preset:
+    if preset and not assistant:
         from . import master_audio, master_audio_stereo
 
         if stereo:
@@ -331,22 +390,9 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     elif assistant:
         from . import mastering_assistant_suggest, mastering_assistant_suggest_stereo
 
-        suggestion_params: dict[str, float | int | bool | str] = {
-            "enableRepair": enable_repair,
-            # Resolved to its table index inside mastering_assistant_suggest, by
-            # the library rather than by a mapping restated here.
-            "targetPlatform": target_platform,
-            "preferStreamingSafe": not no_streaming_safe,
-            "speechMonoAmount": speech_mono_amount,
-        }
-        # Sent only when the caller named them. Supplying a key marks the field
-        # as explicit for the assistant, and a delivery target only fills in what
-        # the caller left alone -- so passing the default through unconditionally
-        # suppressed every platform target's loudness.
-        if _option_supplied(args, "target-lufs"):
-            suggestion_params["targetLufs"] = float(getattr(args, "target_lufs", -14.0))
-        if _option_supplied(args, "ceiling-db"):
-            suggestion_params["ceilingDb"] = float(getattr(args, "ceiling_db", -1.0))
+        # --params here overrides the suggested chain, so none of it reaches the
+        # assistant's own config.
+        suggestion_params = _assistant_params_from_args(args, "")
         # The assistant reads the material to decide the chain, so it is handed
         # the same channels the chain will run over rather than a fold of them.
         suggestion = json.loads(
@@ -763,22 +809,15 @@ def cmd_master(args: argparse.Namespace) -> int:
         overrides.update(_parse_kv_params(args.params))
     chain_config_path = getattr(args, "chain_config", None) or ""
     assistant = bool(getattr(args, "assistant", False))
-    # --preset carries a default, so which selectors the caller chose is decided
-    # by what was spelled rather than by the value that reached the namespace.
-    # The same three-way exclusion the native `mastering` handler enforces;
-    # --config / --config-file / --params stay overrides on top of whichever one
-    # built the chain, as --params is on the native side.
-    selectors = [
-        name
-        for name, selected in (
-            ("preset", _option_supplied(args, "preset")),
-            ("chain-config", bool(chain_config_path)),
-            ("assistant", assistant),
-        )
-        if selected
-    ]
-    if len(selectors) > 1:
-        raise ValueError("--preset, --chain-config, and --assistant are mutually exclusive")
+    # --preset carries a default, so whether the caller chose it is decided by
+    # what was spelled rather than by the value that reached the namespace. The
+    # same exclusion the `mastering` handlers enforce: alongside --assistant,
+    # --preset names the base the suggestion starts from, so only --chain-config
+    # excludes the other two. --config / --config-file / --params stay overrides
+    # on top of whichever route built the chain.
+    preset_supplied = _option_supplied(args, "preset")
+    if chain_config_path and (preset_supplied or assistant):
+        raise ValueError("--chain-config is mutually exclusive with --preset and --assistant")
 
     def _run_chain(
         config: dict[str, Any],
@@ -810,10 +849,17 @@ def cmd_master(args: argparse.Namespace) -> int:
     elif assistant:
         # The assistant reads the material to decide the chain, so it is handed
         # the same channels the chain will run over rather than a fold of them.
+        suggestion_params: dict[str, float | int | bool | str] = (
+            {"preset": args.preset} if preset_supplied else {}
+        )
         suggested: dict[str, Any] = dict(
-            mastering_assistant_suggest_chain_stereo(planes[0], planes[1], sample_rate=sr)
+            mastering_assistant_suggest_chain_stereo(
+                planes[0], planes[1], sample_rate=sr, params=suggestion_params
+            )
             if stereo
-            else mastering_assistant_suggest_chain(planes[0], sample_rate=sr)
+            else mastering_assistant_suggest_chain(
+                planes[0], sample_rate=sr, params=suggestion_params
+            )
         )
         suggested.update(overrides)
         result, rendered = _run_chain(suggested)
@@ -966,7 +1012,7 @@ def _parse_repair_params(raw: str) -> dict[str, float]:
 
 # select_repair_stages() (suggester.cpp) names the stage at the start of every
 # explanation line it writes for a repair decision; the remaining lines
-# explain non-repair choices (preset/genre, EQ, dynamics) that `repair` never
+# explain non-repair choices (base preset, EQ, dynamics) that `repair` never
 # applies.
 _REPAIR_EXPLANATION_PREFIXES = (
     "declip:",
@@ -1267,9 +1313,7 @@ def cmd_mastering_suggest(args: argparse.Namespace) -> int:
     from . import mastering_assistant_suggest
 
     samples, sr = _load_audio(args.file)
-    params: dict[str, float | int | bool | str] = (
-        dict(_parse_kv_params(args.params)) if args.params else {}
-    )
+    params = _assistant_params_from_args(args, args.params or "")
     suggestion = json.loads(mastering_assistant_suggest(samples, sample_rate=sr, params=params))
     # The suggested chain is fed back to the library verbatim
     # (`mastering --chain-config`), so the names under it belong to the chain
@@ -1303,6 +1347,43 @@ def cmd_mastering_profile(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_assistant_control_arguments(parser: argparse.ArgumentParser) -> None:
+    """Declare the assistant controls ``mastering`` and ``mastering-suggest`` share."""
+    # The accepted delivery-target names are
+    # the rows of the table in src/mastering/assistant/platform_targets.h, which
+    # the native CLI reads directly; the cross-surface option-domain comparison
+    # is what keeps this restatement pinned to it. ``prefer_streaming_safe``
+    # defaults to true in the library, so the reachable control is the one that
+    # turns it off. ``--speech-mono-amount`` declares no domain because the
+    # suggester clamps it to [0, 1] rather than refusing an outside value.
+    parser.add_argument(
+        "--target-platform",
+        default="streaming",
+        choices=(
+            "streaming",
+            "youtube",
+            "broadcast",
+            "podcast",
+            "audiobook",
+            "cinema",
+            "club",
+            "cd",
+        ),
+        help="Delivery target the assistant masters for (default: streaming)",
+    )
+    parser.add_argument(
+        "--no-streaming-safe",
+        action="store_true",
+        help="Let the assistant suggest treatments it withholds for streaming delivery",
+    )
+    parser.add_argument(
+        "--speech-mono-amount",
+        type=_finite_float,
+        default=1.0,
+        help="How far speech-like material is collapsed toward mono (0-1; default: 1)",
+    )
+
+
 def register_mastering_parsers(
     sub: argparse._SubParsersAction[_ContractArgumentParser], shared: SharedParsers
 ) -> None:
@@ -1332,39 +1413,7 @@ def register_mastering_parsers(
     mastering_p.add_argument("--assistant", action="store_true")
     mastering_p.add_argument("--enable-repair", action="store_true")
     mastering_p.add_argument("--explain", action="store_true")
-    # The remaining assistant controls. The accepted delivery-target names are
-    # the rows of the table in src/mastering/assistant/platform_targets.h, which
-    # the native CLI reads directly; the cross-surface option-domain comparison
-    # is what keeps this restatement pinned to it. ``prefer_streaming_safe``
-    # defaults to true in the library, so the reachable control is the one that
-    # turns it off. ``--speech-mono-amount`` declares no domain because the
-    # suggester clamps it to [0, 1] rather than refusing an outside value.
-    mastering_p.add_argument(
-        "--target-platform",
-        default="streaming",
-        choices=(
-            "streaming",
-            "youtube",
-            "broadcast",
-            "podcast",
-            "audiobook",
-            "cinema",
-            "club",
-            "cd",
-        ),
-        help="Delivery target the assistant masters for (default: streaming)",
-    )
-    mastering_p.add_argument(
-        "--no-streaming-safe",
-        action="store_true",
-        help="Let the assistant suggest treatments it withholds for streaming delivery",
-    )
-    mastering_p.add_argument(
-        "--speech-mono-amount",
-        type=_finite_float,
-        default=1.0,
-        help="How far speech-like material is collapsed toward mono (0-1; default: 1)",
-    )
+    _add_assistant_control_arguments(mastering_p)
     mproc_p = sub.add_parser(
         "mastering-processor", parents=[common], help="Apply a named mastering processor"
     )
@@ -1512,7 +1561,7 @@ def register_mastering_parsers(
     master_p.add_argument(
         "--assistant",
         action="store_true",
-        help="Master with the chain the assistant suggests for this file",
+        help="Master with the chain the assistant suggests; --preset names its base",
     )
     master_p.add_argument("--params", default="", help="Flat overrides as k=v,k=v (floats)")
     master_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
@@ -1563,7 +1612,18 @@ def register_mastering_parsers(
     msuggest_p = sub.add_parser(
         "mastering-suggest", parents=[stdout_options], help="Suggest a mastering chain as JSON"
     )
-    msuggest_p.add_argument("--params", default="", help="Assistant params as k=v,k=v")
+    msuggest_p.add_argument(
+        "--params",
+        default="",
+        help="Assistant params as k=v,k=v; targetPlatform and preset take a name",
+    )
+    msuggest_p.add_argument(
+        "--preset", default="", help="Mastering preset the suggestion starts from"
+    )
+    msuggest_p.add_argument("--target-lufs", type=_finite_float, default=-14.0)
+    msuggest_p.add_argument("--ceiling-db", type=_finite_float, default=-1.0)
+    msuggest_p.add_argument("--enable-repair", action="store_true")
+    _add_assistant_control_arguments(msuggest_p)
     msuggest_p.add_argument(
         "--config-out",
         default="",

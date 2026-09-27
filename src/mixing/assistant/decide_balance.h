@@ -22,12 +22,10 @@
 ///          additive, so neither erases the other, and @ref apply_deltas clamps
 ///          each summed total exactly once.
 ///
-/// @details The offsets come from a table selected by genre. Only one table
-///          exists today; the selection is written as a lookup so that adding a
-///          second one is a table edit rather than a change to the decision.
+/// @details The offsets come from one general table, read the same way for
+///          every track.
 
 #include <cstddef>
-#include <string>
 #include <vector>
 
 #include "mixing/assistant/scene_delta.h"
@@ -36,27 +34,7 @@
 
 namespace sonare::mixing::assistant {
 
-/// @brief Table used when no genre-specific one matches.
-inline constexpr std::size_t kDefaultBalanceTableIndex = 0;
-
-/// @brief Number of class-relative level tables available.
-std::size_t balance_table_count() noexcept;
-
-/// @brief Resolves a genre label to the balance table that voices it.
-/// @details The label is one of the camelCase identifiers
-///          @ref mastering::assistant::AudioProfile::genre_candidates carries.
-///          An empty or unrecognised label resolves to
-///          @ref kDefaultBalanceTableIndex, so a genre the profiler has never
-///          seen still gets a balance rather than none.
-/// @param genre Genre label to resolve.
-/// @return An index below @ref balance_table_count.
-std::size_t balance_table_index_for_genre(const std::string& genre) noexcept;
-
 /// @brief Suggests a class-relative fader offset per track.
-///
-/// @details One genre table is chosen for the whole call and every track is
-///          balanced against it, because a relative level table only means
-///          anything when every part is read from the same one.
 ///
 /// @details A track is skipped, rather than given a zero offset, when it is
 ///          unusable, when it was never classified, or when the classification

@@ -59,6 +59,31 @@ def _write_source(path: Path, channels: int = 1) -> list[list[float]]:
     return planes
 
 
+@pytest.mark.parametrize("channels", [1, 2])
+def test_master_assistant_starts_from_a_named_preset(tmp_path, monkeypatch, capsys, channels):
+    """Alongside ``--assistant``, ``--preset`` is the suggestion's base, as on ``mastering``."""
+    import libsonare
+
+    source = tmp_path / "input.wav"
+    _write_source(source, channels)
+    seen: list[object] = []
+    for name in ("mastering_assistant_suggest_chain", "mastering_assistant_suggest_chain_stereo"):
+        original = getattr(libsonare, name)
+
+        def capture(*args, _original=original, **kwargs):
+            seen.append(kwargs.get("params"))
+            return _original(*args, **kwargs)
+
+        monkeypatch.setattr(libsonare, name, capture)
+
+    assert _run(["master", str(source), "--assistant", "--preset", "classical", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["mode"] == "assistant"
+    assert _run(["master", str(source), "--assistant", "--json"]) == 0
+    capsys.readouterr()
+    # The default --preset value is not a choice the caller made.
+    assert seen == [{"preset": "classical"}, {}]
+
+
 # The dispatch table lives inside the entry point, so the handler is named here
 # rather than reached through it -- the same way the other CLI tests invoke one.
 _HANDLERS = {
@@ -231,7 +256,6 @@ def test_master_assistant_renders_the_chain_it_suggests(tmp_path, capsys, channe
     [
         ("master", ["--preset", "speech", "--chain-config", "chain.json"]),
         ("master", ["--assistant", "--chain-config", "chain.json"]),
-        ("master", ["--preset", "speech", "--assistant"]),
         ("mastering", ["--preset", "speech", "--chain-config", "chain.json"]),
         ("mastering", ["--assistant", "--chain-config", "chain.json"]),
     ],
@@ -342,7 +366,7 @@ def test_native_front_end_declares_the_same_two_spellings() -> None:
     # one form `--chain-config` parses on either front-end.
     assert "mastering::api::chain_config_to_json(suggestion.config)" in handler
     assert (
-        '"--preset, --chain-config (--config), and --assistant are mutually exclusive"' in handler
+        '"--chain-config (--config) is mutually exclusive with --preset and --assistant"' in handler
     )
     # The chain-config selector is read and named under its canonical spelling,
     # matching the Python handler's refusals above.

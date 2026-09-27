@@ -117,6 +117,63 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE_THAT(output, ContainsSubstring("\"stages\""));
   }
 
+  SECTION("--preset names the base the assistant starts from") {
+    auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV +
+                                       " --assistant --preset classical --explain --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("base preset: classical"));
+
+    auto [default_code, default_output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --assistant --explain --json -q");
+    REQUIRE(default_code == 0);
+    REQUIRE_THAT(default_output, ContainsSubstring("base preset: streaming"));
+
+    // A restoration preset leaves level alone, which the suggestion never does.
+    auto [restoration_code, restoration_output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --assistant --preset vinyl --json -q");
+    REQUIRE(restoration_code != 0);
+    REQUIRE_THAT(restoration_output, ContainsSubstring("vinyl"));
+  }
+
+  SECTION("mastering-suggest takes the assistant options by name") {
+    // As an option or a --params key, a delivery target and a preset are names.
+    for (const std::string extra :
+         {" --target-platform broadcast", " --params targetPlatform=broadcast",
+          " --params target_platform=broadcast"}) {
+      CAPTURE(extra);
+      auto [code, output] =
+          exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json");
+      REQUIRE(code == 0);
+      const auto payload = sonare::util::json::parse_strict(output);
+      CHECK(payload["chain_config"]["params"]["loudness.targetLufs"].as_number() == -23.0);
+    }
+    for (const std::string extra : {" --preset classical", " --params preset=classical"}) {
+      CAPTURE(extra);
+      auto [code, output] =
+          exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json");
+      REQUIRE(code == 0);
+      REQUIRE_THAT(output, ContainsSubstring("base preset: classical"));
+    }
+    auto [loud_code, loud_output] = exec_command(CLI + " mastering-suggest " + TEST_WAV +
+                                                 " --target-lufs -12 --ceiling-db -2 --json");
+    REQUIRE(loud_code == 0);
+    const auto loud = sonare::util::json::parse_strict(loud_output);
+    CHECK(loud["chain_config"]["params"]["loudness.targetLufs"].as_number() == -12.0);
+    CHECK(loud["chain_config"]["params"]["loudness.ceilingDb"].as_number() == -2.0);
+  }
+
+  SECTION("mastering-suggest refuses a contradiction, an unknown key and an index") {
+    for (const std::string extra :
+         {" --preset jazz --params preset=jazz", " --target-lufs -12 --params targetLufs=-12",
+          " --target-platform club --params target_platform=club", " --params notAKey=1",
+          " --params preset=3", " --params targetPlatform=2"}) {
+      CAPTURE(extra);
+      auto [code, output] =
+          exec_command(CLI + " mastering-suggest " + TEST_WAV + extra + " --json");
+      REQUIRE(code == 3);
+    }
+  }
+
   SECTION("lists named processors") {
     auto [code, output] = exec_command(CLI + " mastering-processors --json");
     REQUIRE(code == 0);

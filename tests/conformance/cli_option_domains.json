@@ -374,6 +374,25 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "mastering-suggest",
+      "option": "target-platform",
+      "rejectExit": "usage",
+      "choices": [
+        "streaming",
+        "youtube",
+        "broadcast",
+        "podcast",
+        "audiobook",
+        "cinema",
+        "club",
+        "cd"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "repair",
       "option": "bits",
       "rejectExit": "invalid_parameter",

@@ -60,16 +60,6 @@ std::vector<float> ambient_track(int sr, float seconds) {
   return samples;
 }
 
-std::vector<float> dynamic_classical_like(int sr, float seconds) {
-  std::vector<float> samples(static_cast<size_t>(seconds * static_cast<float>(sr)));
-  for (size_t i = 0; i < samples.size(); ++i) {
-    const float t = static_cast<float>(i) / static_cast<float>(sr);
-    const float env = 0.08f + 0.45f * (0.5f + 0.5f * std::sin(kTwoPi * 0.25f * t));
-    samples[i] = env * (std::sin(kTwoPi * 330.0f * t) + 0.5f * std::sin(kTwoPi * 660.0f * t));
-  }
-  return samples;
-}
-
 std::vector<float> speech_like(int sr, float seconds) {
   std::vector<float> samples(static_cast<size_t>(seconds * static_cast<float>(sr)));
   for (size_t i = 0; i < samples.size(); ++i) {
@@ -80,12 +70,6 @@ std::vector<float> speech_like(int sr, float seconds) {
                     0.08f * std::sin(kTwoPi * 1800.0f * t));
   }
   return samples;
-}
-
-bool contains_genre(const std::vector<assistant::GenreCandidate>& candidates,
-                    const std::string& expected) {
-  return std::any_of(candidates.begin(), candidates.end(),
-                     [&](const auto& item) { return item.name == expected; });
 }
 
 }  // namespace
@@ -195,77 +179,40 @@ TEST_CASE("Assistant suggest_chain_interleaved builds on the stereo profile",
   REQUIRE(!stereo.explanation.empty());
 }
 
-TEST_CASE("Assistant genre candidates cover synthetic evaluation set", "[mastering][assistant]") {
-  constexpr int sr = 22050;
-  assistant::AudioProfileConfig cfg;
-  cfg.n_fft = 1024;
-  cfg.hop_length = 256;
-
-  struct Case {
-    std::string expected;
-    std::vector<float> samples;
-  };
-  std::vector<Case> cases;
-  cases.push_back({"edm", rhythmic_track(sr, 3.0f, 128.0f, 55.0f, 0.9f)});
-  cases.push_back({"edm", rhythmic_track(sr, 3.0f, 140.0f, 65.0f, 0.8f)});
-  cases.push_back({"hipHop", rhythmic_track(sr, 3.0f, 90.0f, 48.0f, 0.45f)});
-  cases.push_back({"hipHop", rhythmic_track(sr, 3.0f, 82.0f, 52.0f, 0.40f)});
-  cases.push_back({"ambient", ambient_track(sr, 3.0f)});
-  cases.push_back({"ambient", tone(sr, 3.0f, 140.0f, 0.22f)});
-  cases.push_back({"classical", dynamic_classical_like(sr, 4.0f)});
-  cases.push_back({"classical", dynamic_classical_like(sr, 4.0f)});
-  cases.push_back({"speech", speech_like(sr, 3.0f)});
-  cases.push_back({"pop", rhythmic_track(sr, 3.0f, 112.0f, 110.0f, 0.35f)});
-
-  int top3_hits = 0;
-  for (const auto& item : cases) {
-    CAPTURE(item.expected);
-    const auto profile =
-        assistant::analyze_audio_profile(item.samples.data(), item.samples.size(), sr, cfg);
-    if (contains_genre(profile.genre_candidates, item.expected)) ++top3_hits;
-  }
-  // The expanded taxonomy must not regress the clear primary cases: every
-  // primary genre stays in the top-3 (all 10 cases hit after gating the new
-  // sibling genres on their distinctive features).
-  REQUIRE(top3_hits >= 7);
-}
-
-TEST_CASE("Assistant suggest_chain returns deterministic config and explanations",
-          "[mastering][assistant]") {
-  assistant::AudioProfile profile;
-  profile.bpm = 128.0f;
-  profile.loudness.lra_lu = 14.0f;
-  profile.spectral.centroid_hz = 1200.0f;
-  profile.spectral.low_rms_db = -18.0f;
-  profile.spectral.mid_rms_db = -20.0f;
-  profile.spectral.air_rms_db = -42.0f;
-  profile.dynamics.attack_density = 2.8f;
-  profile.dynamics.short_term_lufs_std = 5.0f;
-  profile.genre_candidates = {{"edm", 0.9f}, {"pop", 0.5f}, {"hipHop", 0.3f}};
+TEST_CASE("Assistant chain does not follow the material outside repair", "[mastering][assistant]") {
+  // Dark, dynamic, bass-heavy, fast and transient-dense all at once: none of it
+  // may move the chain, because no measured rule maps those readings to stages.
+  assistant::AudioProfile extreme;
+  extreme.bpm = 128.0f;
+  extreme.loudness.lra_lu = 14.0f;
+  extreme.spectral.centroid_hz = 1200.0f;
+  extreme.spectral.low_rms_db = -18.0f;
+  extreme.spectral.mid_rms_db = -20.0f;
+  extreme.spectral.air_rms_db = -42.0f;
+  extreme.dynamics.attack_density = 2.8f;
+  extreme.dynamics.short_term_lufs_std = 5.0f;
 
   assistant::AssistantConfig cfg;
   cfg.target_lufs = -13.0f;
   cfg.ceiling_db = -0.8f;
-  auto result = assistant::suggest_chain(profile, cfg);
-  auto result_again = assistant::suggest_chain(profile, cfg);
+  const auto result = assistant::suggest_chain(extreme, cfg);
 
   REQUIRE(result.config.loudness.enabled);
   REQUIRE(result.config.loudness.target_lufs == -13.0f);
   REQUIRE(result.config.loudness.ceiling_db == -0.8f);
-  REQUIRE_FALSE(result.config.maximizer.true_peak_limiter.enabled);
-  REQUIRE(result.config.spectral.air_band.enabled);
-  REQUIRE(result.config.dynamics.compressor.enabled);
-  REQUIRE(result.config.dynamics.transient_shaper.enabled);
-  REQUIRE_FALSE(result.explanation.empty());
   REQUIRE(sonare::mastering::api::chain_config_to_json(result.config) ==
-          sonare::mastering::api::chain_config_to_json(result_again.config));
+          sonare::mastering::api::chain_config_to_json(
+              assistant::suggest_chain(assistant::AudioProfile{}, cfg).config));
+  REQUIRE(result.explanation ==
+          std::vector<std::string>{"base preset: streaming",
+                                   "target loudness and ceiling applied from AssistantConfig"});
 }
 
 TEST_CASE("Assistant exposes speech mono-maker amount", "[mastering][assistant]") {
   assistant::AudioProfile profile;
-  profile.genre_candidates = {{"speech", 0.95f}, {"pop", 0.2f}};
 
   assistant::AssistantConfig cfg;
+  cfg.preset = sonare::mastering::api::Preset::Speech;
   cfg.speech_mono_amount = 0.35f;
   auto result = assistant::suggest_chain(profile, cfg);
 
@@ -278,7 +225,6 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
           "[mastering][assistant]") {
   assistant::AudioProfile profile;
   profile.spectral.flatness = 0.6f;
-  profile.genre_candidates = {{"pop", 0.9f}};
 
   assistant::AssistantConfig broadcast;
   broadcast.target_platform = "broadcast";
@@ -362,116 +308,81 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   REQUIRE_FALSE(unmeasured.config.repair.denoise.enabled);
 }
 
-namespace {
-
-// A profile that triggers none of suggest_chain's content-dependent overrides
-// (no dark/dull-air air band, no high-LRA compressor, no bass-heavy tilt/tape,
-// no dense-attack transient shaper, not speech). Only the genre-derived base
-// preset and the loudness stage are applied, so the preset's distinctive EQ /
-// stereo / saturation voicing survives and can be asserted.
-assistant::AudioProfile neutral_profile_with_genre(const std::string& genre) {
-  assistant::AudioProfile profile;
-  profile.bpm = 110.0f;
-  profile.loudness.lra_lu = 5.0f;  // below dynamic threshold
-  profile.dynamics.short_term_lufs_std = 1.0f;
-  profile.dynamics.attack_density = 1.0f;  // below transient-shaper threshold
-  profile.spectral.centroid_hz = 3000.0f;  // not dark
-  profile.spectral.low_rms_db = -30.0f;    // not bass-heavy
-  profile.spectral.mid_rms_db = -20.0f;
-  profile.spectral.air_rms_db = -25.0f;  // not dull (mid - air < 18)
-  profile.spectral.flatness = 0.1f;
-  profile.genre_candidates = {{genre, 0.99f}};
-  return profile;
-}
-
-}  // namespace
-
-TEST_CASE("Assistant suggester reaches dedicated presets for music genres, not generic Pop",
-          "[mastering][assistant]") {
+TEST_CASE("Assistant suggester starts from the preset the caller names", "[mastering][assistant]") {
   namespace api = sonare::mastering::api;
 
-  // Each genre label produced by infer_genres() must select its own catalogue
-  // preset rather than collapsing to Pop. Assert via distinctive preset fields
-  // that survive the assistant's content overrides for a neutral profile.
-  struct Case {
-    std::string genre;
-    api::Preset preset;
-  };
-  const std::vector<Case> cases = {
-      {"edm", api::Preset::EDM},
-      {"techno", api::Preset::Techno},
-      {"trance", api::Preset::Trance},
-      {"drumAndBass", api::Preset::DrumAndBass},
-      {"hipHop", api::Preset::HipHop},
-      {"trap", api::Preset::Trap},
-      {"rnb", api::Preset::RnB},
-      {"metal", api::Preset::Metal},
-      {"jazz", api::Preset::Jazz},
-      {"acoustic", api::Preset::Acoustic},
-      {"classical", api::Preset::Classical},
-      {"ambient", api::Preset::Ambient},
-      {"lofi", api::Preset::Lofi},
-      {"jpop", api::Preset::JPop},
-      {"kpop", api::Preset::KPop},
-      {"gameOst", api::Preset::GameOst},
-  };
+  for (const std::string& name : api::preset_names()) {
+    const api::Preset preset = api::preset_from_string(name);
+    if (api::preset_kind(preset) != api::PresetKind::Mastering) continue;
+    CAPTURE(name);
+    assistant::AssistantConfig cfg;
+    cfg.preset = preset;
+    const auto result = assistant::suggest_chain(assistant::AudioProfile{}, cfg);
+    const auto preset_base = api::preset_config(preset);
 
-  const auto pop_base = api::preset_config(api::Preset::Pop);
-
-  for (const auto& item : cases) {
-    CAPTURE(item.genre);
-    const auto profile = neutral_profile_with_genre(item.genre);
-    const auto result = assistant::suggest_chain(profile, assistant::AssistantConfig{});
-    const auto preset_base = api::preset_config(item.preset);
-
-    // The suggested chain must carry this preset's distinctive EQ tilt and
-    // stereo width / tape voicing, proving preset_for_genre routed to the
-    // dedicated preset.
     REQUIRE(result.config.eq.tilt.tilt_db == preset_base.eq.tilt.tilt_db);
     REQUIRE(result.config.stereo.imager.config.width == preset_base.stereo.imager.config.width);
     REQUIRE(result.config.saturation.tape.enabled == preset_base.saturation.tape.enabled);
-
-    // The explanation must name the chosen genre.
-    const bool mentions_genre = std::any_of(
-        result.explanation.begin(), result.explanation.end(),
-        [&](const std::string& line) { return line.find(item.genre) != std::string::npos; });
-    REQUIRE(mentions_genre);
-
-    // If the preset genuinely differs from Pop in tilt or width, the suggested
-    // config must differ from Pop too (i.e. it did not silently fall back).
-    if (preset_base.eq.tilt.tilt_db != pop_base.eq.tilt.tilt_db ||
-        preset_base.stereo.imager.config.width != pop_base.stereo.imager.config.width) {
-      const bool differs_from_pop =
-          result.config.eq.tilt.tilt_db != pop_base.eq.tilt.tilt_db ||
-          result.config.stereo.imager.config.width != pop_base.stereo.imager.config.width;
-      REQUIRE(differs_from_pop);
-    }
+    REQUIRE(std::find(result.explanation.begin(), result.explanation.end(),
+                      "base preset: " + name) != result.explanation.end());
   }
 }
 
-TEST_CASE("Assistant infer_genres surfaces the broad music-genre catalogue",
-          "[mastering][assistant]") {
-  // Drive analyze_audio_profile with synthetic fast, bright, transient-dense
-  // material and confirm the inferred candidate set is not limited to the
-  // original six labels. Guards the expanded taxonomy.
+TEST_CASE("Assistant base preset does not follow the material", "[mastering][assistant]") {
+  namespace api = sonare::mastering::api;
   constexpr int sr = 22050;
-  assistant::AudioProfileConfig cfg;
-  cfg.n_fft = 1024;
-  cfg.hop_length = 256;
+  assistant::AudioProfileConfig profile_cfg;
+  profile_cfg.n_fft = 1024;
+  profile_cfg.hop_length = 256;
 
-  auto fast = tone(sr, 3.0f, 70.0f, 0.30f);
-  add_tone(fast, sr, 4000.0f, 0.18f);
-  add_clicks(fast, sr, 174.0f, 0.9f);
-  const auto profile = assistant::analyze_audio_profile(fast.data(), fast.size(), sr, cfg);
+  // Speech-like, fast rhythmic and ambient material: with no preset named, every
+  // one starts from the streaming default and none picks up the speech stages.
+  const std::vector<std::vector<float>> signals = {speech_like(sr, 3.0f),
+                                                   rhythmic_track(sr, 3.0f, 174.0f, 55.0f, 0.9f),
+                                                   ambient_track(sr, 3.0f)};
+  const auto streaming = api::preset_config(api::Preset::Streaming);
+  for (const auto& samples : signals) {
+    const auto profile =
+        assistant::analyze_audio_profile(samples.data(), samples.size(), sr, profile_cfg);
+    const auto result = assistant::suggest_chain(profile, assistant::AssistantConfig{});
+    REQUIRE(result.explanation.front() == "base preset: streaming");
+    REQUIRE(result.config.stereo.imager.config.width == streaming.stereo.imager.config.width);
+    REQUIRE_FALSE(result.config.dynamics.deesser.enabled);
+    REQUIRE_FALSE(result.config.stereo.mono_maker.enabled);
+  }
+}
 
-  static const std::vector<std::string> legacy_six = {"edm",    "hipHop", "classical",
-                                                      "speech", "pop",    "ambient"};
-  const bool has_new_genre = std::any_of(
-      profile.genre_candidates.begin(), profile.genre_candidates.end(),
-      [&](const assistant::GenreCandidate& candidate) {
-        return std::find(legacy_six.begin(), legacy_six.end(), candidate.name) == legacy_six.end();
-      });
-  REQUIRE(has_new_genre);
+TEST_CASE("Assistant refuses a restoration preset as its base", "[mastering][assistant]") {
+  assistant::AssistantConfig cfg;
+  cfg.preset = sonare::mastering::api::Preset::Vinyl;
+  REQUIRE_THROWS_AS(assistant::suggest_chain(assistant::AudioProfile{}, cfg),
+                    sonare::SonareException);
+}
+
+TEST_CASE("Assistant preset param carries a preset index", "[mastering][assistant]") {
+  namespace api = sonare::mastering::api;
+  const auto names = api::preset_names();
+  const auto jazz = std::find(names.begin(), names.end(), "jazz");
+  REQUIRE(jazz != names.end());
+  const api::Param by_index[] = {{"preset", static_cast<double>(jazz - names.begin())}};
+  REQUIRE(assistant::assistant_config_from_params(by_index, 1).preset == api::Preset::Jazz);
+
+  const api::Param out_of_range[] = {{"preset", static_cast<double>(names.size())}};
+  REQUIRE_THROWS_AS(assistant::assistant_config_from_params(out_of_range, 1),
+                    sonare::SonareException);
+  const api::Param fractional[] = {{"preset", 0.5}};
+  REQUIRE_THROWS_AS(assistant::assistant_config_from_params(fractional, 1),
+                    sonare::SonareException);
+  REQUIRE(assistant::AssistantConfig{}.preset == api::Preset::Streaming);
+}
+
+TEST_CASE("Assistant param builders refuse an unknown key", "[mastering][assistant]") {
+  // A misspelt key would otherwise leave its setting at the default unannounced,
+  // which a chain override already refuses.
+  const sonare::mastering::api::Param misspelt[] = {{"targetLufz", -12.0}};
+  REQUIRE_THROWS_AS(assistant::assistant_config_from_params(misspelt, 1), sonare::SonareException);
+  REQUIRE_THROWS_AS(assistant::audio_profile_config_from_params(misspelt, 1),
+                    sonare::SonareException);
 }
 
 TEST_CASE("Assistant suggester loudness config matches preset true-peak oversampling",
@@ -480,7 +391,6 @@ TEST_CASE("Assistant suggester loudness config matches preset true-peak oversamp
   // api::enable_loudness() (presets.cpp). Both are expected to use 4x oversampling;
   // asserting equality guards against the two paths drifting apart in future.
   assistant::AudioProfile profile;
-  profile.genre_candidates = {{"pop", 0.9f}};
 
   assistant::AssistantConfig cfg;
   auto suggested = assistant::suggest_chain(profile, cfg);
@@ -606,7 +516,6 @@ TEST_CASE("Assistant delivery target yields to a named loudness, default-valued 
   namespace api = sonare::mastering::api;
   assistant::AudioProfile profile;
   profile.spectral.flatness = 0.6f;
-  profile.genre_candidates = {{"pop", 0.9f}};
 
   const int broadcast = assistant::platform_index_from_name("broadcast");
   REQUIRE(broadcast >= 0);

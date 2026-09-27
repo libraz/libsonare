@@ -8,11 +8,17 @@
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "mastering/api/presets.h"
 #include "mastering/assistant/audio_profile.h"
 
 namespace sonare::mastering::assistant {
 
 struct AssistantConfig {
+  /// @brief Catalogue preset the suggestion starts from.
+  /// @details Named by the caller and never inferred from the audio. Must be a
+  ///          Mastering-kind preset: the suggestion always sets a loudness
+  ///          target, which a Restoration preset exists to leave alone.
+  api::Preset preset = api::Preset::Streaming;
   std::string target_platform = "streaming";
   float target_lufs = -14.0f;
   float ceiling_db = -1.0f;
@@ -37,7 +43,6 @@ struct AssistantResult {
   api::MasteringChainConfig config{};
   AudioProfile profile{};
   std::vector<std::string> explanation;
-  std::vector<GenreCandidate> genre_candidates;
 };
 
 AssistantResult suggest_chain(const float* samples, std::size_t length, int sample_rate,

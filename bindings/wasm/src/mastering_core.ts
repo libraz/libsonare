@@ -663,12 +663,6 @@ export function masteringAssistantSuggestChain(
   );
 }
 
-/** One entry of {@link MasteringAudioProfile.genreCandidates}. */
-export interface MasteringGenreCandidate {
-  name: string;
-  score: number;
-}
-
 /**
  * The shape {@link masteringAudioProfile}'s JSON parses to.
  *
@@ -736,7 +730,6 @@ export interface MasteringAudioProfile {
     humPeakHarmonicDbfs: number;
     lateDecayRatioDb: number;
   };
-  genreCandidates: MasteringGenreCandidate[];
 }
 
 export function masteringAudioProfile(request: MasteringSamplesParamsRequest): string;

@@ -309,15 +309,96 @@ void print_loudness_result_text(const LoudnessResult& result, const std::string&
   std::cout << "\n";
 }
 
+namespace {
+
+/// A named assistant option and the flat-param key it sets.
+struct AssistantOption {
+  const char* key;
+  const char* option;
+};
+
+constexpr AssistantOption kAssistantOptions[] = {
+    {"targetLufs", "target-lufs"},
+    {"ceilingDb", "ceiling-db"},
+    {"enableRepair", "enable-repair"},
+    {"preferStreamingSafe", "no-streaming-safe"},
+    {"speechMonoAmount", "speech-mono-amount"},
+    {"targetPlatform", "target-platform"},
+    {"preset", "preset"},
+};
+
+/// Build the mastering assistant's config from the command line.
+/// @details `mastering --assistant` and `mastering-suggest` declare the same
+///   named options, and `mastering-suggest` also takes them as `--params`. Both
+///   routes reach the one flat-param builder, so the explicit-loudness flags and
+///   the refusal of an unknown key come from the core. `targetPlatform` and
+///   `preset` take a name: the index the C ABI carries is a transport detail.
+///   A setting named by an option and by `--params` is a contradiction rather
+///   than a precedence question.
+mastering::assistant::AssistantConfig assistant_config_from_cli(const CliArgs& args,
+                                                                const std::string& params_text) {
+  std::vector<mastering::api::Param> params;
+  std::string platform = args.get_string("target-platform", "streaming");
+  std::string preset = args.get_string("preset");
+  bool has_platform = args.has("target-platform");
+  bool has_preset = args.has("preset");
+
+  std::stringstream stream(params_text);
+  std::string item;
+  while (std::getline(stream, item, ',')) {
+    const auto eq = item.find('=');
+    if (eq == std::string::npos || eq == 0 || eq + 1 == item.size()) {
+      throw std::invalid_argument("invalid parameter entry: '" + item + "' (expected key=value)");
+    }
+    const std::string key = item.substr(0, eq);
+    const std::string canonical = json_key_to_snake_case(key);
+    for (const AssistantOption& named : kAssistantOptions) {
+      if (canonical == json_key_to_snake_case(named.key) && args.has(named.option)) {
+        throw std::invalid_argument(std::string("--") + named.option + " and --params " + key +
+                                    "= set the same value");
+      }
+    }
+    if (canonical == "target_platform") {
+      platform = item.substr(eq + 1);
+      has_platform = true;
+    } else if (canonical == "preset") {
+      preset = item.substr(eq + 1);
+      has_preset = true;
+    } else {
+      const auto parsed = parse_mastering_params(item);
+      params.insert(params.end(), parsed.begin(), parsed.end());
+    }
+  }
+
+  if (args.has("target-lufs")) params.push_back({"targetLufs", args.get_float("target-lufs", 0)});
+  if (args.has("ceiling-db")) params.push_back({"ceilingDb", args.get_float("ceiling-db", 0)});
+  if (args.has("enable-repair")) params.push_back({"enableRepair", 1.0});
+  if (args.has("no-streaming-safe")) params.push_back({"preferStreamingSafe", 0.0});
+  if (args.has("speech-mono-amount")) {
+    params.push_back({"speechMonoAmount", args.get_float("speech-mono-amount", 1.0f)});
+  }
+
+  auto config = mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  // Through the shared setter and parser, so a name is validated against the
+  // same tables every other surface resolves it with.
+  if (has_platform) mastering::assistant::set_target_platform(config, platform);
+  if (has_preset) config.preset = mastering::api::preset_from_string(preset);
+  return config;
+}
+
+}  // namespace
+
 int cmd_mastering(const CliArgs& args, const Audio& audio) {
   const bool has_preset = args.has("preset");
   const bool has_config = args.has("chain-config");
   const bool has_assistant = args.has("assistant");
+  // Alongside --assistant, --preset names the base the suggestion starts from
+  // rather than a second chain, so only --chain-config excludes the other two.
   const int selector_count =
-      static_cast<int>(has_preset) + static_cast<int>(has_config) + static_cast<int>(has_assistant);
+      static_cast<int>(has_config) + static_cast<int>(has_preset || has_assistant);
   if (selector_count > 1) {
     throw std::invalid_argument(
-        "--preset, --chain-config (--config), and --assistant are mutually exclusive");
+        "--chain-config (--config) is mutually exclusive with --preset and --assistant");
   }
   const std::string params_text = args.get_string("params");
   const bool has_params = args.has("params");
@@ -348,25 +429,9 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
     std::vector<std::string> explanation;
 
     if (has_assistant) {
-      mastering::assistant::AssistantConfig assistant_config;
-      assistant_config.target_lufs = args.get_float("target-lufs", -14.0f);
-      assistant_config.ceiling_db = args.get_float("ceiling-db", -1.0f);
-      // get_float cannot distinguish an omitted option from one that carries the
-      // default value, and a delivery target only fills in what the caller left
-      // alone -- so the presence answer has to come from the parser, not from
-      // comparing the resulting number against the default.
-      assistant_config.target_lufs_explicit = args.has("target-lufs");
-      assistant_config.ceiling_db_explicit = args.has("ceiling-db");
-      assistant_config.enable_repair = args.has("enable-repair");
-      // Assigned through the shared setter rather than by writing the field, so
-      // the name is validated against the same table every other surface uses.
-      // The registry has already refused an unknown name (it derives its choices
-      // from that table too), which makes this the assignment path rather than
-      // a second, differently-worded rejection.
-      mastering::assistant::set_target_platform(assistant_config,
-                                                args.get_string("target-platform", "streaming"));
-      assistant_config.prefer_streaming_safe = !args.has("no-streaming-safe");
-      assistant_config.speech_mono_amount = args.get_float("speech-mono-amount", 1.0f);
+      // --params here overrides the suggested chain, so none of it reaches the
+      // assistant's own config.
+      const auto assistant_config = assistant_config_from_cli(args, "");
       auto suggestion = mastering::assistant::suggest_chain(audio, assistant_config);
       chain_config = std::move(suggestion.config);
       explanation = std::move(suggestion.explanation);
@@ -1181,13 +1246,7 @@ int cmd_mastering_stereo_analyze(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_mastering_suggest(const CliArgs& args, const Audio& audio) {
-  // Through the shared flat-param builder rather than the per-option reads
-  // `mastering --assistant` uses: this command states its whole configuration
-  // in one --params list, and that builder is what sets the explicit-target
-  // flags a delivery platform needs to distinguish a stated LUFS from a default.
-  const auto params = parse_mastering_params(args.get_string("params"));
-  const auto config =
-      mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  const auto config = assistant_config_from_cli(args, args.get_string("params"));
   const auto suggestion = mastering::assistant::suggest_chain(audio, config);
 
   const std::string config_out = args.get_string("config-out");
@@ -1332,41 +1391,6 @@ struct AssistantTrack {
   int sample_rate = 0;
 };
 
-/// Refuse a `--params` key the assistant does not read.
-///
-/// The config builder ignores an unknown key by design, so a typo there would
-/// otherwise run to completion having changed nothing. Both CLIs refuse it
-/// instead, which means this list has to stay in step with the key chain in
-/// `mixing/assistant/config_from_params.h` -- it is the source of truth, and the
-/// Python CLI keeps its own copy for the same reason.
-void reject_unknown_assistant_params(const std::vector<mastering::api::Param>& params) {
-  static const std::vector<std::string> kKeys = {"targetTrackLufs",
-                                                 "suggestionStrength",
-                                                 "eqMaxCutDb",
-                                                 "mixBusHeadroomDbtp",
-                                                 "tempoBpm",
-                                                 "enableStructure",
-                                                 "enableGain",
-                                                 "enableBalance",
-                                                 "enableEq",
-                                                 "enableDynamics",
-                                                 "enableImage",
-                                                 "enableHighPass",
-                                                 "nFft",
-                                                 "hopLength"};
-  for (const auto& param : params) {
-    bool known = false;
-    for (const std::string& key : kKeys) {
-      // Both spellings reach the same field, as the builder accepts both.
-      if (param.key == key || param.key == json_key_to_snake_case(key)) {
-        known = true;
-        break;
-      }
-    }
-    if (!known) throw std::invalid_argument("unknown suggest-mix param: " + param.key);
-  }
-}
-
 /// Split `[ID=]WAV` into its two halves. A bare path takes the file's own name
 /// as the id, which is what the scene then addresses the strip by.
 void split_track_entry(const std::string& entry, std::string* id, std::string* path) {
@@ -1474,7 +1498,6 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
   const int sample_rate = args.get_int("sample-rate", 48000);
 
   auto params = parse_mastering_params(args.get_string("params"));
-  reject_unknown_assistant_params(params);
   const std::string tempo_text = args.get_string("tempo-bpm");
   if (!tempo_text.empty()) {
     // Both spellings reach the same config field, so naming both is a

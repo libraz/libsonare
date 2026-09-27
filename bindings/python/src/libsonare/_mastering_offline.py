@@ -115,38 +115,64 @@ def _mastering_params(params: dict[str, float | int | bool] | None) -> tuple[Any
 def _assistant_params(
     params: dict[str, float | int | bool | str] | None,
 ) -> tuple[Any, int]:
-    """Marshal assistant params, resolving ``targetPlatform`` to its index.
+    """Marshal assistant params, resolving ``targetPlatform`` and ``preset`` to indices.
 
-    The param transport carries numbers, so a delivery target travels as the
-    index the library resolves for its name. The name is looked up through the
-    library rather than mapped here, so the accepted set cannot drift out of
-    step with the core.
+    The param transport carries numbers, so each name travels as the index the
+    library resolves for it. The name is looked up through the library rather
+    than mapped here, so the accepted set cannot drift out of step with the core.
     """
     if not params:
         return _mastering_params(None)
     resolved: dict[str, float | int | bool] = {}
     for key, value in params.items():
         if key in ("targetPlatform", "target_platform"):
-            if not isinstance(value, str):
-                raise SonareValueError(
-                    f"{key} must be a delivery-target name; "
-                    f"expected one of: {', '.join(mastering_platform_names())}"
-                )
-            lib = _get_lib()
-            if not hasattr(lib, "sonare_mastering_platform_from_name"):
-                raise RuntimeError("libsonare was built without mastering assistant support")
-            index = lib.sonare_mastering_platform_from_name(value.encode("utf-8"))
-            if index < 0:
-                raise SonareValueError(
-                    f"unknown mastering target platform {value!r}; "
-                    f"expected one of: {', '.join(mastering_platform_names())}"
-                )
-            resolved[key] = index
+            resolved[key] = _resolve_name(
+                key,
+                value,
+                "sonare_mastering_platform_from_name",
+                "delivery-target",
+                "mastering target platform",
+                mastering_platform_names,
+            )
+            continue
+        if key == "preset":
+            resolved[key] = _resolve_name(
+                key,
+                value,
+                "sonare_mastering_preset_from_name",
+                "mastering preset",
+                "mastering preset",
+                mastering_preset_names,
+            )
             continue
         if isinstance(value, str):
-            raise SonareValueError(f"{key} must be a number; only targetPlatform takes a name")
+            raise SonareValueError(
+                f"{key} must be a number; only targetPlatform and preset take a name"
+            )
         resolved[key] = value
     return _mastering_params(resolved)
+
+
+def _resolve_name(
+    key: str,
+    value: object,
+    symbol: str,
+    kind: str,
+    noun: str,
+    names: Callable[[], list[str]],
+) -> int:
+    """Resolve one named assistant param to the index its C-ABI lookup returns."""
+    if not isinstance(value, str):
+        raise SonareValueError(
+            f"{key} must be a {kind} name; expected one of: {', '.join(names())}"
+        )
+    lib = _get_lib()
+    if not hasattr(lib, symbol):
+        raise RuntimeError("libsonare was built without mastering assistant support")
+    index = getattr(lib, symbol)(value.encode("utf-8"))
+    if index < 0:
+        raise SonareValueError(f"unknown {noun} {value!r}; expected one of: {', '.join(names())}")
+    return int(index)
 
 
 def mastering_processor_names() -> list[str]:

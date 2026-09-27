@@ -311,7 +311,7 @@ def test_mastering_assistant_suggest_returns_shared_json() -> None:
 
     assert '"chainConfig"' in suggestion_json
     assert '"explanation"' in suggestion_json
-    assert '"genreCandidates"' in suggestion_json
+    assert '"genreCandidates"' not in suggestion_json
     assert '"loudness.targetLufs":-13' in suggestion_json
     assert '"loudness.ceilingDb":-0.8' in suggestion_json
 
@@ -335,7 +335,7 @@ def test_mastering_audio_profile_returns_shared_json() -> None:
     assert '"spectral"' in profile_json
     assert '"centroidHz"' in profile_json
     assert '"dynamics"' in profile_json
-    assert '"genreCandidates"' in profile_json
+    assert '"genreCandidates"' not in profile_json
 
 
 def _decorrelated_pair(sr: int, seconds: int) -> tuple[list[float], list[float], list[float]]:
@@ -626,6 +626,39 @@ def test_mastering_assistant_suggest_follows_target_platform() -> None:
     # The numeric index is a transport detail, not part of the Python vocabulary.
     with pytest.raises(ValueError):
         libsonare.mastering_assistant_suggest(samples, sample_rate=sr, params={"targetPlatform": 2})
+
+
+def test_mastering_assistant_starts_from_the_named_preset() -> None:
+    """``preset`` is a name here; the assistant never picks one from the audio."""
+    import json
+
+    import libsonare
+
+    sr = 48000
+    samples = [0.2 * math.sin(2 * math.pi * 220 * i / sr) for i in range(sr)]
+
+    def explanation(params: dict[str, float | int | bool | str] | None) -> list[str]:
+        return json.loads(
+            libsonare.mastering_assistant_suggest(samples, sample_rate=sr, params=params)
+        )["explanation"]
+
+    assert "base preset: streaming" in explanation(None)
+    assert "base preset: classical" in explanation({"preset": "classical"})
+    stereo = json.loads(
+        libsonare.mastering_assistant_suggest_stereo(
+            samples, samples, sample_rate=sr, params={"preset": "jazz"}
+        )
+    )
+    assert "base preset: jazz" in stereo["explanation"]
+
+    with pytest.raises(ValueError, match="notAPreset"):
+        explanation({"preset": "notAPreset"})
+    # A restoration preset leaves level alone, which the suggestion never does.
+    with pytest.raises(libsonare.SonareError, match="vinyl"):
+        explanation({"preset": "vinyl"})
+    # The numeric index is a transport detail, not part of the Python vocabulary.
+    with pytest.raises(ValueError):
+        explanation({"preset": 3})
 
 
 def test_clean_input_reports_no_non_finite_substitution() -> None:

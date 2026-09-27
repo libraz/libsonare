@@ -226,10 +226,12 @@ export interface MasteringStereoAnalyzeRequest {
 
 /**
  * Params accepted by the assistant entry points. Every key is numeric except
- * `targetPlatform`, which is a delivery-target NAME (`'broadcast'`, `'podcast'`,
- * `'club'`, ...). A number is rejected for it: the numeric index the C ABI
- * carries is a transport detail for callers that cannot pass a string, not part
- * of the JavaScript vocabulary.
+ * two NAMES: `targetPlatform`, a delivery target (`'broadcast'`, `'podcast'`,
+ * `'club'`, ...), and `preset`, the mastering preset the suggestion starts from
+ * (default `'streaming'`; restoration presets are refused). The assistant never
+ * picks a preset from the audio. A number is rejected for either: the numeric
+ * index the C ABI carries is a transport detail for callers that cannot pass a
+ * string, not part of the JavaScript vocabulary.
  */
 export type MasteringAssistantParams = Record<string, number | boolean | string>;
 
@@ -237,12 +239,6 @@ export interface MasteringAssistantSuggestRequest {
   samples: Float32Array;
   sampleRate?: number;
   params?: MasteringAssistantParams;
-}
-
-/** One entry of {@link MasteringAudioProfile.genreCandidates}. */
-export interface MasteringGenreCandidate {
-  name: string;
-  score: number;
 }
 
 /**
@@ -312,7 +308,6 @@ export interface MasteringAudioProfile {
     humPeakHarmonicDbfs: number;
     lateDecayRatioDb: number;
   };
-  genreCandidates: MasteringGenreCandidate[];
 }
 
 /** The profile entry points take numeric params only; they have no target platform. */
@@ -1185,7 +1180,7 @@ export function masteringAssistantSuggest(
  * Suggest a mastering chain and return only its flat `{ "module.param": value }`
  * params -- the same values {@link masteringAssistantSuggest}'s parsed
  * `chainConfig.params` carries, without having to dig them out of the full
- * assistant document (explanation, profile, genre candidates) first. The
+ * assistant document (explanation, profile) first. The
  * result can be passed directly as {@link masterAudio}'s `overrides`.
  *
  * @throws Error if a suggested param is not a number or boolean (a v2

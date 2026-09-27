@@ -571,7 +571,6 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(json != nullptr);
     REQUIRE(std::strstr(json, "\"chainConfig\"") != nullptr);
     REQUIRE(std::strstr(json, "\"explanation\"") != nullptr);
-    REQUIRE(std::strstr(json, "\"genreCandidates\"") != nullptr);
     REQUIRE(std::strstr(json, "\"loudness.targetLufs\":-13") != nullptr);
     REQUIRE(std::strstr(json, "\"loudness.ceilingDb\":-0.8") != nullptr);
     sonare_free_string(json);
@@ -623,6 +622,45 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
                                                &json) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
+  SECTION("assistant suggestion starts from the preset the caller names") {
+    auto samples = generate_sine(220.0f, 48000, 3.0f);
+    for (auto& sample : samples) sample *= 0.2f;
+
+    REQUIRE(sonare_mastering_preset_from_name("not-a-preset") == -1);
+    REQUIRE(sonare_mastering_preset_from_name(nullptr) == -1);
+
+    const int classical = sonare_mastering_preset_from_name("classical");
+    REQUIRE(classical >= 0);
+    SonareMasteringParam classical_params[] = {{"preset", static_cast<double>(classical)}};
+    char* json = nullptr;
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000,
+                                               classical_params, 1, &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "base preset: classical") != nullptr);
+    sonare_free_string(json);
+
+    json = nullptr;
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000, nullptr, 0,
+                                               &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "base preset: streaming") != nullptr);
+    sonare_free_string(json);
+
+    // A restoration preset leaves level alone, which the suggestion never does.
+    const int vinyl = sonare_mastering_preset_from_name("vinyl");
+    REQUIRE(vinyl >= 0);
+    SonareMasteringParam restoration[] = {{"preset", static_cast<double>(vinyl)}};
+    json = nullptr;
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000, restoration,
+                                               1, &json) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareMasteringParam unknown[] = {{"preset", 4096.0}};
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000, unknown, 1,
+                                               &json) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareMasteringParam fractional[] = {{"preset", static_cast<double>(classical) + 0.5}};
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000, fractional, 1,
+                                               &json) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
   SECTION("assistant audio profile is reachable through the C API") {
     auto samples = generate_sine(330.0f, 48000, 2.0f);
     for (auto& sample : samples) sample *= 0.2f;
@@ -638,7 +676,6 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(std::strstr(json, "\"spectral\"") != nullptr);
     REQUIRE(std::strstr(json, "\"centroidHz\"") != nullptr);
     REQUIRE(std::strstr(json, "\"dynamics\"") != nullptr);
-    REQUIRE(std::strstr(json, "\"genreCandidates\"") != nullptr);
     sonare_free_string(json);
   }
 

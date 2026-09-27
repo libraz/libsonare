@@ -1,8 +1,10 @@
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <cstring>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "mastering/api/chain.h"
 #include "mastering/api/presets.h"
@@ -66,6 +68,16 @@ const char* sonare_mastering_platform_names(void) {
 int sonare_mastering_platform_from_name(const char* name) {
   SONARE_C_TRY
   return sonare::mastering::assistant::platform_index_from_name(name);
+  SONARE_C_CATCH_RETURN(-1)
+}
+
+int sonare_mastering_preset_from_name(const char* name) {
+  SONARE_C_TRY
+  if (name == nullptr) return -1;
+  const std::vector<std::string> names = sonare::mastering::api::preset_names();
+  const auto found = std::find(names.begin(), names.end(), name);
+  if (found == names.end()) return -1;
+  return static_cast<int>(found - names.begin());
   SONARE_C_CATCH_RETURN(-1)
 }
 
