@@ -64,6 +64,10 @@ ALLOWED_RESIDUE = {
         "pure string<->enum mapping over a header-only enum, called by the "
         "always-compiled eq_band_json.cpp"
     ),
+    "mastering/eq/eq_band_value.cpp": (
+        "the EQ band JSON codec over plain EqBand data, read and written by the "
+        "always-compiled scene_json.cpp and eq_band_json.cpp"
+    ),
     "mixing/downmix.cpp": (
         "always-compiled core/audio_io.cpp folds every multichannel source to "
         "mono through downmix()"
