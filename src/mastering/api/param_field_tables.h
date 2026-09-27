@@ -433,16 +433,28 @@ struct EnumChoice {
   int value = 0;
 };
 
+/// @brief An enum's @ref enum_choice_name over its wire value, so the code
+///        around it is compiled once rather than once per enum.
+using EnumNameFn = const char* (*)(int value);
+
+template <typename Enum>
+const char* enum_choice_name_of(int value) {
+  return enum_choice_name(static_cast<Enum>(value));
+}
+
+/// @brief Every value @p name_of declares, in wire-value order.
+inline std::vector<EnumChoice> enum_choices(EnumNameFn name_of) {
+  std::vector<EnumChoice> choices;
+  for (int value = 0; value <= kEnumOrdinalScanLimit; ++value) {
+    if (const char* name = name_of(value)) choices.push_back(EnumChoice{name, value});
+  }
+  return choices;
+}
+
 /// @brief Every declared value of @p Enum in wire-value order.
 template <typename Enum>
 std::vector<EnumChoice> enum_choices() {
-  std::vector<EnumChoice> choices;
-  for (int value = 0; value <= kEnumOrdinalScanLimit; ++value) {
-    if (const char* name = enum_choice_name(static_cast<Enum>(value))) {
-      choices.push_back(EnumChoice{name, value});
-    }
-  }
-  return choices;
+  return enum_choices(&enum_choice_name_of<Enum>);
 }
 
 }  // namespace sonare::mastering::api::detail
@@ -511,19 +523,24 @@ inline void assign_field(Int& dst, double value) {
   assign_int_param("mastering integer parameter", value, dst);
 }
 
-template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
-inline void assign_field(Enum& dst, double value) {
+inline void assign_enum_value(int& dst, double value, EnumNameFn name_of) {
   int converted = 0;
   // An enum selector is an index into a closed set, so a fractional one names no
   // enumerator at all; rounding it would silently select a neighbour.
   if (!numeric::checked_integral_cast(value, &converted)) {
     reject_integer_param("mastering enum parameter", value);
   }
-  const Enum candidate = static_cast<Enum>(converted);
-  if (!enum_value_declared(candidate)) {
+  if (name_of(converted) == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "mastering enum parameter is out of range");
   }
-  dst = candidate;
+  dst = converted;
+}
+
+template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
+inline void assign_field(Enum& dst, double value) {
+  int converted = static_cast<int>(dst);
+  assign_enum_value(converted, value, &enum_choice_name_of<Enum>);
+  dst = static_cast<Enum>(converted);
 }
 
 /// @brief Reads a typed config member back as the flat surface's @c double.

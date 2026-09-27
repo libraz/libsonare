@@ -343,6 +343,15 @@ inline constexpr ParamKind field_param_kind() {
   }
 }
 
+/// @brief @ref read_field for an enum member, held as its wire value.
+inline void read_enum_field(const ParamMap& params, const char* key, int& dst, EnumNameFn name_of) {
+  params.note_kind(key, ParamKind::Integer);
+  params.note_default(key, static_cast<double>(dst));
+  if (params.records_declarations()) params.note_choices(key, enum_choices(name_of));
+  auto it = params.find(key);
+  if (it != params.end()) assign_enum_value(dst, it->second, name_of);
+}
+
 /// @brief Overlays a flat param onto a config field, leaving it untouched when
 /// the key is absent. Paired with the SONARE_FIELDS_* tables so a config
 /// builder is a single table expansion instead of one line per field.
@@ -353,15 +362,18 @@ inline constexpr ParamKind field_param_kind() {
 ///          parameter's default.
 template <typename T>
 inline void read_field(const ParamMap& params, const char* key, T& dst) {
-  params.note_kind(key, field_param_kind<T>());
-  // Read before the overlay: `dst` still holds the config struct's own field
-  // initializer here, which is exactly the default this key falls back to.
-  params.note_default(key, field_as_double(dst));
   if constexpr (std::is_enum_v<T>) {
-    if (params.records_declarations()) params.note_choices(key, enum_choices<T>());
+    int value = static_cast<int>(dst);
+    read_enum_field(params, key, value, &enum_choice_name_of<T>);
+    dst = static_cast<T>(value);
+  } else {
+    params.note_kind(key, field_param_kind<T>());
+    // Read before the overlay: `dst` still holds the config struct's own field
+    // initializer here, which is exactly the default this key falls back to.
+    params.note_default(key, field_as_double(dst));
+    auto it = params.find(key);
+    if (it != params.end()) assign_field(dst, it->second);
   }
-  auto it = params.find(key);
-  if (it != params.end()) assign_field(dst, it->second);
 }
 
 /// Most `cutoff<i>Hz` keys a crossover reads, so one fewer than the most bands it splits into.
