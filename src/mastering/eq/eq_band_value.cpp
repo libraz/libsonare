@@ -46,9 +46,10 @@ double json_number_any(const JsonValue& object, const char* first_key, const cha
 // float_or.
 float json_float(const JsonValue& object, const char* key, float fallback, const char* context) {
   float converted = 0.0f;
-  if (!sonare::numeric::checked_float_cast(json_number(object, key, fallback, context), &converted)) {
-    invalid_band(context, std::string("numeric JSON field is non-finite or out of float range: ") +
-                              key);
+  if (!sonare::numeric::checked_float_cast(json_number(object, key, fallback, context),
+                                           &converted)) {
+    invalid_band(context,
+                 std::string("numeric JSON field is non-finite or out of float range: ") + key);
   }
   return converted;
 }
@@ -71,8 +72,8 @@ float json_gain_db_any(const JsonValue& object, const char* first_key, const cha
                        float fallback, const char* context) {
   const float value = json_float_any(object, first_key, second_key, fallback, context);
   if (!std::isfinite(std::pow(10.0, static_cast<double>(value) / 40.0))) {
-    invalid_band(context, std::string("dB JSON field is too large to realize as a filter: ") +
-                              first_key);
+    invalid_band(context,
+                 std::string("dB JSON field is too large to realize as a filter: ") + first_key);
   }
   return value;
 }
@@ -83,8 +84,8 @@ int json_int_any(const JsonValue& object, const char* first_key, const char* sec
   if (!sonare::numeric::checked_integral_cast(
           std::round(json_number_any(object, first_key, second_key, fallback, context)),
           &converted)) {
-    invalid_band(context, std::string("integer JSON field is non-finite or out of range: ") +
-                              first_key);
+    invalid_band(context,
+                 std::string("integer JSON field is non-finite or out of range: ") + first_key);
   }
   return converted;
 }
@@ -218,16 +219,15 @@ EqBand eq_band_from_value(const JsonValue& value, const char* context) {
   band.gain_db = json_gain_db_any(value, "gainDb", "gain_db", band.gain_db, context);
   band.q = json_float(value, "q", band.q, context);
   band.enabled = json_bool(value, "enabled", band.enabled, context);
-  band.slope_db_oct =
-      json_int_any(value, "slopeDbOct", "slope_db_oct", band.slope_db_oct, context);
+  band.slope_db_oct = json_int_any(value, "slopeDbOct", "slope_db_oct", band.slope_db_oct, context);
   band.placement = parse_placement(json_string(value, "placement", "Stereo", context), context);
   band.phase = parse_band_phase(json_string(value, "phase", "Inherit", context), context);
   band.soloed = json_bool(value, "soloed", false, context);
   band.bypassed = json_bool(value, "bypassed", false, context);
   band.proportional_q = json_bool_any(value, "proportionalQ", "proportional_q", false, context);
-  band.proportional_q_strength = json_float_any(
-      value, "proportionalQStrength", "proportional_q_strength", band.proportional_q_strength,
-      context);
+  band.proportional_q_strength =
+      json_float_any(value, "proportionalQStrength", "proportional_q_strength",
+                     band.proportional_q_strength, context);
 
   band.dyn.enabled = json_bool_any(value, "dynamic", "dynEnabled", false, context);
   band.dyn.enabled = json_bool(value, "dyn_enabled", band.dyn.enabled, context);
@@ -280,7 +280,8 @@ JsonValue eq_band_to_value(const EqBand& band) {
   if (band.placement != kDefault.placement) {
     object.emplace("placement", JsonValue(placement_to_string(band.placement)));
   }
-  if (band.phase != kDefault.phase) object.emplace("phase", JsonValue(phase_mode_to_string(band.phase)));
+  if (band.phase != kDefault.phase)
+    object.emplace("phase", JsonValue(phase_mode_to_string(band.phase)));
   if (band.soloed != kDefault.soloed) object.emplace("soloed", JsonValue(band.soloed));
   if (band.bypassed != kDefault.bypassed) object.emplace("bypassed", JsonValue(band.bypassed));
   if (band.proportional_q != kDefault.proportional_q) {
