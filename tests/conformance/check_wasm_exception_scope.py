@@ -214,8 +214,28 @@ def _binary_dir(link_txt: Path) -> Path:
     return directory
 
 
+def _expand_response_files(binary_dir: Path, tokens: list[str]) -> list[str]:
+    """Splices each ``@file`` response file (relative to @p binary_dir) into the line.
+
+    Newer Emscripten releases hand CMake's object and library lists to the linker
+    this way, so a link line read without expansion names no objects at all.
+    """
+    expanded: list[str] = []
+    for token in tokens:
+        response = binary_dir / token[1:] if token.startswith("@") else None
+        if response is not None and response.is_file():
+            expanded.extend(_tokens(response))
+        else:
+            expanded.append(token)
+    return expanded
+
+
 def _link_lines(build_dir: Path) -> list[tuple[Path, list[str]]]:
-    return [(_binary_dir(p), _tokens(p)) for p in sorted(build_dir.rglob("link.txt"))]
+    lines = []
+    for path in sorted(build_dir.rglob("link.txt")):
+        binary_dir = _binary_dir(path)
+        lines.append((binary_dir, _expand_response_files(binary_dir, _tokens(path))))
+    return lines
 
 
 def _output_of(tokens: list[str]) -> str | None:
