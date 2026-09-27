@@ -3,12 +3,16 @@
 
 #include "analysis/beat_analyzer.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #include "analysis/meter_analyzer.h"
+#include "quick.h"
+#include "util/constants.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinRel;
@@ -610,4 +614,119 @@ TEST_CASE("BeatAnalyzer republishes the observations of the latest refinement", 
   REQUIRE(analyzer.beat_chord_change_observations() == chord_changes);
   // The onset window is recomputed by the refinement and stays one per beat.
   REQUIRE(analyzer.beat_onset_observations().size() == beat_count);
+}
+
+namespace {
+
+/// @brief One bar of an accented groove: per-beat hit kind and peak amplitude.
+struct GrooveBeat {
+  bool kick;
+  float amp;
+};
+
+/// @brief Renders a 120 BPM kick/noise-hit groove with eighth-note hats, starting
+///        `start_beat` beats into the bar pattern so a clip can open mid-bar.
+std::vector<float> render_groove(const std::vector<GrooveBeat>& bar, int total_beats,
+                                 int start_beat, int sr) {
+  constexpr float kBeatSeconds = 0.5f;
+  const size_t length = static_cast<size_t>((total_beats * kBeatSeconds + 0.4f) * sr);
+  std::vector<float> out(length, 0.0f);
+  uint32_t state = 0x7a3cf611u;
+  auto noise = [&state]() {
+    state = state * 1664525u + 1013904223u;
+    return static_cast<float>(state >> 8) / static_cast<float>(1u << 24) * 2.0f - 1.0f;
+  };
+  auto add_noise = [&](size_t start, float amp, float decay) {
+    const size_t n = static_cast<size_t>(6.0f * decay * sr);
+    for (size_t j = 0; j < n && start + j < length; ++j) {
+      out[start + j] += amp * std::exp(-static_cast<float>(j) / sr / decay) * noise();
+    }
+  };
+  auto add_kick = [&](size_t start, float amp) {
+    constexpr float kDecay = 0.16f;
+    const size_t n = static_cast<size_t>(6.0f * kDecay * sr);
+    double phase = 0.0;
+    for (size_t j = 0; j < n && start + j < length; ++j) {
+      const float t = static_cast<float>(j) / sr;
+      phase += sonare::constants::kTwoPiD * (55.0 + 90.0 * std::exp(-t / 0.03)) / sr;
+      const float click = t < 0.004f ? (1.0f - t / 0.004f) * noise() * 0.5f : 0.0f;
+      out[start + j] += amp * (std::exp(-t / kDecay) * static_cast<float>(std::sin(phase)) + click);
+    }
+  };
+
+  const int numerator = static_cast<int>(bar.size());
+  for (int k = 0; k < total_beats; ++k) {
+    const GrooveBeat& beat = bar[static_cast<size_t>((k + start_beat) % numerator)];
+    const size_t start = static_cast<size_t>(k * kBeatSeconds * sr);
+    if (beat.kick) {
+      add_kick(start, beat.amp);
+    } else {
+      add_noise(start, beat.amp, 0.045f);
+    }
+    add_noise(start, 0.09f, 0.01f);
+    add_noise(start + static_cast<size_t>(0.5f * kBeatSeconds * sr), 0.063f, 0.01f);
+  }
+  return out;
+}
+
+/// @brief Requires the reported downbeats to be exactly the true bar starts.
+/// @details A bar start inside the first 0.25 s is not required: the tracker
+///          follows the reference beat tracker in reporting no beat at t = 0.
+void require_bar_starts(const std::vector<float>& downbeats, float first_bar, float bar_seconds,
+                        float duration) {
+  constexpr float kTolerance = 0.05f;
+  CAPTURE(downbeats, first_bar, bar_seconds);
+  REQUIRE_FALSE(downbeats.empty());
+  for (float time : downbeats) {
+    const float bars = (time - first_bar) / bar_seconds;
+    CAPTURE(time);
+    REQUIRE(std::abs(bars - std::round(bars)) * bar_seconds <= kTolerance);
+  }
+  for (float bar = first_bar; bar < duration - 0.3f; bar += bar_seconds) {
+    if (bar < 0.25f) continue;
+    const bool found = std::any_of(downbeats.begin(), downbeats.end(), [bar](float time) {
+      return std::abs(time - bar) <= kTolerance;
+    });
+    CAPTURE(bar);
+    REQUIRE(found);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("detect_downbeats places the bar on the kick of a 4/4 backbeat groove",
+          "[beat_analyzer][downbeat]") {
+  constexpr int kSr = 32000;
+  const std::vector<GrooveBeat> bar{{true, 1.0f}, {false, 0.25f}, {false, 0.18f}, {false, 0.25f}};
+  const auto samples = render_groove(bar, 16, 0, kSr);
+  const auto downbeats = quick::detect_downbeats(samples.data(), samples.size(), kSr);
+  require_bar_starts(downbeats, 0.0f, 2.0f, 8.0f);
+}
+
+TEST_CASE("detect_downbeats places the bar on the kick of a 3/4 groove",
+          "[beat_analyzer][downbeat]") {
+  constexpr int kSr = 32000;
+  const std::vector<GrooveBeat> bar{{true, 1.0f}, {false, 0.45f}, {false, 0.45f}};
+  const auto samples = render_groove(bar, 30, 0, kSr);
+  const auto downbeats = quick::detect_downbeats(samples.data(), samples.size(), kSr);
+  require_bar_starts(downbeats, 0.0f, 1.5f, 15.0f);
+}
+
+TEST_CASE("detect_downbeats prefers the louder of two kicks in a short 4/4 kit groove",
+          "[beat_analyzer][downbeat]") {
+  constexpr int kSr = 32000;
+  const std::vector<GrooveBeat> bar{{true, 1.0f}, {false, 0.6f}, {true, 0.8f}, {false, 0.6f}};
+  const auto samples = render_groove(bar, 8, 0, kSr);
+  const auto downbeats = quick::detect_downbeats(samples.data(), samples.size(), kSr);
+  require_bar_starts(downbeats, 0.0f, 2.0f, 4.0f);
+}
+
+TEST_CASE("detect_downbeats finds the bar when a 4/4 clip opens mid-bar",
+          "[beat_analyzer][downbeat]") {
+  constexpr int kSr = 32000;
+  const std::vector<GrooveBeat> bar{{true, 1.0f}, {false, 0.25f}, {false, 0.18f}, {false, 0.25f}};
+  // The clip opens on beat 3, so bars start one second in.
+  const auto samples = render_groove(bar, 18, 2, kSr);
+  const auto downbeats = quick::detect_downbeats(samples.data(), samples.size(), kSr);
+  require_bar_starts(downbeats, 1.0f, 2.0f, 9.0f);
 }

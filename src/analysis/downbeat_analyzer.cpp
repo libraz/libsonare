@@ -32,11 +32,18 @@ std::vector<float> normalize_to_unit(std::vector<float> values, size_t target_si
   return values;
 }
 
-float observation_score(size_t beat_index, int position, int downbeat_phase, int numerator,
-                        const DownbeatObservations& observations,
+/// @brief Scores one beat at one bar position, as that beat's share of its position's mean.
+/// @details Every phase puts the same beats together at a bar position, so dividing by the
+///          size of that group scores each phase by its per-position means. A plain sum lets a
+///          phase win by covering one more bar, and lets a per-beat phase prior outgrow a
+///          clear accent; here the prior totals phase_prior_weight whatever the clip length.
+float observation_score(size_t beat_index, size_t beat_count, int position, int downbeat_phase,
+                        int numerator, const DownbeatObservations& observations,
                         const std::vector<float>& beat_strengths,
                         const std::vector<float>& low_frequency,
                         const std::vector<float>& chord_changes) {
+  const size_t stride = static_cast<size_t>(numerator);
+  const float group_size = static_cast<float>((beat_count - 1 - beat_index % stride) / stride + 1);
   const bool is_downbeat = position == 0;
   const bool is_secondary_strong =
       (numerator == 4 && position == 2) || (numerator == 6 && position == 3);
@@ -55,9 +62,9 @@ float observation_score(size_t beat_index, int position, int downbeat_phase, int
   const int expected_position =
       (static_cast<int>(beat_index) - downbeat_phase + numerator) % numerator;
   if (position == expected_position) {
-    score += observations.phase_prior_weight;
+    score += observations.phase_prior_weight / static_cast<float>(numerator);
   }
-  return score;
+  return score / group_size;
 }
 
 float median_beat_interval(const std::vector<Beat>& beats) {
@@ -189,8 +196,9 @@ DownbeatResult estimate_downbeats(const std::vector<Beat>& beats,
   std::vector<std::vector<int>> backpointer(beats.size(), std::vector<int>(state_count, -1));
 
   for (int position = 0; position < numerator; ++position) {
-    const float base = observation_score(0, position, downbeat_phase, numerator, observations,
-                                         beat_strengths, low_frequency, chord_changes);
+    const float base =
+        observation_score(0, beats.size(), position, downbeat_phase, numerator, observations,
+                          beat_strengths, low_frequency, chord_changes);
     for (int tempo = 0; tempo < tempo_state_count; ++tempo) {
       score[0][state_index(position, tempo)] = base;
     }
@@ -200,8 +208,8 @@ DownbeatResult estimate_downbeats(const std::vector<Beat>& beats,
     for (int position = 0; position < numerator; ++position) {
       const int expected_previous = (position - 1 + numerator) % numerator;
       const float base_observation =
-          observation_score(beat, position, downbeat_phase, numerator, observations, beat_strengths,
-                            low_frequency, chord_changes);
+          observation_score(beat, beats.size(), position, downbeat_phase, numerator, observations,
+                            beat_strengths, low_frequency, chord_changes);
       for (int tempo = 0; tempo < tempo_state_count; ++tempo) {
         float best_previous_score = neg_inf;
         int best_previous_state = -1;

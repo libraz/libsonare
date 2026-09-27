@@ -27,6 +27,7 @@ struct DownbeatObservations {
   float beat_strength_weight = 1.0f;
   float low_frequency_weight = 0.75f;
   float chord_change_weight = 0.75f;
+  /// Total score for agreeing with the meter phase, independent of clip length.
   float phase_prior_weight = 0.2f;
   float tempo_observation_weight = 0.25f;
   float tempo_transition_weight = 0.15f;
