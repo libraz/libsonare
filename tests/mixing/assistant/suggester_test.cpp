@@ -432,6 +432,31 @@ namespace {
 // Every field set, including the conditionally-omitted ones scene_json.cpp
 // only writes for a non-default strip/bus, so the schema-path equality below
 // actually exercises the whole writer rather than its unconditional subset.
+// Every EqBand field off its default, so the writer emits every band path.
+sonare::mastering::eq::EqBand make_fully_populated_eq_band() {
+  using namespace sonare::mastering::eq;
+  EqBand band(EqBandType::HighShelf, 4000.0f, 3.0f, 0.9f, true, BiquadCoeffMode::Vicanek);
+  band.slope_db_oct = 24;
+  band.placement = StereoPlacement::Mid;
+  band.phase = PhaseMode::NaturalPhase;
+  band.soloed = true;
+  band.bypassed = true;
+  band.proportional_q = true;
+  band.proportional_q_strength = 0.1f;
+  band.dyn.enabled = true;
+  band.dyn.threshold_db = -18.0f;
+  band.dyn.auto_threshold = true;
+  band.dyn.ratio = 3.0f;
+  band.dyn.range_db = -9.0f;
+  band.dyn.attack_ms = 2.0f;
+  band.dyn.release_ms = 80.0f;
+  band.dyn.detector_delay_ms = 1.0f;
+  band.dyn.sidechain_freq_hz = 2000.0f;
+  band.dyn.sidechain_q = 2.0f;
+  band.dyn.external_sidechain = true;
+  return band;
+}
+
 sonare::mixing::api::Scene make_fully_populated_scene() {
   using sonare::mixing::api::Bus;
   using sonare::mixing::api::Insert;
@@ -473,6 +498,8 @@ sonare::mixing::api::Scene make_fully_populated_scene() {
   lead.metering.true_peak_oversample = 8;
   lead.inserts.push_back(Insert(InsertSlot::PreFader, "eq.parametric", "{}", "lead-sidechain"));
   lead.sends.push_back(Send{"send1", "reverb", -6.0f, SendTiming::PreFader});
+  lead.eq.enabled = false;
+  lead.eq.bands.push_back(make_fully_populated_eq_band());
   scene.strips.push_back(lead);
 
   Strip backing;
@@ -490,6 +517,16 @@ sonare::mixing::api::Scene make_fully_populated_scene() {
   master.inserts.push_back(
       Insert(InsertSlot::PostFader, "dynamics.limiter", "{}", "bus-sidechain"));
   scene.buses.push_back(master);
+
+  Bus reverb;
+  reverb.id = "reverb";
+  reverb.pan = -0.3f;
+  reverb.pan_mode = 2;
+  reverb.dual_pan_left = -0.6f;
+  reverb.dual_pan_right = 0.4f;
+  reverb.pan_law = 1;
+  reverb.eq.bands.push_back(make_fully_populated_eq_band());
+  scene.buses.push_back(reverb);
 
   VcaGroup group;
   group.id = "vca1";
