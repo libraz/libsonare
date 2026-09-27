@@ -1505,6 +1505,10 @@ if(BUILD_WASM)
     -fexceptions
     -sEXPORT_NAME='Sonare'
     -sEXPORTED_RUNTIME_METHODS=['UTF8ToString']
+    # Emscripten 6.0.2 removed wasmBinary from the default incoming Module
+    # API. The browser and AudioWorklet facades pass the fetched bytes through
+    # Module.wasmBinary, so keep that supported across emsdk upgrades.
+    -sINCOMING_MODULE_JS_API=['arguments','instantiateWasm','locateFile','noExitRuntime','onAbort','onRuntimeInitialized','postRun','preInit','preRun','print','printErr','setStatus','thisProgram','wasmBinary']
     -sMODULARIZE=1
     -sEXPORT_ES6=1
     -sALLOW_MEMORY_GROWTH=1
