@@ -678,6 +678,12 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareSynthPatch),
             ctypes.c_void_p,
         ]
+    if hasattr(lib, "sonare_engine_set_synth_instrument_binding"):
+        lib.sonare_engine_set_synth_instrument_binding.restype = ctypes.c_int32
+        lib.sonare_engine_set_synth_instrument_binding.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(SonareSynthInstrumentBinding),
+        ]
     if hasattr(lib, "sonare_engine_load_soundfont"):
         lib.sonare_engine_load_soundfont.restype = ctypes.c_int32
         lib.sonare_engine_load_soundfont.argtypes = [

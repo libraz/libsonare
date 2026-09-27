@@ -854,6 +854,10 @@ export class RealtimeEngine {
    * An `engineMode: 'sample'` patch also carries the {@link SampleBank} its
    * keymap names. The engine takes a share of the bank, so it may be destroyed
    * right after this call; a sample patch bound without one renders silence.
+   *
+   * `useGmPrograms` follows incoming GM bank/program changes and routes
+   * channel 10 through the GM drum map, exactly like the same-named bounce
+   * binding key; the patch stays the fallback for any unsupported mapping.
    */
   setSynthInstrument(
     patch: SynthPatch | string = {},

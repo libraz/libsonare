@@ -8,6 +8,7 @@
 // Realtime tempo / time-signature ramps reuse the shared segment descriptors
 // SonareProjectTempoSegment / SonareProjectTimeSignatureSegment.
 #include "sonare_c_project_core.h"
+#include "sonare_c_project_instruments.h"
 #include "sonare_c_project_midi.h"
 
 #ifdef __cplusplus
@@ -787,6 +788,16 @@ SonareError sonare_engine_set_synth_instrument_with_bank(SonareRealtimeEngine* e
                                                          uint32_t destination_id,
                                                          const SonareSynthPatch* patch,
                                                          SonareSampleBank* bank);
+
+/// @brief Binds the NativeSynth from a @ref SonareSynthInstrumentBinding, the
+///        record @ref sonare_project_bounce_with_synth_instruments takes, so
+///        live playback and a bounce resolve one binding identically.
+/// @details Reads destination_id, patch and use_gm_programs as the bounce
+///          does. The engine takes a share of sample_bank (the bounce only
+///          borrows it), so the caller may destroy its handle afterwards. Same
+///          control-thread contract as @ref sonare_engine_set_synth_instrument.
+SonareError sonare_engine_set_synth_instrument_binding(SonareRealtimeEngine* engine,
+                                                       const SonareSynthInstrumentBinding* binding);
 
 /// @brief Resolves a hosted instrument's continuous parameter to its reserved
 ///        automation id.

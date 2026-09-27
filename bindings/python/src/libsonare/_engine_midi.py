@@ -10,7 +10,7 @@ from __future__ import annotations
 import ctypes
 from typing import TYPE_CHECKING
 
-from ._ffi_types_mastering_project import SonareControllerBinding
+from ._ffi_types_mastering_project import SonareControllerBinding, SonareSynthInstrumentBinding
 from ._project import (
     BuiltinSynthConfig,
     MidiCcBinding,
@@ -174,32 +174,29 @@ class _EngineMidiMixin:
         renders silence, the same way one naming a keymap set the bank lacks
         does.
 
+        :attr:`SynthPatch.use_gm_programs` follows incoming GM bank/program
+        changes and routes channel 10 through the GM drum map, exactly like
+        the bounce binding of the same name; unlike the bounce, an unstated
+        (``None``) value resolves to ``False`` rather than an ``auto_select_gm``
+        fallback, since the realtime engine has no per-call equivalent of it.
+
         Control-thread only: this is a structural mutation, so do not call it
         concurrently with :meth:`process`.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_engine_set_synth_instrument"):
+        if not hasattr(lib, "sonare_engine_set_synth_instrument_binding"):
             raise RuntimeError("libsonare was built without live-MIDI support")
         resolved = _synth_patch_arg(patch)
         bank = sample_bank if sample_bank is not None else resolved.sample_bank
-        c_patch = resolved._to_c()
-        if bank is None:
-            _check(
-                lib.sonare_engine_set_synth_instrument(
-                    self._require_handle(),
-                    _to_c_uint32(destination_id, "destination_id"),
-                    ctypes.byref(c_patch),
-                )
-            )
-            return
-        if not hasattr(lib, "sonare_engine_set_synth_instrument_with_bank"):
-            raise RuntimeError("libsonare was built without the sample-bank ABI")
+        binding = SonareSynthInstrumentBinding()
+        binding.destination_id = _to_c_uint32(destination_id, "destination_id")
+        binding.patch = resolved._to_c()
+        binding.use_gm_programs = 1 if resolved.use_gm_programs else 0
+        binding.sample_bank = bank._require_handle() if bank is not None else None
         _check(
-            lib.sonare_engine_set_synth_instrument_with_bank(
+            lib.sonare_engine_set_synth_instrument_binding(
                 self._require_handle(),
-                _to_c_uint32(destination_id, "destination_id"),
-                ctypes.byref(c_patch),
-                bank._require_handle(),
+                ctypes.byref(binding),
             )
         )
 

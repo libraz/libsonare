@@ -455,6 +455,82 @@ TEST_CASE("sonare_engine_parameter_info describes a hosted instrument's reserved
 
   sonare_engine_destroy(engine);
 }
+
+TEST_CASE("sonare_engine_set_synth_instrument_binding follows GM program changes only when asked",
+          "[c_api][engine]") {
+  constexpr uint32_t kDestination = 1;
+  constexpr int kBlock = 128;
+  constexpr size_t kFrames = 4096;
+
+  // A program change one sample before the note-on so the resolved patch is
+  // settled before note_on() reads the channel's program/bank state.
+  auto render = [](uint8_t use_gm_programs, uint8_t program) -> std::vector<float> {
+    SonareRealtimeEngine* engine = nullptr;
+    REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 16, 16) == SONARE_OK);
+
+    SonareSynthPatch patch{};
+    patch.struct_version = 1;
+    std::strncpy(patch.preset, "saw-lead", sizeof(patch.preset) - 1);
+
+    SonareSynthInstrumentBinding binding{};
+    binding.destination_id = kDestination;
+    binding.patch = patch;
+    binding.use_gm_programs = use_gm_programs;
+    binding.sample_bank = nullptr;
+    REQUIRE(sonare_engine_set_synth_instrument_binding(engine, &binding) == SONARE_OK);
+
+    const SonareEngineMidiEvent events[] = {
+        {0, midi1_word(0xC, 0, program, 0), 0, 0, 0, 1, 0, 0, 0},
+        {1, midi1_word(0x9, 0, 60, 100), 0, 0, 0, 1, 0, 0, 0},
+    };
+    SonareEngineMidiClipSchedule clip{};
+    clip.id = 1;
+    clip.track_id = kDestination;
+    clip.length_samples = static_cast<int64_t>(kFrames);
+    clip.destination_id = kDestination;
+    clip.events = events;
+    clip.event_count = 2;
+    REQUIRE(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+    REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+    std::vector<float> left(kFrames, 0.0f);
+    std::vector<float> right(kFrames, 0.0f);
+    for (size_t at = 0; at < kFrames; at += kBlock) {
+      float* channels[] = {left.data() + at, right.data() + at};
+      REQUIRE(sonare_engine_process(engine, channels, 2, kBlock) == SONARE_OK);
+    }
+    sonare_engine_destroy(engine);
+    return left;
+  };
+
+  const std::vector<float> gm_piano = render(1, 0);
+  const std::vector<float> gm_violin = render(1, 40);
+  REQUIRE(peak_abs(gm_piano) > 0.0f);
+  REQUIRE(peak_abs(gm_violin) > 0.0f);
+  float max_diff = 0.0f;
+  for (size_t i = 0; i < kFrames; ++i) {
+    max_diff = std::max(max_diff, std::abs(gm_piano[i] - gm_violin[i]));
+  }
+  REQUIRE(max_diff > 1e-4f);
+
+  const std::vector<float> fixed_piano = render(0, 0);
+  const std::vector<float> fixed_violin = render(0, 40);
+  REQUIRE(fixed_piano == fixed_violin);
+
+  SonareSynthPatch patch{};
+  patch.struct_version = 1;
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = kDestination;
+  binding.patch = patch;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_set_synth_instrument_binding(nullptr, &binding) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_synth_instrument_binding(engine, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  sonare_engine_destroy(engine);
+}
 #endif  // defined(SONARE_WITH_ARRANGEMENT)
 
 #if defined(SONARE_WITH_MIXING)

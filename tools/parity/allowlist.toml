@@ -173,8 +173,15 @@ python = [
 #     this C function at all: c_api/sonare_c_engine_midi.cpp is not in the
 #     WASM source list, so its realtime binding constructs the NativeSynth
 #     directly and hands it the same shared bank one layer lower.
+#   engine_set_synth_instrument_binding: same fold, one C entry point wider.
+#     Node and Python route set_synth_instrument's useGmPrograms/sampleBank
+#     through this call now (a SonareSynthInstrumentBinding carries both), so
+#     it IS reachable there -- just under the facade's existing method name,
+#     which the name-matching extractor does not credit. WASM still constructs
+#     the NativeSynth directly, as above.
 node = [
   "engine_set_synth_instrument_with_bank",
+  "engine_set_synth_instrument_binding",
   "detect_chords_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
@@ -299,6 +306,7 @@ node = [
 ]
 wasm = [
   "engine_set_synth_instrument_with_bank",
+  "engine_set_synth_instrument_binding",
   "detect_chords_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
@@ -396,6 +404,7 @@ wasm = [
 ]
 python = [
   "engine_set_synth_instrument_with_bank",
+  "engine_set_synth_instrument_binding",
   "detect_chords_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",

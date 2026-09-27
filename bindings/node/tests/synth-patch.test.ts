@@ -480,4 +480,74 @@ describe('RealtimeEngine.setSynthInstrument', () => {
       engine.destroy();
     }
   });
+
+  // Mirrors bindings/wasm/tests/realtime-engine-gm.test.ts, so the two facades
+  // cannot drift on which incoming MIDI a `useGmPrograms` binding follows.
+  it('follows MIDI programs only when useGmPrograms is enabled', () => {
+    const midi1Word = (status: number, channel: number, data0: number, data1: number): number =>
+      (0x2 << 28) | ((status & 0xf) << 20) | ((channel & 0xf) << 16) | (data0 << 8) | data1;
+    const maxAbsDifference = (left: Float32Array, right: Float32Array): number => {
+      expect(left.length).toBe(right.length);
+      let max = 0;
+      for (let i = 0; i < left.length; i += 1) {
+        max = Math.max(max, Math.abs(left[i] - right[i]));
+      }
+      return max;
+    };
+
+    const blockSize = 128;
+    const blockCount = 32;
+    const renderProgram = (useGmPrograms: boolean, program: number): Float32Array => {
+      const engine = new RealtimeEngine(48000, blockSize);
+      try {
+        engine.setSynthInstrument({ preset: 'saw-lead', useGmPrograms }, 1);
+        engine.setMidiClips([
+          {
+            id: 1,
+            trackId: 1,
+            destinationId: 1,
+            lengthSamples: blockSize * blockCount,
+            events: [
+              { renderFrame: 0, word0: midi1Word(0xc, 0, program, 0), wordCount: 1 },
+              { renderFrame: 1, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 },
+            ],
+          },
+        ]);
+        engine.play();
+        const rendered = new Float32Array(blockSize * blockCount);
+        for (let block = 0; block < blockCount; block += 1) {
+          const [left] = engine.process([new Float32Array(blockSize), new Float32Array(blockSize)]);
+          rendered.set(left, block * blockSize);
+        }
+        return rendered;
+      } finally {
+        engine.destroy();
+      }
+    };
+
+    const gmPiano = renderProgram(true, 0);
+    const gmViolin = renderProgram(true, 40);
+    expect(Math.max(...gmPiano.map(Math.abs))).toBeGreaterThan(0);
+    expect(Math.max(...gmViolin.map(Math.abs))).toBeGreaterThan(0);
+    expect(maxAbsDifference(gmPiano, gmViolin)).toBeGreaterThan(1e-4);
+
+    const fixedPiano = renderProgram(false, 0);
+    const fixedViolin = renderProgram(false, 40);
+    expect(maxAbsDifference(fixedPiano, fixedViolin)).toBe(0);
+  });
+
+  it('requires useGmPrograms to be a boolean when supplied', () => {
+    const engine = new RealtimeEngine();
+    try {
+      expect(() =>
+        engine.setSynthInstrument(
+          // @ts-expect-error Runtime validation intentionally covers a wrong JS type.
+          { preset: 'saw-lead', useGmPrograms: 1 },
+          7,
+        ),
+      ).toThrow(/useGmPrograms/);
+    } finally {
+      engine.destroy();
+    }
+  });
 });

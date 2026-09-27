@@ -7,6 +7,8 @@ import numpy as np
 import pytest
 
 from libsonare import (
+    EngineMidiClipSchedule,
+    EngineMidiEvent,
     Project,
     RealtimeEngine,
     SonareError,
@@ -556,6 +558,62 @@ def test_engine_set_synth_instrument_renders_live_midi() -> None:
             engine.set_synth_instrument("no-such-preset", destination_id=7)
     finally:
         engine.close()
+
+
+def _engine_midi1_word(status: int, channel: int, data0: int, data1: int) -> int:
+    return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (data0 << 8) | data1
+
+
+def test_engine_set_synth_instrument_follows_gm_programs_only_when_enabled() -> None:
+    """Mirrors bindings/wasm/tests/realtime-engine-gm.test.ts and the Node test
+    of the same name, so the three facades cannot drift on which incoming MIDI
+    a ``use_gm_programs`` binding follows."""
+    block_size = 128
+    block_count = 32
+
+    def render(use_gm_programs: bool, program: int) -> np.ndarray:
+        engine = RealtimeEngine()
+        try:
+            engine.prepare(48000.0, block_size, 16, 16)
+            engine.set_synth_instrument(
+                SynthPatch(preset="saw-lead", use_gm_programs=use_gm_programs), destination_id=1
+            )
+            engine.set_midi_clips(
+                [
+                    EngineMidiClipSchedule(
+                        id=1,
+                        track_id=1,
+                        destination_id=1,
+                        length_samples=block_size * block_count,
+                        events=[
+                            EngineMidiEvent(
+                                0, word0=_engine_midi1_word(0xC, 0, program, 0), word_count=1
+                            ),
+                            EngineMidiEvent(
+                                1, word0=_engine_midi1_word(0x9, 0, 60, 100), word_count=1
+                            ),
+                        ],
+                    )
+                ]
+            )
+            engine.play()
+            blocks = [
+                np.asarray(engine.process([[0.0] * block_size, [0.0] * block_size]))[0]
+                for _ in range(block_count)
+            ]
+            return np.concatenate(blocks)
+        finally:
+            engine.close()
+
+    gm_piano = render(True, 0)
+    gm_violin = render(True, 40)
+    assert float(np.max(np.abs(gm_piano))) > 0.0
+    assert float(np.max(np.abs(gm_violin))) > 0.0
+    assert float(np.max(np.abs(gm_piano - gm_violin))) > 1e-4
+
+    fixed_piano = render(False, 0)
+    fixed_violin = render(False, 40)
+    assert np.array_equal(fixed_piano, fixed_violin)
 
 
 def test_gs_sets_that_render_as_standard_are_the_ones_that_say_so() -> None:

@@ -930,26 +930,30 @@ Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& i
 // where `patch` is a SynthPatch object or a preset-name string ("saw-lead" /
 // "va:saw-lead"), resolving exactly like Project.bounceWithSynthInstruments. A
 // sample patch carries its bank as the descriptor's `sampleBank`, the same key
-// the bounce reads; the engine takes a share of it.
+// the bounce reads; the engine takes a share of it. `useGmPrograms` follows
+// incoming GM bank/program changes and routes channel 10 through the GM drum
+// map, exactly like the bounce binding of the same name.
 Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
-  SonareSynthPatch patch{};
-  SonareSampleBank* bank = nullptr;
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = node_arg_uint32(info, 0, 0);
   if (info.Length() > 1) {
-    if (!sonare_node::ReadSynthPatch(env, info[1], &patch)) {
+    if (!sonare_node::ReadSynthPatch(env, info[1], &binding.patch)) {
       return env.Undefined();  // exception already pending
     }
-    if (info[1].IsObject() && !info[1].IsArray() &&
-        !SampleBankWrap::ReadHandle(env, info[1].As<Napi::Object>().Get("sampleBank"), &bank)) {
-      return env.Undefined();  // exception already pending
+    if (info[1].IsObject() && !info[1].IsArray()) {
+      Napi::Object obj = info[1].As<Napi::Object>();
+      binding.use_gm_programs = BoolProperty(obj, "useGmPrograms", false) ? 1 : 0;
+      if (env.IsExceptionPending()) return env.Undefined();
+      if (!SampleBankWrap::ReadHandle(env, obj.Get("sampleBank"), &binding.sample_bank)) {
+        return env.Undefined();  // exception already pending
+      }
     }
   } else {
-    patch.struct_version = 3;
+    binding.patch.struct_version = 3;
   }
-  ThrowIfError(env,
-               sonare_engine_set_synth_instrument_with_bank(engine_, destination_id, &patch, bank));
+  ThrowIfError(env, sonare_engine_set_synth_instrument_binding(engine_, &binding));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

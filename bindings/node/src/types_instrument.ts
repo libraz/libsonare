@@ -506,19 +506,20 @@ export interface SynthPatch {
    */
   destinationId?: number;
   /**
-   * Follow incoming GM bank/program changes for offline project bounces and
-   * route channel 10 through the GM drum map. Defaults to `false`, preserving
-   * the fixed-patch behavior. This is a project-bounce binding option, not a
-   * NativeSynth patch field.
+   * Follow incoming GM bank/program changes and route channel 10 through the
+   * GM drum map, for offline project bounces ({@link Project.bounceWithSynthInstrument})
+   * and for {@link RealtimeEngine.setSynthInstrument} alike. Defaults to
+   * `false`, preserving the fixed-patch behavior. This is a binding option,
+   * not a NativeSynth patch field.
    */
   useGmPrograms?: boolean;
   /**
    * Sample bank an `engineMode: 'sample'` patch reads, for offline project
-   * bounces. Borrowed for the call: it must outlive the bounce, and adding to
-   * it while the bounce runs is not allowed. A sample patch bound without a
-   * bank renders silence rather than failing, the same way a patch naming a
-   * keymap set the bank lacks does. This is a project-bounce binding option,
-   * not a NativeSynth patch field.
+   * bounces and for {@link RealtimeEngine.setSynthInstrument} alike. Borrowed
+   * for the call: it must outlive the bounce, and adding to it while the
+   * bounce runs is not allowed. A sample patch bound without a bank renders
+   * silence rather than failing, the same way a patch naming a keymap set the
+   * bank lacks does. This is a binding option, not a NativeSynth patch field.
    */
   sampleBank?: SampleBank;
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */

@@ -198,6 +198,30 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 #endif
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+
+// The engine takes a share of @p bank, so the caller may destroy its handle.
+SonareError bind_native_synth(SonareRealtimeEngine* engine, uint32_t destination_id,
+                              const SonareSynthPatch& patch, SonareSampleBank* bank,
+                              bool use_gm_programs) {
+  sonare::midi::synth::NativeSynthConfig cfg;
+  const char* error = nullptr;
+  if (!sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error)) {
+    set_last_error(error != nullptr ? error : "invalid synth patch");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  cfg.use_gm_programs = use_gm_programs;
+  auto synth = std::make_unique<sonare::midi::synth::NativeSynth>(cfg);
+  if (bank != nullptr) {
+    synth->set_sample_bank(std::shared_ptr<const sonare::midi::synth::SampleBank>(bank->bank));
+  }
+  return bind_engine_instrument(engine, destination_id, std::move(synth));
+}
+
+}  // namespace
+#endif
+
 SonareError sonare_engine_set_synth_instrument_with_bank(SonareRealtimeEngine* engine,
                                                          uint32_t destination_id,
                                                          const SonareSynthPatch* patch,
@@ -210,18 +234,7 @@ SonareError sonare_engine_set_synth_instrument_with_bank(SonareRealtimeEngine* e
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
-  sonare::midi::synth::NativeSynthConfig cfg;
-  const char* error = nullptr;
-  if (!sonare_c_detail::synth_config_from_patch_c(*patch, &cfg, &error)) {
-    set_last_error(error != nullptr ? error : "invalid synth patch");
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  auto synth = std::make_unique<sonare::midi::synth::NativeSynth>(cfg);
-  // The synth takes a share, so the caller may destroy its handle right after.
-  if (bank != nullptr) {
-    synth->set_sample_bank(std::shared_ptr<const sonare::midi::synth::SampleBank>(bank->bank));
-  }
-  return bind_engine_instrument(engine, destination_id, std::move(synth));
+  return bind_native_synth(engine, destination_id, *patch, bank, false);
   SONARE_C_CATCH
 #endif
 }
@@ -230,6 +243,20 @@ SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
                                                uint32_t destination_id,
                                                const SonareSynthPatch* patch) {
   return sonare_engine_set_synth_instrument_with_bank(engine, destination_id, patch, nullptr);
+}
+
+SonareError sonare_engine_set_synth_instrument_binding(
+    SonareRealtimeEngine* engine, const SonareSynthInstrumentBinding* binding) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !binding) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return bind_native_synth(engine, binding->destination_id, binding->patch, binding->sample_bank,
+                           binding->use_gm_programs != 0);
+  SONARE_C_CATCH
+#endif
 }
 
 SonareError sonare_engine_resolve_instrument_automation_id(SonareRealtimeEngine* engine,
