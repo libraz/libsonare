@@ -19,7 +19,8 @@
 namespace sonare::mixing::assistant {
 
 /// @brief Build a MixAssistantConfig from a flat param list.
-/// @details Unknown keys are ignored, matching the mastering assistant.
+/// @details An unknown key is refused, as the mastering assistant's is: a
+///          misspelt key would otherwise leave its setting at the default.
 inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api::Param* params,
                                                            std::size_t count) {
   mastering::api::validate_params(params, count);
@@ -64,6 +65,13 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
       mastering::api::assign_int_param(key, value, config.n_fft);
     } else if (key == "hopLength" || key == "hop_length") {
       mastering::api::assign_int_param(key, value, config.hop_length);
+    } else {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "unknown mixing assistant param: " + key +
+                                " (expected targetTrackLufs, suggestionStrength, eqMaxCutDb, "
+                                "mixBusHeadroomDbtp, tempoBpm, enableStructure, enableGain, "
+                                "enableBalance, enableEq, enableDynamics, enableImage, "
+                                "enableHighPass, nFft, hopLength)");
     }
   }
   return config;
@@ -83,6 +91,10 @@ inline TrackProfileConfig track_profile_config_from_params(const mastering::api:
       mastering::api::assign_int_param(key, value, config.hop_length);
     } else if (key == "minDurationSec" || key == "min_duration_sec") {
       config.min_duration_sec = static_cast<float>(value);
+    } else {
+      throw SonareException(
+          ErrorCode::InvalidParameter,
+          "unknown track profile param: " + key + " (expected nFft, hopLength, minDurationSec)");
     }
   }
   return config;

@@ -17,6 +17,7 @@
 
 #include "mix_eval.h"
 #include "mixing/api/scene.h"
+#include "mixing/assistant/config_from_params.h"
 #include "mixing/assistant/source_classifier.h"
 #include "mixing/assistant/track_profile.h"
 #include "support/schema_paths.h"
@@ -648,4 +649,19 @@ TEST_CASE("the assistant result's scene interior matches the scene document sche
     if (path.rfind("scene.", 0) == 0) interior.insert(path);
   }
   REQUIRE(interior == prefixed);
+}
+
+TEST_CASE("the mixing assistant param builders refuse an unknown key", "[mixing][assistant]") {
+  namespace assistant = sonare::mixing::assistant;
+  const sonare::mastering::api::Param known[] = {{"suggestionStrength", 0.5}};
+  CHECK(assistant::mix_assistant_config_from_params(known, 1).suggestion_strength == 0.5f);
+  const sonare::mastering::api::Param snake[] = {{"min_duration_sec", 2.0}};
+  CHECK(assistant::track_profile_config_from_params(snake, 1).min_duration_sec == 2.0f);
+
+  // A misspelt key would otherwise leave its setting at the default unannounced.
+  const sonare::mastering::api::Param misspelt[] = {{"suggestionStrenght", 0.5}};
+  CHECK_THROWS_AS(assistant::mix_assistant_config_from_params(misspelt, 1),
+                  sonare::SonareException);
+  CHECK_THROWS_AS(assistant::track_profile_config_from_params(misspelt, 1),
+                  sonare::SonareException);
 }
