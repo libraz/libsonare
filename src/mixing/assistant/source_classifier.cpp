@@ -657,9 +657,16 @@ NameReading read_name(const std::string& name) {
     if (!inside_longer) kept.push_back(match);
   }
   if (kept.empty()) return reading;
-  std::sort(kept.begin(), kept.end(), [](const Match& a, const Match& b) {
-    return a.begin != b.begin ? a.begin < b.begin : a.end < b.end;
-  });
+  // A name holds a handful of matches and no two share a span, so an insertion
+  // sort orders them exactly as a general sort would, without its instantiation.
+  for (std::size_t index = 1; index < kept.size(); ++index) {
+    for (std::size_t at = index; at > 0; --at) {
+      const Match& a = kept[at];
+      const Match& b = kept[at - 1];
+      if (!(a.begin != b.begin ? a.begin < b.begin : a.end < b.end)) break;
+      std::swap(kept[at], kept[at - 1]);
+    }
+  }
 
   for (const Match& match : kept) reading.named |= class_bit(match.source);
   const Match* last = &kept.front();
