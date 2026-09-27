@@ -226,4 +226,13 @@ TEST_CASE("panner at-rest identity reflects mode, pan target, and settle state",
   // Settling the smoothers (as ChannelStrip::settle() does) restores it.
   gliding.reset();
   REQUIRE(gliding.at_rest_identity());
+
+  // A pan settled in place (as an offline render does), then centred, must still
+  // glide back: the smoothers' targets only move inside process().
+  PannerProcessor settled(PannerConfig{0.0f, PanLaw::Const3dB, 5.0f});
+  settled.prepare(48000.0, 64);
+  settled.set_pan(0.3f);
+  settled.reset();
+  settled.set_pan(0.0f);
+  REQUIRE_FALSE(settled.at_rest_identity());
 }

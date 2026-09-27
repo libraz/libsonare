@@ -152,9 +152,13 @@ void PannerProcessor::set_dual_pan(float left_pan, float right_pan) noexcept {
 }
 
 bool PannerProcessor::at_rest_identity() const noexcept {
-  return pan_mode_.load(std::memory_order_relaxed) == PanMode::Balance &&
-         pan_.load(std::memory_order_relaxed) == 0.0f && left_.current() == left_.target() &&
-         right_.current() == right_.target();
+  if (pan_mode_.load(std::memory_order_relaxed) != PanMode::Balance ||
+      pan_.load(std::memory_order_relaxed) != 0.0f) {
+    return false;
+  }
+  // Compare against the centre gains: the smoothers' targets only move inside process().
+  const PanGains centre = compute_pan_gains(0.0f, pan_law_.load(std::memory_order_relaxed));
+  return left_.current() == centre.left && right_.current() == centre.right;
 }
 
 }  // namespace sonare::mixing
