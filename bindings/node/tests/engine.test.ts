@@ -38,6 +38,21 @@ describe('RealtimeEngine native binding', () => {
     return worst;
   };
 
+  /** Asserts that `call` throws a SonareError carrying exactly `code`. */
+  const expectSonareErrorCode = (call: () => void, code: ErrorCode): void => {
+    let error: unknown;
+    try {
+      call();
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(isSonareError(error)).toBe(true);
+    if (!isSonareError(error)) {
+      throw new Error('expected SonareError');
+    }
+    expect(error.code).toBe(code);
+  };
+
   it('exposes engine ABI version', () => {
     expect(engineAbiVersion()).toBeGreaterThan(0);
   });
@@ -931,6 +946,133 @@ describe('RealtimeEngine native binding', () => {
       [eqOut] = engine.process([new Float32Array(256)]);
     }
     expect(rms(eqOut)).toBeGreaterThan(rms(flatOut) * 1.5);
+    engine.destroy();
+  });
+
+  it('applies realtime bus strip pan setters', () => {
+    const engine = new RealtimeEngine(48000, 256);
+    const frames = 256 * 4;
+    engine.setClips([
+      {
+        id: 1,
+        trackId: 10,
+        channels: [new Float32Array(frames).fill(1)],
+        startPpq: 0,
+        lengthSamples: frames,
+      },
+    ]);
+    engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
+    engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
+
+    expect(() => engine.setBusStripPanLaw(1, 'linear0dB')).not.toThrow();
+    expect(() => engine.setBusStripPanMode(1, 'balance')).not.toThrow();
+    expect(() => engine.setBusStripDualPan(1, -1, -1)).not.toThrow();
+
+    // Hard-left pan on the bus: the left output channel must dominate the right.
+    engine.setBusStripPanMode(1, 'balance');
+    engine.setBusStripPan(1, -1);
+    engine.settleParameters();
+    engine.play();
+    let panned: Float32Array[] = [new Float32Array(256), new Float32Array(256)];
+    for (let block = 0; block < 4; block += 1) {
+      panned = engine.process([new Float32Array(256), new Float32Array(256)]);
+    }
+    const leftLevel = Math.abs(panned[0].at(-1) ?? 0);
+    const rightLevel = Math.abs(panned[1].at(-1) ?? 0);
+    expect(leftLevel).toBeGreaterThan(rightLevel);
+    engine.destroy();
+  });
+
+  it('updates bus strip EQ band', () => {
+    const engine = new RealtimeEngine(48000, 256);
+    const frames = 256 * 16;
+    const source = new Float32Array(frames);
+    for (let i = 0; i < frames; i += 1) {
+      source[i] = Math.sin((2 * Math.PI * 1000 * i) / 48000);
+    }
+    engine.setClips([
+      {
+        id: 1,
+        trackId: 10,
+        channels: [source],
+        startPpq: 0,
+        lengthSamples: frames,
+      },
+    ]);
+    engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
+    engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
+    expectSonareErrorCode(
+      () => engine.setBusStripEqBand(1, 99, { type: 'Peak', enabled: true }),
+      ErrorCode.InvalidParameter,
+    );
+
+    engine.play();
+    const [flatOut] = engine.process([new Float32Array(256)]);
+    engine.setBusStripEqBand(1, 0, {
+      type: 'Peak',
+      frequencyHz: 1000,
+      gainDb: 12,
+      q: 1,
+      enabled: true,
+    });
+    engine.seekSample(0);
+    let eqOut: Float32Array<ArrayBufferLike> = new Float32Array(256);
+    for (let block = 0; block < 6; block += 1) {
+      [eqOut] = engine.process([new Float32Array(256)]);
+    }
+    expect(rms(eqOut)).toBeGreaterThan(rms(flatOut) * 1.5);
+    engine.destroy();
+  });
+
+  it('rejects bus strip pan setters for bus id 0, an unknown bus, and non-finite values', () => {
+    const engine = new RealtimeEngine(48000, 256);
+    engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
+
+    expectSonareErrorCode(() => engine.setBusStripPan(0, -1), ErrorCode.InvalidParameter);
+    expectSonareErrorCode(() => engine.setBusStripPan(99, -1), ErrorCode.InvalidParameter);
+    expectSonareErrorCode(() => engine.setBusStripPan(1, Number.NaN), ErrorCode.InvalidParameter);
+    expectSonareErrorCode(
+      () => engine.setBusStripPanLaw(99, 'const6dB'),
+      ErrorCode.InvalidParameter,
+    );
+    expectSonareErrorCode(
+      () => engine.setBusStripPanMode(99, 'stereoPan'),
+      ErrorCode.InvalidParameter,
+    );
+    expectSonareErrorCode(() => engine.setBusStripDualPan(99, -1, 1), ErrorCode.InvalidParameter);
+    expectSonareErrorCode(
+      () => engine.setBusStripDualPan(1, Number.POSITIVE_INFINITY, 1),
+      ErrorCode.InvalidParameter,
+    );
+
+    engine.destroy();
+  });
+
+  it('refuses bus strip pan setters on a surround bus, but still allows EQ', () => {
+    const engine = new RealtimeEngine(48000, 256);
+    engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }]); // 5.1
+
+    expectSonareErrorCode(() => engine.setBusStripPan(1, -1), ErrorCode.InvalidParameter);
+    expectSonareErrorCode(
+      () => engine.setBusStripPanLaw(1, 'const6dB'),
+      ErrorCode.InvalidParameter,
+    );
+    expectSonareErrorCode(
+      () => engine.setBusStripPanMode(1, 'stereoPan'),
+      ErrorCode.InvalidParameter,
+    );
+    expectSonareErrorCode(() => engine.setBusStripDualPan(1, -1, 1), ErrorCode.InvalidParameter);
+
+    expect(() =>
+      engine.setBusStripEqBand(1, 0, {
+        type: 'Peak',
+        frequencyHz: 1000,
+        gainDb: 6,
+        q: 1,
+        enabled: true,
+      }),
+    ).not.toThrow();
+
     engine.destroy();
   });
 

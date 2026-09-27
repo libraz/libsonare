@@ -336,6 +336,23 @@ Napi::Value RealtimeEngineWrap::SetBusStripJson(const Napi::CallbackInfo& info) 
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value RealtimeEngineWrap::SetBusStripEqBandJson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t bus_id = 0;
+  int band_index = -1;
+  std::string band_json;
+  if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
+      !OptionalIntArg(env, info, 1, "bandIndex", -1, &band_index) ||
+      !OptionalStringArg(env, info, 2, "bandJson", "", &band_json)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_bus_strip_eq_band_json(engine_, bus_id, band_index,
+                                                             band_json.c_str()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value RealtimeEngineWrap::SetTrackStripJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
@@ -645,6 +662,64 @@ Napi::Value RealtimeEngineWrap::SetTrackStripDualPan(const Napi::CallbackInfo& i
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_track_strip_dual_pan(engine_, track_id, left_pan, right_pan));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetBusStripPan(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t bus_id = 0;
+  float pan = 0.0f;
+  if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
+      !OptionalFloatArg(env, info, 1, "pan", 0.0f, &pan)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_bus_strip_pan(engine_, bus_id, pan));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetBusStripPanLaw(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t bus_id = 0;
+  int pan_law = 0;
+  if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
+      !OptionalIntArg(env, info, 1, "panLaw", 0, &pan_law)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_bus_strip_pan_law(engine_, bus_id, pan_law));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetBusStripPanMode(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t bus_id = 0;
+  int pan_mode = 0;
+  if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
+      !OptionalIntArg(env, info, 1, "panMode", 0, &pan_mode)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_bus_strip_pan_mode(engine_, bus_id, pan_mode));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetBusStripDualPan(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t bus_id = 0;
+  float left_pan = 0.0f;
+  float right_pan = 0.0f;
+  if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
+      !OptionalFloatArg(env, info, 1, "leftPan", 0.0f, &left_pan) ||
+      !OptionalFloatArg(env, info, 2, "rightPan", 0.0f, &right_pan)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_set_bus_strip_dual_pan(engine_, bus_id, left_pan, right_pan));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

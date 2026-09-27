@@ -328,6 +328,20 @@ export class RealtimeEngine {
     this.native.setBusStripJson(busId, sceneJson);
   }
 
+  /** Bus-strip counterpart of {@link setTrackStripEqBand}. */
+  setBusStripEqBand(busId: number, bandIndex: number, band: EqBandInput | string): void {
+    this.native.setBusStripEqBandJson(
+      busId,
+      bandIndex,
+      typeof band === 'string' ? band : JSON.stringify(band),
+    );
+  }
+
+  /** Bus-strip counterpart of {@link setTrackStripEqBandJson}. */
+  setBusStripEqBandJson(busId: number, bandIndex: number, bandJson: string): void {
+    this.native.setBusStripEqBandJson(busId, bandIndex, bandJson);
+  }
+
   setTrackStripJson(trackId: number, sceneJson: string): void {
     this.native.setTrackStripJson(trackId, sceneJson);
   }
@@ -531,6 +545,55 @@ export class RealtimeEngine {
    */
   setTrackStripDualPan(trackId: number, leftPan: number, rightPan: number): void {
     this.native.setTrackStripDualPan(trackId, leftPan, rightPan);
+  }
+
+  /**
+   * Sets a bus strip's pan position (-1..1) in realtime. Applied at the next
+   * block head via the engine command queue; safe during playback. Rejected on
+   * a surround (>2ch) bus, where pan is not defined.
+   *
+   * @param busId Bus the strip belongs to.
+   * @param pan Pan position from -1 (hard left) to 1 (hard right).
+   */
+  setBusStripPan(busId: number, pan: number): void {
+    this.native.setBusStripPan(busId, pan);
+  }
+
+  /**
+   * Sets a bus strip's pan law in realtime. Applied at the next block head via
+   * the engine command queue; safe during playback. Rejected on a surround
+   * (>2ch) bus.
+   *
+   * @param busId Bus the strip belongs to.
+   * @param panLaw Pan law as an enum name, the enum, or the raw int.
+   */
+  setBusStripPanLaw(busId: number, panLaw: PanLawInput): void {
+    this.native.setBusStripPanLaw(busId, panLawValue(panLaw));
+  }
+
+  /**
+   * Sets a bus strip's pan mode in realtime. Applied at the next block head via
+   * the engine command queue; safe during playback. Rejected on a surround
+   * (>2ch) bus.
+   *
+   * @param busId Bus the strip belongs to.
+   * @param panMode Pan mode as an enum name, the enum, or the raw int.
+   */
+  setBusStripPanMode(busId: number, panMode: PanMode): void {
+    this.native.setBusStripPanMode(busId, panModeValue(panMode));
+  }
+
+  /**
+   * Sets a bus strip's independent left/right pan positions (dual-pan mode) in
+   * realtime. Applied at the next block head via the engine command queue;
+   * safe during playback. Rejected on a surround (>2ch) bus.
+   *
+   * @param busId Bus the strip belongs to.
+   * @param leftPan Left-channel pan position from -1 to 1.
+   * @param rightPan Right-channel pan position from -1 to 1.
+   */
+  setBusStripDualPan(busId: number, leftPan: number, rightPan: number): void {
+    this.native.setBusStripDualPan(busId, leftPan, rightPan);
   }
 
   /**

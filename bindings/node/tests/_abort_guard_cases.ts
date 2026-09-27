@@ -335,6 +335,14 @@ export const CASES: AbortGuardCase[] = [
     badArguments: [{ argument: 'sceneJson', call: (e) => e.setBusStripJson(BUS_ID, 42) }],
   },
   {
+    name: 'RealtimeEngine.setBusStripEqBandJson',
+    missingRequired: [],
+    badArguments: [
+      { argument: 'bandJson', call: (e) => e.setBusStripEqBandJson(BUS_ID, 0, 42) },
+      { argument: 'bandIndex', call: (e) => e.setBusStripEqBandJson(BUS_ID, '0', '{}') },
+    ],
+  },
+  {
     name: 'RealtimeEngine.setTrackStripJson',
     missingRequired: [],
     badArguments: [{ argument: 'sceneJson', call: (e) => e.setTrackStripJson(TRACK_ID, 42) }],
@@ -455,6 +463,29 @@ export const CASES: AbortGuardCase[] = [
     badArguments: [
       { argument: 'leftPan', call: (e) => e.setTrackStripDualPan(TRACK_ID, '0.5', 0) },
       { argument: 'rightPan', call: (e) => e.setTrackStripDualPan(TRACK_ID, 0, '0.5') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setBusStripPan',
+    missingRequired: [],
+    badArguments: [{ argument: 'pan', call: (e) => e.setBusStripPan(BUS_ID, '0.5') }],
+  },
+  {
+    name: 'RealtimeEngine.setBusStripPanLaw',
+    missingRequired: [],
+    badArguments: [{ argument: 'panLaw', call: (e) => e.setBusStripPanLaw(BUS_ID, '3') }],
+  },
+  {
+    name: 'RealtimeEngine.setBusStripPanMode',
+    missingRequired: [],
+    badArguments: [{ argument: 'panMode', call: (e) => e.setBusStripPanMode(BUS_ID, '2') }],
+  },
+  {
+    name: 'RealtimeEngine.setBusStripDualPan',
+    missingRequired: [],
+    badArguments: [
+      { argument: 'leftPan', call: (e) => e.setBusStripDualPan(BUS_ID, '0.5', 0) },
+      { argument: 'rightPan', call: (e) => e.setBusStripDualPan(BUS_ID, 0, '0.5') },
     ],
   },
   {

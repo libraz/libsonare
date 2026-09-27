@@ -47,6 +47,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetLaneSidechain(const Napi::CallbackInfo& info);
   Napi::Value SetTrackBuses(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripJson(const Napi::CallbackInfo& info);
+  Napi::Value SetBusStripEqBandJson(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripJson(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripEqBandJson(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripInsertBypassed(const Napi::CallbackInfo& info);
@@ -65,6 +66,10 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetTrackStripPanLaw(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripPanMode(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripDualPan(const Napi::CallbackInfo& info);
+  Napi::Value SetBusStripPan(const Napi::CallbackInfo& info);
+  Napi::Value SetBusStripPanLaw(const Napi::CallbackInfo& info);
+  Napi::Value SetBusStripPanMode(const Napi::CallbackInfo& info);
+  Napi::Value SetBusStripDualPan(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripChannelDelaySamples(const Napi::CallbackInfo& info);
   Napi::Value CreateClipPageProvider(const Napi::CallbackInfo& info);
   Napi::Value SupplyClipPage(const Napi::CallbackInfo& info);

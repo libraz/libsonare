@@ -169,6 +169,7 @@ export interface NativeEngine {
   drainScopeTelemetry(maxRecords?: unknown): unknown[];
   setLaneSidechain(trackId: unknown, insertIndex: unknown, sourceTrackId: unknown): void;
   setBusStripJson(busId: unknown, sceneJson: unknown): void;
+  setBusStripEqBandJson(busId: unknown, bandIndex: unknown, bandJson: unknown): void;
   setTrackStripJson(trackId: unknown, sceneJson: unknown): void;
   setTrackStripEqBandJson(trackId: unknown, bandIndex: unknown, bandJson: unknown): void;
   setTrackStripInsertBypassed(
@@ -215,6 +216,10 @@ export interface NativeEngine {
   setTrackStripPanLaw(trackId: unknown, panLaw: unknown): void;
   setTrackStripPanMode(trackId: unknown, panMode: unknown): void;
   setTrackStripDualPan(trackId: unknown, leftPan: unknown, rightPan: unknown): void;
+  setBusStripPan(busId: unknown, pan: unknown): void;
+  setBusStripPanLaw(busId: unknown, panLaw: unknown): void;
+  setBusStripPanMode(busId: unknown, panMode: unknown): void;
+  setBusStripDualPan(busId: unknown, leftPan: unknown, rightPan: unknown): void;
   setTrackStripChannelDelaySamples(trackId: unknown, delaySamples: unknown): void;
   createClipPageProvider(numChannels: unknown, numSamples: unknown, pageFrames: unknown): number;
   supplyClipPage(providerId: unknown, pageIndex: unknown, channels: unknown): void;

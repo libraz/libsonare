@@ -199,6 +199,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetLaneSidechain>("setLaneSidechain"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackBuses>("setTrackBuses"),
           InstanceMethod<&RealtimeEngineWrap::SetBusStripJson>("setBusStripJson"),
+          InstanceMethod<&RealtimeEngineWrap::SetBusStripEqBandJson>("setBusStripEqBandJson"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripJson>("setTrackStripJson"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripEqBandJson>("setTrackStripEqBandJson"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripInsertBypassed>(
@@ -227,6 +228,10 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPanLaw>("setTrackStripPanLaw"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPanMode>("setTrackStripPanMode"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripDualPan>("setTrackStripDualPan"),
+          InstanceMethod<&RealtimeEngineWrap::SetBusStripPan>("setBusStripPan"),
+          InstanceMethod<&RealtimeEngineWrap::SetBusStripPanLaw>("setBusStripPanLaw"),
+          InstanceMethod<&RealtimeEngineWrap::SetBusStripPanMode>("setBusStripPanMode"),
+          InstanceMethod<&RealtimeEngineWrap::SetBusStripDualPan>("setBusStripDualPan"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripChannelDelaySamples>(
               "setTrackStripChannelDelaySamples"),
           InstanceMethod<&RealtimeEngineWrap::CreateClipPageProvider>("createClipPageProvider"),
