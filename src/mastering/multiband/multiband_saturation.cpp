@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/eq/parametric.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/soft_clipper.h"
 #include "mastering/saturation/tape.h"
@@ -253,15 +254,7 @@ std::vector<rt::ParamDescriptor> MultibandSaturation::parameter_descriptors() co
   // for every band that exists (band < processors_.size()) and band_param in
   // [0, kBandStride). Keys use the construction-time band{i}.<field> convention.
   static constexpr const char* kBandParamKeys[kBandStride] = {"driveDb", "mix", "outputGainDb"};
-  std::vector<rt::ParamDescriptor> descriptors;
-  descriptors.reserve(processors_.size() * kBandStride);
-  for (unsigned int band = 0; band < processors_.size(); ++band) {
-    const std::string prefix = "band" + std::to_string(band) + ".";
-    for (unsigned int band_param = 0; band_param < kBandStride; ++band_param) {
-      descriptors.push_back({prefix + kBandParamKeys[band_param], band * kBandStride + band_param});
-    }
-  }
-  return descriptors;
+  return eq::banded_parameter_descriptors(processors_.size(), kBandParamKeys, kBandStride);
 }
 
 void MultibandSaturation::validate_config(const MultibandSaturationConfig& config) {

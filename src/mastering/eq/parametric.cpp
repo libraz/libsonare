@@ -26,16 +26,23 @@ float safe_q(float q) {
 
 }  // namespace
 
-std::vector<rt::ParamDescriptor> band_parameter_descriptors(size_t band_count) {
+std::vector<rt::ParamDescriptor> banded_parameter_descriptors(size_t band_count,
+                                                              const char* const* keys,
+                                                              unsigned int keys_per_band) {
   std::vector<rt::ParamDescriptor> descriptors;
-  descriptors.reserve(band_count * 3u);
+  descriptors.reserve(band_count * keys_per_band);
   for (unsigned int b = 0; b < band_count; ++b) {
     const std::string prefix = "band" + std::to_string(b) + ".";
-    descriptors.push_back({prefix + "frequencyHz", b * 3u + 0u});
-    descriptors.push_back({prefix + "gainDb", b * 3u + 1u});
-    descriptors.push_back({prefix + "q", b * 3u + 2u});
+    for (unsigned int field = 0; field < keys_per_band; ++field) {
+      descriptors.push_back({prefix + keys[field], b * keys_per_band + field});
+    }
   }
   return descriptors;
+}
+
+std::vector<rt::ParamDescriptor> band_parameter_descriptors(size_t band_count) {
+  static constexpr const char* kKeys[] = {"frequencyHz", "gainDb", "q"};
+  return banded_parameter_descriptors(band_count, kKeys, 3u);
 }
 
 void ParametricEq::prepare(double sample_rate, int max_block_size) {

@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/eq/parametric.h"
 #include "mastering/stereo/constant_power_width.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -214,15 +215,7 @@ std::vector<rt::ParamDescriptor> MultibandImager::parameter_descriptors() const 
   // for every band that exists (band < config_.bands.size()) and band_param in
   // [0, kBandStride). Keys use the construction-time band{i}.<field> convention.
   static constexpr const char* kBandParamKeys[kBandStride] = {"width", "decorrelationAmount"};
-  std::vector<rt::ParamDescriptor> descriptors;
-  descriptors.reserve(config_.bands.size() * kBandStride);
-  for (unsigned int band = 0; band < config_.bands.size(); ++band) {
-    const std::string prefix = "band" + std::to_string(band) + ".";
-    for (unsigned int band_param = 0; band_param < kBandStride; ++band_param) {
-      descriptors.push_back({prefix + kBandParamKeys[band_param], band * kBandStride + band_param});
-    }
-  }
-  return descriptors;
+  return eq::banded_parameter_descriptors(config_.bands.size(), kBandParamKeys, kBandStride);
 }
 
 void MultibandImager::validate_config(const MultibandImagerConfig& config) {

@@ -5,6 +5,7 @@
 #include <string>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/eq/parametric.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -160,15 +161,7 @@ std::vector<rt::ParamDescriptor> MultibandCompressor::parameter_descriptors() co
   // [0, kBandStride). Keys use the construction-time band{i}.<field> convention.
   static constexpr const char* kBandParamKeys[kBandStride] = {"thresholdDb", "ratio", "attackMs",
                                                               "releaseMs", "makeupGainDb"};
-  std::vector<rt::ParamDescriptor> descriptors;
-  descriptors.reserve(compressors_.size() * kBandStride);
-  for (unsigned int band = 0; band < compressors_.size(); ++band) {
-    const std::string prefix = "band" + std::to_string(band) + ".";
-    for (unsigned int band_param = 0; band_param < kBandStride; ++band_param) {
-      descriptors.push_back({prefix + kBandParamKeys[band_param], band * kBandStride + band_param});
-    }
-  }
-  return descriptors;
+  return eq::banded_parameter_descriptors(compressors_.size(), kBandParamKeys, kBandStride);
 }
 
 void MultibandCompressor::validate_config(const MultibandCompressorConfig& config) {

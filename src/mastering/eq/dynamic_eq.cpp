@@ -309,15 +309,7 @@ std::vector<rt::ParamDescriptor> DynamicEq::parameter_descriptors() const {
   static constexpr std::array<const char*, kParamsPerBand> kFieldKeys{
       "frequencyHz", "staticGainDb",    "q",        "thresholdDb", "ratio",          "rangeDb",
       "sidechainQ",  "sidechainFreqHz", "attackMs", "releaseMs",   "detectorDelayMs"};
-  std::vector<rt::ParamDescriptor> descriptors;
-  descriptors.reserve(kMaxBands * kParamsPerBand);
-  for (unsigned int b = 0; b < kMaxBands; ++b) {
-    const std::string prefix = "band" + std::to_string(b) + ".";
-    for (unsigned int field = 0; field < kParamsPerBand; ++field) {
-      descriptors.push_back({prefix + kFieldKeys[field], b * kParamsPerBand + field});
-    }
-  }
-  return descriptors;
+  return banded_parameter_descriptors(kMaxBands, kFieldKeys.data(), kParamsPerBand);
 }
 
 void DynamicEq::validate_index(size_t index) {

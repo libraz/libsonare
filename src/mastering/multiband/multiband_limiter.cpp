@@ -4,6 +4,7 @@
 #include <string>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/eq/parametric.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -134,14 +135,8 @@ bool MultibandLimiter::set_parameter(unsigned int param_id, float value) {
 }
 
 std::vector<rt::ParamDescriptor> MultibandLimiter::parameter_descriptors() const {
-  std::vector<rt::ParamDescriptor> descriptors;
-  descriptors.reserve(limiters_.size() * kBandStride);
-  for (unsigned int band = 0; band < limiters_.size(); ++band) {
-    const std::string prefix = "band" + std::to_string(band) + ".";
-    descriptors.push_back({prefix + "thresholdDb", band * kBandStride + 0});
-    descriptors.push_back({prefix + "releaseMs", band * kBandStride + 1});
-  }
-  return descriptors;
+  static constexpr const char* kBandParamKeys[kBandStride] = {"thresholdDb", "releaseMs"};
+  return eq::banded_parameter_descriptors(limiters_.size(), kBandParamKeys, kBandStride);
 }
 
 void MultibandLimiter::validate_config(const MultibandLimiterConfig& config) {

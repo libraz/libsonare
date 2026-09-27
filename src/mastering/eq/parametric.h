@@ -19,6 +19,12 @@ namespace sonare::mastering::eq {
 ///        (configure_parametric).
 std::vector<rt::ParamDescriptor> band_parameter_descriptors(size_t band_count);
 
+/// @brief Builds `band<b>.<keys[f]>` descriptors for a processor whose band `b`
+///        occupies ids `b*keys_per_band .. b*keys_per_band + keys_per_band-1`.
+std::vector<rt::ParamDescriptor> banded_parameter_descriptors(size_t band_count,
+                                                              const char* const* keys,
+                                                              unsigned int keys_per_band);
+
 /// @brief One biquad section, normalized so a0 == 1.
 struct BiquadCoefficients {
   float b0 = 1.0f;
