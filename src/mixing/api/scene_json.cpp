@@ -1,6 +1,8 @@
 #include <string>
 #include <utility>
 
+#include "mastering/eq/eq_band_value.h"
+#include "mastering/eq/parametric.h"
 #include "mixing/alignment_delay.h"
 #include "mixing/api/scene.h"
 #include "mixing/pan_law.h"
@@ -210,6 +212,38 @@ std::vector<Send> sends_from_value(const JsonValue& array) {
   return out;
 }
 
+// Strip and Bus share one EQ shape (StripEq) and one validation. `field_prefix`
+// names the enclosing entity ("scene.strips[]" or "scene.buses[]") for error
+// messages, matching the convention the other scene fields use.
+StripEq eq_from_value(const JsonValue& object, const char* field_prefix) {
+  StripEq eq;
+  const auto* eq_value = object.find("eq");
+  if (!eq_value || !eq_value->is_object()) return eq;
+  eq.enabled = bool_or(*eq_value, "enabled", eq.enabled);
+  const auto* bands = eq_value->find("bands");
+  if (!bands || !bands->is_array()) return eq;
+  const auto& array = bands->as_array();
+  if (array.size() > mastering::eq::ParametricEq::kMaxBands) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          std::string(field_prefix) + ".eq.bands has more than 24 bands");
+  }
+  const std::string band_context = std::string(field_prefix) + ".eq.bands[]: ";
+  eq.bands.reserve(array.size());
+  for (const auto& entry : array) {
+    const mastering::eq::EqBand band =
+        mastering::eq::eq_band_from_value(entry, band_context.c_str());
+    // ParametricEq has no tilt design; the shared codec stays permissive for EqualizerProcessor.
+    if (band.type == mastering::eq::EqBandType::TiltShelf ||
+        band.type == mastering::eq::EqBandType::FlatTilt) {
+      throw SonareException(
+          ErrorCode::InvalidParameter,
+          band_context + "TiltShelf/FlatTilt is not supported on a strip or bus EQ");
+    }
+    eq.bands.push_back(band);
+  }
+  return eq;
+}
+
 Strip strip_from_value(const JsonValue& object) {
   Strip strip;
   strip.id = string_or(object, "id", strip.id);
@@ -291,6 +325,7 @@ Strip strip_from_value(const JsonValue& object) {
   }
   if (const auto* inserts = object.find("inserts")) strip.inserts = inserts_from_value(*inserts);
   if (const auto* sends = object.find("sends")) strip.sends = sends_from_value(*sends);
+  strip.eq = eq_from_value(object, "scene.strips[]");
   return strip;
 }
 
@@ -321,6 +356,42 @@ Bus bus_from_value(const JsonValue& object) {
                                             bus.polarity_invert_left);
   bus.polarity_invert_right = bool_or_legacy(object, "polarityInvertRight", "polarity_invert_right",
                                              bus.polarity_invert_right);
+  // Pan: same field names, ranges and clamp/reject split as Strip's above.
+  bus.pan = clamp_pan(number_or(object, "pan", bus.pan, "scene.buses[].pan"));
+  bus.pan_mode = int_or_legacy(object, "panMode", "pan_mode", bus.pan_mode);
+  if (bus.pan_mode < 0 || bus.pan_mode > 2) {
+    throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
+  }
+  bus.dual_pan_left = clamp_pan(number_or_legacy(object, "dualPanLeft", "dual_pan_left",
+                                                 bus.dual_pan_left, "scene.buses[].dualPanLeft"));
+  bus.dual_pan_right = clamp_pan(number_or_legacy(
+      object, "dualPanRight", "dual_pan_right", bus.dual_pan_right, "scene.buses[].dualPanRight"));
+  bus.pan_law = int_or_legacy(object, "panLaw", "pan_law", bus.pan_law);
+  if (bus.pan_law < 0 || bus.pan_law >= kPanLawCount) {
+    throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
+  }
+  // A surround bus has no pan stage, so a non-default pan there is refused rather than dropped.
+  if (channel_count(bus.layout) > 2) {
+    const Bus defaults;
+    const char* offending = nullptr;
+    if (bus.pan != defaults.pan) {
+      offending = "pan";
+    } else if (bus.pan_mode != defaults.pan_mode) {
+      offending = "panMode";
+    } else if (bus.pan_law != defaults.pan_law) {
+      offending = "panLaw";
+    } else if (bus.dual_pan_left != defaults.dual_pan_left) {
+      offending = "dualPanLeft";
+    } else if (bus.dual_pan_right != defaults.dual_pan_right) {
+      offending = "dualPanRight";
+    }
+    if (offending != nullptr) {
+      throw SonareException(ErrorCode::InvalidParameter, "bus '" + bus.id + "' has a non-default " +
+                                                             offending +
+                                                             " on a surround (>2 channel) layout");
+    }
+  }
+  bus.eq = eq_from_value(object, "scene.buses[]");
   if (const auto* inserts = object.find("inserts")) bus.inserts = inserts_from_value(*inserts);
   return bus;
 }
@@ -442,6 +513,29 @@ JsonValue sends_to_value(const std::vector<Send>& sends) {
   return JsonValue(std::move(array));
 }
 
+// Writes `*out` and returns true only when the EQ carries something worth
+// serializing (enabled with no bands is the identity), so a strip/bus that
+// never touched its EQ carries neither the object nor the "eq" key and an
+// existing scene stays byte-identical.
+bool eq_to_value(const StripEq& eq, JsonValue* out) {
+  static const mastering::eq::EqBand kDefaultBand{};
+  sonare::util::json::Array bands;
+  bands.reserve(eq.bands.size());
+  // Trailing default bands are trimmed; an interior one keeps its slot as {"enabled":false}.
+  size_t kept = 0;
+  for (size_t i = 0; i < eq.bands.size(); ++i) {
+    bands.emplace_back(mastering::eq::eq_band_to_value(eq.bands[i]));
+    if (eq.bands[i] != kDefaultBand) kept = i + 1;
+  }
+  bands.resize(kept);
+  if (eq.enabled && bands.empty()) return false;
+  sonare::util::json::Object object;
+  object.emplace("enabled", JsonValue(eq.enabled));
+  object.emplace("bands", JsonValue(std::move(bands)));
+  *out = JsonValue(std::move(object));
+  return true;
+}
+
 JsonValue strip_to_value(const Strip& strip) {
   sonare::util::json::Object object;
   object.emplace("id", JsonValue(strip.id));
@@ -491,6 +585,9 @@ JsonValue strip_to_value(const Strip& strip) {
   }
   object.emplace("inserts", inserts_to_value(strip.inserts));
   object.emplace("sends", sends_to_value(strip.sends));
+  // Omitted at the identity default so an existing scene stays byte-identical.
+  JsonValue eq_value;
+  if (eq_to_value(strip.eq, &eq_value)) object.emplace("eq", std::move(eq_value));
   return JsonValue(std::move(object));
 }
 
@@ -517,7 +614,15 @@ JsonValue bus_to_value(const Bus& bus) {
   if (bus.polarity_invert_right) {
     object.emplace("polarityInvertRight", JsonValue(bus.polarity_invert_right));
   }
+  // Pan is likewise omitted at the default, for the same byte-identity reason.
+  if (bus.pan != 0.0f) object.emplace("pan", JsonValue(bus.pan));
+  if (bus.pan_mode != 0) object.emplace("panMode", JsonValue(bus.pan_mode));
+  if (bus.dual_pan_left != -1.0f) object.emplace("dualPanLeft", JsonValue(bus.dual_pan_left));
+  if (bus.dual_pan_right != 1.0f) object.emplace("dualPanRight", JsonValue(bus.dual_pan_right));
+  if (bus.pan_law != 0) object.emplace("panLaw", JsonValue(bus.pan_law));
   object.emplace("inserts", inserts_to_value(bus.inserts));
+  JsonValue eq_value;
+  if (eq_to_value(bus.eq, &eq_value)) object.emplace("eq", std::move(eq_value));
   return JsonValue(std::move(object));
 }
 
@@ -612,6 +717,33 @@ const std::vector<std::string>& scene_schema_paths() {
       "strips[].sends[].destinationBusId",
       "strips[].sends[].sendDb",
       "strips[].sends[].timing",
+      "strips[].eq",
+      "strips[].eq.enabled",
+      "strips[].eq.bands",
+      "strips[].eq.bands[].type",
+      "strips[].eq.bands[].frequencyHz",
+      "strips[].eq.bands[].gainDb",
+      "strips[].eq.bands[].q",
+      "strips[].eq.bands[].enabled",
+      "strips[].eq.bands[].coeffMode",
+      "strips[].eq.bands[].slopeDbOct",
+      "strips[].eq.bands[].placement",
+      "strips[].eq.bands[].phase",
+      "strips[].eq.bands[].soloed",
+      "strips[].eq.bands[].bypassed",
+      "strips[].eq.bands[].proportionalQ",
+      "strips[].eq.bands[].proportionalQStrength",
+      "strips[].eq.bands[].dynamic",
+      "strips[].eq.bands[].thresholdDb",
+      "strips[].eq.bands[].autoThreshold",
+      "strips[].eq.bands[].ratio",
+      "strips[].eq.bands[].rangeDb",
+      "strips[].eq.bands[].attackMs",
+      "strips[].eq.bands[].releaseMs",
+      "strips[].eq.bands[].detectorDelayMs",
+      "strips[].eq.bands[].externalSidechain",
+      "strips[].eq.bands[].sidechainFreqHz",
+      "strips[].eq.bands[].sidechainQ",
       "buses",
       "buses[].id",
       "buses[].role",
@@ -620,11 +752,43 @@ const std::vector<std::string>& scene_schema_paths() {
       "buses[].width",
       "buses[].polarityInvertLeft",
       "buses[].polarityInvertRight",
+      "buses[].pan",
+      "buses[].panMode",
+      "buses[].dualPanLeft",
+      "buses[].dualPanRight",
+      "buses[].panLaw",
       "buses[].inserts",
       "buses[].inserts[].slot",
       "buses[].inserts[].processor",
       "buses[].inserts[].params",
       "buses[].inserts[].sidechainKey",
+      "buses[].eq",
+      "buses[].eq.enabled",
+      "buses[].eq.bands",
+      "buses[].eq.bands[].type",
+      "buses[].eq.bands[].frequencyHz",
+      "buses[].eq.bands[].gainDb",
+      "buses[].eq.bands[].q",
+      "buses[].eq.bands[].enabled",
+      "buses[].eq.bands[].coeffMode",
+      "buses[].eq.bands[].slopeDbOct",
+      "buses[].eq.bands[].placement",
+      "buses[].eq.bands[].phase",
+      "buses[].eq.bands[].soloed",
+      "buses[].eq.bands[].bypassed",
+      "buses[].eq.bands[].proportionalQ",
+      "buses[].eq.bands[].proportionalQStrength",
+      "buses[].eq.bands[].dynamic",
+      "buses[].eq.bands[].thresholdDb",
+      "buses[].eq.bands[].autoThreshold",
+      "buses[].eq.bands[].ratio",
+      "buses[].eq.bands[].rangeDb",
+      "buses[].eq.bands[].attackMs",
+      "buses[].eq.bands[].releaseMs",
+      "buses[].eq.bands[].detectorDelayMs",
+      "buses[].eq.bands[].externalSidechain",
+      "buses[].eq.bands[].sidechainFreqHz",
+      "buses[].eq.bands[].sidechainQ",
       "vcaGroups",
       "vcaGroups[].id",
       "vcaGroups[].gainDb",

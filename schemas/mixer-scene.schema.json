@@ -96,6 +96,73 @@
         "distance": { "type": "number", "default": 1 }
       }
     },
+    "eqBand": {
+      "description": "One equalizer band, in the shape sonare_eq_set_band's JSON accepts. Only enabled is required to have any effect at all; every other field falls back to the values shown when the writer omits it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": ["Peak", "LowShelf", "HighShelf", "LowPass", "HighPass", "BandPass", "Notch", "TiltShelf", "FlatTilt", "AllPass"],
+          "default": "Peak"
+        },
+        "frequencyHz": { "type": "number", "default": 1000 },
+        "gainDb": { "type": "number", "default": 0 },
+        "q": {
+          "description": "Resonance/slope. Ignored for a LowShelf/HighShelf band under coeffMode Vicanek, which has no Q/S parameter.",
+          "type": "number"
+        },
+        "enabled": { "type": "boolean", "default": false },
+        "coeffMode": { "enum": ["Rbj", "Vicanek"], "default": "Rbj" },
+        "slopeDbOct": {
+          "description": "6 selects a first-order section on a pass or shelf band.",
+          "type": "integer",
+          "default": 12
+        },
+        "placement": {
+          "enum": ["Stereo", "Left", "Right", "Mid", "Side"],
+          "default": "Stereo"
+        },
+        "phase": {
+          "enum": ["Inherit", "ZeroLatency", "NaturalPhase", "LinearPhase"],
+          "default": "Inherit"
+        },
+        "soloed": { "type": "boolean", "default": false },
+        "bypassed": { "type": "boolean", "default": false },
+        "proportionalQ": { "type": "boolean", "default": false },
+        "proportionalQStrength": { "type": "number", "default": 0.03 },
+        "dynamic": { "type": "boolean", "default": false },
+        "thresholdDb": { "type": "number", "default": -24 },
+        "autoThreshold": { "type": "boolean", "default": false },
+        "ratio": { "type": "number", "default": 2 },
+        "rangeDb": { "type": "number", "default": -6 },
+        "attackMs": { "type": "number", "default": 5 },
+        "releaseMs": { "type": "number", "default": 50 },
+        "detectorDelayMs": {
+          "description": "Delays the detector's view of the signal; a larger value makes the band react later, not earlier. Not true look-ahead, and adds no latency to the audio path.",
+          "type": "number",
+          "default": 0
+        },
+        "externalSidechain": { "type": "boolean", "default": false },
+        "sidechainFreqHz": { "type": "number", "default": -1 },
+        "sidechainQ": { "type": "number", "default": 1 }
+      }
+    },
+    "eq": {
+      "description": "A strip or bus's dedicated equalizer. Omitted entirely by the writer when enabled and every band is at its default, so an existing scene carries neither this key unless it set one.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Gates the whole EQ stage without discarding the bands.",
+          "type": "boolean",
+          "default": true
+        },
+        "bands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/eqBand" }
+        }
+      }
+    },
     "metering": {
       "description": "Which meters this strip computes. Switching one off costs nothing but the measurement.",
       "type": "object",
@@ -212,7 +279,8 @@
           "description": "Feeds from this strip to buses, each with its own level and timing.",
           "type": "array",
           "items": { "$ref": "#/$defs/send" }
-        }
+        },
+        "eq": { "$ref": "#/$defs/eq" }
       }
     },
     "bus": {
@@ -245,11 +313,45 @@
         },
         "polarityInvertLeft": { "type": "boolean", "default": false },
         "polarityInvertRight": { "type": "boolean", "default": false },
+        "pan": {
+          "description": "Stereo position, same range and meaning as a strip's. Rejected (not clamped) at a non-default value when layout carries more than two channels: a surround bus has no pan of its own.",
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1,
+          "default": 0
+        },
+        "panMode": {
+          "description": "Panner shape, matching SONARE_PAN_MODE_*. Same meaning as a strip's.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 0
+        },
+        "dualPanLeft": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1,
+          "default": -1
+        },
+        "dualPanRight": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1,
+          "default": 1
+        },
+        "panLaw": {
+          "description": "Pan law, matching the PanLaw enum order. Same meaning as a strip's.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "default": 0
+        },
         "inserts": {
           "description": "Processors on this bus, run on the summed signal.",
           "type": "array",
           "items": { "$ref": "#/$defs/insert" }
-        }
+        },
+        "eq": { "$ref": "#/$defs/eq" }
       }
     },
     "vcaGroup": {

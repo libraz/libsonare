@@ -7,6 +7,8 @@
  * second step through {@link Mixer.fromSceneJson}.
  */
 
+import type { EqBandInput } from './types_features';
+
 export type PanMode =
   | 'balance'
   | 'pan'
@@ -360,6 +362,15 @@ export interface MixSceneStrip {
   };
   inserts: MixSceneInsert[];
   sends: MixSceneSend[];
+  /**
+   * This strip's dedicated equalizer. Present only when it carries something
+   * other than the identity (enabled with no bands set), so an existing scene
+   * that never touched its EQ stays byte-identical.
+   */
+  eq?: {
+    enabled?: boolean;
+    bands: EqBandInput[];
+  };
 }
 
 /** A bus in a mixer scene. Defaulted fields are omitted from the document. */
@@ -371,7 +382,22 @@ export interface MixSceneBus {
   width?: number;
   polarityInvertLeft?: boolean;
   polarityInvertRight?: boolean;
+  /**
+   * Pan, same field names/defaults/ranges as a strip's. Rejected rather than
+   * stored when this bus's layout carries more than two channels: a surround
+   * bus has no pan of its own.
+   */
+  pan?: number;
+  panMode?: number;
+  dualPanLeft?: number;
+  dualPanRight?: number;
+  panLaw?: number;
   inserts: MixSceneInsert[];
+  /** This bus's dedicated equalizer, applied before its inserts. See {@link MixSceneStrip.eq}. */
+  eq?: {
+    enabled?: boolean;
+    bands: EqBandInput[];
+  };
 }
 
 /** A VCA group in a mixer scene. */

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/channel_layout.h"
+#include "mastering/eq/eq_band.h"
 
 // Forward-declared rather than including util/json.h: this header is the
 // pure-data schema and is pulled into the arrangement compile path, which has no
@@ -83,6 +84,13 @@ struct StripMetering {
   int true_peak_oversample = 4;
 };
 
+// A strip or bus's dedicated equalizer. `enabled` gates the stage without
+// discarding the bands; `bands[i]` is that slot's band.
+struct StripEq {
+  bool enabled = true;
+  std::vector<mastering::eq::EqBand> bands;
+};
+
 struct Strip {
   std::string id;
   float input_trim_db = 0.0f;
@@ -116,6 +124,8 @@ struct Strip {
   StripMetering metering;
   std::vector<Insert> inserts;
   std::vector<Send> sends;
+  // Omitted from the document at its default, so an existing scene stays byte-identical.
+  StripEq eq;
 };
 
 struct Bus {
@@ -136,7 +146,15 @@ struct Bus {
   float width = 1.0f;
   bool polarity_invert_left = false;
   bool polarity_invert_right = false;
+  // Pan, as on Strip. A non-default value on a layout wider than two channels is rejected.
+  float pan = 0.0f;
+  int pan_mode = 0;  // 0 = balance (matches SONARE_PAN_MODE_*).
+  float dual_pan_left = -1.0f;
+  float dual_pan_right = 1.0f;
+  int pan_law = 0;  // 0 = Const3dB (matches PanLaw enum order).
   std::vector<Insert> inserts;
+  // Dedicated bus EQ, applied before inserts. Omitted at its default, like Strip's.
+  StripEq eq;
 };
 
 struct VcaGroup {

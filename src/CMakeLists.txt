@@ -196,6 +196,9 @@ set(SONARE_SOURCES
   # string<->enum mapping over a header-only enum, with no mastering runtime
   # behind it.
   mastering/eq/band_strings.cpp
+  # The band's JSON codec, for the same reason: the always-compiled scene_json.cpp
+  # reads and writes strip/bus EQ through it, with no mastering runtime behind it.
+  mastering/eq/eq_band_value.cpp
   # Compiled here rather than with the mixing module for the same reason:
   # core/audio_io.cpp is always compiled and folds every multichannel source to
   # mono through downmix(), so leaving it behind a feature gate makes

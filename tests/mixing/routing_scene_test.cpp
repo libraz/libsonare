@@ -7,6 +7,8 @@
 
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include "arrangement/retained_bytes.h"
+#include "mastering/eq/eq_band.h"
 #include "util/exception.h"
 #include "util/json.h"
 
@@ -934,6 +936,217 @@ TEST_CASE("sonare_mastering_insert_param_names enumerates an insert's keys",
 
   // Unknown name -> empty string (no params, no crash).
   REQUIRE(std::string(sonare_mastering_insert_param_names("not.a.real.processor")).empty());
+}
+
+// -- U1: scene EQ and bus pan ------------------------------------------------
+
+TEST_CASE("EqBand equality compares every field", "[mixing][routing]") {
+  using sonare::mastering::eq::EqBand;
+  const EqBand a;
+  EqBand b;
+  REQUIRE(a == b);
+  REQUIRE_FALSE(a != b);
+  b.gain_db = 3.0f;
+  REQUIRE_FALSE(a == b);
+  REQUIRE(a != b);
+}
+
+TEST_CASE("Scene strip and bus EQ round-trips and omits at the default", "[mixing][routing]") {
+  using sonare::mastering::eq::EqBand;
+  using sonare::mastering::eq::EqBandType;
+
+  EqBand band;
+  band.type = EqBandType::Peak;
+  band.frequency_hz = 2500.0f;
+  band.gain_db = -3.0f;
+  band.enabled = true;
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip lead;
+  lead.id = "lead";
+  lead.eq.enabled = false;
+  lead.eq.bands.push_back(band);
+  scene.strips.push_back(lead);
+
+  sonare::mixing::api::Strip plain;  // all default -> no "eq" key
+  plain.id = "plain";
+  scene.strips.push_back(plain);
+
+  sonare::mixing::api::Bus master("master", "master");
+  master.eq.bands.push_back(band);
+  scene.buses.push_back(master);
+  scene.connections.push_back({"lead", "master"});
+  scene.connections.push_back({"plain", "master"});
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  REQUIRE(json.find("\"eq\"") != std::string::npos);
+
+  const auto restored = sonare::mixing::api::scene_from_json(json);
+  REQUIRE(restored.strips.size() == 2);
+  CHECK_FALSE(restored.strips[0].eq.enabled);
+  REQUIRE(restored.strips[0].eq.bands.size() == 1);
+  CHECK(restored.strips[0].eq.bands[0] == band);
+  CHECK(restored.strips[1].eq.enabled);
+  CHECK(restored.strips[1].eq.bands.empty());
+  REQUIRE(restored.buses.size() == 1);
+  REQUIRE(restored.buses[0].eq.bands.size() == 1);
+  CHECK(restored.buses[0].eq.bands[0] == band);
+
+  // A scene that never touches EQ carries neither key.
+  sonare::mixing::api::Scene plain_scene;
+  sonare::mixing::api::Strip only;
+  only.id = "only";
+  plain_scene.strips.push_back(only);
+  CHECK(sonare::mixing::api::scene_to_json(plain_scene).find("\"eq\"") == std::string::npos);
+}
+
+TEST_CASE("Scene EQ preserves an interior default band's slot", "[mixing][routing]") {
+  using sonare::mastering::eq::EqBand;
+  EqBand configured;
+  configured.gain_db = 4.5f;
+  configured.enabled = true;
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip s;
+  s.id = "s";
+  s.eq.bands.push_back(configured);  // slot 0: configured
+  s.eq.bands.push_back({});          // slot 1: default, in the interior
+  s.eq.bands.push_back(configured);  // slot 2: configured again
+  scene.strips.push_back(s);
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  const auto restored = sonare::mixing::api::scene_from_json(json);
+  REQUIRE(restored.strips.size() == 1);
+  REQUIRE(restored.strips[0].eq.bands.size() == 3);
+  CHECK(restored.strips[0].eq.bands[0] == configured);
+  CHECK(restored.strips[0].eq.bands[1] == EqBand{});
+  CHECK(restored.strips[0].eq.bands[2] == configured);
+}
+
+TEST_CASE("Scene EQ trims trailing default bands", "[mixing][routing]") {
+  using sonare::mastering::eq::EqBand;
+  EqBand configured;
+  configured.gain_db = 4.5f;
+  configured.enabled = true;
+
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip s;
+  s.id = "s";
+  s.eq.bands.push_back(configured);
+  s.eq.bands.push_back({});
+  s.eq.bands.push_back({});
+  scene.strips.push_back(s);
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  const auto restored = sonare::mixing::api::scene_from_json(json);
+  REQUIRE(restored.strips.size() == 1);
+  REQUIRE(restored.strips[0].eq.bands.size() == 1);
+  CHECK(restored.strips[0].eq.bands[0] == configured);
+}
+
+TEST_CASE("Scene EQ rejects more than 24 bands", "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
+  std::string bands_json = "[";
+  for (int i = 0; i < 25; ++i) {
+    if (i > 0) bands_json += ",";
+    bands_json += "{}";
+  }
+  bands_json += "]";
+  const std::string document =
+      R"({"version":1,"strips":[{"id":"s","eq":{"bands":)" + bands_json + "}}]}";
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(document), ContainsSubstring("24"));
+}
+
+TEST_CASE("Scene EQ rejects TiltShelf/FlatTilt band types", "[mixing][routing]") {
+  // ParametricEq, which a strip/bus EQ ultimately runs on, has no coefficient
+  // design for these types (parametric.cpp's design_eq_biquad throws for both);
+  // the scene walker rejects them up front rather than letting the failure
+  // surface later, downstream of the EQ apply path.
+  using Catch::Matchers::ContainsSubstring;
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(
+          R"({"version":1,"strips":[{"id":"s","eq":{"bands":[{"type":"TiltShelf"}]}}]})"),
+      ContainsSubstring("TiltShelf"));
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(
+          R"({"version":1,"buses":[{"id":"b","eq":{"bands":[{"type":"FlatTilt"}]}}]})"),
+      ContainsSubstring("FlatTilt"));
+}
+
+TEST_CASE("Scene bus pan round-trips and omits at the default", "[mixing][routing]") {
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Bus shaped("shaped", "aux");
+  shaped.pan = 0.5f;
+  shaped.pan_mode = 2;
+  shaped.pan_law = 3;
+  shaped.dual_pan_left = -0.75f;
+  shaped.dual_pan_right = 0.75f;
+  scene.buses.push_back(shaped);
+  scene.buses.push_back({"master", "master"});  // all default -> no pan keys
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  REQUIRE(json.find("\"pan\":0.5") != std::string::npos);
+  REQUIRE(json.find("\"panMode\":2") != std::string::npos);
+  REQUIRE(json.find("\"panLaw\":3") != std::string::npos);
+  REQUIRE(json.find("\"dualPanLeft\":-0.75") != std::string::npos);
+  REQUIRE(json.find("\"dualPanRight\":0.75") != std::string::npos);
+
+  const auto restored = sonare::mixing::api::scene_from_json(json);
+  REQUIRE(restored.buses.size() == 2);
+  CHECK(restored.buses[0].pan == 0.5f);
+  CHECK(restored.buses[0].pan_mode == 2);
+  CHECK(restored.buses[0].pan_law == 3);
+  CHECK(restored.buses[0].dual_pan_left == -0.75f);
+  CHECK(restored.buses[0].dual_pan_right == 0.75f);
+  CHECK(restored.buses[1].pan == 0.0f);
+  CHECK(restored.buses[1].pan_mode == 0);
+
+  // A scene with only default bus pan carries none of the new keys.
+  const sonare::mixing::api::Scene plain_scene;
+  CHECK(sonare::mixing::api::scene_to_json(plain_scene).find("\"pan\"") == std::string::npos);
+}
+
+TEST_CASE("Scene clamps bus pan and dual pan to what the panner runs", "[mixing][routing]") {
+  const auto scene = sonare::mixing::api::scene_from_json(
+      R"({"version":1,"buses":[{"id":"b","pan":1.5,"dualPanLeft":-9.0,"dualPanRight":9.0}]})");
+  REQUIRE(scene.buses.size() == 1);
+  CHECK(scene.buses[0].pan == 1.0f);
+  CHECK(scene.buses[0].dual_pan_left == -1.0f);
+  CHECK(scene.buses[0].dual_pan_right == 1.0f);
+}
+
+TEST_CASE("Scene rejects an out-of-range bus panMode/panLaw", "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(R"({"version":1,"buses":[{"id":"b","panMode":5}]})"),
+      ContainsSubstring("panMode"));
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(R"({"version":1,"buses":[{"id":"b","panLaw":9}]})"),
+      ContainsSubstring("panLaw"));
+}
+
+TEST_CASE("Scene rejects a non-default pan on a surround bus, naming the bus and the field",
+          "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
+  const std::string surround_pan = R"({"version":1,"buses":[
+      {"id":"surround-verb","layout":"5.1","pan":0.5}]})";
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(surround_pan),
+                      ContainsSubstring("surround-verb"));
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(surround_pan), ContainsSubstring("pan"));
+
+  // A surround bus at the default pan still loads.
+  const auto ok = sonare::mixing::api::scene_from_json(
+      R"({"version":1,"buses":[{"id":"surround-verb","layout":"5.1"}]})");
+  REQUIRE(ok.buses.size() == 1);
+}
+
+TEST_CASE("dynamic_bytes accounts a strip's EQ bands", "[mixing][routing]") {
+  using sonare::arrangement::retained::dynamic_bytes;
+  sonare::mixing::api::Strip empty;
+  empty.id = "s";
+  sonare::mixing::api::Strip with_eq = empty;
+  with_eq.eq.bands.assign(3, sonare::mastering::eq::EqBand{});
+  CHECK(dynamic_bytes(with_eq) > dynamic_bytes(empty));
 }
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

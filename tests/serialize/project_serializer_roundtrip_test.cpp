@@ -253,6 +253,16 @@ Fixture make_fixture() {
   send.send_db = -6.0f;
   send.timing = mixing::api::SendTiming::PostFader;
   s.sends.push_back(send);
+  // Strip EQ travels with the scene and is compared by eq(); non-default on
+  // both enabled and the bands so a decoder dropping either is not masked by
+  // a coincidental match with the identity.
+  s.eq.enabled = false;
+  mastering::eq::EqBand strip_band;
+  strip_band.type = mastering::eq::EqBandType::LowShelf;
+  strip_band.frequency_hz = 120.0f;
+  strip_band.gain_db = -2.0f;
+  strip_band.enabled = true;
+  s.eq.bands.push_back(strip_band);
   scene.strips.push_back(s);
   mixing::api::Bus master("bus.main", "master");
   master.layout = ChannelLayout::FivePointOne;  // surround bus layout must persist
@@ -262,6 +272,15 @@ Fixture make_fixture() {
   master.input_trim_db = -2.5f;
   master.width = 0.75f;
   master.polarity_invert_left = true;
+  // Bus pan is rejected at a non-default value on a >2-channel layout, so a
+  // surround master exercises the EQ field only; bus.fx below is stereo and
+  // carries the pan fields instead.
+  mastering::eq::EqBand master_band;
+  master_band.type = mastering::eq::EqBandType::HighShelf;
+  master_band.frequency_hz = 8000.0f;
+  master_band.gain_db = 1.5f;
+  master_band.enabled = true;
+  master.eq.bands.push_back(master_band);
   mixing::api::Insert master_insert;
   master_insert.slot = mixing::api::InsertSlot::PostFader;
   master_insert.processor_name = "sonare.compressor";
@@ -272,6 +291,12 @@ Fixture make_fixture() {
   mixing::api::Bus fx("bus.fx", "aux");
   fx.width = 1.5f;
   fx.polarity_invert_right = true;
+  // Bus pan persistence (stereo, so a non-default pan is legal here).
+  fx.pan = 0.5f;
+  fx.pan_mode = 2;
+  fx.dual_pan_left = -0.75f;
+  fx.dual_pan_right = 0.75f;
+  fx.pan_law = 3;
   scene.buses.push_back(fx);
 
   // Two assist sidecars: one JSON-ish text payload, one true binary payload
@@ -465,7 +490,8 @@ bool eq(const mixing::api::Strip& a, const mixing::api::Strip& b) {
       a.metering.enabled != b.metering.enabled || a.metering.lufs != b.metering.lufs ||
       a.metering.true_peak != b.metering.true_peak ||
       a.metering.true_peak_oversample != b.metering.true_peak_oversample ||
-      a.inserts.size() != b.inserts.size() || a.sends.size() != b.sends.size()) {
+      a.inserts.size() != b.inserts.size() || a.sends.size() != b.sends.size() ||
+      a.eq.enabled != b.eq.enabled || a.eq.bands != b.eq.bands) {
     return false;
   }
   for (size_t i = 0; i < a.inserts.size(); ++i) {
@@ -476,7 +502,7 @@ bool eq(const mixing::api::Strip& a, const mixing::api::Strip& b) {
   }
   return true;
 }
-static_assert(field_count<mixing::api::Strip>() == 21,
+static_assert(field_count<mixing::api::Strip>() == 22,
               "Strip gained or lost a field: add it to eq(const mixing::api::Strip&) above, then "
               "update this count and set it to a non-default value in make_fixture()");
 // Both nested structs are compared field by field by the helper above rather
@@ -492,7 +518,11 @@ bool eq(const mixing::api::Bus& a, const mixing::api::Bus& b) {
   if (a.id != b.id || a.role != b.role || a.layout != b.layout ||
       a.input_trim_db != b.input_trim_db || a.width != b.width ||
       a.polarity_invert_left != b.polarity_invert_left ||
-      a.polarity_invert_right != b.polarity_invert_right || a.inserts.size() != b.inserts.size()) {
+      a.polarity_invert_right != b.polarity_invert_right || a.pan != b.pan ||
+      a.pan_mode != b.pan_mode || a.dual_pan_left != b.dual_pan_left ||
+      a.dual_pan_right != b.dual_pan_right || a.pan_law != b.pan_law ||
+      a.eq.enabled != b.eq.enabled || a.eq.bands != b.eq.bands ||
+      a.inserts.size() != b.inserts.size()) {
     return false;
   }
   for (size_t i = 0; i < a.inserts.size(); ++i) {
@@ -837,6 +867,19 @@ TEST_CASE("scene insert and bus JSON carry one key per struct field", "[serializ
   CHECK(key_set(bus_json) == std::vector<std::string>{"id", "inputTrimDb", "inserts", "layout",
                                                       "polarityInvertLeft", "polarityInvertRight",
                                                       "role", "width"});
+
+  // Strip is a plain aggregate (field_count reaches it above), but its EQ and
+  // pan fields are all at their default here, so this pins the same thing
+  // field_count cannot: that the writer omits "eq" (and every other
+  // conditional key) when nothing set it, alongside every field it always
+  // emits.
+  const auto& strip_json = root["scene"]["strips"].as_array()[0];
+  REQUIRE(strip_json.is_object());
+  CHECK(key_set(strip_json) ==
+        std::vector<std::string>{"channelDelaySamples", "dualPanLeft", "dualPanRight", "faderDb",
+                                 "id", "inputTrimDb", "inserts", "muted", "pan", "panLaw",
+                                 "panMode", "polarityInvertLeft", "polarityInvertRight", "sends",
+                                 "soloSafe", "soloed", "vcaOffsetDb", "width"});
 }
 
 TEST_CASE("project scene deserializer accepts legacy snake_case scene keys", "[serialize]") {

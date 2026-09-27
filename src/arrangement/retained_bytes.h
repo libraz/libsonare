@@ -147,15 +147,21 @@ inline std::size_t dynamic_bytes(const mixing::api::Send& value) noexcept {
   return saturating_add(dynamic_bytes(value.id), dynamic_bytes(value.destination_bus_id));
 }
 
+inline std::size_t dynamic_bytes(const mixing::api::StripEq& value) noexcept {
+  return dynamic_bytes(value.bands);
+}
+
 inline std::size_t dynamic_bytes(const mixing::api::Strip& value) noexcept {
   std::size_t total = dynamic_bytes(value.id);
   total = saturating_add(total, dynamic_bytes(value.inserts));
-  return saturating_add(total, dynamic_bytes(value.sends));
+  total = saturating_add(total, dynamic_bytes(value.sends));
+  return saturating_add(total, dynamic_bytes(value.eq));
 }
 
 inline std::size_t dynamic_bytes(const mixing::api::Bus& value) noexcept {
   const std::size_t names = saturating_add(dynamic_bytes(value.id), dynamic_bytes(value.role));
-  return saturating_add(names, dynamic_bytes(value.inserts));
+  const std::size_t total = saturating_add(names, dynamic_bytes(value.inserts));
+  return saturating_add(total, dynamic_bytes(value.eq));
 }
 
 inline std::size_t dynamic_bytes(const mixing::api::VcaGroup& value) noexcept {
