@@ -57,7 +57,9 @@ constexpr int kPoisonIndex = 100;
 // for a proportional bound to be worth anything.
 constexpr int kDeEsserRecoveryBlocks = 8;
 constexpr int kAmpSimRecoveryBlocks = 1100;
+#if defined(SONARE_WITH_ARRANGEMENT)
 constexpr int kGsMasterEqRecoveryBlocks = 320;
+#endif
 // Two owners rejoin nothing inside any practical horizon. The tape's difference
 // falls to a rounding floor by block 6 and then neither decays nor grows, so
 // whether a run coincides with its control is a property of the target's
@@ -310,6 +312,7 @@ TEST_CASE("the amp sim bounds a non-finite sample to its own block", "[mastering
               kPoisonBlock + 1);
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 TEST_CASE("the GS master EQ bounds a non-finite sample to its own block", "[midi][synth]") {
   using sonare::midi::synth::GsMasterEq;
   using sonare::midi::synth::GsMasterEqFilter;
@@ -327,6 +330,7 @@ TEST_CASE("the GS master EQ bounds a non-finite sample to its own block", "[midi
 
   check_owner(make, kGsMasterEqRecoveryBlocks, std::numeric_limits<float>::quiet_NaN());
 }
+#endif  // defined(SONARE_WITH_ARRANGEMENT)
 
 TEST_CASE("the realtime voice changer bounds a non-finite sample to its own block",
           "[editing][voice-changer]") {

@@ -227,8 +227,10 @@ TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+#if defined(SONARE_WITH_ARRANGEMENT)
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
+#endif
 
   for (const char* json : malformed) {
     INFO(json);
@@ -248,7 +250,9 @@ TEST_CASE("malformed JSON exits every C-ABI entry point with the same code",
 #endif
   }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
   sonare_project_destroy(project);
+#endif
   sonare_engine_destroy(engine);
 }
 

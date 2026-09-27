@@ -2,6 +2,8 @@
 /// @brief Tests for the sonare CLI argument contract: parsing, the option
 ///        registry, option domains and exit codes.
 
+#include <algorithm>
+
 #include "cli/cli_test_helpers.h"
 
 TEST_CASE("CLI JSON numbers keep a dot decimal separator under any host locale", "[cli][json]") {
@@ -648,11 +650,22 @@ TEST_CASE("CLI option domains match the cross-surface declaration", "[cli][argum
     return stage == CliOptionDomainStage::Parameter ? std::string("invalid_parameter")
                                                     : std::string("usage");
   };
+#ifndef SONARE_WITH_ARRANGEMENT
+  // The project and MIDI commands are compiled out with the arrangement subsystem.
+  const auto compiled_out = [](const std::string& command) {
+    const auto& registry = cli_command_registry();
+    return std::none_of(registry.begin(), registry.end(),
+                        [&](const auto& entry) { return entry.path == command; });
+  };
+#endif
   // "<command>\t<option>" keys, so a mismatch names both halves.
   std::set<std::string> declared_domains;
   std::set<std::string> declared_required;
   for (const auto& record : fixture["domains"].as_array()) {
     const std::string command = record["command"].as_string();
+#ifndef SONARE_WITH_ARRANGEMENT
+    if (compiled_out(command)) continue;
+#endif
     const std::string option = record["option"].as_string();
     CAPTURE(command, option);
     declared_domains.insert(command + "\t" + option);
@@ -676,6 +689,9 @@ TEST_CASE("CLI option domains match the cross-surface declaration", "[cli][argum
   }
   for (const auto& record : fixture["requiredInvalidParameter"].as_array()) {
     const std::string command = record["command"].as_string();
+#ifndef SONARE_WITH_ARRANGEMENT
+    if (compiled_out(command)) continue;
+#endif
     const std::string option = record["option"].as_string();
     CAPTURE(command, option);
     declared_required.insert(command + "\t" + option);

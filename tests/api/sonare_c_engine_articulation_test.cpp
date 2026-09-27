@@ -68,8 +68,6 @@ std::vector<float> render_slur(uint32_t dest, int engine_mode, int articulation,
   return out;
 }
 
-#endif  // defined(SONARE_WITH_ARRANGEMENT)
-
 /// Entries in a '\n'-separated name table.
 size_t name_count(const char* names) {
   if (names == nullptr || *names == '\0') return 0;
@@ -79,6 +77,8 @@ size_t name_count(const char* names) {
   }
   return count;
 }
+
+#endif  // defined(SONARE_WITH_ARRANGEMENT)
 
 }  // namespace
 

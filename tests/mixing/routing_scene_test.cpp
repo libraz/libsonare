@@ -7,10 +7,13 @@
 
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include "arrangement/retained_bytes.h"
 #include "mastering/eq/eq_band.h"
 #include "util/exception.h"
 #include "util/json.h"
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "arrangement/retained_bytes.h"
+#endif
 
 // The vocalReverbSend preset routes through a plate reverb return strip, so
 // this case additionally needs the FX suite.
@@ -1140,6 +1143,7 @@ TEST_CASE("Scene rejects a non-default pan on a surround bus, naming the bus and
   REQUIRE(ok.buses.size() == 1);
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 TEST_CASE("dynamic_bytes accounts a strip's EQ bands", "[mixing][routing]") {
   using sonare::arrangement::retained::dynamic_bytes;
   sonare::mixing::api::Strip empty;
@@ -1148,5 +1152,6 @@ TEST_CASE("dynamic_bytes accounts a strip's EQ bands", "[mixing][routing]") {
   with_eq.eq.bands.assign(3, sonare::mastering::eq::EqBand{});
   CHECK(dynamic_bytes(with_eq) > dynamic_bytes(empty));
 }
+#endif  // defined(SONARE_WITH_ARRANGEMENT)
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

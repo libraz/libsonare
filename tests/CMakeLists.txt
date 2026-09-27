@@ -105,7 +105,6 @@ add_executable(sonare_tests
   analysis/analysis_tuning_test.cpp
   editing/percussive_event_test.cpp
   editing/polyphonic_f0_test.cpp
-  editing/polyphonic_f0_eval_test.cpp
   editing/polyphonic_inharmonicity_test.cpp
   editing/polyphonic_mask_test.cpp
   editing/polyphonic_shared_bins_test.cpp
@@ -304,7 +303,6 @@ if(BUILD_MIXING)
     engine/mixing_runtime_test.cpp
     engine/monitor_runtime_test.cpp
     engine/track_mixer_test.cpp
-    engine/bus_aggregation_test.cpp
     engine/track_mixer_concurrency_test.cpp
     mixing/downmix_test.cpp
     mixing/golden_hash_test.cpp
@@ -445,7 +443,6 @@ endif()
 # ARRANGEMENT/MIXING/GRAPH/MASTERING/PITCH_EDITOR) and falls back to a stub
 # otherwise. sonare_engine is already linked unconditionally above, so compile
 # these TUs unconditionally too instead of coupling them to voice-changer.
-target_sources(sonare_tests PRIVATE engine/offline_bounce_golden_test.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_daw.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_polyphony.cpp)
 target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine.cpp)
@@ -475,8 +472,31 @@ if(BUILD_VOICE_CHANGER)
   )
 endif()
 
+# The headless-project C ABI sources are compiled into the test binary so the
+# parity test drives the real C surface. Like sonare_shared, they compile even
+# with BUILD_ARRANGEMENT off, where each entry point returns its stub.
+target_sources(sonare_tests PRIVATE
+  ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_project.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce_mixer.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce_stems.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/synth_catalog.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_track.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_clip.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_transcribe.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_assist.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/project_soundfont.cpp
+  ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_sample_bank.cpp
+)
+
 if(BUILD_ARRANGEMENT)
   target_sources(sonare_tests PRIVATE
+    editing/polyphonic_f0_eval_test.cpp
+    engine/offline_bounce_golden_test.cpp
     arrangement/edit_model_test.cpp
     arrangement/external_stems_test.cpp
     arrangement/edit_command_history_test.cpp
@@ -591,25 +611,10 @@ if(BUILD_ARRANGEMENT)
     bindings/binding_sample_bank_test.cpp
     arrangement/c_abi_external_stems_test.cpp
   )
-  # The headless-project C ABI sources are compiled into the test binary so the
-  # parity test drives the real C surface, like the engine/voice-changer TUs.
-  target_sources(sonare_tests PRIVATE
-    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_project.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce_mixer.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/project_bounce_stems.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/synth_catalog.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/project_core.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_track.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/project_edit_clip.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/project_external_stems.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/project_midi.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/project_mir.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_transcribe.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_assist.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/project_soundfont.cpp
-    ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_sample_bank.cpp
-  )
+  # Sums a clip and a MIDI instrument into one group bus.
+  if(BUILD_MIXING)
+    target_sources(sonare_tests PRIVATE engine/bus_aggregation_test.cpp)
+  endif()
   target_link_libraries(sonare_tests PRIVATE sonare_arrangement sonare_mir sonare_serialize sonare_midi)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_ARRANGEMENT=1)
 
